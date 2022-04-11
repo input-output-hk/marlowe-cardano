@@ -61,8 +61,7 @@ import Marlowe.Semantics as S
 import Partial.Unsafe (unsafePartial)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 
-newtype GenerationOptions
-  = GenerationOptions
+newtype GenerationOptions = GenerationOptions
   { withHoles :: Boolean, withExtendedConstructs :: Boolean }
 
 oneOf
@@ -418,8 +417,8 @@ genObservation' size
                   ]
   | otherwise = genLeaf
       where
-      genLeaf ::
-        m Observation
+      genLeaf
+        :: m Observation
       genLeaf = ChoseSomething <$> genChoiceId
 
 genContract
@@ -478,8 +477,8 @@ genContract' size
               ]
   | otherwise = genLeaf
       where
-      genLeaf ::
-        m Contract
+      genLeaf
+        :: m Contract
       genLeaf = pure Close
 
 ----------------------------------------------------------------- Semantics Generators ---------------------------------

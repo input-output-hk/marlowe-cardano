@@ -1,5 +1,3 @@
-
-
 -- | Extraction of Marlowe contracts and history from transaction data.
 
 
@@ -21,6 +19,7 @@ module Language.Marlowe.Client.History (
 , marloweStatesFrom
 , toMarloweState
 -- * History Queriies
+, histories
 , history
 , historyFrom
 , creationTxOut
@@ -45,20 +44,21 @@ import Data.Tuple.Extra (secondM)
 import GHC.Generics (Generic)
 import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
-import Ledger (ChainIndexTxOut (..), PaymentPubKeyHash (..), ciTxOutAddress, toTxOut)
+import Ledger (ChainIndexTxOut (..), ciTxOutAddress, toTxOut)
 import Ledger.TimeSlot (slotRangeToPOSIXTimeRange)
 import Ledger.Tx.CardanoAPI (SomeCardanoApiTx (SomeTx))
 import Ledger.Typed.Scripts (validatorAddress)
 import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
 import Plutus.ChainIndex.Tx (ChainIndexTx, ChainIndexTxOutputs (..), citxCardanoTx, citxData, citxInputs, citxOutputs,
                              citxScripts, citxTxId, citxValidRange)
-import Plutus.Contract (Contract, ownPaymentPubKeyHash)
+import Plutus.Contract (Contract)
 import Plutus.Contract.Error (AsContractError)
+import Plutus.Contract.Logging (logInfo)
 import Plutus.Contract.Request (txsAt, utxosTxOutTxAt, utxosTxOutTxFromTx)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V1.Ledger.Api (Address (..), Credential (..), CurrencySymbol (..), Datum (..), Extended (..),
-                             Interval (..), LowerBound (..), Redeemer (..), TxId (..), TxOut (..), TxOutRef (..),
-                             UpperBound (..), dataToBuiltinData, fromBuiltinData, toBuiltin)
+import Plutus.V1.Ledger.Api (Address (..), CurrencySymbol (..), Datum (..), Extended (..), Interval (..),
+                             LowerBound (..), Redeemer (..), TxId (..), TxOut (..), TxOutRef (..), UpperBound (..),
+                             dataToBuiltinData, fromBuiltinData, toBuiltin)
 import Plutus.V1.Ledger.Scripts (ScriptHash (..))
 import Plutus.V1.Ledger.Tx (txInRef)
 
@@ -114,17 +114,24 @@ marloweHistory :: AsContractError e
 marloweHistory params =
   do
     let address = validatorAddress $ smallUntypedValidator params
+    logInfo $ "[DEBUG:marloweHistory] address = " <> show address
     -- The script address contains transactions that have datum.
     addressTxns <- txsAt address
+    logInfo $ "[DEBUG:marloweHistory] length addressTxns = " <> show (length addressTxns)
     -- When a contract closes, there may be a UTxO at the role address.
     roleTxns <- txsAt . scriptHashAddress $ rolePayoutValidatorHash params
+    logInfo $ "[DEBUG:marloweHistory] length roleTxns = " <> show (length roleTxns)
+{-
+    FIXME: Commented out in order to stress the PAB/CI lesss, just as a workaround for PAB queries freezing.
     -- When a contract closes, there may be a UTxO at the owner's public key hash address.
     pkhTxns <- txsAt . flip Address Nothing . PubKeyCredential . unPaymentPubKeyHash =<< ownPaymentPubKeyHash
+    logInfo $ "[DEBUG:marloweHistory] length pkhTxns = " <> show (length pkhTxns)
+-}
     -- TODO: Extract all PKHs from the contract, and query these addresses, too.
     pure
       . history params address
       . nub
-      $ addressTxns <> roleTxns <> pkhTxns
+      $ addressTxns <> roleTxns {- <> pkhTxns -}
 
 
 -- | Retrieve the history of a role-based Marlowe contract.
@@ -133,13 +140,25 @@ history :: MarloweParams   -- ^ The Marlowe validator parameters.
         -> [ChainIndexTx]  -- ^ The transactions at the Marlowe validator and role validator addresses.
         -> Maybe History   -- ^ The original contract and the sequence of redemptions, if any.
 history params address citxs =
-  case creationTxOut params address `mapMaybe` citxs of
+  case histories params address citxs of
     -- If role tokens are minted by the "create" endpoint, then there should only ever be on contract at the address.
-    [creation] -> Just
-                    . Created (tyTxOutRefRef creation) (toMarloweState creation)
-                    $ historyFrom address citxs creation
+    [history'] -> Just history'
     -- Either there is no contract yet, or role tokens have been reused for multiple contracts.
     _          -> Nothing
+
+
+-- | Retrieve the histories of a role-based Marlowe contract.
+histories :: MarloweParams   -- ^ The Marlowe validator parameters.
+          -> Address         -- ^ The Marlowe validator address.
+          -> [ChainIndexTx]  -- ^ The transactions at the Marlowe validator and role validator addresses.
+          -> [History]       -- ^ The original contracts and the sequence of redemptions.
+histories params address citxs =
+  [
+    Created (tyTxOutRefRef creation) (toMarloweState creation)
+      $ historyFrom address citxs creation
+  |
+    creation <- creationTxOut params address `mapMaybe` citxs
+  ]
 
 
 -- | Construct the sequence of redemptions following from a particular Marlowe transactions.
@@ -176,7 +195,6 @@ historyFrom address citxs consumed =
                   _           -> Nothing
       -- The output of the previous step hasn't been consumed, so the contract is still in progress.
       _      -> Nothing
-
 
 -- | Retrieve the states in UTxOs at the validator address.
 marloweUtxoStatesAt :: AsContractError e
@@ -253,7 +271,6 @@ marloweStatesFrom validator citx =
 toMarloweState :: MarloweTxOutRef  -- ^ The Marlowe-specific output.
                -> MarloweData      -- ^ The Marlowe data.
 toMarloweState = tyTxOutData . tyTxOutRefOut
-
 
 -- | Test whether a transaction created a Marlowe contract.
 creationTxOut :: MarloweParams          -- ^ The Marlowe validator parameters.

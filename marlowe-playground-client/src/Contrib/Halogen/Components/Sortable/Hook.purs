@@ -21,15 +21,13 @@ import Halogen.Hooks.Extra.Hooks (UseGet, UseStateFn, useGet, useModifyState_)
 import Web.Event.Event (preventDefault) as Event
 import Web.HTML.Event.DragEvent (toEvent) as DragEvent
 
-type State
-  =
+type State =
   { dragged :: Maybe Int
   , orderingVersion :: Sortable.OrderingVersion
   , move :: Maybe Unfoldable.Move
   }
 
-type UseSortable'
-  = UseStateFn State <> UseGet State <> Hooks.Pure
+type UseSortable' = UseStateFn State <> UseGet State <> Hooks.Pure
 
 foreign import data UseSortable :: Hooks.HookType
 

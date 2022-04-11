@@ -58,8 +58,11 @@ derive instance Newtype CreatePostData _
 
 --------------------------------------------------------------------------------
 
-_CreatePostData :: Iso' CreatePostData
-  { getCreatePassphrase :: Passphrase, getCreateWalletName :: WalletNickname }
+_CreatePostData
+  :: Iso' CreatePostData
+       { getCreatePassphrase :: Passphrase
+       , getCreateWalletName :: WalletNickname
+       }
 _CreatePostData = _Newtype
 
 --------------------------------------------------------------------------------
@@ -96,8 +99,9 @@ derive instance Newtype CreateResponse _
 
 --------------------------------------------------------------------------------
 
-_CreateResponse :: Iso' CreateResponse
-  { mnemonic :: MnemonicPhrase, walletInfo :: WalletInfo }
+_CreateResponse
+  :: Iso' CreateResponse
+       { mnemonic :: MnemonicPhrase, walletInfo :: WalletInfo }
 _CreateResponse = _Newtype
 
 --------------------------------------------------------------------------------
@@ -137,9 +141,10 @@ derive instance Newtype RestorePostData _
 
 --------------------------------------------------------------------------------
 
-_RestorePostData :: Iso' RestorePostData
-  { getRestoreMnemonicPhrase :: MnemonicPhrase
-  , getRestorePassphrase :: Passphrase
-  , getRestoreWalletName :: WalletNickname
-  }
+_RestorePostData
+  :: Iso' RestorePostData
+       { getRestoreMnemonicPhrase :: MnemonicPhrase
+       , getRestorePassphrase :: Passphrase
+       , getRestoreWalletName :: WalletNickname
+       }
 _RestorePostData = _Newtype

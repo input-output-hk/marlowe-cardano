@@ -68,11 +68,12 @@ derive instance Newtype ContractInstanceLog _
 
 --------------------------------------------------------------------------------
 
-_ContractInstanceLog :: Iso' ContractInstanceLog
-  { _cilMessage :: ContractInstanceMsg
-  , _cilId :: ContractInstanceId
-  , _cilTag :: ContractInstanceTag
-  }
+_ContractInstanceLog
+  :: Iso' ContractInstanceLog
+       { _cilMessage :: ContractInstanceMsg
+       , _cilId :: ContractInstanceId
+       , _cilTag :: ContractInstanceTag
+       }
 _ContractInstanceLog = _Newtype
 
 cilMessage :: Lens' ContractInstanceLog ContractInstanceMsg
@@ -176,8 +177,8 @@ _StoppedWithError = prism' StoppedWithError case _ of
   (StoppedWithError a) -> Just a
   _ -> Nothing
 
-_ReceiveEndpointCall :: Prism' ContractInstanceMsg
-  { a :: EndpointDescription, b :: RawJson }
+_ReceiveEndpointCall
+  :: Prism' ContractInstanceMsg { a :: EndpointDescription, b :: RawJson }
 _ReceiveEndpointCall = prism' (\{ a, b } -> (ReceiveEndpointCall a b)) case _ of
   (ReceiveEndpointCall a b) -> Just { a, b }
   _ -> Nothing
@@ -277,8 +278,9 @@ derive instance Newtype ContractInstanceTag _
 
 --------------------------------------------------------------------------------
 
-_ContractInstanceTag :: Iso' ContractInstanceTag
-  { unContractInstanceTag :: String, shortContractInstanceTag :: String }
+_ContractInstanceTag
+  :: Iso' ContractInstanceTag
+       { unContractInstanceTag :: String, shortContractInstanceTag :: String }
 _ContractInstanceTag = _Newtype
 
 --------------------------------------------------------------------------------
@@ -334,8 +336,8 @@ _InstanceIdNotFound = prism' InstanceIdNotFound case _ of
   (InstanceIdNotFound a) -> Just a
   _ -> Nothing
 
-_EmulatorJSONDecodingError :: Prism' EmulatorRuntimeError
-  { a :: String, b :: RawJson }
+_EmulatorJSONDecodingError
+  :: Prism' EmulatorRuntimeError { a :: String, b :: RawJson }
 _EmulatorJSONDecodingError = prism'
   (\{ a, b } -> (EmulatorJSONDecodingError a b))
   case _ of

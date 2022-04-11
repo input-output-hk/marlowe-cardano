@@ -25,7 +25,8 @@ import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Set as Set
 import Effect.Aff.Class (class MonadAff)
-import Errors (class Debuggable, class Explain)
+import Errors.Debuggable (class Debuggable)
+import Errors.Explain (class Explain)
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral
@@ -34,7 +35,6 @@ import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Halogen (HalogenM)
 import Halogen as H
 import Halogen.Form.Injective (blank, inject)
-import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
@@ -50,6 +50,7 @@ import Marlowe.Template
   , getPlaceholderIds
   , initializeTemplateContent
   )
+import Page.Dashboard.Types (ChildSlots, Msg)
 import Text.Pretty (text)
 
 -- see note [dummyState] in MainFrame.State
@@ -123,8 +124,8 @@ handleAction (OnContractSetupMsg (CS.FieldsUpdated fields)) =
     Setup template input -> Setup template input { fields = fields }
     s -> s
 
-data InstantiateContractError
-  = InstantiateContractError Instant ContractTemplate ContractParams
+data InstantiateContractError =
+  InstantiateContractError Instant ContractTemplate ContractParams
 
 instance Explain InstantiateContractError where
   explain _ = text

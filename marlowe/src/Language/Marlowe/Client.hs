@@ -60,7 +60,7 @@ import Ledger.Constraints
 import qualified Ledger.Constraints as Constraints
 import qualified Ledger.Interval as Interval
 import Ledger.Scripts (datumHash, unitRedeemer)
-import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange)
+import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange, scSlotLength, slotToPOSIXTimeRange)
 import qualified Ledger.Tx as Tx
 import Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts as Typed
@@ -268,6 +268,7 @@ minLovelaceDeposit = 2000000
 marloweFollowContract :: Contract FollowerContractState MarloweFollowSchema MarloweError ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
+    logInfo $ "MarloweFollower endpoint \"follow\" called with parameters " <> show params <> "."
     let typedValidator = mkMarloweTypedValidator params
     marloweHistory params
       >>= maybe (pure InProgress) (updateHistory params)
@@ -363,7 +364,16 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         utx <- either (throwing _ConstraintResolutionContractError) pure (Constraints.mkTx lookups tx)
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:create] utx = " <> show utx
-        submitTxConfirmed utx
+        btx <- balanceTx $ Constraints.adjustUnbalancedTx utx
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] btx = " <> show btx
+        stx <- submitBalancedTx btx
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] stx = " <> show stx
+        let txId = Tx.getCardanoTxId stx
+        awaitTxConfirmed txId
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] txId = " <> show txId
         logInfo $ "MarloweApp contract creation confirmed for parameters " <> show params <> "."
         tell $ Just $ EndpointSuccess reqId $ CreateResponse params
         marlowePlutusContract
@@ -670,13 +680,24 @@ applyInputs :: AsMarloweError e
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
     -- TODO: Move to debug log.
+    do
+      nowSlot <- currentSlot
+      logInfo $ "[DEBUG:applyInputs] current slot = " <> show nowSlot
+      logInfo $ "[DEBUG:applyInputs] time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
+      nowTime <- currentTime
+      logInfo $ "[DEBUG:applyInputs] current time = " <> show nowTime
+    logInfo $ "[DEBUG:applyInputs] inputs = " <> show inputs
     logInfo $ "[DEBUG:applyInputs] params = " <> show params
     logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
+    let resolution = scSlotLength unsafeGetSlotConfig
+    let floor'   (POSIXTime i) = POSIXTime $ resolution * (i `div` resolution)
+    let ceiling' (POSIXTime i) = POSIXTime $ resolution * ((i + resolution - 1) `div` resolution)
     timeRange <- case timeInterval of
-            Just si -> pure si
+            Just (l, h) -> pure (ceiling' l, floor' h)
             Nothing -> do
                 time <- currentTime
-                pure (time, time + defaultTxValidationRange)
+                pure (ceiling' time, floor' $ time + defaultTxValidationRange)
+    -- TODO: Move to debug log.
     logInfo $ "[DEBUG:applyInputs] timeRange = " <> show timeRange
     mkStep params typedValidator timeRange inputs
 
@@ -836,12 +857,21 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                         (Constraints.mkTx lookups allConstraints)
             let utx' = utx
                         {
-                            unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
+                          unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
                         , unBalancedTxValidityTimeRange = times
                         }
             -- TODO: Move to debug log.
             logInfo $ "[DEBUG:mkStep] utx' = " <> show utx'
-            submitTxConfirmed $ Constraints.adjustUnbalancedTx utx'
+            btx <- balanceTx $ Constraints.adjustUnbalancedTx utx'
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] btx = " <> show btx
+            stx <- submitBalancedTx btx
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] stx = " <> show stx
+            let txId = Tx.getCardanoTxId stx
+            awaitTxConfirmed txId
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] txId = " <> show txId
             pure marloweData
   where
     evaluateTxContstraints :: MarloweData

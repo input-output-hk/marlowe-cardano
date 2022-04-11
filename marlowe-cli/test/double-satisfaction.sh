@@ -25,8 +25,6 @@ set -ev
 # testnet.
 
 MAGIC=(--testnet-magic 1564)
-SLOT_LENGTH=1000
-SLOT_OFFSET=1644929640000
 
 
 # Configure the first party.
@@ -101,15 +99,9 @@ echo "The second party will spend the UTxO $TX_0_PARTY_B."
 
 # Configure the validator.
 
-CONTRACT_ADDRESS=$(
-marlowe-cli contract address "${MAGIC[@]}"        \
-                     --slot-length "$SLOT_LENGTH" \
-                     --slot-offset "$SLOT_OFFSET" \
-)
+CONTRACT_ADDRESS=$(marlowe-cli contract address "${MAGIC[@]}")
 
 marlowe-cli contract validator "${MAGIC[@]}"                \
-                               --slot-length "$SLOT_LENGTH" \
-                               --slot-offset "$SLOT_OFFSET" \
                                --out-file marlowe.plutus    \
                                --print-stats
 
@@ -144,7 +136,7 @@ cat > tx-1.state << EOI
       3000000
     ]
   ],
-  "minSlot": $TIP,
+  "minTime": 1,
   "boundValues": []
 }
 EOI
@@ -195,7 +187,7 @@ cat > tx-2.state << EOI
       4000000
     ]
   ],
-  "minSlot": $TIP,
+  "minTime": 1,
   "boundValues": []
 }
 EOI

@@ -288,8 +288,7 @@ setOraclePrice = do
         Nothing -> pure unit
     _ -> pure unit
 
-type Resp
-  =
+type Resp =
   { result :: { price :: Number }
   , allowance :: { remaining :: Number, upgrade :: String, cost :: Number }
   }

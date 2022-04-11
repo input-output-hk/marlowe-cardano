@@ -65,8 +65,9 @@ _RawError = prism' RawError case _ of
   (RawError a) -> Just a
   _ -> Nothing
 
-_CompilationError :: Prism' CompilationError
-  { filename :: String, row :: Int, column :: Int, text :: Array String }
+_CompilationError
+  :: Prism' CompilationError
+       { filename :: String, row :: Int, column :: Int, text :: Array String }
 _CompilationError = prism' CompilationError case _ of
   (CompilationError a) -> Just a
   _ -> Nothing

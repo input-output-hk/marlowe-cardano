@@ -1,62 +1,70 @@
-module AppM (AppM, handleRequest, passphrase, runAppM) where
+module AppM (AppM, passphrase, runAppM) where
 
 import Prologue
 
 import Clipboard (class MonadClipboard, copy)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
-import Control.Logger.Structured (StructuredLog)
+import Control.Logger.Structured (StructuredLog, debug', error)
+import Control.Monad.Base (class MonadBase, liftBase)
+import Control.Monad.Error.Class (class MonadThrow, try)
+import Control.Monad.Error.Extra (toMonadThrow)
+import Control.Monad.Except (class MonadError)
+import Control.Monad.Fork.Class
+  ( class MonadBracket
+  , class MonadFork
+  , class MonadKill
+  , bracket
+  , kill
+  , never
+  , uninterruptible
+  )
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader
   ( class MonadReader
-  , ReaderT
-  , asks
-  , mapReaderT
+  , ReaderT(..)
   , runReaderT
   , withReaderT
   )
 import Control.Monad.Reader.Class (class MonadAsk)
-import Control.Monad.Rec.Class (class MonadRec, tailRecM)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Rec.Class (class MonadRec)
+import Control.Monad.Trans.Class (class MonadTrans, lift)
+import Control.Monad.UUID (class MonadUUID)
+import Control.Monad.Unlift (class MonadUnlift, withRunInBase)
 import Data.Array as A
-import Data.Lens (Lens', over, to, view)
+import Data.HTTP.Method (unCustomMethod)
+import Data.Lens (Lens', over, view)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
-import Data.Newtype (un)
 import Data.Passphrase (Passphrase)
 import Data.Passphrase as Passphrase
-import Effect.Aff (Aff)
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Data.String (joinWith)
+import Effect.Aff (Aff, Error)
+import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Unlift (class MonadUnliftAff, withRunInAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env
-  ( Env(..)
-  , HandleRequest(..)
-  , MakeClock(..)
-  , _handleRequest
-  , _makeClock
-  , _sources
-  , _timezoneOffset
-  )
+import Effect.Unlift (class MonadUnliftEffect, withRunInEffect)
+import Env (Env, _sinks)
 import Halogen (Component)
 import Halogen.Component (hoist)
 import Halogen.Store.Monad
   ( class MonadStore
+  , HalogenStore
   , StoreT(..)
-  , emitSelected
-  , getStore
-  , runStoreT
-  , updateStore
+  , runAndEmitStoreT
   )
+import Halogen.Subscription (Emitter)
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
+import Safe.Coerce (coerce)
 import Servant.PureScript
   ( class ContentType
   , class MonadAjax
   , AjaxError
   , Request
   , prepareRequest
-  , prepareResponse
+  , request
   )
 import Store as Store
 import Type.Proxy (Proxy(..))
@@ -71,54 +79,106 @@ passphrase :: Passphrase
 passphrase = unsafePartial $ fromJust $ Passphrase.fromString
   "fixme-allow-pass-per-wallet"
 
-newtype AppM a = AppM (ReaderT Env (StoreT Store.Action Store.Store Aff) a)
+newtype AppM m a = AppM (ReaderT Env (StoreT Store.Action Store.Store m) a)
 
 runAppM
-  :: forall q i o
-   . Env
+  :: forall q i o m
+   . Monad m
+  => Env
   -> Store.Store
-  -> Component q i o AppM
-  -> Aff (Component q i o Aff)
+  -> Component q i o (AppM m)
+  -> Aff ({ component :: Component q i o m, emitter :: Emitter Store.Store })
 runAppM env store =
-  runStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
+  runAndEmitStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
 
-derive newtype instance Functor AppM
+derive newtype instance Functor m => Functor (AppM m)
 
-derive newtype instance Apply AppM
+derive newtype instance Apply m => Apply (AppM m)
 
-derive newtype instance Applicative AppM
+derive newtype instance Applicative m => Applicative (AppM m)
 
-derive newtype instance Bind AppM
+derive newtype instance Bind m => Bind (AppM m)
 
-derive newtype instance Monad AppM
+derive newtype instance Monad m => Monad (AppM m)
 
-derive newtype instance MonadEffect AppM
+derive newtype instance MonadThrow e m => MonadThrow e (AppM m)
 
-derive newtype instance MonadAff AppM
+derive newtype instance MonadError e m => MonadError e (AppM m)
 
-instance MonadTime AppM where
-  now = liftEffect =<< (asks $ view $ _sources <<< to _.currentTime)
-  timezoneOffset = asks $ view _timezoneOffset
-  makeClock interval = do
-    MakeClock mkClock <- asks $ view _makeClock
-    liftEffect $ mkClock interval
+derive newtype instance MonadEffect m => MonadEffect (AppM m)
 
--- TODO use newtype deriving when MonadRec instance is added to StoreT
-instance MonadRec AppM where
-  tailRecM rec a = AppM $ mapReaderT StoreT $ tailRecM rec' a
+derive newtype instance MonadFork f m => MonadFork f (AppM m)
+
+instance MonadKill f e m => MonadKill f e (AppM m) where
+  kill = map (map lift) kill
+
+instance MonadBracket f e m => MonadBracket f e (AppM m) where
+  bracket acquire release =
+    AppM
+      <<< bracket (coerce acquire) (map (map coerce) release)
+      <<< map coerce
+  uninterruptible = AppM <<< uninterruptible <<< coerce
+  never = AppM never
+
+-- TODO add instances of these classes to StoreT so we can use newtype
+-- deriving.
+instance MonadUnliftEffect m => MonadUnliftEffect (AppM m) where
+  withRunInEffect action = AppM $ ReaderT \env ->
+    StoreT $ withRunInEffect \run -> action (run <<< runAppM' env)
     where
-    rec' = map (mapReaderT unStoreT <<< unAppM) rec
-    unAppM (AppM m) = m
-    unStoreT (StoreT m) = m
+    runAppM'
+      :: forall a n
+       . Env
+      -> AppM n a
+      -> ReaderT (HalogenStore Store.Action Store.Store) n a
+    runAppM' env (AppM r) = case runReaderT r env of
+      StoreT storeReader -> storeReader
 
-instance MonadStore Store.Action Store.Store AppM where
-  getStore = AppM (lift getStore)
-  updateStore = AppM <<< lift <<< updateStore
-  emitSelected = AppM <<< lift <<< emitSelected
+instance MonadUnliftAff m => MonadUnliftAff (AppM m) where
+  withRunInAff action = AppM $ ReaderT \env ->
+    StoreT $ withRunInAff \run -> action (run <<< runAppM' env)
+    where
+    runAppM'
+      :: forall a n
+       . Env
+      -> AppM n a
+      -> ReaderT (HalogenStore Store.Action Store.Store) n a
+    runAppM' env (AppM r) = case runReaderT r env of
+      StoreT storeReader -> storeReader
 
-derive newtype instance MonadAsk Env AppM
+instance MonadBase b m => MonadBase b (AppM m) where
+  liftBase = lift <<< liftBase
 
-derive newtype instance MonadReader Env AppM
+instance MonadUnlift b m => MonadUnlift b (AppM m) where
+  withRunInBase action = AppM $ ReaderT \env ->
+    StoreT $ withRunInBase \run -> action (run <<< runAppM' env)
+    where
+    runAppM'
+      :: forall a n
+       . Env
+      -> AppM n a
+      -> ReaderT (HalogenStore Store.Action Store.Store) n a
+    runAppM' env (AppM r) = case runReaderT r env of
+      StoreT storeReader -> storeReader
+
+derive newtype instance MonadAff m => MonadAff (AppM m)
+
+derive newtype instance MonadRec m => MonadRec (AppM m)
+
+instance MonadTrans AppM where
+  lift = AppM <<< lift <<< lift
+
+derive newtype instance Monad m => MonadAsk Env (AppM m)
+
+derive newtype instance Monad m => MonadReader Env (AppM m)
+
+derive newtype instance
+  MonadEffect m =>
+  MonadStore Store.Action Store.Store (AppM m)
+
+derive newtype instance MonadTime m => MonadTime (AppM m)
+
+derive newtype instance MonadUUID m => MonadUUID (AppM m)
 
 -- TODO move to servant-support and add more lenses
 _uri
@@ -145,27 +205,68 @@ prependPath prefix =
     (_uri <<< _relPart <<< _relPath)
     (Just <<< append prefix <<< join <<< A.fromFoldable)
 
+-- Errors thrown from base monads can behave in unexpected way if the
+-- transformed monad shares an error type. This fixes that behaviour by
+-- catching errors in the base monad, lifting the result, and rethrowing in the
+-- parent monad.
+liftAndRethrow
+  :: forall t m e a
+   . MonadError e m
+  => MonadThrow e (t m)
+  => MonadTrans t
+  => m a
+  -> t m a
+liftAndRethrow m = toMonadThrow =<< lift (try m)
+
 handleRequest
-  :: forall resDecodeError reqDecodeError resContent reqContent req res
-   . ContentType reqDecodeError reqContent
+  :: forall api m reqDecodeError resDecodeError resContent reqContent req res
+   . MonadEffect m
+  => MonadError Error m
+  => MonadAjax api m
+  => ContentType reqDecodeError reqContent
   => ContentType resDecodeError resContent
-  => Request reqContent resContent resDecodeError req res
-  -> AppM (Either (AjaxError resDecodeError resContent) res)
-handleRequest req = do
-  HandleRequest handle <- asks $ view _handleRequest
-  liftAff $ prepareResponse req.decode aReq <$> handle aReq
-  where
-  aReq = prepareRequest req
+  => Array String
+  -> api
+  -> Request reqContent resContent resDecodeError req res
+  -> AppM m (Either (AjaxError resDecodeError resContent) res)
+handleRequest prefix api req = do
+  let req' = prependPath prefix req
+  let uri = (prepareRequest req').url
+  result <- liftAndRethrow $ request api req'
+  let
+    msg = joinWith " "
+      [ "⇅"
+      , case req'.method of
+          Left m -> show m
+          Right m -> unCustomMethod m
+      , uri
+      ]
+  case result of
+    Left e -> do
+      error msg e
+    Right _ ->
+      debug' msg
+  pure result
 
-instance MonadAjax PAB.Api AppM where
-  request _ = handleRequest <<< prependPath [ "pab" ]
+instance
+  ( MonadError Error m
+  , MonadEffect m
+  , MonadAjax PAB.Api m
+  ) =>
+  MonadAjax PAB.Api (AppM m) where
+  request = handleRequest [ "pab" ]
 
-instance MonadAjax MarloweRun.Api AppM where
-  request _ = handleRequest
+instance
+  ( MonadError Error m
+  , MonadEffect m
+  , MonadAjax MarloweRun.Api m
+  ) =>
+  MonadAjax MarloweRun.Api (AppM m) where
+  request = handleRequest []
 
-instance MonadLogger StructuredLog AppM where
+instance MonadEffect m => MonadLogger StructuredLog (AppM m) where
   -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`
-  log m = AppM $ withReaderT (un Env) (Control.Monad.Effect.Class.log' m)
+  log m = AppM $ withReaderT (view _sinks) (Control.Monad.Effect.Class.log' m)
 
-instance MonadClipboard AppM where
+instance MonadEffect m => MonadClipboard (AppM m) where
   copy = liftEffect <<< copy

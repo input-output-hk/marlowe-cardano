@@ -43,12 +43,12 @@ currentStepActions
   -> ComponentHTML m
 currentStepActions state =
   let
-    executionState = state ^. _executionState
+    executionState = state.input ^. _executionState
   in
     case
       isClosed executionState,
       isJust executionState.mPendingTransaction,
-      state.namedActions
+      state.input.namedActions
       of
       true, _, _ ->
         div
@@ -117,7 +117,7 @@ renderPartyTasks
   :: forall p. State -> Party -> Array NamedAction -> HTML p Action
 renderPartyTasks state party actions =
   let
-    contractUserParties = state ^. _contractUserParties
+    contractUserParties = state.input ^. _contractUserParties
     actionsSeparatedByOr =
       intercalate
         [ div [ classNames [ "font-semibold", "text-center", "text-xs" ] ]
@@ -132,7 +132,7 @@ renderPartyTasks state party actions =
 renderAction :: forall p. State -> Party -> NamedAction -> HTML p Action
 renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) =
   let
-    contractUserParties = state ^. _contractUserParties
+    contractUserParties = state.input ^. _contractUserParties
 
     isActiveParticipant = isCurrentUser party contractUserParties
 
@@ -175,13 +175,13 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
 
 renderAction state party namedAction@(MakeChoice choiceId bounds) =
   let
-    contractUserParties = state ^. _contractUserParties
+    contractUserParties = state.input ^. _contractUserParties
 
-    mChosenNum = Map.lookup choiceId $ state.choiceValues
+    mChosenNum = Map.lookup choiceId $ state.transient.choiceValues
 
     isActiveParticipant = isCurrentUser party contractUserParties
 
-    metadata = state ^. (_executionState <<< _metadata)
+    metadata = state.input ^. (_executionState <<< _metadata)
 
     -- NOTE': We could eventually add an heuristic that if the difference between min and max is less
     --        than 10 elements, we could show a `select` instead of a input[number]
@@ -283,7 +283,7 @@ renderAction _ _ (Evaluate _) = div []
 
 renderAction state party CloseContract =
   let
-    contractUserParties = state ^. _contractUserParties
+    contractUserParties = state.input ^. _contractUserParties
 
     isActiveParticipant = isCurrentUser party contractUserParties
   in

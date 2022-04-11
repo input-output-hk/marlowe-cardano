@@ -78,8 +78,7 @@ instance isEventAction :: IsEvent Action where
   toEvent EditSource = Just $ defaultEvent "EditSource"
   toEvent (HandleEditorMessage _) = Just $ defaultEvent "HandleEditorMessage"
 
-data Query a
-  = WebsocketResponse (RemoteData String Result) a
+data Query a = WebsocketResponse (RemoteData String Result) a
 
 data BottomPanelView
   = CurrentStateView

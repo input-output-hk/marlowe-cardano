@@ -70,6 +70,8 @@ library
     plutus-ledger-constraints,
     plutus-tx -any,
     plutus-use-cases,
+    serialise -any,
+    base16-bytestring -any,
     text,
     sbv >= 8.4,
     scientific -any,
@@ -91,6 +93,7 @@ library
     Language.Marlowe.Scripts
     Language.Marlowe.Pretty
     Language.Marlowe.Analysis.FSSemantics
+    Plutus.Debug
   other-modules:
 
 test-suite marlowe-test-long-running

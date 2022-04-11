@@ -38,22 +38,33 @@ let
   start-backend = pkgs.writeShellScriptBin "marlowe-run-server" ''
     echo "marlowe-pab-server: for development use only"
     export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
+    export NOMAD_PORT_index="''${NOMAD_PORT_index:-9083}"
     cat > marlowe-run.json <<EOF
     {
       "wbeConfig": { "host": "localhost", "port": $NOMAD_PORT_wbe },
+      "chainIndexConfig": { "host": "localhost", "port": $MONAD_PORT_index },
       "staticPath": "/var/empty",
       "verbosity": 3
     }
     EOF
     (trap 'kill 0' SIGINT;
       $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml webserver &
-      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./marlowe-run.json
+      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./marlowe-run.json -n 1564
     )
   '';
 
+  spagoBuild =
+    ''spago build --purs-args "--strict --stash --censor-lib --stash --is-lib=generated --is-lib=.spago"'';
+
   build-client = writeShellScriptBinInRepoRoot "marlowe-run-spago" ''
     cd marlowe-dashboard-client
-    spago build --purs-args "--strict --stash --censor-lib --stash --is-lib=generated --is-lib=.spago"
+    ${spagoBuild}
+  '';
+
+  test-client = writeShellScriptBinInRepoRoot "marlowe-run-test" ''
+    cd marlowe-dashboard-client
+    ${spagoBuild}
+    npm test
   '';
 
   cleanSrc = gitignore-nix.gitignoreSource ./.;
@@ -84,5 +95,7 @@ let
     });
 in
 {
-  inherit client marlowe-invoker marlowe-run-backend-invoker generate-purescript generated-purescript start-backend build-client;
+  inherit
+    client marlowe-invoker marlowe-run-backend-invoker generate-purescript
+    generated-purescript start-backend build-client test-client;
 }

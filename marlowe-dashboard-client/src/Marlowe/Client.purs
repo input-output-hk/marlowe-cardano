@@ -4,7 +4,11 @@ preferred to have a generated type by purescript-bridge but, the type relies on 
 which doesn't have an Encode/DecodeJson
 -}
 module Marlowe.Client
-  ( getContract
+  ( _chAddress
+  , _chHistory
+  , _chInitialData
+  , _chParams
+  , getContract
   , getInitialData
   , getMarloweParams
   , getTransactionInputs
@@ -23,6 +27,7 @@ import Marlowe.Semantics
   , TransactionInput
   , _marloweContract
   )
+import Plutus.V1.Ledger.Address (Address)
 import Type.Proxy (Proxy(..))
 
 _chParams :: Lens' ContractHistory MarloweParams
@@ -34,8 +39,8 @@ _chInitialData = _Newtype <<< prop (Proxy :: _ "chInitialData")
 _chHistory :: Lens' ContractHistory (Array TransactionInput)
 _chHistory = _Newtype <<< prop (Proxy :: _ "chHistory")
 
--- _chAddress :: Lens' ContractHistory Address
--- _chAddress = _Newtype <<< prop (Proxy :: _ "chAddress")
+_chAddress :: Lens' ContractHistory Address
+_chAddress = _Newtype <<< prop (Proxy :: _ "chAddress")
 
 getContract :: ContractHistory -> Contract
 getContract = view $ _chInitialData <<< _marloweContract

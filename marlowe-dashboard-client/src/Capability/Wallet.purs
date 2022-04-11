@@ -11,12 +11,16 @@ module Capability.Wallet
 import Prologue
 
 import AppM (AppM)
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (lift)
 import Control.Monad.Maybe.Trans (MaybeT)
+import Control.Monad.Reader (ReaderT)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Passphrase (Passphrase)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
+import Effect.Aff (Error)
+import Effect.Class (class MonadEffect)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen (HalogenM)
 import Marlowe.Run.Server as MarloweRun
@@ -28,6 +32,7 @@ import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   )
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Plutus.V1.Ledger.Tx (Tx)
+import Servant.PureScript (class MonadAjax)
 import Types (AjaxResponse)
 
 class Monad m <= ManageWallet m where
@@ -45,7 +50,12 @@ class Monad m <= ManageWallet m where
   getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFundsResponse)
   signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
-instance ManageWallet AppM where
+instance
+  ( MonadError Error m
+  , MonadEffect m
+  , MonadAjax MarloweRun.Api m
+  ) =>
+  ManageWallet (AppM m) where
   createWallet wn p = MarloweRun.postApiWalletV1CentralizedtestnetCreate
     $ CreatePostData { getCreateWalletName: wn, getCreatePassphrase: p }
   restoreWallet mp wn p = MarloweRun.postApiWalletV1CentralizedtestnetRestore
@@ -68,6 +78,14 @@ instance ManageWallet m => ManageWallet (HalogenM state action slots msg m) wher
   signTransaction tx wallet = lift $ signTransaction tx wallet
 
 instance ManageWallet m => ManageWallet (MaybeT m) where
+  createWallet wn p = lift $ createWallet wn p
+  restoreWallet mp wn p = lift $ restoreWallet mp wn p
+  submitWalletTransaction tx wallet = lift $ submitWalletTransaction tx wallet
+  getWalletInfo = lift <<< getWalletInfo
+  getWalletTotalFunds = lift <<< getWalletTotalFunds
+  signTransaction tx wallet = lift $ signTransaction tx wallet
+
+instance ManageWallet m => ManageWallet (ReaderT r m) where
   createWallet wn p = lift $ createWallet wn p
   restoreWallet mp wn p = lift $ restoreWallet mp wn p
   submitWalletTransaction tx wallet = lift $ submitWalletTransaction tx wallet

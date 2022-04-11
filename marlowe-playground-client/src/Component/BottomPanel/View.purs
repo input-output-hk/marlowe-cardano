@@ -37,8 +37,7 @@ import Halogen.HTML (ClassName, HTML, a, div, img, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (alt, classes, src)
 
-type PanelTitle panel
-  =
+type PanelTitle panel =
   { view :: panel
   , classes :: Array ClassName
   , title :: String

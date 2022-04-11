@@ -54,6 +54,6 @@ derive instance Newtype Wallet _
 
 --------------------------------------------------------------------------------
 
-_Wallet :: Iso' Wallet
-  { prettyWalletName :: Maybe String, getWalletId :: String }
+_Wallet
+  :: Iso' Wallet { prettyWalletName :: Maybe String, getWalletId :: String }
 _Wallet = _Newtype

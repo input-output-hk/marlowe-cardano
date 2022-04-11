@@ -9,8 +9,8 @@ import Clipboard (Action(..)) as Clipboard
 import Component.AddContact (_addContact)
 import Component.AddContact (component) as AddContact
 import Component.Address.View as Address
-import Component.Contacts.Lenses (_cardSection)
-import Component.Contacts.Types (Action(..), CardSection(..), State)
+import Component.Contacts.Lenses (_addressBook, _cardSection, _wallet)
+import Component.Contacts.Types (Action(..), CardSection(..), ChildSlots, State)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
 import Css as Css
@@ -25,7 +25,7 @@ import Data.Tuple.Nested ((/\))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Class (class MonadEffect)
-import Halogen (ComponentHTML)
+import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.HTML
   ( HTML
@@ -44,20 +44,21 @@ import Halogen.HTML
   )
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.Store.Monad (class MonadStore)
-import MainFrame.Types (ChildSlots)
 import Store as Store
+
+type ComponentHTML m = H.ComponentHTML Action ChildSlots m
 
 contactsCard
   :: forall m
    . MonadEffect m
   => MonadStore Store.Action Store.Store m
-  => AddressBook
-  -> PABConnectedWallet
-  -> State
-  -> ComponentHTML Action ChildSlots m
-contactsCard addressBook currentWallet state =
+  => State
+  -> ComponentHTML m
+contactsCard state =
   let
+    addressBook = state ^. _addressBook
     cardSection = state ^. _cardSection
+    wallet = state ^. _wallet
   in
     div
       [ classNames
@@ -77,14 +78,9 @@ contactsCard addressBook currentWallet state =
           <> case cardSection of
             Home -> addressBookCard addressBook
             ViewWallet nickname address ->
-              contactDetailsCard currentWallet nickname address
-            NewWallet mTokenName ->
-              [ slot
-                  _addContact
-                  unit
-                  AddContact.component
-                  {} $ OnAddContactMsg
-                  mTokenName
+              contactDetailsCard wallet nickname address
+            NewWallet _ ->
+              [ slot _addContact unit AddContact.component {} OnAddContactMsg
               ]
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action

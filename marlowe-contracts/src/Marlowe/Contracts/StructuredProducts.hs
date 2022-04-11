@@ -14,7 +14,7 @@ import Marlowe.Contracts.ZeroCouponBond
 --
 -- === Construction
 -- A /Reverse Convertible/ is typically constructed by combining a /zero-coupon Bond/
--- with a short position of an /Option/ with the same maturity and the face value
+-- with a short position of a /Put-Option/ with the same maturity and the face value
 -- of the Bond is equal to the strike of the Option - i.e. the short position of the
 -- Option is collateralized by the face value of the Bond. The coupon payment is the
 -- premium received by shorting the Option.
@@ -69,18 +69,19 @@ import Marlowe.Contracts.ZeroCouponBond
 -- from selling the option, in the example: @Underlying + 100@
 --
 reverseConvertible ::
-     Party   -- ^ Investor
-  -> Timeout -- ^ Initial fixing
-  -> Timeout -- ^ Maturity
-  -> Timeout -- ^ Settlement date
-  -> Token   -- ^ Currency
-  -> Token   -- ^ Underlying
-  -> Value   -- ^ Strike
-  -> Value   -- ^ Ratio
-  -> Value   -- ^ Issue Price
-  -> Contract          -- ^ Reverse Convertible Contract
-reverseConvertible investor fixing maturity settlement currency underlying strike ratio issuePrice =
-  zcb `both` shortCall
+     Party          -- ^ Investor
+  -> Timeout        -- ^ Initial fixing
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement date
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Strike
+  -> Value          -- ^ Ratio
+  -> Value          -- ^ Issue Price
+  -> Contract       -- ^ Reverse Convertible Contract
+reverseConvertible investor fixing maturity settlement priceFeed currency underlying strike ratio issuePrice =
+  zcb `both` shortPut
   where
     zcb =
       zeroCouponBond'
@@ -92,13 +93,59 @@ reverseConvertible investor fixing maturity settlement currency underlying strik
         strike
         currency
         Close
-    shortCall =
+    shortPut =
       option
         European
-        Call
+        Put
         (Role "OptionCounterparty")
         investor
-        (currency, strike)
+        priceFeed
         (underlying, ratio)
+        (currency, strike)
+        maturity
+        settlement
+
+-- |Similar to `reverseConvertible` constructed from a Bond in combination with a Down-And-In Put barrier option
+barrierReverseConvertible ::
+     Party          -- ^ Investor
+  -> Timeout        -- ^ Initial fixing
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement date
+  -> [Timeout]      -- ^ Barrier observation dates
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Strike
+  -> Value          -- ^ Barrier
+  -> Value          -- ^ Ratio
+  -> Value          -- ^ Issue Price
+  -> Contract       -- ^ Reverse Convertible Contract
+barrierReverseConvertible investor fixing maturity settlement observationDates priceFeed currency underlying strike barrier ratio issuePrice =
+  zcb `both` shortPut
+  where
+    zcb =
+      zeroCouponBond'
+        investor
+        (Role "BondProvider")
+        fixing
+        maturity
+        issuePrice
+        strike
+        currency
+        Close
+    shortPut =
+      barrierOption
+        European
+        Put
+        DownAndIn
+        (Role "OptionCounterparty")
+        investor
+        priceFeed
+        currency
+        underlying
+        strike
+        ratio
+        barrier
+        observationDates
         maturity
         settlement

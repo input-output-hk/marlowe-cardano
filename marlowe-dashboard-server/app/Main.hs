@@ -11,6 +11,8 @@ where
 
 import Prelude hiding (toEnum)
 
+import Cardano.Api (NetworkId, NetworkMagic (NetworkMagic))
+import Cardano.Api.Byron (NetworkId (Testnet))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logInfoN, runStderrLoggingT)
 import qualified Data.Text as Text
@@ -18,7 +20,9 @@ import Network.Wai.Handler.Warp (HostPreference, defaultSettings, setHost, setPo
 import Options.Applicative (CommandFields, Mod, Parser, ReadM, auto, command, customExecParser, disambiguate, fullDesc,
                             help, helper, idm, info, long, option, prefs, readerError, short, showDefault,
                             showHelpOnEmpty, showHelpOnError, strOption, subparser, value)
+import qualified Prelude as P
 import Prelude.SafeEnum as SafeEnum
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Verbosity (Verbosity (..))
 import qualified Webserver
 
@@ -34,7 +38,8 @@ data Command
       { _host      :: !HostPreference,
         _port      :: !Int,
         _config    :: !FilePath,
-        _verbosity :: !(Maybe Verbosity)
+        _verbosity :: !(Maybe Verbosity),
+        _networkId :: !NetworkId
       }
   deriving (Show, Eq)
 
@@ -51,6 +56,7 @@ webserverCommandParser =
               <> showDefault
               <> value "127.0.0.1"
           )
+
       _port <-
         option
           auto
@@ -58,6 +64,7 @@ webserverCommandParser =
               <> showDefault
               <> value 8080
           )
+
       _verbosity <-
         option
           ( do
@@ -75,10 +82,17 @@ webserverCommandParser =
         strOption
           ( short 'c' <> long "config" <> help "Location of the configuration file"
           )
+
+      _networkId <-
+        option
+          (Testnet . NetworkMagic . P.toEnum <$> auto)
+          ( short 'n' <> long "network-id" <> help "The Cardano network ID"
+          )
+
       pure Run {..}
 
 runCommand :: (MonadIO m, MonadLogger m) => Command -> m ()
-runCommand Run {..} = liftIO $ Webserver.run _config settings _verbosity
+runCommand Run {..} = liftIO $ Webserver.run _config settings _verbosity _networkId
   where
     settings = setHost _host . setPort _port $ defaultSettings
 
@@ -89,5 +103,7 @@ main = do
       (prefs $ disambiguate <> showHelpOnEmpty <> showHelpOnError)
       (info (helper <*> commandParser) idm)
   runStderrLoggingT $ do
+    liftIO $ hSetBuffering stdout LineBuffering
+    liftIO $ hSetBuffering stderr LineBuffering
     logInfoN $ "Running: " <> Text.pack (show options)
     runCommand options

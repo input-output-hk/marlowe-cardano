@@ -632,6 +632,7 @@
         "deriving-compat".flags.base-4-9 = true;
         "deriving-compat".flags.template-haskell-2-11 = true;
         "path-pieces".revision = (((hackage."path-pieces")."0.2.1").revisions).default;
+        "base16".revision = (((hackage."base16")."0.3.1.0").revisions).default;
         "testing-type-modifiers".revision = (((hackage."testing-type-modifiers")."0.1.0.1").revisions).default;
         "cmdargs".revision = (((hackage."cmdargs")."0.10.21").revisions).default;
         "cmdargs".flags.quotation = true;
@@ -1807,6 +1808,7 @@
           "Only".components.library.planned = lib.mkOverride 900 true;
           "cryptohash-sha1".components.library.planned = lib.mkOverride 900 true;
           "prelude-safeenum".components.library.planned = lib.mkOverride 900 true;
+          "base16".components.library.planned = lib.mkOverride 900 true;
           "exact-combinatorics".components.library.planned = lib.mkOverride 900 true;
           "crypto-api".components.library.planned = lib.mkOverride 900 true;
           "cardano-cli".components.exes."cardano-cli".planned = lib.mkOverride 900 true;

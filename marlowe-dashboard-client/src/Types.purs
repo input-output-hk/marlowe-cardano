@@ -6,7 +6,8 @@ import Data.Argonaut (Json, fromString)
 import Data.Argonaut.Decode (JsonDecodeError)
 import Data.Variant (Variant)
 import Data.Variant as Variant
-import Errors (class Debuggable, class Explain)
+import Errors.Debuggable (class Debuggable)
+import Errors.Explain (class Explain)
 import Servant.PureScript (AjaxError)
 import Text.Pretty (text)
 import Type.Proxy (Proxy(..))
@@ -41,12 +42,9 @@ type JsonDecodeErrorRow r = (jsonDecodeError :: JsonDecodeError | r)
 jsonDecodeError :: forall r. JsonDecodeError -> Variant (JsonDecodeErrorRow r)
 jsonDecodeError = Variant.inj (Proxy :: Proxy "jsonDecodeError")
 
-type AjaxResponse
-  = Either JsonAjaxError
+type AjaxResponse = Either JsonAjaxError
 
-type DecodedAjaxError
-  = Either JsonAjaxError JsonDecodeError
+type DecodedAjaxError = Either JsonAjaxError JsonDecodeError
 
-type DecodedAjaxResponse
-  = Either DecodedAjaxError
+type DecodedAjaxResponse = Either DecodedAjaxError
 

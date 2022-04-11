@@ -6,8 +6,7 @@ import Analytics (class IsEvent)
 import Component.Projects.Types (Lang)
 import Data.Newtype (class Newtype)
 
-newtype Demo
-  = Demo String
+newtype Demo = Demo String
 
 derive instance newtypeDemo :: Newtype Demo _
 

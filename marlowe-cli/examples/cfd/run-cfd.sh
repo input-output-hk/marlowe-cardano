@@ -16,6 +16,8 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
+echo '* tr'
+echo '* basenc'
 echo
 echo "Signing and verification keys must be provided below for the oracle and party roles: to do this, set the environment variables "'`'"PARTY_PREFIX"'`'", "'`'"COUNTERPARTY_PREFIX"'`'", and "'`'"ORACLE_PREFIX"'`'" where they appear below."
 
@@ -23,7 +25,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if true
+if false
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -49,6 +51,7 @@ echo "The party bets that the asset under consideration will decrease. If it inc
 PARTY_PREFIX="$TREASURY/francis-beaumont"
 PARTY_NAME="Francis Beaumont"
 PARTY_ROLE=FB
+PARTY_ROLE_HEX=$(echo -n "$PARTY_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 PARTY_TOKEN="$ROLE_CURRENCY.$PARTY_ROLE"
 PARTY_PAYMENT_SKEY="$PARTY_PREFIX".skey
 PARTY_PAYMENT_VKEY="$PARTY_PREFIX".vkey
@@ -78,10 +81,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_PARTY_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                     \
-                       --address "$PARTY_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                            \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$PARTY_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                         \
+                       --address "$PARTY_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$PARTY_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$PARTY_NAME will spend the UTxOs "'`'"$TX_0_PARTY_ADA"'`'" and "'`'"$TX_0_PARTY_TOKEN"'`.'
@@ -93,6 +96,7 @@ echo "The counterparty bets that the asset under consideration will increase. If
 COUNTERPARTY_PREFIX="$TREASURY/thomas-middleton"
 COUNTERPARTY_NAME="Thomas Middleton"
 COUNTERPARTY_ROLE=TM
+COUNTERPARTY_ROLE_HEX=$(echo -n "$COUNTERPARTY_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 COUNTERPARTY_TOKEN="$ROLE_CURRENCY.$COUNTERPARTY_ROLE"
 COUNTERPARTY_PAYMENT_SKEY="$COUNTERPARTY_PREFIX".skey
 COUNTERPARTY_PAYMENT_VKEY="$COUNTERPARTY_PREFIX".vkey
@@ -122,10 +126,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_COUNTERPARTY_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$COUNTERPARTY_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$COUNTERPARTY_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                                \
+                       --address "$COUNTERPARTY_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                       \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$COUNTERPARTY_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$COUNTERPARTY_NAME will spend the UTxOs "'`'"$TX_0_COUNTERPARTY_ADA"'`'" and "'`'"$TX_0_COUNTERPARTY_TOKEN"'`.'
@@ -137,6 +141,7 @@ echo "The oracle reports prices to the contract."
 ORACLE_PREFIX="$TREASURY/christopher-marlowe"
 ORACLE_NAME="Christopher Marlowe"
 ORACLE_ROLE=CM
+ORACLE_ROLE_HEX=$(echo -n "$ORACLE_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 ORACLE_TOKEN="$ROLE_CURRENCY.$ORACLE_ROLE"
 ORACLE_PAYMENT_SKEY="$ORACLE_PREFIX".skey
 ORACLE_PAYMENT_VKEY="$ORACLE_PREFIX".vkey
@@ -166,10 +171,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_ORACLE_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                      \
-                       --address "$ORACLE_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                             \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$ORACLE_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                          \
+                       --address "$ORACLE_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                 \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$ORACLE_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$ORACLE_NAME will spend the UTxOs "'`'"$TX_0_ORACLE_ADA"'`'" and "'`'"$TX_0_ORACLE_TOKEN"'`.'

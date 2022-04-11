@@ -35,9 +35,11 @@
         depends = [
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
+          (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
@@ -46,6 +48,8 @@
           (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
+          (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+          (hsPkgs."marlowe-cli" or (errorHandler.buildDepError "marlowe-cli"))
           (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
@@ -72,6 +76,8 @@
         buildable = true;
         modules = [
           "Marlowe/Run"
+          "Marlowe/Run/Contract/V1"
+          "Marlowe/Run/Contract/V1/Server"
           "Marlowe/Run/Wallet/V1"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/Server"
@@ -80,6 +86,8 @@
           "Marlowe/Run/API"
           "Marlowe/Run/Env"
           "Marlowe/Run/Server"
+          "Marlowe/Run/Contract/V1/API"
+          "Marlowe/Run/Contract/V1/Types"
           "Marlowe/Run/Wallet/V1/API"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/API"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/Types"
@@ -94,6 +102,7 @@
           depends = [
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
             (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
             (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
@@ -108,6 +117,7 @@
             (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
+            (hsPkgs."wai-logger" or (errorHandler.buildDepError "wai-logger"))
             (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
             ];
           buildable = true;

@@ -71,8 +71,7 @@ instance showModalView :: Show ModalView where
 -- does not work. For the moment I've made a manual instance, but not sure why
 -- ModalView requires show, or if we should make Action an instance of Show
 -- show = genericShow
-data Query a
-  = ChangeRoute Route a
+data Query a = ChangeRoute Route a
 
 data Action
   = Init
@@ -140,8 +139,7 @@ derive instance genericView :: Generic View _
 instance showView :: Show View where
   show = genericShow
 
-type ChildSlots
-  =
+type ChildSlots =
   ( haskellEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
   , jsEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
   , blocklySlot :: H.Slot Blockly.Query Blockly.Message Unit
@@ -179,8 +177,7 @@ _currencyInputSlot :: Proxy "currencyInput"
 _currencyInputSlot = Proxy
 
 -----------------------------------------------------------
-type State
-  =
+type State =
   { view :: View
   , jsCompilationResult :: CompilationState
   , jsEditorKeybindings :: KeyBindings
@@ -335,8 +332,7 @@ isActiveTab :: State -> View -> Array ClassName
 isActiveTab state activeView = state ^. _view <<< (activeClass (eq activeView))
 
 -----------------------------------------------------------
-newtype Session
-  = Session
+newtype Session = Session
   { projectName :: String
   , gistId :: Maybe GistId
   , workflow :: Maybe Lang

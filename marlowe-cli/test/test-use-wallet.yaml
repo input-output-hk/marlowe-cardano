@@ -1,0 +1,11 @@
+ptTestName: Returning Funds
+
+ptPabOperations:
+
+- tag: UseWallet
+  poOwner: PAB
+  poWalletId: ffad420107082691531cad6e434ab73dce064edf
+  poPassphrase: fixme-allow-pass-per-wallet
+
+- tag: PrintWallet
+  poOwner: PAB

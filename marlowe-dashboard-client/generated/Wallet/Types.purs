@@ -102,8 +102,8 @@ derive instance Newtype EndpointDescription _
 
 --------------------------------------------------------------------------------
 
-_EndpointDescription :: Iso' EndpointDescription
-  { getEndpointDescription :: String }
+_EndpointDescription
+  :: Iso' EndpointDescription { getEndpointDescription :: String }
 _EndpointDescription = _Newtype
 
 --------------------------------------------------------------------------------
@@ -170,11 +170,12 @@ derive instance Newtype Notification _
 
 --------------------------------------------------------------------------------
 
-_Notification :: Iso' Notification
-  { notificationContractID :: PlutusAppId
-  , notificationContractEndpoint :: EndpointDescription
-  , notificationContractArg :: Json
-  }
+_Notification
+  :: Iso' Notification
+       { notificationContractID :: PlutusAppId
+       , notificationContractEndpoint :: EndpointDescription
+       , notificationContractArg :: Json
+       }
 _Notification = _Newtype
 
 --------------------------------------------------------------------------------
@@ -220,15 +221,15 @@ derive instance Generic NotificationError _
 
 --------------------------------------------------------------------------------
 
-_EndpointNotAvailable :: Prism' NotificationError
-  { a :: PlutusAppId, b :: EndpointDescription }
+_EndpointNotAvailable
+  :: Prism' NotificationError { a :: PlutusAppId, b :: EndpointDescription }
 _EndpointNotAvailable = prism' (\{ a, b } -> (EndpointNotAvailable a b))
   case _ of
     (EndpointNotAvailable a b) -> Just { a, b }
     _ -> Nothing
 
-_MoreThanOneEndpointAvailable :: Prism' NotificationError
-  { a :: PlutusAppId, b :: EndpointDescription }
+_MoreThanOneEndpointAvailable
+  :: Prism' NotificationError { a :: PlutusAppId, b :: EndpointDescription }
 _MoreThanOneEndpointAvailable = prism'
   (\{ a, b } -> (MoreThanOneEndpointAvailable a b))
   case _ of
@@ -240,8 +241,9 @@ _InstanceDoesNotExist = prism' InstanceDoesNotExist case _ of
   (InstanceDoesNotExist a) -> Just a
   _ -> Nothing
 
-_NotificationJSONDecodeError :: Prism' NotificationError
-  { a :: EndpointDescription, b :: Json, c :: String }
+_NotificationJSONDecodeError
+  :: Prism' NotificationError
+       { a :: EndpointDescription, b :: Json, c :: String }
 _NotificationJSONDecodeError = prism'
   (\{ a, b, c } -> (NotificationJSONDecodeError a b c))
   case _ of

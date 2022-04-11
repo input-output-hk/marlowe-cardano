@@ -58,8 +58,8 @@ derive instance Newtype SlotConfig _
 
 --------------------------------------------------------------------------------
 
-_SlotConfig :: Iso' SlotConfig
-  { scSlotLength :: BigInt, scSlotZeroTime :: POSIXTime }
+_SlotConfig
+  :: Iso' SlotConfig { scSlotLength :: BigInt, scSlotZeroTime :: POSIXTime }
 _SlotConfig = _Newtype
 
 --------------------------------------------------------------------------------
@@ -96,6 +96,7 @@ derive instance Newtype SlotConversionError _
 
 --------------------------------------------------------------------------------
 
-_SlotOutOfRange :: Iso' SlotConversionError
-  { requestedSlot :: Slot, horizon :: Tuple Slot POSIXTime }
+_SlotOutOfRange
+  :: Iso' SlotConversionError
+       { requestedSlot :: Slot, horizon :: Tuple Slot POSIXTime }
 _SlotOutOfRange = _Newtype

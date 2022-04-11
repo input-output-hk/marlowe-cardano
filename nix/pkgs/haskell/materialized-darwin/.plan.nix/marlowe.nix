@@ -55,6 +55,8 @@
           (hsPkgs."plutus-ledger-constraints" or (errorHandler.buildDepError "plutus-ledger-constraints"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-use-cases" or (errorHandler.buildDepError "plutus-use-cases"))
+          (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
+          (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."sbv" or (errorHandler.buildDepError "sbv"))
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
@@ -76,6 +78,7 @@
           "Language/Marlowe/Scripts"
           "Language/Marlowe/Pretty"
           "Language/Marlowe/Analysis/FSSemantics"
+          "Plutus/Debug"
           ];
         hsSourceDirs = [ "src" ];
         };

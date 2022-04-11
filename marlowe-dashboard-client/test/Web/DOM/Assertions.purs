@@ -18,6 +18,18 @@ import Web.DOM.Node (textContent)
 import Web.HTML (HTMLButtonElement)
 import Web.HTML.HTMLButtonElement as ButtonElement
 
+shouldHaveTextM
+  :: forall node m
+   . IsNode node
+  => MonadThrow Error m
+  => MonadEffect m
+  => m node
+  -> String
+  -> m Unit
+shouldHaveTextM nodeM text = do
+  node <- nodeM
+  shouldHaveText node text
+
 shouldHaveText
   :: forall node m
    . IsNode node

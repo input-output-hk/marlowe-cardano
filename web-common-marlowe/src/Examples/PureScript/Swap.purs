@@ -74,8 +74,7 @@ dollarDepositTimeout = TimeParam "Timeout for dollar deposit"
 dollars :: Token
 dollars = Token "85bb65" "dollar"
 
-type SwapParty
-  =
+type SwapParty =
   { party :: Party
   , currency :: Token
   , amount :: Value

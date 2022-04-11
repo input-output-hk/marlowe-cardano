@@ -1,10 +1,10 @@
 /*eslint-env node*/
 import "./static/css/main.css";
 // We need to patch the JSON.stringify in order for BigInt serialization to work.
-var JSONbig = require("json-bigint");
+const { stringify, parse } = require("json-bigint")({ useNativeBigInt: true });
 
-JSON.stringify = JSONbig.stringify;
-JSON.parse = JSONbig.parse;
+JSON.stringify = stringify;
+JSON.parse = parse;
 
 require("./output/Main").main({
   webpackDevelMode: process.env.NODE_ENV === "development",

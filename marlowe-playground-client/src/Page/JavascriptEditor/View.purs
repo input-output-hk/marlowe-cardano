@@ -46,6 +46,7 @@ import Halogen.HTML
   )
 import Halogen.HTML.Events (onClick, onSelectedIndexChange)
 import Halogen.HTML.Properties as HP
+import Halogen.HTML.Properties.ARIA (label, role)
 import Language.Javascript.Interpreter
   ( CompilationError(..)
   , InterpreterResult(..)
@@ -86,7 +87,11 @@ render
   -> ComponentHTML Action ChildSlots m
 render metadata state =
   div [ HP.classes [ flex, flexCol, fullHeight ] ]
-    [ section [ HP.classes [ paddingX, minH0, flexGrow, overflowHidden ] ]
+    [ section
+        [ HP.classes [ paddingX, minH0, flexGrow, overflowHidden ]
+        , role "heading"
+        , label "javascript-editor"
+        ]
         [ jsEditor ]
     , section [ HP.classes [ paddingX, maxH70p ] ]
         [ renderSubmodule

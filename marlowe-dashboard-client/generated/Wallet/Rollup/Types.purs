@@ -74,14 +74,15 @@ derive instance Newtype AnnotatedTx _
 
 --------------------------------------------------------------------------------
 
-_AnnotatedTx :: Iso' AnnotatedTx
-  { sequenceId :: SequenceId
-  , txId :: TxId
-  , tx :: Tx
-  , dereferencedInputs :: Array DereferencedInput
-  , balances :: Map BeneficialOwner Value
-  , valid :: Boolean
-  }
+_AnnotatedTx
+  :: Iso' AnnotatedTx
+       { sequenceId :: SequenceId
+       , txId :: TxId
+       , tx :: Tx
+       , dereferencedInputs :: Array DereferencedInput
+       , balances :: Map BeneficialOwner Value
+       , valid :: Boolean
+       }
 _AnnotatedTx = _Newtype
 
 --------------------------------------------------------------------------------
@@ -164,8 +165,8 @@ derive instance Generic DereferencedInput _
 
 --------------------------------------------------------------------------------
 
-_DereferencedInput :: Prism' DereferencedInput
-  { originalInput :: TxIn, refersTo :: TxOut }
+_DereferencedInput
+  :: Prism' DereferencedInput { originalInput :: TxIn, refersTo :: TxOut }
 _DereferencedInput = prism' DereferencedInput case _ of
   (DereferencedInput a) -> Just a
   _ -> Nothing

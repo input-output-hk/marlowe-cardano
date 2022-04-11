@@ -29,12 +29,13 @@ module Language.Marlowe.CLI.Test.PAB (
 ) where
 
 
-import Cardano.Api (AddressAny (..), AddressInEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr), AssetId (..),
-                    AssetName (..), PolicyId (..), Quantity (..), ShelleyEra, anyAddressInShelleyBasedEra,
-                    deserialiseAddress, deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace,
-                    selectLovelace, toAddressAny, valueFromList, valueToList)
+import Cardano.Api (AddressAny (..), AddressInEra (..), AlonzoEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr),
+                    AssetId (..), AssetName (..), LocalNodeConnectInfo (..), PolicyId (..), Quantity (..), ShelleyEra,
+                    StakeAddressReference (NoStakeAddress), anyAddressInShelleyBasedEra, deserialiseAddress,
+                    deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace, selectLovelace,
+                    serialiseAddress, toAddressAny, valueFromList, valueToList)
 import Cardano.Api.Shelley (shelleyPayAddrToPlutusPubKHash)
-import Cardano.Mnemonic (SomeMnemonic (..))
+import Cardano.Mnemonic (SomeMnemonic (..), mnemonicToText)
 import Cardano.Wallet.Api (GetTransaction, MigrateShelleyWallet)
 import Cardano.Wallet.Api.Client (addressClient, getWallet, listAddresses, postWallet, walletClient)
 import Cardano.Wallet.Api.Types (ApiMnemonicT (..), ApiT (..), ApiTransaction (..), ApiTxId (..), ApiWallet (..),
@@ -61,12 +62,13 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Proxy (Proxy (..))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.UUID.V4 (nextRandom)
+import Language.Marlowe.CLI.Export (buildAddress, buildRoleAddress)
 import Language.Marlowe.CLI.IO (liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.PAB (receiveStatus)
 import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), InstanceNickname, PabAccess (..), PabOperation (..),
                                         PabState (..), PabTest (..), RoleName, WalletInfo (..), psAppInstances,
                                         psBurnAddress, psFaucetAddress, psFaucetKey, psPassphrase, psWallets)
-import Language.Marlowe.CLI.Transaction (buildFaucet)
+import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
                                 EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
@@ -94,7 +96,7 @@ import qualified Data.ByteString.Char8 as BS8 (pack)
 import qualified Data.HashMap.Strict as H (lookup)
 import qualified Data.Map.Strict as M (adjust, insert, lookup)
 import qualified Data.Quantity as W (Quantity (..))
-import qualified Data.Text as T (pack)
+import qualified Data.Text as T (pack, unpack)
 import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
 import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
@@ -133,7 +135,7 @@ pabTest access faucetKey faucetAddress burnAddress passphrase PabTest{..} =
         -- TODO: Clean up wallets and instances.
         liftIO (putStrLn "***** FAILED *****")
           >> throwError (e :: CliError)
-    liftIO $ putStrLn "***** SUCCEEDED *****"
+    liftIO $ putStrLn "***** PASSED *****"
 
 
 -- | Execute a test operation.
@@ -147,7 +149,15 @@ interpret access CreateWallet{..} =
   do
     passphrase <- use psPassphrase
     wi <- lift $ createWallet access poOwner passphrase
-    liftIO . putStrLn $ "[CreateWallet] Created wallet " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
+    liftIO . putStrLn $ "[CreateWallet] Created wallet identified as " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
+    psWallets %= M.insert poOwner wi
+
+interpret access UseWallet{..} =
+  do
+    let
+      passphrase = Passphrase . BA.pack $ toEnum . fromEnum <$> poPassphrase
+    wi <- lift $ useWallet access poWalletId passphrase
+    liftIO . putStrLn $ "[UseWallet] Using wallet identified as " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
     psWallets %= M.insert poOwner wi
 
 interpret PabAccess{..} FundWallet{..} =
@@ -161,12 +171,11 @@ interpret PabAccess{..} FundWallet{..} =
           poValue wiAddress
           faucetAddress faucetKey
           (Just 600)
-    liftIO . putStrLn $ "[FundWallet] Funded wallet " <> show (W.getWalletId wiWalletId) <> " for role " <> show poOwner <> " with " <> show poValue <> "."
+    liftIO . putStrLn $ "[FundWallet] Funded wallet for role " <> show poOwner <> " with " <> show poValue <> "."
 
 interpret PabAccess{..} ReturnFunds{..} =
   do
     WalletInfo{..} <- findOwner poOwner
-    passphrase <- use psPassphrase
     faucetAddress <- use psFaucetAddress
     faucetAddress' <-
       case faucetAddress of
@@ -180,7 +189,7 @@ interpret PabAccess{..} ReturnFunds{..} =
       . runWallet
       $ migrate
           (ApiT wiWalletId)
-          (ApiWalletMigrationPostData (ApiT passphrase) ((ApiT faucetAddress', Proxy) :| []))
+          (ApiWalletMigrationPostData (ApiT wiPassphrase) ((ApiT faucetAddress', Proxy) :| []))
     let
       go =
         do
@@ -206,7 +215,7 @@ interpret PabAccess{..} ReturnFunds{..} =
           (minAda <> roleTokens) burnAddress
           faucetAddress faucetKey
           (Just 600)
-    liftIO . putStrLn $ "[ReturnFunds] Returned funds from wallet " <> show (W.getWalletId wiWalletId) <> "."
+    liftIO . putStrLn $ "[ReturnFunds] Returned funds from wallet for role " <> show poOwner <> "."
 
 interpret access CheckFunds{..} =
   do
@@ -235,7 +244,7 @@ interpret access ActivateApp{..} =
     (aiInstance, aiChannel) <- lift $ runContract access MarloweApp wiWalletId'
     let
       aiParams = Nothing
-    liftIO . putStrLn $ "[ActivateApp] Activated MarloweApp instance " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
+    liftIO . putStrLn $ "[ActivateApp] Activated MarloweApp instance " <> show poInstance <> " with identifier " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
     psAppInstances %= M.insert poInstance AppInstanceInfo{..}
 
 interpret access CallCreate{..} =
@@ -254,9 +263,9 @@ interpret access CallCreate{..} =
         poOwners
     lift
       $ call access aiInstance "create" ((uuid, AM.fromList owners, poContract) :: CreateEndpointSchema)
-    liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show (unContractInstanceId aiInstance) <> " for owners " <> show owners <> "."
+    liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show poInstance <> " for owners " <> show owners <> "."
 
-interpret _ AwaitCreate{..} =
+interpret PabAccess{localConnection = LocalNodeConnectInfo _ network _} AwaitCreate{..} =
   do
     result <- awaitApp poInstance (-1)
     case result of
@@ -265,7 +274,10 @@ interpret _ AwaitCreate{..} =
                                    M.adjust
                                      (\ai -> ai {aiParams = Just params})
                                      poInstance
-                                 liftIO . putStrLn $ "[AwaitCreate] Creation confirmed with " <> show params <> "."
+                                 let
+                                   appAddress = T.unpack $ serialiseAddress (buildAddress params network NoStakeAddress :: AddressInEra AlonzoEra)
+                                   roleAddress = T.unpack $ serialiseAddress (buildRoleAddress (rolesCurrency params) network NoStakeAddress :: AddressInEra AlonzoEra)
+                                 liftIO . putStrLn $ "[AwaitCreate] Creation confirmed for app address " <> appAddress <> " and role address " <> roleAddress <> " with " <> show params <> "."
       _                     -> throwError . CliError $ "[AwaitCreate] received unexpected response " <> show result <> "."
 
 interpret access CallApplyInputs{..} =
@@ -275,7 +287,7 @@ interpret access CallApplyInputs{..} =
     params <- maybe (throwError $ CliError "[CallApplyInputs] Contract parameters are not known.") pure aiParams
     lift
       $ call access aiInstance "apply-inputs" ((uuid, params, poTimes, poInputs) :: ApplyInputsEndpointSchema)
-    liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on " <> show (unContractInstanceId aiInstance) <> " for inputs " <> show poInputs <> " and times " <> show poTimes <> "."
+    liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on instance " <> show poInstance <> " for inputs " <> show poInputs <> " and times " <> show poTimes <> "."
 
 interpret _ AwaitApplyInputs{..} =
   do
@@ -297,7 +309,7 @@ interpret access CallAuto{..} =
       , Role . TokenName . toBuiltin $ BS8.pack poOwner
       , poAbsoluteTime
       ) :: AutoEndpointSchema)
-    liftIO . putStrLn $ "[CallAuto] Endpoint \"auto\" called on " <> show (unContractInstanceId aiInstance) <> " on behalf of role " <> show poOwner <> " until time " <> show poAbsoluteTime <> "."
+    liftIO . putStrLn $ "[CallAuto] Endpoint \"auto\" called on instance " <> show poInstance <> " on behalf of role " <> show poOwner <> " until time " <> show poAbsoluteTime <> "."
 
 interpret _ AwaitAuto{..} =
   do
@@ -320,7 +332,7 @@ interpret access CallRedeem{..} =
       , TokenName . toBuiltin $ BS8.pack poOwner
       , anyAddressInShelleyBasedEra wiAddress :: AddressInEra ShelleyEra
       ) :: RedeemEndpointSchema)
-    liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
+    liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on instance " <> show poInstance <> " for role " <> show poOwner <> "."
 
 interpret _ AwaitRedeem{..} =
   do
@@ -335,7 +347,7 @@ interpret access CallClose{..} =
     AppInstanceInfo{..} <- findInstance poInstance
     lift
       $ call access aiInstance "close" uuid
-    liftIO . putStrLn $ "[CallClose] Endpoint \"close\" called on " <> show (unContractInstanceId aiInstance) <> "."
+    liftIO . putStrLn $ "[CallClose] Endpoint \"close\" called on instance " <> show poInstance <> "."
 
 interpret _ AwaitClose{..} =
   do
@@ -353,17 +365,16 @@ interpret PabAccess{..} Stop{..} =
     liftCliIO
       $ runApi stopInstance
     -- TODO: Update state.
-    liftIO . putStrLn $ "[Stop] Instance " <> show (unContractInstanceId aiInstance) <> " stopped."
+    liftIO . putStrLn $ "[Stop] Instance " <> show poInstance <> " stopped."
 
 interpret _ Follow{..} =
   do
-    aiThis <- findInstance poInstance
     aiOther <- findInstance poOtherInstance
     psAppInstances %=
       M.adjust
         (\ai -> ai {aiParams = aiParams aiOther})
         poInstance
-    liftIO . putStrLn $ "[Follow] Instance " <> show (unContractInstanceId $ aiInstance aiThis) <> " now follows instance " <> show (unContractInstanceId $ aiInstance aiOther) <> "."
+    liftIO . putStrLn $ "[Follow] Instance " <> show poInstance <> " now follows instance " <> show poOtherInstance <> "."
 
 interpret _ PrintState =
   do
@@ -375,6 +386,28 @@ interpret access PrintWallet{..} =
     WalletInfo{..} <- findOwner poOwner
     actual <- lift $ totalBalance access wiWalletId
     liftIO . putStrLn $ "[PrintWallet] Wallet for role " <> show poOwner <> " contains " <> show actual <> "."
+
+interpret PabAccess{..} PrintAppUTxOs{..} =
+  do
+    AppInstanceInfo{..} <- findInstance poInstance
+    params <- maybe (throwError $ CliError "[PrintAppUTxOs] Contract parameters are not known.") pure aiParams
+    let
+      toAddressAny' (AddressInEra _ address') = toAddressAny address'
+      LocalNodeConnectInfo _ network _ = localConnection
+      address = buildAddress params network NoStakeAddress :: AddressInEra AlonzoEra
+    utxos <- queryUtxos localConnection $ toAddressAny' address
+    liftIO . putStrLn $ "[PrintAppUTxOs] App address " <> T.unpack (serialiseAddress address) <> " contains " <> show utxos <> "."
+
+interpret PabAccess{..} PrintRoleUTxOs{..} =
+  do
+    AppInstanceInfo{..} <- findInstance poInstance
+    params <- maybe (throwError $ CliError "[PrintRoleUTxOs] Contract parameters are not known.") pure aiParams
+    let
+      toAddressAny' (AddressInEra _ address') = toAddressAny address'
+      LocalNodeConnectInfo _ network _ = localConnection
+      address = buildRoleAddress (rolesCurrency params) network NoStakeAddress :: AddressInEra AlonzoEra
+    utxos <- queryUtxos localConnection $ toAddressAny' address
+    liftIO . putStrLn $ "[PrintAppUTxOs] Role address " <> T.unpack (serialiseAddress address) <> " contains " <> show utxos <> "."
 
 interpret _ Comment{..} =
   liftIO . putStrLn $ "[Comment] " <> poComment
@@ -400,13 +433,13 @@ interpret access Timeout{..} =
     result <-
       liftIO
         . timeout (1_000_000 * poTimeoutSeconds)
-        $ runOperationsToIO access [poOperation] state
+        $ runOperationsToIO access poOperations state
     case result of
       Just (Right state') -> do
                                put state'
-                               liftIO . putStrLn $ "[Timeout] Operation completed within " <> show poTimeoutSeconds <> " seconds."
+                               liftIO . putStrLn $ "[Timeout] Operations completed within " <> show poTimeoutSeconds <> " seconds."
       Just (Left e)       -> throwError e
-      Nothing             -> throwError . CliError $ "[Timeout] Operation did not complete within " <> show poTimeoutSeconds <> " seconds: " <> show poOperation <> "."
+      Nothing             -> throwError . CliError $ "[Timeout] Operations did not complete within " <> show poTimeoutSeconds <> " seconds: " <> show poOperations <> "."
 
 interpret access ShouldFail{..} =
   do
@@ -489,7 +522,7 @@ findRoleTokens poOwner poInstances =
       do
         AppInstanceInfo{..} <- findInstance poInstance
         CurrencySymbol currency <-
-          liftCliMaybe ("[findRoleTokens] Parameters not found for instance " <> show (unContractInstanceId aiInstance) <> ".")
+          liftCliMaybe ("[findRoleTokens] Parameters not found for instance " <> show poInstance <> ".")
             $ rolesCurrency
             <$> aiParams
         policy <-
@@ -510,17 +543,15 @@ createWallet :: MonadError CliError m
              -> RoleName          -- ^ The name of the owner.
              -> Passphrase "raw"  -- ^ The passphrase for the wallet.
              -> m WalletInfo      -- ^ Action returning the new wallet information.
-createWallet PabAccess{..} owner passphrase' =
+createWallet PabAccess{..} owner wiPassphrase =
   do
-    mnemonicSentence <-
-      liftIO . generate
-        $ ApiMnemonicT . SomeMnemonic
-        <$> genMnemonic @24
+    mnemonicSentence' <- liftIO . generate $ genMnemonic @24
     let
+      mnemonicSentence = ApiMnemonicT . SomeMnemonic $ mnemonicSentence'
       addressPoolGap = Nothing
       mnemonicSecondFactor = Nothing
       name = ApiT . WalletName . T.pack $ show owner
-      passphrase = ApiT passphrase'
+      passphrase = ApiT wiPassphrase
     wallet <-
       liftCliIO
         . runWallet
@@ -533,7 +564,7 @@ createWallet PabAccess{..} owner passphrase' =
     addresses <- liftCliIO . runWallet $ listAddresses addressClient (W.id wallet) Nothing
     (wiAddress, wiPubKeyHash) <-
       case addresses of
-        Object o : _ -> liftCliMaybe "[CreateWallet] Failed to deserialise wallet address."
+        Object o : _ -> liftCliMaybe "[createWallet] Failed to deserialise wallet address."
                           $ do
                             address <-
                               case H.lookup "id" o of
@@ -541,12 +572,48 @@ createWallet PabAccess{..} owner passphrase' =
                                 _               -> Nothing
                             pkh <- shelleyPayAddrToPlutusPubKHash address
                             pure (toAddressAny address, pkh)
-        _            -> throwError $ CliError "[CreateWallet] No addresses found in wallet."
+        _            -> throwError $ CliError "[createWallet] No addresses found in wallet."
+    liftIO . putStrLn $ "[createWallet] Mnemonic sentence is \"" <> unwords (T.unpack <$> mnemonicToText mnemonicSentence') <> "\"."
+    liftIO . putStrLn $ "[createWallet] First wallet address is " <> T.unpack (serialiseAddress wiAddress) <> "."
+    liftIO . putStrLn $ "[createWallet] First public key hash is " <> show wiPubKeyHash <> "."
     let
       go =
         do
           liftIO $ threadDelay 5_000_000
           s <- W.state <$> liftCliIO (runWallet (getWallet walletClient $ W.id wallet))
+          unless (s == ApiT Ready) go
+    go
+    pure WalletInfo{..}
+
+
+-- | Create a new, random wallet.
+useWallet :: MonadError CliError m
+             => MonadIO m
+             => PabAccess         -- ^ Access to the PAB API.
+             -> WalletId          -- ^ The wallet ID.
+             -> Passphrase "raw"  -- ^ The passphrase for the wallet.
+             -> m WalletInfo      -- ^ Action returning the new wallet information.
+useWallet PabAccess{..} wiWalletId'@(WalletId wiWalletId) wiPassphrase =
+  do
+    addresses <- liftCliIO . runWallet $ listAddresses addressClient (ApiT wiWalletId) Nothing
+    (wiAddress, wiPubKeyHash) <-
+      case addresses of
+        Object o : _ -> liftCliMaybe "[useWallet] Failed to deserialise wallet address."
+                          $ do
+                            address <-
+                              case H.lookup "id" o of
+                                Just (String a) -> deserialiseAddress (AsAddress AsShelleyAddr) a
+                                _               -> Nothing
+                            pkh <- shelleyPayAddrToPlutusPubKHash address
+                            pure (toAddressAny address, pkh)
+        _            -> throwError $ CliError "[useWallet] No addresses found in wallet."
+    liftIO . putStrLn $ "[useWallet] First wallet address is " <> T.unpack (serialiseAddress wiAddress) <> "."
+    liftIO . putStrLn $ "[useWallet] First public key hash is " <> show wiPubKeyHash <> "."
+    let
+      go =
+        do
+          liftIO $ threadDelay 5_000_000
+          s <- W.state <$> liftCliIO (runWallet (getWallet walletClient $ ApiT wiWalletId))
           unless (s == ApiT Ready) go
     go
     pure WalletInfo{..}

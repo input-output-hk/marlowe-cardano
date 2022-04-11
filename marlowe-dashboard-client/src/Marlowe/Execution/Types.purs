@@ -18,6 +18,7 @@ import Data.List (List)
 import Data.Map (Map)
 import Data.Show.Generic (genericShow)
 import Marlowe.Extended.Metadata (MetaData)
+import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( AccountId
   , Accounts
@@ -43,8 +44,11 @@ import Marlowe.Semantics (State) as Semantic
 -- TODO: Consider using Lazy computations
 type State =
   { contractNickname :: Maybe ContractNickname
+  -- Current contract and state
   , semanticState :: Semantic.State
   , contract :: Contract
+  -- The initial contract is needed to calculate the participants
+  , initialContract :: Contract
   , metadata :: MetaData
   , marloweParams :: MarloweParams
   , history :: Array PastState
@@ -54,6 +58,7 @@ type State =
 
   , mPendingTimeouts :: Maybe PendingTimeouts
   , mNextTimeout :: Maybe Instant
+  , followerAppId :: PlutusAppId
   }
 
 type TimeoutInfo =

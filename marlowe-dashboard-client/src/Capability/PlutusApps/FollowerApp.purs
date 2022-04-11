@@ -1,38 +1,45 @@
 module Capability.PlutusApps.FollowerApp
   ( class FollowerApp
   , FollowContractError
-  , ensureFollowerContract
-  , followNewContract
+  , followContract
   , onNewObservableState
   ) where
 
 import Prologue
 
 import AppM (AppM)
-import Capability.PAB (class ManagePAB, subscribeToPlutusApp)
-import Capability.PAB as PAB
+import Capability.PAB (activateContract, invokeEndpoint) as PAB
+import Capability.PAB (subscribeToPlutusApp)
+import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Monad.Cont (lift)
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
-import Control.Monad.Reader (class MonadAsk, asks)
+import Control.Monad.Fork.Class (class MonadBracket, bracket)
+import Control.Monad.Reader (class MonadAsk, ReaderT, asks)
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut (encodeJson)
-import Data.Either (either)
 import Data.Lens (view, (^.))
+import Data.Maybe (maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
-import Data.Traversable (for_)
-import Data.Tuple.Nested (type (/\), (/\))
-import Effect.Aff (Aff)
+import Data.Set as Set
+import Effect.Aff (Error)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Env (Env, _followerBus)
-import Errors (class Debuggable, class Explain, debuggable)
+import Env (Env, _followerAVarMap, _followerBus)
+import Errors.Debuggable (class Debuggable, debuggable)
+import Errors.Explain (class Explain)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
+import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
+import Plutus.PAB.Webserver (Api) as PAB
+import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts (getFollowerContract)
 import Text.Pretty (text)
@@ -56,73 +63,74 @@ instance Debuggable FollowContractError where
     , error: debuggable error
     }
 
-class ManagePAB m <= FollowerApp m where
+class Monad m <= FollowerApp m where
   -- This function makes sure that there is a follower contract for the specified
   -- marloweParams. It tries to see if we are already following, and if not, it creates
   -- a new one.
-  ensureFollowerContract
+  followContract
     :: PABConnectedWallet
     -> MarloweParams
     -> m (Either FollowContractError PlutusAppId)
-  -- This function follows a new marlowe contract and returns an await function so
-  -- that the caller knows when the contract is correctly followed
-  followNewContract
-    :: PABConnectedWallet
-    -> MarloweParams
-    -> m (Aff (Either FollowContractError (PlutusAppId /\ ContractHistory)))
 
-instance manageMarloweAppM :: FollowerApp AppM where
-  ensureFollowerContract wallet marloweParams = do
-    contracts <- _.contracts <$> getStore
-    case getFollowerContract marloweParams contracts of
-      -- If we already have a follower contract, we don't need to do anything
-      Just plutusAppId -> pure $ Right plutusAppId
-      -- If we don't, lets activate and follow one
-      Nothing -> activateAndfollowContract wallet marloweParams
-
-  followNewContract wallet marloweParams = do
-    mFollowAppId <- activateAndfollowContract wallet marloweParams
-    bus <- asks $ view _followerBus
-    pure $ either
-      (pure <<< Left)
-      ( \followAppId ->
-          EventBus.subscribeOnce bus.emitter followAppId
-            <#> (\history -> Right $ followAppId /\ history)
-      )
-      mFollowAppId
+instance
+  ( MonadAff m
+  , MonadRec m
+  , MonadError Error m
+  , MonadBracket Error f m
+  , MonadAjax PAB.Api m
+  ) =>
+  FollowerApp (AppM m) where
+  followContract wallet marloweParams =
+    -- After we retreive the contract store to check if a follower exists, and
+    -- before the the follower is added to the store, we are vulnerable to a
+    -- race condition in which multiple followers may be created for the same
+    -- set of marlowe params. To mitigate this risk, we create a critical
+    -- section around the call for the specific marlowe commands. Simultaneous
+    -- attempts to activate a follower will be forced to run in sequence. After
+    -- the first succeeds, subsequent attempts will instead find a cached
+    -- instance ID for that marlowe params in the store.
+    bracket lockFollowerActivation unlockFollowerActivation \_ ->
+      do
+        contracts <- _.contracts <$> getStore
+        case getFollowerContract marloweParams contracts of
+          -- If we already have a follower contract, we don't need to do anything
+          Just plutusAppId -> do
+            pure $ Right plutusAppId
+          -- If we don't, activate and follow one
+          Nothing -> runExceptT do
+            let walletId = wallet ^. _walletId
+            -- Create a new instance of a MarloweFollower plutus contract
+            followAppId <- withExceptT ActivateContractError
+              $ ExceptT
+              $ PAB.activateContract MarloweFollower walletId
+            -- Add it to the store's index
+            updateStore
+              $ Store.FollowerAppsActivated
+              $ Set.singleton
+              $ Tuple marloweParams followAppId
+            -- Subscribe to notifications
+            lift $ subscribeToPlutusApp followAppId
+            -- Tell it to follow the Marlowe contract via its MarloweParams
+            withExceptT FollowContractError
+              $ ExceptT
+              $ PAB.invokeEndpoint followAppId "follow" marloweParams
+            pure followAppId
+    where
+    lockFollowerActivation = do
+      followerAVarMap <- asks $ view _followerAVarMap
+      AVarMap.put marloweParams unit followerAVarMap
+      pure followerAVarMap
+    unlockFollowerActivation _ = AVarMap.take marloweParams
 
 instance FollowerApp m => FollowerApp (HalogenM state action slots msg m) where
-  ensureFollowerContract wallet marloweParams = lift $ ensureFollowerContract
-    wallet
-    marloweParams
-  followNewContract wallet marloweParams = lift $ followNewContract
+  followContract wallet marloweParams = lift $ followContract
     wallet
     marloweParams
 
-activateAndfollowContract
-  :: forall m
-   . ManagePAB m
-  => PABConnectedWallet
-  -> MarloweParams
-  -> m (Either FollowContractError PlutusAppId)
-activateAndfollowContract wallet marloweParams = runExceptT do
-  let walletId = wallet ^. _walletId
-  -- Create a new instance of a MarloweFollower plutus contract
-  followAppId <- withExceptT ActivateContractError
-    $ ExceptT
-    $ PAB.activateContract
-        MarloweFollower
-        walletId
-  -- Tell it to follow the Marlowe contract via its MarloweParams
-  withExceptT FollowContractError
-    $ ExceptT
-    $ PAB.invokeEndpoint
-        followAppId
-        "follow"
-        marloweParams
-  -- Subscribe to notifications
-  lift $ subscribeToPlutusApp followAppId
-  pure followAppId
+instance FollowerApp m => FollowerApp (ReaderT r m) where
+  followContract wallet marloweParams = lift $ followContract
+    wallet
+    marloweParams
 
 {- [UC-CONTRACT-1][4] Start a new marlowe contract
    [UC-CONTRACT-2][X] Receive a role token for a marlowe contract
@@ -145,12 +153,10 @@ onNewObservableState followerAppId contractHistory = do
   liftEffect $ EventBus.notify bus.listener followerAppId contractHistory
 
   let
-    mMetadata = _.metaData <$> (findTemplate $ getContract contractHistory)
-  -- FIXME-3208 I don't like that this step requires to find the metadata again
-  --            but I wanted to reutilize the logic of always regenerating the Execution
-  --            state from the contract history. I may need to move back the metadata to a
-  --            "parent view state".
-  --            If I continue to reutilize AddFollowerContract then I might rename it to
-  --            UpdateFollowerContract, RestoreContract or similar
-  for_ mMetadata \metadata -> updateStore
-    $ Store.AddFollowerContract followerAppId metadata contractHistory
+    metadata = maybe
+      emptyContractMetadata
+      _.metaData
+      (findTemplate $ getContract contractHistory)
+
+  updateStore
+    $ Store.ContractHistoryUpdated followerAppId metadata contractHistory

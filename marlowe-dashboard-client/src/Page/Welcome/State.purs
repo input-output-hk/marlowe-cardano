@@ -6,16 +6,10 @@ module Page.Welcome.State
 import Prologue
 
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.MarloweStorage
-  ( class ManageMarloweStorage
-  , modifyAddressBook_
-  )
 import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
 import Control.Monad.Reader (class MonadAsk)
-import Data.AddressBook as AddressBook
-import Data.Lens (assign, view)
-import Data.Wallet (_address, _walletNickname)
+import Data.Lens (assign)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
@@ -44,7 +38,6 @@ handleAction
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
-  => ManageMarloweStorage m
   => Toast m
   => MonadClipboard m
   => Action
@@ -81,11 +74,6 @@ two PAB apps for that wallet: a `WalletCompanion` and a `MarloweApp`.
 -}
 handleAction (ConnectWallet walletDetails) = do
   assign _enteringDashboardState true
-  let
-    walletNickname = view _walletNickname walletDetails
-    address = view _address walletDetails
-
-  modifyAddressBook_ $ AddressBook.insert walletNickname address
   updateStore $ Store.Wallet $ WalletStore.OnConnect walletDetails
 
 handleAction (OnRestoreWalletMsg msg) = case msg of

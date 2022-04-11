@@ -14,6 +14,8 @@
 module Language.Marlowe.CLI.Command.Parse (
 -- * Parsers
   parseAddressAny
+, parseAssetId
+, parseOutputQuery
 , parseByteString
 , parseCurrencySymbol
 , parseInput
@@ -42,14 +44,14 @@ module Language.Marlowe.CLI.Command.Parse (
 
 
 import Cardano.Api (AddressAny, AsType (AsAddressAny, AsPolicyId, AsStakeAddress, AsTxId), AssetId (..), AssetName (..),
-                    NetworkId (..), NetworkMagic (..), Quantity (..), SlotNo (..), StakeAddressReference (..),
-                    TxId (..), TxIn (..), TxIx (..), Value, deserialiseAddress, deserialiseFromRawBytesHex,
-                    lovelaceToValue, quantityToLovelace, valueFromList)
+                    Lovelace (..), NetworkId (..), NetworkMagic (..), Quantity (..), SlotNo (..),
+                    StakeAddressReference (..), TxId (..), TxIn (..), TxIx (..), Value, deserialiseAddress,
+                    deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace, valueFromList)
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
+import Language.Marlowe.CLI.Types (OutputQuery (..))
 import Language.Marlowe.Client (MarloweClientInput (..))
-import qualified Language.Marlowe.Extended as E (Timeout (..))
 import Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -63,6 +65,7 @@ import Wallet.Emulator.Wallet (WalletId, fromBase16)
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 import qualified Data.Text as T (pack)
+import qualified Language.Marlowe.Extended as E (Timeout (..))
 import qualified Options.Applicative as O
 
 
@@ -144,12 +147,12 @@ parseTxOut =
   O.eitherReader
     $ \s ->
       case splitOn "+" s of
-        address : lovelace : tokens -> do
-                                         address' <- readAddressAnyEither address
-                                         lovelace' <- readLovelaceEither lovelace
-                                         tokens' <- mapM readAssetValueEither tokens
-                                         pure (address', lovelace' <> mconcat tokens')
-        _                           -> Left "Invalid transaction output."
+        address : lovelace' : tokens -> do
+                                          address' <- readAddressAnyEither address
+                                          lovelace'' <- readLovelaceEither lovelace'
+                                          tokens' <- mapM readAssetValueEither tokens
+                                          pure (address', lovelace'' <> mconcat tokens')
+        _                            -> Left "Invalid transaction output."
 
 
 -- | Parser for `Value`.
@@ -158,11 +161,11 @@ parseValue =
   O.eitherReader
     $ \s ->
       case splitOn "+" s of
-        lovelace : tokens -> do
-                               lovelace' <- readLovelaceEither lovelace
-                               tokens' <- mapM readAssetValueEither tokens
-                               pure $ lovelace' <> mconcat tokens'
-        _                 -> Left "Invalid transaction output."
+        lovelace' : tokens -> do
+                                lovelace'' <- readLovelaceEither lovelace'
+                                tokens' <- mapM readAssetValueEither tokens
+                                pure $ lovelace'' <> mconcat tokens'
+        _                  -> Left "Invalid transaction output."
 
 
 -- | Parser for lovelace `Value`.
@@ -188,6 +191,11 @@ readAssetValueEither s =
                          amount' <- Quantity <$> readEither amount
                          pure $ valueFromList [(token', amount')]
     _               -> Left "Invalid asset value."
+
+
+-- | Parser for `AssetId`.
+parseAssetId :: O.ReadM AssetId
+parseAssetId = O.eitherReader readAssetIdEither
 
 
 -- | Reader for `AssetId`.
@@ -354,3 +362,19 @@ parseRole =
                              address' <- readAddressAnyEither address
                              pure (readTokenName name, address')
         _               -> Left "Invalid role assigment."
+
+
+-- | Parse an address query.
+parseOutputQuery :: O.Parser OutputQuery
+parseOutputQuery =
+  parseAllOutput <|> parseLovelaceOnly <|> parseAssetOnly <|> pure AllOutput
+    where
+      parseAllOutput =
+        AllOutput
+          <$ O.flag' () (O.long "all" <> O.help "Report all output.")
+      parseLovelaceOnly =
+        LovelaceOnly . Lovelace
+          <$> O.option O.auto (O.long "lovelace-only" <> O.metavar "LOVELACE" <> O.help "The minimum Lovelace that must be the sole asset in the output value.")
+      parseAssetOnly =
+        AssetOnly
+          <$> O.option parseAssetId (O.long "asset-only" <> O.metavar "CURRENCY_SYMBOL.TOKEN_NAME" <> O.help "The current symbol and token name for the sole native asset in the value.")

@@ -114,7 +114,11 @@ instance MonadHalogenTest q i o m => MonadHalogenTest q i o (MaybeT m) where
   getMessages = lift getMessages
   sendInput = map lift sendInput
 
-instance MonadHalogenTest q i o m => MonadHalogenTest q i o (UserM m) where
+instance
+  ( MonadError Error m
+  , MonadHalogenTest q i o m
+  ) =>
+  MonadHalogenTest q i o (UserM m) where
   getDriver = map (hoistDriver lift) $ lift getDriver
   getMessages = lift getMessages
   sendInput = map lift sendInput
@@ -282,20 +286,20 @@ runUITest
      )
   -> Aff Unit
 runUITest component input test =
-  bracket getContainer removeContainer \(Tuple _ container) -> do
-    driver <- runUI (wrap component) input container
-    messages <- liftEffect do
-      ref <- Ref.new []
-      void
-        $ HS.subscribe driver.messages
-        $ flip Ref.modify_ ref <<< flip Array.snoc
-      pure ref
-    runTestM container
-      $ runUserM Nothing
-      $ runHalogenTestM test
-      $ HalogenTestEnv { messages, driver }
+  bracket acquire release
+    \(Tuple _ (Tuple container driver)) -> do
+      messages <- liftEffect do
+        ref <- Ref.new []
+        void
+          $ HS.subscribe driver.messages
+          $ flip Ref.modify_ ref <<< flip Array.snoc
+        pure ref
+      runTestM container
+        $ runUserM Nothing
+        $ runHalogenTestM test
+        $ HalogenTestEnv { messages, driver }
   where
-  getContainer = do
+  acquire = do
     document <-
       liftEffect $ map HTMLDocument.toDocument $ Window.document =<< window
     body <- awaitBody
@@ -306,8 +310,10 @@ runUITest component input test =
     liftEffect $ Node.appendChild
       (HTMLElement.toNode container)
       (HTMLElement.toNode body)
-    pure $ Tuple body container
-  removeContainer (Tuple body container) = do
+    driver <- runUI (wrap component) input container
+    pure $ Tuple body (Tuple container driver)
+  release (Tuple body (Tuple container driver)) = do
+    driver.dispose
     liftEffect $ Node.removeChild
       (HTMLElement.toNode container)
       (HTMLElement.toNode body)

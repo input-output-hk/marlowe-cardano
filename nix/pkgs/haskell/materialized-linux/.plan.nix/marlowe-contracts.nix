@@ -35,6 +35,7 @@
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."time" or (errorHandler.buildDepError "time"))
           ];
         buildable = true;
         modules = [
@@ -47,6 +48,13 @@
           "Marlowe/Contracts/Swap"
           "Marlowe/Contracts/Trivial"
           "Marlowe/Contracts/ZeroCouponBond"
+          "Marlowe/Contracts/UTC/Common"
+          "Marlowe/Contracts/UTC/CouponBond"
+          "Marlowe/Contracts/UTC/Futures"
+          "Marlowe/Contracts/UTC/Options"
+          "Marlowe/Contracts/UTC/StructuredProducts"
+          "Marlowe/Contracts/UTC/Swap"
+          "Marlowe/Contracts/UTC/ZeroCouponBond"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -67,6 +75,7 @@
             (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
             ];
           buildable = true;

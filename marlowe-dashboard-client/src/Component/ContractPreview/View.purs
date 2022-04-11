@@ -5,6 +5,7 @@ module Component.ContractPreview.View
 
 import Prologue hiding (div)
 
+import Capability.Marlowe (CreateError(..))
 import Component.Contract.View (startingStepActions, timeoutString)
 import Component.CurrentStepActions.State as CurrentStepActions
 import Component.CurrentStepActions.Types (Msg(..), _currentStepActions)
@@ -14,20 +15,26 @@ import Component.Progress.Circular as Progress
 import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
-import Data.Lens ((^.))
+import Data.Lens (view, (^.))
+import Data.Maybe (maybe)
 import Data.NewContract (NewContract(..))
+import Data.Newtype (unwrap)
+import Data.UUID.Argonaut as UUID
 import Effect.Aff.Class (class MonadAff)
-import Halogen (ComponentHTML)
+import Errors.Explain (explain)
+import Halogen (AttrName(..), ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.HTML (a, div, h3, p, slot, text)
+import Halogen.HTML (a, attr, div, h3, h3_, li, p, p_, slot, text)
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Properties (title)
+import Halogen.HTML.Properties.ARIA (role)
 import Humanize (contractIcon)
-import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Extended.Metadata (_contractName, _contractType)
+import Marlowe.Semantics (_rolesCurrency)
 import Page.Contract.Lenses (_marloweParams, _metadata)
-import Page.Dashboard.Types (Action(..), ContractState)
+import Page.Dashboard.Types (Action(..), ChildSlots, ContractState)
 
 -- This card shows a preview of synced contracts (intended to be used in the dashboard)
 contractPreviewCard
@@ -66,16 +73,25 @@ contractPreviewCard
           num
       )
   in
-    div
-      [ classNames
+    li
+      [ title nickname
+      , classNames
           [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
+      , attr (AttrName "data-follower-id")
+          $ UUID.toString
+          $ unwrap
+          $ executionState.followerAppId
+      , attr (AttrName "data-currency-id") $ view
+          _rolesCurrency
+          executionState.marloweParams
       ]
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]
           [ div
               [ classNames [ "flex-1", "truncate" ] ]
               [ h3
-                  [ classNames [ "flex", "gap-2", "items-center" ] ]
+                  [ classNames [ "flex", "gap-2", "items-center" ]
+                  ]
                   [ contractIcon contractType
                   , text contractName
                   ]
@@ -110,7 +126,8 @@ contractPreviewCard
 -- FIXME-3487: Factor out commonalities between contractStartingPreviewCard and contractPreviewCard
 contractStartingPreviewCard
   :: forall m. MonadAff m => NewContract -> ComponentHTML Action ChildSlots m
-contractStartingPreviewCard (NewContract reqId contractNickname metadata) =
+contractStartingPreviewCard
+  (NewContract reqId contractNickname metadata mError _) =
   let
     nickname = ContractNickname.toString contractNickname
 
@@ -129,15 +146,39 @@ contractStartingPreviewCard (NewContract reqId contractNickname metadata) =
             ]
         ]
         [ p
-            [ classNames [ "text-sm", "font-semibold" ] ]
-            [ text $ "Starting contract…" ]
-        , Progress.view Progress.defaultSpec
+            [ classNames
+                [ "text-sm"
+                , "font-semibold"
+                , case mError of
+                    Nothing -> "text-black"
+                    _ -> "text-red"
+                ]
+            ]
+            [ text $ case mError of
+                Nothing -> "Starting contract…"
+                _ -> "Failed to start contract"
+            ]
+        , case mError of
+            Nothing -> Progress.view Progress.defaultSpec
+            _ -> icon Icon.ErrorOutline [ "text-red" ]
         ]
-    stepActions = startingStepActions
+    startingStepActionsFailed error =
+      div [ classNames [ "space-y-6" ] ]
+        [ h3_ [ text "Message:" ]
+        , p_ [ text $ show $ explain $ CreateError error ]
+        ]
+    stepActions = maybe startingStepActions startingStepActionsFailed mError
   in
-    div
-      [ classNames
+    li
+      [ title nickname
+      , role case mError of
+          Nothing -> "listitem"
+          _ -> "alert"
+      , classNames
           [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
+      , attr (AttrName "data-request-id")
+          $ UUID.toString
+          $ reqId
       ]
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]

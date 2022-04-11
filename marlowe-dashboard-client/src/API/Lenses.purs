@@ -36,25 +36,29 @@ import Wallet.Types
   , _EndpointDescription
   )
 
-_cicContract :: Lens' (ContractInstanceClientState MarloweContract)
-  PlutusAppId
+_cicContract
+  :: Lens' (ContractInstanceClientState MarloweContract)
+       PlutusAppId
 _cicContract = _ContractInstanceClientState <<< prop (Proxy :: _ "cicContract")
 
-_cicCurrentState :: Lens' (ContractInstanceClientState MarloweContract)
-  (PartiallyDecodedResponse ActiveEndpoint)
+_cicCurrentState
+  :: Lens' (ContractInstanceClientState MarloweContract)
+       (PartiallyDecodedResponse ActiveEndpoint)
 _cicCurrentState = _ContractInstanceClientState <<< prop
   (Proxy :: _ "cicCurrentState")
 
-_cicDefinition :: Lens' (ContractInstanceClientState MarloweContract)
-  MarloweContract
+_cicDefinition
+  :: Lens' (ContractInstanceClientState MarloweContract)
+       MarloweContract
 _cicDefinition = _ContractInstanceClientState <<< prop
   (Proxy :: _ "cicDefinition")
 
 _cicWallet :: Lens' (ContractInstanceClientState MarloweContract) Wallet
 _cicWallet = _ContractInstanceClientState <<< prop (Proxy :: _ "cicWallet")
 
-_cicStatus :: Lens' (ContractInstanceClientState MarloweContract)
-  ContractActivityStatus
+_cicStatus
+  :: Lens' (ContractInstanceClientState MarloweContract)
+       ContractActivityStatus
 _cicStatus = _ContractInstanceClientState <<< prop (Proxy :: _ "cicStatus")
 
 ----------
@@ -62,8 +66,9 @@ _observableState :: Lens' (PartiallyDecodedResponse ActiveEndpoint) Json
 _observableState = _PartiallyDecodedResponse <<< prop
   (Proxy :: _ "observableState")
 
-_hooks :: Lens' (PartiallyDecodedResponse ActiveEndpoint)
-  (Array (Request ActiveEndpoint))
+_hooks
+  :: Lens' (PartiallyDecodedResponse ActiveEndpoint)
+       (Array (Request ActiveEndpoint))
 _hooks = _PartiallyDecodedResponse <<< prop (Proxy :: _ "hooks")
 
 _rqRequest :: Lens' (Request ActiveEndpoint) ActiveEndpoint

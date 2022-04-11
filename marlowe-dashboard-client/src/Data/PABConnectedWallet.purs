@@ -2,11 +2,13 @@ module Data.PABConnectedWallet
   ( PABConnectedWallet
   , _assets
   , _companionAppId
+  , _initialFollowers
   , _marloweAppId
   , _pubKeyHash
   , _address
   , _syncStatus
   , _walletId
+  , _walletDetails
   , _walletNickname
   , connectWallet
   ) where
@@ -17,17 +19,19 @@ import Data.Address (Address)
 import Data.Lens (Lens', iso)
 import Data.Lens.Record (prop)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
+import Data.Set (Set)
 import Data.Wallet (SyncStatus, WalletDetails)
 import Data.Wallet as Wallet
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets)
+import Marlowe.Semantics (Assets, MarloweParams)
 import Type.Proxy (Proxy(..))
 
 type PABConnectedWalletFields =
   { companionAppId :: PlutusAppId
   , marloweAppId :: PlutusAppId
+  , initialFollowers :: Set (Tuple MarloweParams PlutusAppId)
   , wallet :: WalletDetails
   }
 
@@ -36,11 +40,15 @@ newtype PABConnectedWallet = PABConnectedWallet PABConnectedWalletFields
 derive instance Eq PABConnectedWallet
 
 connectWallet
-  :: { companionAppId :: PlutusAppId, marloweAppId :: PlutusAppId }
+  :: { companionAppId :: PlutusAppId
+     , marloweAppId :: PlutusAppId
+     , initialFollowers :: Set (Tuple MarloweParams PlutusAppId)
+     }
   -> WalletDetails
   -> PABConnectedWallet
-connectWallet { companionAppId, marloweAppId } wallet = PABConnectedWallet
-  { companionAppId, marloweAppId, wallet }
+connectWallet { companionAppId, marloweAppId, initialFollowers } wallet =
+  PABConnectedWallet
+    { companionAppId, marloweAppId, wallet, initialFollowers }
 
 _PABConnectedWallet :: Lens' PABConnectedWallet PABConnectedWalletFields
 _PABConnectedWallet = iso
@@ -53,6 +61,10 @@ _Wallet = _PABConnectedWallet <<< prop (Proxy :: _ "wallet")
 ------------------------------------------------------------
 _walletNickname :: Lens' PABConnectedWallet WalletNickname
 _walletNickname = _Wallet <<< Wallet._walletNickname
+
+_initialFollowers
+  :: Lens' PABConnectedWallet (Set (Tuple MarloweParams PlutusAppId))
+_initialFollowers = _PABConnectedWallet <<< prop (Proxy :: _ "initialFollowers")
 
 _companionAppId :: Lens' PABConnectedWallet PlutusAppId
 _companionAppId = _PABConnectedWallet <<< prop (Proxy :: _ "companionAppId")
@@ -74,3 +86,6 @@ _pubKeyHash = _Wallet <<< Wallet._pubKeyHash
 
 _address :: Lens' PABConnectedWallet Address
 _address = _Wallet <<< Wallet._address
+
+_walletDetails :: Lens' PABConnectedWallet WalletDetails
+_walletDetails = _Wallet

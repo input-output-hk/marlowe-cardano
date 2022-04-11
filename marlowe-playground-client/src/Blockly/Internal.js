@@ -1,7 +1,7 @@
 /*eslint-env node*/
 "use strict";
 
-var JSONbig = require("json-bigint");
+const JSONbig = require("json-bigint")({ useNativeBigInt: true });
 
 exports.createBlocklyInstance_ = () => {
   return require("blockly");

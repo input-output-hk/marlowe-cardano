@@ -702,8 +702,7 @@ instance toCorePayee :: ToCore Payee S.Payee where
   toCore (Account accId) = Just $ S.Account accId
   toCore (Party roleName) = Just $ S.Party roleName
 
-data Case
-  = Case Action Contract
+data Case = Case Action Contract
 
 derive instance genericCase :: Generic Case _
 

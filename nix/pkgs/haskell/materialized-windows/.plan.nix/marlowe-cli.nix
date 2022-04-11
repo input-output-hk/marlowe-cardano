@@ -58,6 +58,7 @@
           (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
+          (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
           (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
@@ -79,11 +80,13 @@
           ];
         buildable = true;
         modules = [
+          "Language/Marlowe/CLI/ChainIndex"
           "Language/Marlowe/CLI/Command"
           "Language/Marlowe/CLI/Command/Contract"
           "Language/Marlowe/CLI/Command/Input"
           "Language/Marlowe/CLI/Command/Parse"
           "Language/Marlowe/CLI/Command/PAB"
+          "Language/Marlowe/CLI/Command/Query"
           "Language/Marlowe/CLI/Command/Role"
           "Language/Marlowe/CLI/Command/Run"
           "Language/Marlowe/CLI/Command/Template"

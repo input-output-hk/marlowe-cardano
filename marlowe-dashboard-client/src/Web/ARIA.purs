@@ -1,6 +1,14 @@
 module Web.ARIA where
 
-import Prelude
+import Prologue
+
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , JsonDecodeError(..)
+  , fromString
+  , toString
+  )
 
 data ARIARole
   = Alert
@@ -137,6 +145,153 @@ data ARIARole
   | Treeitem
   | Widget
   | Window
+
+-- Note: We use equality on show as a derive instance warns with the following:
+--   An exhaustivity check was abandoned due to too many possible cases.
+--   You may want to decompose your data types into smaller types.of too
+instance Eq ARIARole where
+  eq a b = show a == show b
+
+instance DecodeJson ARIARole where
+  decodeJson json = case toString json of
+    Just "alert" -> Right Alert
+    Just "alertdialog" -> Right Alertdialog
+    Just "application" -> Right Application
+    Just "article" -> Right Article
+    Just "banner" -> Right Banner
+    Just "blockquote" -> Right Blockquote
+    Just "button" -> Right Button
+    Just "caption" -> Right Caption
+    Just "cell" -> Right Cell
+    Just "checkbox" -> Right Checkbox
+    Just "code" -> Right Code
+    Just "columnheader" -> Right Columnheader
+    Just "combobox" -> Right Combobox
+    Just "command" -> Right Command
+    Just "complementary" -> Right Complementary
+    Just "composite" -> Right Composite
+    Just "contentinfo" -> Right Contentinfo
+    Just "definition" -> Right Definition
+    Just "deletion" -> Right Deletion
+    Just "dialog" -> Right Dialog
+    Just "directory" -> Right Directory
+    Just "doc-abstract" -> Right DocAbstract
+    Just "doc-acknowledgments" -> Right DocAcknowledgments
+    Just "doc-afterword" -> Right DocAfterword
+    Just "doc-appendix" -> Right DocAppendix
+    Just "doc-backlink" -> Right DocBacklink
+    Just "doc-biblioentry" -> Right DocBiblioentry
+    Just "doc-bibliography" -> Right DocBibliography
+    Just "doc-biblioref" -> Right DocBiblioref
+    Just "doc-chapter" -> Right DocChapter
+    Just "doc-colophon" -> Right DocColophon
+    Just "doc-conclusion" -> Right DocConclusion
+    Just "doc-cover" -> Right DocCover
+    Just "doc-credit" -> Right DocCredit
+    Just "doc-credits" -> Right DocCredits
+    Just "doc-dedication" -> Right DocDedication
+    Just "doc-endnote" -> Right DocEndnote
+    Just "doc-endnotes" -> Right DocEndnotes
+    Just "doc-epigraph" -> Right DocEpigraph
+    Just "doc-epilogue" -> Right DocEpilogue
+    Just "doc-errata" -> Right DocErrata
+    Just "doc-example" -> Right DocExample
+    Just "doc-footnote" -> Right DocFootnote
+    Just "doc-foreword" -> Right DocForeword
+    Just "doc-glossary" -> Right DocGlossary
+    Just "doc-glossref" -> Right DocGlossref
+    Just "doc-index" -> Right DocIndex
+    Just "doc-introduction" -> Right DocIntroduction
+    Just "doc-noteref" -> Right DocNoteref
+    Just "doc-notice" -> Right DocNotice
+    Just "doc-pagebreak" -> Right DocPagebreak
+    Just "doc-pagelist" -> Right DocPagelist
+    Just "doc-part" -> Right DocPart
+    Just "doc-preface" -> Right DocPreface
+    Just "doc-prologue" -> Right DocPrologue
+    Just "doc-pullquote" -> Right DocPullquote
+    Just "doc-qna" -> Right DocQna
+    Just "doc-subtitle" -> Right DocSubtitle
+    Just "doc-tip" -> Right DocTip
+    Just "doc-toc" -> Right DocToc
+    Just "document" -> Right Document
+    Just "emphasis" -> Right Emphasis
+    Just "feed" -> Right Feed
+    Just "figure" -> Right Figure
+    Just "form" -> Right Form
+    Just "generic" -> Right Generic
+    Just "grid" -> Right Grid
+    Just "gridcell" -> Right Gridcell
+    Just "group" -> Right Group
+    Just "heading" -> Right Heading
+    Just "img" -> Right Img
+    Just "input" -> Right Input
+    Just "insertion" -> Right Insertion
+    Just "landmark" -> Right Landmark
+    Just "link" -> Right Link
+    Just "list" -> Right List
+    Just "listbox" -> Right Listbox
+    Just "listitem" -> Right Listitem
+    Just "log" -> Right Log
+    Just "main" -> Right Main
+    Just "mark" -> Right Mark
+    Just "marquee" -> Right Marquee
+    Just "math" -> Right Math
+    Just "menu" -> Right Menu
+    Just "menubar" -> Right Menubar
+    Just "menuitem" -> Right Menuitem
+    Just "menuitemcheckbox" -> Right Menuitemcheckbox
+    Just "menuitemradio" -> Right Menuitemradio
+    Just "meter" -> Right Meter
+    Just "navigation" -> Right Navigation
+    Just "none" -> Right None
+    Just "note" -> Right Note
+    Just "option" -> Right Option
+    Just "paragraph" -> Right Paragraph
+    Just "presentation" -> Right Presentation
+    Just "progressbar" -> Right Progressbar
+    Just "radio" -> Right Radio
+    Just "radiogroup" -> Right Radiogroup
+    Just "range" -> Right Range
+    Just "region" -> Right Region
+    Just "roletype" -> Right Roletype
+    Just "row" -> Right Row
+    Just "rowgroup" -> Right Rowgroup
+    Just "rowheader" -> Right Rowheader
+    Just "scrollbar" -> Right Scrollbar
+    Just "search" -> Right Search
+    Just "searchbox" -> Right Searchbox
+    Just "section" -> Right Section
+    Just "sectionhead" -> Right Sectionhead
+    Just "select" -> Right Select
+    Just "separator" -> Right Separator
+    Just "slider" -> Right Slider
+    Just "spinbutton" -> Right Spinbutton
+    Just "status" -> Right Status
+    Just "strong" -> Right Strong
+    Just "structure" -> Right Structure
+    Just "subscript" -> Right Subscript
+    Just "superscript" -> Right Superscript
+    Just "switch" -> Right Switch
+    Just "tab" -> Right Tab
+    Just "table" -> Right Table
+    Just "tablist" -> Right Tablist
+    Just "tabpanel" -> Right Tabpanel
+    Just "term" -> Right Term
+    Just "textbox" -> Right Textbox
+    Just "time" -> Right Time
+    Just "timer" -> Right Timer
+    Just "toolbar" -> Right Toolbar
+    Just "tooltip" -> Right Tooltip
+    Just "tree" -> Right Tree
+    Just "treegrid" -> Right Treegrid
+    Just "treeitem" -> Right Treeitem
+    Just "widget" -> Right Widget
+    Just "window" -> Right Window
+    _ -> Left $ TypeMismatch "ARIARole"
+
+instance EncodeJson ARIARole where
+  encodeJson = fromString <<< show
 
 instance Show ARIARole where
   show Alert = "alert"

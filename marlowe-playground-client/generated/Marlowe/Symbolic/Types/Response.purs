@@ -107,11 +107,12 @@ _Valid = prism' (const Valid) case _ of
   Valid -> Just unit
   _ -> Nothing
 
-_CounterExample :: Prism' Result
-  { initialSlot :: BigInt
-  , transactionList :: Array TransactionInput
-  , transactionWarning :: Array TransactionWarning
-  }
+_CounterExample
+  :: Prism' Result
+       { initialSlot :: BigInt
+       , transactionList :: Array TransactionInput
+       , transactionWarning :: Array TransactionWarning
+       }
 _CounterExample = prism' CounterExample case _ of
   (CounterExample a) -> Just a
   _ -> Nothing

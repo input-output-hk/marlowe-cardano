@@ -247,8 +247,7 @@ getNextSubproblem f (Cons (zipper /\ contract) rest) Nil =
 getNextSubproblem f acc newChildren = getNextSubproblem f (acc <> newChildren)
   Nil
 
-data StaticAnalysisEvent
-  = StaticAnalysisTimingEvent BigInt
+data StaticAnalysisEvent = StaticAnalysisTimingEvent BigInt
 
 instance isEventStaticAnalysisEvent :: IsEvent StaticAnalysisEvent where
   toEvent (StaticAnalysisTimingEvent durationMs) =

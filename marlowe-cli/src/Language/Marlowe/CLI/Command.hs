@@ -29,6 +29,7 @@ import Data.Foldable (asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
 import Language.Marlowe.CLI.Command.Input (InputCommand, parseInputCommand, runInputCommand)
 import Language.Marlowe.CLI.Command.PAB (PabCommand, parsePabCommand, runPabCommand)
+import Language.Marlowe.CLI.Command.Query (QueryCommand, parseQueryCommand, runQueryCommand)
 import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRoleCommand)
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand, parseTemplateCommand, runTemplateCommand)
@@ -58,6 +59,8 @@ data Command =
   | TemplateCommand TemplateCommand
     -- | Transaction-related commands.
   | TransactionCommand TransactionCommand
+    -- | Query commands.
+  | QueryCommand QueryCommand
     -- | Miscellaneous commands.
   | UtilCommand UtilCommand
     -- | Test-related commands.
@@ -90,6 +93,7 @@ runCommand (PabCommand         command) = runPabCommand         command
 runCommand (ContractCommand    command) = runContractCommand    command
 runCommand (TestCommand        command) = runTestCommand        command
 runCommand (InputCommand       command) = runInputCommand       command
+runCommand (QueryCommand       command) = runQueryCommand       command
 runCommand (RoleCommand        command) = runRoleCommand        command
 runCommand (TemplateCommand    command) = runTemplateCommand    command
 runCommand (TransactionCommand command) = runTransactionCommand command
@@ -120,6 +124,7 @@ parseCommand version =
                 <> O.command "contract"    (O.info (ContractCommand    <$> parseContractCommand   ) $ O.progDesc "Export contract address, validator, datum, or redeemer.")
                 <> O.command "input"       (O.info (InputCommand       <$> parseInputCommand      ) $ O.progDesc "Create inputs to a contract."                           )
                 <> O.command "role"        (O.info (RoleCommand        <$> parseRoleCommand       ) $ O.progDesc "Export role address, validator, datum, or redeemer."    )
+                <> O.command "query"       (O.info (QueryCommand       <$> parseQueryCommand      ) $ O.progDesc "Blockchain queries for Marlowe."                        )
                 <> O.command "transaction" (O.info (TransactionCommand <$> parseTransactionCommand) $ O.progDesc "Create and submit transactions."                        )
                 <> O.command "util"        (O.info (UtilCommand        <$> parseUtilCommand       ) $ O.progDesc "Miscellaneous utilities."                               )
               )

@@ -83,16 +83,14 @@ import Web.HTML (window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
 
-type GridConfig
-  =
+type GridConfig =
   { spacing :: Int
   , length :: Int
   , colour :: String
   , snap :: Boolean
   }
 
-type ZoomConfig
-  =
+type ZoomConfig =
   { controls :: Boolean
   , wheel :: Boolean
   , startScale :: Number
@@ -101,15 +99,13 @@ type ZoomConfig
   , scaleSpeed :: Number
   }
 
-type Move
-  =
+type Move =
   { scrollbars :: Boolean
   , drag :: Boolean
   , wheel :: Boolean
   }
 
-type WorkspaceConfig
-  =
+type WorkspaceConfig =
   { toolbox :: Json
   , collapse :: Boolean
   , comments :: Boolean
@@ -128,8 +124,7 @@ type WorkspaceConfig
   , grid :: GridConfig
   }
 
-newtype XML
-  = XML String
+newtype XML = XML String
 
 derive instance newtypeXML :: Newtype XML _
 
@@ -204,8 +199,7 @@ foreign import fieldName :: Field -> String
 getInputWithName :: String -> Array Input -> Maybe Input
 getInputWithName n = Array.find (eq n <<< inputName)
 
-newtype ElementId
-  = ElementId String
+newtype ElementId = ElementId String
 
 derive instance newtypeElementId :: Newtype ElementId _
 
@@ -299,8 +293,7 @@ foreign import updateToolbox_ :: Json -> Workspace -> Effect Unit
 updateToolbox :: Toolbox -> Workspace -> Effect Unit
 updateToolbox = updateToolbox_ <<< encodeToolbox
 
-data Pair
-  = Pair String String
+data Pair = Pair String String
 
 instance writeForeignPair :: WriteForeign Pair where
   writeImpl (Pair first second) = JSON.write [ first, second ]
@@ -382,8 +375,7 @@ instance writeForeignAlignDirection :: WriteForeign AlignDirection where
   writeImpl AlignCentre = JSON.write "CENTRE"
   writeImpl AlignRight = JSON.write "RIGHT"
 
-type BasicBlockDefinition r
-  =
+type BasicBlockDefinition r =
   ( message0 :: String
   , args0 :: Array Arg
   , lastDummyAlign0 :: AlignDirection
@@ -400,27 +392,27 @@ type BasicBlockDefinition r
   | r
   )
 
-newtype BlockDefinition
-  = BlockDefinition (Record (BasicBlockDefinition (type :: String)))
+newtype BlockDefinition = BlockDefinition
+  (Record (BasicBlockDefinition (type :: String)))
 
 derive instance newtypeBlockDefinition :: Newtype BlockDefinition _
 
 instance writeForeignBlockDefinition :: WriteForeign BlockDefinition where
   writeImpl (BlockDefinition fields) = JSON.write fields
 
-defaultBlockDefinition ::
-  { extensions :: Array String
-  , lastDummyAlign0 :: AlignDirection
-  , args0 :: Array Arg
-  , fieldValue :: Maybe Pair
-  , helpUrl :: String
-  , inputsInline :: Maybe Boolean
-  , mutator :: Maybe String
-  , nextStatement :: Maybe String
-  , output :: Maybe String
-  , previousStatement :: Maybe String
-  , tooltip :: Maybe String
-  }
+defaultBlockDefinition
+  :: { extensions :: Array String
+     , lastDummyAlign0 :: AlignDirection
+     , args0 :: Array Arg
+     , fieldValue :: Maybe Pair
+     , helpUrl :: String
+     , inputsInline :: Maybe Boolean
+     , mutator :: Maybe String
+     , nextStatement :: Maybe String
+     , output :: Maybe String
+     , previousStatement :: Maybe String
+     , tooltip :: Maybe String
+     }
 defaultBlockDefinition =
   { fieldValue: Nothing
   , lastDummyAlign0: AlignLeft

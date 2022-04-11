@@ -10,9 +10,9 @@ import { EmacsExtension } from "monaco-emacs";
 import { initVimMode } from "monaco-vim";
 import * as bignumberDTS from "!!raw-loader!bignumber.js/bignumber.d.ts";
 import * as marloweDTS from "!!raw-loader!src/Language/Javascript/MarloweJS.ts";
-import { BigNumber } from "bignumber";
-import { stringify, parse } from "json-bigint";
 import { main } from "./output/Main";
+
+const { stringify, parse } = require("json-bigint")({ useNativeBigInt: true });
 
 global.monaco = monaco;
 global.EmacsExtension = EmacsExtension;

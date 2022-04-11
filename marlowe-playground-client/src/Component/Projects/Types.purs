@@ -67,8 +67,7 @@ instance isEventAction :: IsEvent Action where
     }
   toEvent Cancel = Just $ defaultEvent "Cancel"
 
-type State
-  =
+type State =
   { projects :: RemoteData String (Array Gist)
   }
 

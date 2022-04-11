@@ -21,11 +21,9 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData, MetadataHintInfo)
 import Type.Prelude (Proxy(..))
 
-type State
-  = Unit
+type State = Unit
 
-type Input
-  =
+type Input =
   { metadataHintInfo :: MetadataHintInfo
   , metadata :: MetaData
   }

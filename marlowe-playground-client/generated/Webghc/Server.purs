@@ -48,6 +48,6 @@ derive instance Newtype CompileRequest _
 
 --------------------------------------------------------------------------------
 
-_CompileRequest :: Iso' CompileRequest
-  { code :: String, implicitPrelude :: Boolean }
+_CompileRequest
+  :: Iso' CompileRequest { code :: String, implicitPrelude :: Boolean }
 _CompileRequest = _Newtype

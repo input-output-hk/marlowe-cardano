@@ -10,8 +10,7 @@ import Type.Proxy (Proxy(..))
 _submitButtonSlot :: Proxy "submitButtonSlot"
 _submitButtonSlot = Proxy
 
-type State
-  =
+type State =
   { caption :: String
   , styles :: Array String
   , enabled :: Boolean
@@ -19,15 +18,13 @@ type State
   , buttonHeight :: Number
   }
 
-type Input
-  =
+type Input =
   { caption :: String
   , styles :: Array String
   , enabled :: Boolean
   }
 
-data Query a
-  = SubmitResult Milliseconds (Either String String) a
+data Query a = SubmitResult Milliseconds (Either String String) a
 
 data Action
   = Submit

@@ -145,6 +145,13 @@ data PabOperation =
     {
       poOwner :: RoleName  -- ^ The name of the wallet's owner.
     }
+    -- | Use a pre-existing wallet.
+  | UseWallet
+    {
+      poOwner      :: RoleName  -- ^ The name of the wallet's owner.
+    , poWalletId   :: WalletId  -- ^ The wallet ID.
+    , poPassphrase :: String    -- ^ The default wallet passphrase.
+    }
     -- | Fund a wallet.
   | FundWallet
     {
@@ -247,6 +254,16 @@ data PabOperation =
     {
       poOwner :: RoleName  -- ^ The name of the wallet's owner.
     }
+    -- | Print the UTxOs at the app adddress.
+  | PrintAppUTxOs
+    {
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    }
+    -- | Print the UTxOs at the role-payout adddress.
+  | PrintRoleUTxOs
+    {
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    }
     -- | Print a comment.
   | Comment
     {
@@ -265,8 +282,8 @@ data PabOperation =
     -- | Fail if a test operation doesn't complete in time.
   | Timeout
     {
-      poTimeoutSeconds :: Int           -- ^ The number of seconds to wait.
-    , poOperation      :: PabOperation  -- ^ The PAB operation to wait for.
+      poTimeoutSeconds :: Int             -- ^ The number of seconds to wait.
+    , poOperations     :: [PabOperation]  -- ^ The PAB operations to wait for.
     }
     -- | Execute test operations that should fail.
   | ShouldFail
@@ -293,10 +310,11 @@ data PabAccess =
 data WalletInfo =
   WalletInfo
   {
-    wiWalletId   :: W.WalletId  -- ^ One wallet identifier.
-  , wiWalletId'  :: WalletId    -- ^ Another wallet identifier
-  , wiAddress    :: AddressAny  -- ^ The first wallet address.
-  , wiPubKeyHash :: PubKeyHash  -- ^ The public key hash of the first wallet address.
+    wiWalletId   :: W.WalletId        -- ^ One wallet identifier.
+  , wiWalletId'  :: WalletId          -- ^ Another wallet identifier
+  , wiAddress    :: AddressAny        -- ^ The first wallet address.
+  , wiPubKeyHash :: PubKeyHash        -- ^ The public key hash of the first wallet address.
+  , wiPassphrase :: Passphrase "raw"  -- ^ The default wallet passphrase.
   }
     deriving (Eq, Show)
 
@@ -326,7 +344,7 @@ data PabState =
     _psFaucetKey     :: SomePaymentSigningKey                   -- ^ The key to the faucet.
   , _psFaucetAddress :: AddressAny                              -- ^ The address of the faucet.
   , _psBurnAddress   :: AddressAny                              -- ^ The address for burning role tokens.
-  , _psPassphrase    :: Passphrase "raw"                        -- ^ The wallet passphrase.
+  , _psPassphrase    :: Passphrase "raw"                        -- ^ The default wallet passphrase.
   , _psWallets       :: M.Map RoleName WalletInfo               -- ^ The wallets being managed.
   , _psAppInstances  :: M.Map InstanceNickname AppInstanceInfo  -- ^ The PAB contract instances being managed.
   }

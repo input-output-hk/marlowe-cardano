@@ -3,32 +3,35 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.PAB (class ManagePAB)
+import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.Toast (class Toast)
+import Clipboard (class MonadClipboard)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
+import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
+import Data.Either (fromLeft)
 import Data.Lens ((^.), (^?))
+import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Unlift (class MonadUnliftAff)
 import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.Extra (renderSubmodule)
+import Halogen.Extra (mapComponentAction)
 import Halogen.HTML (div)
 import Halogen.HTML as H
+import Halogen.HTML as HH
 import Halogen.Store.Monad (class MonadStore)
-import MainFrame.Lenses
-  ( _addressBook
-  , _currentTime
-  , _dashboardState
-  , _store
-  , _subState
-  , _tzOffset
-  , _welcomeState
-  )
+import MainFrame.Lenses (_store, _subState)
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
-import Page.Dashboard.View (dashboardCard, dashboardScreen)
+import Page.Dashboard.State as Dashboard
+import Page.Dashboard.Types (_dashboard)
+import Page.Welcome.State as Welcome
 import Page.Welcome.View (welcomeCard, welcomeScreen)
-import Store (_contracts, _wallet)
+import Store (_wallet)
 import Store as Store
 import Store.Wallet (_connectedWallet)
 import Toast.State as Toast
@@ -36,57 +39,34 @@ import Toast.State as Toast
 render
   :: forall m
    . MonadAff m
+  => MonadKill Error Fiber m
+  => MonadUnliftAff m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
-  => ManageMarloweStorage m
+  => ManagePAB m
+  => MonadClipboard m
+  => MonadLogger StructuredLog m
+  => FollowerApp m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =
   let
-    addressBook = state ^. _addressBook
-
-    currentTime = state ^. _currentTime
-
-    tzOffset = state ^. _tzOffset
-
     subState = state ^. _subState
 
     mWallet = state ^? _store <<< _wallet <<< _connectedWallet
-
-    contracts = state ^. _store <<< _contracts
   in
-    div [ classNames [ "h-full" ] ]
-      $
-        case mWallet, subState of
+    div [ classNames [ "h-full" ] ] $ join
+      [ case mWallet, subState of
           Just wallet, Right _ ->
-            [ renderSubmodule
-                _dashboardState
-                DashboardAction
-                ( \dashboardState ->
-                    dashboardScreen
-                      { addressBook, currentTime, tzOffset, wallet, contracts }
-                      dashboardState
-                )
-                state
-            , renderSubmodule
-                _dashboardState
-                DashboardAction
-                ( \dashboardState ->
-                    dashboardCard
-                      { addressBook, currentTime, tzOffset, wallet, contracts }
-                      dashboardState
-                )
-                state
-            ]
+            [ HH.slot_ _dashboard unit Dashboard.component wallet ]
           _, _ ->
-            [ renderSubmodule _welcomeState WelcomeAction welcomeScreen state
-            , renderSubmodule
-                _welcomeState
-                WelcomeAction
-                welcomeCard
-                state
-            ]
-          <> [ H.slot_ _toaster unit Toast.component unit ]
+            let
+              welcomeState = fromLeft Welcome.initialState subState
+            in
+              mapComponentAction WelcomeAction
+                <$> [ welcomeScreen welcomeState, welcomeCard welcomeState ]
+      , [ H.slot_ _toaster unit Toast.component unit ]
+      ]

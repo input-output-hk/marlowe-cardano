@@ -12,6 +12,8 @@ import Component.Button.Types (Variant(..)) as B
 import Component.Button.View (button) as B
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
 import Css as Css
 import Data.Lens ((^.))
 import Data.List (foldMap)
@@ -80,6 +82,7 @@ welcomeCard
    . MonadAff m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
+  => MonadLogger StructuredLog m
   => Toast m
   => State
   -> ComponentHTML Action ChildSlots m
@@ -274,6 +277,7 @@ createWalletCard
    . MonadAff m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
+  => MonadLogger StructuredLog m
   => Toast m
   => CreateWalletStep
   -> Array (ComponentHTML Action ChildSlots m)
@@ -328,6 +332,7 @@ restoreWalletCard
    . MonadAff m
   => MonadStore Store.Action Store.Store m
   => ManageWallet m
+  => MonadLogger StructuredLog m
   => Toast m
   => Array (ComponentHTML Action ChildSlots m)
 restoreWalletCard =

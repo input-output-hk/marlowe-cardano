@@ -324,8 +324,8 @@ renderPastStep tzOffset state stepNumber step = do
         ]
   ]
 
-type InputsByParty
-  = { inputs :: Array S.Input, interval :: TimeInterval, party :: Party }
+type InputsByParty =
+  { inputs :: Array S.Input, interval :: TimeInterval, party :: Party }
 
 -- Normally we would expect that a TransactionInput has either no inputs or a single one
 -- but the types allows for them to be a list of different inputs, possibly made by different
@@ -700,8 +700,11 @@ renderBalances stepNumber state stepBalance =
     -- NOTE: This transformation assumes that the balances at start and at end (if available) are
     --       expanded to all participants, because intersectionWith only produces values for duplicated
     --       keys. If a key is in one of the map but not the other, it won't be shown.
-    accounts' :: Array
-      (Tuple (Tuple Party Token) { atStart :: BigInt, atEnd :: Maybe BigInt })
+    accounts'
+      :: Array
+           ( Tuple (Tuple Party Token)
+               { atStart :: BigInt, atEnd :: Maybe BigInt }
+           )
     accounts' =
       Map.toUnfoldable
         $ maybe'

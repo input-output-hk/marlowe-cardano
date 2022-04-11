@@ -34,8 +34,7 @@ called `ContractInstanceId` - as above, we don't refer to "contracts" here so as
 *Marlowe* contracts. This is converted to a `ContractInstanceId` that the PAB understands by the `Bridge`
 module.
 -}
-newtype PlutusAppId
-  = PlutusAppId UUID
+newtype PlutusAppId = PlutusAppId UUID
 
 derive instance Newtype PlutusAppId _
 

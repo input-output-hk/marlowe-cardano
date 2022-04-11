@@ -72,7 +72,7 @@ scriptsOptions =
     <*> O.strOption                            (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"                          <> O.help "The file containing the signing key for the faucet."    )
     <*> O.option parseAddressAny               (O.long "faucet-address" <> O.metavar "ADDRESS"                               <> O.help "The address of the faucet."                             )
     <*> O.option parseAddressAny               (O.long "burn-address"   <> O.metavar "ADDRESS"                               <> O.help "Burn address for discarding used tokens."               )
-    <*> (O.many . O.strArgument)               (                           O.metavar "TEST_FILE"                             <> O.help "JSON file containing a test case."                      )
+    <*> (O.some . O.strArgument)               (                           O.metavar "TEST_FILE"                             <> O.help "JSON file containing a test case."                      )
 
 
 -- | Parser for the "contracts" command.
@@ -95,4 +95,4 @@ pabsOptions =
     <*> O.option parseAddressAny               (O.long "faucet-address" <> O.metavar "ADDRESS"      <> O.help "The address of the faucet."                         )
     <*> O.option parseAddressAny               (O.long "burn-address"   <> O.metavar "ADDRESS"      <> O.help "Burn address for discarding used tokens."           )
     <*> O.strOption                            (O.long "passphrase"     <> O.metavar "PASSWORD"     <> O.help "The passphrase used for the Marlowe PAB."           )
-    <*> (O.many . O.strArgument)               (                           O.metavar "TEST_FILE"    <> O.help "JSON file containing a test case."                  )
+    <*> (O.some . O.strArgument)               (                           O.metavar "TEST_FILE"    <> O.help "JSON file containing a test case."                  )

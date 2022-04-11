@@ -14,23 +14,24 @@ import Prologue
 import AppM (AppM)
 import Bridge (toBack)
 import Capability.PAB (invokeEndpoint) as PAB
+import Control.Concurrent.EventBus as EventBus
+import Control.Monad.Cont.Trans (lift)
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (asks)
+import Control.Monad.Rec.Class (class MonadRec)
+import Control.Monad.UUID (class MonadUUID, generateUUID)
 import Data.Address (Address)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Lens (_1, over, view)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
-import Data.UUID.Argonaut (UUID, genUUID)
-import Effect.AVar (AVar)
-import Effect.Aff (Aff, effectCanceler, launchAff_)
-import Effect.Aff as Aff
-import Effect.Aff.AVar as AVar
-import Effect.Aff.Class (liftAff)
-import Effect.Class (liftEffect)
-import Env (_applyInputListeners, _createListeners, _redeemListeners)
-import Halogen.Subscription as HS
+import Data.UUID.Argonaut (UUID)
+import Effect.Aff (Aff, Error, forkAff, joinFiber)
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Env (_applyInputBus, _createBus, _redeemBus)
+import Language.Marlowe.Client (MarloweError)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
@@ -39,8 +40,10 @@ import Marlowe.Semantics
   , TokenName
   , TransactionInput(..)
   )
+import Plutus.PAB.Webserver (Api) as PAB
 import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Value (TokenName) as Back
+import Servant.PureScript (class MonadAjax)
 import Types (AjaxResponse)
 
 class MarloweApp m where
@@ -48,12 +51,12 @@ class MarloweApp m where
     :: PlutusAppId
     -> Map TokenName Address
     -> Contract
-    -> m (AjaxResponse (UUID /\ Aff MarloweParams))
+    -> m (AjaxResponse (UUID /\ Aff (Either MarloweError MarloweParams)))
   applyInputs
     :: PlutusAppId
     -> MarloweParams
     -> TransactionInput
-    -> m (AjaxResponse (Aff Unit))
+    -> m (AjaxResponse (Aff (Either MarloweError Unit)))
   -- TODO auto
   -- TODO close
   redeem
@@ -61,11 +64,24 @@ class MarloweApp m where
     -> MarloweParams
     -> TokenName
     -> Address
-    -> m (AjaxResponse (Aff Unit))
+    -> m (AjaxResponse (Aff (Either MarloweError Unit)))
 
-instance marloweAppM :: MarloweApp AppM where
+instance
+  ( MonadError Error m
+  , MonadAff m
+  , MonadRec m
+  , MonadAjax PAB.Api m
+  , MonadUUID m
+  ) =>
+  MarloweApp (AppM m) where
   createContract plutusAppId roles contract = runExceptT do
-    reqId <- liftEffect genUUID
+    reqId <- lift generateUUID
+    bus <- asks $ view _createBus
+    -- Run and fork this aff now so we are already listening before we even send
+    -- the request. Eliminates the risk that the response will come in before we
+    -- can even subscribe to the event bus.
+    responseFiber <-
+      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
     let
       backRoles :: Map Back.TokenName Address
       backRoles = Map.fromFoldable
@@ -74,14 +90,19 @@ instance marloweAppM :: MarloweApp AppM where
 
       payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
     ExceptT $ PAB.invokeEndpoint plutusAppId "create" payload
-    createListenersAVar <- asks $ view _createListeners
-    liftAff $ Tuple reqId <$> waitForUpdate reqId createListenersAVar
+    pure $ Tuple reqId $ joinFiber responseFiber
 
   applyInputs plutusAppId marloweContractId input = runExceptT do
     let
       TransactionInput { interval: TimeInterval slotStart slotEnd, inputs } =
         input
-    reqId <- liftEffect genUUID
+    reqId <- lift generateUUID
+    bus <- asks $ view _applyInputBus
+    -- Run and fork this aff now so we are already listening before we even send
+    -- the request. Removes the risk that the response will come in before we
+    -- can even subscribe to the event bus.
+    responseFiber <-
+      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
     let
       backTimeInterval :: POSIXTime /\ POSIXTime
       backTimeInterval = (slotStart) /\ (slotEnd)
@@ -94,11 +115,16 @@ instance marloweAppM :: MarloweApp AppM where
         ]
     ExceptT
       $ PAB.invokeEndpoint plutusAppId "apply-inputs-nonmerkleized" payload
-    applyInputListenersAVar <- asks $ view _applyInputListeners
-    liftAff $ waitForUpdate reqId applyInputListenersAVar
+    pure $ joinFiber responseFiber
 
   redeem plutusAppId marloweContractId tokenName address = runExceptT do
-    reqId <- liftEffect genUUID
+    reqId <- lift generateUUID
+    bus <- asks $ view _redeemBus
+    -- Run and fork this aff now so we are already listening before we even send
+    -- the request. Removes the risk that the response will come in before we
+    -- can even subscribe to the event bus.
+    responseFiber <-
+      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
     let
       payload =
         [ encodeJson reqId
@@ -107,31 +133,4 @@ instance marloweAppM :: MarloweApp AppM where
         , encodeJson address
         ]
     ExceptT $ PAB.invokeEndpoint plutusAppId "redeem" payload
-    redeemListenersAVar <- asks $ view _redeemListeners
-    liftAff $ waitForUpdate reqId redeemListenersAVar
-
-waitForUpdate
-  :: forall a
-   . UUID
-  -> AVar (Map UUID (Maybe HS.Subscription /\ HS.Listener a))
-  -> Aff (Aff a)
-waitForUpdate reqId listenersAVar = do
-  { emitter, listener } <- liftEffect HS.create
-  listeners <- AVar.take listenersAVar
-  AVar.put (Map.insert reqId (Nothing /\ listener) listeners) listenersAVar
-  pure $ Aff.makeAff \resolve -> do
-    subscription <- HS.subscribe emitter \params -> do
-      launchAff_ do
-        listeners' <- AVar.take listenersAVar
-        AVar.put (Map.delete reqId listeners') listenersAVar
-      resolve $ pure params
-    launchAff_ do
-      listeners' <- AVar.take listenersAVar
-      AVar.put
-        (Map.insert reqId (Just subscription /\ listener) listeners')
-        listenersAVar
-    pure $ effectCanceler do
-      launchAff_ do
-        listeners' <- AVar.take listenersAVar
-        AVar.put (Map.delete reqId listeners') listenersAVar
-      HS.unsubscribe subscription
+    pure $ joinFiber responseFiber

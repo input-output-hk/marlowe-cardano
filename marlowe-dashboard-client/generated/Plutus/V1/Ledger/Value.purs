@@ -39,8 +39,8 @@ instance EncodeJson AssetClass where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { unAssetClass:
-            (E.tuple (E.value >/\< E.value)) :: _
-              (Tuple CurrencySymbol TokenName)
+            (E.tuple (E.value >/\< E.value))
+              :: _ (Tuple CurrencySymbol TokenName)
         }
     )
 
@@ -48,8 +48,8 @@ instance DecodeJson AssetClass where
   decodeJson = defer \_ -> D.decode $
     ( AssetClass <$> D.record "AssetClass"
         { unAssetClass:
-            (D.tuple (D.value </\> D.value)) :: _
-              (Tuple CurrencySymbol TokenName)
+            (D.tuple (D.value </\> D.value))
+              :: _ (Tuple CurrencySymbol TokenName)
         }
     )
 
@@ -59,8 +59,8 @@ derive instance Newtype AssetClass _
 
 --------------------------------------------------------------------------------
 
-_AssetClass :: Iso' AssetClass
-  { unAssetClass :: Tuple CurrencySymbol TokenName }
+_AssetClass
+  :: Iso' AssetClass { unAssetClass :: Tuple CurrencySymbol TokenName }
 _AssetClass = _Newtype
 
 --------------------------------------------------------------------------------

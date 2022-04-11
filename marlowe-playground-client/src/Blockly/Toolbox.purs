@@ -40,8 +40,7 @@ encodeToolbox (CategoryToolbox xs) =
         ]
     )
 
-type ToolboxBlock
-  =
+type ToolboxBlock =
   { type :: String
   }
 
@@ -57,8 +56,7 @@ encodeBlock b =
 block :: String -> ToolboxBlock
 block _type = { type: _type }
 
-type CategoryFields
-  =
+type CategoryFields =
   { name :: String
   , toolboxitemid :: Maybe String
   , colour :: Maybe String

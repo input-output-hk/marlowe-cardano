@@ -12,8 +12,6 @@ import Effect.Aff.Class (class MonadAff)
 import Halogen (raise)
 import Halogen as H
 import Halogen.Component.Reactive as HR
-import Record as Record
-import Type.Proxy (Proxy(..))
 
 component
   :: forall query m
@@ -21,14 +19,10 @@ component
   => H.Component query Input Msg m
 component =
   HR.mkReactiveComponent
-    { deriveState: \input ->
-        maybe
-          (Record.insert (Proxy :: _ "choiceValues") Map.empty input)
-          (Record.merge input)
+    { deriveState: const unit
+    , initialTransient: { choiceValues: Map.empty }
     , render: currentStepActions
-    , eval: HR.defaultReactiveEval
-        { handleAction = handleAction
-        }
+    , eval: HR.fromHandleAction handleAction
     }
 
 handleAction :: forall m. Action -> DSL m Unit
@@ -38,6 +32,8 @@ handleAction (SelectAction namedAction chosenNum) =
 handleAction (ChangeChoice choiceId chosenNum) =
   H.modify_ \s ->
     s
-      { choiceValues = s.choiceValues
-          # maybe (Map.delete choiceId) (Map.insert choiceId) chosenNum
+      { transient = s.transient
+          { choiceValues = s.transient.choiceValues
+              # maybe (Map.delete choiceId) (Map.insert choiceId) chosenNum
+          }
       }

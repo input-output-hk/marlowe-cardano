@@ -2,29 +2,22 @@ module Env where
 
 import Prologue
 
-import Affjax (Response)
-import Affjax as Affjax
+import Control.Concurrent.AVarMap (AVarMap)
 import Control.Concurrent.EventBus (EventBus)
 import Control.Logger.Effect (Logger)
 import Control.Logger.Structured (StructuredLog)
-import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map (Map)
 import Data.Newtype (class Newtype)
-import Data.Time.Duration (class Duration, Milliseconds, Minutes)
-import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
-import Effect (Effect)
+import Data.Wallet (SyncStatus)
 import Effect.AVar (AVar)
-import Effect.Aff (Aff)
 import Halogen (SubscriptionId)
-import Halogen.Subscription (Emitter, Listener, Subscription)
-import Language.Marlowe.Client (ContractHistory)
-import LocalStorage (Key)
+import Halogen.Subscription (Emitter, Listener)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams)
+import Marlowe.Semantics (Assets, MarloweParams)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer
@@ -32,39 +25,17 @@ import Plutus.PAB.Webserver.Types
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
--- A two-layer mapping of semaphores. The keys of the outer Map correspond to
--- the app IDs of the different plutus apps, the keys of the inner Map
--- correspond to the endpoint names of the endpoints within that app, and the
--- values of the inner map are AVars which are used to conrol when that
--- endpoint is available (when the AVar is empty, it is unavailable, and
--- prospective clients of that endpoint will need to wait until it becomes
--- available again).
-type EndpointSemaphores = Map PlutusAppId (Map String (AVar Unit))
+type WalletFunds = { sync :: SyncStatus, assets :: Assets }
 
 type Sources =
   { pabWebsocket :: Emitter (FromSocket CombinedWSStreamToClient)
-  , currentTime :: Effect Instant
+  , walletFunds :: Emitter WalletFunds
   }
 
 type Sinks =
   { pabWebsocket :: Listener CombinedWSStreamToServer
+  , logger :: Logger StructuredLog
   }
-
-type LocalStorageApi =
-  { removeItem :: Key -> Effect Unit
-  , getItem :: Key -> Effect (Maybe String)
-  , setItem :: Key -> String -> Effect Unit
-  }
-
--- Newtype wrapper for this callback because PureScript doesn't like pualified
--- types to appear in records.
-newtype HandleRequest = HandleRequest
-  (forall a. Affjax.Request a -> Aff (Either Affjax.Error (Response a)))
-
--- Newtype wrapper for this callback because PureScript doesn't like pualified
--- types to appear in records.
-newtype MakeClock = MakeClock
-  (forall d. Duration d => d -> Effect (Emitter Unit))
 
 -- Application enviroment configuration
 newtype Env = Env
@@ -78,67 +49,40 @@ newtype Env = Env
     --    creation functions didn't require that, so it seemed wrong to lift several functions into Effect.
     --    In contrast, the Env is created in Main, where we already have access to Effect
     contractStepCarouselSubscription :: AVar SubscriptionId
-  , logger :: Logger StructuredLog
-  , endpointSemaphores :: AVar EndpointSemaphores
-  , createListeners ::
-      AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams))
-  , applyInputListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
-  , redeemListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
+  , endpointAVarMap :: AVarMap (Tuple PlutusAppId String) Unit
+  , createBus :: EventBus UUID (Either MarloweError MarloweParams)
+  , applyInputBus :: EventBus UUID (Either MarloweError Unit)
+  , redeemBus :: EventBus UUID (Either MarloweError Unit)
+  , followerAVarMap :: AVarMap MarloweParams Unit
   , followerBus :: EventBus PlutusAppId ContractHistory
   -- | All the outbound communication channels to the outside world
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
   , sources :: Sources
-  -- | This allows us to inject a custom HTTP request effect, overriding the
-  -- | default one for testing or global extension purposes.
-  , handleRequest :: HandleRequest
-  , localStorage :: LocalStorageApi
-  , timezoneOffset :: Minutes
-  , makeClock :: MakeClock
-  , regularPollInterval :: Milliseconds
-  , syncPollInterval :: Milliseconds
   }
 
 derive instance newtypeEnv :: Newtype Env _
 
-_createListeners :: Lens' Env
-  (AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams)))
-_createListeners = _Newtype <<< prop (Proxy :: _ "createListeners")
+_createBus :: Lens' Env (EventBus UUID (Either MarloweError MarloweParams))
+_createBus = _Newtype <<< prop (Proxy :: _ "createBus")
 
-_applyInputListeners :: Lens' Env
-  (AVar (Map UUID (Maybe Subscription /\ Listener Unit)))
-_applyInputListeners = _Newtype <<< prop (Proxy :: _ "applyInputListeners")
+_applyInputBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
+_applyInputBus = _Newtype <<< prop (Proxy :: _ "applyInputBus")
 
-_redeemListeners :: Lens' Env
-  (AVar (Map UUID (Maybe Subscription /\ Listener Unit)))
-_redeemListeners = _Newtype <<< prop (Proxy :: _ "redeemListeners")
+_redeemBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
+_redeemBus = _Newtype <<< prop (Proxy :: _ "redeemBus")
+
+_followerAVarMap :: Lens' Env (AVarMap MarloweParams Unit)
+_followerAVarMap = _Newtype <<< prop (Proxy :: _ "followerAVarMap")
 
 _followerBus :: Lens' Env (EventBus PlutusAppId ContractHistory)
 _followerBus = _Newtype <<< prop (Proxy :: _ "followerBus")
 
-_endpointSemaphores :: Lens' Env (AVar EndpointSemaphores)
-_endpointSemaphores = _Newtype <<< prop (Proxy :: _ "endpointSemaphores")
+_endpointAVarMap :: Lens' Env (AVarMap (Tuple PlutusAppId String) Unit)
+_endpointAVarMap = _Newtype <<< prop (Proxy :: _ "endpointAVarMap")
 
 _sources :: Lens' Env Sources
 _sources = _Newtype <<< prop (Proxy :: _ "sources")
 
 _sinks :: Lens' Env Sinks
 _sinks = _Newtype <<< prop (Proxy :: _ "sinks")
-
-_handleRequest :: Lens' Env HandleRequest
-_handleRequest = _Newtype <<< prop (Proxy :: _ "handleRequest")
-
-_timezoneOffset :: Lens' Env Minutes
-_timezoneOffset = _Newtype <<< prop (Proxy :: _ "timezoneOffset")
-
-_localStorage :: Lens' Env LocalStorageApi
-_localStorage = _Newtype <<< prop (Proxy :: _ "localStorage")
-
-_makeClock :: Lens' Env MakeClock
-_makeClock = _Newtype <<< prop (Proxy :: _ "makeClock")
-
-_syncPollInterval :: Lens' Env Milliseconds
-_syncPollInterval = _Newtype <<< prop (Proxy :: _ "syncPollInterval")
-
-_regularPollInterval :: Lens' Env Milliseconds
-_regularPollInterval = _Newtype <<< prop (Proxy :: _ "regularPollInterval")

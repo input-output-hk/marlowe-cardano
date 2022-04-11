@@ -33,13 +33,15 @@ module Language.Marlowe.CLI.Types (
 , SomePaymentSigningKey
 -- * Exceptions
 , CliError(..)
+-- * Queries
+, OutputQuery(..)
 ) where
 
 
-import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra, PaymentExtendedKey, PaymentKey,
-                    PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo,
-                    TxIn, VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
-                    serialiseToTextEnvelope)
+import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), AssetId, Hash, IsCardanoEra, Lovelace, PaymentExtendedKey,
+                    PaymentKey, PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData,
+                    SigningKey, SlotNo, TxIn, VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope,
+                    serialiseAddress, serialiseToTextEnvelope)
 import Cardano.Api.Shelley (PlutusScript (..))
 import Codec.Serialise (deserialise)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
@@ -284,3 +286,19 @@ data PayToScript era =
   , datumHash :: Hash ScriptData   -- ^ The datum hash.
   }
     deriving (Eq, Generic, Show)
+
+
+-- | Options for address queries.
+data OutputQuery =
+    -- | Return all UTxOs.
+    AllOutput
+    -- | Only return pure-ADA UTxOs with at least the specified amount.
+  | LovelaceOnly
+    {
+      lovelace :: Lovelace
+    }
+    -- | Only require UTxOs containing only the specified asset.
+  | AssetOnly
+    {
+      asset :: AssetId
+    }

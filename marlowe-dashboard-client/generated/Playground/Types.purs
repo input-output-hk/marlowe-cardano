@@ -202,9 +202,10 @@ derive instance Newtype KnownCurrency _
 
 --------------------------------------------------------------------------------
 
-_KnownCurrency :: Iso' KnownCurrency
-  { hash :: String
-  , friendlyName :: String
-  , knownTokens :: NonEmptyList TokenName
-  }
+_KnownCurrency
+  :: Iso' KnownCurrency
+       { hash :: String
+       , friendlyName :: String
+       , knownTokens :: NonEmptyList TokenName
+       }
 _KnownCurrency = _Newtype

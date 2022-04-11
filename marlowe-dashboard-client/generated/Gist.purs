@@ -76,17 +76,18 @@ derive instance Newtype Gist _
 
 --------------------------------------------------------------------------------
 
-_Gist :: Iso' Gist
-  { _gistId :: GistId
-  , _gistGitPushUrl :: String
-  , _gistHtmlUrl :: String
-  , _gistOwner :: Owner
-  , _gistFiles :: Map String GistFile
-  , _gistTruncated :: Boolean
-  , _gistCreatedAt :: String
-  , _gistUpdatedAt :: String
-  , _gistDescription :: String
-  }
+_Gist
+  :: Iso' Gist
+       { _gistId :: GistId
+       , _gistGitPushUrl :: String
+       , _gistHtmlUrl :: String
+       , _gistOwner :: Owner
+       , _gistFiles :: Map String GistFile
+       , _gistTruncated :: Boolean
+       , _gistCreatedAt :: String
+       , _gistUpdatedAt :: String
+       , _gistDescription :: String
+       }
 _Gist = _Newtype
 
 gistId :: Lens' Gist GistId
@@ -159,13 +160,14 @@ derive instance Newtype GistFile _
 
 --------------------------------------------------------------------------------
 
-_GistFile :: Iso' GistFile
-  { _gistFileFilename :: String
-  , _gistFileLanguage :: Maybe String
-  , _gistFileType :: String
-  , _gistFileTruncated :: Maybe Boolean
-  , _gistFileContent :: Maybe String
-  }
+_GistFile
+  :: Iso' GistFile
+       { _gistFileFilename :: String
+       , _gistFileLanguage :: Maybe String
+       , _gistFileType :: String
+       , _gistFileTruncated :: Maybe Boolean
+       , _gistFileContent :: Maybe String
+       }
 _GistFile = _Newtype
 
 gistFileFilename :: Lens' GistFile String
@@ -241,11 +243,12 @@ derive instance Newtype NewGist _
 
 --------------------------------------------------------------------------------
 
-_NewGist :: Iso' NewGist
-  { _newGistDescription :: String
-  , _newGistPublic :: Boolean
-  , _newGistFiles :: Array NewGistFile
-  }
+_NewGist
+  :: Iso' NewGist
+       { _newGistDescription :: String
+       , _newGistPublic :: Boolean
+       , _newGistFiles :: Array NewGistFile
+       }
 _NewGist = _Newtype
 
 newGistDescription :: Lens' NewGist String
@@ -286,8 +289,9 @@ derive instance Newtype NewGistFile _
 
 --------------------------------------------------------------------------------
 
-_NewGistFile :: Iso' NewGistFile
-  { _newGistFilename :: String, _newGistFileContent :: String }
+_NewGistFile
+  :: Iso' NewGistFile
+       { _newGistFilename :: String, _newGistFileContent :: String }
 _NewGistFile = _Newtype
 
 newGistFilename :: Lens' NewGistFile String

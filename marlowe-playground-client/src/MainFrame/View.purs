@@ -28,6 +28,7 @@ import Halogen.HTML
   )
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, id, src, target)
+import Halogen.HTML.Properties.ARIA (label, role)
 import Home as Home
 import Icons (Icon(..), icon)
 import MainFrame.Types
@@ -194,7 +195,11 @@ render state =
         spinner =
           if isLoading then icon Spinner else div [ classNames [ "empty" ] ] []
       in
-        div [ classNames [ "project-title" ] ]
+        div
+          [ classNames [ "project-title" ]
+          , role "heading"
+          , label "project-title"
+          ]
           [ h1 [ classNames [ "text-lg" ] ]
               {- TODO: Fix style when name is super long -}
               [ text title

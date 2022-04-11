@@ -108,6 +108,7 @@ let
     hie-bios
     hlint
     marlowe-dashboard.build-client
+    marlowe-dashboard.test-client
     marlowe-dashboard.generate-purescript
     marlowe-dashboard.start-backend
     marlowe-playground.build-client

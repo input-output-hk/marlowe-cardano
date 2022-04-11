@@ -16,6 +16,7 @@ import Data.ContractUserParties (ContractUserParties)
 import Data.Map (Map)
 import Data.UserNamedActions (UserNamedActions)
 import Halogen as H
+import Halogen.Component.Reactive as Reactive
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Semantics (ChoiceId, ChosenNum)
@@ -28,11 +29,7 @@ data Action
   | ChangeChoice ChoiceId (Maybe ChosenNum)
 
 type State =
-  { executionState :: Execution.State
-  , contractUserParties :: ContractUserParties
-  , namedActions :: UserNamedActions
-  , choiceValues :: Map ChoiceId ChosenNum
-  }
+  Reactive.State Input Unit { choiceValues :: (Map ChoiceId ChosenNum) }
 
 type Input =
   { executionState :: Execution.State

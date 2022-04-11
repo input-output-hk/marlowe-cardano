@@ -295,7 +295,7 @@ timeoutInput name fieldState =
           name
           result
           error
-          (Input.setInputProps value [])
+          (Input.setInputProps value [ HP.readOnly true ])
           case _ of
             CT.Empty -> "Required."
             CT.Past -> "Must be in the future."

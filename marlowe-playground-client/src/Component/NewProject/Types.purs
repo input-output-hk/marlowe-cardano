@@ -26,8 +26,7 @@ instance isEventAction :: IsEvent Action where
     , value: Nothing
     }
 
-type State
-  =
+type State =
   { error :: Maybe String
   }
 

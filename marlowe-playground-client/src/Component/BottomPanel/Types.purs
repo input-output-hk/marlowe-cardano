@@ -33,8 +33,7 @@ instance actionIsEvent ::
     { label = Just $ show view }
   toEvent (PanelAction action) = A.toEvent action
 
-type State panel
-  =
+type State panel =
   { showBottomPanel :: Boolean
   , panelView :: panel
   }

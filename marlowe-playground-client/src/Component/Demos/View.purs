@@ -13,6 +13,7 @@ import Halogen.Css (classNames)
 import Halogen.HTML (HTML, button, div, div_, h2_, hr_, span, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
+import Halogen.HTML.Properties.ARIA (label)
 import MainFrame.Types (ChildSlots)
 
 render :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
@@ -47,21 +48,25 @@ demoFile key name description =
             [ button
                 [ onClick $ const $ LoadDemo Haskell key
                 , classNames [ "btn" ]
+                , label $ name <> " Haskell"
                 ]
                 [ text "Haskell" ]
             , button
                 [ onClick $ const $ LoadDemo Javascript key
                 , classNames [ "btn" ]
+                , label $ name <> " Javascript"
                 ]
                 [ text "Javascript" ]
             , button
                 [ onClick $ const $ LoadDemo Marlowe key
                 , classNames [ "btn" ]
+                , label $ name <> " Marlowe"
                 ]
                 [ text "Marlowe" ]
             , button
                 [ onClick $ const $ LoadDemo Blockly key
                 , classNames [ "btn" ]
+                , label $ name <> " Blockly"
                 ]
                 [ text "Blockly" ]
             ]

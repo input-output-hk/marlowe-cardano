@@ -85,8 +85,7 @@ import Web.DOM.HTMLCollection as HTMLCollection
 import Web.DOM.Node as Node
 import Web.DOM.ParentNode as ParentNode
 
-type Block
-  =
+type Block =
   { id :: String
   , type :: String
   -- In the XML the children of a block are stored/represented as an array of elements, but to simplify
@@ -115,8 +114,7 @@ data BlockChild
   -- while parsing.
   | Statement (Array Block)
 
-type NamedBlockChild
-  = Tuple String BlockChild
+type NamedBlockChild = Tuple String BlockChild
 
 data ReadDomError
   = TypeMismatch Element String

@@ -17,6 +17,7 @@ import Control.Monad.State (StateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT)
 import Halogen (HalogenM)
+import Halogen.Store.Monad (StoreT)
 
 class Monad m <= MonadLogger msg m where
   log :: LogMessage msg -> m Unit
@@ -34,6 +35,9 @@ instance MonadLogger msg m => MonadLogger msg (MaybeT m) where
   log = lift <<< log
 
 instance (Monoid w, MonadLogger msg m) => MonadLogger msg (RWST r w s m) where
+  log = lift <<< log
+
+instance MonadLogger msg m => MonadLogger msg (StoreT a s m) where
   log = lift <<< log
 
 instance MonadLogger msg m => MonadLogger msg (ReaderT r m) where

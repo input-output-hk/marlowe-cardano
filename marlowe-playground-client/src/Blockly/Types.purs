@@ -37,8 +37,7 @@ foreign import data Field :: Type
 
 foreign import data Connection :: Type
 
-type BlocklyState
-  =
+type BlocklyState =
   { blockly :: Blockly
   , workspace :: Workspace
   , rootBlockName :: String
@@ -64,5 +63,4 @@ isDragStop (UI event) = element event == (Just "dragStop")
 isDragStop _ = false
 
 -- This is needed for the headless blockly test
-type NewBlockFunction
-  = Workspace -> String -> Effect Block
+type NewBlockFunction = Workspace -> String -> Effect Block

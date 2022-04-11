@@ -7,8 +7,7 @@ import Prelude
 -- |
 -- | Use it for relatively small arrays (length < 10000).
 -- | It is not stack safe.
-newtype Builder a
-  = Builder (Array a -> Array a)
+newtype Builder a = Builder (Array a -> Array a)
 
 instance semigroupBuilder :: Semigroup (Builder a) where
   append (Builder b1) (Builder b2) = Builder (b1 <<< b2)

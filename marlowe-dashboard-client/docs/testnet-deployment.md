@@ -65,6 +65,7 @@ nix-build marlowe-cardano/default.nix -A marlowe-dashboard.marlowe-run-backend-i
 cat > marlowe-run.json << EOI
 {
   "wbeConfig": { "host": "localhost", "port": 8090 },
+  "chainIndexConfig": { "host": "localhost", "port": 9083 },
   "staticPath": "/var/empty",
   "verbosity": 3
 }
@@ -266,10 +267,12 @@ popd
 ```
 
 # Build Daedalus.
+
 pushd daedalus
 NETWORK=alonzo_purple nix-shell shell.nix --argstr nodeImplementation cardano --argstr cluster alonzo_purple --command 'yarn build'
 popd
-```
+
+````
 
 ## Setup Wallet(s)
 
@@ -278,7 +281,7 @@ For each wallet, generate a seed phrase:
 ```console
 $ ./build-wallet/bin/cardano-wallet recovery-phrase generate
 success riot top midnight sauce present sport shadow million canyon finger slam refuse dad december forget picture onion problem bid setup skull master vessel
-```
+````
 
 ## Run Services
 
@@ -354,7 +357,7 @@ You should see a list of blocks and slots. Wait until the slot number is close t
 In a terminal for the dashboard server, run the following:
 
 ```bash
-./build-run/bin/marlowe-dashboard-server webserver --config marlowe-run.json
+./build-run/bin/marlowe-dashboard-server webserver --config marlowe-run.json -n 1564
 ```
 
 The server is generally silent, except for a few messages like when wallets are created.

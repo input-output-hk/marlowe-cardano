@@ -11,8 +11,7 @@ import Routing.Duplex.Generic (noArgs, sum)
 import Routing.Duplex.Generic.Syntax ((/))
 import Type.Proxy (Proxy(..))
 
-type Route
-  =
+type Route =
   { subroute :: SubRoute
   , gistId :: Maybe GistId
   }

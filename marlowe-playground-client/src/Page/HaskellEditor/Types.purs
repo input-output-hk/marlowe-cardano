@@ -64,8 +64,7 @@ instance actionIsEvent :: IsEvent Action where
     { label = Just $ showConstructor action }
   toEvent DoNothing = Nothing
 
-type State
-  =
+type State =
   { keybindings :: KeyBindings
   , compilationResult ::
       WebData (Either InterpreterError (InterpreterResult String))
@@ -78,8 +77,9 @@ type State
 _haskellEditorKeybindings :: Lens' State KeyBindings
 _haskellEditorKeybindings = prop (Proxy :: _ "keybindings")
 
-_compilationResult :: Lens' State
-  (WebData (Either InterpreterError (InterpreterResult String)))
+_compilationResult
+  :: Lens' State
+       (WebData (Either InterpreterError (InterpreterResult String)))
 _compilationResult = prop (Proxy :: _ "compilationResult")
 
 _metadataHintInfo :: Lens' State MetadataHintInfo

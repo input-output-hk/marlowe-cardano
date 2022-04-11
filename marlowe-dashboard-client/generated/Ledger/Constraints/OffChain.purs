@@ -157,8 +157,8 @@ instance EncodeJson UnbalancedTx where
     ( E.record
         { unBalancedTxTx: E.value :: _ Tx
         , unBalancedTxRequiredSignatories:
-            (E.dictionary E.value (E.maybe E.value)) :: _
-              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
+            (E.dictionary E.value (E.maybe E.value))
+              :: _ (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
             (E.dictionary E.value E.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: E.value :: _ (Interval POSIXTime)
@@ -170,8 +170,8 @@ instance DecodeJson UnbalancedTx where
     ( UnbalancedTx <$> D.record "UnbalancedTx"
         { unBalancedTxTx: D.value :: _ Tx
         , unBalancedTxRequiredSignatories:
-            (D.dictionary D.value (D.maybe D.value)) :: _
-              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
+            (D.dictionary D.value (D.maybe D.value))
+              :: _ (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
             (D.dictionary D.value D.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: D.value :: _ (Interval POSIXTime)
@@ -184,11 +184,12 @@ derive instance Newtype UnbalancedTx _
 
 --------------------------------------------------------------------------------
 
-_UnbalancedTx :: Iso' UnbalancedTx
-  { unBalancedTxTx :: Tx
-  , unBalancedTxRequiredSignatories ::
-      Map PaymentPubKeyHash (Maybe PaymentPubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
-  , unBalancedTxValidityTimeRange :: Interval POSIXTime
-  }
+_UnbalancedTx
+  :: Iso' UnbalancedTx
+       { unBalancedTxTx :: Tx
+       , unBalancedTxRequiredSignatories ::
+           Map PaymentPubKeyHash (Maybe PaymentPubKey)
+       , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
+       , unBalancedTxValidityTimeRange :: Interval POSIXTime
+       }
 _UnbalancedTx = _Newtype

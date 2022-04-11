@@ -18,6 +18,8 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
+echo '* basenc'
+echo '* tr'
 echo
 echo "Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables "'`'"SELLER_PREFIX"'`'", "'`'"BUYER_PREFIX"'`'", and "'`'"MEDIATOR_PREFIX"'`'" where they appear below."
 
@@ -25,7 +27,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if true
+if false
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -51,6 +53,7 @@ echo "The seller sells an item for a price."
 SELLER_PREFIX="$TREASURY/francis-beaumont"
 SELLER_NAME="Francis Beaumont"
 SELLER_ROLE=FB
+SELLER_ROLE_HEX=$(echo -n "$SELLER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 SELLER_TOKEN="$ROLE_CURRENCY.$SELLER_ROLE"
 SELLER_PAYMENT_SKEY="$SELLER_PREFIX".skey
 SELLER_PAYMENT_VKEY="$SELLER_PREFIX".vkey
@@ -80,10 +83,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_SELLER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                      \
-                       --address "$SELLER_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                             \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$SELLER_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                          \
+                       --address "$SELLER_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                 \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$SELLER_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$SELLER_NAME will spend the UTxOs "'`'"$TX_0_SELLER_ADA"'`'" and "'`'"$TX_0_SELLER_TOKEN"'`.'
@@ -93,6 +96,7 @@ echo "### The Buyer"
 BUYER_PREFIX="$TREASURY/thomas-middleton"
 BUYER_NAME="Thomas Middleton"
 BUYER_ROLE=TM
+BUYER_ROLE_HEX=$(echo -n "$BUYER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 BUYER_TOKEN="$ROLE_CURRENCY.$BUYER_ROLE"
 BUYER_PAYMENT_SKEY="$BUYER_PREFIX".skey
 BUYER_PAYMENT_VKEY="$BUYER_PREFIX".vkey
@@ -122,10 +126,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_BUYER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                     \
-                       --address "$BUYER_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                            \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$BUYER_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                         \
+                       --address "$BUYER_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$BUYER_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$BUYER_NAME will spend the UTxOs "'`'"$TX_0_BUYER_ADA"'`'" and "'`'"$TX_0_BUYER_TOKEN"'`.'
@@ -135,6 +139,7 @@ echo "### The Mediator"
 MEDIATOR_PREFIX="$TREASURY/christopher-marlowe"
 MEDIATOR_NAME="Christopher Marlowe"
 MEDIATOR_ROLE=CM
+MEDIATOR_ROLE_HEX=$(echo -n "$MEDIATOR_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 MEDIATOR_TOKEN="$ROLE_CURRENCY.$MEDIATOR_ROLE"
 MEDIATOR_PAYMENT_SKEY="$MEDIATOR_PREFIX".skey
 MEDIATOR_PAYMENT_VKEY="$MEDIATOR_PREFIX".vkey
@@ -164,10 +169,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_MEDIATOR_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                        \
-                       --address "$MEDIATOR_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                               \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$MEDIATOR_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$MEDIATOR_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$MEDIATOR_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$MEDIATOR_NAME will spend the UTxOs "'`'"$TX_0_MEDIATOR_ADA"'`'" and "'`'"$TX_0_MEDIATOR_TOKEN"'`.'

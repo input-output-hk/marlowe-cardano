@@ -1,125 +1,254 @@
 module Page.Dashboard.State
-  ( handleAction
-  , mkInitialState
+  ( component
   , updateTotalFunds
   ) where
 
 import Prologue
 
+import API.Lenses (_cicContract)
 import Bridge (toFront)
-import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe, initializeContract)
-import Capability.MarloweStorage (class ManageMarloweStorage)
-import Capability.PlutusApps.FollowerApp
-  ( class FollowerApp
-  , ensureFollowerContract
-  , followNewContract
+import Capability.PAB
+  ( class ManagePAB
+  , onNewActiveEndpoints
+  , subscribeToPlutusApp
+  , unsubscribeFromPlutusApp
   )
+import Capability.PAB (activateContract, getWalletContractInstances) as PAB
+import Capability.PlutusApps.FollowerApp (class FollowerApp, followContract)
+import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.AddContact.Types as AddContact
-import Component.Contacts.Lenses (_cardSection)
-import Component.Contacts.State (handleAction, initialState) as Contacts
-import Component.Contacts.Types (Action(..), State) as Contacts
-import Component.Contacts.Types (CardSection(..))
+import Component.Contacts.Types as Contacts
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
-import Component.Template.State (dummyState, handleAction, initialState) as Template
+import Component.Template.State (handleAction, initialState) as Template
 import Component.Template.Types (Action(..), State(..)) as Template
+import Control.Alt ((<|>))
+import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Structured (StructuredLog)
+import Control.Logger.Structured (StructuredLog, debug, error)
 import Control.Logger.Structured as Logger
-import Control.Monad.Now (class MonadTime, now)
-import Control.Monad.Reader (class MonadAsk)
+import Control.Monad.Fork.Class (class MonadKill)
+import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Now (class MonadTime, now, timezoneOffset)
+import Control.Monad.Reader (class MonadAsk, asks)
+import Control.Monad.State (class MonadState)
+import Control.Parallel (parTraverse_)
+import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Array as Array
 import Data.ContractStatus (ContractStatus(..))
 import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
-import Data.Foldable (for_)
-import Data.Lens (assign, modifying, set, use)
+import Data.Foldable (for_, traverse_)
+import Data.Lens (assign, modifying, set, use, view, (^.), (^?))
 import Data.Map (filterKeys, toUnfoldable)
 import Data.NewContract (NewContract(..))
-import Data.PABConnectedWallet (PABConnectedWallet)
-import Data.Time.Duration (Milliseconds(..))
+import Data.PABConnectedWallet
+  ( PABConnectedWallet
+  , _companionAppId
+  , _initialFollowers
+  , _marloweAppId
+  , _walletId
+  )
+import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Data.UserNamedActions (userNamedActions)
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
+import Effect.Aff (Error, Fiber, launchAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Env (Env)
-import Halogen (HalogenM, modify_, tell)
+import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
+import Effect.Class (liftEffect)
+import Env (Env, _applyInputBus, _createBus, _redeemBus, _sources)
+import Errors (globalError)
+import Halogen (modify_, tell)
+import Halogen as H
+import Halogen.Component.Reactive (mkReactiveComponent)
 import Halogen.Extra (mapSubmodule)
-import Halogen.Store.Monad (class MonadStore, updateStore)
-import MainFrame.Types (ChildSlots, Msg)
+import Halogen.Store.Connect (Connected, connect)
+import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
+import Halogen.Store.Select (selectEq)
+import Halogen.Subscription (Emitter, makeEmitter)
+import Halogen.Subscription as HS
+import Halogen.Subscription.Extra (compactEmitter)
+import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
+import Marlowe.Client (getMarloweParams)
 import Marlowe.Execution.State (extractNamedActions)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics (MarloweData, MarloweParams)
+import MarloweContract (MarloweContract(..))
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
-  , _closedContracts
-  , _contactsState
   , _contractFilter
+  , _contracts
   , _menuOpen
-  , _newContracts
-  , _runningContracts
   , _selectedContractIndex
   , _templateState
+  , _tzOffset
+  , _wallet
   , _walletCompanionStatus
   )
 import Page.Dashboard.Types
   ( Action(..)
   , Card(..)
+  , ChildSlots
+  , Component
   , ContractFilter(..)
   , ContractState
-  , Input
+  , DerivedState
+  , Msg
+  , NotificationParseFailedError(..)
+  , Slice
   , State
   , WalletCompanionStatus(..)
   )
+import Page.Dashboard.View (render)
+import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient(..))
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient
+  , InstanceStatusToClient(..)
+  ) as PAB
 import Store as Store
 import Store.Contracts
-  ( ContractStore
-  , followerContractExists
+  ( followerContractExists
   , getClosedContracts
   , getContract
   , getNewContracts
   , getRunningContracts
   )
+import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (explainableErrorToast, successToast)
+import Toast.Types (successToast)
+import WebSocket.Support (FromSocket)
+import WebSocket.Support as WS
 
-mkInitialState
-  :: Instant -> PABConnectedWallet -> ContractStore -> State
-mkInitialState currentTime wallet contracts =
+subscribeToPlutusApps
+  :: forall m
+   . ManagePAB m
+  => MonadLogger StructuredLog m
+  => Toast m
+  => MonadStore Store.Action Store.Store m
+  => HalogenM m Unit
+subscribeToPlutusApps = do
+  wallet <- use _wallet
+  let companionAppId = wallet ^. _companionAppId
+  let marloweAppId = wallet ^. _marloweAppId
+  let initialFollowers = wallet ^. _initialFollowers
+  -- Register initial follower contracts before subscribing to companion so
+  -- existing follower instances never get duplicated by companion updates.
+  updateStore $ Store.FollowerAppsActivated initialFollowers
+
+  -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
+  -- Get notified of new contracts
+  subscribeToPlutusApp companionAppId
+
+  -- Get notified of the results of our control app
+  subscribeToPlutusApp marloweAppId
+  Logger.info' $ "Subscribed to companion app " <> show companionAppId
+    <> " and control app "
+    <> show marloweAppId
+
+  -- subscribe to followers
+  traverse_ (subscribeToPlutusApp <<< snd) initialFollowers
+  Logger.info' $ "Subscribed to follower apps "
+    <> show (Array.fromFoldable initialFollowers)
+
+{- [UC-WALLET-3][1] Disconnect a wallet
+Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
+need to unsubscribe from all the apps related to the wallet that was previously connected.
+-}
+unsubscribeFromPlutusApps
+  :: forall m
+   . ManagePAB m
+  => Toast m
+  => MonadLogger StructuredLog m
+  => HalogenM m Unit
+unsubscribeFromPlutusApps = do
+  wallet <- use _wallet
+  let walletId = view _walletId wallet
+  -- And also from the individual plutus apps that we are
+  -- subscribed to.
+  -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
+  ajaxPlutusApps <- PAB.getWalletContractInstances walletId
+  case ajaxPlutusApps of
+    Left err -> globalError "Can't unsubscribe from the backend notifications"
+      err
+    Right plutusApps -> do
+      traverse_ (unsubscribeFromPlutusApp <<< view _cicContract) plutusApps
+
+component
+  :: forall m
+   . MonadAff m
+  => MonadLogger StructuredLog m
+  => MonadUnliftAff m
+  => MonadAsk Env m
+  => MonadTime m
+  => MonadKill Error Fiber m
+  => ManageMarlowe m
+  => ManagePAB m
+  => FollowerApp m
+  => MonadStore Store.Action Store.Store m
+  => Toast m
+  => MonadClipboard m
+  => Component m
+component = connect sliceSelector $ mkReactiveComponent
+  { deriveState
+  , initialTransient:
+      { walletCompanionStatus: WaitingToSync
+      , menuOpen: false
+      , card: Nothing
+      , cardOpen: false
+      , contractFilter: Running
+      , selectedContractIndex: Nothing
+      , templateState: Template.initialState
+      , tzOffset: Minutes zero
+      }
+  , render
+  , eval:
+      { initialize: do
+          subscribeToSources
+          subscribeToPlutusApps
+          tzOffset <- timezoneOffset
+          assign _tzOffset tzOffset
+      , finalize: \_ -> unsubscribeFromPlutusApps
+      , handleInput: \_ _ -> pure unit
+      , handleAction
+      }
+  }
+  where
+  sliceSelector =
+    selectEq \{ currentTime, contracts } -> { currentTime, contracts }
+
+deriveState :: Connected Slice PABConnectedWallet -> DerivedState
+deriveState { input, context } =
   let
-    runningContracts = deriveContractState currentTime wallet $
-      getRunningContracts contracts
-    closedContracts = deriveContractState currentTime wallet $
-      getClosedContracts contracts
+    wallet = input
+    { contracts, currentTime } = context
+    runningContracts =
+      deriveContractState currentTime wallet <$> getRunningContracts contracts
+    closedContracts =
+      deriveContractState currentTime wallet <$> getClosedContracts contracts
+    newContracts = getNewContracts contracts
   in
-    { contactsState: Contacts.initialState
-    , walletCompanionStatus: WaitingToSync
-    , menuOpen: false
-    , card: Nothing
-    , cardOpen: false
-    , newContracts: getNewContracts contracts
+    { newContracts
     , runningContracts
     , closedContracts
-    , contractFilter: Running
-    , selectedContractIndex: Nothing
-    , templateState: Template.dummyState
     }
 
 deriveContractState
   :: Instant
   -> PABConnectedWallet
-  -> Array Execution.State
-  -> Array ContractState
-deriveContractState currentTime wallet = map \executionState ->
+  -> Execution.State
+  -> ContractState
+deriveContractState currentTime wallet executionState =
   let
     { marloweParams, contract } = executionState
     userParties = contractUserParties wallet marloweParams contract
@@ -130,58 +259,41 @@ deriveContractState currentTime wallet = map \executionState ->
         $ extractNamedActions currentTime executionState
     }
 
+type HalogenM = H.HalogenM State Action ChildSlots Msg
+
 handleAction
   :: forall m
    . MonadAff m
   => MonadLogger StructuredLog m
   => MonadAsk Env m
   => MonadTime m
-  => ManageMarloweStorage m
   => ManageMarlowe m
+  => ManagePAB m
   => FollowerApp m
-  => MainFrameLoop m
   => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m
-  => Input
-  -> Action
-  -> HalogenM State Action ChildSlots Msg m Unit
-handleAction { currentTime, wallet, contracts } Receive = do
-  let
-    runningContracts = deriveContractState currentTime wallet $
-      getRunningContracts contracts
-    closedContracts = deriveContractState currentTime wallet $
-      getClosedContracts contracts
-    newContracts = getNewContracts contracts
-  modify_
-    ( set _runningContracts runningContracts
-        <<< set _closedContracts closedContracts
-        <<< set _newContracts newContracts
-    )
+  => Action
+  -> HalogenM m Unit
+handleAction (OnContactsMsg Contacts.Closed) =
+  assign _card Nothing
 
 {- [UC-WALLET-3][0] Disconnect a wallet -}
-handleAction { wallet } DisconnectWallet = do
+handleAction DisconnectWallet = do
+  wallet <- use _wallet
   updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet
 
-handleAction _ (ContactsAction contactsAction) =
-  case contactsAction of
-    Contacts.OnAddContactMsg (Just _) AddContact.BackClicked -> do
-      assign _card $ Just ContractTemplateCard
-    _ -> do
-      toContacts $ Contacts.handleAction contactsAction
+handleAction ToggleMenu = modifying _menuOpen not
 
-handleAction _ ToggleMenu = modifying _menuOpen not
-
-handleAction _ (ClipboardAction action) = do
+handleAction (ClipboardAction action) = do
   Clipboard.handleAction action
   addToast $ successToast "Copied to clipboard"
 
-handleAction _ (OpenCard card) = do
+handleAction (OpenCard card) = do
   -- We set the card and reset the contact and template card states to their first section
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
     $ set _card (Just card)
-        <<< set (_contactsState <<< _cardSection) Home
         <<< set _templateState Template.Start
   -- then we set the card to open (and close the mobile menu) in a separate `modify_`, so that the
   -- CSS transition animation works
@@ -189,31 +301,14 @@ handleAction _ (OpenCard card) = do
     $ set _cardOpen true
         <<< set _menuOpen false
 
-handleAction _ CloseCard = assign _cardOpen false
+handleAction CloseCard = assign _cardOpen false
 
-handleAction _ (SetContractFilter contractFilter) = assign _contractFilter
+handleAction (SetContractFilter contractFilter) = assign _contractFilter
   contractFilter
 
-handleAction _ (SelectContract marloweParams) = assign
+handleAction (SelectContract marloweParams) = assign
   _selectedContractIndex
   marloweParams
-
-{- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
-handleAction { wallet, contracts } (UpdateFollowerApps companionAppState) = do
-  walletCompanionStatus <- use _walletCompanionStatus
-  let
-    contractExists marloweParams = followerContractExists marloweParams
-      contracts
-
-    newContracts = filterKeys (not contractExists) companionAppState
-
-    newContractsArray :: Array (Tuple MarloweParams MarloweData)
-    newContractsArray = toUnfoldable newContracts
-  when (walletCompanionStatus == WaitingToSync) $ assign
-    _walletCompanionStatus
-    WalletCompanionSynced
-  for_ newContractsArray \(marloweParams /\ _) ->
-    ensureFollowerContract wallet marloweParams
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
@@ -226,7 +321,8 @@ we thought it would be more user-friendly for now to trigger this automatically 
 integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
 manually (and sign the transaction). So this will almost certainly have to change.
 -}
-handleAction _ (RedeemPayments _) = pure unit
+handleAction (RedeemPayments _) = pure unit
+
 {-
   -- FIXME-3559 Fix redeem logic
 handleAction { wallet } (RedeemPayments marloweParams) = do
@@ -250,13 +346,11 @@ for_ mStartedContract \{ executionState, userParties } ->
           _ -> pure unit
 -}
 
-handleAction input@{ wallet } (TemplateAction templateAction) =
+handleAction (TemplateAction templateAction) = do
+  wallet <- use _wallet
   case templateAction of
-    Template.OpenCreateWalletCard tokenName -> do
-      modify_
-        $ set _card (Just $ ContactsCard)
-            <<< set (_contactsState <<< _cardSection)
-              (NewWallet $ Just tokenName)
+    Template.OpenCreateWalletCard _ -> do
+      modify_ $ set _card (Just $ ContactsCard)
     {- [UC-CONTRACT-1][0] Start a new marlowe contract
      The flow of creating a new marlowe contract starts when we submit the
      Template form. In here we apply the contract parameters to the Marlowe
@@ -272,58 +366,35 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
         Left error -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $
             SubmitResult (Milliseconds 600.0) (Left "Error")
-          addToast $ explainableErrorToast "Failed to initialize contract."
-            error
-          Logger.error "Failed to initialize contract." error
+          globalError "Failed to initialize contract." error
         Right (newContract /\ awaitContractCreation) -> do
-          handleAction input CloseCard
+          handleAction CloseCard
           void $ tell _submitButtonSlot "action-pay-and-start" $
             SubmitResult (Milliseconds 600.0) (Right "")
           addToast $ successToast
             "The request to initialize this contract has been submitted."
           -- We reset the template component (TODO: this wont be needed after the SCP-3464 refactor)
           assign _templateState Template.initialState
-          marloweParams <- liftAff awaitContractCreation
-          awaitContractFollow <- followNewContract wallet marloweParams
-          ajaxFollow <- liftAff awaitContractFollow
-
-          case ajaxFollow of
-            Left err -> do
-              addToast $ explainableErrorToast "Can't follow the contract"
-                err
-              Logger.error "Can't follow the contract: " err
-            Right (followerId /\ history) -> do
-              -- TODO: Ideally I want this updateStore to live under the FollowerApp capability
-              --       or the ManageMarlowe capability, but in order to do that I need to see how
-              --       feasible is to add a Co-routine.
-              --       After we submit a new contract from the capability, we should yield the flow
-              --       to the UI here so we can show the toast message, then we should give back control
-              --       to the capability via the awaitContractCreation which should do this updateStore
-              --       and then yield back here so we can do the second toast
-              updateStore $
-                Store.SwapStartingToStartedContract
-                  newContract
-                  currentInstant
-                  followerId
-                  history
-              addToast $ successToast "Contract initialised."
+          mMarloweParams <- liftAff awaitContractCreation
+          case mMarloweParams of
+            Left contractError ->
+              globalError "Failed to create contract" contractError
+            Right marloweParams -> do
               -- If the UI is showing the Starting contract we change the index to
               -- show the newly Started contract
-              let
-                NewContract newContractUUID _ _ = newContract
+              let NewContract newContractUUID _ _ _ _ = newContract
               mSelectedContract <- use _selectedContractIndex
               when (mSelectedContract == (Just $ Starting newContractUUID))
                 do
                   assign _selectedContractIndex
                     $ Just
                     $ Started marloweParams
+              addToast $ successToast "Contract created."
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
--- FIXME: this all feels like a horrible hack that should be refactored.
--- This action is a bridge from the Contacts to the Template modules. It is used to create a
--- contract for a specific role during contract setup.
-handleAction _ (SetContactForRole _ _) = do
+-- FIXME: SCP-3468
+handleAction (SetContactForRole _ _) = do
   pure unit
 -- handleAction input $ TemplateAction Template.UpdateRoleWalletValidators
 -- handleAction input
@@ -337,15 +408,252 @@ handleAction _ (SetContactForRole _ _) = do
 -- assign _card $ Just ContractTemplateCard
 
 handleAction
-  input@{ contracts, wallet }
   (OnAskContractActionConfirmation marloweParams action chosenNum) = do
+  contracts <- use _contracts
+  wallet <- use _wallet
   let
     mExecutionState = getContract marloweParams contracts
   for_ mExecutionState \executionState ->
-    handleAction input
-      $ OpenCard
-      $ ContractActionConfirmationCard
-          { action, chosenNum, executionState, wallet }
+    handleAction $ OpenCard $ ContractActionConfirmationCard
+      { action, chosenNum, executionState, wallet }
+
+handleAction (NotificationParseFailed error) = do
+  let
+    NotificationParseFailedError { whatFailed } = error
+    shortDescription = "Failed to parse " <> whatFailed <>
+      " from websocket message"
+  globalError shortDescription error
+
+{- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
+handleAction (CompanionAppStateUpdated companionAppState) = do
+  contracts <- use _contracts
+  wallet <- use _wallet
+  walletCompanionStatus <- use _walletCompanionStatus
+  let
+    contractExists = flip followerContractExists contracts
+
+    newContracts = filterKeys (not contractExists) companionAppState
+
+    newContractsArray :: Array (Tuple MarloweParams MarloweData)
+    newContractsArray = toUnfoldable newContracts
+  when (walletCompanionStatus == WaitingToSync) $ assign
+    _walletCompanionStatus
+    WalletCompanionSynced
+  flip parTraverse_ newContractsArray \(marloweParams /\ _) -> do
+    ajaxFollow <- followContract wallet marloweParams
+    case ajaxFollow of
+      Left err -> globalError "Can't follow the contract" err
+      Right _ -> do
+        addToast $ successToast "Contract initialized."
+
+handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
+  {- [UC-CONTRACT-1][3] Start a contract -}
+  {- [UC-CONTRACT-3][1] Apply an input to a contract -}
+  FollowerApp.onNewObservableState plutusAppId contractHistory
+  {- [UC-CONTRACT-4][0] Redeem payments -}
+  let marloweParams = getMarloweParams contractHistory
+  handleAction $ RedeemPayments marloweParams
+
+{- [UC-CONTRACT-1][2] Starting a Marlowe contract
+  After the PAB endpoint finishes creating the contract, it modifies
+  its observable state with the MarloweParams of the newly created
+  contract. We take this opportunity to create a FollowerContract
+  that will give us updates on the state of the contract
+-}
+handleAction (MarloweContractCreated reqId marloweParams) = do
+  bus <- asks $ view _createBus
+  liftEffect $ EventBus.notify bus.listener reqId $ Right marloweParams
+
+handleAction (InputsApplied reqId) = do
+  bus <- asks $ view _applyInputBus
+  liftEffect $ EventBus.notify bus.listener reqId $ Right unit
+
+handleAction (PaymentRedeemed reqId) = do
+  bus <- asks $ view _redeemBus
+  liftEffect $ EventBus.notify bus.listener reqId $ Right unit
+
+handleAction (CreateFailed reqId error) = void $ runMaybeT $ do
+  bus <- asks $ view _createBus
+  liftEffect $ EventBus.notify bus.listener reqId $ Left error
+
+handleAction (ApplyInputsFailed reqId error) = void $ runMaybeT $ do
+  bus <- asks $ view _applyInputBus
+  liftEffect $ EventBus.notify bus.listener reqId $ Left error
+
+handleAction (RedeemFailed reqId error) = void $ runMaybeT $ do
+  bus <- asks $ view _redeemBus
+  liftEffect $ EventBus.notify bus.listener reqId $ Left error
+
+handleAction (NewActiveEndpoints plutusAppId activeEndpoints) = do
+  -- TODO move into main directly and remove this from the PAB capability API
+  onNewActiveEndpoints plutusAppId activeEndpoints
+
+handleAction (MarloweAppClosed mVal) = void $ runMaybeT do
+  reActivatePlutusScript MarloweApp mVal
+
+handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
+  reActivatePlutusScript WalletCompanion mVal
+
+handleAction (UpdateWalletFunds { assets, sync }) = do
+  debug "💰Wallet funds changed" $ encodeJson assets
+  updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
+  updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
+
+reActivatePlutusScript
+  :: forall m
+   . MonadState State m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManagePAB m
+  => MarloweContract
+  -> Maybe Json
+  -> MaybeT m Unit
+reActivatePlutusScript contractType mVal = do
+  walletId <- use (_wallet <<< _walletId)
+  Logger.error
+    ("Plutus script " <> show contractType <> " has closed unexpectedly")
+    mVal
+  newAppId <- MaybeT $ hush <$> PAB.activateContract contractType walletId
+  H.lift
+    $ updateStore
+    $ Store.Wallet
+    $ Wallet.OnPlutusScriptChanged contractType newAppId
+
+subscribeToSources
+  :: forall m
+   . MonadAsk Env m
+  => MonadUnliftAff m
+  => MonadStore Store.Action Store.Store m
+  => MonadLogger StructuredLog m
+  => HalogenM m Unit
+subscribeToSources =
+  void <<< H.subscribe <<< compactEmitter =<< H.lift actionsFromSources
+
+actionsFromSources
+  :: forall m
+   . MonadAsk Env m
+  => MonadUnliftAff m
+  => MonadStore Store.Action Store.Store m
+  => MonadLogger StructuredLog m
+  => m (Emitter (Maybe Action))
+actionsFromSources = do
+  { pabWebsocket, walletFunds } <- asks $ view _sources
+  u <- askUnliftAff
+  -- IMPORTANT: we can't use the applicative instance for Emitter here like
+  -- this: actionFromWebsocket <$> wallet <*> pabWebsocket. Why? Because that
+  -- will cause duplicate actions to be sent on every wallet change. In FRP
+  -- terms, `wallet` functions as a `Behaviour` here, not an `Event`. But the
+  -- applicative instance for `Emitters` does not work like that. It fires an
+  -- event when either constituent `Emitter` fires, using the previous value of
+  -- the other one each time.
+  let
+    websocketActions = makeEmitter \subscriber -> do
+      canceller <- HS.subscribe pabWebsocket \websocketMsg -> launchAff_ do
+        store <- unliftAff u $ getStore
+        unliftAff u case websocketMsg of
+          WS.ReceiveMessage (Left err) ->
+            error "✘ Failed to parse websocket message" err
+          WS.ReceiveMessage (Right msg) ->
+            debug "↓ Recv websocket message" msg
+          _ -> pure unit
+        let mWallet = store ^? Store._wallet <<< _connectedWallet
+        liftEffect $ for_ mWallet \w ->
+          subscriber $ actionFromWebsocket w websocketMsg
+      pure $ HS.unsubscribe canceller
+  let walletUpdates = Just <<< UpdateWalletFunds <$> walletFunds
+  -- Alt instance for Emitters "zips" them together. So the resulting Emitter
+  -- is the union of events fired from the constituent emitters.
+  pure $ websocketActions <|> walletUpdates
+
+actionFromWebsocket
+  :: PABConnectedWallet
+  -> FromSocket CombinedWSStreamToClient
+  -> Maybe Action
+actionFromWebsocket wallet = case _ of
+  WS.ReceiveMessage (Left jsonDecodeError) ->
+    Just $ notificationParseFailed "websocket message" jsonNull jsonDecodeError
+  WS.ReceiveMessage (Right stream) -> actionFromStream wallet stream
+  _ -> Nothing
+
+actionFromStream
+  :: PABConnectedWallet
+  -> PAB.CombinedWSStreamToClient
+  -> Maybe Action
+actionFromStream wallet = case _ of
+  SlotChange _ -> Nothing
+  -- TODO handle with lite wallet support
+  -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
+  --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
+  --       so that it only triggers this call once synced or ignore the message altogether and find
+  --       a different approach.
+  -- TODO: If we receive a second status update for the same contract / plutus app, while
+  -- the previous update is still being handled, then strange things could happen. This
+  -- does not seem very likely. Still, it might be worth considering guarding against this
+  -- possibility by e.g. keeping a list/array of updates and having a subscription that
+  -- handles them synchronously in the order in which they arrive.
+  InstanceUpdate _ (PAB.NewYieldedExportTxs _) -> Nothing
+  InstanceUpdate appId (PAB.NewActiveEndpoints activeEndpoints) ->
+    Just $ NewActiveEndpoints appId activeEndpoints
+  InstanceUpdate appId (PAB.ContractFinished message)
+    | appId == companionAppId ->
+        Just $ WalletCompanionAppClosed message
+    | appId == marloweAppId ->
+        Just $ MarloweAppClosed message
+    | otherwise ->
+        Just $ MarloweAppClosed message
+  InstanceUpdate appId (PAB.NewObservableState state)
+    | appId == companionAppId ->
+        case D.decode (D.maybe D.value) state of
+          Left error ->
+            Just $ notificationParseFailed
+              "wallet companion state"
+              state
+              error
+          Right (Just companionAppState) ->
+            Just $ CompanionAppStateUpdated companionAppState
+          _ -> Nothing
+    | appId == marloweAppId -> case D.decode (D.maybe D.value) state of
+        Left error ->
+          Just $ notificationParseFailed
+            "marlowe app response"
+            state
+            error
+        Right Nothing ->
+          Nothing
+        Right (Just (EndpointException uuid "create" error)) ->
+          Just $ CreateFailed uuid error
+        Right (Just (EndpointException uuid "apply-inputs-nonmerkleized" error)) ->
+          Just $ ApplyInputsFailed uuid error
+        Right (Just (EndpointException uuid "redeem" error)) ->
+          Just $ RedeemFailed uuid error
+        Right (Just (EndpointSuccess uuid (CreateResponse marloweParams))) ->
+          Just $ MarloweContractCreated uuid marloweParams
+        Right (Just (EndpointSuccess uuid ApplyInputsResponse)) ->
+          Just $ InputsApplied uuid
+        Right (Just (EndpointSuccess uuid RedeemResponse)) ->
+          Just $ PaymentRedeemed uuid
+        _ -> Nothing
+    | otherwise -> case D.decode (D.maybe D.value) state of
+        Left error ->
+          Just $ notificationParseFailed
+            "follower app response"
+            state
+            error
+        Right (Just history) ->
+          Just $ ContractHistoryUpdated appId history
+        Right _ -> Nothing
+  where
+  companionAppId = wallet ^. _companionAppId
+  marloweAppId = wallet ^. _marloweAppId
+
+notificationParseFailed
+  :: String -> Json -> JsonDecodeError -> Action
+notificationParseFailed whatFailed originalValue parsingError =
+  NotificationParseFailed $ NotificationParseFailedError
+    { whatFailed
+    , originalValue
+    , parsingError
+    }
 
 updateTotalFunds
   :: forall m
@@ -362,16 +670,9 @@ updateTotalFunds walletId = do
     updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
     pure syncStatus
 
-toContacts
-  :: forall m msg slots
-   . Functor m
-  => HalogenM Contacts.State Contacts.Action slots msg m Unit
-  -> HalogenM State Action slots msg m Unit
-toContacts = mapSubmodule _contactsState ContactsAction
-
 toTemplate
-  :: forall m msg slots
+  :: forall m
    . Functor m
-  => HalogenM Template.State Template.Action slots msg m Unit
-  -> HalogenM State Action slots msg m Unit
+  => H.HalogenM Template.State Template.Action ChildSlots Msg m Unit
+  -> HalogenM m Unit
 toTemplate = mapSubmodule _templateState TemplateAction

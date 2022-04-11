@@ -68,8 +68,7 @@ derive instance genericBottomPanelView :: Generic BottomPanelView _
 instance showBottomPanelView :: Show BottomPanelView where
   show = genericShow
 
-type State
-  =
+type State =
   { errorMessage :: Maybe String
   , marloweCode :: Maybe String
   , hasHoles :: Boolean

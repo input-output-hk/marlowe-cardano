@@ -2,7 +2,7 @@ let mkPackage =
       https://raw.githubusercontent.com/purescript/package-sets/psc-0.13.0-20190626/src/mkPackage.dhall sha256:0b197efa1d397ace6eb46b243ff2d73a3da5638d8d0ac8473e8e4a8fc528cf57
 
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20211028/packages.dhall sha256:df6486e7fad6dbe724c4e2ee5eac65454843dce1f6e10dc35e0b1a8aa9720b26
+      https://github.com/purescript/package-sets/releases/download/psc-0.14.7-20220315/packages.dhall sha256:708ca6d205ab5ecc1a3522e4bbe44fa576a0ebebbbc094a3aa9417be7b246974
 
 in  upstream
   with infinite-lists =
@@ -195,7 +195,7 @@ in  upstream
         , "web-uievents"
         ]
         "https://github.com/input-output-hk/purescript-web-common"
-        "v3.0.3"
+        "v3.1.1"
   with halogen-nselect =
       mkPackage
         [ "aff"
@@ -213,3 +213,18 @@ in  upstream
         ]
         "https://github.com/jhbertra/purescript-halogen-nselect"
         "v1.0.0"
+  with unlift =
+      mkPackage
+        [ "aff"
+        , "effect"
+        , "either"
+        , "identity"
+        , "lists"
+        , "maybe"
+        , "monad-control"
+        , "prelude"
+        , "transformers"
+        , "tuples"
+        ]
+        "https://github.com/tweag/purescript-unlift"
+        "v1.0.1"

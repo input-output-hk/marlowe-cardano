@@ -173,8 +173,8 @@ instance (EncodeJson a) => EncodeJson (Responses a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { unResponses:
-            (E.dictionary (E.tuple (E.value >/\< E.value)) E.value) :: _
-              (Map (Tuple IterationID RequestID) a)
+            (E.dictionary (E.tuple (E.value >/\< E.value)) E.value)
+              :: _ (Map (Tuple IterationID RequestID) a)
         }
     )
 
@@ -182,8 +182,8 @@ instance (DecodeJson a) => DecodeJson (Responses a) where
   decodeJson = defer \_ -> D.decode $
     ( Responses <$> D.record "Responses"
         { unResponses:
-            (D.dictionary (D.tuple (D.value </\> D.value)) D.value) :: _
-              (Map (Tuple IterationID RequestID) a)
+            (D.dictionary (D.tuple (D.value </\> D.value)) D.value)
+              :: _ (Map (Tuple IterationID RequestID) a)
         }
     )
 

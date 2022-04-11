@@ -10,6 +10,8 @@ module Marlowe.Execution.State
   , mkTx
   , nextState
   , nextTimeout
+  , pendingTimeouts
+  , removePendingTransaction
   , restoreState
   , setPendingTransaction
   , timeoutState
@@ -28,7 +30,7 @@ import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe, maybe')
 import Data.Newtype (unwrap)
-import Data.Time.Duration (Days(..), Milliseconds(..), Minutes(..))
+import Data.Time.Duration (Days(..), Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
@@ -41,6 +43,7 @@ import Marlowe.Execution.Types
   , TimeoutInfo
   )
 import Marlowe.Extended.Metadata (MetaData)
+import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Accounts
   , Action(..)
@@ -57,6 +60,7 @@ import Marlowe.Semantics
   , TimeInterval(..)
   , Timeouts(..)
   , Token
+  , TransactionError(..)
   , TransactionInput(..)
   , TransactionOutput(..)
   , _accounts
@@ -75,30 +79,34 @@ import Plutus.V1.Ledger.Time as POSIXTime
 import Safe.Coerce (coerce)
 
 mkInitialState
-  :: Maybe ContractNickname
+  :: PlutusAppId
+  -> Maybe ContractNickname
   -> MarloweParams
   -> MetaData
   -> Contract
   -> State
-mkInitialState contractNickname marloweParams metadata contract =
+mkInitialState followerAppId contractNickname marloweParams metadata contract =
   { semanticState: emptyState
   , contractNickname
   , contract
+  , initialContract: contract
   , metadata
   , marloweParams
   , history: mempty
   , mPendingTransaction: Nothing
   , mPendingTimeouts: Nothing
   , mNextTimeout: nextTimeout contract
+  , followerAppId
   }
 
 restoreState
-  :: Instant
+  :: PlutusAppId
+  -> Instant
   -> Maybe ContractNickname
   -> MetaData
   -> ContractHistory
-  -> Either String State
-restoreState currentTime contractNickname metadata history = do
+  -> Either TransactionError State
+restoreState followerAppId currentTime contractNickname metadata history = do
   let
     MarloweData { marloweContract, marloweState } = getInitialData history
     marloweParams = getMarloweParams history
@@ -108,17 +116,23 @@ restoreState currentTime contractNickname metadata history = do
       { semanticState: marloweState
       , contractNickname
       , contract: marloweContract
+      , initialContract: marloweContract
       , metadata
       , marloweParams
       , history: mempty
       , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
       , mNextTimeout: nextTimeout marloweContract
+      , followerAppId
       }
   -- Apply all the transaction inputs
-  foldl (flip nextState) initialState inputs
-    -- See if any step has timeouted
-    # timeoutState currentTime
+  appliedInputState <- foldl
+    (\mState txInput -> nextState txInput =<< mState)
+    (Right initialState)
+    inputs
+
+  -- See if any step has timeouted
+  timeoutState currentTime appliedInputState
 
 -- Each contract should always have a name, if we
 -- have given a Local nickname, we use that, if not we
@@ -133,7 +147,11 @@ setPendingTransaction :: TransactionInput -> State -> State
 setPendingTransaction txInput state = state
   { mPendingTransaction = Just txInput }
 
-nextState :: TransactionInput -> State -> State
+removePendingTransaction :: State -> State
+removePendingTransaction state = state
+  { mPendingTransaction = Nothing }
+
+nextState :: TransactionInput -> State -> Either TransactionError State
 nextState txInput state =
   let
     { semanticState, contract, history } =
@@ -141,53 +159,45 @@ nextState txInput state =
     TransactionInput { interval: TimeInterval (POSIXTime minTime) _, inputs } =
       txInput
 
-    { txOutState, txOutContract, txOutPayments } =
-      case computeTransaction txInput semanticState contract of
-        (TransactionOutput { txOutState, txOutContract, txOutPayments }) ->
-          { txOutState, txOutContract, txOutPayments }
-        -- We should not have contracts which cause errors in the dashboard so we will just ignore error cases for now
-        -- FIXME: Change nextState to return an Either
-        -- TODO: SCP-2088 We need to discuss how to display the warnings that computeTransaction may give
-        (Error _) ->
-          { txOutState: semanticState
-          , txOutContract: contract
-          , txOutPayments: mempty
-          }
-
-    mPendingTransaction =
-      if state.mPendingTransaction == Just txInput then
-        Nothing
-      else
-        state.mPendingTransaction
-
-    -- For the moment the only way to get an empty transaction is if there was a timeout,
-    -- but later on there could be other reasons to move a contract forward, and we should
-    -- compare with the contract to see the reason.
-    action = case inputs of
-      Nil ->
-        TimeoutAction
-          { time: minTime
-          , missedActions:
-              extractActionsFromContract minTime semanticState contract
-          }
-      _ -> InputAction
-
-    pastState =
-      { balancesAtStart: semanticState ^. _accounts
-      , action
-      , txInput
-      , balancesAtEnd: txOutState ^. _accounts
-      , resultingPayments: txOutPayments
-      }
   in
-    state
-      { semanticState = txOutState
-      , contract = txOutContract
-      , history = Array.snoc history pastState
-      , mPendingTransaction = mPendingTransaction
-      , mPendingTimeouts = Nothing
-      , mNextTimeout = nextTimeout txOutContract
-      }
+    case computeTransaction txInput semanticState contract of
+      (Error err) -> Left err
+      (TransactionOutput { txOutState, txOutContract, txOutPayments }) ->
+        let
+          mPendingTransaction =
+            if state.mPendingTransaction == Just txInput then
+              Nothing
+            else
+              state.mPendingTransaction
+
+          -- For the moment the only way to get an empty transaction is if there was a timeout,
+          -- but later on there could be other reasons to move a contract forward, and we should
+          -- compare with the contract to see the reason.
+          action = case inputs of
+            Nil ->
+              TimeoutAction
+                { time: minTime
+                , missedActions:
+                    extractActionsFromContract minTime semanticState contract
+                }
+            _ -> InputAction
+
+          pastState =
+            { balancesAtStart: semanticState ^. _accounts
+            , action
+            , txInput
+            , balancesAtEnd: txOutState ^. _accounts
+            , resultingPayments: txOutPayments
+            }
+        in
+          pure $ state
+            { semanticState = txOutState
+            , contract = txOutContract
+            , history = Array.snoc history pastState
+            , mPendingTransaction = mPendingTransaction
+            , mPendingTimeouts = Nothing
+            , mNextTimeout = nextTimeout txOutContract
+            }
 
 nextTimeout :: Contract -> Maybe Instant
 nextTimeout = timeouts >>> \(Timeouts { minTime }) -> coerce minTime
@@ -197,7 +207,7 @@ mkTx currentTime contract inputs =
   TransactionInput { interval: mkInterval currentTime contract, inputs }
 
 -- This function checks if the are any new timeouts in the current execution state
-timeoutState :: Instant -> State -> Either String State
+timeoutState :: Instant -> State -> Either TransactionError State
 timeoutState currentTime state =
   let
     { semanticState
@@ -225,7 +235,7 @@ timeoutState currentTime state =
       -> Semantic.State
       -> Contract
       -> Either
-           String
+           TransactionError
            { mNextTimeout :: Maybe Instant
            , mPendingTimeouts :: Maybe PendingTimeouts
            }
@@ -238,9 +248,8 @@ timeoutState currentTime state =
               -- TODO: SCP-2088 We need to discuss how to display the warnings that computeTransaction may give
               ContractQuiescent _ _ _ txOutState txOutContract ->
                 Right { txOutState, txOutContract }
-              -- FIXME: Change timeoutState to return an Either
               RRAmbiguousTimeIntervalError ->
-                Left "RRAmbiguousTimeIntervalError"
+                Left TEAmbiguousTimeIntervalError
 
           let newNextTimeout = nextTimeout txOutContract
           let
@@ -285,6 +294,9 @@ isClosed :: State -> Boolean
 isClosed { contract: Close } = true
 
 isClosed _ = false
+
+pendingTimeouts :: State -> Maybe PendingTimeouts
+pendingTimeouts { mPendingTimeouts } = mPendingTimeouts
 
 getActionParticipant :: NamedAction -> Maybe Party
 getActionParticipant (MakeDeposit _ party _ _) = Just party
@@ -348,18 +360,28 @@ expandBalances participants tokens stateAccounts =
 mkInterval :: Instant -> Contract -> TimeInterval
 mkInterval currentTime contract =
   case nextTimeout contract of
+    -- There are no timeouts in the remaining contract. i.e. the contract is
+    -- not an executable contract.
     Nothing -> TimeInterval
       (POSIXTime currentTimeAdjustedForSlotDelay)
       (POSIXTime currentTimeAdjustedForBlockConfirmation)
     Just nextTO
       -- FIXME SCP-2875 Change hardcoded time in mkInterval
-      | nextTO < currentTimeAdjustedForSlotDelay ->
-          TimeInterval (POSIXTime nextTO) top
+      -- The next timeout in the contract has already passed - i.e. the
+      -- branch is timed out.
+      | nextTO < currentTime ->
+          TimeInterval
+            ( fromMaybe (POSIXTime nextTO)
+                $ POSIXTime.adjust (Seconds 1.0)
+                $ POSIXTime nextTO
+            )
+            top
+      -- There is a timeout approaching. The valid interval for the transaction
+      -- is any time between now and the next timeout.
       | otherwise ->
           TimeInterval (POSIXTime currentTimeAdjustedForSlotDelay)
-            $ unsafePartial
-            $ fromJust
-            $ POSIXTime.adjust (Milliseconds (-1.0)) (POSIXTime nextTO)
+            $ fromMaybe (POSIXTime nextTO)
+            $ POSIXTime.adjust (Seconds (-1.0)) (POSIXTime nextTO)
   where
   -- TODO move this to configuration and possibly process server-side instead.
   -- If the block is confirmed after the upper bound of the interval, the
@@ -387,6 +409,7 @@ getAllPayments { history } = concat $ fromFoldable $ map
   (view _resultingPayments)
   history
 
+-- Zero-indexed step
 currentStep :: State -> Int
 currentStep { history, mPendingTimeouts } = pastSteps + pendingSteps
   where

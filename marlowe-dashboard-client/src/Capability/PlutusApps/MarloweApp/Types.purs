@@ -13,13 +13,11 @@ import Language.Marlowe.Client
   , MarloweError
   )
 
-type EndpointName
-  = String
+type EndpointName = String
 
 type MarloweEndpointResponse = EndpointResponse MarloweEndpointResult
   MarloweError
 
-type MarloweAppState
-  = Maybe MarloweEndpointResponse
+type MarloweAppState = Maybe MarloweEndpointResponse
 
 type PendingResults = AVar (Array (UUID /\ (AVar MarloweEndpointResponse)))

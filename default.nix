@@ -54,13 +54,16 @@ rec {
   };
 
   marlowe-dashboard = pkgs.recurseIntoAttrs rec {
-    inherit (pkgs.callPackage ./marlowe-dashboard-client {
+    pkg = pkgs.callPackage ./marlowe-dashboard-client {
       inherit haskell;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
       inherit (marlowe) purs-tidy writeShellScriptBinInRepoRoot;
       inherit (pkgs.nodePackages) prettier;
-    }) client marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend build-client;
+    };
+    inherit (pkg)
+      client marlowe-invoker marlowe-run-backend-invoker generated-purescript
+      generate-purescript start-backend build-client test-client;
   };
 
   tests = import ./nix/tests/default.nix {

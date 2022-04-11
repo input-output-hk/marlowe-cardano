@@ -109,8 +109,7 @@ defaultForFormatType DecimalFormatType = DecimalFormat 0 ""
 
 defaultForFormatType TimeFormatType = TimeFormat
 
-type ValueParameterInfo
-  =
+type ValueParameterInfo =
   { valueParameterFormat :: NumberFormat
   , valueParameterDescription :: String
   }
@@ -218,9 +217,9 @@ _choiceInfo = prop (Proxy :: _ "choiceInfo")
 emptyContractMetadata :: MetaData
 emptyContractMetadata =
   { contractType: Other
-  , contractName: ""
-  , contractShortDescription: ""
-  , contractLongDescription: ""
+  , contractName: "Unknown"
+  , contractShortDescription: "Unknown"
+  , contractLongDescription: "We couldn't find information about this contract"
   , roleDescriptions: Map.empty
   , timeParameterDescriptions: mempty
   , valueParameterInfo: mempty
@@ -232,8 +231,7 @@ getChoiceFormat { choiceInfo } choiceName =
   maybe DefaultFormat (\choiceInfoVal -> choiceInfoVal.choiceFormat) $
     Map.lookup choiceName choiceInfo
 
-type MetadataHintInfo
-  =
+type MetadataHintInfo =
   { roles :: Set S.TokenName
   , timeParameters :: OSet String
   , valueParameters :: OSet String

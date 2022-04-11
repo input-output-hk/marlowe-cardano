@@ -58,8 +58,7 @@ timeout instant =
     , inputs: mempty
     }
 
-type ContractFlows
-  = List (String /\ List TransactionInput)
+type ContractFlows = List (String /\ List TransactionInput)
 
 ------------------------------------------------------------------------------------------------------
 seller :: Party

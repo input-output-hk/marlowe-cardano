@@ -55,8 +55,7 @@ type Input output =
   , options :: Bimap String output
   }
 
-data Msg output
-  = Updated (FieldState String output)
+data Msg output = Updated (FieldState String output)
 
 data Action output
   = OnNSelectMsg (Select.Message (Action output))

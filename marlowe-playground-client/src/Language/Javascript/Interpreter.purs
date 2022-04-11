@@ -23,11 +23,9 @@ data CompilationError
       , text :: Array String
       }
 
-newtype Warning
-  = Warning String
+newtype Warning = Warning String
 
-newtype InterpreterResult a
-  = InterpreterResult
+newtype InterpreterResult a = InterpreterResult
   { warnings :: Array Warning
   , result :: a
   }

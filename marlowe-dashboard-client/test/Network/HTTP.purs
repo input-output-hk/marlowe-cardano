@@ -1,8 +1,10 @@
 module Test.Network.HTTP
   ( class MonadMockHTTP
   , MatcherError(..)
+  , MockHttpM
   , RequestBox(..)
   , RequestMatcher
+  , runMockHttpM
   , runRequestMatcher
   , expectCondition
   , expectContent
@@ -12,6 +14,7 @@ module Test.Network.HTTP
   , expectMaybe
   , expectMethod
   , expectNoContent
+  , expectNoRequest
   , expectRequest
   , expectRequest'
   , expectTextContent
@@ -23,65 +26,254 @@ module Test.Network.HTTP
 
 import Prelude
 
-import Affjax (Error, Request, Response)
+import Affjax (Request, Response)
 import Affjax as Affjax
 import Affjax.RequestBody (RequestBody)
 import Affjax.RequestBody as Request
 import Affjax.ResponseFormat (ResponseFormat(..))
 import Affjax.ResponseFormat as Response
 import Affjax.StatusCode (StatusCode(..))
+import Ansi.Codes (Color(..))
+import Ansi.Output (foreground, withGraphics)
+import Capability.Marlowe (class ManageMarlowe)
+import Capability.PAB (class ManagePAB)
+import Capability.PlutusApps.FollowerApp (class FollowerApp)
+import Capability.Toast (class Toast)
+import Capability.Wallet (class ManageWallet)
+import Clipboard (class MonadClipboard)
+import Concurrent.Queue (Queue)
+import Concurrent.Queue as Queue
 import Control.Alt (class Alt, alt)
 import Control.Apply (lift2)
-import Control.Monad.Cont (ContT)
-import Control.Monad.Error.Class (throwError)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Monad.Base (class MonadBase)
+import Control.Monad.Cont (class MonadCont, class MonadTrans, ContT)
+import Control.Monad.Error.Class
+  ( class MonadError
+  , class MonadThrow
+  , throwError
+  )
 import Control.Monad.Except (ExceptT)
+import Control.Monad.Fork.Class
+  ( class MonadBracket
+  , class MonadFork
+  , class MonadKill
+  , bracket
+  , kill
+  , never
+  , uninterruptible
+  )
 import Control.Monad.Maybe.Trans (MaybeT)
+import Control.Monad.Now (class MonadTime)
 import Control.Monad.RWS (RWST)
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.State (StateT)
+import Control.Monad.Reader
+  ( class MonadAsk
+  , class MonadReader
+  , ReaderT(..)
+  , ask
+  , local
+  , runReaderT
+  )
+import Control.Monad.Rec.Class (class MonadRec, untilJust)
+import Control.Monad.State (class MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Writer (WriterT)
+import Control.Monad.UUID (class MonadUUID)
+import Control.Monad.Unlift (class MonadUnlift)
+import Control.Monad.Writer (class MonadTell, class MonadWriter, WriterT)
+import Control.Parallel (parOneOf)
 import Data.Argonaut (class EncodeJson, encodeJson, stringifyWithIndent)
 import Data.Array (fromFoldable)
 import Data.Bifunctor (lmap)
+import Data.Distributive (class Distributive)
 import Data.Either (Either(..), either, note)
 import Data.HTTP.Method (CustomMethod, Method, unCustomMethod)
 import Data.Maybe (Maybe(..), isNothing)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String (Pattern(..), joinWith, split)
 import Data.String.Extra (repeat)
+import Data.Time.Duration (Milliseconds(..))
 import Data.Validation.Semigroup (V(..))
-import Effect.Aff (Aff, error)
+import Effect.Aff (Error, delay, error)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Unlift (class MonadUnliftAff)
+import Effect.Class (class MonadEffect)
+import Effect.Unlift (class MonadUnliftEffect)
+import Halogen.Store.Monad (class MonadStore)
+import Servant.PureScript
+  ( class MonadAjax
+  , AjaxError(..)
+  , ErrorDescription(..)
+  , prepareRequest
+  , prepareResponse
+  , printAjaxError
+  )
+import Test.Assertions (jsonDiffString)
+import Test.Data.Argonaut.Extra (bigIntEq)
+import Test.Halogen (class MonadHalogenTest)
+import Test.Web.Event.User.Monad (class MonadUser)
+import Test.Web.Monad (class MonadTest)
 import Unsafe.Coerce (unsafeCoerce)
 
+newtype MockHttpM (m :: Type -> Type) a = MockHttpM
+  (ReaderT (Queue RequestBox) m a)
+
+runMockHttpM :: forall m a. MockHttpM m a -> Queue RequestBox -> m a
+runMockHttpM (MockHttpM r) = runReaderT r
+
+derive newtype instance Functor m => Functor (MockHttpM m)
+derive newtype instance Apply m => Apply (MockHttpM m)
+derive newtype instance Applicative m => Applicative (MockHttpM m)
+derive newtype instance Bind m => Bind (MockHttpM m)
+derive newtype instance Monad m => Monad (MockHttpM m)
+derive newtype instance MonadEffect m => MonadEffect (MockHttpM m)
+derive newtype instance MonadUnliftEffect m => MonadUnliftEffect (MockHttpM m)
+derive newtype instance MonadAff m => MonadAff (MockHttpM m)
+derive newtype instance MonadUnliftAff m => MonadUnliftAff (MockHttpM m)
+derive newtype instance MonadBase b m => MonadBase b (MockHttpM m)
+derive newtype instance MonadUnlift b m => MonadUnlift b (MockHttpM m)
+derive newtype instance MonadThrow e m => MonadThrow e (MockHttpM m)
+derive newtype instance MonadError e m => MonadError e (MockHttpM m)
+derive newtype instance MonadTell s m => MonadTell s (MockHttpM m)
+derive newtype instance MonadWriter s m => MonadWriter s (MockHttpM m)
+derive newtype instance MonadState s m => MonadState s (MockHttpM m)
+derive newtype instance MonadCont m => MonadCont (MockHttpM m)
+derive newtype instance MonadRec m => MonadRec (MockHttpM m)
+derive newtype instance MonadFork f m => MonadFork f (MockHttpM m)
+derive newtype instance MonadTime m => MonadTime (MockHttpM m)
+derive newtype instance MonadUUID m => MonadUUID (MockHttpM m)
+derive newtype instance MonadTest m => MonadTest (MockHttpM m)
+derive newtype instance MonadLogger l m => MonadLogger l (MockHttpM m)
+derive newtype instance MonadStore a s m => MonadStore a s (MockHttpM m)
+derive newtype instance ManageWallet m => ManageWallet (MockHttpM m)
+derive newtype instance ManagePAB m => ManagePAB (MockHttpM m)
+derive newtype instance FollowerApp m => FollowerApp (MockHttpM m)
+derive newtype instance Toast m => Toast (MockHttpM m)
+derive newtype instance
+  ( Monad m
+  , MonadClipboard m
+  ) =>
+  MonadClipboard (MockHttpM m)
+
+derive newtype instance ManageMarlowe m => ManageMarlowe (MockHttpM m)
+derive newtype instance
+  MonadHalogenTest q i o m =>
+  MonadHalogenTest q i o (MockHttpM m)
+
+derive newtype instance MonadUser m => MonadUser (MockHttpM m)
+
+awaitNextRequest :: forall m. MonadAff m => MockHttpM m (Maybe RequestBox)
+awaitNextRequest = do
+  requests <- MockHttpM ask
+  liftAff $ parOneOf
+    -- tryRead here is necessary  because it is not safe to kill a
+    -- `Queue.read` or `Queue.tryRead` operation because it will permenantly lock
+    -- the queue (the `readEnd` AVar is taken but not put back in a bracket, so
+    -- it will be empty but nothing will be reading it).
+    -- We also add a small delay between retries because otherwise we can
+    -- starve the event queue and the timeout never runs.
+    [ Just <$> untilJust do
+        result <- Queue.tryRead requests
+        case result of
+          Just a -> pure $ Just a
+          Nothing -> do
+            delay $ Milliseconds 30.0
+            pure Nothing
+    , Nothing <$ delay (Milliseconds 120.0)
+    ]
+
+instance (MonadThrow Error m, MonadAff m) => MonadMockHTTP (MockHttpM m) where
+  expectNoRequest = do
+    mRequest <- awaitNextRequest
+    case mRequest of
+      Nothing ->
+        pure unit
+      Just request ->
+        throwError
+          $ error
+          $ renderMatcherError request
+          $ MatcherError [ "Unexpected HTTP request." ]
+
+  expectRequest responseFormat matcher = do
+    mRequest <- awaitNextRequest
+    case mRequest of
+      Nothing ->
+        throwError $ error "Expected an HTTP request to be made"
+      Just request ->
+        runRequestMatcher responseFormat matcher request
+
+instance MonadAff m => MonadAjax api (MockHttpM m) where
+  request _ req = do
+    requests <- MockHttpM ask
+    liftAff do
+      responseA <- AVar.empty
+      let aReq = prepareRequest req
+      Queue.write requests $ RequestBox \next -> next aReq responseA
+      response <- AVar.take responseA
+      case prepareResponse req.decode aReq response of
+        Left e@(AjaxError { description: MalformedContent _ }) ->
+          throwError $ error $ joinWith "\n"
+            [ "Failed to decode HTTP response:"
+            , printAjaxError e
+            ]
+        x -> pure x
+
+instance MonadKill e f m => MonadKill e f (MockHttpM m) where
+  kill e = lift <<< kill e
+
+instance MonadBracket e f m => MonadBracket e f (MockHttpM m) where
+  bracket (MockHttpM acquire) release run = MockHttpM $ bracket
+    acquire
+    (\c a -> case release c a of MockHttpM r -> r)
+    (\a -> case run a of MockHttpM r -> r)
+  uninterruptible (MockHttpM r) = MockHttpM $ uninterruptible r
+  never = lift never
+
+derive newtype instance Distributive g => Distributive (MockHttpM g)
+instance MonadTrans (MockHttpM) where
+  lift m = MockHttpM $ lift m
+
+instance MonadAsk r m => MonadAsk r (MockHttpM m) where
+  ask = lift ask
+
+instance MonadReader r m => MonadReader r (MockHttpM m) where
+  local f (MockHttpM (ReaderT r)) = MockHttpM $ ReaderT $ local f <<< r
+
 class Monad m <= MonadMockHTTP m where
+  expectNoRequest :: m Unit
   expectRequest
     :: forall a
      . ResponseFormat a
-    -> RequestMatcher (Either Error (Response a))
+    -> RequestMatcher (Either Affjax.Error (Response a))
     -> m Unit
 
 instance MonadMockHTTP m => MonadMockHTTP (ReaderT r m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance (Monoid w, MonadMockHTTP m) => MonadMockHTTP (WriterT w m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (StateT s m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (ContT r m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (ExceptT e m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (MaybeT m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance (Monoid w, MonadMockHTTP m) => MonadMockHTTP (RWST r w s m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 expectTextRequest
@@ -154,21 +346,23 @@ renderMatcherError (RequestBox f) (MatcherError lines) = f \request _ ->
     ]
 
 runRequestMatcher
-  :: forall a
-   . ResponseFormat a
-  -> RequestMatcher (Either Error (Response a))
+  :: forall m a
+   . MonadAff m
+  => MonadThrow Error m
+  => ResponseFormat a
+  -> RequestMatcher (Either Affjax.Error (Response a))
   -> RequestBox
-  -> Aff Unit
+  -> m Unit
 runRequestMatcher providedFormat (RequestMatcher matcher) (RequestBox f) = f go
   where
   go
     :: forall b
      . Request b
     -> AVar (Either Affjax.Error (Affjax.Response b))
-    -> Aff Unit
+    -> m Unit
   go request responseA = either
     (throwError <<< error <<< renderMatcherError (RequestBox f))
-    (flip AVar.put responseA)
+    (liftAff <<< flip AVar.put responseA)
     ( map (map unsafeCoerceResponse)
         case request.responseFormat, providedFormat of
           ArrayBuffer _, ArrayBuffer _ ->
@@ -288,11 +482,19 @@ expectContent expected = RequestMatcher \request ->
   lmap MatcherError case request.content, expected of
     Nothing, _ -> Left $ [ "Expected content, but saw none" ]
     Just (Request.Json actualJson), Request.Json expectedJson
-      | expectedJson == actualJson -> Right unit
+      | expectedJson `bigIntEq` actualJson -> Right unit
       | otherwise -> Left $ join
           [ pure
-              "✗ Actual JSON content does not match the following expected content:"
-          , indent 2 $ split (Pattern "\n") (stringifyWithIndent 2 expectedJson)
+              "✗ Actual JSON content does not match expected content:"
+          , indent 2
+              $
+                [ withGraphics (foreground Red) "- Actual"
+                , withGraphics (foreground Green) "+ Expected"
+                , ""
+                , ""
+                ] <> split
+                  (Pattern "\n")
+                  (jsonDiffString actualJson expectedJson)
           ]
     Just (Request.String actualStr), Request.String expectedStr
       | expectedStr == actualStr -> Right unit

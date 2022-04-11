@@ -15,7 +15,21 @@ PAB_PASSPHRASE=fixme-allow-pass-per-wallet
 
 git log -n 1 --pretty=oneline
 
-for t in test-{wait,refund,simple,escrow,escrow-with-collateral,zero-coupon-bond,zero-coupon-bond-too-late,zero-coupon-bond-immediate-timeout,coupon-bond-guaranteed,contract-for-differences,contract-for-differences-with-oracle,swap-of-ada-for-ada}.yaml
+echo "Non-PAB tests:"
+
+for t in examples/*/run-*.sh
+do
+  if bash -ve "$t" >& "${t%%.sh}.log"
+  then
+    echo "  PASS: $t"
+  else
+    echo "  FAIL: $t"
+  fi
+done
+
+echo  "PAB tests:"
+
+for t in test/test-{wait,refund,wallet-failure,simple,escrow,escrow-with-collateral,zero-coupon-bond,zero-coupon-bond-too-late,zero-coupon-bond-immediate-timeout,coupon-bond-guaranteed,contract-for-differences,contract-for-differences-with-oracle,swap-of-ada-for-ada}.yaml
 do
   if marlowe-cli test contracts "${MAGIC[@]}"                               \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -28,8 +42,8 @@ do
                                 $t                                        \
                                 >& ${t%%.yaml}.log
   then
-    echo "SUCCEEDED: $t"
+    echo "  PASS: $t"
   else
-    echo "FAILED: $t"
+    echo "  FAIL: $t"
   fi
 done

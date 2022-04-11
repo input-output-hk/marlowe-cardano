@@ -28,8 +28,7 @@ instance isEventAction :: IsEvent Action where
     , value: Nothing
     }
 
-type State
-  =
+type State =
   { projectName :: String
   -- We need a data type that handles NotAsked, Error and Loading to store the current status of the modal.
   -- Rather than creating a new data type I prefer to reuse RemoteData using Void as the successful response
