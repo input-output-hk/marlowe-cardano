@@ -56,6 +56,7 @@ import Test.Marlowe.Run.Action.Flows
   )
 import Test.Marlowe.Run.Commands
   ( clickConfirm
+  , handleGetRoleToken
   , handlePostActivate
   , handlePostApplyInputs
   , handlePostFollow
@@ -117,7 +118,7 @@ loanContractTimeout = loanContractTest
     withContainer card do
       void $ findBy text $ pure "Timed out"
       void $ findBy text $ pure "Lender (you)"
-      void $ findBy text $ pure "Borrower"
+      void $ findBy text $ pure "Borrower (Borrower)"
       closeButtons <- traverse shouldCast =<< getAllBy role do
         nameRegexi "close contract"
         pure Button
@@ -218,7 +219,7 @@ loanContract = loanContractTest
 
     withContainer card do
       void $ findBy text $ pure "Current step:2"
-      void $ findBy text $ pure "Borrower"
+      void $ findBy text $ pure "Borrower (Borrower)"
       timeoutText <- getBy text $ pure $ unsafeRegex "left" ignoreCase
       timeoutText `shouldHaveText` "23min 30s left"
       advanceTime (Minutes 1.5)
@@ -253,6 +254,8 @@ startContractCompanionBeforeMarloweApp = loanContractTest
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
+    handleGetRoleToken marloweParams "Borrower" borrowerNickname
+    handleGetRoleToken marloweParams "Lender" lenderNickname
     assertStartedContractShown
     expectError assertStartingContractShown
 
@@ -278,6 +281,8 @@ startContractMarloweAppHangs = loanContractTest
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
+    handleGetRoleToken marloweParams "Borrower" borrowerNickname
+    handleGetRoleToken marloweParams "Lender" lenderNickname
     assertStartedContractShown
     expectError assertStartingContractShown
 
@@ -307,6 +312,8 @@ startContractMarloweAppBeforeCompanion = loanContractTest
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
+    handleGetRoleToken marloweParams "Borrower" borrowerNickname
+    handleGetRoleToken marloweParams "Lender" lenderNickname
     assertStartedContractShown
     expectError assertStartingContractShown
 

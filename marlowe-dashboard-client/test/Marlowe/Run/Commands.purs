@@ -19,6 +19,7 @@ import Data.Argonaut (class EncodeJson, encodeJson, jsonEmptyArray)
 import Data.Argonaut.Extra (encodeStringifyJson)
 import Data.Foldable (class Foldable)
 import Data.HTTP.Method (Method(..))
+import Data.Lens ((^.))
 import Data.Map (Map)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.String (joinWith)
@@ -41,7 +42,9 @@ import Marlowe.Semantics
   ( Contract
   , MarloweData
   , MarloweParams
+  , TokenName
   , TransactionInput
+  , _rolesCurrency
   )
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types
@@ -63,6 +66,7 @@ import Test.Data.Marlowe
   , followEndpoint
   , followerMessage
   , restoreRequest
+  , roleToken
   , walletCompantionMessage
   )
 import Test.Data.Plutus
@@ -71,7 +75,7 @@ import Test.Data.Plutus
   , newActiveEndpoints
   , subscribeApp
   )
-import Test.Marlowe.Run (Coenv)
+import Test.Marlowe.Run (Coenv, getWallet)
 import Test.Network.HTTP
   ( class MonadMockHTTP
   , RequestMatcher
@@ -492,6 +496,31 @@ handlePostActivate walletId contractType instanceId =
   handleHTTPRequest POST "/pab/api/contract/activate" ado
     expectJsonContent $ contractActivationArgs walletId contractType
     in PlutusAppId instanceId
+
+handleGetRoleToken
+  :: forall m
+   . MonadLogger String m
+  => MonadError Error m
+  => MonadEffect m
+  => MonadAsk Coenv m
+  => MonadMockHTTP m
+  => MarloweParams
+  -> TokenName
+  -> WalletNickname
+  -> m Unit
+handleGetRoleToken params tokenName walletName = do
+  { address } <- getWallet walletName
+  handleHTTPRequest GET uri $ pure $ roleToken params tokenName address
+  where
+  uri = joinWith "/"
+    [ ""
+    , "api"
+    , "contracts"
+    , "v1"
+    , params ^. _rolesCurrency
+    , "role-tokens"
+    , tokenName
+    ]
 
 handleHTTPRequest
   :: forall a m

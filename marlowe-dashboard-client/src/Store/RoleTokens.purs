@@ -56,16 +56,17 @@ mkRoleTokenStore = RoleTokenStore
 -- | store with which contract role tokens are owned by the current user.
 updateMyRoleTokens :: Assets -> RoleTokenStore -> RoleTokenStore
 updateMyRoleTokens (Assets assets) (RoleTokenStore store) = RoleTokenStore
-  store { myRoleTokens = walletTokens }
+  store
+    { myRoleTokens = Set.fromFoldable
+        $ filter (not <<< isAda)
+        $ bindFlipped case _ of
+            Tuple currency values ->
+              Token currency <$> Set.toUnfoldable (Map.keys values)
+        $ (Map.toUnfoldable assets :: Array _)
+    }
   where
-  walletTokens = Set.fromFoldable
-    $ filter (not <<< isAda)
-    $ bindFlipped case _ of
-        Tuple currency values ->
-          Token currency <$> Set.toUnfoldable (Map.keys values)
-    $ (Map.toUnfoldable assets :: Array _)
-  isAda (Token "" "") = false
-  isAda _ = true
+  isAda (Token "" "") = true
+  isAda _ = false
 
 -- | Determines if the current user owns the given role token.
 isMyRoleToken :: Token -> RoleTokenStore -> Boolean

@@ -82,6 +82,7 @@ import Test.Marlowe.Run.Commands
   , clickSave
   , clickSetup
   , handleGetContractInstances
+  , handleGetRoleToken
   , handlePostActivate
   , handlePostCreate
   , handlePostCreateWallet
@@ -297,6 +298,8 @@ createLoan
   handlePostFollow followerId params
   sendFollowerUpdate followerId
     $ contractHistory params (marloweData contract contractState) []
+  handleGetRoleToken params "Borrower" borrower
+  handleGetRoleToken params "Lender" lender
   pure { followerId, marloweData: marloweData contract contractState }
 
 createLoanWithoutUpdates

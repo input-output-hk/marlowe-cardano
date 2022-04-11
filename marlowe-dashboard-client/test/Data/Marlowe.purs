@@ -29,6 +29,7 @@ import Data.Enum (class BoundedEnum, Cardinality(..), cardinality, toEnum)
 import Data.Foldable (class Foldable, fold)
 import Data.Function (on)
 import Data.Int (hexadecimal, toStringAs)
+import Data.Lens ((^.))
 import Data.List as L
 import Data.List.Lazy (replicateM)
 import Data.Map (Map)
@@ -59,6 +60,7 @@ import Language.Marlowe.Client
   , MarloweEndpointResult(..)
   , MarloweError
   )
+import Marlowe.Run.Contract.V1.Types (RoleToken(..))
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CreatePostData(..)
   , RestorePostData(..)
@@ -85,6 +87,7 @@ import Marlowe.Semantics
   , ValidatorHash
   , Value(..)
   , ValueId
+  , _rolesCurrency
   )
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
 import Plutus.V1.Ledger.Address as PAB
@@ -98,6 +101,13 @@ import Unsafe.Coerce (unsafeCoerce)
 -------------------------------------------------------------------------------
 -- Webserver
 -------------------------------------------------------------------------------
+
+roleToken :: MarloweParams -> TokenName -> Address -> RoleToken
+roleToken params tokenName utxoAddress = RoleToken
+  { currencySymbol: params ^. _rolesCurrency
+  , utxoAddress
+  , tokenName
+  }
 
 walletInfo :: WalletId -> Address -> PubKeyHash -> WalletInfo
 walletInfo walletId address pubKeyHash = WalletInfo
