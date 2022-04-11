@@ -259,6 +259,162 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                 in traceIfFalse "R" $ any (checkScriptOutput addr hsh value) allOutputs
 
 
+{-# INLINABLE smallMarloweValidator2 #-}
+smallMarloweValidator2
+    :: MarloweParams
+    -> MarloweData
+    -> MarloweInput
+    -> ScriptContext
+    -> ()
+smallMarloweValidator2 MarloweParams{rolesCurrency, rolePayoutValidatorHash}
+    MarloweData{..}
+    marloweTxInputs
+    ctx@ScriptContext{scriptContextTxInfo} = do
+
+    let findOwnInput :: ScriptContext -> Maybe TxInInfo
+        findOwnInput ScriptContext{scriptContextTxInfo=TxInfo{txInfoInputs}, scriptContextPurpose=Spending txOutRef} =
+            find (\TxInInfo{txInInfoOutRef} -> txInInfoOutRef == txOutRef) txInfoInputs
+        findOwnInput _ = Nothing
+
+        ownInput :: TxInInfo
+        ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} =
+            case findOwnInput ctx of
+                Just ownTxInInfo ->
+                    case filter (sameValidatorHash ownTxInInfo) (txInfoInputs scriptContextTxInfo) of
+                        [i] -> i
+                        _   -> traceError "I1" -- multiple Marlowe contract inputs with the same address, it's forbidden
+                _ -> traceError "I0" {-"Can't find validation input"-}
+
+        sameValidatorHash:: TxInInfo -> TxInInfo -> Bool
+        sameValidatorHash
+            TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential vh1) _}}
+            TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential vh2) _}} = vh1 == vh2
+        sameValidatorHash _ _ = False
+
+
+        findDatumHash' :: PlutusTx.ToData o => o -> Maybe DatumHash
+        findDatumHash' datum = findDatumHash (Datum $ PlutusTx.toBuiltinData datum) scriptContextTxInfo
+
+        checkOwnOutputConstraint :: MarloweData -> Val.Value -> Bool
+        checkOwnOutputConstraint ocDatum ocValue =
+            let hsh = findDatumHash' ocDatum
+            in traceIfFalse "L1" -- "Output constraint"
+            $ checkScriptOutput ownAddress hsh ocValue getContinuingOutput
+
+        getContinuingOutput :: TxOut
+        getContinuingOutput = case filter (\TxOut{txOutAddress} -> ownAddress == txOutAddress) allOutputs of
+            [out] -> out
+            _     -> traceError "O0" -- no continuation or multiple Marlowe contract outputs, it's forbidden
+
+        checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
+                        txOutValue == value && hsh == Just svh && txOutAddress == addr
+        checkScriptOutput _ _ _ _ = False
+
+        allOutputs :: [TxOut]
+        allOutputs = txInfoOutputs scriptContextTxInfo
+
+        marloweTxInputToInput :: MarloweTxInput -> Input
+        marloweTxInputToInput (MerkleizedTxInput input hash) =
+            case findDatum (DatumHash hash) scriptContextTxInfo of
+                Just (Datum d) -> let
+                    continuation = PlutusTx.unsafeFromBuiltinData d
+                    in MerkleizedInput input hash continuation
+                Nothing -> traceError "H"
+        marloweTxInputToInput (Input input) = NormalInput input
+
+        validateInputs :: [Input] -> Bool
+        validateInputs inputs = all (validateInputWitness . getInputContent) inputs
+            where
+                validateInputWitness :: InputContent -> Bool
+                validateInputWitness input =
+                    case input of
+                        IDeposit _ party _ _         -> validatePartyWitness party
+                        IChoice (ChoiceId _ party) _ -> validatePartyWitness party
+                        INotify                      -> True
+                  where
+                    validatePartyWitness (PK pk)     = traceIfFalse "S" $ scriptContextTxInfo `txSignedBy` pk
+                    validatePartyWitness (Role role) = traceIfFalse "T" -- "Spent value not OK"
+                                                    $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
+
+        collectDeposits :: InputContent -> Val.Value
+        collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
+        collectDeposits _                                     = zero
+
+        payoutByParty :: Payment -> AssocMap.Map Party Val.Value
+        payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
+        payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
+
+        payoutConstraints :: [(Party, Val.Value)] -> Bool
+        payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty
+            where
+                payoutToTxOut (party, value) = case party of
+                    PK pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
+                    Role role -> let
+                        hsh = findDatumHash' role
+                        addr = Ledger.scriptHashAddress rolePayoutValidatorHash
+                        in traceIfFalse "R" $ any (checkScriptOutput addr hsh value) allOutputs
+
+    let scriptInValue = txOutValue $ txInInfoResolved ownInput
+    let interval =
+            case txInfoValidRange scriptContextTxInfo of
+                -- FIXME: Recheck this, but it appears that any inclusiveness can appear at either bound when milliseconds
+                --        of POSIX time is converted from slot number.
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) _) (Interval.UpperBound (Interval.Finite h) _) -> (l, h)
+                _ -> traceError "R0"
+    let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
+
+    {- Find Contract continuation in TxInfo datums by hash or fail with error -}
+    let inputs = fmap marloweTxInputToInput marloweTxInputs
+    {-  We do not check that a transaction contains exact input payments.
+        We only require an evidence from a party, e.g. a signature for PubKey party,
+        or a spend of a 'party role' token.
+        This gives huge flexibility by allowing parties to provide multiple
+        inputs (either other contracts or P2PKH).
+        Then, we check scriptOutput to be correct.
+     -}
+    let inputsOk = validateInputs inputs
+
+    -- total balance of all accounts in State
+    -- accounts must be positive, and we checked it above
+    let inputBalance = totalBalance (accounts marloweState)
+
+    -- ensure that a contract TxOut has what it suppose to have
+    let balancesOk = traceIfFalse "B1" $ inputBalance == scriptInValue
+
+    let preconditionsOk = positiveBalances && balancesOk
+
+    let txInput = TransactionInput {
+            txInterval = interval,
+            txInputs = inputs }
+
+    let computedResult = computeTransaction txInput marloweState marloweContract
+    -- let computedResult = TransactionOutput [] [] (emptyState minSlot) Close
+    case computedResult of
+        TransactionOutput {txOutPayments, txOutState, txOutContract} -> do
+            let marloweData = MarloweData {
+                    marloweContract = txOutContract,
+                    marloweState = txOutState }
+
+                payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
+                payoutsOk = payoutConstraints payoutsByParty
+                checkContinuation = case txOutContract of
+                    Close -> True
+                    _ -> let
+                        totalIncome = foldMap (collectDeposits . getInputContent) inputs
+                        totalPayouts = foldMap snd payoutsByParty
+                        finalBalance = inputBalance + totalIncome - totalPayouts
+                        in checkOwnOutputConstraint marloweData finalBalance
+            if preconditionsOk && inputsOk && payoutsOk && checkContinuation
+            then () else traceError "M"
+
+        Error TEAmbiguousTimeIntervalError -> traceError "E1"
+        Error TEApplyNoMatchError -> traceError "E2"
+        Error (TEIntervalError (InvalidInterval _)) -> traceError "E3"
+        Error (TEIntervalError (IntervalInPastError _ _)) -> traceError "E4"
+        Error TEUselessTransaction -> traceError "E5"
+        Error TEHashMismatch -> traceError "E6"
+
+
 smallTypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
 smallTypedValidator = Scripts.mkTypedValidatorParam @TypedMarloweValidator
     $$(PlutusTx.compile [|| smallMarloweValidator ||])
@@ -275,9 +431,26 @@ smallUntypedValidator params = let
     -- Remove this when Typed Validator has the same size as untyped.
     in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
 
+smallUntypedValidatorScript2 :: MarloweParams -> Scripts.Script
+smallUntypedValidatorScript2 params = Scripts.fromCompiledCode code
+  where
+    code = ($$(PlutusTx.compile [|| smallMarloweValidator2 ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+
+
 
 smallUntypedValidatorScript :: MarloweParams -> Scripts.Script
 smallUntypedValidatorScript =  getValidator . Scripts.validatorScript . smallUntypedValidator
+
+wrapper1 = Scripts.fromCompiledCode $$(PlutusTx.compile [|| wrapped ||])
+  where
+      wrapped :: (MarloweData-> MarloweInput -> ScriptContext -> Bool) -> Scripts.WrappedValidatorType
+      wrapped = Scripts.wrapValidator
+    -- wrapped = unsafeCoerce (smallMarloweValidator s)
+    --   typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+
+
+unwrapped1 = Scripts.fromCompiledCode $$(PlutusTx.compile [|| smallMarloweValidator2 ||])
+
 
 
 applyScript :: Script -> Script -> Script
@@ -285,7 +458,7 @@ applyScript (Script f) (Script arg) = Script $ UPLC.applyProgram f arg
 
 
 
-{- asdf :: (MarloweData -> MarloweInput -> Bool) -> BuiltinData -> BuiltinData -> Bool
+asdf :: (MarloweData -> MarloweInput -> Bool) -> BuiltinData -> BuiltinData -> Bool
 asdf f a b = let
     -- if script's second argument is ScriptContext then it's a MintingPolicy
     -- otherwise, it's a Validator
@@ -293,27 +466,32 @@ asdf f a b = let
     mctx = PlutusTx.fromBuiltinData b
     in case mctx of
         Just ctx -> True
-        _ -> False -- f (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
- -}
+        _        -> False -- f (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
 
-asdf :: BuiltinData -> Bool
-asdf a = let
+
+asdf2 :: (MarloweData -> MarloweInput -> ()) -> BuiltinData -> BuiltinData -> ()
+asdf2 f a b = let
     -- if script's second argument is ScriptContext then it's a MintingPolicy
     -- otherwise, it's a Validator
     mctx :: Maybe ScriptContext
-    mctx = PlutusTx.fromBuiltinData a
+    mctx = PlutusTx.fromBuiltinData b
     in case mctx of
-        Just ctx -> True
-        _        -> False
+        Just ctx -> ()
+        _        -> f (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
 
 
-marloweMPS = Scripts.fromCompiledCode $$(PlutusTx.compile [|| asdf ||])
+
+marloweMPS3333 = $(PlutusTx.compileUntyped [| asdf |])
+
+
+marloweMPS = Scripts.fromCompiledCode $$(PlutusTx.compile [|| asdf2 ||])
 
 
 universalMarloweScript :: MarloweParams -> Scripts.Script
 universalMarloweScript params = applyScript marloweMPS validator
   where
-    validator = smallUntypedValidatorScript params
+    validator = smallUntypedValidatorScript2 params
+    -- validator = smallUntypedValidatorScript params
 
 
 universalMarloweValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
