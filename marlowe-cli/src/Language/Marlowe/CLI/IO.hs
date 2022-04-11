@@ -22,6 +22,7 @@ module Language.Marlowe.CLI.IO (
 , readSigningKey
 , maybeWriteTextEnvelope
 , maybeWriteJson
+, readMaybeMetadata
 -- * Lifting
 , liftCli
 , liftCliMaybe
@@ -29,7 +30,8 @@ module Language.Marlowe.CLI.IO (
 ) where
 
 
-import Cardano.Api (AsType (..), FromSomeType (..), HasTextEnvelope, ScriptDataJsonSchema (..),
+import Cardano.Api (AlonzoEra, AsType (..), FromSomeType (..), HasTextEnvelope, ScriptDataJsonSchema (..),
+                    TxMetadataInEra (..), TxMetadataJsonSchema (..), TxMetadataSupportedInEra (..), metadataFromJson,
                     readFileTextEnvelopeAnyOf, scriptDataFromJson, serialiseToTextEnvelope, writeFileTextEnvelope)
 import Cardano.Api.Shelley (toPlutusData)
 import Control.Monad ((<=<))
@@ -143,3 +145,17 @@ maybeWriteJson :: MonadIO m
                -> m ()
 maybeWriteJson Nothing           = liftIO . LBS8.putStrLn            . encodePretty
 maybeWriteJson (Just outputFile) = liftIO . LBS.writeFile outputFile . encodePretty
+
+
+-- | Read optional metadata.
+readMaybeMetadata :: MonadError CliError m
+                  => MonadIO m
+                  => Maybe FilePath                 -- ^ The metadata file, if any.
+                  -> m (TxMetadataInEra AlonzoEra)  -- ^ Action for reading the metadata.
+readMaybeMetadata file =
+  do
+    metadata <- sequence $ decodeFileStrict <$> file
+    maybe
+      (pure TxMetadataNone)
+      (fmap (TxMetadataInEra TxMetadataInAlonzoEra) . liftCli . metadataFromJson TxMetadataJsonNoSchema)
+      metadata

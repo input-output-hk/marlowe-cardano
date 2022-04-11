@@ -49,6 +49,7 @@ data TransactionCommand =
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressAny                 -- ^ The change address.
+    , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
@@ -67,6 +68,7 @@ data TransactionCommand =
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressAny                 -- ^ The change address.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
@@ -90,6 +92,7 @@ data TransactionCommand =
     , change          :: AddressAny                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
+    , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
@@ -111,6 +114,7 @@ data TransactionCommand =
     , change          :: AddressAny                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
+    , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
@@ -152,6 +156,7 @@ runTransactionCommand command =
                                       connection
                                       signingKeyFiles
                                       inputs outputs' change
+                                      metadataFile
                                       bodyFile
                                       submitTimeout
                                       printStats
@@ -165,6 +170,7 @@ runTransactionCommand command =
                                         outputDatumFile
                                         outputValue
                                         inputs outputs' change
+                                        metadataFile
                                         bodyFile
                                         submitTimeout
                                         printStats
@@ -183,6 +189,7 @@ runTransactionCommand command =
                                         outputValue
                                         inputs outputs' collateral change
                                         minimumSlot maximumSlot
+                                        metadataFile
                                         bodyFile
                                         submitTimeout
                                         printStats
@@ -198,6 +205,7 @@ runTransactionCommand command =
                                         inputTxIn
                                         inputs outputs' collateral change
                                         minimumSlot maximumSlot
+                                        metadataFile
                                         bodyFile
                                         submitTimeout
                                         printStats
@@ -241,6 +249,7 @@ buildSimpleOptions =
     <*> (O.some . O.option parseTxIn)          (O.long "tx-in"           <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"   <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                         )
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                  <> O.help "Print statistics."                                      )
@@ -268,7 +277,8 @@ buildIncomingOptions =
     <*> (O.some . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
-    <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
+    <*> O.strOption                            (O.long "metadata-file"     <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                         )
+    <*> (O.optional . O.strOption)             (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"            <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                    <> O.help "Print statistics."                                      )
     <*> O.switch                               (O.long "script-invalid"                                 <> O.help "Assert that the transaction is invalid."                )
@@ -302,6 +312,7 @@ buildContinuingOptions =
     <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."                       )
     <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."                       )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"       <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                         )
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"              <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                      <> O.help "Print statistics."                                      )
@@ -333,6 +344,7 @@ buildOutgoingOptions =
     <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."                       )
     <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."                       )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"       <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                         )
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"              <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                      <> O.help "Print statistics."                                      )

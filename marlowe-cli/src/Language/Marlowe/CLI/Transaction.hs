@@ -80,7 +80,8 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (forM_, void, when, (<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (isNothing, maybeToList)
-import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, readSigningKey)
+import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, readMaybeMetadata,
+                                readSigningKey)
 import Language.Marlowe.CLI.Types (CliError (..), OutputQuery (..), PayFromScript (..), PayToScript (..),
                                    SomePaymentSigningKey)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
@@ -104,13 +105,15 @@ buildSimple :: MonadError CliError m
             -> [TxIn]                              -- ^ The transaction inputs.
             -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
             -> AddressAny                          -- ^ The change address.
+            -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
             -> FilePath                            -- ^ The output file for the transaction body.
             -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> Bool                                -- ^ Whether to print statistics about the transaction.
             -> Bool                                -- ^ Assertion that the transaction is invalid.
             -> m TxId                              -- ^ Action to build the transaction body.
-buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout printStats invalid =
+buildSimple connection signingKeyFiles inputs outputs changeAddress metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
@@ -120,7 +123,7 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
         Nothing
         []
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -401,13 +404,15 @@ buildIncoming :: MonadError CliError m
               -> [TxIn]                              -- ^ The transaction inputs.
               -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
               -> AddressAny                          -- ^ The change address.
+              -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
               -> FilePath                            -- ^ The output file for the transaction body.
               -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                -- ^ Whether to print statistics about the transaction.
               -> Bool                                -- ^ Assertion that the transaction is invalid.
               -> m TxId                              -- ^ Action to build the transaction body.
-buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout printStats invalid =
+buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
     signingKeys <- mapM readSigningKey signingKeyFiles
@@ -419,7 +424,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
         Nothing
         []
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -450,13 +455,15 @@ buildContinuing :: MonadError CliError m
                 -> AddressAny                          -- ^ The change address.
                 -> SlotNo                              -- ^ The first valid slot for the transaction.
                 -> SlotNo                              -- ^ The last valid slot for the transaction.
+                -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
                 -> FilePath                            -- ^ The output file for the transaction body.
                 -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                 -> Bool                                -- ^ Whether to print statistics about the transaction.
                 -> Bool                                -- ^ Assertion that the transaction is invalid.
                 -> m TxId                              -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
@@ -471,7 +478,7 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -499,13 +506,15 @@ buildOutgoing :: MonadError CliError m
               -> AddressAny                          -- ^ The change address.
               -> SlotNo                              -- ^ The first valid slot for the transaction.
               -> SlotNo                              -- ^ The last valid slot for the transaction.
+              -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
               -> FilePath                            -- ^ The output file for the transaction body.
               -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                -- ^ Whether to print statistics about the transaction.
               -> Bool                                -- ^ Assertion that the transaction is invalid.
               -> m TxId                              -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
@@ -518,7 +527,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
