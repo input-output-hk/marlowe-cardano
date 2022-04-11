@@ -757,14 +757,6 @@ accountIndicator
 accountIndicator { colorStyles, otherStyles, name } =
   div [ classNames $ [ "relative" ] <> otherStyles ]
     [ firstLetterInCircle { styles: colorStyles, name }
-    , icon Icon.ReadMore
-        [ "absolute"
-        , "text-xs"
-        , "-top-1"
-        , "right-0"
-        , "bg-white"
-        , "rounded-full"
-        ]
     ]
 
 renderBalances
