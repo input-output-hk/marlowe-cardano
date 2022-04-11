@@ -2,6 +2,8 @@ module Component.CurrentStepActions.Types where
 
 import Prologue
 
+import Component.Tooltip.Types (ReferenceId)
+import Data.Address (Address)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Map (Map)
@@ -17,11 +19,14 @@ import Marlowe.Semantics as Semantics
 import Store.RoleTokens (RoleTokenStore)
 import Type.Proxy (Proxy(..))
 
-data Msg = ActionSelected NamedAction (Maybe ChosenNum)
+data Msg
+  = ActionSelected NamedAction (Maybe ChosenNum)
+  | PartyClicked Address
 
 data Action
   = SelectAction NamedAction (Maybe ChosenNum)
   | ChangeChoice ChoiceId (Maybe ChosenNum)
+  | OnPartyClicked Address
 
 type State = Reactive.State Input Unit Transient
 
@@ -57,11 +62,15 @@ _namedActions = _input
   <<< prop (Proxy :: _ "input")
   <<< prop (Proxy :: _ "namedActions")
 
+type ChildSlots =
+  ( tooltipSlot :: forall query. H.Slot query Void ReferenceId
+  )
+
 type ComponentHTML m =
-  H.ComponentHTML Action () m
+  H.ComponentHTML Action ChildSlots m
 
 type DSL m a =
-  H.HalogenM State Action () Msg m a
+  H.HalogenM State Action ChildSlots Msg m a
 
 data Query (a :: Type)
 

@@ -1,18 +1,17 @@
-module Page.Contract.State
-  ( component
-  , handleAction
-  ) where
+module Page.Contract.State (component) where
 
 import Prologue
 
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.Toast (class Toast)
+import Capability.Toast (class Toast, addToast)
+import Clipboard (class MonadClipboard, copy)
 import Component.Contacts.State (adaToken)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (class MonadTime, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State.Class (modify_)
+import Data.Address as Address
 import Data.Array (index, length, mapMaybe)
 import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
@@ -77,6 +76,7 @@ import Page.Contract.View (contractScreen)
 import Store as Store
 import Store.Contracts (getContract, getNewContract)
 import Store.RoleTokens (RoleTokenStore)
+import Toast.Types (successToast)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.Dom.ElementExtra
@@ -92,7 +92,8 @@ import Web.HTML.HTMLElement as HTMLElement
 
 component
   :: forall query m
-   . MonadAff m
+   . MonadClipboard m
+  => MonadAff m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
@@ -176,7 +177,8 @@ withStarted f = peruse (_contract <<< _Started) >>= traverse_ f
 
 handleAction
   :: forall m
-   . MonadAff m
+   . MonadClipboard m
+  => MonadAff m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
@@ -242,6 +244,10 @@ handleAction (MoveToStep stepNumber) = do
   subscribeToSelectCenteredStep
   mElement <- H.getHTMLElementRef scrollContainerRef
   for_ mElement $ liftEffect <<< scrollStepToCenter Smooth stepNumber
+
+handleAction (OnPartyClicked address) = do
+  copy $ Address.toString address
+  addToast $ successToast "Copied to clipboard"
 
 transactionsToStep
   :: RoleTokenStore

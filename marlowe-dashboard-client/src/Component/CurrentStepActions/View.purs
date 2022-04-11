@@ -27,6 +27,7 @@ import Data.Maybe (isJust, maybe, maybe')
 import Data.String (trim)
 import Data.String.Extra (capitalize)
 import Data.UserNamedActions (haveActions, mapActions)
+import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (applyWhen, classNames)
 import Halogen.HTML (HTML, button, div, div_, h4, input, p_, span, span_, text)
 import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
@@ -53,7 +54,8 @@ import Text.Markdown.TrimmedInline (markdownToHTML)
 
 currentStepActions
   :: forall m
-   . State
+   . MonadAff m
+  => State
   -> ComponentHTML m
 currentStepActions state =
   let
@@ -128,7 +130,12 @@ currentStepActions state =
           $ renderPartyTasks state `mapActions` namedActions
 
 renderPartyTasks
-  :: forall p. State -> Party -> Array NamedAction -> HTML p Action
+  :: forall m
+   . MonadAff m
+  => State
+  -> Party
+  -> Array NamedAction
+  -> ComponentHTML m
 renderPartyTasks state party actions =
   let
     roleTokens = state ^. _roleTokens
@@ -143,7 +150,10 @@ renderPartyTasks state party actions =
         (Array.singleton <<< renderAction state party <$> actions)
   in
     div [ classNames [ "space-y-2" ] ]
-      ([ renderParty currencySymbol roleTokens party ] <> actionsSeparatedByOr)
+      ( [ renderParty OnPartyClicked (-1) currencySymbol roleTokens party
+        ] <>
+          actionsSeparatedByOr
+      )
 
 -- The Party parameter represents who is taking the action
 renderAction :: forall p. State -> Party -> NamedAction -> HTML p Action

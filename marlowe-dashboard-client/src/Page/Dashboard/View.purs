@@ -162,6 +162,7 @@ dashboardScreen
   => ManageMarlowe m
   => Toast m
   => MonadStore Store.Action Store.Store m
+  => MonadClipboard m
   => State
   -> ComponentHTML m
 dashboardScreen state =
@@ -215,7 +216,8 @@ dashboardScreen state =
 
 dashboardCard
   :: forall m
-   . MonadAff m
+   . MonadClipboard m
+  => MonadAff m
   => MonadKill Error Fiber m
   => MonadAsk Env m
   => MonadTime m

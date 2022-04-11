@@ -42,3 +42,5 @@ handleAction (ChangeChoice choiceId chosenNum) =
               # maybe (Map.delete choiceId) (Map.insert choiceId) chosenNum
           }
       }
+
+handleAction (OnPartyClicked address) = H.raise $ PartyClicked address

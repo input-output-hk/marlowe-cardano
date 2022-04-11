@@ -1,25 +1,4 @@
-module Page.Contract.Types
-  ( Action(..)
-  , ChildSlots
-  , ComponentHTML
-  , ContractState(..)
-  , DSL
-  , Input
-  , Msg(..)
-  , PreviousStep
-  , PreviousStepState(..)
-  , Query(..)
-  , Slice
-  , Slot
-  , StartedState
-  , State
-  , StepBalance
-  , Tab(..)
-  , TimeoutInfo
-  , _contractPage
-  , currentStep
-  , scrollContainerRef
-  ) where
+module Page.Contract.Types where
 
 import Prologue
 
@@ -27,6 +6,7 @@ import Analytics (class IsEvent, defaultEvent)
 import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
+import Data.Address (Address)
 import Data.Array (length)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatus, ContractStatusId)
@@ -131,6 +111,7 @@ data Action
   | SelectStep Int
   -- The MoveToStep action scrolls the step carousel so that the indicated step is at the center (without changing the model).
   | MoveToStep Int
+  | OnPartyClicked Address
 
 type ChildSlots =
   ( submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
@@ -154,6 +135,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent Finalize = Nothing
   toEvent (Receive _) = Nothing
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
+  toEvent (OnPartyClicked _) = Just $ defaultEvent "OnPartyClicked"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
   toEvent (OnActionSelected _ _) = Nothing
