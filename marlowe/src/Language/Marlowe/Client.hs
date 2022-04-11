@@ -258,7 +258,7 @@ type MarloweContractState = Maybe MarloweEndpointResponse
 
 
 mkMarloweTypedValidator :: MarloweParams -> SmallTypedValidator
-mkMarloweTypedValidator = smallUntypedValidator
+mkMarloweTypedValidator = universalMarloweValidator
 
 
 minLovelaceDeposit :: Integer
