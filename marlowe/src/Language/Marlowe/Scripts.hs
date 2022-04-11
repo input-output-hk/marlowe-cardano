@@ -262,14 +262,20 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
 {-# INLINABLE smallMarloweValidator2 #-}
 smallMarloweValidator2
     :: MarloweParams
+    -> (BuiltinData -> Contract)
+    -> (BuiltinData -> ScriptContext)
     -> MarloweData
     -> MarloweInput
-    -> ScriptContext
+    -> BuiltinData
     -> ()
 smallMarloweValidator2 MarloweParams{rolesCurrency, rolePayoutValidatorHash}
+    fromDataToContract
+    fromDataToScriptContext
     MarloweData{..}
     marloweTxInputs
-    ctx@ScriptContext{scriptContextTxInfo} = do
+    builtInDataCtx = do
+
+    let ctx@ScriptContext{scriptContextTxInfo} = fromDataToScriptContext builtInDataCtx
 
     let findOwnInput :: ScriptContext -> Maybe TxInInfo
         findOwnInput ScriptContext{scriptContextTxInfo=TxInfo{txInfoInputs}, scriptContextPurpose=Spending txOutRef} =
@@ -317,7 +323,8 @@ smallMarloweValidator2 MarloweParams{rolesCurrency, rolePayoutValidatorHash}
         marloweTxInputToInput (MerkleizedTxInput input hash) =
             case findDatum (DatumHash hash) scriptContextTxInfo of
                 Just (Datum d) -> let
-                    continuation = PlutusTx.unsafeFromBuiltinData d
+                    -- continuation = PlutusTx.unsafeFromBuiltinData d
+                    continuation = fromDataToContract d
                     in MerkleizedInput input hash continuation
                 Nothing -> traceError "H"
         marloweTxInputToInput (Input input) = NormalInput input
@@ -469,7 +476,7 @@ asdf f a b = let
         _        -> False -- f (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
 
 
-asdf2 :: (MarloweData -> MarloweInput -> ()) -> BuiltinData -> BuiltinData -> ()
+asdf2 :: ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> ()) -> BuiltinData -> BuiltinData -> ()
 asdf2 f a b = let
     -- if script's second argument is ScriptContext then it's a MintingPolicy
     -- otherwise, it's a Validator
@@ -477,7 +484,7 @@ asdf2 f a b = let
     mctx = PlutusTx.fromBuiltinData b
     in case mctx of
         Just ctx -> ()
-        _        -> f (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
+        _        -> f PlutusTx.unsafeFromBuiltinData PlutusTx.unsafeFromBuiltinData (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
 
 
 

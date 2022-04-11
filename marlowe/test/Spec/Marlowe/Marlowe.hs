@@ -374,7 +374,7 @@ untypedValidatorSize = do
     let wsize3 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise wrapper1
     let wsize4 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise unwrapped1
     -- print $ prettyPlcReadableDebug plc
-    print $ prettyPlcReadableDebug wpr
+    -- print $ prettyPlcReadableDebug wpr
     putStrLn $ "smallUntypedValidator " <> show vsize <> ", universalMarloweScript " <> show vsize2 <> ", marloweMPS " <> show vsize3
     print wsize3
     print wsize4
