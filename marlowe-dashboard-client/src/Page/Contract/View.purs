@@ -334,7 +334,12 @@ renderPastStep roleTokens tzOffset state stepNumber step = do
                   step
               ]
             Tasks, { state: TimeoutStep timeoutInfo } -> cardContent [ "p-4" ]
-              [ renderTimeout roleTokens tzOffset stepNumber state stepNumber
+              [ renderTimeout
+                  roleTokens
+                  tzOffset
+                  stepNumber
+                  state
+                  stepNumber
                   timeoutInfo
               ]
             Balances, { balances } -> cardContent []
@@ -591,7 +596,7 @@ renderTimeout roleTokens tzOffset stepNumber state _ timeoutInfo =
           , "shadow-sm"
           , "flex"
           , "flex-col"
-          , "items-center"
+          , "items-stretch"
           ]
       ]
       [ header
@@ -655,7 +660,15 @@ renderPartyMissingActions roleTokens stepNumber state party actions =
         ]
         (Array.singleton <<< renderMissingAction <$> actions)
   in
-    div [ classNames [ "border-l-2", "border-black", "pl-2", "space-y-2" ] ]
+    div
+      [ classNames
+          [ "overflow-hidden"
+          , "border-l-2"
+          , "border-black"
+          , "pl-2"
+          , "space-y-2"
+          ]
+      ]
       $ renderParty OnPartyClicked stepNumber currencySymbol roleTokens party :
           actionsSeparatedByOr
 
@@ -812,7 +825,6 @@ renderBalances roleTokens stepNumber state stepBalance =
                 ( \((party /\ token) /\ balance) ->
                     let
                       participantName = participantWithNickname
-                        20
                         currencySymbol
                         roleTokens
                         party
@@ -831,10 +843,10 @@ renderBalances roleTokens stepNumber state stepBalance =
                       div
                         [ classNames
                             [ "grid"
-                            , "grid-cols-auto-1fr"
+                            , "grid-cols-1fr-auto"
                             , "gap-y-1"
                             , "py-3"
-                            , "px-4"
+                            , "px-3"
                             , "shadow-sm"
                             , "bg-white"
                             , "rounded"
@@ -848,6 +860,8 @@ renderBalances roleTokens stepNumber state stepBalance =
                                         [ pure "flex"
                                         , pure "gap-1"
                                         , "cursor-pointer" <$ mAddress
+                                        , pure "whitespace-nowrap"
+                                        , pure "overflow-hidden"
                                         ]
                                     , pure $ id lineId
                                     ]
@@ -865,7 +879,12 @@ renderBalances roleTokens stepNumber state stepBalance =
                                         , name: participantName
                                         }
                                     , pure $ span
-                                        [ classNames [ "font-semibold" ] ]
+                                        [ classNames
+                                            [ "font-semibold"
+                                            , "overflow-ellipsis"
+                                            , "overflow-hidden"
+                                            ]
+                                        ]
                                         [ text participantName ]
                                     , tooltip
                                         "Click to copy address"

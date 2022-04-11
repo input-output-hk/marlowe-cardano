@@ -45,7 +45,7 @@ import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
-import Marlowe.Execution.State (expandBalances)
+import Marlowe.Execution.State (expandBalances, extractNamedActions)
 import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (emptyContractMetadata)
@@ -251,13 +251,11 @@ handleAction (OnPartyClicked address) = do
 
 transactionsToStep
   :: RoleTokenStore
-  -> Instant
   -> StartedState
   -> Execution.PastState
   -> PreviousStep
 transactionsToStep
   roleTokens
-  currentTime
   state
   { balancesAtStart, balancesAtEnd, txInput, resultingPayments, action } =
   let
@@ -279,9 +277,9 @@ transactionsToStep
       TimeoutAction act ->
         let
           missedActions = userNamedActions
-            currentTime
             roleTokens
             state.executionState
+            act.missedActions
         in
           TimeoutStep { time: act.time, missedActions }
       InputAction -> TransactionStep txInput
@@ -297,11 +295,10 @@ transactionsToStep
 
 timeoutToStep
   :: RoleTokenStore
-  -> Instant
   -> StartedState
   -> Execution.TimeoutInfo
   -> PreviousStep
-timeoutToStep roleTokens currentTime state { time } =
+timeoutToStep roleTokens state { time, missedActions } =
   let
     balances = state ^. (_executionState <<< _semanticState <<< _accounts)
 
@@ -321,7 +318,7 @@ timeoutToStep roleTokens currentTime state { time } =
         TimeoutStep
           { time
           , missedActions:
-              userNamedActions currentTime roleTokens state.executionState
+              userNamedActions roleTokens state.executionState missedActions
           }
     }
 
@@ -338,14 +335,14 @@ regenerateStepCards roleTokens currentTime state =
     confirmedSteps :: Array PreviousStep
     confirmedSteps = toArrayOf
       ( _executionState <<< _history <<< traversed <<< to
-          (transactionsToStep roleTokens currentTime state)
+          (transactionsToStep roleTokens state)
       )
       state
 
     pendingTimeoutSteps :: Array PreviousStep
     pendingTimeoutSteps = toArrayOf
       ( _executionState <<< _pendingTimeouts <<< traversed <<< to
-          (timeoutToStep roleTokens currentTime state)
+          (timeoutToStep roleTokens state)
       )
       state
 
@@ -353,7 +350,8 @@ regenerateStepCards roleTokens currentTime state =
 
     executionState = state ^. _executionState
 
-    namedActions = userNamedActions currentTime roleTokens executionState
+    namedActions = userNamedActions roleTokens executionState
+      $ extractNamedActions currentTime executionState
   in
     state { previousSteps = previousSteps, namedActions = namedActions }
 

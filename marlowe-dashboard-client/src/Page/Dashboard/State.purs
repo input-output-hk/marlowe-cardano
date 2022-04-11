@@ -81,7 +81,7 @@ import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
 import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
 import Marlowe.Client (getMarloweParams)
-import Marlowe.Execution.State (isClosed)
+import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
 import Marlowe.Run.Server
@@ -260,7 +260,8 @@ deriveContractState
   -> ContractState
 deriveContractState currentTime roleTokens executionState =
   { executionState
-  , namedActions: userNamedActions currentTime roleTokens executionState
+  , namedActions: userNamedActions roleTokens executionState
+      $ extractNamedActions currentTime executionState
   , isClosed: isClosed executionState
   }
 

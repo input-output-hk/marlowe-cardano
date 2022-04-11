@@ -13,13 +13,12 @@ import Prologue
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
-import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens', Traversal', _2, iso, traversed, view, (^.))
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Tuple as Tuple
 import Data.Tuple.Nested ((/\))
-import Marlowe.Execution.State (extractNamedActions, getActionParticipant)
+import Marlowe.Execution.State (getActionParticipant)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
@@ -40,11 +39,11 @@ _UserNamedActions = iso
   (\m -> UserNamedActions m)
 
 userNamedActions
-  :: Instant
-  -> RoleTokenStore
+  :: RoleTokenStore
   -> Execution.State
+  -> Array NamedAction
   -> UserNamedActions
-userNamedActions currentTime roleTokens executionState =
+userNamedActions roleTokens executionState actions =
   -- First we expand the actions that can be taken by every party
   expandedActions
     # Array.sortBy currentPartiesFirst
@@ -52,7 +51,6 @@ userNamedActions currentTime roleTokens executionState =
     # map extractGroupedParty
     # UserNamedActions
   where
-  actions = extractNamedActions currentTime executionState
   allParticipants = getParties executionState.contract
 
   -- If an action has a participant, just use that, if it doesn't expand it to all

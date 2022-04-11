@@ -19,7 +19,7 @@ import Data.Foldable (foldMap)
 import Data.Function (on)
 import Data.Lens ((^.), (^?))
 import Data.Maybe (maybe')
-import Data.String (drop, length, take)
+import Data.String (take)
 import Data.String.Extra (capitalize)
 import Effect.Aff.Class (class MonadAff)
 import Halogen as H
@@ -66,7 +66,7 @@ renderParty
        m
 renderParty onClick stepNumber currencySymbol roleTokens party =
   let
-    participantName = participantWithNickname 32 currencySymbol roleTokens party
+    participantName = participantWithNickname currencySymbol roleTokens party
     mToken = case party of
       Role tokenName -> Just $ Token currencySymbol tokenName
       _ -> Nothing
@@ -86,6 +86,7 @@ renderParty onClick stepNumber currencySymbol roleTokens party =
               [ pure "text-xs"
               , pure "flex"
               , pure "gap-1"
+              , pure "whitespace-nowrap"
               , "cursor-pointer" <$ mOnClick
               ]
           , pure $ id itemId
@@ -102,28 +103,30 @@ renderParty onClick stepNumber currencySymbol roleTokens party =
                   ]
               , name: participantName
               }
-          , pure $ div [ classNames [ "font-semibold" ] ]
+          , pure $ div
+              [ classNames
+                  [ "font-semibold"
+                  , "overflow-ellipsis"
+                  , "overflow-hidden"
+                  , "w-4/5"
+                  ]
+              ]
               [ text participantName ]
           , tooltip <$> mTooltipMsg <@> (RefId itemId) <@> Bottom
           ]
       )
 
 participantWithNickname
-  :: Int -> CurrencySymbol -> RoleTokenStore -> Party -> String
-participantWithNickname maxWidth currencySymbol roleTokens party =
+  :: CurrencySymbol -> RoleTokenStore -> Party -> String
+participantWithNickname currencySymbol roleTokens party =
   capitalize case party of
     PK publicKey -> publicKey
     Role tokenName ->
       let
         suffix = foldMap (\n -> " (" <> n <> ")")
           $ getDisplayName (Token currencySymbol tokenName) roleTokens
-
-        name = tokenName <> suffix
       in
-        if length name > maxWidth then
-          take (maxWidth - 5) name <> "…" <> drop (length name - 3) name
-        else
-          name
+        tokenName <> suffix
 
 firstLetterInCircle
   :: forall p a. { styles :: Array String, name :: String } -> HTML p a
