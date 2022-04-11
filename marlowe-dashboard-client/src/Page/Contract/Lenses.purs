@@ -1,19 +1,4 @@
-module Page.Contract.Lenses
-  ( _Started
-  , _Starting
-  , _contract
-  , _contractUserParties
-  , _executionState
-  , _expandPayments
-  , _marloweParams
-  , _metadata
-  , _namedActions
-  , _nickname
-  , _previousSteps
-  , _resultingPayments
-  , _selectedStep
-  , _tab
-  ) where
+module Page.Contract.Lenses where
 
 import Prologue
 
@@ -23,6 +8,8 @@ import Data.Lens.At (at)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromMaybe)
 import Data.NewContract (NewContract)
+import Marlowe.Semantics (CurrencySymbol)
+import Marlowe.Semantics as Semantics
 import Page.Contract.Types (ContractState, StartedState, Tab(..))
 import Type.Proxy (Proxy(..))
 
@@ -53,11 +40,17 @@ _nickname = prop (Proxy :: _ "nickname")
 _executionState :: forall a r. Lens' { executionState :: a | r } a
 _executionState = prop (Proxy :: _ "executionState")
 
+_rolesCurrency :: Lens' StartedState CurrencySymbol
+_rolesCurrency = _executionState <<< _marloweParams <<< Semantics._rolesCurrency
+
 _previousSteps :: forall a r. Lens' { previousSteps :: a | r } a
 _previousSteps = prop (Proxy :: _ "previousSteps")
 
 _marloweParams :: forall a r. Lens' { marloweParams :: a | r } a
 _marloweParams = prop (Proxy :: _ "marloweParams")
+
+_participants :: forall a r. Lens' { participants :: a | r } a
+_participants = prop (Proxy :: _ "participants")
 
 _selectedStep :: forall a r. Lens' { selectedStep :: a | r } a
 _selectedStep = prop (Proxy :: _ "selectedStep")
@@ -65,8 +58,8 @@ _selectedStep = prop (Proxy :: _ "selectedStep")
 _metadata :: forall a r. Lens' { metadata :: a | r } a
 _metadata = prop (Proxy :: _ "metadata")
 
-_contractUserParties :: forall a r. Lens' { contractUserParties :: a | r } a
-_contractUserParties = prop (Proxy :: _ "contractUserParties")
+_roleTokens :: forall a r. Lens' { roleTokens :: a | r } a
+_roleTokens = prop (Proxy :: _ "roleTokens")
 
 _namedActions :: forall a r. Lens' { namedActions :: a | r } a
 _namedActions = prop (Proxy :: _ "namedActions")

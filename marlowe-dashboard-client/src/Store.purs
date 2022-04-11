@@ -22,6 +22,14 @@ import Marlowe.Run.Contract.V1.Types (RoleToken)
 import Marlowe.Semantics (Assets(..), MarloweParams, Token)
 import Store.Contracts (ContractStore, mkContractStore, tick)
 import Store.Contracts as Contracts
+import Store.RoleTokens
+  ( RoleTokenStore
+  , loadRoleTokenFailed
+  , loadRoleTokens
+  , mkRoleTokenStore
+  , roleTokenLoaded
+  , updateMyRoleTokens
+  )
 import Store.Wallet (WalletAction, WalletStore, _connectedWallet)
 import Store.Wallet as Wallet
 import Toast.Types (ToastMessage, errorToast)
@@ -31,10 +39,9 @@ import Types (JsonAjaxError)
 type Store =
   { addressBook :: AddressBook
   , wallet :: WalletStore
-  -- # Contracts
   , contracts :: ContractStore
-  -- # Backend Notifications
   , currentTime :: Instant
+  , roleTokens :: RoleTokenStore
   -- # System wide components
   -- This is to make sure only one dropdown at a time is open, in order to
   -- overcome a limitation of nselect that prevents it from closing the
@@ -43,11 +50,16 @@ type Store =
   , toast :: Maybe ToastMessage
   }
 
+type StoreLens a = Lens' Store a
+
 _wallet :: forall r a. Lens' { wallet :: a | r } a
 _wallet = prop (Proxy :: _ "wallet")
 
 _contracts :: forall r a. Lens' { contracts :: a | r } a
 _contracts = prop (Proxy :: _ "contracts")
+
+_roleTokens :: StoreLens RoleTokenStore
+_roleTokens = prop (Proxy :: _ "roleTokens")
 
 mkStore
   :: Instant
@@ -56,13 +68,11 @@ mkStore
   -> Maybe WalletDetails
   -> Store
 mkStore currentTime addressBook contractNicknames wallet =
-  { -- # Wallet
-    addressBook
+  { addressBook
   , wallet: maybe Wallet.Disconnected Wallet.Connecting wallet
-  -- # Contracts
   , contracts: mkContractStore contractNicknames
-  -- # Time
   , currentTime
+  , roleTokens: mkRoleTokenStore
   -- # System wide components
   , openDropdown: Nothing
   , toast: Nothing
@@ -125,17 +135,17 @@ reduce store = case _ of
   ContractStartFailed newContract marloweError ->
     updateContractStore $ Contracts.ContractStartFailed newContract marloweError
   LoadRoleTokens tokens ->
-    updateContractStore $ Contracts.LoadRoleTokens tokens
+    updateRoleTokenStore $ loadRoleTokens tokens
   LoadRoleTokenFailed token ajaxError ->
-    updateContractStore $ Contracts.LoadRoleTokenFailed token ajaxError
+    updateRoleTokenStore $ loadRoleTokenFailed token ajaxError
   RoleTokenLoaded roleToken ->
-    updateContractStore $ Contracts.RoleTokenLoaded roleToken
+    updateRoleTokenStore $ roleTokenLoaded store.addressBook roleToken
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
   -- Wallet
   Wallet action -> store
     { wallet = Wallet.reduce store.wallet action
-    , contracts =
+    , roleTokens =
         let
           oldAssets = fromMaybe
             (Assets Map.empty)
@@ -144,9 +154,8 @@ reduce store = case _ of
           case action of
             Wallet.OnAssetsChanged newAssets
               | newAssets /= oldAssets ->
-                  Contracts.reduce store.contracts
-                    $ Contracts.AssetsChanged newAssets
-            _ -> store.contracts
+                  updateMyRoleTokens newAssets store.roleTokens
+            _ -> store.roleTokens
     }
   -- Toast
   ShowToast msg -> store { toast = Just msg }
@@ -158,6 +167,7 @@ reduce store = case _ of
     { wallet = Wallet.Disconnected
     }
   where
-  updateContractStore action = store
-    { contracts = Contracts.reduce store.contracts action
-    }
+  updateRoleTokenStore f =
+    store { roleTokens = f store.roleTokens }
+  updateContractStore action =
+    store { contracts = Contracts.reduce store.contracts action }

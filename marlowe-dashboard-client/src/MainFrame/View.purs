@@ -29,11 +29,13 @@ import Halogen.HTML as HH
 import Halogen.Store.Monad (class MonadStore)
 import MainFrame.Lenses (_enteringDashboardState, _store, _subState)
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
+import Marlowe.Run.Server as MarloweRun
 import Page.Dashboard.State as Dashboard
 import Page.Dashboard.Types (_dashboard)
 import Page.Dashboard.View (appTemplate, appTemplateHeader)
 import Page.Welcome.State as Welcome
 import Page.Welcome.View (welcomeCard, welcomeScreen)
+import Servant.PureScript (class MonadAjax)
 import Store (_wallet)
 import Store as Store
 import Store.Wallet (_connectedWallet)
@@ -45,6 +47,7 @@ render
   => MonadKill Error Fiber m
   => MonadUnliftAff m
   => MonadAsk Env m
+  => MonadAjax MarloweRun.Api m
   => MonadTime m
   => ManageMarlowe m
   => ManagePAB m

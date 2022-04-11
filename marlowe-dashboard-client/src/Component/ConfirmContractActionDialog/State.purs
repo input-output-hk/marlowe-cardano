@@ -26,7 +26,6 @@ import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill, fork, kill)
 import Control.Monad.Fork.Class as MF
 import Control.Monad.Now (class MonadTime)
-import Data.ContractUserParties (contractUserParties)
 import Data.Lens (assign, use)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Unfoldable as Unfoldable
@@ -62,7 +61,7 @@ component
   => MonadTime m
   => Toast m
   => H.Component CCAD.Query Input Msg m
-component = connect (selectEq _.currentTime) $
+component = connect (selectEq selectSlice) $
   HR.mkReactiveComponent
     { deriveState
     , initialTransient:
@@ -71,17 +70,18 @@ component = connect (selectEq _.currentTime) $
     , render
     , eval: HR.fromHandleAction handleAction
     }
+  where
+  selectSlice { currentTime, roleTokens } = { currentTime, roleTokens }
 
 deriveState :: Input' -> Derived
 deriveState { context, input } =
   let
-    { action, executionState, wallet, chosenNum } = input
-    currentTime = context
-    { marloweParams, contract } = executionState
+    { action, executionState, chosenNum } = input
+    { currentTime } = context
+    { contract } = executionState
     contractInput = toInput action chosenNum
   in
-    { contractUserParties: contractUserParties wallet marloweParams contract
-    , transactionFeeQuote: transactionFee
+    { transactionFeeQuote: transactionFee
     , txInput: mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
     }
 

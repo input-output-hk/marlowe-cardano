@@ -14,7 +14,6 @@ import Component.Template.Types (Action, State) as Template
 import Component.Tooltip.Types (ReferenceId)
 import Data.Argonaut (Json, JsonDecodeError)
 import Data.ContractStatus (ContractStatusId)
-import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.NewContract (NewContract)
@@ -37,13 +36,14 @@ import Marlowe.Semantics (ChosenNum, MarloweData, MarloweParams)
 import Page.Contract.Types as ContractPage
 import Plutus.Contract.Effects (ActiveEndpoint)
 import Store.Contracts (ContractStore)
+import Store.RoleTokens (RoleTokenStore)
 import Text.Pretty (text)
 import Type.Proxy (Proxy(..))
 
 type ContractState =
   { executionState :: Execution.State
-  , contractUserParties :: ContractUserParties
   , namedActions :: UserNamedActions
+  , isClosed :: Boolean
   }
 
 type State = Reactive.State
@@ -64,9 +64,8 @@ type TransientState =
   }
 
 type DerivedState =
-  { newContracts :: Array NewContract
-  , runningContracts :: Array ContractState
-  , closedContracts :: Array ContractState
+  { newContracts :: Map UUID NewContract
+  , contracts :: Map MarloweParams ContractState
   }
 
 -- This represents the status of the wallet companion. When we start the application
@@ -98,6 +97,7 @@ data Query (a :: Type)
 type Slice =
   { contracts :: ContractStore
   , currentTime :: Instant
+  , roleTokens :: RoleTokenStore
   }
 
 data Msg

@@ -71,11 +71,13 @@ import MainFrame.Types
   )
 import MainFrame.View (render)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Run.Server as MarloweRun
 import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types (ContractInstanceClientState)
+import Servant.PureScript (class MonadAjax)
 import Store (_wallet)
 import Store as Store
 import Store.Wallet (WalletStore(..), _Connecting)
@@ -99,6 +101,7 @@ mkMainFrame
    . MonadAff m
   => MonadKill Error Fiber m
   => MonadUnliftAff m
+  => MonadAjax MarloweRun.Api m
   => MonadLogger StructuredLog m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m

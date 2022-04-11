@@ -16,7 +16,6 @@ import Control.Monad.State.Class (modify_)
 import Data.Array (index, length, mapMaybe)
 import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
-import Data.ContractUserParties (contractUserParties, getParticipants)
 import Data.DateTime.Instant (Instant)
 import Data.Foldable (for_)
 import Data.FoldableWithIndex (foldlWithIndex)
@@ -28,7 +27,6 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.NewContract (NewContract(..))
 import Data.Ord (abs)
-import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (traverse, traverse_)
@@ -48,15 +46,15 @@ import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
-import Marlowe.Execution.State (expandBalances, extractNamedActions)
+import Marlowe.Execution.State (expandBalances)
 import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (emptyContractMetadata)
+import Marlowe.HasParties (getParties)
 import Marlowe.Semantics (Contract(..), _accounts)
 import Page.Contract.Lenses
   ( _Started
   , _contract
-  , _contractUserParties
   , _executionState
   , _expandPayments
   , _selectedStep
@@ -78,6 +76,7 @@ import Page.Contract.Types
 import Page.Contract.View (contractScreen)
 import Store as Store
 import Store.Contracts (getContract, getNewContract)
+import Store.RoleTokens (RoleTokenStore)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.Dom.ElementExtra
@@ -101,7 +100,10 @@ component
   => MonadStore Store.Action Store.Store m
   => H.Component query Input Msg m
 component =
-  connect (selectEq \{ contracts, currentTime } -> { contracts, currentTime }) $
+  connect
+    ( selectEq \{ roleTokens, contracts, currentTime } ->
+        { roleTokens, contracts, currentTime }
+    ) $
     H.mkComponent
       { initialState: deriveState
       , render: contractScreen
@@ -124,13 +126,14 @@ dummyState = Starting $ NewContract
 deriveState :: Connected Slice Input -> State
 deriveState
   { context
-  , input: { wallet, contractIndex }
+  , input: { contractIndex }
   } =
   let
     mContract = case contractIndex of
       Starting reqId -> Starting <$> getNewContract reqId context.contracts
-      Started marloweParams -> mkInitialState context.currentTime wallet
-        <$> getContract marloweParams context.contracts
+      Started marloweParams ->
+        mkInitialState context.currentTime context.roleTokens
+          <$> getContract marloweParams context.contracts
 
     -- TODO: We might want to represent an error state instead of dummyState
     contract = fromMaybe dummyState $ mContract
@@ -138,27 +141,29 @@ deriveState
     { contract
     , currentTime: context.currentTime
     , tzOffset: Minutes 0.0 -- This will be set in Init
-    , wallet
+    , roleTokens: context.roleTokens
     }
 
 mkInitialState
-  :: Instant -> PABConnectedWallet -> Execution.State -> ContractState
-mkInitialState currentTime wallet executionState =
+  :: Instant
+  -> RoleTokenStore
+  -> Execution.State
+  -> ContractState
+mkInitialState currentTime roleTokens executionState =
   let
-    { marloweParams, initialContract } = executionState
+    { initialContract } = executionState
     initialState =
       { tabs: Map.empty
       , expandPayments: Map.empty
       , executionState
       , previousSteps: mempty
       , selectedStep: 0
-      , contractUserParties: contractUserParties wallet marloweParams
-          initialContract
       , namedActions: UserNamedActions.empty
+      , participants: getParties initialContract
       }
   in
     initialState
-      # regenerateStepCards currentTime
+      # regenerateStepCards roleTokens currentTime
       # selectLastStep
       # Started
 
@@ -201,13 +206,14 @@ handleAction (Receive { input, context }) = do
       case currentContractState of
         -- If we are transitioning from a Starting to a Started contract we recreate the Contract initial
         -- state
-        Starting _ -> assign _contract $ mkInitialState context.currentTime
-          input.wallet
+        Starting _ -> assign _contract $ mkInitialState
+          context.currentTime
+          context.roleTokens
           executionState
         -- If we are just receiving a new input but we are already in a Started state, then we just
         -- update the execution state
         Started _ -> modifying (_contract <<< _Started) $
-          regenerateStepCards context.currentTime
+          regenerateStepCards context.roleTokens context.currentTime
             <<< set _executionState executionState
     _ -> pure unit
 handleAction (SetNickname nickname) =
@@ -237,12 +243,19 @@ handleAction (MoveToStep stepNumber) = do
   mElement <- H.getHTMLElementRef scrollContainerRef
   for_ mElement $ liftEffect <<< scrollStepToCenter Smooth stepNumber
 
-transactionsToStep :: StartedState -> Execution.PastState -> PreviousStep
 transactionsToStep
+  :: RoleTokenStore
+  -> Instant
+  -> StartedState
+  -> Execution.PastState
+  -> PreviousStep
+transactionsToStep
+  roleTokens
+  currentTime
   state
   { balancesAtStart, balancesAtEnd, txInput, resultingPayments, action } =
   let
-    participants = getParticipants $ state ^. _contractUserParties
+    participants = state.participants
 
     -- TODO: When we add support for multiple tokens we should extract the possible tokens from the
     --       contract, store it in ContractState and pass them here.
@@ -259,12 +272,10 @@ transactionsToStep
     stepState = case action of
       TimeoutAction act ->
         let
-          contractUserParties = state ^. _contractUserParties
-
-          missedActions =
-            userNamedActions
-              contractUserParties
-              act.missedActions
+          missedActions = userNamedActions
+            currentTime
+            roleTokens
+            state.executionState
         in
           TimeoutStep { time: act.time, missedActions }
       InputAction -> TransactionStep txInput
@@ -278,14 +289,17 @@ transactionsToStep
     , state: stepState
     }
 
-timeoutToStep :: StartedState -> Execution.TimeoutInfo -> PreviousStep
-timeoutToStep state { time, missedActions } =
+timeoutToStep
+  :: RoleTokenStore
+  -> Instant
+  -> StartedState
+  -> Execution.TimeoutInfo
+  -> PreviousStep
+timeoutToStep roleTokens currentTime state { time } =
   let
     balances = state ^. (_executionState <<< _semanticState <<< _accounts)
 
-    contractUserParties = state ^. _contractUserParties
-
-    participants = getParticipants contractUserParties
+    participants = state.participants
 
     expandedBalances = expandBalances (Set.toUnfoldable participants)
       [ adaToken ]
@@ -301,14 +315,12 @@ timeoutToStep state { time, missedActions } =
         TimeoutStep
           { time
           , missedActions:
-              userNamedActions
-                contractUserParties
-                missedActions
+              userNamedActions currentTime roleTokens state.executionState
           }
     }
 
-regenerateStepCards :: Instant -> StartedState -> StartedState
-regenerateStepCards currentTime state =
+regenerateStepCards :: RoleTokenStore -> Instant -> StartedState -> StartedState
+regenerateStepCards roleTokens currentTime state =
   -- TODO: This regenerates all the previous step cards, resetting them to their default state (showing
   -- the Tasks tab). If any of them are showing the Balances tab, it would be nice to keep them that way.
   -- TODO: Performance optimization
@@ -320,14 +332,14 @@ regenerateStepCards currentTime state =
     confirmedSteps :: Array PreviousStep
     confirmedSteps = toArrayOf
       ( _executionState <<< _history <<< traversed <<< to
-          (transactionsToStep state)
+          (transactionsToStep roleTokens currentTime state)
       )
       state
 
     pendingTimeoutSteps :: Array PreviousStep
     pendingTimeoutSteps = toArrayOf
       ( _executionState <<< _pendingTimeouts <<< traversed <<< to
-          (timeoutToStep state)
+          (timeoutToStep roleTokens currentTime state)
       )
       state
 
@@ -335,10 +347,7 @@ regenerateStepCards currentTime state =
 
     executionState = state ^. _executionState
 
-    contractUserParties = state ^. _contractUserParties
-
-    namedActions = userNamedActions contractUserParties
-      $ extractNamedActions currentTime executionState
+    namedActions = userNamedActions currentTime roleTokens executionState
   in
     state { previousSteps = previousSteps, namedActions = namedActions }
 

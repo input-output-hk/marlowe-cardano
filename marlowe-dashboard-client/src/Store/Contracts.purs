@@ -3,15 +3,13 @@ module Store.Contracts
   , ContractStore
   , reduce
   , followerContractExists
-  , getClosedContracts
   , getContract
   , getContractNickname
   , getContractNicknames
   , getFollowerContract
   , getNewContract
-  , getNewContracts
-  , getRunningContracts
   , mkContractStore
+  , partitionContracts
   , tick
   ) where
 
@@ -32,12 +30,11 @@ import Data.Lens
   , over
   , preview
   , set
+  , takeBoth
   , to
-  , toArrayOf
   , traverseOf
   , traversed
   , view
-  , (%~)
   , (^.)
   )
 import Data.Lens.At (at)
@@ -59,23 +56,13 @@ import Data.UUID.Argonaut (UUID, emptyUUID)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.Client (getMarloweParams)
 import Marlowe.Client as Client
-import Marlowe.Execution.State (isClosed, restoreState) as Execution
+import Marlowe.Execution.State (restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Run.Contract.V1.Types (RoleToken)
-import Marlowe.Semantics (Assets, MarloweParams, Token, TransactionError)
-import Store.Contracts.RoleTokens
-  ( RoleTokenStore
-  , loadRoleTokenFailed
-  , loadRoleTokens
-  , mkRoleTokenStore
-  , roleTokenLoaded
-  , updateMyRoleTokens
-  )
+import Marlowe.Semantics (MarloweParams, TransactionError)
 import Type.Proxy (Proxy(..))
-import Types (JsonAjaxError)
 
 newtype ContractStore = ContractStore ContractStoreFields
 
@@ -87,10 +74,6 @@ data Action
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   | ContractStarted NewContract MarloweParams
   | ContractStartFailed NewContract MarloweError
-  | LoadRoleTokens (Set Token)
-  | LoadRoleTokenFailed Token JsonAjaxError
-  | RoleTokenLoaded RoleToken
-  | AssetsChanged Assets
   | Reset
 
 type ContractStoreFields =
@@ -110,7 +93,6 @@ type ContractStoreFields =
   -- This bimap help us have one Follower contract per Marlowe contract.
   , contractIndex :: Bimap MarloweParams PlutusAppId
   , contractNicknames :: LocalContractNicknames
-  , roleTokens :: RoleTokenStore
   }
 
 derive instance Eq ContractStore
@@ -133,14 +115,6 @@ reduce store = case _ of
     contractStartFailed newContract marloweError store
   Reset ->
     mkContractStore $ store ^. _contractNicknames
-  LoadRoleTokens tokens ->
-    store # _roleTokens %~ loadRoleTokens tokens
-  LoadRoleTokenFailed token ajaxError ->
-    store # _roleTokens %~ loadRoleTokenFailed token ajaxError
-  RoleTokenLoaded roleToken ->
-    store # _roleTokens %~ roleTokenLoaded roleToken
-  AssetsChanged assets ->
-    store # _roleTokens %~ updateMyRoleTokens assets
 
 ------------------------------------------------------------
 _ContractStore :: Lens' ContractStore ContractStoreFields
@@ -157,9 +131,6 @@ _newContracts = _ContractStore <<< prop (Proxy :: _ "newContracts")
 _contractIndex :: Lens' ContractStore (Bimap MarloweParams PlutusAppId)
 _contractIndex = _ContractStore <<< prop (Proxy :: _ "contractIndex")
 
-_roleTokens :: Lens' ContractStore RoleTokenStore
-_roleTokens = _ContractStore <<< prop (Proxy :: _ "roleTokens")
-
 _contractNicknames :: Lens' ContractStore LocalContractNicknames
 _contractNicknames = _ContractStore <<< prop (Proxy :: _ "contractNicknames")
 
@@ -170,7 +141,6 @@ mkContractStore nicknames = ContractStore
   , newMarloweParams: Map.empty
   , contractIndex: Bimap.empty
   , contractNicknames: nicknames
-  , roleTokens: mkRoleTokenStore
   }
 
 followerAppsActivated
@@ -327,19 +297,11 @@ getContractNickname marloweParams =
   LocalContractNicknames.getContractNickname marloweParams <<<
     getContractNicknames
 
-getRunningContracts :: ContractStore -> Array Execution.State
-getRunningContracts = toArrayOf
-  ( _startedContracts
-      <<< traversed
-      <<< filtered (not <<< Execution.isClosed)
-  )
-
-getClosedContracts :: ContractStore -> Array Execution.State
-getClosedContracts = toArrayOf
-  ( _startedContracts
-      <<< traversed
-      <<< filtered Execution.isClosed
-  )
-
-getNewContracts :: ContractStore -> Array NewContract
-getNewContracts = toArrayOf (_newContracts <<< traversed)
+partitionContracts
+  :: ContractStore
+  -> { started :: Map MarloweParams Execution.State
+     , starting :: Map UUID NewContract
+     }
+partitionContracts store = { started, starting }
+  where
+  Tuple started starting = store ^. takeBoth _startedContracts _newContracts

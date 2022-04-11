@@ -40,12 +40,13 @@ import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
 import Data.ContractStatus (ContractStatus(..))
-import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (foldMap, for_, traverse_)
 import Data.Lens (assign, modifying, set, use, view, (^.), (^?))
 import Data.Map (filterKeys, toUnfoldable)
+import Data.Map as Map
+import Data.Maybe (maybe)
 import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet
   ( PABConnectedWallet
@@ -54,6 +55,7 @@ import Data.PABConnectedWallet
   , _marloweAppId
   , _walletId
   )
+import Data.Set as Set
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -78,15 +80,27 @@ import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
 import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
 import Marlowe.Client (getMarloweParams)
-import Marlowe.Execution.State (extractNamedActions)
+import Marlowe.Execution.State (isClosed)
 import Marlowe.Execution.Types as Execution
+import Marlowe.HasParties (getParties)
+import Marlowe.Run.Server
+  ( getApiContractsV1ByCurrencysymbolRoletokensByTokenname
+  )
+import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Semantics (MarloweData, MarloweParams)
+import Marlowe.Semantics
+  ( MarloweData
+  , MarloweParams
+  , Party(..)
+  , Token(..)
+  , _rolesCurrency
+  )
 import MarloweContract (MarloweContract(..))
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
   , _contractFilter
+  , _contractStore
   , _contracts
   , _menuOpen
   , _selectedContractIndex
@@ -115,14 +129,10 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , InstanceStatusToClient(..)
   ) as PAB
+import Servant.PureScript (class MonadAjax)
 import Store as Store
-import Store.Contracts
-  ( followerContractExists
-  , getClosedContracts
-  , getContract
-  , getNewContracts
-  , getRunningContracts
-  )
+import Store.Contracts (followerContractExists, getContract, partitionContracts)
+import Store.RoleTokens (RoleTokenStore)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
@@ -187,6 +197,7 @@ unsubscribeFromPlutusApps = do
 component
   :: forall m
    . MonadAff m
+  => MonadAjax MarloweRun.Api m
   => MonadLogger StructuredLog m
   => MonadUnliftAff m
   => MonadAsk Env m
@@ -219,47 +230,79 @@ component = connect sliceSelector $ mkReactiveComponent
           tzOffset <- timezoneOffset
           assign _tzOffset tzOffset
       , finalize: \_ -> unsubscribeFromPlutusApps
-      , handleInput: \_ _ -> pure unit
+      , handleInput
       , handleAction
       }
   }
   where
   sliceSelector =
-    selectEq \{ currentTime, contracts } -> { currentTime, contracts }
+    selectEq \{ currentTime, contracts, roleTokens } ->
+      { currentTime
+      , contracts
+      , roleTokens
+      }
 
 deriveState :: Connected Slice PABConnectedWallet -> DerivedState
-deriveState { input, context } =
+deriveState { context } =
   let
-    wallet = input
-    { contracts, currentTime } = context
-    runningContracts =
-      deriveContractState currentTime wallet <$> getRunningContracts contracts
-    closedContracts =
-      deriveContractState currentTime wallet <$> getClosedContracts contracts
-    newContracts = getNewContracts contracts
+    { contracts, currentTime, roleTokens } = context
+    { started, starting } = partitionContracts contracts
   in
-    { newContracts
-    , runningContracts
-    , closedContracts
+    { newContracts: starting
+    , contracts: deriveContractState currentTime roleTokens <$> started
     }
 
 deriveContractState
   :: Instant
-  -> PABConnectedWallet
+  -> RoleTokenStore
   -> Execution.State
   -> ContractState
-deriveContractState currentTime wallet executionState =
-  let
-    { marloweParams, contract } = executionState
-    userParties = contractUserParties wallet marloweParams contract
-  in
-    { executionState
-    , contractUserParties: userParties
-    , namedActions: userNamedActions userParties
-        $ extractNamedActions currentTime executionState
-    }
+deriveContractState currentTime roleTokens executionState =
+  { executionState
+  , namedActions: userNamedActions currentTime roleTokens executionState
+  , isClosed: isClosed executionState
+  }
 
 type HalogenM = H.HalogenM State Action ChildSlots Msg
+
+handleInput
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => Unit
+  -> Maybe State
+  -> HalogenM m Unit
+handleInput _ oldState = do
+  let oldContracts = maybe Map.empty (view _contracts) oldState
+  currentContracts <- use _contracts
+  let
+    addedContracts = Array.fromFoldable
+      $ Map.difference currentContracts oldContracts
+    addedTokens = addedContracts # foldMap \{ executionState } ->
+      let
+        currencySymbol = executionState.marloweParams ^. _rolesCurrency
+        parties = getParties executionState.contract
+      in
+        parties # Set.mapMaybe case _ of
+          Role tokenName -> Just $ Token currencySymbol tokenName
+          _ -> Nothing
+  updateStore $ Store.LoadRoleTokens addedTokens
+  parTraverse_ loadRoleToken addedTokens
+  where
+  loadRoleToken token@(Token currencySymbol tokenName) = do
+    debug "Loading role token" { currencySymbol, tokenName }
+    result <- H.lift $ getApiContractsV1ByCurrencysymbolRoletokensByTokenname
+      currencySymbol
+      tokenName
+    case result of
+      Left err -> do
+        error "Failed to load role token"
+          { currencySymbol, tokenName, error: err }
+        updateStore $ Store.LoadRoleTokenFailed token err
+      Right roleToken -> do
+        debug "Role token loaded" $ encodeJson roleToken
+        updateStore $ Store.RoleTokenLoaded roleToken
 
 handleAction
   :: forall m
@@ -409,7 +452,7 @@ handleAction (SetContactForRole _ _) = do
 
 handleAction
   (OnAskContractActionConfirmation marloweParams action chosenNum) = do
-  contracts <- use _contracts
+  contracts <- use _contractStore
   wallet <- use _wallet
   let
     mExecutionState = getContract marloweParams contracts
@@ -426,7 +469,7 @@ handleAction (NotificationParseFailed error) = do
 
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
 handleAction (CompanionAppStateUpdated companionAppState) = do
-  contracts <- use _contracts
+  contracts <- use _contractStore
   wallet <- use _wallet
   walletCompanionStatus <- use _walletCompanionStatus
   let

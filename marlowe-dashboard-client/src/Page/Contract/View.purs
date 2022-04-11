@@ -27,7 +27,7 @@ import Component.Transfer.Types
   , paymentToTransfer
   )
 import Component.Transfer.View (transfer)
-import Data.Array (fromFoldable, intercalate, length)
+import Data.Array (fromFoldable, intercalate, length, (:))
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
@@ -35,8 +35,8 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
 import Data.ContractStatus (ContractStatus(..))
-import Data.ContractUserParties (getParticipants, isCurrentUser)
 import Data.DateTime.Instant (Instant, toDateTime)
+import Data.Foldable (any)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens ((^.))
 import Data.List.NonEmpty (foldr)
@@ -58,6 +58,7 @@ import Halogen.HTML (HTML, a, button, div, div_, h4_, slot, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (IProp, enabled, id, ref)
+import Halogen.Store.Monad (class MonadStore)
 import Humanize (formatDate, formatTime, humanizeOffset, humanizeValue)
 import Marlowe.Execution.Lenses (_semanticState)
 import Marlowe.Execution.State (expandBalances, isClosed)
@@ -67,19 +68,20 @@ import Marlowe.Semantics
   ( ChoiceId(..)
   , Party(..)
   , TimeInterval(..)
-  , Token
+  , Token(..)
   , TransactionInput(..)
   , _accounts
   )
 import Marlowe.Semantics (Input(..)) as S
 import Page.Contract.Lenses
-  ( _contractUserParties
-  , _executionState
+  ( _executionState
   , _expandPayments
   , _marloweParams
   , _namedActions
+  , _participants
   , _previousSteps
   , _resultingPayments
+  , _rolesCurrency
   , _selectedStep
   , _tab
   )
@@ -99,12 +101,18 @@ import Page.Contract.Types
   , scrollContainerRef
   )
 import Plutus.V1.Ledger.Time (POSIXTime(..))
+import Store as Store
+import Store.RoleTokens (RoleTokenStore, isMyRoleToken)
 
 -------------------------------------------------------------------------------
 -- Top-level views
 -------------------------------------------------------------------------------
 contractScreen
-  :: forall m. MonadAff m => State -> ComponentHTML m
+  :: forall m
+   . MonadAff m
+  => MonadStore Store.Action Store.Store m
+  => State
+  -> ComponentHTML m
 contractScreen state =
   let
     cards = case state.contract of
@@ -112,10 +120,11 @@ contractScreen state =
         let
           pastStepsCards =
             mapWithIndex
-              (renderPastStep state.tzOffset started)
+              (renderPastStep state.roleTokens state.tzOffset started)
               (started ^. _previousSteps)
 
-          currentStepCard = [ renderCurrentStep state.currentTime started ]
+          currentStepCard =
+            [ renderCurrentStep state.roleTokens state.currentTime started ]
 
           cardForStep stepNumber
             | stepNumber == started.selectedStep = card
@@ -186,31 +195,34 @@ contractScreen state =
           ]
       , cardNavigationButtons state.contract
       , div [ classNames [ "self-end", "pb-4", "pr-4", "font-bold" ] ]
-          [ text $ statusIndicatorMessage state.contract ]
+          [ text $ statusIndicatorMessage state.roleTokens state.contract ]
       ]
 
 -------------------------------------------------------------------------------
 -- UI components
 -------------------------------------------------------------------------------
 
-statusIndicatorMessage :: ContractState -> String
-statusIndicatorMessage (Starting _) = "Starting contract…"
+statusIndicatorMessage :: RoleTokenStore -> ContractState -> String
+statusIndicatorMessage _ (Starting _) = "Starting contract…"
 
-statusIndicatorMessage (Started state) =
+statusIndicatorMessage roleTokens (Started state) =
   let
-    contractUserParties = state ^. _contractUserParties
-
     participantsWithAction = getParticipantsWithAction $ state ^. _namedActions
 
     executionState = state ^. _executionState
+
+    currency = state ^. _rolesCurrency
   in
     if isClosed executionState then
       "Contract completed"
     else if
-      Set.isEmpty
-        ( Set.filter (flip isCurrentUser $ contractUserParties)
-            participantsWithAction
-        ) then
+      any
+        ( case _ of
+            Role tokenName ->
+              isMyRoleToken (Token currency tokenName) roleTokens
+            _ -> false
+        )
+        participantsWithAction then
       "Waiting for "
         <>
           if Set.size participantsWithAction > 1 then
@@ -290,12 +302,13 @@ cardNavigationButtons (Started state) =
 renderPastStep
   :: forall m
    . MonadAff m
-  => Minutes
+  => RoleTokenStore
+  -> Minutes
   -> StartedState
   -> Int
   -> PreviousStep
   -> Array (ComponentHTML m)
-renderPastStep tzOffset state stepNumber step = do
+renderPastStep roleTokens tzOffset state stepNumber step = do
   let tab = state ^. _tab stepNumber
   [ tabBar tab $ Just (SelectTab stepNumber)
   , cardBody []
@@ -316,11 +329,15 @@ renderPastStep tzOffset state stepNumber step = do
             ]
         , case tab, step of
             Tasks, { state: TransactionStep txInput } -> cardContent [ "p-4" ]
-              [ renderPastStepTasksTab tzOffset stepNumber state txInput step ]
+              [ renderPastStepTasksTab roleTokens tzOffset stepNumber state
+                  txInput
+                  step
+              ]
             Tasks, { state: TimeoutStep timeoutInfo } -> cardContent [ "p-4" ]
-              [ renderTimeout tzOffset state stepNumber timeoutInfo ]
+              [ renderTimeout roleTokens tzOffset state stepNumber timeoutInfo
+              ]
             Balances, { balances } -> cardContent []
-              [ renderBalances stepNumber state balances ]
+              [ renderBalances roleTokens stepNumber state balances ]
         ]
   ]
 
@@ -355,13 +372,14 @@ groupTransactionInputByParticipant (TransactionInput { inputs, interval }) =
 renderPastStepTasksTab
   :: forall m
    . MonadAff m
-  => Minutes
+  => RoleTokenStore
+  -> Minutes
   -> Int
   -> StartedState
   -> TransactionInput
   -> PreviousStep
   -> ComponentHTML m
-renderPastStepTasksTab tzOffset stepNumber state txInput step =
+renderPastStepTasksTab roleTokens tzOffset stepNumber state txInput step =
   let
     actionsByParticipant = groupTransactionInputByParticipant txInput
 
@@ -375,20 +393,30 @@ renderPastStepTasksTab tzOffset stepNumber state txInput step =
         ]
       else
         append
-          (renderPartyPastActions tzOffset state <$> actionsByParticipant)
+          ( renderPartyPastActions roleTokens tzOffset state <$>
+              actionsByParticipant
+          )
           if length resultingPayments == 0 then
             []
           else
-            [ renderPaymentSummary stepNumber state step ]
+            [ renderPaymentSummary roleTokens stepNumber state step ]
 
 renderPaymentSummary
-  :: forall p. Int -> StartedState -> PreviousStep -> HTML p Action
-renderPaymentSummary stepNumber state step =
+  :: forall p
+   . RoleTokenStore
+  -> Int
+  -> StartedState
+  -> PreviousStep
+  -> HTML p Action
+renderPaymentSummary roleTokens stepNumber state step =
   let
     expanded = state ^. _expandPayments stepNumber
-    contractUserPartes = state ^. _contractUserParties
-    transfers = paymentToTransfer contractUserPartes <$> step ^.
-      _resultingPayments
+
+    payments = step ^. _resultingPayments
+
+    currencySymbol = state ^. _rolesCurrency
+
+    transfers = paymentToTransfer roleTokens currencySymbol <$> payments
 
     expandIcon = if expanded then Icon.ExpandLess else Icon.ExpandMore
   in
@@ -429,11 +457,12 @@ renderPaymentSummary stepNumber state step =
 renderPartyPastActions
   :: forall m action
    . MonadAff m
-  => Minutes
+  => RoleTokenStore
+  -> Minutes
   -> StartedState
   -> InputsByParty
   -> H.ComponentHTML action ChildSlots m
-renderPartyPastActions tzOffset state { inputs, interval, party } =
+renderPartyPastActions roleTokens tzOffset state { inputs, interval, party } =
   let
     -- We don't know exactly when a transaction was executed, we have an interval. But
     -- the design asks for an exact date so we use the lower end of the interval so that
@@ -446,11 +475,11 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
 
     transactionTime = formatTime tzOffset mTransactionDateTime
 
-    contractUserParties = state ^. _contractUserParties
+    currencySymbol = state ^. _rolesCurrency
 
     renderPartyHeader =
       div [ classNames [ "flex", "justify-between", "items-center", "p-4" ] ]
-        [ renderParty contractUserParties party
+        [ renderParty currencySymbol roleTokens party
         , div
             [ classNames
                 [ "flex", "flex-col", "items-end", "text-xxs", "font-semibold" ]
@@ -480,8 +509,8 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
     renderPastAction = case _ of
       S.IDeposit recipient sender token quantity ->
         transfer
-          { sender: partyToParticipant contractUserParties sender
-          , recipient: partyToParticipant contractUserParties recipient
+          { sender: partyToParticipant roleTokens currencySymbol sender
+          , recipient: partyToParticipant roleTokens currencySymbol recipient
           , token
           , quantity
           , termini: WalletToAccount sender recipient
@@ -508,8 +537,14 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
       ]
 
 renderTimeout
-  :: forall p a. Minutes -> StartedState -> Int -> TimeoutInfo -> HTML p a
-renderTimeout tzOffset state _ timeoutInfo =
+  :: forall p a
+   . RoleTokenStore
+  -> Minutes
+  -> StartedState
+  -> Int
+  -> TimeoutInfo
+  -> HTML p a
+renderTimeout roleTokens tzOffset state _ timeoutInfo =
   let
     timeoutDateTime = toDateTime timeoutInfo.time
 
@@ -536,7 +571,7 @@ renderTimeout tzOffset state _ timeoutInfo =
 
     body =
       div [ classNames [ "p-2", "space-y-2" ] ]
-        $ renderMissingActions state timeoutInfo
+        $ renderMissingActions roleTokens state timeoutInfo
   in
     div
       [ classNames
@@ -555,25 +590,35 @@ renderTimeout tzOffset state _ timeoutInfo =
       ]
 
 renderMissingActions
-  :: forall p a. StartedState -> TimeoutInfo -> Array (HTML p a)
-renderMissingActions _ { missedActions } | haveActions missedActions == false =
-  [ div [ classNames [ "font-semibold", "text-xs", "leading-none" ] ]
-      [ text
-          "There were no tasks to complete at this step and the contract has timeouted as expected."
+  :: forall p a
+   . RoleTokenStore
+  -> StartedState
+  -> TimeoutInfo
+  -> Array (HTML p a)
+renderMissingActions _ _ { missedActions }
+  | haveActions missedActions == false =
+      [ div [ classNames [ "font-semibold", "text-xs", "leading-none" ] ]
+          [ text
+              "There were no tasks to complete at this step and the contract has timeouted as expected."
+          ]
       ]
-  ]
 
-renderMissingActions state { missedActions } =
+renderMissingActions roleTokens state { missedActions } =
   append
     [ div [ classNames [ "font-semibold", "text-xs", "leading-none" ] ]
         [ text "The step timed out before the following actions could be made."
         ]
     ]
-    (renderPartyMissingActions state `mapActions` missedActions)
+    (renderPartyMissingActions roleTokens state `mapActions` missedActions)
 
 renderPartyMissingActions
-  :: forall p a. StartedState -> Party -> Array NamedAction -> HTML p a
-renderPartyMissingActions state party actions =
+  :: forall p a
+   . RoleTokenStore
+  -> StartedState
+  -> Party
+  -> Array NamedAction
+  -> HTML p a
+renderPartyMissingActions roleTokens state party actions =
   let
     renderMissingAction (MakeChoice (ChoiceId name _) _) = span_
       [ text "Make a choice for "
@@ -587,7 +632,7 @@ renderPartyMissingActions state party actions =
 
     renderMissingAction _ = span [] [ text "invalid action" ]
 
-    contractUserParties = state ^. _contractUserParties
+    currencySymbol = state ^. _rolesCurrency
 
     actionsSeparatedByOr =
       intercalate
@@ -596,15 +641,17 @@ renderPartyMissingActions state party actions =
         (Array.singleton <<< renderMissingAction <$> actions)
   in
     div [ classNames [ "border-l-2", "border-black", "pl-2", "space-y-2" ] ]
-      $ Array.cons (renderParty contractUserParties party) actionsSeparatedByOr
+      $ renderParty currencySymbol roleTokens party : actionsSeparatedByOr
 
 renderCurrentStep
   :: forall m
    . MonadAff m
-  => Instant
+  => MonadStore Store.Action Store.Store m
+  => RoleTokenStore
+  -> Instant
   -> StartedState
   -> Array (ComponentHTML m)
-renderCurrentStep currentSlot state =
+renderCurrentStep roleTokens currentTime state =
   let
     stepNumber = currentStep state
     tab = state ^. _tab stepNumber
@@ -623,7 +670,7 @@ renderCurrentStep currentSlot state =
                       _, true -> [ stepStatusText "Awaiting confirmation" [] ]
                       _, _ ->
                         [ stepStatusText
-                            (timeoutString currentSlot executionState)
+                            (timeoutString currentTime executionState)
                             []
                         , icon Icon.Timer []
                         ]
@@ -632,7 +679,6 @@ renderCurrentStep currentSlot state =
               Tasks ->
                 let
                   marloweParams = state ^. (_executionState <<< _marloweParams)
-                  contractUserParties = state ^. _contractUserParties
                   namedActions = state ^. _namedActions
                 in
                   cardContent [ "bg-wite", "p-4" ]
@@ -640,14 +686,14 @@ renderCurrentStep currentSlot state =
                         _currentStepActions
                         marloweParams
                         CurrentStepActions.component
-                        { executionState, contractUserParties, namedActions }
+                        { executionState, namedActions }
                         case _ of
                           ActionSelected action num ->
                             OnActionSelected action num
                     ]
               Balances ->
                 let
-                  participants = getParticipants $ state ^. _contractUserParties
+                  participants = state ^. _participants
 
                   balancesAtStart = state ^.
                     (_executionState <<< _semanticState <<< _accounts)
@@ -662,7 +708,12 @@ renderCurrentStep currentSlot state =
                     else Nothing
                 in
                   cardContent [ "bg-gray" ]
-                    [ renderBalances stepNumber state { atStart, atEnd } ]
+                    [ renderBalances
+                        roleTokens
+                        stepNumber
+                        state
+                        { atStart, atEnd }
+                    ]
           ]
     ]
 
@@ -689,11 +740,12 @@ accountIndicator { colorStyles, otherStyles, name } =
 renderBalances
   :: forall m action
    . MonadAff m
-  => Int
+  => RoleTokenStore
+  -> Int
   -> StartedState
   -> StepBalance
   -> H.ComponentHTML action ChildSlots m
-renderBalances stepNumber state stepBalance =
+renderBalances roleTokens stepNumber state stepBalance =
   let
     -- TODO: Right now we only have one type of Token (ada), but when we support multiple tokens we may want to group by
     --       participant and show the different tokens for each participant.
@@ -719,7 +771,7 @@ renderBalances stepNumber state stepBalance =
             )
             stepBalance.atEnd
 
-    contractUserParties = state ^. _contractUserParties
+    currencySymbol = state ^. _rolesCurrency
   in
     div [ classNames [ "text-xs", "space-y-4" ] ]
       [ div
@@ -743,7 +795,8 @@ renderBalances stepNumber state stepBalance =
                 ( \((party /\ token) /\ balance) ->
                     let
                       participantName = participantWithNickname
-                        contractUserParties
+                        currencySymbol
+                        roleTokens
                         party
                     in
                       div

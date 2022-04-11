@@ -38,7 +38,7 @@ import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Int (round)
-import Data.Lens (view, (^.))
+import Data.Lens (folded, toArrayOf, view, (^.))
 import Data.Maybe (isJust)
 import Data.NewContract (getContractNickname)
 import Data.PABConnectedWallet
@@ -96,7 +96,7 @@ import Page.Dashboard.Lenses
   , _cardOpen
   , _closedContracts
   , _contractFilter
-  , _contracts
+  , _contractStore
   , _currentTime
   , _menuOpen
   , _newContracts
@@ -167,7 +167,7 @@ dashboardScreen
 dashboardScreen state =
   let
     currentTime = state ^. _currentTime
-    contracts = state ^. _contracts
+    contracts = state ^. _contractStore
     wallet = state ^. _wallet
     walletNickname = wallet ^. _walletNickname
     menuOpen = state ^. _menuOpen
@@ -196,7 +196,7 @@ dashboardScreen state =
                           _contractPage
                           unit
                           ContractPage.component
-                          { wallet, contractIndex }
+                          { contractIndex }
                           ( \(AskConfirmation namedAction num) ->
                               case contractIndex of
                                 -- This should never happen (famous last words)
@@ -499,6 +499,7 @@ link label url =
 contractsScreen
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
@@ -643,6 +644,7 @@ contractNavigation contractFilter =
 contractCards
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
@@ -716,6 +718,7 @@ contractGridClasses =
 contractGridRunning
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
@@ -729,8 +732,8 @@ contractGridRunning currentTime state =
           <> (contractStartingPreviewCard <$> newContracts)
           <> (contractPreviewCard currentTime <$> runningContracts)
   where
-  runningContracts = state ^. _runningContracts
-  newContracts = state ^. _newContracts
+  runningContracts = toArrayOf _runningContracts state
+  newContracts = toArrayOf (_newContracts <<< folded) state
   newContractCard =
     a
       [ classNames
@@ -754,12 +757,13 @@ contractGridRunning currentTime state =
 contractGridCompleted
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
 contractGridCompleted currentTime state =
   let
-    closedContracts = state ^. _closedContracts
+    closedContracts = toArrayOf _closedContracts state
   in
     if Array.null closedContracts then noContractsMessage Completed
     else

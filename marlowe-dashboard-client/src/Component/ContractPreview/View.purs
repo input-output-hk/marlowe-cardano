@@ -28,6 +28,7 @@ import Halogen.HTML (a, attr, div, h3, h3_, li, p, p_, slot, text)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (title)
 import Halogen.HTML.Properties.ARIA (role)
+import Halogen.Store.Monad (class MonadStore)
 import Humanize (contractIcon)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
@@ -35,23 +36,22 @@ import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (_rolesCurrency)
 import Page.Contract.Lenses (_marloweParams, _metadata)
 import Page.Dashboard.Types (Action(..), ChildSlots, ContractState)
+import Store as Store
 
 -- This card shows a preview of synced contracts (intended to be used in the dashboard)
 contractPreviewCard
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> ContractState
   -> ComponentHTML Action ChildSlots m
-contractPreviewCard
-  currentTime
-  { executionState, contractUserParties, namedActions } =
+contractPreviewCard currentTime { executionState, namedActions } =
   let
     contractType = executionState ^. (_metadata <<< _contractType)
     contractName = executionState ^. (_metadata <<< _contractName)
     marloweParams = executionState ^. _marloweParams
     nickname = Execution.contractName executionState
-
     stepPanel =
       div
         [ classNames [ "px-4", "py-2" ] ]
@@ -66,7 +66,7 @@ contractPreviewCard
       _currentStepActions
       marloweParams
       CurrentStepActions.component
-      { executionState, contractUserParties, namedActions }
+      { executionState, namedActions }
       ( \(ActionSelected action num) -> OnAskContractActionConfirmation
           marloweParams
           action

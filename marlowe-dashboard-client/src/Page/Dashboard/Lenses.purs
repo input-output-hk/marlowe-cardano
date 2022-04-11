@@ -5,12 +5,15 @@ import Prologue
 import Component.Template.Types (State) as Template
 import Data.ContractStatus (ContractStatusId)
 import Data.DateTime.Instant (Instant)
-import Data.Lens (Lens')
+import Data.Lens (Fold', Lens', filtered, folded)
 import Data.Lens.Record (prop)
+import Data.Map (Map)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
+import Data.UUID.Argonaut (UUID)
 import Halogen.Component.Reactive (_derived, _input, _transient)
+import Marlowe.Semantics (MarloweParams)
 import Page.Dashboard.Types
   ( Card
   , ContractFilter
@@ -19,6 +22,7 @@ import Page.Dashboard.Types
   , WalletCompanionStatus
   )
 import Store.Contracts (ContractStore)
+import Store.RoleTokens (RoleTokenStore)
 import Type.Proxy (Proxy(..))
 
 _walletCompanionStatus :: Lens' State WalletCompanionStatus
@@ -44,9 +48,13 @@ _selectedContractIndex = _transient <<< prop
 _wallet :: Lens' State PABConnectedWallet
 _wallet = _input <<< prop (Proxy :: _ "input")
 
-_contracts :: Lens' State ContractStore
-_contracts =
+_contractStore :: Lens' State ContractStore
+_contractStore =
   _input <<< prop (Proxy :: _ "context") <<< prop (Proxy :: _ "contracts")
+
+_roleTokens :: Lens' State RoleTokenStore
+_roleTokens =
+  _input <<< prop (Proxy :: _ "context") <<< prop (Proxy :: _ "roleTokens")
 
 _currentTime :: Lens' State Instant
 _currentTime =
@@ -58,11 +66,14 @@ _tzOffset = _transient <<< prop (Proxy :: _ "tzOffset")
 _templateState :: Lens' State Template.State
 _templateState = _transient <<< prop (Proxy :: _ "templateState")
 
-_runningContracts :: Lens' State (Array ContractState)
-_runningContracts = _derived <<< prop (Proxy :: _ "runningContracts")
+_contracts :: Lens' State (Map MarloweParams ContractState)
+_contracts = _derived <<< prop (Proxy :: _ "contracts")
 
-_closedContracts :: Lens' State (Array ContractState)
-_closedContracts = _derived <<< prop (Proxy :: _ "closedContracts")
+_closedContracts :: forall r. Monoid r => Fold' r State ContractState
+_closedContracts = _contracts <<< folded <<< filtered _.isClosed
 
-_newContracts :: Lens' State (Array NewContract)
+_runningContracts :: forall r. Monoid r => Fold' r State ContractState
+_runningContracts = _contracts <<< folded <<< filtered (not <<< _.isClosed)
+
+_newContracts :: Lens' State (Map UUID NewContract)
 _newContracts = _derived <<< prop (Proxy :: _ "newContracts")

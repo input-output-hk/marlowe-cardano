@@ -1,6 +1,8 @@
-module Store.Contracts.RoleTokens
+module Store.RoleTokens
   ( RoleTokenStore
+  , getDisplayName
   , getRoleToken
+  , getNickname
   , isMyRoleToken
   , loadRoleTokenFailed
   , loadRoleTokens
@@ -11,23 +13,35 @@ module Store.Contracts.RoleTokens
 
 import Prologue
 
+import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
+import Data.Address (Address)
+import Data.Address as Address
+import Data.AddressBook (AddressBook, lookupNickname)
 import Data.Filterable (filter)
-import Data.Lens ((^.))
+import Data.Foldable (oneOf)
+import Data.Lens (_Just, preview, to, (^.))
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set as Set
-import Marlowe.Run.Contract.V1.Types (RoleToken, _token)
+import Data.WalletNickname (WalletNickname)
+import Data.WalletNickname as WN
+import Marlowe.Run.Contract.V1.Types (RoleToken, _token, _utxoAddress)
 import Marlowe.Semantics (Assets(..), Token(..))
-import Network.RemoteData (RemoteData(..))
+import Network.RemoteData (RemoteData(..), toMaybe)
 import Servant.PureScript (printAjaxError)
 import Types (JsonAjaxError)
 
+type RoleTokenWithNickname =
+  { roleToken :: RoleToken
+  , nickname :: Maybe WalletNickname
+  }
+
 newtype RoleTokenStore = RoleTokenStore
   { myRoleTokens :: Set Token
-  , roleTokens :: Map Token (RemoteData String RoleToken)
+  , roleTokens :: Map Token (RemoteData String RoleTokenWithNickname)
   }
 
 derive instance Eq RoleTokenStore
@@ -75,17 +89,36 @@ loadRoleTokenFailed token ajaxError (RoleTokenStore store) =
       }
 
 -- | Set the `RemoteData` status for the provided Token to `Success`.
-roleTokenLoaded :: RoleToken -> RoleTokenStore -> RoleTokenStore
-roleTokenLoaded roleToken (RoleTokenStore store) =
+roleTokenLoaded :: AddressBook -> RoleToken -> RoleTokenStore -> RoleTokenStore
+roleTokenLoaded addressBook roleToken (RoleTokenStore store) =
   RoleTokenStore
     store
       { roleTokens = Map.insert
-          (roleToken ^. _token)
-          (Success roleToken)
+          token
+          (Success { roleToken, nickname })
           store.roleTokens
       }
+  where
+  address = roleToken ^. _utxoAddress
+  token = roleToken ^. _token
+  nickname = lookupNickname address addressBook
 
 -- | Get a `RoleToken` for a Token.
 getRoleToken :: Token -> RoleTokenStore -> RemoteData String RoleToken
 getRoleToken token (RoleTokenStore store) =
-  fromMaybe NotAsked $ Map.lookup token store.roleTokens
+  fromMaybe NotAsked $ map _.roleToken <$> Map.lookup token store.roleTokens
+
+getAddress :: Token -> RoleTokenStore -> Maybe Address
+getAddress token = preview
+  $ to (toMaybe <<< getRoleToken token) <<< _Just <<< _utxoAddress
+
+getNickname :: Token -> RoleTokenStore -> Maybe WalletNickname
+getNickname token (RoleTokenStore store) =
+  _.nickname =<< toMaybe =<< Map.lookup token store.roleTokens
+
+getDisplayName :: Token -> RoleTokenStore -> Maybe String
+getDisplayName token store = oneOf
+  [ "you" <$ guard (isMyRoleToken token store)
+  , WN.toString <$> getNickname token store
+  , Address.toString <$> getAddress token store
+  ]

@@ -15,7 +15,6 @@ import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Data.Maybe (fromMaybe)
 import Data.String (Pattern(..))
 import Data.String.Extra (capitalize, endsWith)
-import Data.WalletNickname as WN
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, span, text)
 import Marlowe.Semantics (Party(..))
@@ -42,7 +41,7 @@ account :: forall w i. Party -> Participant -> String -> HTML w i
 account party { nickname, isCurrentUser } accountTypeLabel =
   row Row.Cramped [ "items-center" ]
     [ avatar
-        { nickname: fromMaybe defaultName $ WN.toString <$> nickname
+        { nickname: fromMaybe defaultName nickname
         , background: [ "bg-gradient-to-r", "from-purple", "to-lightpurple" ]
         , size: Avatar.Small
         }
