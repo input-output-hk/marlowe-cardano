@@ -34,12 +34,14 @@ import qualified Ledger.Interval as Interval
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
 import Plutus.V1.Ledger.Credential (Credential (..))
+import Plutus.V1.Ledger.Scripts as Scripts
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Prelude
 import qualified Prelude as Haskell
 import Unsafe.Coerce
+import qualified UntypedPlutusCore as UPLC
 
 type MarloweTimeRange = (POSIXTime, POSIXTime)
 type MarloweInput = [MarloweTxInput]
@@ -80,6 +82,26 @@ mkRolePayoutValidatorHash symbol = validatorHash (rolePayoutScript symbol)
 
 defaultRolePayoutValidatorHash :: ValidatorHash
 defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
+
+
+-- {-# INLINABLE smallMarloweValidator #-}
+
+{-
+    Off-chain
+    Contract -> [role]
+    Contract -> [role] -> [(role, amount)]
+    () -> TxInRef
+    TxInRef -> rolePayoutValidatorHash (unique, not enforced)
+    [(role, amount)], txInRef, rolePayoutValidatorHash -> MarloweParams
+    [(role, amount)], txInRef, rolePayoutValidatorHash, initial MarloweDataHash -> UniversalHash (MPSHash == ValidatorHash == CurrencySymbol)
+    MPS checks during minting, either:
+    - role tokens minted && a single TxOut exists with same hash validator, and DatumHash == initial MarloweDataHash
+    - role tokens can be destroyed
+    Validator checks
+    - single input-output with same TxInRef
+
+
+ -}
 
 
 {-# INLINABLE smallMarloweValidator #-}
@@ -252,6 +274,52 @@ smallUntypedValidator params = let
     -- Yeah, I know. It works, though.
     -- Remove this when Typed Validator has the same size as untyped.
     in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
+
+
+smallUntypedValidatorScript :: MarloweParams -> Scripts.Script
+smallUntypedValidatorScript =  getValidator . Scripts.validatorScript . smallUntypedValidator
+
+
+applyScript :: Script -> Script -> Script
+applyScript (Script f) (Script arg) = Script $ UPLC.applyProgram f arg
+
+
+
+{- asdf :: (MarloweData -> MarloweInput -> Bool) -> BuiltinData -> BuiltinData -> Bool
+asdf f a b = let
+    -- if script's second argument is ScriptContext then it's a MintingPolicy
+    -- otherwise, it's a Validator
+    mctx :: Maybe ScriptContext
+    mctx = PlutusTx.fromBuiltinData b
+    in case mctx of
+        Just ctx -> True
+        _ -> False -- f (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
+ -}
+
+asdf :: BuiltinData -> Bool
+asdf a = let
+    -- if script's second argument is ScriptContext then it's a MintingPolicy
+    -- otherwise, it's a Validator
+    mctx :: Maybe ScriptContext
+    mctx = PlutusTx.fromBuiltinData a
+    in case mctx of
+        Just ctx -> True
+        _        -> False
+
+
+marloweMPS = Scripts.fromCompiledCode $$(PlutusTx.compile [|| asdf ||])
+
+
+universalMarloweScript :: MarloweParams -> Scripts.Script
+universalMarloweScript params = applyScript marloweMPS validator
+  where
+    validator = smallUntypedValidatorScript params
+
+
+universalMarloweValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
+universalMarloweValidator params = unsafeCoerce (Scripts.unsafeMkTypedValidator validator)
+ where
+   validator = Validator $ universalMarloweScript params
 
 
 defaultTxValidationRange :: POSIXTime

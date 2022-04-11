@@ -179,6 +179,7 @@ test-suite marlowe-test
         template-haskell -any,
         streaming -any,
         plutus-pab -any,
+        plutus-core,
         async -any,
         prettyprinter -any,
         purescript-bridge -any,

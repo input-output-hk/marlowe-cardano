@@ -45,11 +45,12 @@ import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpr
 import qualified Language.Marlowe as M ((%))
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
-import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValidator, smallUntypedValidator)
+import Language.Marlowe.Scripts (MarloweInput, marloweMPS, rolePayoutScript, smallTypedValidator, smallUntypedValidator,
+                                 universalMarloweScript)
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Language.Marlowe.Util
-import Ledger (POSIXTime (..), PaymentPubKeyHash (..), PubKeyHash (..), pubKeyHash, validatorHash)
+import Ledger (POSIXTime (..), PaymentPubKeyHash (..), PubKeyHash (..), Script (..), pubKeyHash, validatorHash)
 import Ledger.Ada (adaValueOf, lovelaceValueOf)
 import Ledger.Constraints.TxConstraints (TxConstraints)
 import Ledger.TimeSlot (SlotConfig (..))
@@ -61,6 +62,7 @@ import qualified Plutus.Contract.Test as T
 import Plutus.Contract.Types (_observableState)
 import qualified Plutus.Trace.Emulator as Trace
 import Plutus.Trace.Emulator.Types (instContractState)
+import PlutusCore.Pretty
 import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Builtins (emptyByteString, sha2_256)
 import PlutusTx.Lattice
@@ -363,7 +365,13 @@ typedValidatorSize = do
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do
     let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
+    let validator2 = universalMarloweScript defaultMarloweParams
+    let Script plc = marloweMPS
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
+    let vsize2 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator2
+    let vsize3 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise marloweMPS
+    print $ prettyPlcReadableDebug plc
+    putStrLn $ "smallUntypedValidator " <> show vsize <> ", universalMarloweScript " <> show vsize2 <> ", marloweMPS " <> show vsize3
     assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
 
 extractContractRolesTest :: IO ()
