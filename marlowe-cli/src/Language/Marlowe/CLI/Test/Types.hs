@@ -282,7 +282,7 @@ data PabOperation =
   | AwaitFollow
     {
       poInstance        :: InstanceNickname
-    , poResponsePattern :: PatternJSON
+    , poResponsePattern :: Maybe PatternJSON
     }
     -- | Print the contents of a wallet.
   | PrintWallet

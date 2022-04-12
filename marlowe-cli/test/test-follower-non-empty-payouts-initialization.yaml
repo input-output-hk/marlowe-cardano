@@ -1,0 +1,126 @@
+ptTestName: Check whether payouts are correctly initialized by the follower up
+
+ptPabOperations:
+  - tag: CreateWallet
+    poOwner: PAB
+
+  - tag: FundWallet
+    poOwner: PAB
+    poValue:
+      lovelace: 80000000
+
+  - tag: ActivateApp
+    poOwner: PAB
+    poInstance: App
+
+  - tag: CallCreate
+    poInstance: App
+    poOwners:
+      - PAB
+    poContract:
+      when:
+        - case:
+            party:
+              role_token: PAB
+            deposits: 15000000
+            into_account:
+              role_token: PAB
+            of_token:
+              currency_symbol: ""
+              token_name: ""
+          then:
+            pay: 8000000
+            token:
+              currency_symbol: ""
+              token_name: ""
+            from_account:
+              role_token: PAB
+            to:
+              party:
+                role_token: PAB
+            then:
+              when:
+                - case:
+                    notify_if: true
+                  then:
+                    pay: 3000000
+                    token:
+                      currency_symbol: ""
+                      token_name: ""
+                    from_account:
+                      role_token: PAB
+                    to:
+                      party:
+                        role_token: PAB
+                    then:
+                      when:
+                        - case:
+                            notify_if: true
+                          then: close
+                      timeout: 1961123625000
+                      timeout_continuation: close
+              timeout: 1961123625000
+              timeout_continuation: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+  - tag: AwaitCreate
+    poInstance: App
+
+  - tag: PrintWallet
+    poOwner: PAB
+
+  - tag: CallApplyInputs
+    poInstance: App
+    poInputs:
+      - input_from_party:
+          role_token: PAB
+        that_deposits: 15000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: PAB
+    poTimes:
+      - 1645590825000
+      - 1898051625000
+
+  - tag: AwaitApplyInputs
+    poInstance: App
+
+  - tag: Comment
+    poComment: "We attach follower to already ongoing contract."
+
+  - tag: ActivateFollower
+    poAppInstance: App
+    poInstance: Follower
+    poOwner: PAB
+
+  - tag: CallFollow
+    poInstance: Follower
+
+  - tag: Comment
+    poComment: "We should see a payout in the reported state."
+
+  - tag: AwaitFollow
+    poInstance: Follower
+    poResponsePattern:
+      parts:
+        chUnspentPayouts: []
+
+  - tag: AwaitFollow
+    poInstance: Follower
+    poResponsePattern:
+      parts:
+        chUnspentPayouts:
+          - rolePayoutName:
+              unTokenName: "PAB"
+            rolePayoutTxOutRef: {}
+            rolePayoutValue:
+              getValue:
+                [
+                  [
+                    { "unCurrencySymbol": "" },
+                    [[{ "unTokenName": "" }, 8000000]],
+                  ],
+                ]

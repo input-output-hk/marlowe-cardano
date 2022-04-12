@@ -1,5 +1,5 @@
 -- Bump this if you need newer packages
-index-state: 2022-01-22T00:00:00Z
+index-state: 2022-02-22T20:47:03Z
 
 packages: marlowe
           marlowe-actus
@@ -47,15 +47,15 @@ package cardano-wallet-core-integration
 -- of plutus-apps are also updated
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/plutus-apps
-  tag: 83b3547d3a8412e26fce6ff5a9e0ee63438a4be1
-  --sha256: 19cjb8ng6d64r30vpdp32i228bz2iq7r79zrw2mfz09h7266zqsx
+  location: https://github.com/paluh/plutus-apps
+  tag: 1e3d1d6e74da33ee8042ab0d4a320857ccea88df
   subdir:
     freer-extras
     playground-common
     plutus-chain-index
     plutus-chain-index-core
     plutus-contract
+    plutus-contract-certification
     plutus-ledger
     plutus-ledger-constraints
     plutus-pab

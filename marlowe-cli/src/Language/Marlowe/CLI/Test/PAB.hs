@@ -411,7 +411,7 @@ interpret _ AwaitFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
     liftIO . putStrLn $ "[AwaitFollow] fetching channel messages."
-    -- ^ Skipp all preceeding `null`s
+    --  Skipp all preceeding `null`s
     contractHistoryJSON <- untilJustM $ do
       res <- liftIO $ readChan fiChannel
       if res == Null
@@ -424,14 +424,17 @@ interpret _ AwaitFollow{..} =
       extractPatternJSON (Parts json) = json
       extractPatternJSON (Exact json) = json
 
-    if matchJSON poResponsePattern contractHistoryJSON
-      then liftIO . putStrLn $ "[AwaitFollow] Follow confirmed."
-      else throwError $ CliError $ T.unpack $
-        "[AwaitFollow] Received response does not match expected pattern. Expected: "
-        <> renderValue (extractPatternJSON poResponsePattern)
-        <> ". Received: "
-        <> renderValue contractHistoryJSON
-        <> "."
+    case poResponsePattern of
+      Just pt -> if matchJSON pt contractHistoryJSON
+        then liftIO . putStrLn $ "[AwaitFollow] Follow confirmed."
+        else throwError $ CliError $ T.unpack $
+          "[AwaitFollow] Received response does not match expected pattern. Expected: "
+          <> renderValue (extractPatternJSON pt)
+          <> ". Received: "
+          <> renderValue contractHistoryJSON
+          <> "."
+      Nothing ->
+        liftIO . putStrLn $ "[AwaitFollow] Follow confirmed."
 
 interpret _ PrintState =
   do
@@ -660,7 +663,7 @@ useWallet :: MonadError CliError m
              => PabAccess         -- ^ Access to the PAB API.
              -> WalletId          -- ^ The wallet ID.
              -> Passphrase "raw"  -- ^ The passphrase for the wallet.
-             -> m WalletInfo      -- ^ Action returning the new wallet information.
+             -> m WalletInfo      -- ^ Action returning the new wallet informatio.
 useWallet PabAccess{..} wiWalletId'@(WalletId wiWalletId) wiPassphrase =
   do
     addresses <- liftCliIO . runWallet $ listAddresses addressClient (ApiT wiWalletId) Nothing
@@ -788,7 +791,8 @@ matchJSON :: PatternJSON -> A.Value -> Bool
 matchJSON (Exact expected) given = expected == given
 -- ^ Pattern match on the the array prefixes and subsets of fields.
 matchJSON (Parts expected) given = case (expected, given) of
-  (A.Array eItems, A.Array gItems) -> V.all (\(ev, gv) -> matchJSON (Parts ev) gv) . V.zip eItems $ gItems
+  (A.Array eItems, A.Array gItems) ->
+    length gItems == length eItems && (V.all (\(ev, gv) -> matchJSON (Parts ev) gv) . V.zip eItems $ gItems)
   (A.Object eProps, A.Object gProps) ->
     let
       step key ev acc = (&&) acc $ fromMaybe False $ do
