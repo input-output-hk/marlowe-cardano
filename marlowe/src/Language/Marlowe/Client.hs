@@ -1,27 +1,29 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DefaultSignatures     #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DerivingVia           #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE ImportQualifiedPost   #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE ImportQualifiedPost        #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-specialise #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NumericUnderscores         #-}
 
 module Language.Marlowe.Client where
 import Cardano.Api (AddressInEra (..), PaymentCredential (..), SerialiseAsRawBytes (serialiseToRawBytes), ShelleyEra,
@@ -29,10 +31,11 @@ import Cardano.Api (AddressInEra (..), PaymentCredential (..), SerialiseAsRawByt
 import Cardano.Api.Shelley (StakeCredential (..))
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Lens
-import Control.Monad (forM_, void)
+import Control.Monad (forM_, void, when)
 import Control.Monad.Error.Lens (catching, handling, throwing, throwing_)
 import Control.Monad.Extra (concatMapM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -41,10 +44,11 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.UUID (UUID)
-import Data.Void (Void, absurd)
+import Data.Void (Void)
 import GHC.Generics (Generic)
-import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, marloweHistory, marloweHistoryFrom,
-                                        marloweUtxoStatesAt, toMarloweState)
+import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, RolePayout (..), marloweHistory,
+                                        marloweHistoryFrom, marloweUtxoStatesAt, toMarloweState, toRolePayout,
+                                        txRoleData)
 import Language.Marlowe.Scripts
 import Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics as Marlowe
@@ -151,13 +155,16 @@ type RoleOwners = AssocMap.Map Val.TokenName (AddressInEra ShelleyEra)
 -- state of a Marlowe Contract.
 data ContractHistory =
     ContractHistory
-        { chParams      :: MarloweParams      -- ^ The "instance id" of the contract
-        , chInitialData :: MarloweData        -- ^ The initial Contract + State
-        , chHistory     :: [TransactionInput] -- ^ All the transaction that affected the contract.
-                                              --   The current state and intermediate states can
-                                              --   be recalculated by using computeTransaction
-                                              --   of each TransactionInput to the initial state
-        , chAddress     :: Address            -- ^ The script address of the marlowe contract
+        { chParams         :: MarloweParams      -- ^ The "instance id" of the contract
+        , chInitialData    :: MarloweData        -- ^ The initial Contract + State
+        , chHistory        :: [TransactionInput] -- ^ All the transaction that affected the contract.
+                                                 --   The current state and intermediate states can
+                                                 --   be recalculated by using computeTransaction
+                                                 --   of each TransactionInput to the initial state
+        , chAddress        :: Address            -- ^ The script address of the marlowe contract
+        , chUnspentPayouts :: UnspentPayouts     -- ^ All UTxOs associated with our payout script.
+                                                 --   Please note that in theory we include here outpus
+                                                 --   which possible were created by an "external" transactions.
         }
         deriving stock (Show, Generic)
         deriving anyclass (FromJSON, ToJSON)
@@ -172,6 +179,7 @@ instance Semigroup ContractHistory where
             , chInitialData = chInitialData first
             , chHistory = chHistory first <> chHistory second
             , chAddress = chAddress first
+            , chUnspentPayouts = chUnspentPayouts second
             }
 
 -- The FollowerContractState is a Maybe because the Contract monad requires the state
@@ -181,36 +189,49 @@ type FollowerContractState = Maybe ContractHistory
 
 newtype OnChainState = OnChainState {ocsTxOutRef :: MarloweTxOutRef}
 
+newtype Transition = Transition History     -- ^ The state machine instance transitioned to a new state
+    deriving stock (Show, Generic)
+    deriving anyclass (ToJSON, FromJSON)
+
+data PayoutsChange
+              = PayoutSpent ChainIndexTx
+              | PayoutProduced (NonEmpty ChainIndexTx)
+              deriving stock (Show, Generic)
+
+
+-- We expose unordered payouts set so we can compute this state
+-- from the chain easily and we can avoid traversing the full history.
+newtype UnspentPayouts = UnspentPayouts [RolePayout]
+    deriving stock (Show, Eq, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+    deriving newtype (Semigroup, Monoid)
+
 
 -- | The outcome of 'waitForUpdateTimeout'
-data WaitingResult t
-    = Timeout t          -- ^ The timeout happened before any change of the on-chain state was detected
-    | Transition History -- ^ The state machine instance transitioned to a new state
-  deriving stock (Show,Generic,Functor)
-  deriving anyclass (ToJSON, FromJSON)
-
-
 created :: MarloweParams -> MarloweData -> FollowerContractState
 created marloweParams marloweData = Just $ ContractHistory
               { chParams = marloweParams
               , chInitialData = marloweData
               , chHistory = []
               , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator marloweParams
+              , chUnspentPayouts = mempty
               }
 
-transition :: MarloweParams -> TransactionInput -> FollowerContractState
-transition marloweParams input =
+transition :: MarloweParams -> TransactionInput -> UnspentPayouts -> FollowerContractState
+transition marloweParams input unspentPayouts =
     let
-        -- WARNING: The FollowerContractState needs to be a monoid so we can have a mempty
-        --          value when the contract is created, and then a Semigroup to be able to
-        --          add data to the contract state. The semigroup instance has the semantics
-        --          of choosing the first Params, Data and Address and to concatenate history.
-        --          We don't always have MarloweData in the context of a transition (for example
-        --          with Close), so we always use a dummyMarloweData that "should" be discarded.
-        --          The intended flow is that the State is initially Nothing, then the first real
-        --          value is forged with `created` and then we add more transactions to history
-        --          with this function. We wouldn't need this hack if we were able to query the
-        --          contract state from the Contract monad.
+        {-- NOTE: dummyMarloweData
+          WARNING: The FollowerContractState needs to be a monoid so we can have a mempty
+                   value when the contract is created, and then a Semigroup to be able to
+                   add data to the contract state. The semigroup instance has the semantics
+                   of choosing the first Params, Data and Address and to concatenate history.
+                   We don't always have MarloweData in the context of a transition (for example
+                   with Close), so we always use a dummyMarloweData that "should" be discarded.
+                   The intended flow is that the State is initially Nothing, then the first real
+                   value is forged with `created` and then we add more transactions to history
+                   with this function. We wouldn't need this hack if we were able to query the
+                   contract state from the Contract monad.
+        --}
         dummyMarloweData =
             MarloweData
                 { marloweContract = Close
@@ -222,6 +243,7 @@ transition marloweParams input =
               , chInitialData = dummyMarloweData
               , chHistory = [input]
               , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator marloweParams
+              , chUnspentPayouts = unspentPayouts
               }
 
 data ContractProgress = InProgress | Finished
@@ -256,7 +278,6 @@ type MarloweEndpointResponse = EndpointResponse MarloweEndpointResult MarloweErr
 
 type MarloweContractState = Maybe MarloweEndpointResponse
 
-
 mkMarloweTypedValidator :: MarloweParams -> SmallTypedValidator
 mkMarloweTypedValidator = smallUntypedValidator
 
@@ -264,56 +285,130 @@ mkMarloweTypedValidator = smallUntypedValidator
 minLovelaceDeposit :: Integer
 minLovelaceDeposit = 2000000
 
+{- NOTE: Chain index / cardano-node query consistency
+  It seems that we are able to experience inconsistency between chain-index state and
+  `cardano-node` state. For example we can be notified about `utxoIsProduced` but subsequent
+  query about the same address can result in an empty set. To work around that problem we
+  should probably provide some helper for check looping but for now we use trivial strategy
+  of using ad hoc `waitNMilliSeconds` in multiple places.
+-}
+
+waitForChainIndex :: forall st sc err. AsContractError err => Contract st sc err ()
+waitForChainIndex = void $ waitNMilliSeconds 3000
+
+debugMsg :: String -> String -> String
+debugMsg fnName msg = "[DEBUG:" <> fnName <> "]" <> msg
+
+debug :: forall st sc err. String -> String -> Contract st sc err ()
+debug fnName msg = logInfo $ debugMsg fnName msg
 
 marloweFollowContract :: Contract FollowerContractState MarloweFollowSchema MarloweError ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
-    logInfo $ "MarloweFollower endpoint \"follow\" called with parameters " <> show params <> "."
+    debug' $ "call parameters: " <> show params <> "."
     let typedValidator = mkMarloweTypedValidator params
+
+    -- FIXME: This whole "statfull" event replay seems unnecessary here and in general.
+    -- Can we simplify the whole follower to just stateless
+    -- query which overrides the state and ignores the whole effectfulness and `Writer` logic?
+    --
+    -- Because we don't want to do deep refator before the above payouts update is passed as a
+    -- separate and last update to the event stream which is just ugly as hell.
     marloweHistory params
       >>= maybe (pure InProgress) (updateHistory params)
+      >> updatePayouts params
       >>= checkpointLoop (follow typedValidator params)
 
   where
+    debug' = debug "Language.Marlowe.Client.marloweFollowContract"
     follow typedValidator params = \case
         Finished -> do
-            logInfo $ "MarloweFollower found finished contract with " <> show params <> "."
+            debug "follow" $ "MarloweFollower found finished contract with " <> show params <> "."
             pure $ Right InProgress -- do not close the contract so we can see it in Marlowe Run history
         InProgress -> do
-            result <- waitForUpdateTimeout typedValidator never >>= awaitPromise
-            case result of
-                Timeout t -> absurd t
+            waitForTransitionPromise <- waitForTransition typedValidator
+            waitForPayoutPromise <- waitForPayoutsChange $ rolesCurrency params
+
+            update <- awaitPromise (selectEither waitForTransitionPromise waitForPayoutPromise)
+
+            -- FIXME: Super ugly workaround - see NOTE: Chain index / cardano-node query consistency
+            waitForChainIndex
+
+            -- Let's keep payouts info in a stateless manner
+            unspentPayouts@(UnspentPayouts ps) <- unspentPayoutsAtCurrency $ rolesCurrency params
+            debug' $ "| payouts | = "  <> show (length ps)
+
+            case update of
+              Left t -> case t of
                 Transition Closed{..} -> do
-                    logInfo $ "MarloweFollower found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
-                    tell @FollowerContractState (transition params historyInput)
+                    debug' $ "MarloweFollower found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
+                    tell @FollowerContractState (transition params historyInput unspentPayouts)
                     pure (Right Finished)
                 Transition InputApplied{..} -> do
-                    logInfo $ "MarloweFollower found contract transitioned with " <> show historyInput <> " by " <> show historyTxOutRef <> "."
-                    tell @FollowerContractState (transition params historyInput)
+                    debug' $ "MarloweFollower found contract transitioned with " <> show historyInput <> " by " <> show historyTxOutRef <> "."
+                    tell @FollowerContractState (transition params historyInput unspentPayouts)
                     pure (Right InProgress)
                 Transition Created{..} -> do
-                    logInfo $ "MarloweFollower found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
+                    debug' $ "MarloweFollower found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
                     tell @FollowerContractState (created params historyData)
                     pure (Right InProgress)
+              Right payoutsChange -> do
+                case payoutsChange of
+                  PayoutSpent _ -> do
+                    debug' "payout has just been spent"
+                    pure (Right InProgress)
+                  PayoutProduced _ -> do
+                    debug' "payout has just been produced"
+                    pure (Right InProgress)
+
+    updatePayouts params = do
+      unspentPayouts <- unspentPayoutsAtCurrency $ rolesCurrency params
+      when (unspentPayouts /= mempty) $
+        tell @FollowerContractState $ Just $ ContractHistory
+          { chParams = params
+          -- Please check NOTE: dummyMarloweData for more info
+          , chInitialData = MarloweData
+              { marloweContract = Close
+              , marloweState = emptyState 0
+              }
+          , chHistory = []
+          , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator params
+          , chUnspentPayouts = unspentPayouts
+          }
+      pure InProgress
 
     updateHistory :: MarloweParams
                   -> History
                   -> Contract FollowerContractState MarloweFollowSchema MarloweError ContractProgress
     updateHistory params Created{..} =
       do
-        logInfo $ "MarloweFollower found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
+        debug' $ "MarloweFollower found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
         tell $ created params historyData
         maybe (pure InProgress) (updateHistory params) historyNext
     updateHistory params InputApplied{..} =
       do
-        logInfo $ "MarloweFollower found contract transitioned with " <> show historyInput <> " by " <> show historyTxOutRef <> "."
-        tell $ transition params historyInput
+        debug' $ "MarloweFollower found contract transitioned with " <> show historyInput <> " by " <> show historyTxOutRef <> "."
+        tell $ transition params historyInput mempty
         maybe (pure InProgress) (updateHistory params) historyNext
     updateHistory params Closed{..} =
       do
-        logInfo $ "MarloweFollower found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
-        tell $ transition params historyInput
+        debug' $ "MarloweFollower found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
+        tell $ transition params historyInput mempty
         pure Finished
+
+unspentPayoutsAtCurrency :: AsContractError e
+                         => CurrencySymbol
+                         -> Contract w s e UnspentPayouts
+unspentPayoutsAtCurrency rolesCurrency = do
+  let
+    address = scriptHashAddress $ mkRolePayoutValidatorHash rolesCurrency
+  txs <- do
+    utxosMap <- utxosTxOutTxAt address
+    pure $ fmap snd $ Map.elems utxosMap
+  let
+    rolePayoutTxs = concatMap txRoleData txs
+  pure $ UnspentPayouts . map toRolePayout $ rolePayoutTxs
+
 
 {-  This is a control contract.
     It allows to create a contract, apply inputs, auto-execute a contract,
@@ -378,6 +473,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         tell $ Just $ EndpointSuccess reqId $ CreateResponse params
         marlowePlutusContract
     apply = endpoint @"apply-inputs" $ \(reqId, params, timeInterval, inputs) -> catchError reqId "apply-inputs" $ do
+        logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
         let typedValidator = mkMarloweTypedValidator params
         _ <- applyInputs params typedValidator timeInterval inputs
         tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
@@ -455,19 +551,18 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         maybeState <- getOnChainState typedValidator
         case maybeState of
             Nothing -> do
-                wr <- waitForUpdateUntilTime typedValidator untilTime
-                case wr of
-                    Transition Closed{} -> do
-                        logInfo @String $ "Contract Ended for party " <> show party
-                        tell $ Just $ EndpointSuccess reqId AutoResponse
-                        marlowePlutusContract
-                    Timeout{} -> do
+                waitForTimeoutOrTransition typedValidator untilTime >>= \case
+                    Left _ -> do
                         logInfo @String $ "Contract Timeout for party " <> show party
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
-                    Transition InputApplied{historyData} -> continueWith historyData
-                    Transition Created{historyData} -> continueWith historyData
-            Just (OnChainState{ocsTxOutRef=st}, _) -> do
+                    Right (Transition Closed{}) -> do
+                        logInfo @String $ "Contract Ended for party " <> show party
+                        tell $ Just $ EndpointSuccess reqId AutoResponse
+                        marlowePlutusContract
+                    Right (Transition InputApplied{historyData}) -> continueWith historyData
+                    Right (Transition Created{historyData}) -> continueWith historyData
+            Just OnChainState{ocsTxOutRef=st} -> do
                 let marloweData = toMarloweState st
                 continueWith marloweData
     -- The MarloweApp contract is closed implicitly by not returning
@@ -502,17 +597,16 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                 continueWith marloweData
             WaitOtherActionUntil timeout -> do
                 logInfo @String $ "WaitOtherActionUntil " <> show timeout
-                wr <- waitForUpdateUntilTime typedValidator timeout
-                case wr of
-                    Transition Closed{} -> do
+                waitForTimeoutOrTransition typedValidator timeout >>= \case
+                    Left _ -> do
+                        logInfo @String $ "Contract Timeout"
+                        continueWith marloweData
+                    Right (Transition Closed{}) -> do
                         logInfo @String $ "Contract Ended"
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
-                    Timeout{} -> do
-                        logInfo @String $ "Contract Timeout"
-                        continueWith marloweData
-                    Transition InputApplied{historyData} -> continueWith historyData
-                    Transition Created{historyData} -> continueWith historyData
+                    Right (Transition InputApplied{historyData}) -> continueWith historyData
+                    Right (Transition Created{historyData}) -> continueWith historyData
 
             CloseContract -> do
                 logInfo @String $ "CloseContract"
@@ -795,10 +889,21 @@ findMarloweContractsOnChainByRoleCurrency curSym = do
     let typedValidator = mkMarloweTypedValidator params
     maybeState <- handling _AmbiguousOnChainState (const $ pure Nothing) $ getOnChainState typedValidator
     case maybeState of
-        Just (OnChainState{ocsTxOutRef}, _) -> do
+        Just OnChainState{ocsTxOutRef} -> do
             let marloweData = toMarloweState ocsTxOutRef
             pure $ Just (params, marloweData)
         Nothing -> pure Nothing
+
+
+getOnChainStateTxOuts ::
+    SmallTypedValidator
+    -> Contract w schema MarloweError (Maybe (OnChainState, Map Ledger.TxOutRef Tx.ChainIndexTxOut))
+getOnChainStateTxOuts validator = do
+    (outRefs, utxos) <- mapError (review _MarloweError) $ marloweUtxoStatesAt validator
+    case outRefs of
+        []       -> pure Nothing
+        [outRef] -> pure $ Just (OnChainState outRef, utxos)
+        _        -> throwing_ _AmbiguousOnChainState
 
 {-| Get the current on-chain state of the state machine instance.
     Return Nothing if there is no state on chain.
@@ -806,14 +911,8 @@ findMarloweContractsOnChainByRoleCurrency curSym = do
 -}
 getOnChainState ::
     SmallTypedValidator
-    -> Contract w schema MarloweError (Maybe (OnChainState, Map Ledger.TxOutRef Tx.ChainIndexTxOut))
-getOnChainState validator = do
-    (outRefs, utxos) <- mapError (review _MarloweError) $ marloweUtxoStatesAt validator
-    case outRefs of
-        []       -> pure Nothing
-        [outRef] -> pure $ Just (OnChainState outRef, utxos)
-        _        -> throwing_ _AmbiguousOnChainState
-
+    -> Contract w schema MarloweError (Maybe OnChainState)
+getOnChainState validator = fmap fst <$> getOnChainStateTxOuts validator
 
 mkStep ::
     MarloweParams
@@ -822,6 +921,7 @@ mkStep ::
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
 mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
+    logInfo $ "[DEBUG:mkStep] clientInputs = " <> show clientInputs
     let
       times =
         Interval.Interval
@@ -831,7 +931,8 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
         posixTimeRangeToContainedSlotRange
           unsafeGetSlotConfig
           times
-    maybeState <- getOnChainState typedValidator
+    waitForChainIndex
+    maybeState <- getOnChainStateTxOuts typedValidator
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
         Just (OnChainState{ocsTxOutRef}, utxo) -> do
@@ -962,17 +1063,14 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                 dataValue = Datum $ PlutusTx.toBuiltinData role
                 in mustPayToOtherScript rolePayoutValidatorHash dataValue value
 
-
-
-waitForUpdateTimeout ::
-    forall t w schema.
+waitForTransition ::
+    forall w schema.
        SmallTypedValidator
-    -> Promise w schema MarloweError t -- ^ The timeout
-    -> Contract w schema MarloweError (Promise w schema MarloweError (WaitingResult t))
-waitForUpdateTimeout typedValidator timeout = do
+    -> Contract w schema MarloweError (Promise w schema MarloweError Transition)
+waitForTransition typedValidator = do
     let addr = validatorAddress typedValidator
     currentState <- getOnChainState typedValidator
-    let success = case currentState of
+    pure $ case currentState of
             Nothing ->
                 -- There is no on-chain state, so we wait for an output to appear
                 -- at the address. Any output that appears needs to be checked
@@ -983,24 +1081,42 @@ waitForUpdateTimeout typedValidator timeout = do
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
                         [history] -> pure $ Transition history
                         _         -> throwing_ _AmbiguousOnChainState
-            Just (OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}}, _) ->
+            Just OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}} ->
                 promiseBind (utxoIsSpent tyTxOutRefRef) $ \txn -> do
                     spent <- marloweHistoryFrom typedValidator txn
                     case spent of
                         [history] -> pure $ Transition history
                         _         -> throwing_ _UnableToExtractTransition
-    pure $ select success (Timeout <$> timeout)
 
-
-waitForUpdateUntilTime ::
+waitForTimeoutOrTransition ::
     forall w schema.
        SmallTypedValidator
     -> POSIXTime
-    -> Contract w schema MarloweError (WaitingResult POSIXTime)
-waitForUpdateUntilTime client timeout =
-    awaitPromise
-      =<< waitForUpdateTimeout client (isTime timeout)
+    -> Contract w schema MarloweError (Either POSIXTime Transition)
+waitForTimeoutOrTransition validator timeout = do
+  waitForTransitionPromise <- waitForTransition validator
+  awaitPromise $ selectEither (isTime timeout) waitForTransitionPromise
 
+-- | Actually safe version of `selectList` which returns a `Promise`
+raceList :: [Promise w s e a] -> Promise w s e a
+raceList [] = never
+raceList l  = foldr1 select . reverse $ l
+
+waitForPayoutsChange
+  :: forall w schema.
+    Val.CurrencySymbol
+  -> Contract w schema MarloweError (Promise w schema MarloweError PayoutsChange)
+waitForPayoutsChange rolesCurrency = do
+  let
+    address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
+
+    fromEither (Left u)  = PayoutSpent u
+    fromEither (Right u) = PayoutProduced u
+  payouts <- Map.keys <$> utxosAt address
+  logInfo $ "[DEBUG:waitForPayoutsChange] | payouts | = " <> show (length payouts) <> "."
+  pure $ case payouts of
+    [] -> PayoutProduced <$> utxoIsProduced address
+    _  -> fromEither <$> selectEither (raceList $ fmap utxoIsSpent payouts) (utxoIsProduced address)
 
 getInput ::
     forall i.
