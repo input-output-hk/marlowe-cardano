@@ -67,8 +67,8 @@ data TransactionCommand =
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressAny                 -- ^ The change address.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
+    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
@@ -277,8 +277,8 @@ buildIncomingOptions =
     <*> (O.some . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
-    <*> O.strOption                            (O.long "metadata-file"     <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                         )
-    <*> (O.optional . O.strOption)             (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"     <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                         )
+    <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"            <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                    <> O.help "Print statistics."                                      )
     <*> O.switch                               (O.long "script-invalid"                                 <> O.help "Assert that the transaction is invalid."                )

@@ -70,7 +70,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --lovelace 150000000                      \
                         "$LENDER_ADDRESS"
 
-echo "### The Borrower"
+echo "#### The Borrower"
 
 BORROWER_PREFIX="$TREASURY/thomas-middleton"
 BORROWER_NAME="Thomas Middleton"

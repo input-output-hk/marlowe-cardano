@@ -73,7 +73,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --lovelace 50000000                       \
                         "$PARTY_ADDRESS"
 
-echo "### The Counterparty"
+echo "#### The Counterparty"
 
 COUNTERPARTY_PREFIX="$TREASURY/thomas-middleton"
 COUNTERPARTY_NAME="Thomas Middleton"
@@ -99,7 +99,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --lovelace 50000000                       \
                         "$COUNTERPARTY_ADDRESS"
 
-echo "### The Oracle"
+echo "#### The Oracle"
 
 ORACLE_PREFIX="$TREASURY/christopher-marlowe"
 ORACLE_NAME="Christopher Marlowe"
@@ -816,6 +816,7 @@ FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
 marlowe-cli transaction simple "${MAGIC[@]}"                                     \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
                                --tx-in "$TX_6"#0                                 \
+                               --tx-in "$TX_6"#1                                 \
                                --tx-in "$TX_6"#2                                 \
                                --tx-out "$ORACLE_ADDRESS+1400000+1 $PARTY_TOKEN" \
                                --required-signer "$PARTY_PAYMENT_SKEY"           \
@@ -826,6 +827,7 @@ marlowe-cli transaction simple "${MAGIC[@]}"                                    
 marlowe-cli transaction simple "${MAGIC[@]}"                                            \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"                \
                                --tx-in "$TX_7"#0                                        \
+                               --tx-in "$TX_7"#1                                        \
                                --tx-in "$TX_7"#2                                        \
                                --tx-out "$ORACLE_ADDRESS+1400000+1 $COUNTERPARTY_TOKEN" \
                                --required-signer "$COUNTERPARTY_PAYMENT_SKEY"           \
@@ -842,3 +844,19 @@ marlowe-cli util mint "${MAGIC[@]}" \
                       --out-file /dev/null                              \
                       --submit=600                                      \
                       "$ORACLE_ROLE" "$PARTY_ROLE" "$COUNTERPARTY_ROLE"
+
+TX=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$ORACLE_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+marlowe-cli transaction simple "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --tx-in "$TX"                             \
+                               --required-signer "$ORACLE_PAYMENT_SKEY"  \
+                               --change-address "$FAUCET_ADDRESS"        \
+                               --out-file /dev/null                      \
+                               --submit 600

@@ -7,7 +7,7 @@ The `marlowe contract redeemer` command writes a Marlowe redeemer to a JSON file
 
     $ marlowe-cli contract redeemer --help
     
-    Usage: marlowe-cli contract redeemer [--input-file INPUT_FILE]
+    Usage: marlowe-cli contract redeemer [--input-file INPUT_FILE] 
                                          [--out-file OUTPUT_FILE] [--print-stats]
       Export a contract redeemer to a JSON file.
     

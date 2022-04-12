@@ -12,7 +12,7 @@ The following tools must be on the PATH:
 * [jq](https://stedolan.github.io/jq/manual/)
 * sed
 
-Signing and verification keys must be provided below for the two parties: to do this, set the environment variables `ISSUER_PREFIX` and `COUNTERPARTY_PREFIX` where they appear below.
+Signing and verification keys must be provided below for the two parties, or they will be created automatically: to do this, set the environment variables `ISSUER_PREFIX` and `COUNTERPARTY_PREFIX` where they appear below.
 
 The two parties' wallets much have exactly one UTxO with the token they want to swap and at least one UTxO without tokens.
 
@@ -33,6 +33,18 @@ else # Use the private testnet.
 fi
 ```
 
+### Tip of the Blockchain
+
+```
+TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
+```
+
+The tip is at slot 4871334. The current POSIX time implies that the tip of the blockchain should be slightly before slot 4871353. Tests may fail if this is not the case.
+
+### Participants
+
 #### The Issuer
 
 ```
@@ -40,16 +52,57 @@ ISSUER_PREFIX="$TREASURY/john-fletcher"
 ISSUER_NAME="John Fletcher"
 ISSUER_PAYMENT_SKEY="$ISSUER_PREFIX".skey
 ISSUER_PAYMENT_VKEY="$ISSUER_PREFIX".vkey
-ISSUER_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                          \
-                            --payment-verification-key-file "$ISSUER_PAYMENT_VKEY" \
-)
-ISSUER_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$ISSUER_PAYMENT_VKEY"
-)
 ```
 
-The issuer John Fletcher is the minimum-ADA provider and has the address `addr_test1vrsuucqupq5xz7dw0tnw7w3cyck5zyk2kpnr56xlhr57m3gll8m84` and public-key hash `e1ce601c08286179ae7ae6ef3a38262d4112cab0663a68dfb8e9edc5`. They have the following UTxOs in their wallet:
+Create the issuer's keys, if necessary.
+
+```
+if [[ ! -e "$ISSUER_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$ISSUER_PAYMENT_SKEY"      \
+                              --verification-key-file "$ISSUER_PAYMENT_VKEY"
+fi
+ISSUER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$ISSUER_PAYMENT_VKEY" )
+ISSUER_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$ISSUER_PAYMENT_VKEY")
+```
+
+Fund the issuer's address.
+
+```
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 150000000                      \
+                        "$ISSUER_ADDRESS"
+```
+
+```console
+TxId "360fb70b9771d5582422fb73e456c151cdda3e616b91be089e2fa0ca0229d6ce"
+```
+
+The issuer mints their tokens for the contract.
+
+```
+MINT_EXPIRES=$((TIP + 1000000))
+TOKEN_NAME_A=Globe
+AMOUNT_A=300
+CURRENCY_SYMBOL_A=$(
+marlowe-cli util mint "${MAGIC[@]}"                             \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$ISSUER_PAYMENT_SKEY"  \
+                      --change-address  "$ISSUER_ADDRESS"       \
+                      --count "$AMOUNT_A"                       \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      "$TOKEN_NAME_A"                           \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
+)
+TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
+```
+
+The issuer John Fletcher is the minimum-ADA provider and has the address `addr_test1vqwt2xlr4d8yk4qws675exlqy6pdhq2s76wrehkjggkvr0cerfe8r` and public-key hash `1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf`. They have the following UTxOs in their wallet:
 
 ```
 marlowe-cli util clean "${MAGIC[@]}"                             \
@@ -65,52 +118,88 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ISSUER_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-24ec470099dd87cb54e909843436af391cdb770e54b17fea5c48bd3d04c99cf3     0        12963862085 lovelace + TxOutDatumNone
-24ec470099dd87cb54e909843436af391cdb770e54b17fea5c48bd3d04c99cf3     1        2000000 lovelace + 12000 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.476c6f6265 + TxOutDatumNone
-24ec470099dd87cb54e909843436af391cdb770e54b17fea5c48bd3d04c99cf3     2        2000000 lovelace + 1 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.4a46 + TxOutDatumNone
+68b679c66cf18f6ce264ab7218d921efe14775b0f07603ef4e919e04873f87c6     0        147651442 lovelace + TxOutDatumNone
+68b679c66cf18f6ce264ab7218d921efe14775b0f07603ef4e919e04873f87c6     1        2000000 lovelace + 300 d4839c6fb15990b6780403574c5a53f959609db102512322662581b8.476c6f6265 + TxOutDatumNone
 ```
 
-We select the UTxO with the most ADA and another UTxO with exactly one type of native token.
+We select the UTxO with the most ADA and another UTxO with the newly minted native token.
 
 ```
 TX_0_A_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$ISSUER_ADDRESS"                                                              \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$ISSUER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
-cardano-cli query utxo "${MAGIC[@]}"                                                                                                                   \
-                       --address "$ISSUER_ADDRESS"                                                                                                     \
-                       --out-file /dev/stdout                                                                                                          \
-| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[1].value | to_entries | .[0] | .value) > 1)' \
-> utxo-0-a.json
-TX_0_A_TOKEN=$(jq -r '.key' utxo-0-a.json | head -n 1)
-CURRENCY_SYMBOL_A=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .key' utxo-0-a.json | head -n 1)
-TOKEN_NAME_A=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-a.json | head -n 1 | sed -e 's/\(.*\)/\U\1/' | basenc --decode --base16)
-TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
-AMOUNT_A=$(jq '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .value' utxo-0-a.json | head -n 1)
+TX_0_A_TOKEN=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$TOKEN_A"                   \
+                        "$ISSUER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
 ```
 
-John Fletcher will spend the UTxOs `24ec470099dd87cb54e909843436af391cdb770e54b17fea5c48bd3d04c99cf3#0` and `24ec470099dd87cb54e909843436af391cdb770e54b17fea5c48bd3d04c99cf3#1`. They will trade 12000 of `8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.Globe`.
+John Fletcher will spend the UTxOs `68b679c66cf18f6ce264ab7218d921efe14775b0f07603ef4e919e04873f87c6#0` and `68b679c66cf18f6ce264ab7218d921efe14775b0f07603ef4e919e04873f87c6#1`. They will trade 300 of `d4839c6fb15990b6780403574c5a53f959609db102512322662581b8.Globe`.
 
-### The Counter-party
+#### The Counterparty
 
 ```
 COUNTERPARTY_PREFIX="$TREASURY/thomas-kyd"
 COUNTERPARTY_NAME="Thomas Kyd"
 COUNTERPARTY_PAYMENT_SKEY="$COUNTERPARTY_PREFIX".skey
 COUNTERPARTY_PAYMENT_VKEY="$COUNTERPARTY_PREFIX".vkey
-COUNTERPARTY_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                                \
-                            --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY" \
-)
-COUNTERPARTY_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY"
-)
 ```
 
-The counter party Thomas Kyd has the address `addr_test1vpkedn0l6slaj8fzkx08qyce9vpreuu3spmnlxkepx4757grxzyzf` and public-key hash `6d96cdffd43fd91d22b19e7013192b023cf39180773f9ad909abea79`. They have the following UTxOs in their wallet:
+Create the counterparty's keys, if necessary.
+
+```
+if [[ ! -e "$COUNTERPARTY_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$COUNTERPARTY_PAYMENT_SKEY"      \
+                              --verification-key-file "$COUNTERPARTY_PAYMENT_VKEY"
+fi
+COUNTERPARTY_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY" )
+COUNTERPARTY_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY")
+```
+
+Fund the counterparty's address.
+
+```
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 150000000                      \
+                        "$COUNTERPARTY_ADDRESS"
+```
+
+```console
+TxId "c4e2cd496a6868f65ad8ab3394a76da98599151744b63a48616df45c6356f3fa"
+```
+
+The counterparty mints their tokens for the swap.
+
+```
+TOKEN_NAME_B=Swan
+AMOUNT_B=500
+CURRENCY_SYMBOL_B=$(
+marlowe-cli util mint "${MAGIC[@]}"                                  \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
+                      --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
+                      --change-address  "$COUNTERPARTY_ADDRESS"      \
+                      --count "$AMOUNT_B"                            \
+                      --expires "$MINT_EXPIRES"                      \
+                      --out-file /dev/null                           \
+                      --submit=600                                   \
+                      "$TOKEN_NAME_B"                                \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                                 \
+)
+TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"
+```
+
+The counterparty Thomas Kyd has the address `addr_test1vrqhqzkgnzekjy30fpxff3vcap82a8vw75m30yvpv0sawgg0pqxf8` and public-key hash `c1700ac898b369122f484c94c598e84eae9d8ef53717918163e1d721`. They have the following UTxOs in their wallet:
 
 ```
 marlowe-cli util clean "${MAGIC[@]}"                                  \
@@ -126,56 +215,43 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-32c8eb8ed6b323544ff1367ea2546c151a80c1fb199568268f6e4f2edd3a2b94     0        11983669915 lovelace + TxOutDatumNone
-32c8eb8ed6b323544ff1367ea2546c151a80c1fb199568268f6e4f2edd3a2b94     1        2000000 lovelace + 4500 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.5377616e + TxOutDatumNone
+99d9dc4a61883c69bf004f84a6aae66eed43c108d2f3aae6ecea33e78abdb9b0     0        147651574 lovelace + TxOutDatumNone
+99d9dc4a61883c69bf004f84a6aae66eed43c108d2f3aae6ecea33e78abdb9b0     1        2000000 lovelace + 500 cfefd2163839fc940d8e483a29d67041829173f7655b13e33df09d49.5377616e + TxOutDatumNone
 ```
 
-We select the UTxO with the most ADA and another UTxO with exactly one type of native token.
+We select the UTxO with the most ADA and another UTxO with the newly minted native token.
 
 ```
 TX_0_B_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$COUNTERPARTY_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$COUNTERPARTY_ADDRESS"                   \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
-cardano-cli query utxo "${MAGIC[@]}"                                                                                                                   \
-                       --address "$COUNTERPARTY_ADDRESS"                                                                                               \
-                       --out-file /dev/stdout                                                                                                          \
-| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[1].value | to_entries | .[0] | .value) > 1)' \
-> utxo-0-b.json
-TX_0_B_TOKEN=$(jq -r '.key' utxo-0-b.json | head -n 1)
-CURRENCY_SYMBOL_B=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .key' utxo-0-b.json | head -n 1)
-TOKEN_NAME_B=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-b.json | head -n 1 | sed -e 's/\(.*\)/\U\1/' | basenc --decode --base16)
-TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"
-AMOUNT_B=$(jq '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .value' utxo-0-b.json | head -n 1)
+TX_0_B_TOKEN=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$TOKEN_B"                   \
+                        "$COUNTERPARTY_ADDRESS"                   \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
 ```
 
-Thomas Kyd will spend the UTxOs `32c8eb8ed6b323544ff1367ea2546c151a80c1fb199568268f6e4f2edd3a2b94#0` and `32c8eb8ed6b323544ff1367ea2546c151a80c1fb199568268f6e4f2edd3a2b94#1`. They will trade 4500 of `8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.Swan`.
+Thomas Kyd will spend the UTxOs `99d9dc4a61883c69bf004f84a6aae66eed43c108d2f3aae6ecea33e78abdb9b0#0` and `99d9dc4a61883c69bf004f84a6aae66eed43c108d2f3aae6ecea33e78abdb9b0#1`. They will trade 500 of `cfefd2163839fc940d8e483a29d67041829173f7655b13e33df09d49.Swan`.
 
-### Tip of the Blockchain
-
-```
-TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
-NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
-HOUR="$((3600*1000))"
-MINUTE="$((60*1000))"
-SECOND="1000"
-```
-
-The tip is at slot 2452255. The current POSIX time implies that the tip of the blockchain should be slightly before slot 2452258. Tests may fail if this is not the case.
+The tip is at slot 4871334. The current POSIX time implies that the tip of the blockchain should be slightly before slot 4871499. Tests may fail if this is not the case.
 
 ## The Contract
 
 ```
 MINIMUM_ADA=3000000
-ISSUE_TIMEOUT=$((NOW+5*MINUTE-1*SECOND))
-MATURITY_TIMEOUT=$((NOW+5*MINUTE))
+ISSUE_TIMEOUT=$((NOW+5*HOUR))
+MATURITY_TIMEOUT=$((NOW+0*HOUR))
 SETTLEMENT_TIMEOUT=$((NOW+12*HOUR))
 ```
 
-The contract has a minimum-ADA requirement and three timeouts. It also specifies that the issuer John Fletcher will put 12000 of `8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.Globe` before Tue, 15 Mar 2022 22:09:54 +0000 into the contract and if the counter-party Thomas Kyd exercises the option for 4500 of `8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.Swan` after Tue, 15 Mar 2022 22:09:55 +0000 and before Wed, 16 Mar 2022 10:04:55 +0000.
+The contract has a minimum-ADA requirement and three timeouts. It also specifies that the issuer John Fletcher will put 300 of `d4839c6fb15990b6780403574c5a53f959609db102512322662581b8.Globe` before Wed, 13 Apr 2022 03:02:54 +0000 into the contract and if the counter-party Thomas Kyd exercises the option for 500 of `cfefd2163839fc940d8e483a29d67041829173f7655b13e33df09d49.Swan` after Tue, 12 Apr 2022 22:02:54 +0000 and before Wed, 13 Apr 2022 10:02:54 +0000.
 
 We create the contract for the previously specified parameters.
 
@@ -209,8 +285,8 @@ marlowe-cli run initialize "${MAGIC[@]}"                 \
 ```
 
 ```console
-Validator size: 11932
-Base-validator cost: ExBudget {exBudgetCPU = ExCPU 24384187, exBudgetMemory = ExMemory 82000}
+Validator size: 12350
+Base-validator cost: ExBudget {exBudgetCPU = ExCPU 24652144, exBudgetMemory = ExMemory 82900}
 ```
 
 In particular, we can extract the contract's address from the `.marlowe` file.
@@ -219,7 +295,7 @@ In particular, we can extract the contract's address from the `.marlowe` file.
 CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 ```
 
-The Marlowe contract resides at address `addr_test1wzw0y8gpcpx0rksg82w37ddrcntkrx94klevdf269g5news45dfzm`.
+The Marlowe contract resides at address `addr_test1wrpwjj2eqlt7weufhmtphza92hsg3luz7f8gndlvza6d62srp373k`.
 
 The issuer John Fletcher submits the transaction along with the minimum ADA 3000000 lovelace required for the contract's initial state. Submitting with the `--print-stats` switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits.
 
@@ -239,14 +315,14 @@ marlowe-cli run execute "${MAGIC[@]}"                             \
 ```
 
 ```console
-Fee: Lovelace 209413
-Size: 985 / 32768 = 3%
+Fee: Lovelace 209853
+Size: 995 / 32768 = 3%
 Execution units:
   Memory: 0 / 30000000 = 0%
   Steps: 0 / 10000000000 = 0%
 ```
 
-The contract received the minimum ADA of 3000000 lovelace from the issuer  in the transaction `3fcfb24ae74583d0a458604df9d80837c1cd4c5f246ac9478c16e9a2c0f8850d`.  Here is the UTxO at the contract address:
+The contract received the minimum ADA of 3000000 lovelace from the issuer John Fletcher in the transaction `0e573624b1f9b37380f0857a0dc9b25b5363329a4cc98ab4c43b5b21ff2abeba`.  Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
@@ -255,7 +331,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-3fcfb24ae74583d0a458604df9d80837c1cd4c5f246ac9478c16e9a2c0f8850d     1        3000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "b8b2b5af212e11391696202e665b3ab17a23d21435d4dbe84f180c40688c7b7d"
+0e573624b1f9b37380f0857a0dc9b25b5363329a4cc98ab4c43b5b21ff2abeba     1        3000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "8554b0fc07e429bf293eb70f353cbe87c63cf511b3443417453f6711d909871c"
 ```
 
 Here are the UTxOs at the issuer John Fletcher's address:
@@ -267,7 +343,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ISSUER_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-3fcfb24ae74583d0a458604df9d80837c1cd4c5f246ac9478c16e9a2c0f8850d     0        12960652672 lovelace + TxOutDatumNone
+0e573624b1f9b37380f0857a0dc9b25b5363329a4cc98ab4c43b5b21ff2abeba     0        144441589 lovelace + TxOutDatumNone
 ```
 
 ## Transaction 2. The issuer deposits Tokens into the Contract.
@@ -280,8 +356,8 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe               \
                         --deposit-party "PK=$ISSUER_PUBKEYHASH"   \
                         --deposit-token "$TOKEN_A"                \
                         --deposit-amount "$AMOUNT_A"              \
-                        --invalid-before "$((NOW-300000))"        \
-                        --invalid-hereafter "$((NOW+5*MINUTE-2*SECOND))"     \
+                        --invalid-before "$NOW"                   \
+                        --invalid-hereafter "$((NOW+1*HOUR))"     \
                         --out-file tx-2.marlowe                   \
                         --print-stats
 ```
@@ -312,14 +388,14 @@ marlowe-cli run execute "${MAGIC[@]}"                             \
 ```
 
 ```console
-Fee: Lovelace 1154885
-Size: 13917 / 32768 = 42%
+Fee: Lovelace 1216256
+Size: 14345 / 32768 = 43%
 Execution units:
-  Memory: 4373046 / 30000000 = 14%
-  Steps: 1597258917 / 10000000000 = 15%
+  Memory: 4905364 / 30000000 = 16%
+  Steps: 1761265438 / 10000000000 = 17%
 ```
 
-The contract received the deposit of 12000 `8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.Globe` in the transaction `32defd1b56bf63a7ee2c64c131046b6cc6e48f3544fa60c57dafc4b4afc98dc4`. Here is the UTxO at the contract address:
+The contract received the deposit of 300 `d4839c6fb15990b6780403574c5a53f959609db102512322662581b8.Globe` in the transaction `9d45c27155a1c8b5ae596f0e5f9a469f76be19ceca2a9ff92b78ecccab032060`. Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
@@ -328,7 +404,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-32defd1b56bf63a7ee2c64c131046b6cc6e48f3544fa60c57dafc4b4afc98dc4     1        3000000 lovelace + 12000 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.476c6f6265 + TxOutDatumHash ScriptDataInAlonzoEra "24381d43dfaac28b1f137c516ab48ebf278ba2564eed1c813ae8c33d82364b88"
+9d45c27155a1c8b5ae596f0e5f9a469f76be19ceca2a9ff92b78ecccab032060     1        3000000 lovelace + 300 d4839c6fb15990b6780403574c5a53f959609db102512322662581b8.476c6f6265 + TxOutDatumHash ScriptDataInAlonzoEra "c5fdd7f5c776ede89263931f9a3dde56265f997e8ea5209b54071a04effd19bb"
 ```
 
 Here is the UTxO at the issuer John Fletcher's address:
@@ -340,19 +416,19 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ISSUER_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-32defd1b56bf63a7ee2c64c131046b6cc6e48f3544fa60c57dafc4b4afc98dc4     0        12961497787 lovelace + TxOutDatumNone
+9d45c27155a1c8b5ae596f0e5f9a469f76be19ceca2a9ff92b78ecccab032060     0        145225333 lovelace + TxOutDatumNone
 ```
 
 ## Transaction 3. The Counter-Party chooses to exercise the option
 
 ```
-marlowe-cli run prepare --marlowe-file tx-2.marlowe                   \
-                        --choice-name "Exercise Call"                 \
-                        --choice-party "PK=$COUNTERPARTY_PUBKEYHASH"  \
-                        --choice-number 1                             \
-                        --invalid-before "$((NOW-300000))"        \
-                        --invalid-hereafter "$((NOW+5*MINUTE-2*SECOND))"     \
-                        --out-file tx-3.marlowe                       \
+marlowe-cli run prepare --marlowe-file tx-2.marlowe                  \
+                        --choice-name "Exercise Call"                \
+                        --choice-party "PK=$COUNTERPARTY_PUBKEYHASH" \
+                        --choice-number 1                            \
+                        --invalid-before "$NOW"                      \
+                        --invalid-hereafter "$((NOW+1*HOUR))"        \
+                        --out-file tx-3.marlowe                      \
                         --print-stats
 ```
 
@@ -378,17 +454,11 @@ marlowe-cli run execute "${MAGIC[@]}"                                  \
 ```
 
 ```console
-Fee: Lovelace 1143281
-Size: 13664 / 32768 = 41%
+Fee: Lovelace 1176963
+Size: 14078 / 32768 = 42%
 Execution units:
-  Memory: 4461202 / 30000000 = 14%
-  Steps: 1581810625 / 10000000000 = 15%
-## Wait until settlement (5 minutes) and advance contract
-
-```
-sleep 5m
-```
-
+  Memory: 4656706 / 30000000 = 15%
+  Steps: 1639848503 / 10000000000 = 16%
 ## Transaction 4. The Counter-Party Deposits their Tokens.
 
 First we compute the input for the contract to transition forward.
@@ -399,7 +469,7 @@ marlowe-cli run prepare --marlowe-file tx-3.marlowe                     \
                         --deposit-party "PK=$COUNTERPARTY_PUBKEYHASH"   \
                         --deposit-token "$TOKEN_B"                      \
                         --deposit-amount "$AMOUNT_B"                    \
-                        --invalid-before "$((NOW+5*MINUTE+1*SECOND))"   \
+                        --invalid-before "$NOW"                         \
                         --invalid-hereafter "$((NOW+8*HOUR))"           \
                         --out-file tx-4.marlowe                         \
                         --print-stats
@@ -408,18 +478,18 @@ marlowe-cli run prepare --marlowe-file tx-3.marlowe                     \
 ```console
 Datum size: 76
 Payment 1
-  Acccount: PK "e1ce601c08286179ae7ae6ef3a38262d4112cab0663a68dfb8e9edc5"
-  Payee: Party (PK "6d96cdffd43fd91d22b19e7013192b023cf39180773f9ad909abea79")
+  Acccount: PK "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+  Payee: Party (PK "c1700ac898b369122f484c94c598e84eae9d8ef53717918163e1d721")
   Ada: 0.000000
-  8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d."Globe": 12000
+  d4839c6fb15990b6780403574c5a53f959609db102512322662581b8."Globe": 300
 Payment 2
-  Acccount: PK "6d96cdffd43fd91d22b19e7013192b023cf39180773f9ad909abea79"
-  Payee: Party (PK "e1ce601c08286179ae7ae6ef3a38262d4112cab0663a68dfb8e9edc5")
+  Acccount: PK "c1700ac898b369122f484c94c598e84eae9d8ef53717918163e1d721"
+  Payee: Party (PK "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf")
   Ada: 0.000000
-  8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d."Swan": 4500
+  cfefd2163839fc940d8e483a29d67041829173f7655b13e33df09d49."Swan": 500
 Payment 3
-  Acccount: PK "e1ce601c08286179ae7ae6ef3a38262d4112cab0663a68dfb8e9edc5"
-  Payee: Party (PK "e1ce601c08286179ae7ae6ef3a38262d4112cab0663a68dfb8e9edc5")
+  Acccount: PK "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+  Payee: Party (PK "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf")
   Ada: 3.000000
 ```
 
@@ -445,14 +515,14 @@ marlowe-cli run execute "${MAGIC[@]}"                                  \
 ```
 
 ```console
-Fee: Lovelace 1228006
-Size: 13103 / 32768 = 39%
+Fee: Lovelace 1261349
+Size: 13517 / 32768 = 41%
 Execution units:
-  Memory: 5796810 / 30000000 = 19%
-  Steps: 1968778631 / 10000000000 = 19%
+  Memory: 5987124 / 30000000 = 19%
+  Steps: 2026280013 / 10000000000 = 20%
 ```
 
-The closing of the contract paid 4500 `8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.Swan` to the first party John Fletcher, along with the minimum ADA 3000000 lovelace that they deposited when creating the contract, and it paid 12000 `8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.Globe` to the counter party Thomas Kyd in the transaction `bd8589340529b1dfedc9371229a941bfde249b1dcf0a0fb9480df51282805ac7`. There is no UTxO at the contract address:
+The closing of the contract paid 500 `cfefd2163839fc940d8e483a29d67041829173f7655b13e33df09d49.Swan` to the first party John Fletcher, along with the minimum ADA 3000000 lovelace that they deposited when creating the contract, and it paid 300 `d4839c6fb15990b6780403574c5a53f959609db102512322662581b8.Globe` to the counter party Thomas Kyd in the transaction `597db5b527b7059f57b4083af967038725333b28f6a0b4c897dd302e686e8e1d`. There is no UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
@@ -472,8 +542,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ISSUER_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-32defd1b56bf63a7ee2c64c131046b6cc6e48f3544fa60c57dafc4b4afc98dc4     0        12961497787 lovelace + TxOutDatumNone
-bd8589340529b1dfedc9371229a941bfde249b1dcf0a0fb9480df51282805ac7     2        3000000 lovelace + 4500 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.5377616e + TxOutDatumNone
+597db5b527b7059f57b4083af967038725333b28f6a0b4c897dd302e686e8e1d     2        3000000 lovelace + 500 cfefd2163839fc940d8e483a29d67041829173f7655b13e33df09d49.5377616e + TxOutDatumNone
+9d45c27155a1c8b5ae596f0e5f9a469f76be19ceca2a9ff92b78ecccab032060     0        145225333 lovelace + TxOutDatumNone
 ```
 
 Here are the UTxOs at the counter party Thomas Kyd's address:
@@ -485,7 +555,100 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS" | sed -n 
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-bd8589340529b1dfedc9371229a941bfde249b1dcf0a0fb9480df51282805ac7     0        11981953830 lovelace + TxOutDatumNone
-bd8589340529b1dfedc9371229a941bfde249b1dcf0a0fb9480df51282805ac7     1        1344798 lovelace + 12000 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.476c6f6265 + TxOutDatumNone
+597db5b527b7059f57b4083af967038725333b28f6a0b4c897dd302e686e8e1d     0        145868464 lovelace + TxOutDatumNone
+597db5b527b7059f57b4083af967038725333b28f6a0b4c897dd302e686e8e1d     1        1344798 lovelace + 300 d4839c6fb15990b6780403574c5a53f959609db102512322662581b8.476c6f6265 + TxOutDatumNone
 ```
 
+## Clean Up
+
+```
+FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
+marlowe-cli transaction simple "${MAGIC[@]}"                                               \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                   \
+                               --tx-in "$TX_4"#2                                           \
+                               --tx-out "$COUNTERPARTY_ADDRESS+1400000+$AMOUNT_B $TOKEN_B" \
+                               --required-signer "$ISSUER_PAYMENT_SKEY"                    \
+                               --change-address "$ISSUER_ADDRESS"                          \
+                               --out-file /dev/null                                        \
+                               --submit 600
+```
+
+```console
+TxId "dc51e9165e08daf9237088d98c5c997247011651804041cf0acb3885d8521aea"
+```
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                         \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"             \
+                               --tx-in "$TX_4"#0                                     \
+                               --tx-in "$TX_4"#1                                     \
+                               --tx-out "$ISSUER_ADDRESS+1400000+$AMOUNT_A $TOKEN_A" \
+                               --required-signer "$COUNTERPARTY_PAYMENT_SKEY"        \
+                               --change-address "$COUNTERPARTY_ADDRESS"              \
+                               --out-file /dev/null                                  \
+                               --submit 600
+```
+
+```console
+TxId "f66dfc14b814068d77baa672d2a8d71e90126261cc942267f4b0400a33c8605c"
+marlowe-cli util mint "${MAGIC[@]}"                             \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$ISSUER_PAYMENT_SKEY"  \
+                      --change-address  "$ISSUER_ADDRESS"       \
+                      --count "-$AMOUNT_A"                      \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      "$TOKEN_NAME_A"
+```
+
+```console
+PolicyID "d4839c6fb15990b6780403574c5a53f959609db102512322662581b8"
+marlowe-cli util mint "${MAGIC[@]}"                                  \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
+                      --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
+                      --change-address  "$COUNTERPARTY_ADDRESS"      \
+                      --count "-$AMOUNT_B"                           \
+                      --expires "$MINT_EXPIRES"                      \
+                      --out-file /dev/null                           \
+                      --submit=600                                   \
+                      "$TOKEN_NAME_B"
+```
+
+```console
+PolicyID "cfefd2163839fc940d8e483a29d67041829173f7655b13e33df09d49"
+TX=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$ISSUER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+marlowe-cli transaction simple "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --tx-in "$TX"                             \
+                               --required-signer "$ISSUER_PAYMENT_SKEY"  \
+                               --change-address "$FAUCET_ADDRESS"        \
+                               --out-file /dev/null                      \
+                               --submit 600
+```
+
+```console
+TxId "9b1bb31cadfd3f51007f514812556b95f6e643b5078efba819038f772f4c3583"
+TX=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$COUNTERPARTY_ADDRESS"                   \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+marlowe-cli transaction simple "${MAGIC[@]}"                                  \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
+                               --tx-in "$TX"                                  \
+                               --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
+                               --change-address "$FAUCET_ADDRESS"             \
+                               --out-file /dev/null                           \
+                               --submit 600
+```
+
+```console
+TxId "fc16d0fdb712e8e6239842ea1c209e0caff444b7be3c67bed0c83fd3091fc89d"

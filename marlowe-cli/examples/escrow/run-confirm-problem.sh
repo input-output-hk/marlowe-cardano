@@ -74,7 +74,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --lovelace 50000000                       \
                         "$SELLER_ADDRESS"
 
-echo "### The Buyer"
+echo "#### The Buyer"
 
 BUYER_PREFIX="$TREASURY/thomas-middleton"
 BUYER_NAME="Thomas Middleton"
@@ -100,7 +100,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --lovelace 350000000                      \
                         "$BUYER_ADDRESS"
 
-echo "### The Mediator"
+echo "#### The Mediator"
 
 MEDIATOR_PREFIX="$TREASURY/christopher-marlowe"
 MEDIATOR_NAME="Christopher Marlowe"
@@ -123,7 +123,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
-                        --lovelace 100000000                      \
+                        --lovelace 120000000                      \
                         "$MEDIATOR_ADDRESS"
 
 echo "### Role Tokens"
@@ -208,15 +208,15 @@ echo "We select the UTxO with the mediator $MEDIATOR_NAME's role token."
 TX_0_MEDIATOR_ADA=$(
 marlowe-cli util select "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --lovelace-only 120000000                 \
+                        --lovelace-only 80000000                  \
                         "$MEDIATOR_ADDRESS"                       \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_MEDIATOR_TOKEN=$(
 marlowe-cli util select "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --asset-only "$MEDIATOR_TOKEN"              \
-                        "$MEDIATOR_ADDRESS"                         \
+                        --asset-only "$MEDIATOR_TOKEN"            \
+                        "$MEDIATOR_ADDRESS"                       \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 

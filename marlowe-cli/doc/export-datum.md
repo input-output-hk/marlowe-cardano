@@ -8,16 +8,17 @@ The `marlowe-cli contract datum` command writes a Marlowe datum to a JSON file i
     $ marlowe-cli contract datum --help
     
     Usage: marlowe-cli contract datum --contract-file CONTRACT_FILE
-                                      --state-file STATE_FILE
+                                      --state-file STATE_FILE 
                                       [--out-file DATUM_FILE] [--print-stats]
       Export a contract datum to a JSON file.
     
     Available options:
-      --contract-file CONTRACT_FILE  JSON input file for the contract.
-      --state-file STATE_FILE        JSON input file for the contract state.
-      --out-file DATUM_FILE          JSON output file for datum.
-      --print-stats                  Print statistics.
-      -h,--help                      Show this help text
+      --contract-file CONTRACT_FILE
+                               JSON input file for the contract.
+      --state-file STATE_FILE  JSON input file for the contract state.
+      --out-file DATUM_FILE    JSON output file for datum.
+      --print-stats            Print statistics.
+      -h,--help                Show this help text
 
 See the `Contract` and `State` data types in [`Language.Marlowe.SemanticTypes`](../src/Language/Marlowe/SemanticsTypes.hs) for valid JSON to represent the contract and its state. The simplest contract is [`Close`](example.contract) and the [simplest state](example.state) is a public key for the actor withdrawing funds from the script and the amount withdrawn, along with a minimum slot number for the withdrawal.
 

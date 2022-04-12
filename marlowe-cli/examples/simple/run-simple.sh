@@ -65,8 +65,6 @@ else # Use the private testnet.
   SLOT_OFFSET=1644929640000
 fi
 
-echo "### Select Parties"
-
 echo "### Participants"
 
 echo "#### The Bystander"
@@ -123,7 +121,7 @@ marlowe-cli util select "${MAGIC[@]}"                             \
 
 echo "$BYSTANDER_NAME will spend the UTxO "'`'"$TX_0_BYSTANDER"'`.'
 
-echo "### The Party"
+echo "#### The Party"
 
 echo "The party deposits and removes funds from the contract."
 

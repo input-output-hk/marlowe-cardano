@@ -32,16 +32,27 @@ MAGIC=(--testnet-magic 1564)
 PARTY_A_PREFIX="$TREASURY/francis-beaumont"
 PARTY_A_PAYMENT_SKEY="$PARTY_A_PREFIX".skey
 PARTY_A_PAYMENT_VKEY="$PARTY_A_PREFIX".vkey
-PARTY_A_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                           \
-                            --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY" \
-)
-PARTY_A_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY"
-)
 
-echo "The first party has the address $PARTY_A_ADDRESS and the public-key hash $PARTY_A_PUBKEYHASH. They have the following UTxOs in their wallet:"
-echo
+# Create the first party's keys, if necessary.
+
+if [[ ! -e "$PARTY_A_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$PARTY_A_PAYMENT_SKEY"      \
+                              --verification-key-file "$PARTY_A_PAYMENT_VKEY"
+fi
+PARTY_A_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY" )
+PARTY_A_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY")
+
+
+# Fund the first party's address.
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$PARTY_A_ADDRESS"
+
 marlowe-cli util clean "${MAGIC[@]}"                             \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                        --required-signer "$PARTY_A_PAYMENT_SKEY" \
@@ -49,17 +60,19 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
                        --out-file /dev/null                      \
                        --submit=600                              \
 > /dev/null
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS"
 
-echo "We select the UTxO with the most funds to use in executing the contract."
+
+# We select the UTxO with sufficient funds to use in executing the contract.
+
 TX_0_PARTY_A=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                           \
-                       --address "$PARTY_A_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                  \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) ==1) | .key' \
-| head -n 1                                                                                                    \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 50000000                  \
+                        "$PARTY_A_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
-echo "The first party will spend the UTxO $TX_0_PARTY_A."
 
 
 # Configure the second party.
@@ -67,16 +80,28 @@ echo "The first party will spend the UTxO $TX_0_PARTY_A."
 PARTY_B_PREFIX="$TREASURY/christopher-marlowe"
 PARTY_B_PAYMENT_SKEY="$PARTY_B_PREFIX".skey
 PARTY_B_PAYMENT_VKEY="$PARTY_B_PREFIX".vkey
-PARTY_B_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                           \
-                            --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY" \
-)
-PARTY_B_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY"
-)
 
-echo "The second party has the address $PARTY_B_ADDRESS and public-key hash $PARTY_B_PUBKEYHASH. They have the following UTxOs in their wallet:"
-echo
+
+# Create the second party's keys, if necessary.
+
+if [[ ! -e "$PARTY_B_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$PARTY_B_PAYMENT_SKEY"      \
+                              --verification-key-file "$PARTY_B_PAYMENT_VKEY"
+fi
+PARTY_B_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY" )
+PARTY_B_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY")
+
+
+# Fund the second party's address.
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$PARTY_B_ADDRESS"
+
 marlowe-cli util clean "${MAGIC[@]}"                             \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                        --required-signer "$PARTY_B_PAYMENT_SKEY" \
@@ -84,17 +109,19 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
                        --out-file /dev/null                      \
                        --submit=600                              \
 > /dev/null
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS"
 
-echo "We select the UTxO with the most funds to use in executing the contract."
+
+# We select the UTxO with sufficient funds to use in executing the contract.
+
 TX_0_PARTY_B=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                           \
-                       --address "$PARTY_B_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                  \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) ==1) | .key' \
-| head -n 1                                                                                                    \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 50000000                  \
+                        "$PARTY_B_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
-echo "The second party will spend the UTxO $TX_0_PARTY_B."
 
 
 # Configure the validator.
@@ -226,6 +253,7 @@ echo "TxId $TX_2"
 # two contracts separately and together.
 
 # Compute the redeemers for the two UTxOs at the contract address:
+
 marlowe-cli contract redeemer --out-file tx-2-first.redeemer
 marlowe-cli contract redeemer --out-file tx-2-second.redeemer
 
@@ -233,6 +261,7 @@ marlowe-cli contract redeemer --out-file tx-2-second.redeemer
 # their 25 ADA and the second party receives their 3 ADA. If the following
 # command prints the transaction ID, that indicates that the transaction would
 # run without error. (It doesn't matter which party submits this transaction.)
+
 marlowe-cli transaction close "${MAGIC[@]}"                              \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
                               --tx-in-marlowe "$TX_1"#1                  \
@@ -254,6 +283,7 @@ marlowe-cli transaction close "${MAGIC[@]}"                              \
 # their 20 ADA and the second party receives their 4 ADA. If the following
 # command prints the transaction ID, that indicates that the transaction would
 # run without error. (It doesn't matter which party submits this transaction.)
+
 marlowe-cli transaction close "${MAGIC[@]}"                              \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
                               --tx-in-marlowe "$TX_2"#1                  \
@@ -271,30 +301,6 @@ marlowe-cli transaction close "${MAGIC[@]}"                              \
                               --out-file tx-2.raw                        \
                               --print-stats
 
-# Perform a dry-run of redeeming both contracts at once: the first party
-# receives their 25+20=45 ADA and the second party receives their 3+4=7 ADA. If
-# the following commands succeeds, that indicates that the transaction would run
-# without error. (It doesn't matter which party submits this transaction.)
-cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
-                              --protocol-params-file private.protocol      \
-                              --tx-in "$TX_1"#1                            \
-                                --tx-in-script-file marlowe.plutus         \
-                                --tx-in-datum-file tx-1.datum              \
-                                --tx-in-redeemer-file tx-2-first.redeemer  \
-                              --tx-in "$TX_2"#1                            \
-                                --tx-in-script-file marlowe.plutus         \
-                                --tx-in-datum-file tx-2.datum              \
-                                --tx-in-redeemer-file tx-2-second.redeemer \
-                              --tx-in "$TX_2"#0                            \
-                              --tx-in-collateral "$TX_2"#0                 \
-                              --required-signer "$PARTY_B_PAYMENT_SKEY"    \
-                              --tx-out "$PARTY_A_ADDRESS+45000000"         \
-                              --tx-out "$PARTY_B_ADDRESS+7000000"          \
-                              --change-address "$PARTY_B_ADDRESS"          \
-                              --invalid-before "$MINIMUM_SLOT"             \
-                              --invalid-hereafter "$TIMEOUT_SLOT"          \
-                              --out-file tx-2.raw
-
 # Perform a dry-run of redeeming both contracts at once: the first party only
 # receives their 25 ADA from the first contract and the second party steals
 # the first party's 20 ADA from the second contract because the second validator
@@ -303,55 +309,29 @@ cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
 # commands succeeds, that indicates that the transaction would run without
 # error. (It doesn't matter which party submits this transaction, but the second
 # party submits it because they are the thief.)
-cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
-                              --protocol-params-file private.protocol      \
-                              --tx-in "$TX_1"#1                            \
-                                --tx-in-script-file marlowe.plutus         \
-                                --tx-in-datum-file tx-1.datum              \
-                                --tx-in-redeemer-file tx-2-first.redeemer  \
-                              --tx-in "$TX_2"#1                            \
-                                --tx-in-script-file marlowe.plutus         \
-                                --tx-in-datum-file tx-2.datum              \
-                                --tx-in-redeemer-file tx-2-second.redeemer \
-                              --tx-in "$TX_2"#0                            \
-                              --tx-in-collateral "$TX_2"#0                 \
-                              --required-signer "$PARTY_B_PAYMENT_SKEY"    \
-                              --tx-out "$PARTY_A_ADDRESS+25000000"         \
-                              --tx-out "$PARTY_B_ADDRESS+27000000"         \
-                              --change-address "$PARTY_B_ADDRESS"          \
-                              --invalid-before "$MINIMUM_SLOT"             \
-                              --invalid-hereafter "$TIMEOUT_SLOT"          \
-                              --out-file tx-2.raw
 
-# Now sign and submit the transaction, just to make sure that the theft really
-# can occur.
-TX_3=$(
-marlowe-cli transaction submit "${MAGIC[@]}"                             \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                               --tx-body-file tx-2.raw                   \
-                               --required-signer "$PARTY_B_PAYMENT_SKEY" \
-                               --timeout 600                             \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                         \
-)
-TX_3_EXIT="$?"
-echo "TxId $TX_3"
-
-echo "There is no UTxO at the contract address:"
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p"
-
-echo "Here is the UTxO at the first party's address:"
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p"
-
-echo "Here is the UTxO at the second party's address:"
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p"
-
-
-# Return error if the transaction succeeded.
-
-if [ "$TX_3_EXIT" -eq 0 ]
+if cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
+                                 --protocol-params-file private.protocol      \
+                                 --tx-in "$TX_1"#1                            \
+                                   --tx-in-script-file marlowe.plutus         \
+                                   --tx-in-datum-file tx-1.datum              \
+                                   --tx-in-redeemer-file tx-2-first.redeemer  \
+                                 --tx-in "$TX_2"#1                            \
+                                   --tx-in-script-file marlowe.plutus         \
+                                   --tx-in-datum-file tx-2.datum              \
+                                   --tx-in-redeemer-file tx-2-second.redeemer \
+                                 --tx-in "$TX_2"#0                            \
+                                 --tx-in-collateral "$TX_2"#0                 \
+                                 --required-signer "$PARTY_B_PAYMENT_SKEY"    \
+                                 --tx-out "$PARTY_A_ADDRESS+25000000"         \
+                                 --tx-out "$PARTY_B_ADDRESS+27000000"         \
+                                 --change-address "$PARTY_B_ADDRESS"          \
+                                 --invalid-before "$MINIMUM_SLOT"             \
+                                 --invalid-hereafter "$TIMEOUT_SLOT"          \
+                                 --out-file tx-2.raw
 then
-  echo "Double satisfaction occurred."
+  echo "Double satisfaction was prevented."
   exit 1
 else
-  echo "Double satisfaction did not occur."
+  echo "Double satisfaction was not prevented."
 fi

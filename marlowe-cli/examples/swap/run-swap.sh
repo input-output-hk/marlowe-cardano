@@ -120,7 +120,7 @@ marlowe-cli util select "${MAGIC[@]}"                             \
 
 echo "$PARTY_A_NAME will spend the UTxOs "'`'"$TX_0_A_ADA"'`'" and "'`'"$TX_0_A_TOKEN"'`'". They will trade $AMOUNT_A of "'`'"$TOKEN_A"'`.'
 
-echo "### The Second Party"
+echo "#### The Second Party"
 
 PARTY_B_PREFIX="$TREASURY/thomas-kyd"
 PARTY_B_NAME="Thomas Kyd"

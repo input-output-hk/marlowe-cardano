@@ -19,14 +19,13 @@ A [slide presentation](doc/marlowe-overview-tutorial.pdf) describes the high-lev
 *   [escrow](examples/escrow/ReadMe.md)
 *   [swap](examples/swap/ReadMe.md)
 *   [zero-coupon bond](examples/zcb/ReadMe.md)
+*   [contract for differences](examples/cfd/ReadMe.md)
+*   [covered call](examples/coveredCall/ReadMe.md)
 
 
 ## Available Commands
 
     $ marlowe-cli --help
-
-    Usage: marlowe-cli [--version] COMMAND
-      Utilities for Marlowe.
     
     marlowe-cli : a command-line tool for Marlowe contracts
     
@@ -39,12 +38,16 @@ A [slide presentation](doc/marlowe-overview-tutorial.pdf) describes the high-lev
     
     High-level commands:
       run                      Run a contract.
+      pab                      Run a contract via the PAB.
       template                 Create a contract from a template.
+      test                     Test contracts.
     
     Low-level commands:
-      contract                 Export contract address, validator, datum, or redeemer.
+      contract                 Export contract address, validator, datum, or
+                               redeemer.
       input                    Create inputs to a contract.
       role                     Export role address, validator, datum, or redeemer.
+      query                    Blockchain queries for Marlowe.
       transaction              Create and submit transactions.
       util                     Miscellaneous utilities.
 
@@ -52,11 +55,14 @@ Help for subcommands:
 
 *   high-level commands
     *   [`marlowe-cli run`](#run-commands)
+    *   [`marlowe-cli pab`](#pab-commands)
     *   [`marlowe-cli template`](#template-commands)
+    *   [`marlowe-cli test`](#test-commands)
 *   low-level commands
     *   [`marlowe-cli contract`](#contract-commands)
     *   [`marlowe-cli input`](#input-commands)
     *   [`marlowe-cli role`](#role-commands)
+    *   [`marlowe-cli query`](#query-commands)
     *   [`marlowe-cli transaction`](#transaction-commands)
     *   [`marlowe-cli util`](#util-commands)
 
@@ -76,8 +82,10 @@ Help for subcommands:
     
     Commands for running contracts:
       execute                  Run a Marlowe transaction.
-      initialize               Initialize the first transaction of a Marlowe contract and write output to a JSON file.
-      prepare                  Prepare the next step of a Marlowe contract and write the output to a JSON file.
+      initialize               Initialize the first transaction of a Marlowe
+                               contract and write output to a JSON file.
+      prepare                  Prepare the next step of a Marlowe contract and write
+                               the output to a JSON file.
       withdraw                 Withdraw funds from the Marlowe role address.
 
 Individual help pages:
@@ -86,6 +94,29 @@ Individual help pages:
 *   [`marlowe-cli run initialize`](doc/run-initialize.md)
 *   [`marlowe-cli run prepare`](doc/run-prepare.md)
 *   [`marlowe-cli run withdraw`](doc/run-withdraw.md)
+
+
+#### "PAB" Commands
+
+    $ marlowe-cli pab --help
+    
+    Usage: marlowe-cli pab COMMAND
+      Run a contract via the PAB.
+    
+    Available options:
+      -h,--help                Show this help text
+    
+    Commands for running contracts on the PAB:
+      app                      Start the Marlowe application contract.
+      create                   Create a Marlowe contract.
+      apply-inputs             Apply inputs to a Marlowe contract.
+      redeem                   Redeem funds from a Marlowe contract.
+      follower                 Start the Marlowe follower contract.
+      follow                   Follow a Marlowe contract.
+      companion                Start the Marlowe companion contract.
+      stop                     Stop a Marlowe contract.
+
+See [the PAB example](doc/PAB.md) for usage.
 
 
 #### "Template" Commands
@@ -103,6 +134,38 @@ Individual help pages:
       simple                   Create a simple example contract.
       swap                     Create a swap contract.
       zcb                      Create a zero-coupon bond.
+      coveredCall              Create a covered call Option.
+
+See [../marlowe-contracts/src/Marlowe/Contracts](../marlowe-contracts/src/Marlowe/Contracts) for details.
+
+
+#### "Test" Commands
+
+    $ marlowe-cli test contracts --help
+    
+    Usage: marlowe-cli test contracts [--testnet-magic INTEGER]
+                                      --socket-path SOCKET_FILE --wallet-url URL
+                                      --pab-url URL --faucet-key SIGNING_FILE
+                                      --faucet-address ADDRESS
+                                      --burn-address ADDRESS --passphrase PASSWORD
+                                      TEST_FILE
+      Test Marlowe contracts using the Marlowe PAB.
+    
+    Available options:
+      --testnet-magic INTEGER  Network magic, or omit for mainnet.
+      --socket-path SOCKET_FILE
+                               Location of the cardano-node socket file.
+      --wallet-url URL         URL for Cardano Wallet.
+      --pab-url URL            URL for the Marlowe PAB.
+      --faucet-key SIGNING_FILE
+                               The file containing the signing key for the faucet.
+      --faucet-address ADDRESS The address of the faucet.
+      --burn-address ADDRESS   Burn address for discarding used tokens.
+      --passphrase PASSWORD    The passphrase used for the Marlowe PAB.
+      TEST_FILE                JSON file containing a test case.
+      -h,--help                Show this help text
+
+See [../test/](../test/ReadMe.md) for details.
 
 
 ### Low-Level Commands
@@ -127,11 +190,11 @@ Individual help pages:
 
 Individual help pages:
 
-*   [`marlowe-cli contract marlowe`](doc/export-marlowe.md)
 *   [`marlowe-cli contract address`](doc/export-address.md)
-*   [`marlowe-cli contract validator`](doc/export-validator.md)
 *   [`marlowe-cli contract datum`](doc/export-datum.md)
+*   [`marlowe-cli contract marlowe`](doc/export-marlowe.md)
 *   [`marlowe-cli contract redeemer`](doc/export-redeemer.md)
+*   [`marlowe-cli contract validator`](doc/export-validator.md)
 
 
 #### "Input" Commands
@@ -151,8 +214,8 @@ Individual help pages:
 
 Individual help pages:
 
-*   [`marlowe-cli input deposit`](doc/input-deposit.md)
 *   [`marlowe-cli input choose`](doc/input-choose.md)
+*   [`marlowe-cli input deposit`](doc/input-deposit.md)
 *   [`marlowe-cli input notify`](doc/input-notify.md)
 
 
@@ -161,7 +224,7 @@ Individual help pages:
     $ marlowe-cli role --help
     
     Usage: marlowe-cli role COMMAND
-      Export role address, validator, datum, or redeemer. [low-level]
+      Export role address, validator, datum, or redeemer.
     
     Available options:
       -h,--help                Show this help text
@@ -173,29 +236,59 @@ Individual help pages:
       validator                Export a role validator to a JSON file.
 
 
+#### "Query" Commands
+
+    $ marlowe-cli query --help
+    
+    Usage: marlowe-cli query COMMAND
+      Blockchain queries for Marlowe.
+    
+    Available options:
+      -h,--help                Show this help text
+    
+    Query commands:
+      address                  Query transactions at an address.
+      app                      Query the state of the Marlowe application script.
+      history                  Query for the Marlowe contract histories.
+      output                   Query output details.
+      payout                   Query the state of the Marlowe payout script.
+      transaction              Query transaction details.
+
+Individual help pages:
+
+*   [`marlowe-cli query address`](doc/query-address.md)
+*   [`marlowe-cli query app`](doc/query-app.md)
+*   [`marlowe-cli query history`](doc/query-history.md)
+*   [`marlowe-cli query output`](doc/query-output.md)
+*   [`marlowe-cli query payout`](doc/query-payout.md)
+*   [`marlowe-cli query transaction`](doc/query-transaction.md)
+
+
 #### "Transaction" Commands
 
     $ marlowe-cli transaction --help
     
     Usage: marlowe-cli transaction COMMAND
-      Create and submit transactions. [low-level]
+      Create and submit transactions.
     
     Available options:
       -h,--help                Show this help text
     
     Low-level commands for creating and submitting transactions:
-      advance                  Build a transaction that both spends from and pays to a Marlowe script.
-      close                    Build a transaction that spends from a Marlowe script.
+      advance                  Build a transaction that both spends from and pays to
+                               a Marlowe script.
+      close                    Build a transaction that spends from a Marlowe
+                               script.
       create                   Build a transaction that pays to a Marlowe script.
       simple                   Build a non-Marlowe transaction.
       submit                   Submit a transaction body.
 
 Individual help pages:
 
-*   [`marlowe-cli transaction simple`](doc/transaction-simple.md)
-*   [`marlowe-cli transaction create`](doc/transaction-create.md)
 *   [`marlowe-cli transaction advance`](doc/transaction-advance.md)
 *   [`marlowe-cli transaction close`](doc/transaction-close.md)
+*   [`marlowe-cli transaction create`](doc/transaction-create.md)
+*   [`marlowe-cli transaction simple`](doc/transaction-simple.md)
 *   [`marlowe-cli transaction submit`](doc/transaction-submit.md)
 
 
@@ -210,11 +303,20 @@ Individual help pages:
       -h,--help                Show this help text
     
     Miscellaneous low-level commands:
-      clean                    Reorganize the UTxOs at an address, separating tokens.
+      clean                    Reorganize the UTxOs at an address, separating
+                               tokens.
+      decode-bech32            DecodBech32 data.
+      encode-bech32            EncodBech32 data.
+      mint                     Mint native tokens.
+      select                   Select UTxO by asset.
 
 Individual help pages:
 
 *   [`marlowe-cli util clean`](doc/util-clean.md)
+*   [`marlowe-cli util decode-bech32`](doc/util-decode-bech32.md)
+*   [`marlowe-cli util encode-bech32`](doc/util-encode-bech32.md)
+*   [`marlowe-cli util mint`](doc/util-mint.md)
+*   [`marlowe-cli util select`](doc/util-select.md)
 
 
 ## Installation
@@ -275,3 +377,5 @@ See [example.sh](doc/example.sh) for an example bash script embodying this workf
     *   ["confirm claim"](examples/escrow/run-confirm-claim.sh)
 *   [swap](examples/swap/run-swap.sh)
 *   [zero-coupon bond](examples/zcb/run-zcb.sh)
+*   [contract for differences](examples/cfd/run-cfd.sh)
+*   [covered call](examples/coveredCall/run-coveredCall.sh)
