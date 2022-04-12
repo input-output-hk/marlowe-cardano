@@ -299,7 +299,12 @@ data PabOperation =
     {
       poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
     }
-    -- | Print a comment.
+    -- | Print an instance state.
+  | PrintPABInstanceState
+    { poInstance        :: InstanceNickname
+    , poMarloweContract :: MarloweContract -- ^ 'MarloweApp' | 'MarloweFollower'
+    }
+    -- | Print comment.
   | Comment
     {
       poComment :: String  -- ^ The textual comment.
