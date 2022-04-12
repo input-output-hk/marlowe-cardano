@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script exits with an error value if the end-to-end test fails.
-set -e
+set -euo pipefail
 
 echo "# Test of a Zero-Coupon Bond"
 
@@ -16,12 +16,8 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
-echo '* basenc'
-echo '* tr'
 echo
 echo "Signing and verification keys must be provided below for the two parties, or they will be created automatically: to do this, set the environment variables "'`'"LENDER_PREFIX"'`'" and "'`'"BORROWER_PREFIX"'`'" where they appear below."
-echo
-echo "The two parties' wallets must have exactly one UTxO with their role token. The currency symbol for the role tokens must be set below in "'`'"ROLE_CURRENCY"'`'"."
 
 echo "## Preliminaries"
 
@@ -422,35 +418,48 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2
 
 echo "Here are the UTxOs at the lender $LENDER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
+
+echo "Here are the UTxOs at the borrower $BORROWER_NAME's address:"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
 
 echo "## Clean Up"
 
-TX_RETURN_BORROWER=$(
-marlowe-cli util select "${MAGIC[@]}"                             \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --asset-only "$BORROWER_TOKEN"            \
-                        "$BORROWER_ADDRESS"                       \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
-)
+FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
 
 marlowe-cli transaction simple "${MAGIC[@]}"                                        \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
-                               --tx-in "$TX_RETURN_BORROWER"                        \
+                               --tx-in "$TX_4"#0                                    \
+                               --tx-in "$TX_4"#2                                    \
                                --tx-out "$LENDER_ADDRESS+1400000+1 $BORROWER_TOKEN" \
                                --required-signer "$BORROWER_PAYMENT_SKEY"           \
-                               --change-address "$BORROWER_ADDRESS"                 \
+                               --change-address "$FAUCET_ADDRESS"                   \
                                --out-file /dev/null                                 \
-                               --submit 600                                         \
-> /dev/null
+                               --submit 600
 
 marlowe-cli util mint "${MAGIC[@]}" \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                       --required-signer "$LENDER_PAYMENT_SKEY"  \
                       --change-address  "$LENDER_ADDRESS"       \
+                      --count -1                                \
                       --expires "$MINT_EXPIRES"                 \
                       --out-file /dev/null                      \
                       --submit=600                              \
-                      --count -1                                \
-                      "$LENDER_ROLE" "$BORROWER_ROLE"           \
-> /dev/null
+                      "$LENDER_ROLE" "$BORROWER_ROLE"
+
+TX=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$LENDER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+marlowe-cli transaction simple "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --tx-in "$TX"                             \
+                               --required-signer "$LENDER_PAYMENT_SKEY"  \
+                               --change-address "$FAUCET_ADDRESS"        \
+                               --out-file /dev/null                      \
+                               --submit 600

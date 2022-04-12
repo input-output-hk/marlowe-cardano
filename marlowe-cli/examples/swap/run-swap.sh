@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script exits with an error value if the end-to-end test fails.
-set -e
+set -euo pipefail
 
 echo "# Test of a Swap Contract"
 
@@ -16,11 +16,8 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
-echo '* basenc'
 echo
-echo "Signing and verification keys must be provided below for the two parties: to do this, set the environment variables "'`'"PARTY_A_PREFIX"'`'" and "'`'"PARTY_B_PREFIX"'`'" where they appear below."
-echo
-echo "The two parties' wallets much have exactly one UTxO with the token they want to swap and at least one UTxO without tokens."
+echo "Signing and verification keys must be provided below for the two parties, or they will be created automatically: to do this, set the environment variables "'`'"PARTY_A_PREFIX"'`'" and "'`'"PARTY_B_PREFIX"'`'" where they appear below."
 
 echo "## Preliminaries"
 
@@ -37,19 +34,61 @@ else # Use the private testnet.
   SLOT_OFFSET=1644929640000
 fi
 
+echo "### Tip of the Blockchain"
+
+TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
+
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
+
+echo "### Participants"
+
 echo "#### The First Party"
 
 PARTY_A_PREFIX="$TREASURY/john-fletcher"
 PARTY_A_NAME="John Fletcher"
 PARTY_A_PAYMENT_SKEY="$PARTY_A_PREFIX".skey
 PARTY_A_PAYMENT_VKEY="$PARTY_A_PREFIX".vkey
-PARTY_A_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                           \
-                            --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY" \
+
+echo "Create the first party's keys, if necessary."
+
+if [[ ! -e "$PARTY_A_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$PARTY_A_PAYMENT_SKEY"      \
+                              --verification-key-file "$PARTY_A_PAYMENT_VKEY"
+fi
+PARTY_A_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY" )
+PARTY_A_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY")
+
+echo "Fund the first party's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$PARTY_A_ADDRESS"
+
+echo "The first party mints their tokens for the swap."
+
+MINT_EXPIRES=$((TIP + 1000000))
+
+TOKEN_NAME_A=Globe
+AMOUNT_A=300
+CURRENCY_SYMBOL_A=$(
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$PARTY_A_PAYMENT_SKEY" \
+                      --change-address  "$PARTY_A_ADDRESS"      \
+                      --count "$AMOUNT_A"                       \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      "$TOKEN_NAME_A"                           \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
 )
-PARTY_A_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY"
-)
+TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
 
 echo "The first party $PARTY_A_NAME is the minimum-ADA provider and has the address "'`'"$PARTY_A_ADDRESS"'`'" and public-key hash "'`'"$PARTY_A_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
@@ -62,25 +101,22 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
 > /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS"
 
-echo "We select the UTxO with the most ADA and another UTxO with exactly one type of native token."
+echo "We select the UTxO with the most ADA and another UTxO with the newly minted native token."
 
 TX_0_A_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$PARTY_A_ADDRESS"                                                             \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$PARTY_A_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
-cardano-cli query utxo "${MAGIC[@]}"                                                                                                                   \
-                       --address "$PARTY_A_ADDRESS"                                                                                                    \
-                       --out-file /dev/stdout                                                                                                          \
-| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[1].value | to_entries | .[0] | .value) > 1)' \
-> utxo-0-a.json
-TX_0_A_TOKEN=$(jq -r '.key' utxo-0-a.json | head -n 1)
-CURRENCY_SYMBOL_A=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .key' utxo-0-a.json | head -n 1)
-TOKEN_NAME_A=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-a.json | head -n 1 | sed -e 's/\(.*\)/\U\1/' | basenc --decode --base16)
-TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
-AMOUNT_A=$(jq '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .value' utxo-0-a.json | head -n 1)
+TX_0_A_TOKEN=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$TOKEN_A"                   \
+                        "$PARTY_A_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
 
 echo "$PARTY_A_NAME will spend the UTxOs "'`'"$TX_0_A_ADA"'`'" and "'`'"$TX_0_A_TOKEN"'`'". They will trade $AMOUNT_A of "'`'"$TOKEN_A"'`.'
 
@@ -90,13 +126,43 @@ PARTY_B_PREFIX="$TREASURY/thomas-kyd"
 PARTY_B_NAME="Thomas Kyd"
 PARTY_B_PAYMENT_SKEY="$PARTY_B_PREFIX".skey
 PARTY_B_PAYMENT_VKEY="$PARTY_B_PREFIX".vkey
-PARTY_B_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                           \
-                            --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY" \
+
+echo "Create the second party's keys, if necessary."
+
+if [[ ! -e "$PARTY_B_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$PARTY_B_PAYMENT_SKEY"      \
+                              --verification-key-file "$PARTY_B_PAYMENT_VKEY"
+fi
+PARTY_B_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY" )
+PARTY_B_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY")
+
+echo "Fund the second party's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$PARTY_B_ADDRESS"
+
+echo "The second party mints their tokens for the swap."
+
+TOKEN_NAME_B=Swan
+AMOUNT_B=500
+CURRENCY_SYMBOL_B=$(
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$PARTY_B_PAYMENT_SKEY" \
+                      --change-address  "$PARTY_B_ADDRESS"      \
+                      --count "$AMOUNT_B"                       \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      "$TOKEN_NAME_B"                           \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
 )
-PARTY_B_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY"
-)
+TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"
 
 echo "The second party $PARTY_B_NAME has the address "'`'"$PARTY_B_ADDRESS"'`'" and public-key hash "'`'"$PARTY_B_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
@@ -109,35 +175,24 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
 > /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS"
 
-echo "We select the UTxO with the most ADA and another UTxO with exactly one type of native token."
+echo "We select the UTxO with the most ADA and another UTxO with the newly minted native token."
 
 TX_0_B_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$PARTY_B_ADDRESS"                                                             \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$PARTY_B_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
-cardano-cli query utxo "${MAGIC[@]}"                                                                                                                   \
-                       --address "$PARTY_B_ADDRESS"                                                                                                    \
-                       --out-file /dev/stdout                                                                                                          \
-| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[1].value | to_entries | .[0] | .value) > 1)' \
-> utxo-0-b.json
-TX_0_B_TOKEN=$(jq -r '.key' utxo-0-b.json | head -n 1)
-CURRENCY_SYMBOL_B=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .key' utxo-0-b.json | head -n 1)
-TOKEN_NAME_B=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-b.json | head -n 1 | sed -e 's/\(.*\)/\U\1/' | basenc --decode --base16)
-TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"
-AMOUNT_B=$(jq '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .value' utxo-0-b.json | head -n 1)
+TX_0_B_TOKEN=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$TOKEN_B"                   \
+                        "$PARTY_B_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
 
 echo "$PARTY_B_NAME will spend the UTxOs "'`'"$TX_0_B_ADA"'`'" and "'`'"$TX_0_B_TOKEN"'`'". They will trade $AMOUNT_B of "'`'"$TOKEN_B"'`.'
-
-echo "### Tip of the Blockchain"
-
-TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
-NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
-HOUR="$((3600*1000))"
-
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
@@ -283,9 +338,84 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 
 echo "Here are the UTxOs at the first party $PARTY_A_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p"
 
 echo "Here are the UTxOs at the second party $PARTY_B_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p"
 
+echo "## Clean Up"
+
+FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                          \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"              \
+                               --tx-in "$TX_2"#0                                      \
+                               --tx-in "$TX_3"#2                                      \
+                               --tx-out "$PARTY_B_ADDRESS+1500000+$AMOUNT_B $TOKEN_B" \
+                               --required-signer "$PARTY_A_PAYMENT_SKEY"              \
+                               --change-address "$PARTY_A_ADDRESS"                    \
+                               --out-file /dev/null                                   \
+                               --submit 600
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                          \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"              \
+                               --tx-in "$TX_3"#0                                      \
+                               --tx-in "$TX_3"#1                                      \
+                               --tx-out "$PARTY_A_ADDRESS+1500000+$AMOUNT_A $TOKEN_A" \
+                               --required-signer "$PARTY_B_PAYMENT_SKEY"              \
+                               --change-address "$PARTY_B_ADDRESS"                    \
+                               --out-file /dev/null                                   \
+                               --submit 600
+
+marlowe-cli util mint "${MAGIC[@]}"                             \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$PARTY_A_PAYMENT_SKEY" \
+                      --change-address  "$PARTY_A_ADDRESS"      \
+                      --count "-$AMOUNT_A"                      \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      "$TOKEN_NAME_A"
+
+marlowe-cli util mint "${MAGIC[@]}"                             \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$PARTY_B_PAYMENT_SKEY" \
+                      --change-address  "$PARTY_B_ADDRESS"      \
+                      --count "-$AMOUNT_B"                      \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      "$TOKEN_NAME_B"
+
+TX=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$PARTY_A_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+marlowe-cli transaction simple "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --tx-in "$TX"                             \
+                               --required-signer "$PARTY_A_PAYMENT_SKEY" \
+                               --change-address "$FAUCET_ADDRESS"        \
+                               --out-file /dev/null                      \
+                               --submit 600
+
+TX=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$PARTY_B_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+marlowe-cli transaction simple "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --tx-in "$TX"                             \
+                               --required-signer "$PARTY_B_PAYMENT_SKEY" \
+                               --change-address "$FAUCET_ADDRESS"        \
+                               --out-file /dev/null                      \
+                               --submit 600

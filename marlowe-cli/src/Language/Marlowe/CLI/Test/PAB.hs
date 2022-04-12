@@ -627,6 +627,8 @@ totalBalance :: MonadError CliError m
              -> m C.Value   -- ^ Action returning the total balance.
 totalBalance PabAccess{..} walletId =
   do
+    -- Cardano Wallet may lag the PAB and chain index, so wait a bit before querying funds.
+    liftIO $ threadDelay 2500
     ApiWallet{balance,assets} <- liftCliIO $ runWallet (getWallet walletClient $ ApiT walletId)
     let
       ApiWalletBalance (W.Quantity lovelace) _ _ = balance

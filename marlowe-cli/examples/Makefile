@@ -2,13 +2,13 @@
 #!nix-shell -i "make -f" -p gnumake
 
 
-SUBDIRS:=simple swap zcb cfd escrow
+SUBDIRS:=simple zcb escrow cfd swap
 
 
 all: $(SUBDIRS)
 
 $(SUBDIRS):
-	make -C $@ clean tests
+	make -C $@ docs
 
 clean:
 	-rm */tx-?.* */utxo-?-?.json */*.{diff,log}

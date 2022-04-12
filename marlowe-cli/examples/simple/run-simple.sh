@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script exits with an error value if the end-to-end test fails.
-set -e
+set -euo pipefail
 
 echo "# Test of a Simple Contract"
 
@@ -67,6 +67,8 @@ fi
 
 echo "### Select Parties"
 
+echo "### Participants"
+
 echo "#### The Bystander"
 
 echo "The bystander simply provides the minimum ada to be held in the contract while it is active."
@@ -95,7 +97,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
-                        --lovelace 100000000                      \
+                        --lovelace 50000000                       \
                         "$BYSTANDER_ADDRESS"
 
 echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'" and public-key hash "'`'"$BYSTANDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
@@ -114,7 +116,7 @@ echo "We select a UTxO with sufficient funds to use in executing the contract."
 TX_0_BYSTANDER=$(
 marlowe-cli util select "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --lovelace-only 50000000                  \
+                        --lovelace-only 20000000                  \
                         "$BYSTANDER_ADDRESS"                      \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'
 )
@@ -148,7 +150,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
-                        --lovelace 100000000                      \
+                        --lovelace 50000000                       \
                         "$PARTY_ADDRESS"
 
 echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and the public-key hash "'`'"$PARTY_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
@@ -167,7 +169,7 @@ echo "We select the UTxO with the most funds to use in executing the contract."
 TX_0_PARTY=$(
 marlowe-cli util select "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --lovelace-only 50000000                  \
+                        --lovelace-only 20000000                  \
                         "$PARTY_ADDRESS"                          \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'
 )
@@ -363,9 +365,30 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 
 echo "Here is the UTxO at the bystander $BYSTANDER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
 
 echo "Here is the UTxO at the party $PARTY_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
 
+echo "## Clean Up"
+
+FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
+
+marlowe-cli transaction simple "${MAGIC[@]}"                               \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
+                               --tx-in "$TX_1"#0                           \
+                               --tx-in "$TX_4"#1                           \
+                               --required-signer "$BYSTANDER_PAYMENT_SKEY" \
+                               --change-address "$FAUCET_ADDRESS"          \
+                               --out-file /dev/null                        \
+                               --submit 600
+
+marlowe-cli transaction simple "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --tx-in "$TX_4"#0                         \
+                               --tx-in "$TX_4"#2                         \
+                               --required-signer "$PARTY_PAYMENT_SKEY"   \
+                               --change-address "$FAUCET_ADDRESS"        \
+                               --out-file /dev/null                      \
+                               --submit 600

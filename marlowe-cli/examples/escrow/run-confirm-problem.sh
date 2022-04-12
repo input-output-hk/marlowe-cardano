@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script exits with an error value if the end-to-end test fails.
-set -e
+set -euo pipefail
 
 echo '# Example Escrow Contract: "Confirm Problem"'
 
@@ -18,10 +18,8 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
-echo '* basenc'
-echo '* tr'
 echo
-echo "Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables "'`'"SELLER_PREFIX"'`'", "'`'"BUYER_PREFIX"'`'", and "'`'"MEDIATOR_PREFIX"'`'" where they appear below."
+echo "Signing and verification keys must be provided below for the bystander and party roles, or they will be created automatically: to do this, set the environment variables "'`'"SELLER_PREFIX"'`'", "'`'"BUYER_PREFIX"'`'", and "'`'"MEDIATOR_PREFIX"'`'" where they appear below."
 
 echo "## Preliminaries"
 
@@ -38,13 +36,15 @@ else # Use the private testnet.
   SLOT_OFFSET=1644929640000
 fi
 
-echo "### Role Currency"
+echo "### Tip of the Blockchain"
 
-echo "Set the role currency for the validator."
+TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
 
-ROLE_CURRENCY=8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
-echo "### Select Parties"
+echo "### Participants"
 
 echo "#### The Seller"
 
@@ -53,14 +53,174 @@ echo "The seller sells an item for a price."
 SELLER_PREFIX="$TREASURY/francis-beaumont"
 SELLER_NAME="Francis Beaumont"
 SELLER_ROLE=FB
-SELLER_ROLE_HEX=$(echo -n "$SELLER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-SELLER_TOKEN="$ROLE_CURRENCY.$SELLER_ROLE"
 SELLER_PAYMENT_SKEY="$SELLER_PREFIX".skey
 SELLER_PAYMENT_VKEY="$SELLER_PREFIX".vkey
-SELLER_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                          \
-                            --payment-verification-key-file "$SELLER_PAYMENT_VKEY" \
+
+echo "Create the seller's keys, if necessary."
+
+if [[ ! -e "$SELLER_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$SELLER_PAYMENT_SKEY"      \
+                              --verification-key-file "$SELLER_PAYMENT_VKEY"
+fi
+SELLER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$SELLER_PAYMENT_VKEY")
+
+echo "Fund the seller's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 50000000                       \
+                        "$SELLER_ADDRESS"
+
+echo "### The Buyer"
+
+BUYER_PREFIX="$TREASURY/thomas-middleton"
+BUYER_NAME="Thomas Middleton"
+BUYER_ROLE=TM
+BUYER_PAYMENT_SKEY="$BUYER_PREFIX".skey
+BUYER_PAYMENT_VKEY="$BUYER_PREFIX".vkey
+
+echo "Create the buyer's keys, if necessary."
+
+if [[ ! -e "$BUYER_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$BUYER_PAYMENT_SKEY"      \
+                              --verification-key-file "$BUYER_PAYMENT_VKEY"
+fi
+BUYER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$BUYER_PAYMENT_VKEY")
+
+echo "Fund the buyer's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 350000000                      \
+                        "$BUYER_ADDRESS"
+
+echo "### The Mediator"
+
+MEDIATOR_PREFIX="$TREASURY/christopher-marlowe"
+MEDIATOR_NAME="Christopher Marlowe"
+MEDIATOR_ROLE=CM
+MEDIATOR_PAYMENT_SKEY="$MEDIATOR_PREFIX".skey
+MEDIATOR_PAYMENT_VKEY="$MEDIATOR_PREFIX".vkey
+
+echo "Create the mediator's keys, if necessary."
+
+if [[ ! -e "$MEDIATOR_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$MEDIATOR_PAYMENT_SKEY"      \
+                              --verification-key-file "$MEDIATOR_PAYMENT_VKEY"
+fi
+MEDIATOR_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$MEDIATOR_PAYMENT_VKEY")
+
+echo "Fund the mediator's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$MEDIATOR_ADDRESS"
+
+echo "### Role Tokens"
+
+echo "The mediator mints the role tokens."
+
+MINT_EXPIRES=$((TIP + 1000000))
+
+ROLE_CURRENCY=$(
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"     \
+                      --required-signer "$MEDIATOR_PAYMENT_SKEY"    \
+                      --change-address  "$MEDIATOR_ADDRESS"         \
+                      --expires "$MINT_EXPIRES"                     \
+                      --out-file /dev/null                          \
+                      --submit=600                                  \
+                      "$MEDIATOR_ROLE" "$SELLER_ROLE" "$BUYER_ROLE" \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                                \
 )
+
+MEDIATOR_TOKEN="$ROLE_CURRENCY.$MEDIATOR_ROLE"
+SELLER_TOKEN="$ROLE_CURRENCY.$SELLER_ROLE"
+BUYER_TOKEN="$ROLE_CURRENCY.$BUYER_ROLE"
+
+echo "Find the transaction output with the seller's role token."
+
+TX_MINT_SELLER=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$SELLER_TOKEN"              \
+                        "$MEDIATOR_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "Send the seller their role token."
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                      \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"          \
+                               --tx-in "$TX_MINT_SELLER"                          \
+                               --tx-out "$SELLER_ADDRESS+2000000+1 $SELLER_TOKEN" \
+                               --required-signer "$MEDIATOR_PAYMENT_SKEY"         \
+                               --change-address "$MEDIATOR_ADDRESS"               \
+                               --out-file /dev/null                               \
+                               --submit 600
+
+echo "Find the transaction output with the buyer's role token."
+
+TX_MINT_BUYER=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$BUYER_TOKEN"               \
+                        "$MEDIATOR_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "Send the buyer their role token."
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                    \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"        \
+                               --tx-in "$TX_MINT_BUYER"                         \
+                               --tx-out "$BUYER_ADDRESS+2000000+1 $BUYER_TOKEN" \
+                               --required-signer "$MEDIATOR_PAYMENT_SKEY"       \
+                               --change-address "$MEDIATOR_ADDRESS"             \
+                               --out-file /dev/null                             \
+                               --submit 600
+
+echo "### Available UTxOs"
+
+echo "The mediator $MEDIATOR_NAME is the minimum-ADA provider and has the address "'`'"$MEDIATOR_ADDRESS"'`'" and role token named "'`'"$MEDIATOR_ROLE"'`'". They have the following UTxOs in their wallet:"
+
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$MEDIATOR_PAYMENT_SKEY"\
+                       --change-address "$MEDIATOR_ADDRESS"      \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
+cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS"
+
+echo "We select the UTxO with the mediator $MEDIATOR_NAME's role token."
+
+TX_0_MEDIATOR_ADA=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 120000000                 \
+                        "$MEDIATOR_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+TX_0_MEDIATOR_TOKEN=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$MEDIATOR_TOKEN"              \
+                        "$MEDIATOR_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "$MEDIATOR_NAME will spend the UTxOs "'`'"$TX_0_MEDIATOR_ADA"'`'" and "'`'"$TX_0_MEDIATOR_TOKEN"'`.'
 
 echo "The seller $SELLER_NAME has the address "'`'"$SELLER_ADDRESS"'`'" and role token named "'`'"$SELLER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
@@ -73,37 +233,24 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
 > /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS"
 
-echo "We select the UTxO with the seller $SELLER_NAME's role token."
+echo "We select the UTxO with the lender $SELLER_NAME's role token."
 
 TX_0_SELLER_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$SELLER_ADDRESS"                                                              \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$SELLER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_SELLER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                          \
-                       --address "$SELLER_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                 \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$SELLER_ROLE_HEX"'" == 1) | .key' \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$SELLER_TOKEN"              \
+                        "$SELLER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 
 echo "$SELLER_NAME will spend the UTxOs "'`'"$TX_0_SELLER_ADA"'`'" and "'`'"$TX_0_SELLER_TOKEN"'`.'
-
-echo "### The Buyer"
-
-BUYER_PREFIX="$TREASURY/thomas-middleton"
-BUYER_NAME="Thomas Middleton"
-BUYER_ROLE=TM
-BUYER_ROLE_HEX=$(echo -n "$BUYER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-BUYER_TOKEN="$ROLE_CURRENCY.$BUYER_ROLE"
-BUYER_PAYMENT_SKEY="$BUYER_PREFIX".skey
-BUYER_PAYMENT_VKEY="$BUYER_PREFIX".vkey
-BUYER_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                         \
-                            --payment-verification-key-file "$BUYER_PAYMENT_VKEY" \
-)
 
 echo "The buyer $BUYER_NAME has the address "'`'"$BUYER_ADDRESS"'`'" and role token named "'`'"$BUYER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
@@ -116,74 +263,24 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
 > /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS"
 
-echo "We select the UTxO with the buyer $BUYER_NAME's role token."
+echo "We select the UTxO with the lender $BUYER_NAME's role token."
 
 TX_0_BUYER_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$BUYER_ADDRESS"                                                               \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$BUYER_ADDRESS"                          \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_BUYER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                         \
-                       --address "$BUYER_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$BUYER_ROLE_HEX"'" == 1) | .key' \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$BUYER_TOKEN"               \
+                        "$BUYER_ADDRESS"                          \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 
 echo "$BUYER_NAME will spend the UTxOs "'`'"$TX_0_BUYER_ADA"'`'" and "'`'"$TX_0_BUYER_TOKEN"'`.'
-
-echo "### The Mediator"
-
-MEDIATOR_PREFIX="$TREASURY/christopher-marlowe"
-MEDIATOR_NAME="Christopher Marlowe"
-MEDIATOR_ROLE=CM
-MEDIATOR_ROLE_HEX=$(echo -n "$MEDIATOR_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-MEDIATOR_TOKEN="$ROLE_CURRENCY.$MEDIATOR_ROLE"
-MEDIATOR_PAYMENT_SKEY="$MEDIATOR_PREFIX".skey
-MEDIATOR_PAYMENT_VKEY="$MEDIATOR_PREFIX".vkey
-MEDIATOR_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                            \
-                            --payment-verification-key-file "$MEDIATOR_PAYMENT_VKEY" \
-)
-
-echo "The mediator $MEDIATOR_NAME has the address "'`'"$MEDIATOR_ADDRESS"'`'" and role token named "'`'"$MEDIATOR_ROLE"'`'". They have the following UTxOs in their wallet:"
-
-marlowe-cli util clean "${MAGIC[@]}"                              \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                       --required-signer "$MEDIATOR_PAYMENT_SKEY" \
-                       --change-address "$MEDIATOR_ADDRESS"       \
-                       --out-file /dev/null                       \
-                       --submit=600                               \
-> /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS"
-
-echo "We select the UTxO with the mediator $MEDIATOR_NAME's role token."
-
-TX_0_MEDIATOR_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$MEDIATOR_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
-)
-TX_0_MEDIATOR_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$MEDIATOR_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$MEDIATOR_ROLE_HEX"'" == 1) | .key' \
-)
-
-echo "$MEDIATOR_NAME will spend the UTxOs "'`'"$TX_0_MEDIATOR_ADA"'`'" and "'`'"$TX_0_MEDIATOR_TOKEN"'`.'
-
-echo "### Tip of the Blockchain"
-
-TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
-NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
-HOUR="$((3600*1000))"
-
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
@@ -386,7 +483,7 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                                \
 )
 
-echo "The confirmation of the claim resulted in closing the contract, paying $PRICE lovelace to the role address for the benefit of the buyer $BUYER_NAME and $MINIMUM_ADA lovelace for the benefit of the mediator $MEDIATOR_NAME in the transaction "'`'"$TX_5"'`'".  There is no UTxO at the contract address:"
+echo "The confirmation of the claim resulted in closing the contract, paying $PRICE lovelace to the role address for the benefit of the buyer $BUYER_NAME and $MINIMUM_ADA lovelace for the benefit of the mediator $MEDIATOR_NAME in the transaction "'`'"$TX_4"'`'".  There is no UTxO at the contract address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
 
@@ -394,9 +491,9 @@ echo "Here are the UTxOs at the role address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
-echo "Here is the UTxO at the mediator $MEDIATOR_NAME's address:"
+echo "Here is the UTxO at the seller $SELLER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
 echo "## Transactions 5 and 6. Buyer and Mediator Withdraw Funds."
 
@@ -442,11 +539,64 @@ echo "There is no UTxO at the role address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
 
+echo "Here are the UTxOs at the seller $SELLER_NAME's address:"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
+
 echo "Here are the UTxOs at the buyer $BUYER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
 
 echo "Here are the UTxOs at the mediator $MEDIATOR_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_6/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
 
+echo "## Clean Up"
+
+FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                        \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
+                               --tx-in "$TX_4"#0                                    \
+                               --tx-in "$TX_4"#3                                    \
+                               --tx-out "$MEDIATOR_ADDRESS+1400000+1 $SELLER_TOKEN" \
+                               --required-signer "$SELLER_PAYMENT_SKEY"             \
+                               --change-address "$FAUCET_ADDRESS"                   \
+                               --out-file /dev/null                                 \
+                               --submit 600
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                       \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"           \
+                               --tx-in "$TX_5"#0                                   \
+                               --tx-in "$TX_5"#2                                   \
+                               --tx-out "$MEDIATOR_ADDRESS+1400000+1 $BUYER_TOKEN" \
+                               --required-signer "$BUYER_PAYMENT_SKEY"             \
+                               --change-address "$FAUCET_ADDRESS"                  \
+                               --out-file /dev/null                                \
+                               --submit 600
+
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"     \
+                      --required-signer "$MEDIATOR_PAYMENT_SKEY"    \
+                      --change-address  "$MEDIATOR_ADDRESS"         \
+                      --count -1                                    \
+                      --expires "$MINT_EXPIRES"                     \
+                      --out-file /dev/null                          \
+                      --submit=600                                  \
+                      "$MEDIATOR_ROLE" "$SELLER_ROLE" "$BUYER_ROLE"
+
+TX=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$MEDIATOR_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+marlowe-cli transaction simple "${MAGIC[@]}"                              \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                               --tx-in "$TX"                              \
+                               --required-signer "$MEDIATOR_PAYMENT_SKEY" \
+                               --change-address "$FAUCET_ADDRESS"         \
+                               --out-file /dev/null                       \
+                               --submit 600

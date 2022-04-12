@@ -7,8 +7,6 @@ DOCS=$(wildcard *-*.md)
 TESTS=$(addsuffix .log,$(basename $(wildcard run-*.sh)))
 
 
-all: tests docs
-
 tests: $(TESTS)
 
 run-%.log: run-%.sh

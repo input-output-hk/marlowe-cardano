@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script exits with an error value if the end-to-end test fails.
-set -e
+set -euo pipefail
 
 echo '# Test of a Contract for Differences'
 
@@ -16,10 +16,8 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
-echo '* tr'
-echo '* basenc'
 echo
-echo "Signing and verification keys must be provided below for the oracle and party roles: to do this, set the environment variables "'`'"PARTY_PREFIX"'`'", "'`'"COUNTERPARTY_PREFIX"'`'", and "'`'"ORACLE_PREFIX"'`'" where they appear below."
+echo "Signing and verification keys must be provided below for the oracle and party roles, or they will be created automatically: to do this, set the environment variables "'`'"PARTY_PREFIX"'`'", "'`'"COUNTERPARTY_PREFIX"'`'", and "'`'"ORACLE_PREFIX"'`'" where they appear below."
 
 echo "## Preliminaries"
 
@@ -36,121 +34,164 @@ else # Use the private testnet.
   SLOT_OFFSET=1644929640000
 fi
 
-echo "### Role Currency"
+echo "### Tip of the Blockchain"
 
-echo "Set the role currency for the validator."
+TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
+MINUTE="$((60*1000))"
 
-ROLE_CURRENCY=8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
-echo "### Select Parties"
+echo "### Participants"
 
 echo "#### The Party"
 
-echo "The party bets that the asset under consideration will decrease. If it increases, they pay the difference in price to the counterparty."
+echo "The party sells an item for a price."
 
 PARTY_PREFIX="$TREASURY/francis-beaumont"
 PARTY_NAME="Francis Beaumont"
 PARTY_ROLE=FB
-PARTY_ROLE_HEX=$(echo -n "$PARTY_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-PARTY_TOKEN="$ROLE_CURRENCY.$PARTY_ROLE"
 PARTY_PAYMENT_SKEY="$PARTY_PREFIX".skey
 PARTY_PAYMENT_VKEY="$PARTY_PREFIX".vkey
-PARTY_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                         \
-                            --payment-verification-key-file "$PARTY_PAYMENT_VKEY" \
-)
 
-echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and role token named "'`'"$PARTY_ROLE"'`'". They have the following UTxOs in their wallet:"
+echo "Create the party's keys, if necessary."
 
-marlowe-cli util clean "${MAGIC[@]}"                             \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --required-signer "$PARTY_PAYMENT_SKEY"   \
-                       --change-address "$PARTY_ADDRESS"         \
-                       --out-file /dev/null                      \
-                       --submit=600                              \
-> /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"
+if [[ ! -e "$PARTY_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$PARTY_PAYMENT_SKEY"      \
+                              --verification-key-file "$PARTY_PAYMENT_VKEY"
+fi
+PARTY_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$PARTY_PAYMENT_VKEY")
 
-echo "We select the UTxO with the party $PARTY_NAME's role token."
+echo "Fund the party's address."
 
-TX_0_PARTY_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$PARTY_ADDRESS"                                                               \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
-)
-TX_0_PARTY_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                         \
-                       --address "$PARTY_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$PARTY_ROLE_HEX"'" == 1) | .key' \
-)
-
-echo "$PARTY_NAME will spend the UTxOs "'`'"$TX_0_PARTY_ADA"'`'" and "'`'"$TX_0_PARTY_TOKEN"'`.'
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 50000000                       \
+                        "$PARTY_ADDRESS"
 
 echo "### The Counterparty"
-
-echo "The counterparty bets that the asset under consideration will increase. If it decreases, they pay the difference in price to the counterparty."
 
 COUNTERPARTY_PREFIX="$TREASURY/thomas-middleton"
 COUNTERPARTY_NAME="Thomas Middleton"
 COUNTERPARTY_ROLE=TM
-COUNTERPARTY_ROLE_HEX=$(echo -n "$COUNTERPARTY_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-COUNTERPARTY_TOKEN="$ROLE_CURRENCY.$COUNTERPARTY_ROLE"
 COUNTERPARTY_PAYMENT_SKEY="$COUNTERPARTY_PREFIX".skey
 COUNTERPARTY_PAYMENT_VKEY="$COUNTERPARTY_PREFIX".vkey
-COUNTERPARTY_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                                \
-                            --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY" \
-)
 
-echo "The counterparty $COUNTERPARTY_NAME has the address "'`'"$COUNTERPARTY_ADDRESS"'`'" and role token named "'`'"$COUNTERPARTY_ROLE"'`'". They have the following UTxOs in their wallet:"
+echo "Create the counterparty's keys, if necessary."
 
-marlowe-cli util clean "${MAGIC[@]}"                                  \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
-                       --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
-                       --change-address "$COUNTERPARTY_ADDRESS"       \
-                       --out-file /dev/null                           \
-                       --submit=600                                   \
-> /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS"
+if [[ ! -e "$COUNTERPARTY_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$COUNTERPARTY_PAYMENT_SKEY"      \
+                              --verification-key-file "$COUNTERPARTY_PAYMENT_VKEY"
+fi
+COUNTERPARTY_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY")
 
-echo "We select the UTxO with the counterparty $COUNTERPARTY_NAME's role token."
+echo "Fund the counterparty's address."
 
-TX_0_COUNTERPARTY_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$COUNTERPARTY_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
-)
-TX_0_COUNTERPARTY_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                                \
-                       --address "$COUNTERPARTY_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                       \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$COUNTERPARTY_ROLE_HEX"'" == 1) | .key' \
-)
-
-echo "$COUNTERPARTY_NAME will spend the UTxOs "'`'"$TX_0_COUNTERPARTY_ADA"'`'" and "'`'"$TX_0_COUNTERPARTY_TOKEN"'`.'
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 50000000                       \
+                        "$COUNTERPARTY_ADDRESS"
 
 echo "### The Oracle"
-
-echo "The oracle reports prices to the contract."
 
 ORACLE_PREFIX="$TREASURY/christopher-marlowe"
 ORACLE_NAME="Christopher Marlowe"
 ORACLE_ROLE=CM
-ORACLE_ROLE_HEX=$(echo -n "$ORACLE_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-ORACLE_TOKEN="$ROLE_CURRENCY.$ORACLE_ROLE"
 ORACLE_PAYMENT_SKEY="$ORACLE_PREFIX".skey
 ORACLE_PAYMENT_VKEY="$ORACLE_PREFIX".vkey
-ORACLE_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                          \
-                            --payment-verification-key-file "$ORACLE_PAYMENT_VKEY" \
+
+echo "Create the oracle's keys, if necessary."
+
+if [[ ! -e "$ORACLE_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$ORACLE_PAYMENT_SKEY"      \
+                              --verification-key-file "$ORACLE_PAYMENT_VKEY"
+fi
+ORACLE_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$ORACLE_PAYMENT_VKEY")
+
+echo "Fund the oracle's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$ORACLE_ADDRESS"
+
+echo "### Role Tokens"
+
+echo "The oracle mints the role tokens."
+
+MINT_EXPIRES=$((TIP + 1000000))
+
+ROLE_CURRENCY=$(
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
+                      --required-signer "$ORACLE_PAYMENT_SKEY"          \
+                      --change-address  "$ORACLE_ADDRESS"               \
+                      --expires "$MINT_EXPIRES"                         \
+                      --out-file /dev/null                              \
+                      --submit=600                                      \
+                      "$ORACLE_ROLE" "$PARTY_ROLE" "$COUNTERPARTY_ROLE" \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                                    \
 )
 
-echo "The oracle $ORACLE_NAME has the address "'`'"$ORACLE_ADDRESS"'`'" and role token named "'`'"$ORACLE_ROLE"'`'". They have the following UTxOs in their wallet:"
+ORACLE_TOKEN="$ROLE_CURRENCY.$ORACLE_ROLE"
+PARTY_TOKEN="$ROLE_CURRENCY.$PARTY_ROLE"
+COUNTERPARTY_TOKEN="$ROLE_CURRENCY.$COUNTERPARTY_ROLE"
+
+echo "Find the transaction output with the party's role token."
+
+TX_MINT_PARTY=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$PARTY_TOKEN"               \
+                        "$ORACLE_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "Send the party their role token."
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                    \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"        \
+                               --tx-in "$TX_MINT_PARTY"                         \
+                               --tx-out "$PARTY_ADDRESS+2000000+1 $PARTY_TOKEN" \
+                               --required-signer "$ORACLE_PAYMENT_SKEY"         \
+                               --change-address "$ORACLE_ADDRESS"               \
+                               --out-file /dev/null                             \
+                               --submit 600
+
+echo "Find the transaction output with the counterparty's role token."
+
+TX_MINT_COUNTERPARTY=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$COUNTERPARTY_TOKEN"        \
+                        "$ORACLE_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "Send the counterparty their role token."
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                                  \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                      \
+                               --tx-in "$TX_MINT_COUNTERPARTY"                                \
+                               --tx-out "$COUNTERPARTY_ADDRESS+2000000+1 $COUNTERPARTY_TOKEN" \
+                               --required-signer "$ORACLE_PAYMENT_SKEY"                       \
+                               --change-address "$ORACLE_ADDRESS"                             \
+                               --out-file /dev/null                                           \
+                               --submit 600
+
+echo "### Available UTxOs"
+
+echo "The oracle $ORACLE_NAME is the minimum-ADA provider and has the address "'`'"$ORACLE_ADDRESS"'`'" and role token named "'`'"$ORACLE_ROLE"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean "${MAGIC[@]}"                             \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -164,29 +205,81 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ORACLE_ADDRESS"
 echo "We select the UTxO with the oracle $ORACLE_NAME's role token."
 
 TX_0_ORACLE_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$ORACLE_ADDRESS"                                                              \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$ORACLE_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_ORACLE_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                          \
-                       --address "$ORACLE_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                 \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$ORACLE_ROLE_HEX"'" == 1) | .key' \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$ORACLE_TOKEN"              \
+                        "$ORACLE_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 
 echo "$ORACLE_NAME will spend the UTxOs "'`'"$TX_0_ORACLE_ADA"'`'" and "'`'"$TX_0_ORACLE_TOKEN"'`.'
 
-echo "### Tip of the Blockchain"
+echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and role token named "'`'"$PARTY_ROLE"'`'". They have the following UTxOs in their wallet:"
 
-TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
-NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
-HOUR="$((3600*1000))"
-MINUTE="$((60*1000))"
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$PARTY_PAYMENT_SKEY"   \
+                       --change-address "$PARTY_ADDRESS"         \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"
 
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
+echo "We select the UTxO with the lender $PARTY_NAME's role token."
+
+TX_0_PARTY_ADA=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$PARTY_ADDRESS"                          \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+TX_0_PARTY_TOKEN=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$PARTY_TOKEN"               \
+                        "$PARTY_ADDRESS"                          \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "$PARTY_NAME will spend the UTxOs "'`'"$TX_0_PARTY_ADA"'`'" and "'`'"$TX_0_PARTY_TOKEN"'`.'
+
+echo "The counterparty $COUNTERPARTY_NAME has the address "'`'"$COUNTERPARTY_ADDRESS"'`'" and role token named "'`'"$COUNTERPARTY_ROLE"'`'". They have the following UTxOs in their wallet:"
+
+marlowe-cli util clean "${MAGIC[@]}"                                  \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
+                       --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
+                       --change-address "$COUNTERPARTY_ADDRESS"       \
+                       --out-file /dev/null                           \
+                       --submit=600                                   \
+> /dev/null
+cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS"
+
+echo "We select the UTxO with the lender $COUNTERPARTY_NAME's role token."
+
+TX_0_COUNTERPARTY_ADA=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$COUNTERPARTY_ADDRESS"                   \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+TX_0_COUNTERPARTY_TOKEN=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$COUNTERPARTY_TOKEN"        \
+                        "$COUNTERPARTY_ADDRESS"                   \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "$COUNTERPARTY_NAME will spend the UTxOs "'`'"$TX_0_COUNTERPARTY_ADA"'`'" and "'`'"$TX_0_COUNTERPARTY_TOKEN"'`.'
 
 echo "## The Contract"
 
@@ -704,7 +797,48 @@ echo "There are no UTxOs at the role address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
 
-echo "Here are the UTxOs at the oracle $ORACLE_NAME's address:"
+echo "Here are the UTxOs at the party $PARTY_NAME's address:"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
+
+echo "Here are the UTxOs at the counterparty $COUNTERPARTY_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
 
+echo "Here are the UTxOs at the oracle $ORACLE_NAME's address:"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$ORACLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
+
+echo "## Clean Up"
+
+FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                     \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
+                               --tx-in "$TX_6"#0                                 \
+                               --tx-in "$TX_6"#2                                 \
+                               --tx-out "$ORACLE_ADDRESS+1400000+1 $PARTY_TOKEN" \
+                               --required-signer "$PARTY_PAYMENT_SKEY"           \
+                               --change-address "$FAUCET_ADDRESS"                \
+                               --out-file /dev/null                              \
+                               --submit 600
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                            \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                \
+                               --tx-in "$TX_7"#0                                        \
+                               --tx-in "$TX_7"#2                                        \
+                               --tx-out "$ORACLE_ADDRESS+1400000+1 $COUNTERPARTY_TOKEN" \
+                               --required-signer "$COUNTERPARTY_PAYMENT_SKEY"           \
+                               --change-address "$FAUCET_ADDRESS"                       \
+                               --out-file /dev/null                                     \
+                               --submit 600
+
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
+                      --required-signer "$ORACLE_PAYMENT_SKEY"          \
+                      --change-address  "$ORACLE_ADDRESS"               \
+                      --count -1                                        \
+                      --expires "$MINT_EXPIRES"                         \
+                      --out-file /dev/null                              \
+                      --submit=600                                      \
+                      "$ORACLE_ROLE" "$PARTY_ROLE" "$COUNTERPARTY_ROLE"
