@@ -382,13 +382,13 @@ interpret _ Follow{..} =
         poInstance
     liftIO . putStrLn $ "[Follow] Instance " <> show poInstance <> " now follows instance " <> show poOtherInstance <> "."
 
-interpret access ActivateFollower{..} =
+interpret access po@ActivateFollower{..} =
   do
     WalletInfo{..} <- findOwner poOwner
     (fiInstance, fiChannel) <- runContract access MarloweFollower wiWalletId'
     AppInstanceInfo{..} <- findAppInstance poAppInstance
     case aiParams of
-      Nothing -> throwError . CliError $ "[ActivateFollower] not able to follow AppInstance with missinng MarloweParams."
+      Nothing -> throwError . CliError $ printPoMsg PoName po "Not able to follow AppInstance with missinng MarloweParams."
       Just params -> do
                         let
                           fiParams = params
@@ -400,23 +400,23 @@ interpret access ActivateFollower{..} =
                           <> "."
                         psFollowerInstances %= M.insert poInstance FollowerInstanceInfo{..}
 
-interpret access CallFollow{..} =
+interpret access po@CallFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
     lift
       $ call access fiInstance "follow" fiParams
-    liftIO . putStrLn $ "[CallFollow] Endpoint \"follow\" called on " <> show (unContractInstanceId fiInstance) <> "."
+    logPoMsg PoShow po "Endpoint \"follow\" called."
 
-interpret _ AwaitFollow{..} =
+interpret _ po@AwaitFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
-    liftIO . putStrLn $ "[AwaitFollow] fetching channel messages."
+    logPoMsg PoShow po "Fetching follower messages."
     --  Skipp all preceeding `null`s
     contractHistoryJSON <- untilJustM $ do
       res <- liftIO $ readChan fiChannel
       if res == Null
         then do
-          liftIO . putStrLn $ "[AwaitFollow] Skipping `null` response."
+          logPoMsg PoShow po "Skipping `null` response."
           pure Nothing
         else pure $ Just res
 
@@ -426,15 +426,37 @@ interpret _ AwaitFollow{..} =
 
     case poResponsePattern of
       Just pt -> if matchJSON pt contractHistoryJSON
-        then liftIO . putStrLn $ "[AwaitFollow] Follow confirmed."
-        else throwError $ CliError $ T.unpack $
-          "[AwaitFollow] Received response does not match expected pattern. Expected: "
+        then logPoMsg PoShow po "Follow confirmed."
+        else throwError $ CliError $ printPoMsg PoName po $ T.unpack $
+          "Given response does not match expected pattern. Expected: "
           <> renderValue (extractPatternJSON pt)
           <> ". Received: "
           <> renderValue contractHistoryJSON
           <> "."
       Nothing ->
-        liftIO . putStrLn $ "[AwaitFollow] Follow confirmed."
+        logPoMsg PoShow po "Follow confirmed."
+
+interpret PabAccess{..} po@PrintPABInstanceState{..} =
+  do
+    instanceId <- case poMarloweContract of
+      MarloweApp -> do
+        AppInstanceInfo{..} <- findAppInstance poInstance
+        pure aiInstance
+      MarloweFollower -> do
+        FollowerInstanceInfo{..} <- findFollowerInstance poInstance
+        pure fiInstance
+      WalletCompanion -> do
+        throwError . CliError $ printTraceMsg "PrintPABInstanceState" "WalletCompanion contracts are not supported"
+
+    let
+      PabClient{..} = client
+      InstanceClient{..} = instanceClient instanceId
+
+    response <- liftCliIO
+      . runApi
+      $ getInstanceStatus
+
+    logPoMsg PoShow po $ T.unpack $ renderValue $ toJSON response
 
 interpret _ PrintState =
   do
@@ -805,3 +827,54 @@ matchJSON (Parts expected) given = case (expected, given) of
   (A.Bool ev, A.Bool gv) -> ev == gv
   (A.Null, A.Null) -> True
   (_, _) -> False
+
+
+data PoFormat = PoName | PoShow
+
+printTraceMsg :: String -> String -> String
+printTraceMsg loc msg = "[" <> loc <> "]" <> " " <> msg
+
+logTraceMsg :: MonadIO m => String -> String -> m ()
+logTraceMsg loc msg = liftIO . putStrLn $ printTraceMsg loc msg
+
+printPo :: PoFormat -> PabOperation -> String
+printPo PoShow po = show po
+printPo PoName po = printName po
+  where
+    printName CreateWallet {}          = "CreateWallet"
+    printName FundWallet {}            = "FundWallet"
+    printName ReturnFunds {}           = "ReturnFunds"
+    printName CheckFunds {}            = "CheckFunds"
+    printName ActivateApp {}           = "ActivateApp"
+    printName CallCreate {}            = "CallCreate"
+    printName AwaitCreate {}           = "AwaitCreate"
+    printName CallApplyInputs {}       = "CallApplyInputs"
+    printName AwaitApplyInputs {}      = "AwaitApplyInputs"
+    printName CallAuto {}              = "CallAuto"
+    printName AwaitAuto {}             = "AwaitAuto"
+    printName CallRedeem {}            = "CallRedeem"
+    printName AwaitRedeem {}           = "AwaitRedeem"
+    printName CallClose {}             = "CallClose"
+    printName AwaitClose {}            = "AwaitClose"
+    printName Follow {}                = "Follow"
+    printName Stop {}                  = "Stop"
+    printName PrintState               = "PrintState"
+    printName ActivateFollower {}      = "ActivateFollower"
+    printName CallFollow {}            = "CallFollow"
+    printName AwaitFollow {}           = "AwaitFollow"
+    printName PrintWallet {}           = "PrintWallet"
+    printName Comment {}               = "Comment"
+    printName WaitFor {}               = "WaitFor"
+    printName WaitUntil {}             = "WaitUntil"
+    printName Timeout {}               = "Timeout"
+    printName ShouldFail {}            = "ShouldFail"
+    printName PrintPABInstanceState {} = "PrintPABInstanceState"
+    printName UseWallet {}             = "UseWallet"
+    printName PrintAppUTxOs {}         = "PrintAppUTxOs"
+    printName PrintRoleUTxOs {}        = "PrintRoleUTxOs"
+
+printPoMsg :: PoFormat -> PabOperation -> String -> String
+printPoMsg format po = printTraceMsg (printPo format po)
+
+logPoMsg :: MonadIO m => PoFormat -> PabOperation -> String -> m ()
+logPoMsg frmt po = logTraceMsg (printPo frmt po)
