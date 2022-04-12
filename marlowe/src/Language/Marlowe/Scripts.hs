@@ -30,6 +30,7 @@ import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Ledger
 import Ledger.Ada (adaSymbol)
+import qualified Ledger.Contexts as V
 import qualified Ledger.Interval as Interval
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
@@ -433,6 +434,7 @@ smallTypedValidator = Scripts.mkTypedValidatorParam @TypedMarloweValidator
 smallUntypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
 smallUntypedValidator params = let
     wrapped s = Scripts.wrapValidator (smallMarloweValidator s)
+    -- wrapped s = asdf3 (smallMarloweValidator2 s)
     typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
     -- Yeah, I know. It works, though.
     -- Remove this when Typed Validator has the same size as untyped.
@@ -459,52 +461,74 @@ wrapper1 = Scripts.fromCompiledCode $$(PlutusTx.compile [|| wrapped ||])
 unwrapped1 = Scripts.fromCompiledCode $$(PlutusTx.compile [|| smallMarloweValidator2 ||])
 
 
-
 applyScript :: Script -> Script -> Script
 applyScript (Script f) (Script arg) = Script $ UPLC.applyProgram f arg
 
 
+type MintingParams = ((TxId, Integer), AssocMap.Map TokenName Integer)
 
-asdf :: (MarloweData -> MarloweInput -> Bool) -> BuiltinData -> BuiltinData -> Bool
-asdf f a b = let
+
+{-# INLINABLE marloweMonetaryPolicy #-}
+marloweMonetaryPolicy :: MintingParams -> ScriptContext -> ()
+marloweMonetaryPolicy ((refHash, refIdx), tokens) ctx@ScriptContext{scriptContextTxInfo=txinfo} = let
+    -- see note [Obtaining the currency symbol]
+    ownSymbol@Val.CurrencySymbol{unCurrencySymbol=ownHash} = ownCurrencySymbol ctx
+    ownValidatorHash = ValidatorHash ownHash
+
+    minted = V.txInfoMint txinfo
+    expected = Val.Value $ AssocMap.singleton ownSymbol tokens
+
+    -- True if the pending transaction mints the amount of
+    -- currency that we expect
+    mintOK =
+        let v = expected == minted
+        in traceIfFalse "C0" {-"Value minted different from expected"-} v
+
+    -- True if the pending transaction spends the output
+    -- identified by @(refHash, refIdx)@
+    txOutputSpent =
+        let v = V.spendsOutput txinfo refHash refIdx
+        in  traceIfFalse "C1" {-"Pending transaction does not spend the designated transaction output"-} v
+
+    f _ TxOut{txOutAddress=Address (ScriptCredential vh) _} | vh == ownValidatorHash = True
+    f acc _ = acc
+
+    marloweContractTxOutExists = foldl f False $ txInfoOutputs txinfo
+
+    in if mintOK && txOutputSpent && marloweContractTxOutExists then () else traceError "E"
+
+
+asdf2 :: MintingParams -> ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> ()) -> BuiltinData -> BuiltinData -> ()
+asdf2 mp f a b = let
     -- if script's second argument is ScriptContext then it's a MintingPolicy
     -- otherwise, it's a Validator
     mctx :: Maybe ScriptContext
     mctx = PlutusTx.fromBuiltinData b
     in case mctx of
-        Just ctx -> True
-        _        -> False -- f (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
-
-
-asdf2 :: ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> ()) -> BuiltinData -> BuiltinData -> ()
-asdf2 f a b = let
-    -- if script's second argument is ScriptContext then it's a MintingPolicy
-    -- otherwise, it's a Validator
-    mctx :: Maybe ScriptContext
-    mctx = PlutusTx.fromBuiltinData b
-    in case mctx of
-        Just ctx -> ()
+        Just ctx -> marloweMonetaryPolicy mp ctx
         _        -> f PlutusTx.unsafeFromBuiltinData PlutusTx.unsafeFromBuiltinData (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
 
 
-
-marloweMPS3333 = $(PlutusTx.compileUntyped [| asdf |])
-
-
-marloweMPS = Scripts.fromCompiledCode $$(PlutusTx.compile [|| asdf2 ||])
+{-# INLINABLE asdf3 #-}
+asdf3 :: ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> BuiltinData -> ()) -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+asdf3 f a b c = f PlutusTx.unsafeFromBuiltinData PlutusTx.unsafeFromBuiltinData (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b) c
 
 
-universalMarloweScript :: MarloweParams -> Scripts.Script
-universalMarloweScript params = applyScript marloweMPS validator
+marloweMPS :: MintingParams -> Scripts.Script
+marloweMPS params = Scripts.fromCompiledCode ($$(PlutusTx.compile [|| asdf2 ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+
+
+universalMarloweScript :: MintingParams -> MarloweParams -> Scripts.Script
+universalMarloweScript mp params = applyScript mps validator
   where
     validator = smallUntypedValidatorScript2 params
-    -- validator = smallUntypedValidatorScript params
+    mps = marloweMPS mp
 
 
-universalMarloweValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
-universalMarloweValidator params = unsafeCoerce (Scripts.unsafeMkTypedValidator validator)
+universalMarloweValidator :: MintingParams -> MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
+universalMarloweValidator mp params = unsafeCoerce (Scripts.unsafeMkTypedValidator validator)
  where
-   validator = Validator $ universalMarloweScript params
+   validator = Validator $ universalMarloweScript mp params
 
 
 defaultTxValidationRange :: POSIXTime
