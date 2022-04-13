@@ -88,13 +88,13 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "11";
+      url = "12";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "11";
+      url = "12";
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/libs/small-steps-test; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/libs/small-steps-test; echo source root reset to $sourceRoot";
     }

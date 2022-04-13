@@ -64,13 +64,13 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "2";
+      url = "3";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "2";
+      url = "3";
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/stubs/plutus-ghc-stub; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/stubs/plutus-ghc-stub; echo source root reset to $sourceRoot";
     }
