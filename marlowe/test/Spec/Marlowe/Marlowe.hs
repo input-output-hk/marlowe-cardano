@@ -45,7 +45,7 @@ import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpr
 import qualified Language.Marlowe as M ((%))
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
-import Language.Marlowe.Scripts (MarloweInput, marloweMPS, rolePayoutScript, smallTypedValidator, smallUntypedValidator,
+import Language.Marlowe.Scripts (MarloweInput, marloweMPS, rolePayoutScript, smallUntypedValidator,
                                  universalMarloweScript, unwrapped1, wrapper1)
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
@@ -87,8 +87,7 @@ tests = testGroup "Marlowe"
     , testCase "State serializes into valid JSON" stateSerialization
     , testCase "Input serializes into valid JSON" inputSerialization
     , testGroup "Validator size is reasonable"
-        [ testCase "Typed validator size" typedValidatorSize
-        , testCase "Untyped validator size" untypedValidatorSize
+        [ testCase "Untyped validator size" untypedValidatorSize
         ]
     , testCase "Mul analysis" mulAnalysisTest
     , testCase "Div analysis" divAnalysisTest
@@ -350,17 +349,12 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
 uniqueContractHash :: IO ()
 uniqueContractHash = do
-    let hash1 = Scripts.validatorHash $ smallTypedValidator (marloweParams "11")
-    let hash2 = Scripts.validatorHash $ smallTypedValidator (marloweParams "22")
-    let hash3 = Scripts.validatorHash $ smallTypedValidator (marloweParams "22")
+    let hash1 = Scripts.validatorHash $ smallUntypedValidator (marloweParams "11")
+    let hash2 = Scripts.validatorHash $ smallUntypedValidator (marloweParams "22")
+    let hash3 = Scripts.validatorHash $ smallUntypedValidator (marloweParams "22")
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
 
-typedValidatorSize :: IO ()
-typedValidatorSize = do
-    let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
-    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 17200)
 
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do
