@@ -7,6 +7,8 @@ import Capability.PAB (class ManagePAB)
 import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
+import Component.Icons (icon)
+import Component.Icons as Icon
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill)
@@ -25,10 +27,11 @@ import Halogen.HTML (div)
 import Halogen.HTML as H
 import Halogen.HTML as HH
 import Halogen.Store.Monad (class MonadStore)
-import MainFrame.Lenses (_store, _subState)
+import MainFrame.Lenses (_enteringDashboardState, _store, _subState)
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
 import Page.Dashboard.State as Dashboard
 import Page.Dashboard.Types (_dashboard)
+import Page.Dashboard.View (appTemplate, appTemplateHeader)
 import Page.Welcome.State as Welcome
 import Page.Welcome.View (welcomeCard, welcomeScreen)
 import Store (_wallet)
@@ -56,17 +59,36 @@ render state =
   let
     subState = state ^. _subState
 
+    enteringDashboardState = state ^. _enteringDashboardState
+
     mWallet = state ^? _store <<< _wallet <<< _connectedWallet
   in
     div [ classNames [ "h-full" ] ] $ join
-      [ case mWallet, subState of
-          Just wallet, Right _ ->
+      [ case enteringDashboardState, mWallet, subState of
+          _, Just wallet, Right _ ->
             [ HH.slot_ _dashboard unit Dashboard.component wallet ]
-          _, _ ->
+          true, _, _ ->
+            [ enteringDashboardStateView ]
+          _, _, _ ->
             let
               welcomeState = fromLeft Welcome.initialState subState
             in
               mapComponentAction WelcomeAction
                 <$> [ welcomeScreen welcomeState, welcomeCard welcomeState ]
       , [ H.slot_ _toaster unit Toast.component unit ]
+      ]
+
+enteringDashboardStateView :: forall w i. HH.HTML w i
+enteringDashboardStateView = do
+  appTemplate false (appTemplateHeader Nothing false []) $
+    HH.div
+      [ classNames
+          [ "h-full", "flex", "flex-col", "justify-center", "items-center" ]
+      ]
+      [ icon Icon.ImportExport [ "text-big-icon", "text-gray" ]
+      , HH.p
+          [ classNames [ "flex", "items-center", "gap-2" ] ]
+          [ icon Icon.Sync [ "animate-spin" ]
+          , HH.text "Connecting your wallet to the PAB..."
+          ]
       ]

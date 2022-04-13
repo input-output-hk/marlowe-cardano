@@ -9,7 +9,6 @@ import Capability.Marlowe (class ManageMarlowe)
 import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
 import Control.Monad.Reader (class MonadAsk)
-import Data.Lens (assign)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
@@ -17,7 +16,6 @@ import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
 import Page.Welcome.CreateWallet.Types as CreateWallet
-import Page.Welcome.Lenses (_enteringDashboardState)
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
 import Store as Store
@@ -27,7 +25,6 @@ initialState :: State
 initialState =
   { card: Nothing
   , cardOpen: false
-  , enteringDashboardState: false
   }
 
 -- Some actions are handled in `MainFrame.State` because they involve
@@ -55,7 +52,7 @@ handleAction (OnAcknowledgeMnemonic details) =
   openCard $ CreateWalletCard $ CreateWalletConfirmMnemonic details
 
 handleAction CloseCard =
-  modify_ _ { enteringDashboardState = false, cardOpen = false }
+  modify_ _ { cardOpen = false }
 
 {- [UC-WALLET-TESTNET-1][0] Create a new testnet wallet
    [UC-WALLET-TESTNET-2][4a] Restore a testnet wallet
@@ -73,7 +70,6 @@ two PAB apps for that wallet: a `WalletCompanion` and a `MarloweApp`.
   payments to this wallet.
 -}
 handleAction (ConnectWallet walletDetails) = do
-  assign _enteringDashboardState true
   updateStore $ Store.Wallet $ WalletStore.OnConnect walletDetails
 
 handleAction (OnRestoreWalletMsg msg) = case msg of

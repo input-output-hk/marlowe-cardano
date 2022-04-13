@@ -53,6 +53,7 @@ import Halogen.Store.Select (selectEq)
 import Language.Marlowe.Client (ContractHistory(..))
 import MainFrame.Lenses
   ( _dashboardState
+  , _enteringDashboardState
   , _store
   , _subState
   , _tzOffset
@@ -130,6 +131,7 @@ emptyState =
       { addressBook: AddressBook.empty
       , wallet: Disconnected
       }
+  , enteringDashboardState: false
   }
 
 deriveState :: State -> Connected Slice Unit -> State
@@ -187,6 +189,8 @@ handleAction (Receive context) = do
         $ Store.ModifyAddressBook
         $ AddressBook.insert walletNickname address
       assign _subState $ Right connectedWallet
+      assign _enteringDashboardState false
+    Connecting _, _ -> assign _enteringDashboardState false
     Connected _, Disconnecting _ ->
       updateStore Store.Disconnect
     Disconnecting _, Disconnected ->
@@ -246,14 +250,14 @@ enterDashboardState
   => WalletDetails
   -> HalogenM State Action ChildSlots Msg m Unit
 enterDashboardState disconnectedWallet = do
+  assign _enteringDashboardState true
   let
     walletId = view Disconnected._walletId disconnectedWallet
   ajaxPlutusApps <- PAB.getWalletContractInstances walletId
   -- TODO: Refactor with runExceptT
   case ajaxPlutusApps of
-    Left ajaxError -> globalError
-      "Failed to access the plutus contracts."
-      ajaxError
+    Left ajaxError -> do
+      globalError "Failed to access the plutus contracts." ajaxError
     Right plutusApps -> do
       -- Get instances of the WalletCompanion and the MarloweApp control app.
       -- We try to reutilize an active plutus contract if possible,

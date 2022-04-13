@@ -1,4 +1,4 @@
-module Page.Dashboard.View (render) where
+module Page.Dashboard.View (render, appTemplate, appTemplateHeader) where
 
 import Prologue hiding (Either(..), div)
 
@@ -33,6 +33,7 @@ import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
 import Data.Array as Array
+import Data.Compactable (compact)
 import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
@@ -136,6 +137,22 @@ render state = HH.div [ classNames [ "h-full" ] ]
   , dashboardCard state
   ]
 
+appTemplate :: forall w i. Boolean -> HH.HTML w i -> HH.HTML w i -> HH.HTML w i
+appTemplate cardOpen header body =
+  div
+    [ classNames
+        $
+          [ "h-full"
+          , "grid"
+          , "grid-rows-auto-1fr-auto"
+          , "transition-all"
+          , "duration-500"
+          , "overflow-x-hidden"
+          ]
+            <> applyWhen cardOpen [ "lg:mr-sidebar" ]
+    ]
+    [ header, body, dashboardFooter ]
+
 dashboardScreen
   :: forall m
    . MonadAff m
@@ -165,20 +182,8 @@ dashboardScreen state =
           marloweParams
           contracts
   in
-    div
-      [ classNames
-          $
-            [ "h-full"
-            , "grid"
-            , "grid-rows-auto-1fr-auto"
-            , "transition-all"
-            , "duration-500"
-            , "overflow-x-hidden"
-            ]
-              <> applyWhen cardOpen [ "lg:mr-sidebar" ]
-      ]
-      [ dashboardHeader (WN.toString walletNickname) menuOpen
-      , div
+    appTemplate cardOpen (dashboardHeader (WN.toString walletNickname) menuOpen)
+      $ div
           [ classNames [ "relative" ] ] -- this wrapper is relative because the mobile menu is absolutely positioned inside it
           [ mobileMenu menuOpen
           , div [ classNames [ "h-full", "grid", "grid-rows-auto-1fr" ] ]
@@ -207,8 +212,6 @@ dashboardScreen state =
                     _ -> [ contractsScreen currentTime state ]
               ]
           ]
-      , dashboardFooter
-      ]
 
 dashboardCard
   :: forall m
@@ -265,13 +268,9 @@ dashboardCard state = case view _card state of
   Nothing -> div_ []
 
 ------------------------------------------------------------
-dashboardHeader
-  :: forall m
-   . MonadAff m
-  => PubKey
-  -> Boolean
-  -> ComponentHTML m
-dashboardHeader walletNickname menuOpen =
+appTemplateHeader
+  :: forall w i. Maybe i -> Boolean -> Array (HH.HTML w i) -> HH.HTML w i
+appTemplateHeader onLogoClick menuOpen navItems =
   header
     [ classNames
         $ [ "relative", "border-gray", "transition-colors", "duration-200" ]
@@ -298,7 +297,7 @@ dashboardHeader walletNickname menuOpen =
             ]
         ]
         [ a
-            [ onClick_ $ SelectContract Nothing ]
+            (compact [ onClick_ <$> onLogoClick ])
             [ img
                 [ classNames [ "w-16", "md:hidden" ]
                 , src
@@ -311,66 +310,74 @@ dashboardHeader walletNickname menuOpen =
                 , src marloweRunNavLogo
                 ]
             ]
-        , nav
-            [ classNames [ "flex", "items-center" ] ]
-            [ navigation
-                (OpenCard ContactsCard)
-                Icon.Contacts
-                "contactsHeader"
-                "Contacts"
-            , navigation
-                (OpenCard TutorialsCard)
-                Icon.Tutorials
-                "tutorialsHeader"
-                "Tutorials"
-            , a
-                [ classNames [ "ml-6", "font-bold", "text-sm" ]
-                , id "currentWalletHeader"
-                , onClick_ $ OpenCard CurrentWalletCard
-                , href "#"
-                , ARIA.label "My wallet"
+        , nav [ classNames [ "flex", "items-center" ] ] navItems
+        ]
+    ]
+
+dashboardHeader
+  :: forall m
+   . MonadAff m
+  => PubKey
+  -> Boolean
+  -> ComponentHTML m
+dashboardHeader walletNickname menuOpen =
+  appTemplateHeader (Just $ SelectContract Nothing) menuOpen
+    [ navigation
+        (OpenCard ContactsCard)
+        Icon.Contacts
+        "contactsHeader"
+        "Contacts"
+    , navigation
+        (OpenCard TutorialsCard)
+        Icon.Tutorials
+        "tutorialsHeader"
+        "Tutorials"
+    , a
+        [ classNames [ "ml-6", "font-bold", "text-sm" ]
+        , id "currentWalletHeader"
+        , onClick_ $ OpenCard CurrentWalletCard
+        , href "#"
+        , ARIA.label "My wallet"
+        ]
+        [ span
+            [ classNames $
+                [ "flex"
+                , "items-baseline"
+                , "gap-2"
+                , "bg-white"
+                , "rounded-lg"
+                , "p-4"
+                , "leading-none"
                 ]
-                [ span
-                    [ classNames $
-                        [ "flex"
-                        , "items-baseline"
-                        , "gap-2"
-                        , "bg-white"
-                        , "rounded-lg"
-                        , "p-4"
-                        , "leading-none"
-                        ]
-                    ]
-                    [ span
-                        [ classNames $
-                            [ "-m-1"
-                            , "rounded-full"
-                            , "text-white"
-                            , "w-5"
-                            , "h-5"
-                            , "flex"
-                            , "justify-center"
-                            , "items-center"
-                            , "uppercase"
-                            , "font-semibold"
-                            ] <> Css.bgBlueGradient
-                        ]
-                        [ text $ take 1 walletNickname ]
-                    , span
-                        [ classNames
-                            [ "hidden", "md:inline", "truncate", "max-w-16" ]
-                        ]
-                        [ text walletNickname ]
-                    ]
+            ]
+            [ span
+                [ classNames $
+                    [ "-m-1"
+                    , "rounded-full"
+                    , "text-white"
+                    , "w-5"
+                    , "h-5"
+                    , "flex"
+                    , "justify-center"
+                    , "items-center"
+                    , "uppercase"
+                    , "font-semibold"
+                    ] <> Css.bgBlueGradient
                 ]
-            , tooltip "My wallet" (RefId "currentWalletHeader") Bottom
-            , a
-                [ classNames [ "ml-4", "md:hidden" ]
-                , onClick_ ToggleMenu
+                [ text $ take 1 walletNickname ]
+            , span
+                [ classNames
+                    [ "hidden", "md:inline", "truncate", "max-w-16" ]
                 ]
-                [ if menuOpen then icon_ Icon.Close else icon_ Icon.Menu ]
+                [ text walletNickname ]
             ]
         ]
+    , tooltip "My wallet" (RefId "currentWalletHeader") Bottom
+    , a
+        [ classNames [ "ml-4", "md:hidden" ]
+        , onClick_ ToggleMenu
+        ]
+        [ if menuOpen then icon_ Icon.Close else icon_ Icon.Menu ]
     ]
   where
   navigation action icon' refId label =
@@ -447,7 +454,7 @@ dashboardBreadcrumb mSelectedContractStringId =
               Nothing -> []
     ]
 
-dashboardFooter :: forall p. HTML p Action
+dashboardFooter :: forall w i. HTML w i
 dashboardFooter =
   footer
     [ classNames [ "hidden", "md:block", "border-t", "border-gray" ] ]
@@ -464,7 +471,7 @@ dashboardFooter =
         ]
     ]
 
-dashboardLinks :: forall p. Array (HTML p Action)
+dashboardLinks :: forall w i. Array (HTML w i)
 dashboardLinks =
   -- FIXME: SCP-2589 Add link to Docs
   [ link "Docs" ""
@@ -474,13 +481,13 @@ dashboardLinks =
   , link "Support" "" -}
   ]
 
-iohkLinks :: forall p. Array (HTML p Action)
+iohkLinks :: forall w i. Array (HTML w i)
 iohkLinks =
   [ link "cardano.org" "https://cardano.org"
   , link "iohk.io" "https://iohk.io"
   ]
 
-link :: forall p. String -> String -> HTML p Action
+link :: forall w i. String -> String -> HTML w i
 link label url =
   a
     [ classNames [ "px-4", "py-2", "font-bold", "cursor-pointer" ]
