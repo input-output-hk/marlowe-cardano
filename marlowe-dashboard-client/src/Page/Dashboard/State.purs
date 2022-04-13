@@ -19,7 +19,7 @@ import Capability.PlutusApps.FollowerApp (class FollowerApp, followContract)
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
-import Clipboard (class MonadClipboard, copy)
+import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Types as Contacts
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
@@ -36,7 +36,6 @@ import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Control.Parallel (parTraverse_)
-import Data.Address as Address
 import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
@@ -543,10 +542,6 @@ handleAction (UpdateWalletFunds { assets, sync }) = do
   debug "💰Wallet funds changed" $ encodeJson assets
   updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
   updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
-
-handleAction (OnPartyClicked address) = do
-  copy $ Address.toString address
-  addToast $ successToast "Copied to clipboard"
 
 reActivatePlutusScript
   :: forall m

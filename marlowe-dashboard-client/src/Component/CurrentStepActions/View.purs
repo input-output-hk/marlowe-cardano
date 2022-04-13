@@ -150,10 +150,7 @@ renderPartyTasks state party actions =
         (Array.singleton <<< renderAction state party <$> actions)
   in
     div [ classNames [ "space-y-2" ] ]
-      ( [ renderParty OnPartyClicked (-1) currencySymbol roleTokens party
-        ] <>
-          actionsSeparatedByOr
-      )
+      ([ renderParty currencySymbol roleTokens party ] <> actionsSeparatedByOr)
 
 -- The Party parameter represents who is taking the action
 renderAction :: forall p. State -> Party -> NamedAction -> HTML p Action

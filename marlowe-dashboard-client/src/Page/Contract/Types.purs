@@ -111,7 +111,6 @@ data Action
   | SelectStep Int
   -- The MoveToStep action scrolls the step carousel so that the indicated step is at the center (without changing the model).
   | MoveToStep Int
-  | OnPartyClicked Address
 
 type ChildSlots =
   ( submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
@@ -135,7 +134,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent Finalize = Nothing
   toEvent (Receive _) = Nothing
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
-  toEvent (OnPartyClicked _) = Just $ defaultEvent "OnPartyClicked"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
   toEvent (OnActionSelected _ _) = Nothing

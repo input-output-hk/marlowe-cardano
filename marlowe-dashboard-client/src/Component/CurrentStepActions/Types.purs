@@ -3,7 +3,6 @@ module Component.CurrentStepActions.Types where
 import Prologue
 
 import Component.Tooltip.Types (ReferenceId)
-import Data.Address (Address)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Map (Map)
@@ -19,14 +18,11 @@ import Marlowe.Semantics as Semantics
 import Store.RoleTokens (RoleTokenStore)
 import Type.Proxy (Proxy(..))
 
-data Msg
-  = ActionSelected NamedAction (Maybe ChosenNum)
-  | PartyClicked Address
+data Msg = ActionSelected NamedAction (Maybe ChosenNum)
 
 data Action
   = SelectAction NamedAction (Maybe ChosenNum)
   | ChangeChoice ChoiceId (Maybe ChosenNum)
-  | OnPartyClicked Address
 
 type State = Reactive.State Input Unit Transient
 

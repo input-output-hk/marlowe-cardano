@@ -12,7 +12,6 @@ import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Template.Types (Action, State) as Template
 import Component.Tooltip.Types (ReferenceId)
-import Data.Address (Address)
 import Data.Argonaut (Json, JsonDecodeError)
 import Data.ContractStatus (ContractStatusId)
 import Data.DateTime.Instant (Instant)
@@ -130,7 +129,6 @@ data Action
   | SelectContract (Maybe ContractStatusId)
   | RedeemPayments MarloweParams
   | OnAskContractActionConfirmation MarloweParams NamedAction (Maybe ChosenNum)
-  | OnPartyClicked Address
   | TemplateAction Template.Action
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action

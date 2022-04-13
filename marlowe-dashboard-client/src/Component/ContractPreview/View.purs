@@ -70,7 +70,6 @@ contractPreviewCard currentTime { executionState, namedActions } =
       case _ of
         ActionSelected action num ->
           OnAskContractActionConfirmation marloweParams action num
-        PartyClicked address -> OnPartyClicked address
   in
     li
       [ title nickname

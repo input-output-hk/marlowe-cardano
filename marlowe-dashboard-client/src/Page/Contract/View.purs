@@ -38,7 +38,7 @@ import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant, toDateTime)
 import Data.Foldable (any, foldMap)
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Lens ((^.), (^?))
+import Data.Lens ((^.))
 import Data.List.NonEmpty (foldr)
 import Data.Map (intersectionWith, toUnfoldable) as Map
 import Data.Maybe (isJust, maybe')
@@ -63,7 +63,6 @@ import Marlowe.Execution.Lenses (_semanticState)
 import Marlowe.Execution.State (expandBalances, isClosed)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (transactionFee)
-import Marlowe.Run.Contract.V1.Types (_utxoAddress)
 import Marlowe.Semantics
   ( ChoiceId(..)
   , Party(..)
@@ -73,7 +72,6 @@ import Marlowe.Semantics
   , _accounts
   )
 import Marlowe.Semantics (Input(..)) as S
-import Network.RemoteData (_Success, fromMaybe)
 import Page.Contract.Lenses
   ( _executionState
   , _expandPayments
@@ -102,7 +100,7 @@ import Page.Contract.Types
   )
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Store as Store
-import Store.RoleTokens (RoleTokenStore, getRoleToken, isMyRoleToken)
+import Store.RoleTokens (RoleTokenStore, isMyRoleToken)
 
 -------------------------------------------------------------------------------
 -- Top-level views
@@ -329,19 +327,16 @@ renderPastStep roleTokens tzOffset state stepNumber step = do
             ]
         , case tab, step of
             Tasks, { state: TransactionStep txInput } -> cardContent [ "p-4" ]
-              [ renderPastStepTasksTab roleTokens tzOffset stepNumber state
-                  txInput
-                  step
-              ]
-            Tasks, { state: TimeoutStep timeoutInfo } -> cardContent [ "p-4" ]
-              [ renderTimeout
+              [ renderPastStepTasksTab
                   roleTokens
                   tzOffset
                   stepNumber
                   state
-                  stepNumber
-                  timeoutInfo
+                  txInput
+                  step
               ]
+            Tasks, { state: TimeoutStep timeoutInfo } -> cardContent [ "p-4" ]
+              [ renderTimeout roleTokens tzOffset state stepNumber timeoutInfo ]
             Balances, { balances } -> cardContent []
               [ renderBalances roleTokens stepNumber state balances ]
         ]
@@ -399,7 +394,7 @@ renderPastStepTasksTab roleTokens tzOffset stepNumber state txInput step =
         ]
       else
         append
-          ( renderPartyPastActions roleTokens tzOffset stepNumber state <$>
+          ( renderPartyPastActions roleTokens tzOffset state <$>
               actionsByParticipant
           )
           if length resultingPayments == 0 then
@@ -465,14 +460,12 @@ renderPartyPastActions
    . MonadAff m
   => RoleTokenStore
   -> Minutes
-  -> Int
   -> StartedState
   -> InputsByParty
   -> ComponentHTML m
 renderPartyPastActions
   roleTokens
   tzOffset
-  stepNumber
   state
   { inputs, interval, party } =
   let
@@ -491,7 +484,7 @@ renderPartyPastActions
 
     renderPartyHeader =
       div [ classNames [ "flex", "justify-between", "items-center", "p-4" ] ]
-        [ renderParty OnPartyClicked stepNumber currencySymbol roleTokens party
+        [ renderParty currencySymbol roleTokens party
         , div
             [ classNames
                 [ "flex", "flex-col", "items-end", "text-xxs", "font-semibold" ]
@@ -553,12 +546,11 @@ renderTimeout
    . MonadAff m
   => RoleTokenStore
   -> Minutes
-  -> Int
   -> StartedState
   -> Int
   -> TimeoutInfo
   -> ComponentHTML m
-renderTimeout roleTokens tzOffset stepNumber state _ timeoutInfo =
+renderTimeout roleTokens tzOffset state _ timeoutInfo =
   let
     timeoutDateTime = toDateTime timeoutInfo.time
 
@@ -585,7 +577,7 @@ renderTimeout roleTokens tzOffset stepNumber state _ timeoutInfo =
 
     body =
       div [ classNames [ "p-2", "space-y-2" ] ]
-        $ renderMissingActions roleTokens stepNumber state timeoutInfo
+        $ renderMissingActions roleTokens state timeoutInfo
   in
     div
       [ classNames
@@ -607,11 +599,10 @@ renderMissingActions
   :: forall m
    . MonadAff m
   => RoleTokenStore
-  -> Int
   -> StartedState
   -> TimeoutInfo
   -> Array (ComponentHTML m)
-renderMissingActions _ _ _ { missedActions }
+renderMissingActions _ _ { missedActions }
   | haveActions missedActions == false =
       [ div [ classNames [ "font-semibold", "text-xs", "leading-none" ] ]
           [ text
@@ -619,26 +610,23 @@ renderMissingActions _ _ _ { missedActions }
           ]
       ]
 
-renderMissingActions roleTokens stepNumber state { missedActions } =
+renderMissingActions roleTokens state { missedActions } =
   append
     [ div [ classNames [ "font-semibold", "text-xs", "leading-none" ] ]
         [ text "The step timed out before the following actions could be made."
         ]
     ]
-    ( renderPartyMissingActions roleTokens stepNumber state `mapActions`
-        missedActions
-    )
+    (renderPartyMissingActions roleTokens state `mapActions` missedActions)
 
 renderPartyMissingActions
   :: forall m
    . MonadAff m
   => RoleTokenStore
-  -> Int
   -> StartedState
   -> Party
   -> Array NamedAction
   -> ComponentHTML m
-renderPartyMissingActions roleTokens stepNumber state party actions =
+renderPartyMissingActions roleTokens state party actions =
   let
     renderMissingAction (MakeChoice (ChoiceId name _) _) = span_
       [ text "Make a choice for "
@@ -669,7 +657,7 @@ renderPartyMissingActions roleTokens stepNumber state party actions =
           , "space-y-2"
           ]
       ]
-      $ renderParty OnPartyClicked stepNumber currencySymbol roleTokens party :
+      $ renderParty currencySymbol roleTokens party :
           actionsSeparatedByOr
 
 renderCurrentStep
@@ -719,7 +707,6 @@ renderCurrentStep roleTokens currentTime state =
                         case _ of
                           ActionSelected action num ->
                             OnActionSelected action num
-                          PartyClicked address -> OnPartyClicked address
                     ]
               Balances ->
                 let
@@ -820,17 +807,6 @@ renderBalances roleTokens stepNumber state stepBalance =
                         currencySymbol
                         roleTokens
                         party
-                      mTokenName = case party of
-                        Role tokenName -> Just tokenName
-                        _ -> Nothing
-                      mToken = Token currencySymbol <$> mTokenName
-                      mRoleToken =
-                        flip getRoleToken roleTokens =<< fromMaybe mToken
-                      mAddress = mRoleToken ^? _Success <<< _utxoAddress
-                      lineId = "balances-"
-                        <> participantName
-                        <> "-"
-                        <> show stepNumber
                     in
                       div
                         [ classNames
@@ -846,44 +822,32 @@ renderBalances roleTokens stepNumber state stepBalance =
                         ]
                         ( append
                             [ div
-                                ( compact
-                                    [ onClick_ <<< OnPartyClicked <$> mAddress
-                                    , pure $ classNames $ compact
-                                        [ pure "flex"
-                                        , pure "gap-1"
-                                        , "cursor-pointer" <$ mAddress
-                                        , pure "whitespace-nowrap"
-                                        , pure "overflow-hidden"
-                                        ]
-                                    , pure $ id lineId
+                                [ classNames
+                                    [ "flex"
+                                    , "gap-1"
+                                    , "whitespace-nowrap"
+                                    , "overflow-hidden"
                                     ]
-                                )
-                                ( compact
-                                    [ pure $ accountIndicator
-                                        { colorStyles:
-                                            [ "bg-gradient-to-r"
-                                            , "from-purple"
-                                            , "to-lightpurple"
-                                            , "text-white"
-                                            ]
-                                        , otherStyles:
-                                            []
-                                        , name: participantName
-                                        }
-                                    , pure $ span
-                                        [ classNames
-                                            [ "font-semibold"
-                                            , "overflow-ellipsis"
-                                            , "overflow-hidden"
-                                            ]
+                                ]
+                                [ accountIndicator
+                                    { colorStyles:
+                                        [ "bg-gradient-to-r"
+                                        , "from-purple"
+                                        , "to-lightpurple"
+                                        , "text-white"
                                         ]
-                                        [ text participantName ]
-                                    , tooltip
-                                        "Click to copy address"
-                                        (RefId lineId)
-                                        Bottom <$ mAddress
+                                    , otherStyles: []
+                                    , name: participantName
+                                    }
+                                , span
+                                    [ classNames
+                                        [ "font-semibold"
+                                        , "overflow-ellipsis"
+                                        , "overflow-hidden"
+                                        ]
                                     ]
-                                )
+                                    [ text participantName ]
+                                ]
                             , div
                                 [ classNames
                                     [ "font-semibold", "justify-self-end" ]
