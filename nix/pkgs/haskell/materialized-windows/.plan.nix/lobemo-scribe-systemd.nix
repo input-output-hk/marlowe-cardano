@@ -64,5 +64,5 @@
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/plugins/scribe-systemd; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/plugins/scribe-systemd; echo source root reset to $sourceRoot";
     }

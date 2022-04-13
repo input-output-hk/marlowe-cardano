@@ -236,5 +236,5 @@
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/plutus-playground-server; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/plutus-playground-server; echo source root reset to $sourceRoot";
     }

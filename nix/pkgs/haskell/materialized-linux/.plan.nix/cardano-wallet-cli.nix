@@ -79,20 +79,20 @@
             ];
           buildable = true;
           modules = [ "Cardano/CLISpec" ];
-          hsSourceDirs = [ "test/unit" ];
+          hsSourceDirs = [ "test/unit" "test/data" ];
           mainPath = [ "cli-unit-test.hs" ];
           };
         };
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "6";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "6";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/lib/cli; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/lib/cli; echo source root reset to $sourceRoot";
     }
