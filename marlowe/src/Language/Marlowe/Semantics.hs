@@ -56,7 +56,7 @@ import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (
                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
                                         Observation (..), Party, Payee (..), State (..), TimeInterval, Token (..),
                                         Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
-import Ledger (POSIXTime (..), ValidatorHash)
+import Ledger (POSIXTime (..), TxId, ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
 import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
@@ -211,7 +211,8 @@ data MarloweData = MarloweData {
 
 data MarloweParams = MarloweParams {
         rolePayoutValidatorHash :: ValidatorHash,
-        rolesCurrency           :: CurrencySymbol
+        rolesCurrency           :: CurrencySymbol,
+        uniqueTxOutRef          :: (TxId, Integer)
     }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (FromJSON,ToJSON)

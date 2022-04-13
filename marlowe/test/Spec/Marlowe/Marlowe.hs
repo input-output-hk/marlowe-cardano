@@ -366,11 +366,11 @@ untypedValidatorSize :: IO ()
 untypedValidatorSize = do
     let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
     let validator2 = universalMarloweScript defaultMarloweParams
-    let Script plc = marloweMPS
+    let Script plc = marloweMPS defaultMarloweParams
     let Script wpr = wrapper1
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
     let vsize2 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator2
-    let vsize3 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise marloweMPS
+    let vsize3 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise (marloweMPS defaultMarloweParams)
     let wsize3 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise wrapper1
     let wsize4 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise unwrapped1
     -- print $ prettyPlcReadableDebug plc

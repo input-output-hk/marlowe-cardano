@@ -258,7 +258,7 @@ type MarloweContractState = Maybe MarloweEndpointResponse
 
 
 mkMarloweTypedValidator :: MarloweParams -> SmallTypedValidator
-mkMarloweTypedValidator = universalMarloweValidator
+mkMarloweTypedValidator = smallUntypedValidator
 
 
 minLovelaceDeposit :: Integer
@@ -693,7 +693,9 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
 marloweParams :: CurrencySymbol -> MarloweParams
 marloweParams rolesCurrency = MarloweParams
     { rolesCurrency = rolesCurrency
-    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency}
+    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency
+    , uniqueTxOutRef = ("", 0)
+    }
 
 
 defaultMarloweParams :: MarloweParams
