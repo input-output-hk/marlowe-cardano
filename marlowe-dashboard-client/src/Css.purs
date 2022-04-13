@@ -33,7 +33,7 @@ button =
   ]
 
 withShadow :: Array String
-withShadow = [ "shadow", "hover:shadow-lg" ]
+withShadow = [ "shadow", "hover:shadow-lg", "active:shadow" ]
 
 withAnimation :: Array String
 withAnimation = [ "transition-all", "duration-200" ]
