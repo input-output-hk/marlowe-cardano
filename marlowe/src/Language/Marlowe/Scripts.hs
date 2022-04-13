@@ -65,24 +65,24 @@ data MarloweTxInput = Input InputContent
   deriving anyclass (Pretty)
 
 
-rolePayoutScript :: CurrencySymbol -> Validator
-rolePayoutScript symbol = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode symbol)
+rolePayoutScript :: Validator
+rolePayoutScript = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]))
   where
-    wrapped s = Scripts.wrapValidator (rolePayoutValidator s)
+    wrapped = Scripts.wrapValidator rolePayoutValidator
 
 
 {-# INLINABLE rolePayoutValidator #-}
-rolePayoutValidator :: CurrencySymbol -> TokenName -> () -> ScriptContext -> Bool
-rolePayoutValidator currency role _ ctx =
+rolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Bool
+rolePayoutValidator (currency, role) _ ctx =
     Val.valueOf (valueSpent (scriptContextTxInfo ctx)) currency role > 0
 
 
-mkRolePayoutValidatorHash :: CurrencySymbol -> ValidatorHash
-mkRolePayoutValidatorHash symbol = validatorHash (rolePayoutScript symbol)
+mkRolePayoutValidatorHash :: ValidatorHash
+mkRolePayoutValidatorHash = validatorHash rolePayoutScript
 
 
 defaultRolePayoutValidatorHash :: ValidatorHash
-defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
+defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash
 
 
 -- {-# INLINABLE smallMarloweValidator #-}
@@ -103,7 +103,9 @@ defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
 
 
  -}
-
+mkRolesCurrency params = let
+    ValidatorHash hash = Scripts.validatorHash $ universalMarloweValidator params
+    in Val.CurrencySymbol hash
 
 {-# INLINABLE smallMarloweValidator #-}
 smallMarloweValidator
@@ -114,7 +116,7 @@ smallMarloweValidator
     -> MarloweInput
     -> BuiltinData
     -> ()
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
+smallMarloweValidator MarloweParams{rolePayoutValidatorHash}
     fromDataToContract
     fromDataToScriptContext
     MarloweData{..}
@@ -129,13 +131,15 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
         findOwnInput _ = Nothing
 
         ownInput :: TxInInfo
-        ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} =
+        ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress@(Address (ScriptCredential (ValidatorHash ownValidatorHash)) _)}} =
             case findOwnInput ctx of
                 Just ownTxInInfo ->
                     case filter (sameValidatorHash ownTxInInfo) (txInfoInputs scriptContextTxInfo) of
                         [i] -> i
                         _   -> traceError "I1" -- multiple Marlowe contract inputs with the same address, it's forbidden
                 _ -> traceError "I0" {-"Can't find validation input"-}
+
+        rolesCurrency = Val.CurrencySymbol ownValidatorHash
 
         sameValidatorHash:: TxInInfo -> TxInInfo -> Bool
         sameValidatorHash
@@ -203,7 +207,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                 payoutToTxOut (party, value) = case party of
                     PK pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
                     Role role -> let
-                        hsh = findDatumHash' role
+                        hsh = findDatumHash' (rolesCurrency, role)
                         addr = Ledger.scriptHashAddress rolePayoutValidatorHash
                         in traceIfFalse "R" $ any (checkScriptOutput addr hsh value) allOutputs
 
@@ -271,31 +275,15 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
 smallUntypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
 smallUntypedValidator params = let
     -- wrapped s = Scripts.wrapValidator (smallMarloweValidator s)
-    wrapped s = asdf3 (smallMarloweValidator s)
+    wrapped s = wrapper (smallMarloweValidator s)
     typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
     -- Yeah, I know. It works, though.
     -- Remove this when Typed Validator has the same size as untyped.
     in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
 
-smallUntypedValidatorScript2 :: MarloweParams -> Scripts.Script
-smallUntypedValidatorScript2 params = Scripts.fromCompiledCode code
-  where
-    code = ($$(PlutusTx.compile [|| smallMarloweValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
-
-
 
 smallUntypedValidatorScript :: MarloweParams -> Scripts.Script
 smallUntypedValidatorScript =  getValidator . Scripts.validatorScript . smallUntypedValidator
-
-wrapper1 = Scripts.fromCompiledCode $$(PlutusTx.compile [|| wrapped ||])
-  where
-      wrapped :: (MarloweData-> MarloweInput -> ScriptContext -> Bool) -> Scripts.WrappedValidatorType
-      wrapped = Scripts.wrapValidator
-    -- wrapped = unsafeCoerce (smallMarloweValidator s)
-    --   typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
-
-
-unwrapped1 = Scripts.fromCompiledCode $$(PlutusTx.compile [|| smallMarloweValidator ||])
 
 
 applyScript :: Script -> Script -> Script
@@ -324,38 +312,111 @@ marloweMonetaryPolicy MarloweParams{uniqueTxOutRef=(refHash, refIdx)} tokens ctx
         let v = V.spendsOutput txinfo refHash refIdx
         in  traceIfFalse "C1" {-"Pending transaction does not spend the designated transaction output"-} v
 
-    f _ TxOut{txOutAddress=Address (ScriptCredential vh) _} | vh == ownValidatorHash = True
-    f acc _ = acc
+    marloweTxOutExists TxOut{txOutAddress=Address (ScriptCredential vh) _} | vh == ownValidatorHash = True
+    marloweTxOutExists _ = False
 
-    marloweContractTxOutExists = foldl f False $ txInfoOutputs txinfo
+    -- Ensure that a TxOut exists with ValidatorHash same as this MintingPolicyHash
+    marloweContractTxOutExists = any marloweTxOutExists $ txInfoOutputs txinfo
 
     in if mintOK && txOutputSpent && marloweContractTxOutExists then () else traceError "E"
 
 
-asdf2 :: MarloweParams -> ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> ()) -> BuiltinData -> BuiltinData -> ()
-asdf2 mp f a b = let
+{-- * Note [Universal Script]
+
+    How to make a single script that works as both a MintingPolicy and as a Validator.
+
+    A MintingPolicy script is a function of 2 arguments, and has a signature
+
+    mintingPolicy :: BuiltinData -> BuiltinData -> ()
+    mintingPolicy redeemer context = ...
+
+    and a Validator is a function of 3 arguments, and has a signature
+
+    validator :: BuiltinData -> BuiltinData -> BuiltinData -> ()
+    validator redeemer datum context = ...
+
+    We can distinguish the context in which a script is called by
+    checking whether the second argument is 'ScriptContext' or not.
+    We can do this by trying do deserialize the second argument into ScriptContext
+    using 'fromBuiltinData'. If it deserializes successfully we are called as a Minting Policy,
+    otherwise it's a Validator context.
+
+    To be run in both contexts, the universal script must expect 2 arguments,
+    'Redeemer' and 'ScriptContext' for of MintingPolicy, and 'Redeemer' and 'Datum' for a Validator.
+    In case of Minting Policy it should return () or error.
+    But as a Validator, the script should return a continuation:
+    (\ctx :: ScriptContext -> validator logic)
+
+    This obviously does not typecheck as Haskell can't unify () and ScriptContext -> () types.
+    Moreover, PlutusTx does not support usage of 'unsafeCoerce'.
+
+    In order to convince the compiler we are going to exploit the fact
+    that Plutus script is actually an untyped lambda calculus.
+
+    We parameterize our 'universalScript' with a validator function 'f' that has a signature
+
+    f :: BuiltinData -> BuiltinData -> ()
+
+    universalPlutusCode :: (BuiltinData -> BuiltinData -> ()) -> BuiltinData -> BuiltinData -> ()
+    universalPlutusCode f a b = if isScriptContext b then mintingPolicy a b else f a b
+
+    While our validator code would look like that:
+
+    validatorPlutusCode :: BuiltinData -> BuiltinData -> BuiltinData -> ()
+    validatorPlutusCode redeemer datum context = ...
+
+    Compile thes function to Plutus Script:
+
+    universalScript = Scripts.fromCompiledCode $$(PlutusTx.compile [|| universalPlutusCode ||]
+    validatorScript = Scripts.fromCompiledCode $$(PlutusTx.compile [|| validatorPlutusCode ||]
+
+    Here is the trick: we apply universalScript to validatorScript as an argument.
+
+    Then, the 'validatorPlutusCode' (binded as 'f' in our 'universalScript')
+    applied to 2 arguments will return a continuation(\ctx -> ...).
+    And that's precisely what we wanted!
+
+    There is a significant drawback with this approach, though.
+    As we compile these 2 scripts separately, the common Plutus code gets generated and included twice,
+    because Haskell compiler can't optimize/reuse it.
+    The large amount of code is generated by 'unsafeFromBuiltinData' function, almost 4k bytes.
+    Simplest solution is to pass instantiations of the function as arguments into 'validatorPlutusCode'
+    and reuse it manually.
+
+    In the future we expect the serialization to become a builtin, so it won't be a size issue.
+
+    Another possibility could be adding support for usafeCoerce to PlutusTx compiler.
+    Then we could just directly 'unsafeCoerse (f a b) :: ()' in the 'universalScript'.
+-}
+
+universalMarlowePlutusCode :: MarloweParams -> ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> ()) -> BuiltinData -> BuiltinData -> ()
+universalMarlowePlutusCode mp f a b = let
     -- if script's second argument is ScriptContext then it's a MintingPolicy
     -- otherwise, it's a Validator
     mctx :: Maybe ScriptContext
     mctx = PlutusTx.fromBuiltinData b
     in case mctx of
         Just ctx -> marloweMonetaryPolicy mp (PlutusTx.unsafeFromBuiltinData a) ctx
-        _        -> f PlutusTx.unsafeFromBuiltinData PlutusTx.unsafeFromBuiltinData (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
+        -- this call should return a continuation (\scriptContext -> validator logic)
+        _        -> f PlutusTx.unsafeFromBuiltinData PlutusTx.unsafeFromBuiltinData
+                        (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b)
 
 
-{-# INLINABLE asdf3 #-}
-asdf3 :: ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> BuiltinData -> ()) -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-asdf3 f a b c = f PlutusTx.unsafeFromBuiltinData PlutusTx.unsafeFromBuiltinData (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b) c
+{-# INLINABLE wrapper #-}
+wrapper :: ((BuiltinData -> Contract) -> (BuiltinData -> ScriptContext) -> MarloweData -> MarloweInput -> BuiltinData -> ()) -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+wrapper f a b c = f PlutusTx.unsafeFromBuiltinData PlutusTx.unsafeFromBuiltinData (PlutusTx.unsafeFromBuiltinData a) (PlutusTx.unsafeFromBuiltinData b) c
 
 
 marloweMPS :: MarloweParams -> Scripts.Script
-marloweMPS params = Scripts.fromCompiledCode ($$(PlutusTx.compile [|| asdf2 ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+marloweMPS params = Scripts.fromCompiledCode
+    ($$(PlutusTx.compile [|| universalMarlowePlutusCode ||])
+        `PlutusTx.applyCode` PlutusTx.liftCode params)
 
 
 universalMarloweScript :: MarloweParams -> Scripts.Script
 universalMarloweScript params = applyScript mps validator
   where
-    validator = smallUntypedValidatorScript2 params
+    validator = smallUntypedValidatorScript params
     mps = marloweMPS params
 
 
@@ -363,6 +424,10 @@ universalMarloweValidator :: MarloweParams -> Scripts.TypedValidator TypedMarlow
 universalMarloweValidator params = unsafeCoerce (Scripts.unsafeMkTypedValidator validator)
  where
    validator = Validator $ universalMarloweScript params
+
+
+universalMarloweMintingPolicy :: MarloweParams -> MintingPolicy
+universalMarloweMintingPolicy params = MintingPolicy $ universalMarloweScript params
 
 
 defaultTxValidationRange :: POSIXTime

@@ -71,7 +71,6 @@ import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractErr
 import qualified Plutus.Contract as Contract (ContractError (..))
 import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import Plutus.Contract.Wallet (getUnspentOutput)
-import qualified Plutus.Contracts.Currency as Currency
 import Plutus.V1.Ledger.Api (toBuiltin)
 import PlutusPrelude (foldMapM, (<|>))
 import qualified PlutusTx
@@ -258,7 +257,7 @@ type MarloweContractState = Maybe MarloweEndpointResponse
 
 
 mkMarloweTypedValidator :: MarloweParams -> SmallTypedValidator
-mkMarloweTypedValidator = smallUntypedValidator
+mkMarloweTypedValidator = universalMarloweValidator
 
 
 minLovelaceDeposit :: Integer
@@ -389,16 +388,17 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
         logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
         marlowePlutusContract
-    redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, MarloweParams{rolesCurrency}, role, paymentAddress) -> catchError reqId "redeem" $ do
+    redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, params, role, paymentAddress) -> catchError reqId "redeem" $ do
+        let rolesCurrency = mkRolesCurrency params
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:redeem] rolesCurrency = " <> show rolesCurrency
-        let address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
+        let address = scriptHashAddress mkRolePayoutValidatorHash
         logInfo $ "[DEBUG:redeem] address = " <> show address
         utxos <- utxosAt address
         let
           spendable txout =
             let
-              expectedDatumHash = datumHash (Datum $ PlutusTx.toBuiltinData role)
+              expectedDatumHash = datumHash (Datum $ PlutusTx.toBuiltinData (rolesCurrency, role))
               dh = either id Ledger.datumHash <$> preview Ledger.ciTxOutDatum txout
             in
               dh == Just expectedDatumHash
@@ -424,7 +424,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                   -- must spend a role token for authorization
                   <> Constraints.mustSpendAtLeast (Val.singleton rolesCurrency role 1)
               -- lookup for payout validator and role payouts
-              validator = rolePayoutScript rolesCurrency
+              validator = rolePayoutScript
             -- TODO: Move to debug log.
             logInfo $ "[DEBUG:redeem] constraints = " <> show constraints
             ownAddressLookups <- ownShelleyAddress paymentAddress
@@ -561,26 +561,26 @@ setupMarloweParams owners roles = mapError (review _MarloweError) $ do
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:setupMarloweParams] txOut = " <> show txOut
         let utxo = Map.singleton txOutRef txOut
-        let theCurrency = Currency.OneShotCurrency
-                { curRefTransactionOutput = (h, i)
-                , curAmounts              = AssocMap.fromList tokens
-                }
-            curVali     = Currency.curPolicy theCurrency
+        let params = MarloweParams {rolePayoutValidatorHash = mkRolePayoutValidatorHash, uniqueTxOutRef = (h, i)}
+        let rolesSymbol = mkRolesCurrency params
+        let tokenAmounts = AssocMap.fromList tokens
+        let redeemer = Ledger.Redeemer $ PlutusTx.toBuiltinData tokenAmounts
+        let mintValue = Val.Value $ AssocMap.singleton rolesSymbol tokenAmounts
+            curVali     = universalMarloweMintingPolicy params
             lookups     = Constraints.mintingPolicy curVali
                             <> Constraints.unspentOutputs utxo
             mintTx      = Constraints.mustSpendPubKeyOutput txOutRef
-                            <> Constraints.mustMintValue (Currency.mintedValue theCurrency)
-        let rolesSymbol = Ledger.scriptCurrencySymbol curVali
+                            <> Constraints.mustMintValueWithRedeemer redeemer mintValue
         let minAdaTxOut = adaValueOf 2
         let giveToParty (role, addr) =
               mustPayToShelleyAddress addr (Val.singleton rolesSymbol role 1 <> minAdaTxOut)
         distributeRoleTokens <- foldMapM giveToParty $ AssocMap.toList owners
-        let params = marloweParams rolesSymbol
         pure (params, mintTx <> distributeRoleTokens, lookups)
     else do
         let missingRoles = roles `Set.difference` Set.fromList (AssocMap.keys owners)
         let message = T.pack $ "You didn't specify owners of these roles: " <> show missingRoles
         throwing _ContractError $ Contract.OtherContractError message
+
 
 ownShelleyAddress
   :: AddressInEra ShelleyEra
@@ -692,8 +692,7 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
 
 marloweParams :: CurrencySymbol -> MarloweParams
 marloweParams rolesCurrency = MarloweParams
-    { rolesCurrency = rolesCurrency
-    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency
+    { rolePayoutValidatorHash = mkRolePayoutValidatorHash
     , uniqueTxOutRef = ("", 0)
     }
 
@@ -812,7 +811,7 @@ mkStep ::
     -> TimeInterval
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
-mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
+mkStep params@MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
     let
       times =
         Interval.Interval
@@ -865,6 +864,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
             logInfo $ "[DEBUG:mkStep] txId = " <> show txId
             pure marloweData
   where
+    rolesCurrency = mkRolesCurrency params
     evaluateTxContstraints :: MarloweData
         -> Ledger.POSIXTimeRange
         -> Tx.TxOutRef

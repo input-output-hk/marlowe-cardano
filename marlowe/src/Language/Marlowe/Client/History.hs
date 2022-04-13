@@ -44,7 +44,7 @@ import Data.List (nub)
 import Data.Maybe (catMaybes, isJust, isNothing, mapMaybe)
 import Data.Tuple.Extra (secondM)
 import GHC.Generics (Generic)
-import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, smallUntypedValidator)
+import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, mkRolesCurrency, smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
 import Ledger (ChainIndexTxOut (..), ciTxOutAddress, toTxOut)
 import Ledger.TimeSlot (slotRangeToPOSIXTimeRange)
@@ -281,8 +281,9 @@ creationTxOut :: MarloweParams          -- ^ The Marlowe validator parameters.
               -> Address                -- ^ The Marlowe validator address.
               -> ChainIndexTx           -- ^ The transaction to be checked.
               -> Maybe MarloweTxOutRef  -- ^ The creation-transaction output and the contract, if any.
-creationTxOut MarloweParams{..} address citx =
+creationTxOut params address citx =
   do
+    let rolesCurrency = mkRolesCurrency params
     -- Ensure that the transaction minted the role currency.
     guard
       . elem (ScriptHash $ unCurrencySymbol rolesCurrency)

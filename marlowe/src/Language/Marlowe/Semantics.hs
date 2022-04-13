@@ -211,7 +211,6 @@ data MarloweData = MarloweData {
 
 data MarloweParams = MarloweParams {
         rolePayoutValidatorHash :: ValidatorHash,
-        rolesCurrency           :: CurrencySymbol,
         uniqueTxOutRef          :: (TxId, Integer)
     }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)

@@ -45,8 +45,8 @@ import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpr
 import qualified Language.Marlowe as M ((%))
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
-import Language.Marlowe.Scripts (MarloweInput, marloweMPS, rolePayoutScript, smallUntypedValidator,
-                                 universalMarloweScript, unwrapped1, wrapper1)
+import Language.Marlowe.Scripts (MarloweInput, marloweMPS, mkRolesCurrency, rolePayoutScript, smallUntypedValidator,
+                                 universalMarloweScript)
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Language.Marlowe.Util
@@ -261,8 +261,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
     -- T..&&. emulatorLog (const False) ""
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag alice) "contract should not have any errors"
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag bob) "contract should not have any errors"
-    T..&&. walletFundsChange alice (lovelaceValueOf (-minAda-25_600_000) <> Val.singleton (rolesCurrency params) "alice" 1)
-    T..&&. walletFundsChange bob (lovelaceValueOf (minAda+25_600_000) <> Val.singleton (rolesCurrency params) "bob" 1)
+    T..&&. walletFundsChange alice (lovelaceValueOf (-minAda-25_600_000) <> Val.singleton (mkRolesCurrency params) "alice" 1)
+    T..&&. walletFundsChange bob (lovelaceValueOf (minAda+25_600_000) <> Val.singleton (mkRolesCurrency params) "bob" 1)
     -- TODO Commented out because the new chain index does not allow to fetch
     -- all transactions that modified an address. Need to find an alternative
     -- way.
@@ -361,17 +361,12 @@ untypedValidatorSize = do
     let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
     let validator2 = universalMarloweScript defaultMarloweParams
     let Script plc = marloweMPS defaultMarloweParams
-    let Script wpr = wrapper1
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
     let vsize2 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator2
     let vsize3 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise (marloweMPS defaultMarloweParams)
-    let wsize3 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise wrapper1
-    let wsize4 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise unwrapped1
     -- print $ prettyPlcReadableDebug plc
     -- print $ prettyPlcReadableDebug wpr
     putStrLn $ "smallUntypedValidator " <> show vsize <> ", universalMarloweScript " <> show vsize2 <> ", marloweMPS " <> show vsize3
-    print wsize3
-    print wsize4
     assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
 
 extractContractRolesTest :: IO ()
