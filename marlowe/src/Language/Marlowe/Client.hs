@@ -337,8 +337,10 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         logInfo $ "[DEBUG:create] ownPubKey = " <> show ownPubKey
         let roles = extractNonMerkleizedContractRoles contract
         -- TODO: Move to debug log.
-        logInfo $ "[DEBUG:create] roles = " <> show roles
-        (params, distributeRoleTokens, lkps) <- setupMarloweParams owners roles
+        logInfo $ "[DEBUG:create] DINO06 roles = " <> show roles
+        -- Fix from Yves for the missing token failure
+        -- (params, distributeRoleTokens, lkps) <- setupMarloweParams owners roles
+        (params, distributeRoleTokens, lkps) <- setupMarloweParams owners (Set.fromList (AssocMap.keys owners))
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:create] params = " <> show params
         time <- currentTime
