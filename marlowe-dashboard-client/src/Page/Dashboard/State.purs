@@ -31,7 +31,7 @@ import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog, debug, error)
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
-import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
@@ -576,17 +576,17 @@ handleAction (NewActiveEndpoints plutusAppId activeEndpoints) = do
   onNewActiveEndpoints plutusAppId activeEndpoints
 
 handleAction (MarloweAppClosed mVal) = void $ runMaybeT do
-  reActivatePlutusScript MarloweApp mVal
+  reactivatePlutusScript MarloweApp mVal
 
 handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
-  reActivatePlutusScript WalletCompanion mVal
+  reactivatePlutusScript WalletCompanion mVal
 
 handleAction (UpdateWalletFunds { assets, sync }) = do
   debug "💰Wallet funds changed" $ encodeJson assets
   updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
   updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
 
-reActivatePlutusScript
+reactivatePlutusScript
   :: forall m
    . MonadState State m
   => MonadLogger StructuredLog m
@@ -594,17 +594,25 @@ reActivatePlutusScript
   => ManagePAB m
   => MarloweContract
   -> Maybe Json
-  -> MaybeT m Unit
-reActivatePlutusScript contractType mVal = do
+  -> m Unit
+reactivatePlutusScript contractType mVal = do
   walletId <- use (_wallet <<< _walletId)
-  Logger.error
-    ("Plutus script " <> show contractType <> " has closed unexpectedly")
+  Logger.info
+    ("Plutus script " <> show contractType <> " has stopped. Restarting now.")
     mVal
-  newAppId <- MaybeT $ hush <$> PAB.activateContract contractType walletId
-  H.lift
-    $ updateStore
-    $ Store.Wallet
-    $ Wallet.OnPlutusScriptChanged contractType newAppId
+  result <- PAB.activateContract contractType walletId
+  case result of
+    Left err ->
+      Logger.error
+        ("Plutus script " <> show contractType <> " failed to start.")
+        err
+    Right instanceId -> do
+      Logger.info
+        ("Plutus script " <> show contractType <> " started.")
+        (encodeJson instanceId)
+      updateStore
+        $ Store.Wallet
+        $ Wallet.OnPlutusScriptChanged contractType instanceId
 
 subscribeToSources
   :: forall m
@@ -687,7 +695,7 @@ actionFromStream wallet = case _ of
     | appId == marloweAppId ->
         Just $ MarloweAppClosed message
     | otherwise ->
-        Just $ MarloweAppClosed message
+        Nothing
   InstanceUpdate appId (PAB.NewObservableState state)
     | appId == companionAppId ->
         case D.decode (D.maybe D.value) state of

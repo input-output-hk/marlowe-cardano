@@ -10,6 +10,7 @@ import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Newtype (class Newtype)
+import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
 import Effect.AVar (AVar)
@@ -59,6 +60,7 @@ newtype Env = Env
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
   , sources :: Sources
+  , marloweAppTimeout :: Minutes
   }
 
 derive instance newtypeEnv :: Newtype Env _
@@ -71,6 +73,9 @@ _applyInputBus = _Newtype <<< prop (Proxy :: _ "applyInputBus")
 
 _redeemBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
 _redeemBus = _Newtype <<< prop (Proxy :: _ "redeemBus")
+
+_marloweAppTimeout :: Lens' Env Minutes
+_marloweAppTimeout = _Newtype <<< prop (Proxy :: _ "marloweAppTimeout")
 
 _followerAVarMap :: Lens' Env (AVarMap MarloweParams Unit)
 _followerAVarMap = _Newtype <<< prop (Proxy :: _ "followerAVarMap")

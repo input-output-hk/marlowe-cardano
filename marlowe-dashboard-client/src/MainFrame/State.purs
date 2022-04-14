@@ -261,6 +261,7 @@ enterDashboardState disconnectedWallet = do
   case ajaxPlutusApps of
     Left ajaxError -> do
       globalError "Failed to access the plutus contracts." ajaxError
+      updateStore $ Store.Wallet $ Wallet.OnDisconnected
     Right plutusApps -> do
       -- Get instances of the WalletCompanion and the MarloweApp control app.
       -- We try to reutilize an active plutus contract if possible,
@@ -269,9 +270,11 @@ enterDashboardState disconnectedWallet = do
         walletId
         plutusApps
       case ajaxCompanionContracts of
-        Left ajaxError -> globalError
-          "Failed to create the companion plutus contracts."
-          ajaxError
+        Left ajaxError -> do
+          globalError
+            "Failed to create the companion plutus contracts."
+            ajaxError
+          updateStore $ Store.Wallet $ Wallet.OnDisconnected
         Right { companionAppId, marloweAppId } -> do
           let
             initialFollowers = Set.fromFoldable
