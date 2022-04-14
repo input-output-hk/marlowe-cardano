@@ -24,7 +24,7 @@ set -ev
 # Because of the transaction size, this test must be run on the private Marlowe
 # testnet.
 
-MAGIC=(--testnet-magic 1564)
+MAGIC=(--testnet-magic 1567)
 
 
 # Configure the first party.

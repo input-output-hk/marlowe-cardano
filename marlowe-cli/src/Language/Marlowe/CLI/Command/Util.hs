@@ -32,7 +32,7 @@ import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseOutputQuery, parseSlotNo,
                                            parseTokenName)
-import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, selectUtxos)
+import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, querySlotting, selectUtxos)
 import Language.Marlowe.CLI.Types (CliError, OutputQuery)
 import Plutus.V1.Ledger.Api (TokenName)
 
@@ -96,6 +96,13 @@ data UtilCommand =
       prefix  :: String  -- ^ The Bech32 prefix.
     , content :: String  -- ^ The base16-encoded bytes to be encoded in Bech32.
     }
+    -- | Extract slot configuation.
+  | Slotting
+    {
+      network      :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath   :: FilePath         -- ^ The path to the node socket.
+    , slottingFile :: Maybe FilePath   -- ^ The output file for the slot configuration.
+    }
 
 
 -- | Run a miscellaneous command.
@@ -116,44 +123,47 @@ runUtilCommand command =
         }
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
     case command of
-      Clean{..}  -> buildClean
-                      connection
-                      signingKeyFiles
-                      lovelace
-                      change
-                      Nothing
-                      TxMintNone
-                      TxMetadataNone
-                      bodyFile
-                      submitTimeout
-                      >>= printTxId
-      Mint{..}   -> buildMinting
-                      connection
-                      signingKeyFile
-                      tokenNames
-                      metadataFile
-                      count
-                      expires
-                      lovelace
-                      change
-                      bodyFile
-                      submitTimeout
-      Faucet{..} -> buildFaucet'
-                      connection
-                      (lovelaceToValue lovelace)
-                      addresses
-                      bodyFile
-                      submitTimeout
-                      >>= printTxId
-      Output{..} -> selectUtxos
-                      connection
-                      address
-                      query
+      Clean{..}        -> buildClean
+                            connection
+                            signingKeyFiles
+                            lovelace
+                            change
+                            Nothing
+                            TxMintNone
+                            TxMetadataNone
+                            bodyFile
+                            submitTimeout
+                            >>= printTxId
+      Mint{..}         -> buildMinting
+                            connection
+                            signingKeyFile
+                            tokenNames
+                            metadataFile
+                            count
+                            expires
+                            lovelace
+                            change
+                            bodyFile
+                            submitTimeout
+      Faucet{..}       -> buildFaucet'
+                            connection
+                            (lovelaceToValue lovelace)
+                            addresses
+                            bodyFile
+                            submitTimeout
+                            >>= printTxId
+      Output{..}       -> selectUtxos
+                            connection
+                            address
+                            query
       DecodeBech32{..} -> decodeBech32
                             content
       EncodeBech32{..} -> encodeBech32
                             prefix
                             content
+      Slotting{..}     -> querySlotting
+                            connection
+                            slottingFile
 
 
 -- | Parser for miscellaneous commands.
@@ -167,6 +177,7 @@ parseUtilCommand =
     <> faucetCommand
     <> mintCommand
     <> selectCommand
+    <> slottingCommand
 
 
 -- | Parser for the "clean" command.
@@ -282,3 +293,20 @@ encodeBechOptions =
   EncodeBech32
     <$> O.strArgument (O.metavar "PREFIX" <> O.help "The Bech32 human-readable prefix.")
     <*> O.strArgument (O.metavar "BASE16" <> O.help "The base 16 data to be encoded."  )
+
+
+-- | Parser for the "slotting" command.
+slottingCommand :: O.Mod O.CommandFields UtilCommand
+slottingCommand =
+  O.command "slotting"
+    $ O.info slottingOptions
+    $ O.progDesc "Find the slot-to-time relationship for the current epoch."
+
+
+-- | Parser for the "slotting" options.
+slottingOptions :: O.Parser UtilCommand
+slottingOptions =
+  Slotting
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."      )
+    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file.")
+    <*> (O.optional .O.strOption             ) (O.long "out-file"      <> O.metavar "FILE"        <> O.help "Output file for slot configuration."      )

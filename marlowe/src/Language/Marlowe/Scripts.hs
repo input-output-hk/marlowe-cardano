@@ -33,6 +33,7 @@ import Ledger.Ada (adaSymbol)
 import qualified Ledger.Interval as Interval
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
+import Plutus.Debug
 import Plutus.V1.Ledger.Credential (Credential (..))
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
@@ -143,7 +144,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                         totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
-                        in checkOwnOutputConstraint marloweData finalBalance
+                        in debugIfFalse "L1+" interval  -- TODO: Switch to `traceIfFalse` if SCP-3624 does not reoccur.
+                             $ checkOwnOutputConstraint marloweData finalBalance
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousTimeIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"

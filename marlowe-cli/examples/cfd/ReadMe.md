@@ -5,6 +5,7 @@ In this example execution of a contract for differences, the party and counterpa
 ## Prerequisites
 
 The environment variable `CARDANO_NODE_SOCKET_PATH` must be set to the path to the cardano node's socket.
+See below for how to set `MAGIC` to select the network.
 
 The following tools must be on the PATH:
 * [marlowe-cli](../../ReadMe.md)
@@ -19,16 +20,12 @@ Signing and verification keys must be provided below for the oracle and party ro
 ### Select Network
 
 ```
-if false
-then # Use the public testnet.
-  MAGIC=(--testnet-magic 1097911063)
-  SLOT_LENGTH=1000
-  SLOT_OFFSET=1594369216000
-else # Use the private testnet.
-  MAGIC=(--testnet-magic 1564)
-  SLOT_LENGTH=1000
-  SLOT_OFFSET=1644929640000
+if [[ -z "$MAGIC" ]]
+then
+  MAGIC=(--testnet-magic 1567)
 fi
+SLOT_LENGTH=$(marlowe-cli util slotting "${MAGIC[@]}" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
+SLOT_OFFSET=$(marlowe-cli util slotting "${MAGIC[@]}" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotZeroTime)
 ```
 
 ### Tip of the Blockchain
@@ -40,7 +37,7 @@ HOUR="$((3600*1000))"
 MINUTE="$((60*1000))"
 ```
 
-The tip is at slot 4870526. The current POSIX time implies that the tip of the blockchain should be slightly before slot 4870528. Tests may fail if this is not the case.
+The tip is at slot 31610. The current POSIX time implies that the tip of the blockchain should be slightly before slot 31612. Tests may fail if this is not the case.
 
 ### Participants
 
@@ -79,7 +76,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
 ```
 
 ```console
-TxId "103df793a34f53b6fd6a69843b2a12121b5655b36faa51ad6a78e7b39061bc9c"
+TxId "8177286c71971212bd28237ed63b6376501b07dfdf0f88af7996e438c1bb8024"
 ```
 
 #### The Counterparty
@@ -115,7 +112,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
 ```
 
 ```console
-TxId "327d229c8cf03c60f86b7ee8e69233a33c21f8a636e5a1ad5a06a4e99a8d62d0"
+TxId "308279728cdfc276e2282eee40dc6c21848a9cf0a93b0a42b615639752852f37"
 ```
 
 #### The Oracle
@@ -151,7 +148,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
 ```
 
 ```console
-TxId "70257de8baccdd34bc1b8f3c4144807c7f5944280d04cfe0ba692fa5ee702a0b"
+TxId "7a0ca1029e3433f9ac1ac6b13a590ee284d03f298498bf889e3310ccd0783250"
 ```
 
 ### Role Tokens
@@ -202,7 +199,7 @@ marlowe-cli transaction simple "${MAGIC[@]}"                                    
 ```
 
 ```console
-TxId "69b13f7d769a5ca6d36cf78047a3909d155986292fa2ef4a0a53565ba03db1e2"
+TxId "994b776f4d62ab66d17cfbe943cc2859250504b991330c12527bb40f61548525"
 ```
 
 Find the transaction output with the counterparty's role token.
@@ -231,7 +228,7 @@ marlowe-cli transaction simple "${MAGIC[@]}"                                    
 ```
 
 ```console
-TxId "a8bd4a471653c1200ae87e48e353b4c00f604faf6d0274d8b403d69480ceac30"
+TxId "4b3bc4633f0b24b760e0c5f504e64ae16aa87aa0e62361251730bfb199dfcee4"
 ```
 
 ### Available UTxOs
@@ -252,8 +249,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ORACLE_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-4b041611ab264e3470ef9ba0d52c88b3ae41a6d392ded2c0a4c28b4cb9c877ef     0        93295228 lovelace + TxOutDatumNone
-4b041611ab264e3470ef9ba0d52c88b3ae41a6d392ded2c0a4c28b4cb9c877ef     1        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.434d + TxOutDatumNone
+43101c1ee613d7e30ddcf0e60c429df9a779290e33ec366dee6884af63c93ae2     0        93295228 lovelace + TxOutDatumNone
+43101c1ee613d7e30ddcf0e60c429df9a779290e33ec366dee6884af63c93ae2     1        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.434d + TxOutDatumNone
 ```
 
 We select the UTxO with the oracle Christopher Marlowe's role token.
@@ -275,7 +272,7 @@ marlowe-cli util select "${MAGIC[@]}"                             \
 )
 ```
 
-Christopher Marlowe will spend the UTxOs `4b041611ab264e3470ef9ba0d52c88b3ae41a6d392ded2c0a4c28b4cb9c877ef#0` and `4b041611ab264e3470ef9ba0d52c88b3ae41a6d392ded2c0a4c28b4cb9c877ef#1`.
+Christopher Marlowe will spend the UTxOs `43101c1ee613d7e30ddcf0e60c429df9a779290e33ec366dee6884af63c93ae2#0` and `43101c1ee613d7e30ddcf0e60c429df9a779290e33ec366dee6884af63c93ae2#1`.
 
 The party Francis Beaumont has the address `addr_test1vzzpzll6gsl9npf8wfhk2zg8sy2we50jcqc7w8w46gua2pqq7cw2q` and role token named `FB`. They have the following UTxOs in their wallet:
 
@@ -293,8 +290,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-f3891a6051ad41e380f819f10df1ffd159baa2d4d8a2b125ea7ff56f7186c8c4     0        49824995 lovelace + TxOutDatumNone
-f3891a6051ad41e380f819f10df1ffd159baa2d4d8a2b125ea7ff56f7186c8c4     1        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.4642 + TxOutDatumNone
+dbf3f263b7460e16a5eab06a58f32219d9ed683603446a0559f2145046047167     0        305818967 lovelace + TxOutDatumNone
+dbf3f263b7460e16a5eab06a58f32219d9ed683603446a0559f2145046047167     1        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.4642 + TxOutDatumNone
 ```
 
 We select the UTxO with the lender Francis Beaumont's role token.
@@ -316,7 +313,7 @@ marlowe-cli util select "${MAGIC[@]}"                             \
 )
 ```
 
-Francis Beaumont will spend the UTxOs `f3891a6051ad41e380f819f10df1ffd159baa2d4d8a2b125ea7ff56f7186c8c4#0` and `f3891a6051ad41e380f819f10df1ffd159baa2d4d8a2b125ea7ff56f7186c8c4#1`.
+Francis Beaumont will spend the UTxOs `dbf3f263b7460e16a5eab06a58f32219d9ed683603446a0559f2145046047167#0` and `dbf3f263b7460e16a5eab06a58f32219d9ed683603446a0559f2145046047167#1`.
 
 The counterparty Thomas Middleton has the address `addr_test1vqetzradrerxgqu6xcuk35qckxkl4hwdz8h82zpld226t8ce30xxn` and role token named `TM`. They have the following UTxOs in their wallet:
 
@@ -334,8 +331,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-7628ec00921791a98cbceca9d82c1622c2237e5b35bea434ca59da9939fede56     0        49824995 lovelace + TxOutDatumNone
-7628ec00921791a98cbceca9d82c1622c2237e5b35bea434ca59da9939fede56     1        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.544d + TxOutDatumNone
+dbff628765d4611cf7bb9d3ca8818c04a744ab56ad98bfcf6ae9cabc2ff1b108     0        49824995 lovelace + TxOutDatumNone
+dbff628765d4611cf7bb9d3ca8818c04a744ab56ad98bfcf6ae9cabc2ff1b108     1        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.544d + TxOutDatumNone
 ```
 
 We select the UTxO with the lender Thomas Middleton's role token.
@@ -357,7 +354,7 @@ marlowe-cli util select "${MAGIC[@]}"                             \
 )
 ```
 
-Thomas Middleton will spend the UTxOs `7628ec00921791a98cbceca9d82c1622c2237e5b35bea434ca59da9939fede56#0` and `7628ec00921791a98cbceca9d82c1622c2237e5b35bea434ca59da9939fede56#1`.
+Thomas Middleton will spend the UTxOs `dbff628765d4611cf7bb9d3ca8818c04a744ab56ad98bfcf6ae9cabc2ff1b108#0` and `dbff628765d4611cf7bb9d3ca8818c04a744ab56ad98bfcf6ae9cabc2ff1b108#1`.
 
 ## The Contract
 
@@ -387,11 +384,11 @@ FIRST_PRICE=1000000
 SECOND_PRICE=1500000
 ```
 
-* The current slot is 4870526.
-* The party Francis Beaumont must pay the margin deposit of 7000000 lovelace before Wed, 13 Apr 2022 09:49:26 +0000.
-* The counterparty Thomas Middleton must pay the margin deposit of 8000000 lovelace before Wed, 13 Apr 2022 15:49:26 +0000.
-* The oracle Christopher Marlowe report the first price of 1000000 lovelace between Tue, 12 Apr 2022 21:29:26 +0000 and Wed, 13 Apr 2022 21:49:26 +0000.
-* The oracle Christopher Marlowe report the second price of 1500000 lovelace between Tue, 12 Apr 2022 21:30:26 +0000 and Thu, 14 Apr 2022 21:49:26 +0000.
+* The current slot is 31610.
+* The party Francis Beaumont must pay the margin deposit of 7000000 lovelace before Fri, 15 Apr 2022 12:07:21 +0000.
+* The counterparty Thomas Middleton must pay the margin deposit of 8000000 lovelace before Fri, 15 Apr 2022 18:07:21 +0000.
+* The oracle Christopher Marlowe report the first price of 1000000 lovelace between Thu, 14 Apr 2022 23:47:21 +0000 and Sat, 16 Apr 2022 00:07:21 +0000.
+* The oracle Christopher Marlowe report the second price of 1500000 lovelace between Thu, 14 Apr 2022 23:48:21 +0000 and Sun, 17 Apr 2022 00:07:21 +0000.
 
 We create the contract for the previously specified parameters. User Marlowe Playground to create contracts and export them to JSON files like the following.
 
@@ -591,19 +588,18 @@ EOI
 First we create a `.marlowe` file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it will require.
 
 ```
-marlowe-cli run initialize "${MAGIC[@]}"                     \
-                           --slot-length "$SLOT_LENGTH"      \
-                           --slot-offset "$SLOT_OFFSET"      \
-                           --roles-currency "$ROLE_CURRENCY" \
-                           --contract-file tx-1.contract     \
-                           --state-file    tx-1.state        \
-                           --out-file      tx-1.marlowe      \
+marlowe-cli run initialize "${MAGIC[@]}"                             \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --roles-currency "$ROLE_CURRENCY"         \
+                           --contract-file tx-1.contract             \
+                           --state-file    tx-1.state                \
+                           --out-file      tx-1.marlowe              \
                            --print-stats
 ```
 
 ```console
-Validator size: 12379
-Base-validator cost: ExBudget {exBudgetCPU = ExCPU 24652144, exBudgetMemory = ExMemory 82900}
+Validator size: 12633
+Base-validator cost: ExBudget {exBudgetCPU = ExCPU 24920101, exBudgetMemory = ExMemory 83800}
 ```
 
 In particular, we can extract the contract's address from the `.marlowe` file.
@@ -612,7 +608,7 @@ In particular, we can extract the contract's address from the `.marlowe` file.
 CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 ```
 
-The Marlowe contract resides at address `addr_test1wz8hxrpserkykxhz767tg5x78v8zayl2rd9q95h0lsfu4hqfeh799`.
+The Marlowe contract resides at address `addr_test1wqd55ncuuzut5rwkfy62tuakf36yve3cafyd34knfxv3dsgaew3yl`.
 
 Because this is a role-based contract, we compute the address of the script for roles.
 
@@ -620,7 +616,7 @@ Because this is a role-based contract, we compute the address of the script for 
 ROLE_ADDRESS=$(jq -r '.rolesValidator.address' tx-1.marlowe)
 ```
 
-The role address is `addr_test1wp8c8jvd0fh99dh5ey9zdgxn8dcn3u5wldgnzvn7xjcxwpselwscq`.
+The role address is `addr_test1wpk809w7k8fypemv0slvjqjf5evh0u94maw72jj0ccfw4eg2qsmrk`.
 
 The oracle Christopher Marlowe submits the transaction along with the minimum ADA 2000000 lovelace required for the contract's initial state. Submitting with the `--print-stats` switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits.
 
@@ -647,7 +643,7 @@ Execution units:
   Steps: 0 / 10000000000 = 0%
 ```
 
-The contract received the minimum ADA of 2000000 lovelace from the oracle Christopher Marlowe in the transaction `d400cb82d87aaa0d57de077078345752648b81222ba0b67f2efd6fe9d0d28bbd`.  Here is the UTxO at the contract address:
+The contract received the minimum ADA of 2000000 lovelace from the oracle Christopher Marlowe in the transaction `6c0331f34d5be83d8ec519515f61399f09ebfec2fa65202cbbe35ab84362f453`.  Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
@@ -656,7 +652,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-d400cb82d87aaa0d57de077078345752648b81222ba0b67f2efd6fe9d0d28bbd     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "9172fed0456babcad1c713481c39efb766cf567c35f5ead2256eb900b3c41185"
+6c0331f34d5be83d8ec519515f61399f09ebfec2fa65202cbbe35ab84362f453     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "2dead97ee7e0742c384400d5c7dc811d6c8b6f3ce3cf42d6fe4fefc8001ee2ce"
 ```
 
 Here is the UTxO at the oracle Christopher Marlowe's address:
@@ -668,7 +664,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ORACLE_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-d400cb82d87aaa0d57de077078345752648b81222ba0b67f2efd6fe9d0d28bbd     0        91077895 lovelace + TxOutDatumNone
+6c0331f34d5be83d8ec519515f61399f09ebfec2fa65202cbbe35ab84362f453     0        91077895 lovelace + TxOutDatumNone
 ```
 
 ## Transaction 2. Party Deposits Margin Funds into Their Account.
@@ -713,14 +709,14 @@ marlowe-cli run execute "${MAGIC[@]}"                                         \
 ```
 
 ```console
-Fee: Lovelace 1390537
-Size: 14693 / 32768 = 44%
+Fee: Lovelace 1401727
+Size: 14943 / 32768 = 45%
 Execution units:
-  Memory: 6778248 / 30000000 = 22%
-  Steps: 2467277051 / 10000000000 = 24%
+  Memory: 6780648 / 30000000 = 22%
+  Steps: 2467991603 / 10000000000 = 24%
 ```
 
-The contract received the margin deposit of 7000000 lovelace in the transaction `d18491d49bc15b176ed6096efc046987bc44da81dd85cdcf8d271b081f0fd241`.  Here is the UTxO at the contract address:
+The contract received the margin deposit of 7000000 lovelace in the transaction `bbff62707790540c54d358b5fef1cca4e43c7be923137364c40facfea5c508c5`.  Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
@@ -729,7 +725,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-d18491d49bc15b176ed6096efc046987bc44da81dd85cdcf8d271b081f0fd241     1        9000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "d669355b92cc01e75338c4ca497336160a2220a29eca9ac341fdb143f7706daf"
+bbff62707790540c54d358b5fef1cca4e43c7be923137364c40facfea5c508c5     1        9000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "8dd6992a966723c57308382b304fffc8f874a3a8e12fbf93101665c84d46eadf"
 ```
 
 Here is the UTxO at the party Francis Beaumont's address:
@@ -741,8 +737,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-d18491d49bc15b176ed6096efc046987bc44da81dd85cdcf8d271b081f0fd241     0        41434458 lovelace + TxOutDatumNone
-d18491d49bc15b176ed6096efc046987bc44da81dd85cdcf8d271b081f0fd241     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.4642 + TxOutDatumNone
+bbff62707790540c54d358b5fef1cca4e43c7be923137364c40facfea5c508c5     0        297417240 lovelace + TxOutDatumNone
+bbff62707790540c54d358b5fef1cca4e43c7be923137364c40facfea5c508c5     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.4642 + TxOutDatumNone
 ```
 
 ## Transaction 3. Counterparty Deposits Margin Funds into Their Account.
@@ -787,14 +783,14 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 ```
 
 ```console
-Fee: Lovelace 1403433
-Size: 14613 / 32768 = 44%
+Fee: Lovelace 1418996
+Size: 14863 / 32768 = 45%
 Execution units:
-  Memory: 7002686 / 30000000 = 23%
-  Steps: 2515343620 / 10000000000 = 25%
+  Memory: 7060286 / 30000000 = 23%
+  Steps: 2532540076 / 10000000000 = 25%
 ```
 
-The contract received the margin deposit of 8000000 lovelace in the transaction `9210751e0124a582fedfdae0e41bc9f93414413afb0ccdd1c1dbc7585e682529`.  Here is the UTxO at the contract address:
+The contract received the margin deposit of 8000000 lovelace in the transaction `10e91f688f9ace5b2db61ec5d5e72167557393a63041c559a67a80993452d2c5`.  Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
@@ -803,7 +799,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-9210751e0124a582fedfdae0e41bc9f93414413afb0ccdd1c1dbc7585e682529     1        17000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "99f931439b36db35dd1d67fb9681f1ec4dd275c0e3a10ac159a1ee1a1b92ff4f"
+10e91f688f9ace5b2db61ec5d5e72167557393a63041c559a67a80993452d2c5     1        17000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "2098f5238170c5c63ed1da5dff7d4c7f0017cd9d873c8bc1255b5d12a0875e7e"
 ```
 
 Here is the UTxO at the counterparty Thomas Middleton's address:
@@ -815,8 +811,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS" | sed -n 
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-9210751e0124a582fedfdae0e41bc9f93414413afb0ccdd1c1dbc7585e682529     0        40421562 lovelace + TxOutDatumNone
-9210751e0124a582fedfdae0e41bc9f93414413afb0ccdd1c1dbc7585e682529     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.544d + TxOutDatumNone
+10e91f688f9ace5b2db61ec5d5e72167557393a63041c559a67a80993452d2c5     0        40405999 lovelace + TxOutDatumNone
+10e91f688f9ace5b2db61ec5d5e72167557393a63041c559a67a80993452d2c5     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.544d + TxOutDatumNone
 ```
 
 ## Transaction 4. Oracle Reports the First Price.
@@ -861,14 +857,14 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 ```
 
 ```console
-Fee: Lovelace 1381983
-Size: 14532 / 32768 = 44%
+Fee: Lovelace 1399010
+Size: 14782 / 32768 = 45%
 Execution units:
-  Memory: 6802860 / 30000000 = 22%
-  Steps: 2427197116 / 10000000000 = 24%
+  Memory: 6878664 / 30000000 = 22%
+  Steps: 2450112260 / 10000000000 = 24%
 ```
 
-The contract received the price report in the transaction `64b95f48561e184ac17c815241b2f6436267a0c79316a8949a4e7f18374b6372`.  Here is the UTxO at the contract address:
+The contract received the price report in the transaction `a6c262f383d9478d4f7660348563e73314f28fb1cf869a9353cbabe59349c16d`.  Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
@@ -877,7 +873,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-64b95f48561e184ac17c815241b2f6436267a0c79316a8949a4e7f18374b6372     1        17000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "21ecf3fd057b43416ff7442b8b1d4d311906060c83ee3216b9fe184695aea2e1"
+a6c262f383d9478d4f7660348563e73314f28fb1cf869a9353cbabe59349c16d     1        17000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "83b43993d815aa8a84aefeccb6f46f4d6139a9303eb03e460930163cdea878bb"
 ```
 
 Here is the UTxO at the oracle Christopher Marlowe's address:
@@ -889,8 +885,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ORACLE_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-64b95f48561e184ac17c815241b2f6436267a0c79316a8949a4e7f18374b6372     0        89695912 lovelace + TxOutDatumNone
-64b95f48561e184ac17c815241b2f6436267a0c79316a8949a4e7f18374b6372     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.434d + TxOutDatumNone
+a6c262f383d9478d4f7660348563e73314f28fb1cf869a9353cbabe59349c16d     0        89678885 lovelace + TxOutDatumNone
+a6c262f383d9478d4f7660348563e73314f28fb1cf869a9353cbabe59349c16d     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.434d + TxOutDatumNone
 ```
 
 ## Transaction 5. Oracle Reports the Second Price.
@@ -951,14 +947,14 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 ```
 
 ```console
-Fee: Lovelace 1584102
-Size: 13830 / 32768 = 42%
+Fee: Lovelace 1595213
+Size: 14080 / 32768 = 42%
 Execution units:
-  Memory: 9777684 / 30000000 = 32%
-  Steps: 3278225203 / 10000000000 = 32%
+  Memory: 9779084 / 30000000 = 32%
+  Steps: 3278642025 / 10000000000 = 32%
 ```
 
-The contract received the price report in the transaction `2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18` and settled the payments. There is no UTxO at the contract address:
+The contract received the price report in the transaction `f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d` and settled the payments. There is no UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
@@ -978,8 +974,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ORACLE_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     0        88111810 lovelace + TxOutDatumNone
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     4        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.434d + TxOutDatumNone
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     0        88083672 lovelace + TxOutDatumNone
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     4        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.434d + TxOutDatumNone
 ```
 
 This settles the difference contract, so payments are made to each participant. Here are the UTxO for payments at the role address:
@@ -991,9 +987,9 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d8ad8b0a642297fa38291e4522015f82d47774e9a9829345a0952c654f427a3"
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     2        6500000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "f605a13bb90b0f530748173887182b9135318402c3d5c989e40cca12b283664b"
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     3        8500000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d6b817dd540b8b4358a4f439ac7eda7a9877fe9f02f6244348d80542cb761b7"
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d8ad8b0a642297fa38291e4522015f82d47774e9a9829345a0952c654f427a3"
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     2        6500000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "f605a13bb90b0f530748173887182b9135318402c3d5c989e40cca12b283664b"
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     3        8500000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d6b817dd540b8b4358a4f439ac7eda7a9877fe9f02f6244348d80542cb761b7"
 ```
 
 ## Transaction 6. Party Withdraws Their Remaining Margin Deposit.
@@ -1020,11 +1016,11 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                         \
 ```
 
 ```console
-Fee: Lovelace 426563
-Size: 2885 / 32768 = 8%
+Fee: Lovelace 422045
+Size: 2881 / 32768 = 8%
 Execution units:
-  Memory: 1461810 / 30000000 = 4%
-  Steps: 557930172 / 10000000000 = 5%
+  Memory: 1407010 / 30000000 = 4%
+  Steps: 541567360 / 10000000000 = 5%
 ```
 
 There are still pending payment UTxOs at the role address:
@@ -1036,8 +1032,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d8ad8b0a642297fa38291e4522015f82d47774e9a9829345a0952c654f427a3"
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     3        8500000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d6b817dd540b8b4358a4f439ac7eda7a9877fe9f02f6244348d80542cb761b7"
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d8ad8b0a642297fa38291e4522015f82d47774e9a9829345a0952c654f427a3"
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     3        8500000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d6b817dd540b8b4358a4f439ac7eda7a9877fe9f02f6244348d80542cb761b7"
 ```
 
 Here are the UTxOs at the party Francis Beaumont's address:
@@ -1049,9 +1045,9 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-b545ed9baa1d7b7defdd75be99b2dc9800fd1a93018edb3d3b9b9becf8427adf     0        41007895 lovelace + TxOutDatumNone
-b545ed9baa1d7b7defdd75be99b2dc9800fd1a93018edb3d3b9b9becf8427adf     1        6500000 lovelace + TxOutDatumNone
-b545ed9baa1d7b7defdd75be99b2dc9800fd1a93018edb3d3b9b9becf8427adf     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.4642 + TxOutDatumNone
+173edf9f6a19f39dde9c6d53fc8f971d3de4ca1b26a62c276ddc24802ea7a516     0        296995195 lovelace + TxOutDatumNone
+173edf9f6a19f39dde9c6d53fc8f971d3de4ca1b26a62c276ddc24802ea7a516     1        6500000 lovelace + TxOutDatumNone
+173edf9f6a19f39dde9c6d53fc8f971d3de4ca1b26a62c276ddc24802ea7a516     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.4642 + TxOutDatumNone
 ```
 
 ## Transaction 7. Counterparty Withdraws Their Margin Deposit and Profit.
@@ -1078,11 +1074,11 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                          
 ```
 
 ```console
-Fee: Lovelace 426563
-Size: 2885 / 32768 = 8%
+Fee: Lovelace 422045
+Size: 2881 / 32768 = 8%
 Execution units:
-  Memory: 1461810 / 30000000 = 4%
-  Steps: 557930172 / 10000000000 = 5%
+  Memory: 1407010 / 30000000 = 4%
+  Steps: 541567360 / 10000000000 = 5%
 ```
 
 There are still pending payment UTxOs at the role address:
@@ -1094,7 +1090,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-2e8abe5f9faf98c4fc4051884e47ce1b7d81ac78af9234a1dbf24d467f2d9c18     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d8ad8b0a642297fa38291e4522015f82d47774e9a9829345a0952c654f427a3"
+f45fbdf7a0af60e2c25133b4854800ed3175e09f9574243299e634df53489d5d     1        2000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "1d8ad8b0a642297fa38291e4522015f82d47774e9a9829345a0952c654f427a3"
 ```
 
 Here are the UTxOs at the counterparty Thomas Middleton's address:
@@ -1106,9 +1102,9 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS" | sed -n 
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-f14379cfc1af76f6ac89fadc035614ccabe01ed0731fcfb873aaa5f16763926f     0        39994999 lovelace + TxOutDatumNone
-f14379cfc1af76f6ac89fadc035614ccabe01ed0731fcfb873aaa5f16763926f     1        8500000 lovelace + TxOutDatumNone
-f14379cfc1af76f6ac89fadc035614ccabe01ed0731fcfb873aaa5f16763926f     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.544d + TxOutDatumNone
+15613d9f31733f08439b5d2ef16d3fedc854ae8a3584f7d79b08b140cfc8c875     0        39983954 lovelace + TxOutDatumNone
+15613d9f31733f08439b5d2ef16d3fedc854ae8a3584f7d79b08b140cfc8c875     1        8500000 lovelace + TxOutDatumNone
+15613d9f31733f08439b5d2ef16d3fedc854ae8a3584f7d79b08b140cfc8c875     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.544d + TxOutDatumNone
 ```
 
 ## Transaction 8. Oracle Withdraws Their Deposit.
@@ -1135,8 +1131,8 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                          
 ```
 
 ```console
-Fee: Lovelace 426563
-Size: 2885 / 32768 = 8%
+Fee: Lovelace 426387
+Size: 2881 / 32768 = 8%
 Execution units:
   Memory: 1461810 / 30000000 = 4%
   Steps: 557930172 / 10000000000 = 5%
@@ -1162,9 +1158,9 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-b545ed9baa1d7b7defdd75be99b2dc9800fd1a93018edb3d3b9b9becf8427adf     0        41007895 lovelace + TxOutDatumNone
-b545ed9baa1d7b7defdd75be99b2dc9800fd1a93018edb3d3b9b9becf8427adf     1        6500000 lovelace + TxOutDatumNone
-b545ed9baa1d7b7defdd75be99b2dc9800fd1a93018edb3d3b9b9becf8427adf     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.4642 + TxOutDatumNone
+173edf9f6a19f39dde9c6d53fc8f971d3de4ca1b26a62c276ddc24802ea7a516     0        296995195 lovelace + TxOutDatumNone
+173edf9f6a19f39dde9c6d53fc8f971d3de4ca1b26a62c276ddc24802ea7a516     1        6500000 lovelace + TxOutDatumNone
+173edf9f6a19f39dde9c6d53fc8f971d3de4ca1b26a62c276ddc24802ea7a516     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.4642 + TxOutDatumNone
 ```
 
 Here are the UTxOs at the counterparty Thomas Middleton's address:
@@ -1176,9 +1172,9 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS" | sed -n 
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-f14379cfc1af76f6ac89fadc035614ccabe01ed0731fcfb873aaa5f16763926f     0        39994999 lovelace + TxOutDatumNone
-f14379cfc1af76f6ac89fadc035614ccabe01ed0731fcfb873aaa5f16763926f     1        8500000 lovelace + TxOutDatumNone
-f14379cfc1af76f6ac89fadc035614ccabe01ed0731fcfb873aaa5f16763926f     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.544d + TxOutDatumNone
+15613d9f31733f08439b5d2ef16d3fedc854ae8a3584f7d79b08b140cfc8c875     0        39983954 lovelace + TxOutDatumNone
+15613d9f31733f08439b5d2ef16d3fedc854ae8a3584f7d79b08b140cfc8c875     1        8500000 lovelace + TxOutDatumNone
+15613d9f31733f08439b5d2ef16d3fedc854ae8a3584f7d79b08b140cfc8c875     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.544d + TxOutDatumNone
 ```
 
 Here are the UTxOs at the oracle Christopher Marlowe's address:
@@ -1190,9 +1186,9 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ORACLE_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-20c56adf9b8495db92126df5e213a6ca72436173e1f064f136df4a42ad6fdb76     0        87685247 lovelace + TxOutDatumNone
-20c56adf9b8495db92126df5e213a6ca72436173e1f064f136df4a42ad6fdb76     1        2000000 lovelace + TxOutDatumNone
-20c56adf9b8495db92126df5e213a6ca72436173e1f064f136df4a42ad6fdb76     2        2000000 lovelace + 1 8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37.434d + TxOutDatumNone
+00c74db37a7268d24a455d6a254a13f97ae240c704762cb6af547e06b88bfcea     0        87657285 lovelace + TxOutDatumNone
+00c74db37a7268d24a455d6a254a13f97ae240c704762cb6af547e06b88bfcea     1        2000000 lovelace + TxOutDatumNone
+00c74db37a7268d24a455d6a254a13f97ae240c704762cb6af547e06b88bfcea     2        2000000 lovelace + 1 2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b.434d + TxOutDatumNone
 ```
 
 ## Clean Up
@@ -1212,7 +1208,7 @@ marlowe-cli transaction simple "${MAGIC[@]}"                                    
 ```
 
 ```console
-TxId "bc392f2566be897e09df5e2c317bfea0610b60b84acfc0388069ff253888314d"
+TxId "12843949161ed803f57c9dad402ac2262af6b081a0d6484b834f8a790ffab53f"
 ```
 
 marlowe-cli transaction simple "${MAGIC[@]}"                                            \
@@ -1228,7 +1224,7 @@ marlowe-cli transaction simple "${MAGIC[@]}"                                    
 ```
 
 ```console
-TxId "7ab57a84f695198a6493e33233690851bc504d8af8cde9bddfab58c8460d2d81"
+TxId "37e7becd93049ccf4b8f0faddbb2da642b89e0320aa7dd47e2741e2c3e85dca1"
 marlowe-cli util mint "${MAGIC[@]}" \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
                       --required-signer "$ORACLE_PAYMENT_SKEY"          \
@@ -1241,7 +1237,7 @@ marlowe-cli util mint "${MAGIC[@]}" \
 ```
 
 ```console
-PolicyID "8f841510b60b3efb489318b8614b64d2d6e2d618e354e0576c5e5f37"
+PolicyID "2c0447a0b07aee4708fa09845d3080ed78a4d414c49bbc03405dbf4b"
 TX=$(
 marlowe-cli util select "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -1259,4 +1255,4 @@ marlowe-cli transaction simple "${MAGIC[@]}"                             \
 ```
 
 ```console
-TxId "dfd457f505cf2f09a0a349b01578164df6334324db07d41599984802ea3e129d"
+TxId "035dd3d107f5c28eb06cba8229ddb1d6fd2adedb2f3bf2be5ab2cbc02000d2dc"

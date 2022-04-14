@@ -8,8 +8,6 @@ The `marlowe-cli run initialize` command creates the initial configuration for a
     $ marlowe-cli run initialize --help
     
     Usage: marlowe-cli run initialize [--testnet-magic INTEGER] 
-                                      [--slot-length INTEGER] 
-                                      [--slot-offset INTEGER] 
                                       [--stake-address ADDRESS] 
                                       [--roles-currency CURRENCY_SYMBOL]
                                       --contract-file CONTRACT_FILE
@@ -20,9 +18,6 @@ The `marlowe-cli run initialize` command creates the initial configuration for a
     
     Available options:
       --testnet-magic INTEGER  Network magic, or omit for mainnet.
-      --slot-length INTEGER    The slot length, in milliseconds.
-      --slot-offset INTEGER    The effective POSIX time of slot zero, in
-                               milliseconds.
       --stake-address ADDRESS  Stake address, if any.
       --roles-currency CURRENCY_SYMBOL
                                The currency symbol for roles, if any.

@@ -6,7 +6,10 @@ then
 fi
 
 # Select network.
-MAGIC=(--testnet-magic 1564)
+if [[ -z "$MAGIC" ]]
+then
+  MAGIC=(--testnet-magic 1567)
+fi
 
 # Wallet and PAB services.
 WALLET_API=http://localhost:8090
@@ -47,9 +50,9 @@ echo "Non-PAB tests:"
 
 if bash -ve "test/double-satisfaction.sh" >& "test/double-satisfaction.log"
 then
-    echo "  PASS: test/double-satisfaction"
+    echo "  PASS: test/double-satisfaction.sh"
 else
-    echo "  FAIL: test/double-satisfaction"
+    echo "  FAIL: test/double-satisfaction.sh"
 fi
 
 for t in examples/*/run-*.sh

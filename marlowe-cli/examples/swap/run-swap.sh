@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script exits with an error value if the end-to-end test fails.
-set -euo pipefail
+set -eo pipefail
 
 echo "# Test of a Swap Contract"
 
@@ -10,6 +10,7 @@ echo "[This swap contract](../../src/Language/Marlowe/CLI/Examples/Swap.hs) swap
 echo "## Prerequisites"
 
 echo "The environment variable "'`'"CARDANO_NODE_SOCKET_PATH"'`'" must be set to the path to the cardano node's socket."
+echo "See below for how to set "'`'"MAGIC"'`'" to select the network."
 echo
 echo 'The following tools must be on the PATH:'
 echo '* [marlowe-cli](../../ReadMe.md)'
@@ -23,16 +24,13 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if false
-then # Use the public testnet.
-  MAGIC=(--testnet-magic 1097911063)
-  SLOT_LENGTH=1000
-  SLOT_OFFSET=1594369216000
-else # Use the private testnet.
-  MAGIC=(--testnet-magic 1564)
-  SLOT_LENGTH=1000
-  SLOT_OFFSET=1644929640000
+if [[ -z "$MAGIC" ]]
+then
+  MAGIC=(--testnet-magic 1567)
 fi
+
+SLOT_LENGTH=$(marlowe-cli util slotting "${MAGIC[@]}" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
+SLOT_OFFSET=$(marlowe-cli util slotting "${MAGIC[@]}" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotZeroTime)
 
 echo "### Tip of the Blockchain"
 
@@ -40,7 +38,7 @@ TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
 HOUR="$((3600*1000))"
 
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(((1000 * $(date -u +%s) - SLOT_OFFSET) / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "### Participants"
 
@@ -221,12 +219,11 @@ echo "## Transaction 1. Create the Contract by Providing the Minimum ADA."
 
 echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it will require."
 
-marlowe-cli run initialize "${MAGIC[@]}"                 \
-                           --slot-length "$SLOT_LENGTH"  \
-                           --slot-offset "$SLOT_OFFSET"  \
-                           --contract-file tx-1.contract \
-                           --state-file    tx-1.state    \
-                           --out-file      tx-1.marlowe  \
+marlowe-cli run initialize "${MAGIC[@]}"                             \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --contract-file tx-1.contract             \
+                           --state-file    tx-1.state                \
+                           --out-file      tx-1.marlowe              \
                            --print-stats
 
 echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."

@@ -24,7 +24,7 @@ set -ev
 # Because of the transaction size, this test must be run on the private Marlowe
 # testnet.
 
-MAGIC=(--testnet-magic 1564)
+MAGIC=(--testnet-magic 1567)
 
 
 # Configure the first party.
@@ -52,7 +52,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --submit 600                              \
                         --lovelace 100000000                      \
                         "$PARTY_A_ADDRESS"
-TxId "7c8c1e5ab64f498960ccb1463ebb34796845904e0f30833ed2e7272df5074912"
+TxId "8294246c1fb0a6d96c7f74e8b6a3dfebb125985e27f4f9e565bf455f1c2bb3ef"
 
 marlowe-cli util clean "${MAGIC[@]}"                             \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -65,7 +65,7 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS"
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-e55c31cb06d3f7f9c3d52c697b112dc37c23c109cc99e60f8225077e3a40f43f     0        486273754 lovelace + TxOutDatumNone
+a7d98005f8b88553febfda55ca22ffbb3a82af4787886979deb45324b4c6016a     0        99834279 lovelace + TxOutDatumNone
 
 
 # We select the UTxO with sufficient funds to use in executing the contract.
@@ -105,7 +105,7 @@ marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --submit 600                              \
                         --lovelace 100000000                      \
                         "$PARTY_B_ADDRESS"
-TxId "c018cc3d58fe204bac3c2676248fe679b3793ae7885c14473c98437f9f0073d2"
+TxId "c9cfa7bd4af9dd776f3dfcd36b6630c82b57f8f1d7d5b5e1a310762bc47afaee"
 
 marlowe-cli util clean "${MAGIC[@]}"                             \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -118,7 +118,7 @@ marlowe-cli util clean "${MAGIC[@]}"                             \
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS"
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-1db1235d63ad65c4ff5a763acf8d0c603d3a5d99e7c6b00967ea8c70104f230a     0        502273754 lovelace + TxOutDatumNone
+b304c764d3fb9076756aec3c2c3aa7de8acde5192c349a157c84680ad1e94444     0        99834279 lovelace + TxOutDatumNone
 
 
 # We select the UTxO with sufficient funds to use in executing the contract.
@@ -139,10 +139,10 @@ CONTRACT_ADDRESS=$(marlowe-cli contract address "${MAGIC[@]}")
 marlowe-cli contract validator "${MAGIC[@]}"                \
                                --out-file marlowe.plutus    \
                                --print-stats
-addr_test1wrpwjj2eqlt7weufhmtphza92hsg3luz7f8gndlvza6d62srp373k
+addr_test1wp20ushgkk9nsfdcetcxpac8dgx09q08yhtdskptacvkcxsz2qjzl
 
-Validator size: 12350
-Bare-validator cost: ExBudget {exBudgetCPU = ExCPU 24652144, exBudgetMemory = ExMemory 82900}
+Validator size: 12604
+Bare-validator cost: ExBudget {exBudgetCPU = ExCPU 24920101, exBudgetMemory = ExMemory 83800}
 
 
 # Find the protocol parameters and the tip.
@@ -210,7 +210,7 @@ Execution units:
   Memory: 0 / 30000000 = 0%
   Steps: 0 / 10000000000 = 0%
 echo "TxId $TX_1"
-TxId 907f7117fa3427eb1e361f15e464e092066292011baa8bb073d719c29754faa4
+TxId b296349d10dbf2e073c0ecee317a96b8c94770f77128658e4e471a6d1c504a53
 
 
 # Transaction 2. Configure the second contract.
@@ -269,7 +269,7 @@ Execution units:
   Memory: 0 / 30000000 = 0%
   Steps: 0 / 10000000000 = 0%
 echo "TxId $TX_2"
-TxId e47851affe2fcea5c51635ab2d79a652925b3b0726339da01d7690e04831932c
+TxId 2ee79a952930c5edb1f4d388f7dd97708cd62b600acceca21bf9b358de757996
 
 
 # Transaction 3. The second party steals 20 ADA from the first party.
@@ -307,12 +307,12 @@ marlowe-cli transaction close "${MAGIC[@]}"                              \
                               --out-file tx-2.raw                        \
                               --print-stats
 
-Fee: Lovelace 971813
-Size: 12801 / 32768 = 39%
+Fee: Lovelace 982924
+Size: 13051 / 32768 = 39%
 Execution units:
-  Memory: 2889700 / 30000000 = 9%
-  Steps: 987905431 / 10000000000 = 9%
-TxId "d0c5bf04a1d45bb609ea4a6d24c7ac4d00da9beee2d9ee33c0740fca1eebf52f"
+  Memory: 2891100 / 30000000 = 9%
+  Steps: 988322253 / 10000000000 = 9%
+TxId "5382b0d639e964d3bc14986531faf44b74e99d35080799bc050f1284314fb777"
 
 # Perform a dry-run of redeeming the second contact: the first party receives
 # their 20 ADA and the second party receives their 4 ADA. If the following
@@ -336,12 +336,12 @@ marlowe-cli transaction close "${MAGIC[@]}"                              \
                               --out-file tx-2.raw                        \
                               --print-stats
 
-Fee: Lovelace 972356
-Size: 12801 / 32768 = 39%
+Fee: Lovelace 983467
+Size: 13051 / 32768 = 39%
 Execution units:
-  Memory: 2896304 / 30000000 = 9%
-  Steps: 990146187 / 10000000000 = 9%
-TxId "83f8b502fa1912ab4a6c58594f65904f33ba1352312397059f2402a085e10656"
+  Memory: 2897704 / 30000000 = 9%
+  Steps: 990563009 / 10000000000 = 9%
+TxId "c056baeaae0e967cd1e62062fcb9b85a4524e29b7fb296d3e668443ad93d3587"
 
 # Perform a dry-run of redeeming both contracts at once: the first party only
 # receives their 25 ADA from the first contract and the second party steals
@@ -378,7 +378,7 @@ else
   echo "Double satisfaction was not prevented."
 fi
 Command failed: transaction build  Error: The following scripts have execution failures:
-the script for transaction input 0 (in the order of the TxIds) failed with: 
+the script for transaction input 1 (in the order of the TxIds) failed with: 
 The Plutus script evaluation failed: An error has occurred:  User error:
 The provided Plutus code called 'error'.
 Script debugging logs: I1
