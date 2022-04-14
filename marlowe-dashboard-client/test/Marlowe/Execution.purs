@@ -311,6 +311,7 @@ restoreLoanState { currentTime, startTime } loanParams chHistory = do
           }
     , chHistory
     , chAddress: scriptAddress
+    , chUnspentPayouts: mempty
     }
 
 infixl 6 unsafeAddInstant as /+/
@@ -328,3 +329,4 @@ unsafeRemoveInstant a b =
   case runExcept $ adjustInstant (negateDuration $ unInstant b) a of
     Left _ -> unsafeThrow $ "Cannot remove " <> show a <> " - " <> show b
     Right i -> i
+

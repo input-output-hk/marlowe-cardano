@@ -362,6 +362,7 @@ contractHistory chParams chInitialData chHistory = ContractHistory
   , chParams
   , chInitialData
   , chHistory
+  , chUnspentPayouts: mempty
   }
 
 -------------------------------------------------------------------------------

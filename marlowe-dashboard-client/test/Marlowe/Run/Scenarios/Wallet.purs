@@ -104,6 +104,7 @@ multipleCompanionUpdates = marloweRunTest "Receiving multiple companion updates"
           , chParams: fst contract1
           , chInitialData: emptyMarloweData
           , chHistory: []
+          , chUnspentPayouts: mempty
           }
       ]
     followerId1 <- expectJust "followerId not found" $ Map.lookup
