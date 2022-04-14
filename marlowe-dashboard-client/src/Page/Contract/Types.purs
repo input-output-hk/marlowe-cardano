@@ -6,7 +6,6 @@ import Analytics (class IsEvent, defaultEvent)
 import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
-import Data.Address (Address)
 import Data.Array (length)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatus, ContractStatusId)
