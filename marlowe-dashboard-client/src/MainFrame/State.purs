@@ -7,11 +7,17 @@ import API.Lenses
   , _cicCurrentState
   , _cicDefinition
   , _cicStatus
+  , _hooks
   , _observableState
+  , _rqRequest
   )
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.PAB (class ManagePAB, subscribeToPlutusApp)
-import Capability.PAB (activateContract, getWalletContractInstances) as PAB
+import Capability.PAB
+  ( activateContract
+  , getWalletContractInstances
+  , stopContract
+  ) as PAB
 import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
@@ -28,7 +34,7 @@ import Data.Array (filter, find) as Array
 import Data.Either (hush)
 import Data.Filterable (filterMap)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (assign, lens, preview, set, use, view, (^.))
+import Data.Lens (assign, folded, hasn't, lens, preview, set, use, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Maybe (fromMaybe)
 import Data.PABConnectedWallet (_syncStatus, connectWallet)
@@ -317,6 +323,11 @@ activateOrRestorePlutusCompanionContracts
 activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
   do
     let
+      isHanging contract = case view _cicDefinition contract of
+        MarloweApp -> hasn't
+          (_cicCurrentState <<< _hooks <<< folded <<< _rqRequest)
+          contract
+        _ -> false
       isActiveContract contractType cic =
         let
           definition = view _cicDefinition cic
@@ -330,9 +341,14 @@ activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
           Nothing ->
             -- If we cannot find it, activate a new one
             ExceptT $ PAB.activateContract contractType walletId
-          Just contract ->
-            -- If we find it, return the id
-            pure $ view _cicContract contract
+          Just contract
+            | not (isHanging contract) ->
+                -- If we find it, and it is not hanging, return the id
+                pure $ view _cicContract contract
+            | otherwise -> do
+                -- If we find it, and it is hanging, stop and restart it.
+                ExceptT $ PAB.stopContract $ view _cicContract contract
+                ExceptT $ PAB.activateContract contractType walletId
     { companionAppId: _, marloweAppId: _ }
       <$> findOrActivateContract WalletCompanion
       <*> findOrActivateContract MarloweApp
