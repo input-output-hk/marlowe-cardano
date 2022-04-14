@@ -3,7 +3,7 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli marlowe-pab plutus-chain-index;
+  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli marlowe-pab plutus-chain-index cardano-wallet;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
@@ -99,6 +99,7 @@ let
     cabal-install
     cardano-node
     cardano-repo-tool
+    cardano-wallet
     fixPngOptimization
     fix-prettier
     fix-purs-tidy

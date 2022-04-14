@@ -43,7 +43,19 @@ import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (foldMap, for_, traverse_)
-import Data.Lens (assign, modifying, set, use, view, (^.), (^?))
+import Data.Lens
+  ( assign
+  , modifying
+  , set
+  , toListOf
+  , traversed
+  , use
+  , view
+  , (^.)
+  , (^?)
+  )
+import Data.Lens.Record (prop)
+import Data.List as List
 import Data.Map (filterKeys, toUnfoldable)
 import Data.Map as Map
 import Data.Maybe (maybe)
@@ -78,9 +90,14 @@ import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
-import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
-import Marlowe.Client (getMarloweParams)
 import Marlowe.Execution.State (extractNamedActions, isClosed)
+import Language.Marlowe.Client
+  ( EndpointResponse(..)
+  , MarloweEndpointResult(..)
+  , _ContractHistory
+  , _UnspentPayouts
+  )
+import Language.Marlowe.Client.History (_RolePayout)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
 import Marlowe.Run.Server
@@ -130,6 +147,7 @@ import Plutus.PAB.Webserver.Types
   , InstanceStatusToClient(..)
   ) as PAB
 import Servant.PureScript (class MonadAjax)
+import Plutus.V1.Ledger.Value (_TokenName)
 import Store as Store
 import Store.Contracts (followerContractExists, getContract, partitionContracts)
 import Store.RoleTokens (RoleTokenStore)
@@ -137,6 +155,7 @@ import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (successToast)
+import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 import WebSocket.Support as WS
 
@@ -354,42 +373,6 @@ handleAction (SelectContract marloweParams) = assign
   _selectedContractIndex
   marloweParams
 
-{- [UC-CONTRACT-4][1] Redeem payments
-This action is triggered every time we receive a status update for a `MarloweFollower` app. The
-handler looks, in the corresponding contract, for any payments to roles for which the current
-wallet holds the token, and then calls the "redeem" endpoint of the wallet's `MarloweApp` for each
-one, to make sure those funds reach the user's wallet (without the user having to do anything).
-This is not very sophisticated, and results in the "redeem" endpoint being called more times than
-necessary (we are not attempting to keep track of which payments have already been redeemed). Also,
-we thought it would be more user-friendly for now to trigger this automatically - but when we
-integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
-manually (and sign the transaction). So this will almost certainly have to change.
--}
-handleAction (RedeemPayments _) = pure unit
-
-{-
-  -- FIXME-3559 Fix redeem logic
-handleAction { wallet } (RedeemPayments marloweParams) = do
- mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
-for_ mStartedContract \{ executionState, userParties } ->
-  let
-    payments = getAllPayments executionState
-    { marloweParams } = executionState
-    isToParty party (Payment _ payee _) = case payee of
-      Party p -> p == party
-      _ -> false
-  in
-    for (List.fromFoldable userParties) \party ->
-      let
-        paymentsToParty = List.filter (isToParty party) payments
-      in
-        for paymentsToParty \payment -> case payment of
-          Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
-            marloweParams
-            tokenName
-          _ -> pure unit
--}
-
 handleAction (TemplateAction templateAction) = do
   wallet <- use _wallet
   case templateAction of
@@ -495,8 +478,68 @@ handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   {- [UC-CONTRACT-3][1] Apply an input to a contract -}
   FollowerApp.onNewObservableState plutusAppId contractHistory
   {- [UC-CONTRACT-4][0] Redeem payments -}
-  let marloweParams = getMarloweParams contractHistory
-  handleAction $ RedeemPayments marloweParams
+  let
+    marloweParams =
+      view
+        ( _ContractHistory
+            <<< prop (Proxy :: Proxy "chParams")
+        )
+        $ contractHistory
+    roles = List.sort
+      $ toListOf
+          ( _ContractHistory
+              <<< prop (Proxy :: Proxy "chUnspentPayouts")
+              <<< _UnspentPayouts
+              <<< traversed
+              <<< _RolePayout
+              <<< prop (Proxy :: Proxy "rolePayoutName")
+              <<< _TokenName
+              <<< prop (Proxy :: Proxy "unTokenName")
+          )
+      $ contractHistory
+  -- wallet <- use _wallet
+  for_ roles \role -> do
+    debug ("Possible payouts for role: " <> role) $ encodeJson marloweParams
+    -- redeem wallet marloweParams role >>= case _ of
+    --   Right awaitResult -> liftAff awaitResult
+    --   Left _ -> pure unit
+    pure unit
+
+{- [UC-CONTRACT-4][1] Redeem payments
+This action is triggered every time we receive a status update for a `MarloweFollower` app. The
+handler looks, in the corresponding contract, for any payments to roles for which the current
+wallet holds the token, and then calls the "redeem" endpoint of the wallet's `MarloweApp` for each
+one, to make sure those funds reach the user's wallet (without the user having to do anything).
+This is not very sophisticated, and results in the "redeem" endpoint being called more times than
+necessary (we are not attempting to keep track of which payments have already been redeemed). Also,
+we thought it would be more user-friendly for now to trigger this automatically - but when we
+integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
+manually (and sign the transaction). So this will almost certainly have to change.
+-}
+handleAction (RedeemPayments _) = pure unit
+
+{-
+  -- FIXME-3559 Fix redeem logic
+handleAction { wallet } (RedeemPayments marloweParams) = do
+ mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
+for_ mStartedContract \{ executionState, userParties } ->
+  let
+    payments = getAllPayments executionState
+    { marloweParams } = executionState
+    isToParty party (Payment _ payee _) = case payee of
+      Party p -> p == party
+      _ -> false
+  in
+    for (List.fromFoldable userParties) \party ->
+      let
+        paymentsToParty = List.filter (isToParty party) payments
+      in
+        for paymentsToParty \payment -> case payment of
+          Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
+            marloweParams
+            tokenName
+          _ -> pure unit
+-}
 
 {- [UC-CONTRACT-1][2] Starting a Marlowe contract
   After the PAB endpoint finishes creating the contract, it modifies
@@ -720,3 +763,4 @@ toTemplate
   => H.HalogenM Template.State Template.Action ChildSlots Msg m Unit
   -> HalogenM m Unit
 toTemplate = mapSubmodule _templateState TemplateAction
+
