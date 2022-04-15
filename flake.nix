@@ -50,7 +50,7 @@
       flake = false;
     };
     iohk-nix = {
-      url = "github:input-output-hk/iohk-nix";
+      url = "github:input-output-hk/iohk-nix/marlowe-dev-testnet";
       flake = false;
     };
     npmlock2nix = {

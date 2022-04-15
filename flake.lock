@@ -195,15 +195,16 @@
     "iohk-nix": {
       "flake": false,
       "locked": {
-        "lastModified": 1626953580,
-        "narHash": "sha256-iEI9aTOaZMGsjWzcrctrC0usmiagwKT2v1LSDe9/tMU=",
+        "lastModified": 1649981543,
+        "narHash": "sha256-g2HWd6+odqUj4Xdb1wipow5F7A21fmuNTXm5NWlU9wk=",
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "cbd497f5844249ef8fe617166337d59f2a6ebe90",
+        "rev": "3b90a1bd7472eb39fd4eba83832310718df58dc4",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
+        "ref": "marlowe-dev-testnet",
         "repo": "iohk-nix",
         "type": "github"
       }

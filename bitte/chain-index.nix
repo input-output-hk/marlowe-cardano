@@ -12,5 +12,5 @@ writeShellScriptBin "entrypoint" ''
 
   wait-for-socket "$NOMAD_ALLOC_DIR/node.sock"
 
-  exec plutus-chain-index start-index --socket-path "$NOMAD_ALLOC_DIR"/node.sock --db-path "$INDEX_STATE_DIR/db.sqlite" --port "$NOMAD_PORT_index" --network-id 1564
+  exec plutus-chain-index start-index --socket-path "$NOMAD_ALLOC_DIR"/node.sock --db-path "$INDEX_STATE_DIR/db.sqlite" --port "$NOMAD_PORT_index" --network-id 1566
 ''

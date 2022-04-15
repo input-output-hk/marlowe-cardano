@@ -13,11 +13,11 @@ writeShellScriptBin "entrypoint" ''
   cat > marlowe-run.json <<EOF
   {
     "wbeConfig": { "host": "$NOMAD_IP_wbe", "port": $NOMAD_PORT_wbe },
-    "wbeConfig": { "host": "$NOMAD_ADDR_index", "port": $NOMAD_PORT_index },
+    "chainIndexConfig": { "host": "$NOMAD_ADDR_index", "port": $NOMAD_PORT_index },
     "staticPath": "/var/empty",
     "verbosity": 3
   }
   EOF
 
-  exec marlowe-dashboard-server webserver --bind 0.0.0.0 --port $NOMAD_PORT_run --config marlowe-run.json
+  exec marlowe-dashboard-server webserver --bind 0.0.0.0 --port $NOMAD_PORT_run --config marlowe-run.json --network-id 1566
 ''

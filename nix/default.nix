@@ -28,6 +28,7 @@ let
     # our own overlays:
     # needed for cardano-api wich uses a patched libsodium
     ++ iohkNixMain.overlays.crypto
+    ++ iohkNixMain.overlays.iohkNix
     ++ ownOverlays;
 
   pkgs = import sources.nixpkgs {
