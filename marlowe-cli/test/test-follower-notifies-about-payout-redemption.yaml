@@ -1,4 +1,4 @@
-ptTestName: Follower should initialize payouts list when they are already present on the chain
+ptTestName: Follower should notify about payouts status change after redemption
 
 ptPabOperations:
   - tag: CreateWallet
@@ -70,6 +70,20 @@ ptPabOperations:
   - tag: PrintWallet
     poOwner: PAB
 
+  - tag: ActivateFollower
+    poAppInstance: App
+    poInstance: Follower
+    poOwner: PAB
+
+  - tag: CallFollow
+    poInstance: Follower
+
+  - tag: AwaitFollow
+    poInstance: Follower
+    poResponsePattern:
+      parts:
+        chUnspentPayouts: []
+
   - tag: CallApplyInputs
     poInstance: App
     poInputs:
@@ -89,18 +103,7 @@ ptPabOperations:
     poInstance: App
 
   - tag: Comment
-    poComment: "We attach follower to already ongoing contract."
-
-  - tag: ActivateFollower
-    poAppInstance: App
-    poInstance: Follower
-    poOwner: PAB
-
-  - tag: CallFollow
-    poInstance: Follower
-
-  - tag: Comment
-    poComment: "We should see a payout in the reported state."
+    poComment: "We should see list of unspent outputs."
 
   - tag: AwaitFollow
     poInstance: Follower
@@ -118,3 +121,55 @@ ptPabOperations:
                     [[{ "unTokenName": "" }, 8000000]],
                   ],
                 ]
+
+  - tag: CallRedeem
+    poInstance: App
+    poOwner: PAB
+
+  - tag: Comment
+    poComment: "Awaiting redemption..."
+
+  - tag: AwaitRedeem
+    poInstance: App
+
+  - tag: Comment
+    poComment: "Now we should have updated list of unspent outputs."
+
+  - tag: AwaitFollow
+    poInstance: Follower
+    poResponsePattern:
+      parts:
+        chUnspentPayouts: []
+
+  - tag: CallApplyInputs
+    poInstance: App
+    poInputs:
+      - input_notify
+    poTimes:
+      - 1645590825000
+      - 1898051625000
+
+  - tag: AwaitFollow
+    poInstance: Follower
+    poResponsePattern:
+      parts:
+        chUnspentPayouts:
+          - rolePayoutName:
+              unTokenName: "PAB"
+            rolePayoutTxOutRef: {}
+            rolePayoutValue:
+              getValue:
+                [
+                  [
+                    { "unCurrencySymbol": "" },
+                    [[{ "unTokenName": "" }, 3000000]],
+                  ],
+                ]
+
+  - tag: CallApplyInputs
+    poInstance: App
+    poInputs:
+      - input_notify
+    poTimes:
+      - 1645590825000
+      - 1898051625000

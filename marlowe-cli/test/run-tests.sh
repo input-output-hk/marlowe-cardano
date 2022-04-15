@@ -41,7 +41,8 @@ BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
 PAB_PASSPHRASE=fixme-allow-pass-per-wallet
 
 if [ -z "$1" ]; then
-  TEST_CASES="wait refund wallet-failure simple escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada follower-non-empty-payouts-initialization"
+  # TEST_CASES="wait refund wallet-failure simple escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption"
+  TEST_CASES="follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption"
 else
   TEST_CASES=$1
 fi
