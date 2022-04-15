@@ -15,7 +15,8 @@ The `marlowe-cli run execute` command creates and optionally runs a Marlowe tran
                                    --marlowe-out-file MARLOWE_FILE 
                                    [--tx-in TXID#TXIX] [--tx-out ADDRESS+VALUE]
                                    --change-address ADDRESS 
-                                   [--required-signer SIGNING_FILE] --out-file FILE 
+                                   [--required-signer SIGNING_FILE] 
+                                   [--metadata-file METADATA_FILE] --out-file FILE 
                                    [--submit SECONDS] [--print-stats] 
                                    [--script-invalid]
       Run a Marlowe transaction.
@@ -39,6 +40,8 @@ The `marlowe-cli run execute` command creates and optionally runs a Marlowe tran
       --change-address ADDRESS Address to receive ADA in excess of fee.
       --required-signer SIGNING_FILE
                                File containing a required signing key.
+      --metadata-file METADATA_FILE
+                               JSON file containing metadata.
       --out-file FILE          Output file for transaction body.
       --submit SECONDS         Also submit the transaction, and wait for
                                confirmation.

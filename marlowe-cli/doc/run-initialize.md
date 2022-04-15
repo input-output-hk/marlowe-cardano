@@ -7,7 +7,8 @@ The `marlowe-cli run initialize` command creates the initial configuration for a
 
     $ marlowe-cli run initialize --help
     
-    Usage: marlowe-cli run initialize [--testnet-magic INTEGER] 
+    Usage: marlowe-cli run initialize [--testnet-magic INTEGER]
+                                      --socket-path SOCKET_FILE 
                                       [--stake-address ADDRESS] 
                                       [--roles-currency CURRENCY_SYMBOL]
                                       --contract-file CONTRACT_FILE
@@ -18,6 +19,8 @@ The `marlowe-cli run initialize` command creates the initial configuration for a
     
     Available options:
       --testnet-magic INTEGER  Network magic, or omit for mainnet.
+      --socket-path SOCKET_FILE
+                               Location of the cardano-node socket file.
       --stake-address ADDRESS  Stake address, if any.
       --roles-currency CURRENCY_SYMBOL
                                The currency symbol for roles, if any.

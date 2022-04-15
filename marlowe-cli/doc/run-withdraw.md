@@ -14,7 +14,8 @@ The `marlowe-cli run withdraw` command creates and optionally runs a transaction
                                     --tx-in-collateral TXID#TXIX [--tx-in TXID#TXIX]
                                     [--tx-out ADDRESS+VALUE]
                                     --change-address ADDRESS 
-                                    [--required-signer SIGNING_FILE] --out-file FILE
+                                    [--required-signer SIGNING_FILE] 
+                                    [--metadata-file METADATA_FILE] --out-file FILE 
                                     [--submit SECONDS] [--print-stats] 
                                     [--script-invalid]
       Withdraw funds from the Marlowe role address.
@@ -34,6 +35,8 @@ The `marlowe-cli run withdraw` command creates and optionally runs a transaction
       --change-address ADDRESS Address to receive ADA in excess of fee.
       --required-signer SIGNING_FILE
                                File containing a required signing key.
+      --metadata-file METADATA_FILE
+                               JSON file containing metadata.
       --out-file FILE          Output file for transaction body.
       --submit SECONDS         Also submit the transaction, and wait for
                                confirmation.

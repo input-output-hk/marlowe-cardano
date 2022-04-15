@@ -78,6 +78,7 @@ data RunCommand =
     , outputs         :: [(AddressAny, Api.Value)]     -- ^ The ordinary transaction outputs.
     , change          :: AddressAny                    -- ^ The change address.
     , signingKeyFiles :: [FilePath]                    -- ^ The files containing the required signing keys.
+    , metadataFile    :: Maybe FilePath                -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                      -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                     -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                          -- ^ Whether to print statistics about the contract and transaction.
@@ -95,6 +96,7 @@ data RunCommand =
     , outputs         :: [(AddressAny, Api.Value)] -- ^ The ordinary transaction outputs.
     , change          :: AddressAny                -- ^ The change address.
     , signingKeyFiles :: [FilePath]                -- ^ The files containing the required signing keys.
+    , metadataFile    :: Maybe FilePath            -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                  -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                 -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                      -- ^ Whether to print statistics about the contract and transaction.
@@ -148,6 +150,7 @@ runRunCommand command =
                             marloweIn marloweOut
                             inputs outputs' change
                             signingKeyFiles
+                            metadataFile
                             bodyFile
                             submitTimeout
                             printStats
@@ -159,6 +162,7 @@ runRunCommand command =
                             marloweOut roleName collateral
                             inputs outputs' change
                             signingKeyFiles
+                            metadataFile
                             bodyFile
                             submitTimeout
                             printStats
@@ -239,6 +243,7 @@ runOptions =
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."                        )
     <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                           )
     <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                            )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                                     )
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."                                  )
     <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."            )
     <*> O.switch                               (O.long "print-stats"                                  <> O.help "Print statistics."                                                  )
@@ -273,6 +278,7 @@ withdrawOptions =
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"           <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."                        )
     <*> O.option parseAddressAny               (O.long "change-address"   <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                           )
     <*> (O.many . O.strOption)                 (O.long "required-signer"  <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                            )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                                     )
     <*> O.strOption                            (O.long "out-file"         <> O.metavar "FILE"          <> O.help "Output file for transaction body."                                  )
     <*> (O.optional . O.option O.auto)         (O.long "submit"           <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."            )
     <*> O.switch                               (O.long "print-stats"                                   <> O.help "Print statistics."                                                  )
