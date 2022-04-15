@@ -26,15 +26,16 @@ echo "### Select Network"
 
 if [[ -z "$MAGIC" ]]
 then
-  MAGIC=(--testnet-magic 1567)
+  MAGIC=1567
 fi
+echo "MAGIC=$MAGIC"
 
-SLOT_LENGTH=$(marlowe-cli util slotting "${MAGIC[@]}" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
-SLOT_OFFSET=$(marlowe-cli util slotting "${MAGIC[@]}" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotZeroTime)
+SLOT_LENGTH=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
+SLOT_OFFSET=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotZeroTime)
 
 echo "### Tip of the Blockchain"
 
-TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+TIP=$(cardano-cli query tip --testnet-magic "$MAGIC" | jq '.slot')
 NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
 HOUR="$((3600*1000))"
 
@@ -57,11 +58,11 @@ then
   cardano-cli address key-gen --signing-key-file "$LENDER_PAYMENT_SKEY"      \
                               --verification-key-file "$LENDER_PAYMENT_VKEY"
 fi
-LENDER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$LENDER_PAYMENT_VKEY")
+LENDER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$LENDER_PAYMENT_VKEY")
 
 echo "Fund the lender's address."
 
-marlowe-cli util faucet "${MAGIC[@]}"                             \
+marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
@@ -83,11 +84,11 @@ then
   cardano-cli address key-gen --signing-key-file "$BORROWER_PAYMENT_SKEY"      \
                               --verification-key-file "$BORROWER_PAYMENT_VKEY"
 fi
-BORROWER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$BORROWER_PAYMENT_VKEY")
+BORROWER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$BORROWER_PAYMENT_VKEY")
 
 echo "Fund the borrower's address."
 
-marlowe-cli util faucet "${MAGIC[@]}"                             \
+marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
@@ -101,7 +102,7 @@ echo "The lender mints the role tokens."
 MINT_EXPIRES=$((TIP + 1000000))
 
 ROLE_CURRENCY=$(
-marlowe-cli util mint "${MAGIC[@]}" \
+marlowe-cli util mint --testnet-magic "$MAGIC" \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                       --required-signer "$LENDER_PAYMENT_SKEY"  \
                       --change-address  "$LENDER_ADDRESS"       \
@@ -118,7 +119,7 @@ BORROWER_TOKEN="$ROLE_CURRENCY.$BORROWER_ROLE"
 echo "Find the transaction output with the borrower's role token."
 
 TX_MINT_BORROWER=$(
-marlowe-cli util select "${MAGIC[@]}"                             \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --asset-only "$BORROWER_TOKEN"            \
                         "$LENDER_ADDRESS"                         \
@@ -127,7 +128,7 @@ marlowe-cli util select "${MAGIC[@]}"                             \
 
 echo "Send the borrower their role token."
 
-marlowe-cli transaction simple "${MAGIC[@]}"                                          \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                               \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"              \
                                --tx-in "$TX_MINT_BORROWER"                            \
                                --tx-out "$BORROWER_ADDRESS+2000000+1 $BORROWER_TOKEN" \
@@ -140,26 +141,26 @@ echo "### Available UTxOs"
 
 echo "The lender $LENDER_NAME is the minimum-ADA provider and has the address "'`'"$LENDER_ADDRESS"'`'" and role token named "'`'"$LENDER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
-marlowe-cli util clean "${MAGIC[@]}"                             \
+marlowe-cli util clean --testnet-magic "$MAGIC"                  \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                        --required-signer "$LENDER_PAYMENT_SKEY"  \
                        --change-address "$LENDER_ADDRESS"        \
                        --out-file /dev/null                      \
                        --submit=600                              \
 > /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS"
 
 echo "We select the UTxO with the lender $LENDER_NAME's role token."
 
 TX_0_LENDER_ADA=$(
-marlowe-cli util select "${MAGIC[@]}"                             \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --lovelace-only 120000000                 \
                         "$LENDER_ADDRESS"                         \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_LENDER_TOKEN=$(
-marlowe-cli util select "${MAGIC[@]}"                             \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --asset-only "$LENDER_TOKEN"              \
                         "$LENDER_ADDRESS"                         \
@@ -170,26 +171,26 @@ echo "$LENDER_NAME will spend the UTxOs "'`'"$TX_0_LENDER_ADA"'`'" and "'`'"$TX_
 
 echo "The borrower $BORROWER_NAME has the address "'`'"$BORROWER_ADDRESS"'`'" and role token named "'`'"$BORROWER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
-marlowe-cli util clean "${MAGIC[@]}"                              \
+marlowe-cli util clean --testnet-magic "$MAGIC"                   \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
                        --required-signer "$BORROWER_PAYMENT_SKEY" \
                        --change-address "$BORROWER_ADDRESS"       \
                        --out-file /dev/null                       \
                        --submit=600                               \
 > /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$BORROWER_ADDRESS"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS"
 
 echo "We select the UTxO with the lender $BORROWER_NAME's role token."
 
 TX_0_BORROWER_ADA=$(
-marlowe-cli util select "${MAGIC[@]}"                             \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --lovelace-only 20000000                  \
                         "$BORROWER_ADDRESS"                       \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_BORROWER_TOKEN=$(
-marlowe-cli util select "${MAGIC[@]}"                             \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --asset-only "$BORROWER_TOKEN"            \
                         "$BORROWER_ADDRESS"                       \
@@ -225,7 +226,7 @@ echo "## Transaction 1. Create the Contract by Providing the Minimum ADA."
 
 echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it will require."
 
-marlowe-cli run initialize "${MAGIC[@]}"                             \
+marlowe-cli run initialize --testnet-magic "$MAGIC"                  \
                            --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                            --roles-currency "$ROLE_CURRENCY"         \
                            --contract-file tx-1.contract             \
@@ -248,7 +249,7 @@ echo "The role address is "'`'"$ROLE_ADDRESS"'`.'
 echo "The lender $LENDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
-marlowe-cli run execute "${MAGIC[@]}"                             \
+marlowe-cli run execute --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --tx-in "$TX_0_LENDER_ADA"                \
                         --required-signer "$LENDER_PAYMENT_SKEY"  \
@@ -262,11 +263,11 @@ marlowe-cli run execute "${MAGIC[@]}"                             \
 
 echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace from the lender $LENDER_NAME in the transaction "'`'"$TX_1"'`'".  Here is the UTxO at the contract address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
 
 echo "Here are the UTxOs at the lender $LENDER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
 
 echo "## Transaction 2. Lender Deposits the Loan Amount"
 
@@ -284,7 +285,7 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
 echo "Now the lender $LENDER_NAME submits the transaction that deposits the loan amount."
 
 TX_2=$(
-marlowe-cli run execute "${MAGIC[@]}"                                           \
+marlowe-cli run execute --testnet-magic "$MAGIC"                                \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH"               \
                         --marlowe-in-file tx-1.marlowe                          \
                         --tx-in-marlowe "$TX_1"#1                               \
@@ -303,22 +304,22 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 
 echo "The contract passed the deposit of $PRINCIPAL ADA in the transaction "'`'"$TX_2"'`'" from the lender to the role address, for the benefit of the borrower. Here is the UTxO at the contract address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
 echo "Here is the UTxO at the lender $LENDER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
 echo "Here is the UTxO at the role address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
 echo "## Transaction 3. Lender Withdraws Loan."
 
 echo "The lender $LENDER_NAME submits a transaction to withdraw the loan from the role address."
 
 TX_3=$(
-marlowe-cli run withdraw "${MAGIC[@]}"                                               \
+marlowe-cli run withdraw --testnet-magic "$MAGIC"                                    \
                          --socket-path "$CARDANO_NODE_SOCKET_PATH"                   \
                          --marlowe-file tx-2.marlowe                                 \
                          --role-name "$BORROWER_ROLE"                                \
@@ -336,11 +337,11 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                          
 
 echo "There is no UTxO at the role address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
 echo "Here is the UTxO at the borrower $BORROWER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
 echo "## Transaction 4. Borrower Repays the Loan's Principal and Interest"
 
@@ -358,7 +359,7 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe                \
 echo "Now the borrower $BORROWER_NAME submits a transaction that repays the loan."
 
 TX_4=$(
-marlowe-cli run execute "${MAGIC[@]}"                                               \
+marlowe-cli run execute --testnet-magic "$MAGIC"                                    \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH"                   \
                         --marlowe-in-file tx-2.marlowe                              \
                         --tx-in-marlowe "$TX_2"#1                                   \
@@ -378,22 +379,22 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 
 echo "The closing of the contract paid in the transaction "'`'"$TX_4"'`'" the $PRINCIPAL lovelace principal and $INTEREST lovelace interest to the role address for the benefit of the lender $LENDER_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract. There is no UTxO at the contract address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
 
 echo "Here are the UTxOs at the borrower $BORROWER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
 echo "Here is the UTxO at the role address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
 echo "## Transaction 5. Lender Withdraws Repayment."
 
 echo "The lender $LENDER_NAME submits a transaction to withdraw the repayment from the role address."
 
 TX_5=$(
-marlowe-cli run withdraw "${MAGIC[@]}"                                           \
+marlowe-cli run withdraw --testnet-magic "$MAGIC"                                \
                          --socket-path "$CARDANO_NODE_SOCKET_PATH"               \
                          --marlowe-file tx-4.marlowe                             \
                          --role-name "$LENDER_ROLE"                              \
@@ -411,21 +412,21 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                          
 
 echo "There is no UTxO at the role address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
 
 echo "Here are the UTxOs at the lender $LENDER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
 
 echo "Here are the UTxOs at the borrower $BORROWER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
 
 echo "## Clean Up"
 
 FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
 
-marlowe-cli transaction simple "${MAGIC[@]}"                                        \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
                                --tx-in "$TX_4"#0                                    \
                                --tx-in "$TX_4"#2                                    \
@@ -435,7 +436,7 @@ marlowe-cli transaction simple "${MAGIC[@]}"                                    
                                --out-file /dev/null                                 \
                                --submit 600
 
-marlowe-cli util mint "${MAGIC[@]}" \
+marlowe-cli util mint --testnet-magic "$MAGIC" \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                       --required-signer "$LENDER_PAYMENT_SKEY"  \
                       --change-address  "$LENDER_ADDRESS"       \
@@ -446,14 +447,14 @@ marlowe-cli util mint "${MAGIC[@]}" \
                       "$LENDER_ROLE" "$BORROWER_ROLE"
 
 TX=$(
-marlowe-cli util select "${MAGIC[@]}"                             \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --lovelace-only 1                         \
                         "$LENDER_ADDRESS"                         \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 
-marlowe-cli transaction simple "${MAGIC[@]}"                             \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                  \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --tx-in "$TX"                             \
                                --required-signer "$LENDER_PAYMENT_SKEY"  \

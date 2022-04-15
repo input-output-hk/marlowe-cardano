@@ -8,8 +8,9 @@ fi
 # Select network.
 if [[ -z "$MAGIC" ]]
 then
-  MAGIC=(--testnet-magic 1567)
+  MAGIC=1567
 fi
+echo "MAGIC=$MAGIC"
 
 # Wallet and PAB services.
 WALLET_API=http://localhost:8090
@@ -31,10 +32,10 @@ then
   cardano-cli address key-gen --signing-key-file "$FAUCET_SKEY"      \
                               --verification-key-file "$FAUCET_VKEY"
 fi
-FAUCET_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$FAUCET_VKEY")
+FAUCET_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$FAUCET_VKEY")
 
 # Fund the faucet with 25k tADA.
-marlowe-cli util faucet "${MAGIC[@]}"                             \
+marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
@@ -69,7 +70,7 @@ echo  "PAB tests:"
 
 for t in test/test-{wait,refund,wallet-failure,simple,escrow,escrow-with-collateral,zero-coupon-bond,zero-coupon-bond-too-late,zero-coupon-bond-immediate-timeout,coupon-bond-guaranteed,contract-for-differences,contract-for-differences-with-oracle,swap-of-ada-for-ada}.yaml
 do
-  if marlowe-cli test contracts "${MAGIC[@]}"                             \
+  if marlowe-cli test contracts --testnet-magic "$MAGIC"                  \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                 --wallet-url "$WALLET_API"                \
                                 --pab-url "$PAB_API"                      \
