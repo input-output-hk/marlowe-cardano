@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+echo "Set CARDANO_NODE_SOCKET_PATH and MAGIC to point to the network to be tested."
+
 if [[ -z "$CARDANO_NODE_SOCKET_PATH" ]]
 then
   CARDANO_NODE_SOCKET_PATH=node.socket
