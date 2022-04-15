@@ -26,6 +26,7 @@
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-specialise #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Language.Marlowe.Client where
 import Cardano.Api (AddressInEra (..), PaymentCredential (..), SerialiseAsRawBytes (serialiseToRawBytes), ShelleyEra,
@@ -49,7 +50,6 @@ import qualified Data.Text as T
 import Data.UUID (UUID)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import GHC.TypeLits (sameNat)
 import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, RolePayout (..), marloweHistory,
                                         marloweHistoryFrom, marloweUtxoStatesAt, toMarloweState, toRolePayout,
                                         txRoleData)
@@ -85,6 +85,8 @@ import PlutusPrelude (foldMapM, (<|>))
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
+
+
 
 data MarloweClientInput = ClientInput InputContent
                         | ClientMerkleizedInput InputContent Marlowe.Contract
