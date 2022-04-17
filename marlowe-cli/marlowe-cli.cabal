@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe-cli
-version: 0.0.2.0
+version: 0.0.3.0
 license: Apache-2.0
 license-files:
   LICENSE
@@ -65,6 +65,8 @@ library
     Language.Marlowe.CLI.Orphans
     Language.Marlowe.CLI.PAB
     Language.Marlowe.CLI.Run
+    Language.Marlowe.CLI.Sync
+    Language.Marlowe.CLI.Sync.Types
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Test
     Language.Marlowe.CLI.Test.PAB
@@ -83,11 +85,13 @@ library
     cardano-addresses,
     cardano-api,
     cardano-ledger-alonzo,
+    cardano-ledger-core,
     cardano-slotting,
     cardano-wallet,
     cardano-wallet-core,
     containers,
     data-default,
+    directory,
     extra,
     freer-simple,
     http-client,

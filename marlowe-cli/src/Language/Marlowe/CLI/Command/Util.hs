@@ -32,6 +32,7 @@ import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseOutputQuery, parseSlotNo,
                                            parseTokenName)
+import Language.Marlowe.CLI.Sync (watchMarlowe)
 import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, querySlotting, selectUtxos)
 import Language.Marlowe.CLI.Types (CliError, OutputQuery)
 import Plutus.V1.Ledger.Api (TokenName)
@@ -103,6 +104,15 @@ data UtilCommand =
     , socketPath   :: FilePath         -- ^ The path to the node socket.
     , slottingFile :: Maybe FilePath   -- ^ The output file for the slot configuration.
     }
+    -- | Watch Marlowe transactions.
+  | Watch
+    {
+      network     :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath  :: FilePath         -- ^ The path to the node socket.
+    , continue    :: Bool             -- ^ Whether to continue watching when the tip of the chain is reached.
+    , restartFile :: Maybe FilePath   -- ^ File for restoring and saving current point on the chain.
+    , outputFile  :: Maybe FilePath   -- ^ File for recording Marlowe transactions.
+    }
 
 
 -- | Run a miscellaneous command.
@@ -164,6 +174,11 @@ runUtilCommand command =
       Slotting{..}     -> querySlotting
                             connection
                             slottingFile
+      Watch{..}        -> watchMarlowe
+                            connection
+                            continue
+                            restartFile
+                            outputFile
 
 
 -- | Parser for miscellaneous commands.
@@ -178,6 +193,7 @@ parseUtilCommand =
     <> mintCommand
     <> selectCommand
     <> slottingCommand
+    <> watchCommand
 
 
 -- | Parser for the "clean" command.
@@ -310,3 +326,22 @@ slottingOptions =
     <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."      )
     <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file.")
     <*> (O.optional .O.strOption             ) (O.long "out-file"      <> O.metavar "FILE"        <> O.help "Output file for slot configuration."      )
+
+
+-- | Parser for the "watch" command.
+watchCommand :: O.Mod O.CommandFields UtilCommand
+watchCommand =
+  O.command "watch"
+    $ O.info watchOptions
+    $ O.progDesc "Watch Marlowe transactions on a Cardano node."
+
+
+-- | Parser for the "watch" options.
+watchOptions :: O.Parser UtilCommand
+watchOptions =
+  Watch
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."                              )
+    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file."                        )
+    <*> O.switch                               (O.long "continue"                                 <> O.help "Whether to continue when the current tip of the chain is reached.")
+    <*> (O.optional . O.strOption)             (O.long "restart"       <> O.metavar "POINT_FILE"  <> O.help "File for restoring and saving current point on the chain."        )
+    <*> (O.optional . O.strOption)             (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "File in which to store JSON records of Marlowe transactions."     )
