@@ -49,10 +49,13 @@ import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), CardanoMode,
 import Cardano.Api.ChainSync.Client (ChainSyncClient (..), ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), TxBodyScriptData (..), fromAlonzoData, toPlutusData)
 import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr (..), Redeemers (..), TxDats (..))
+import Codec.CBOR.Encoding (encodeBreak, encodeListLenIndef)
+import Codec.CBOR.JSON (encodeValue)
+import Codec.CBOR.Write (toStrictByteString)
 import Control.Monad (guard, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Control.Monad.Extra (whenJust)
-import Data.Aeson (FromJSON, ToJSON, decodeFileStrict, encode, encodeFile)
+import Data.Aeson (FromJSON, ToJSON (..), decodeFileStrict, encode, encodeFile)
 import Data.Bifunctor (first)
 import Data.Default (Default (..))
 import Data.IORef (IORef, newIORef, readIORef)
@@ -81,6 +84,7 @@ import System.IO (BufferMode (LineBuffering), Handle, IOMode (WriteMode), hClose
 
 import qualified Data.Aeson as A (Value)
 import qualified Data.ByteArray as BA (length)
+import qualified Data.ByteString as BS (hPutStr)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (hPutStrLn)
 import qualified Data.Map.Strict as M (elems, filter, null, toList)
 import qualified Data.Set as S (singleton, toList)
@@ -275,17 +279,25 @@ processChain' blockHandler txHandler (Block header txs) tip =
 watchMarlowe :: MonadError CliError m
              => MonadIO m
              => LocalNodeConnectInfo CardanoMode  -- ^ The local node connection.
+             -> Bool                              -- ^ Whether to output CBOR instead of JSON.
              -> Bool                              -- ^ Whether to continue processing when the tip is reached.
              -> Maybe FilePath                    -- ^ The file to restore the chain point from and save it to.
              -> Maybe FilePath                    -- ^ The output file.
              -> m ()                              -- ^ Action for watching for potential Marlowe transactions.
-watchMarlowe connection continue pointFile outputFile =
+watchMarlowe connection cbor continue pointFile outputFile =
   do
     hOut <- liftIO $ maybe (pure stdout) (`openFile` WriteMode) outputFile
     liftIO $ hSetBuffering hOut LineBuffering
     liftIO $ hSetBuffering stderr LineBuffering
-    watchMarloweWithPrinter connection continue pointFile
-      $ printJSON hOut
+    printer <-
+      if cbor
+        then do
+               liftIO . BS.hPutStr hOut $ toStrictByteString encodeListLenIndef
+               pure $ printCBOR hOut
+        else pure $ printJSON hOut
+    watchMarloweWithPrinter connection continue pointFile printer
+    when cbor
+      . liftIO . BS.hPutStr hOut $ toStrictByteString encodeBreak
     when (isJust outputFile)
       . liftIO
       $ hClose hOut
@@ -300,7 +312,21 @@ printJSON :: ToJSON a
           => Handle  -- ^ The handle.
           -> a       -- ^ The JSON item.
           -> IO ()   -- ^ Action to print the JSON.
-printJSON hOut = LBS8.hPutStrLn hOut . encode
+printJSON hOut =
+  LBS8.hPutStrLn hOut
+    . encode
+
+
+-- | Print CBOR to a file handle.
+printCBOR :: ToJSON a
+          => Handle  -- ^ The handle.
+          -> a       -- ^ The JSON item.
+          -> IO ()   -- ^ Action to print the CBOR.
+printCBOR hOut =
+  BS.hPutStr hOut
+    . toStrictByteString
+    . encodeValue
+    . toJSON
 
 
 -- | Watch for Marlowe transactions.

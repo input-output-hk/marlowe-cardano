@@ -353,6 +353,7 @@
         "semigroups".flags.unordered-containers = true;
         "semigroups".flags.text = true;
         "semigroups".flags.hashable = true;
+        "cborg-json".revision = (((hackage."cborg-json")."0.2.3.0").revisions).default;
         "free".revision = (((hackage."free")."5.1.3").revisions).default;
         "terminfo".revision = (((hackage."terminfo")."0.4.1.4").revisions).default;
         "connection".revision = (((hackage."connection")."0.3.1").revisions).default;
@@ -1504,6 +1505,7 @@
           "cryptostore".components.library.planned = lib.mkOverride 900 true;
           "cardano-git-rev".components.library.planned = lib.mkOverride 900 true;
           "text-class".components.library.planned = lib.mkOverride 900 true;
+          "cborg-json".components.library.planned = lib.mkOverride 900 true;
           "file-embed-lzma".components.library.planned = lib.mkOverride 900 true;
           "marlowe-cli".components.exes."marlowe-cli".planned = lib.mkOverride 900 true;
           "monad-loops".components.library.planned = lib.mkOverride 900 true;

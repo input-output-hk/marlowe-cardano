@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-cli"; version = "0.0.3.0"; };
+      identifier = { name = "marlowe-cli"; version = "0.0.3.1"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "brian.bush@iohk.io";
@@ -46,6 +46,8 @@
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
           (hsPkgs."cardano-wallet" or (errorHandler.buildDepError "cardano-wallet"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
+          (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
+          (hsPkgs."cborg-json" or (errorHandler.buildDepError "cborg-json"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
           (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
