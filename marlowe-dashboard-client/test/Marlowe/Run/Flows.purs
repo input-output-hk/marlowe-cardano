@@ -191,13 +191,24 @@ restoreWallet walletName contracts = do
     let
       companionContracts =
         contracts ^.. traversed <<< takeBoth _chParams _chInitialData
-      marloweAppInstance =
-        appInstanceActive walletId MarloweApp marloweAppId jsonEmptyArray
+      marloweAppInstance = appInstanceActive
+        marloweAppEndpoints
+        walletId
+        MarloweApp
+        marloweAppId
+        jsonEmptyArray
       walletCompanionInstance =
-        appInstanceActive walletId WalletCompanion walletCompanionId
+        appInstanceActive
+          companionEndpoints
+          walletId
+          WalletCompanion
+          walletCompanionId
           $ walletCompantionState companionContracts
       followerInstances = map
-        (uncurry $ flip $ appInstanceActive walletId MarloweFollower)
+        ( uncurry
+            $ flip
+            $ appInstanceActive followerEndpoints walletId MarloweFollower
+        )
         followerIdsAndHistories
       followerAppIds = Map.fromFoldable
         $ map (lmap $ getMarloweParams) followerIdsAndHistories
