@@ -176,56 +176,72 @@ restoreWallet
        }
 restoreWallet walletName contracts = do
   info $ "Restore wallet " <> WN.toString walletName
-  { address, mnemonic, pubKeyHash, walletId } <- getWallet walletName
+  { walletId } <- restoreWalletWithoutUpdates walletName
+
+  walletCompanionId <- generateUUID
+  marloweAppId <- generateUUID
+  followerIdsAndHistories <-
+    traverse (\history -> Tuple history <$> generateUUID) contracts
+  let
+    companionContracts =
+      contracts ^.. traversed <<< takeBoth _chParams _chInitialData
+    marloweAppInstance = appInstanceActive
+      marloweAppEndpoints
+      walletId
+      MarloweApp
+      marloweAppId
+      jsonEmptyArray
+    walletCompanionInstance =
+      appInstanceActive
+        companionEndpoints
+        walletId
+        WalletCompanion
+        walletCompanionId
+        $ walletCompantionState companionContracts
+    followerInstances = map
+      ( uncurry
+          $ flip
+          $ appInstanceActive followerEndpoints walletId MarloweFollower
+      )
+      followerIdsAndHistories
+    followerAppIds = Map.fromFoldable
+      $ map (lmap $ getMarloweParams) followerIdsAndHistories
+    instances = join
+      [ [ marloweAppInstance, walletCompanionInstance ]
+      , followerInstances
+      ]
+  handleGetContractInstances walletId instances
+  recvInstanceSubscribe walletCompanionId
+  sendNewActiveEndpoints walletCompanionId companionEndpoints
+  recvInstanceSubscribe marloweAppId
+  sendNewActiveEndpoints marloweAppId marloweAppEndpoints
+  sendWalletCompanionUpdate walletCompanionId companionContracts
+  traverse_ (flip sendNewActiveEndpoints followerEndpoints) followerAppIds
+  traverse_ (uncurry $ flip sendFollowerUpdate) followerIdsAndHistories
+  sendWalletFunds walletName
+  pure { marloweAppId, walletCompanionId, followerAppIds }
+
+restoreWalletWithoutUpdates
+  :: forall m
+   . MonadTest m
+  => MonadUser m
+  => MonadUUID m
+  => MonadLogger String m
+  => MonadMockHTTP m
+  => MonadError Error m
+  => MonadAsk Coenv m
+  => WalletNickname
+  -> m TestWallet
+restoreWalletWithoutUpdates walletName = do
+  info $ "Restore wallet " <> WN.toString walletName
+  tw@{ address, mnemonic, pubKeyHash, walletId } <- getWallet walletName
   openRestoreDialog do
     typeWalletNickname $ WN.toString walletName
     typeMnemonicPhrase $ MP.toString mnemonic
     clickRestoreWallet
     handlePostRestoreWallet walletName mnemonic
       $ walletInfo walletId address pubKeyHash
-
-    walletCompanionId <- generateUUID
-    marloweAppId <- generateUUID
-    followerIdsAndHistories <-
-      traverse (\history -> Tuple history <$> generateUUID) contracts
-    let
-      companionContracts =
-        contracts ^.. traversed <<< takeBoth _chParams _chInitialData
-      marloweAppInstance = appInstanceActive
-        marloweAppEndpoints
-        walletId
-        MarloweApp
-        marloweAppId
-        jsonEmptyArray
-      walletCompanionInstance =
-        appInstanceActive
-          companionEndpoints
-          walletId
-          WalletCompanion
-          walletCompanionId
-          $ walletCompantionState companionContracts
-      followerInstances = map
-        ( uncurry
-            $ flip
-            $ appInstanceActive followerEndpoints walletId MarloweFollower
-        )
-        followerIdsAndHistories
-      followerAppIds = Map.fromFoldable
-        $ map (lmap $ getMarloweParams) followerIdsAndHistories
-      instances = join
-        [ [ marloweAppInstance, walletCompanionInstance ]
-        , followerInstances
-        ]
-    handleGetContractInstances walletId instances
-    recvInstanceSubscribe walletCompanionId
-    sendNewActiveEndpoints walletCompanionId companionEndpoints
-    recvInstanceSubscribe marloweAppId
-    sendNewActiveEndpoints marloweAppId marloweAppEndpoints
-    sendWalletCompanionUpdate walletCompanionId companionContracts
-    traverse_ (flip sendNewActiveEndpoints followerEndpoints) followerAppIds
-    traverse_ (uncurry $ flip sendFollowerUpdate) followerIdsAndHistories
-    sendWalletFunds walletName
-    pure { marloweAppId, walletCompanionId, followerAppIds }
+  pure tw
 
 dropWallet
   :: forall m

@@ -424,6 +424,17 @@ handleGetContractInstances walletId = handleHTTPRequest GET uri <<< pure
   where
   uri = "/pab/api/contract/instances/wallet/" <> WI.toString walletId <> "?"
 
+handlePutContractInstanceStop
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> m Unit
+handlePutContractInstanceStop instanceId =
+  handleHTTPRequest PUT uri $ pure jsonEmptyArray
+  where
+  uri = "/pab/api/contract/instance/" <> UUID.toString instanceId <> "/stop"
+
 handlePostCreate
   :: forall m
    . MonadLogger String m

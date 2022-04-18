@@ -101,14 +101,7 @@ import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Class (class MonadEffect)
 import Effect.Unlift (class MonadUnliftEffect)
 import Halogen.Store.Monad (class MonadStore)
-import Servant.PureScript
-  ( class MonadAjax
-  , AjaxError(..)
-  , ErrorDescription(..)
-  , prepareRequest
-  , prepareResponse
-  , printAjaxError
-  )
+import Servant.PureScript (class MonadAjax, prepareRequest, prepareResponse)
 import Test.Assertions (jsonDiffString)
 import Test.Data.Argonaut.Extra (bigIntEq)
 import Test.Halogen (class MonadHalogenTest)
@@ -211,13 +204,7 @@ instance MonadAff m => MonadAjax api (MockHttpM m) where
       let aReq = prepareRequest req
       Queue.write requests $ RequestBox \next -> next aReq responseA
       response <- AVar.take responseA
-      case prepareResponse req.decode aReq response of
-        Left e@(AjaxError { description: MalformedContent _ }) ->
-          throwError $ error $ joinWith "\n"
-            [ "Failed to decode HTTP response:"
-            , printAjaxError e
-            ]
-        x -> pure x
+      pure $ prepareResponse req.decode aReq response
 
 instance MonadKill e f m => MonadKill e f (MockHttpM m) where
   kill e = lift <<< kill e
