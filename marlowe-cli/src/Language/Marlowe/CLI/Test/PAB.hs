@@ -199,7 +199,7 @@ interpret PabAccess{..} ReturnFunds{..} =
     let
       go =
         do
-          liftIO $ threadDelay 5_000_000
+          liftIO $ threadDelay 10_000_000
           ApiTransaction{pendingSince} <-
             liftCliIO
               . runWallet
@@ -207,6 +207,7 @@ interpret PabAccess{..} ReturnFunds{..} =
           whenJust pendingSince
             $ const go
     go
+    liftIO $ threadDelay 10_000_000
     faucetKey <- use psFaucetKey
     burnAddress <- use psBurnAddress
     roleTokens <- findRoleTokens poOwner poInstances

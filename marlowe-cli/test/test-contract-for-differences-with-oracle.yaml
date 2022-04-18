@@ -423,6 +423,21 @@ ptPabOperations:
 - tag: Comment
   poComment: Stop the Marlowe application.
 
+- tag: ReturnFunds
+  poOwner: Party
+  poInstances:
+  - PartyApp
+
+- tag: ReturnFunds
+  poOwner: Counterparty
+  poInstances:
+  - CounterpartyApp
+
+- tag: ReturnFunds
+  poOwner: Oracle
+  poInstances:
+  - OracleApp
+
 - tag: Stop
   poInstance: PartyApp
 
