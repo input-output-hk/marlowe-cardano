@@ -180,7 +180,7 @@ awaitNextRequest = do
           Nothing -> do
             delay $ Milliseconds 30.0
             pure Nothing
-    , Nothing <$ delay (Milliseconds 120.0)
+    , Nothing <$ delay (Milliseconds 1000.0)
     ]
 
 instance (MonadThrow Error m, MonadAff m) => MonadMockHTTP (MockHttpM m) where
