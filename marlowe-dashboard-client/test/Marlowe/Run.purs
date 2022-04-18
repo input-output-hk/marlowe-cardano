@@ -385,7 +385,7 @@ mkTestEnv = do
       , followerBus
       , sinks
       , sources
-      , marloweAppTimeoutBlocks: 1
+      , marloweAppTimeoutBlocks: 2
       }
     coenv =
       { pabWebsocketIn: pabWebsocketIn.listener

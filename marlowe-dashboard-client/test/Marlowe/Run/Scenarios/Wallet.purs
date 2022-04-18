@@ -49,6 +49,7 @@ import Test.Marlowe.Run.Commands
   , handlePutContractInstanceStop
   , openMyWalletDialog
   , recvInstanceSubscribe
+  , sendContractFinished
   , sendNewActiveEndpoints
   , sendWalletCompanionUpdate
   )
@@ -58,7 +59,7 @@ import Test.Marlowe.Run.Queries
   , getWalletStatus
   )
 import Test.Network.HTTP (expectNoRequest)
-import Test.Spec (Spec, focus)
+import Test.Spec (Spec)
 import Test.Web.DOM.Assertions (shouldHaveText, shouldHaveTextM)
 
 createAndRestoreWallet :: Spec Unit
@@ -175,6 +176,7 @@ enterDashboardMarloweAppHung =
 
       -- Assert
       handlePutContractInstanceStop marloweAppId
+      sendContractFinished marloweAppId
       marloweAppId2 <- generateUUID
       handlePostActivate walletId MarloweApp marloweAppId2
       recvInstanceSubscribe walletCompanionId

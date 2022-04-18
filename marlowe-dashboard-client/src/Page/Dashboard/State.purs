@@ -14,7 +14,11 @@ import Capability.PAB
   , subscribeToPlutusApp
   , unsubscribeFromPlutusApp
   )
-import Capability.PAB (activateContract, getWalletContractInstances) as PAB
+import Capability.PAB
+  ( activateContract
+  , getWalletContractInstances
+  , subscribeToPlutusApp
+  ) as PAB
 import Capability.PlutusApps.FollowerApp (class FollowerApp, followContract)
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
@@ -618,6 +622,7 @@ reactivatePlutusScript contractType mVal = do
       Logger.info
         ("Plutus script " <> show contractType <> " started.")
         (encodeJson instanceId)
+      PAB.subscribeToPlutusApp instanceId
       updateStore
         $ Store.Wallet
         $ Wallet.OnPlutusScriptChanged contractType instanceId

@@ -32,6 +32,10 @@ instance BoundedEnum Slot where
     | i < 0 || i >= top = Nothing
     | otherwise = Just $ Slot i
 
+-- There are a few valid semigroup instances that we could choose. We choose
+-- max-based semantics because it is the most convenient and frequently useful
+-- choice whendealing with time series data and absolute times. It allows the
+-- semigroup instance to select the most recent occurrance of an event.
 instance Semigroup Slot where
   append = max
 
