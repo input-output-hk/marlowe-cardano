@@ -4,7 +4,7 @@
 #   NOMAD_PORT_wbe
 #   NOMAD_ADDR_index
 #   NOMAD_PORT_index
-{ writeShellScriptBin, marlowe-dashboard-server, coreutils, lib }:
+{ writeShellScriptBin, marlowe-dashboard-server, coreutils, lib, network }:
 writeShellScriptBin "entrypoint" ''
   set -eEuo pipefail
 
@@ -19,5 +19,5 @@ writeShellScriptBin "entrypoint" ''
   }
   EOF
 
-  exec marlowe-dashboard-server webserver --bind 0.0.0.0 --port $NOMAD_PORT_run --config marlowe-run.json --network-id 1566
+  exec marlowe-dashboard-server webserver --bind 0.0.0.0 --port $NOMAD_PORT_run --config marlowe-run.json --network-id ${toString network.magic}
 ''

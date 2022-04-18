@@ -33,6 +33,7 @@ let
 
     marlowe-run-server-entrypoint = pkgs.callPackage ./marlowe-run-server.nix {
       marlowe-dashboard-server = marlowe-dashboard-server;
+      inherit network;
     };
 
     node = pkgs.callPackage ./node {
@@ -41,7 +42,7 @@ let
 
     wbe = pkgs.callPackage ./wbe.nix { inherit cardano-wallet wait-for-socket network; };
 
-    chain-index = pkgs.callPackage ./chain-index.nix { inherit plutus-chain-index wait-for-socket; };
+    chain-index = pkgs.callPackage ./chain-index.nix { inherit plutus-chain-index wait-for-socket network; };
   };
 
   runs = builtins.listToAttrs (map

@@ -36,7 +36,7 @@ let
       pscSocketPath = "@NOMAD_ALLOC_DIR@/node.sock";
       pscBaseUrl = "@NOMAD_ADDR_node@";
       pscKeptBlocks = 2160;
-      pscNetworkId = "1566";
+      pscNetworkId = "${toString network.magic}";
       pscSlotConfig = {
         scSlotZeroTime = slotZeroTime;
         scSlotLength = slotLengthMillis;
