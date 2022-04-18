@@ -439,7 +439,7 @@ unspentPayoutsAtCurrency rolesCurrency = do
 marlowePlutusContract :: Contract MarloweContractState MarloweSchema MarloweError ()
 marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, redeem, close]
   where
-    debug' endpoint msg = debug ("Language.Marlowe.Client.marlowePlutusContrat:" <> endpoint) msg
+    debug' endpoint msg = debug ("Language.Marlowe.Client.marlowePlutusContract:" <> endpoint) msg
     catchError reqId endpointName handler = catching _MarloweError
         (void $ mapError (review _MarloweError) handler)
         (\err -> do
