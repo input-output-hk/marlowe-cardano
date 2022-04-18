@@ -24,7 +24,7 @@ let
     socat -u OPEN:/dev/null "UNIX-CONNECT:''${sock_path}"
   '';
 
-  env = pkgs.iohkNix.cardanoLib.environments.marlowe-dev;
+  network = pkgs.networks.testnet-dev;
 in
 {
   web-ghc-server-entrypoint = pkgs.callPackage (sources.plutus-apps + "/bitte/web-ghc-server.nix") {
@@ -51,10 +51,10 @@ in
   };
 
   node = pkgs.callPackage ./node {
-    inherit cardano-node env;
+    inherit cardano-node network;
   };
 
-  wbe = pkgs.callPackage ./wbe.nix { inherit cardano-wallet wait-for-socket env; };
+  wbe = pkgs.callPackage ./wbe.nix { inherit cardano-wallet wait-for-socket network; };
 
   chain-index = pkgs.callPackage ./chain-index.nix { inherit plutus-chain-index wait-for-socket; };
 }

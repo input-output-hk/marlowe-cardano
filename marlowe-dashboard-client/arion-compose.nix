@@ -3,7 +3,8 @@
 , ...
 }:
 let
-  inherit (pkgs) plutus-chain-index cardano-cli marlowe-pab marlowe-cli;
+  inherit (pkgs) plutus-chain-index cardano-cli marlowe-pab marlowe-cli networks;
+  network = networks.testnet-dev;
   marlowe-run-backend-invoker = pkgs.marlowe-dashboard.marlowe-run-backend-invoker;
   node-port = "3001";
   wallet-port-int = 8090;
@@ -13,7 +14,7 @@ let
   pab-port = "9080";
   run-port = "8080";
   socket-path = "/ipc/node.socket";
-  network-id = "1564";
+  network-id = "1566";
   pab-params = {
     dbConfigFile = "/data/pab.db";
     baseUrl = "http://0.0.0.0:${pab-port}";
@@ -26,34 +27,14 @@ let
     { }
     ''
       mkdir $out
-      echo '${builtins.toJSON (import ./dev/node-config.nix)}' > $out/config.json
+      echo '${builtins.toJSON (import ./dev/node-config.nix network.nodeConfig)}' > $out/config.json
       echo '${builtins.toJSON (import ./dev/pab-config.nix pab-params)}' > $out/pab.yaml
       echo '${builtins.toJSON (import ./dev/marlowe-run.nix run-params)}' > $out/marlowe-run.json
-      cp ${../bitte/node/config/alonzo-genesis.json} $out/alonzo-genesis.json
-      cp ${../bitte/node/config/byron-genesis.json} $out/byron-genesis.json
-      cp ${../bitte/node/config/shelly-genesis.json} $out/shelly-genesis.json
-      cp ${../bitte/node/config/topology.yaml} $out/topology.yaml
+      cp ${network.networkConfig.AlonzoGenesisFile} $out/alonzo-genesis.json
+      cp ${network.networkConfig.ByronGenesisFile} $out/byron-genesis.json
+      cp ${network.networkConfig.ShelleyGenesisFile} $out/shelley-genesis.json
+      cp ${builtins.toJSON network.topology} $out/topology.yaml
     '';
-
-  node-seeder = {
-    service = {
-      useHostStore = true;
-      volumes = [
-        "cardano-node-data:/data"
-        "${./dev}:/copy"
-      ];
-      command = [
-        "${pkgs.bash}/bin/bash"
-        "-c"
-        ''
-          export PATH=$PATH:${pkgs.gzip}/bin
-          if [ -z "$$(${pkgs.coreutils}/bin/ls -A /data)" ]; then
-            ${pkgs.gnutar}/bin/tar xf /copy/node.db.saved.tar.gz --strip-components 1 -C /data
-          fi
-        ''
-      ];
-    };
-  };
 
   node = {
     service = {
@@ -68,7 +49,6 @@ let
       command = [
         "-c"
         ''
-          until [ ! -z "$$(ls -A /data)" ]; do :; done
           cardano-node run \
             --config /config/config.json \
             --topology /config/topology.yaml \
@@ -203,44 +183,14 @@ let
     };
   };
 
-  marlowe-cli-tests = {
-    service = {
-      useHostStore = true;
-      volumes = [
-        "cardano-ipc:/ipc"
-      ];
-      restart = "on-failure";
-      depends_on = [ "wallet" "pab" ];
-      command = [
-        "${pkgs.bash}/bin/bash"
-        "-c"
-        ''
-          set -euo pipefail
-          exec ${marlowe-cli}/bin/marlowe-cli test contracts \
-            --testnet-magic 1564 \
-            --socket-path /ipc/node.socket \
-            --wallet-url http://wallet:8090 \
-            --pab-url http://pab:9080 \
-            --faucet-key ${../payment.skey} \
-            --faucet-address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
-            --burn-address addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7 \
-            --passphrase fixme-allow-pass-per-wallet \
-            ${../marlowe-cli/test/test-zcb.yaml} 2>&1
-        ''
-      ];
-    };
-  };
-
 in
 {
   config.services = {
-    inherit node-seeder;
     inherit node;
     inherit wallet;
     inherit chain-index;
     inherit pab;
     inherit marlowe-run;
-    # inherit marlowe-cli-tests;
   };
   config.docker-compose.raw = {
     volumes = {

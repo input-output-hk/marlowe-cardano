@@ -2,17 +2,10 @@
 #   NODE_STATE_DIR
 #   NOMAD_ALLOC_DIR # node socket stored in $NOMAD_ALLOC_DIR/node.sock
 #   NOMAD_PORT_node
-{ writeShellScriptBin, cardano-node, coreutils, lib, env }:
+{ writeShellScriptBin, cardano-node, coreutils, lib, network }:
 let
-  topology = builtins.toFile "topology.json" (builtins.toJSON {
-    Producers = [{
-      addr = env.relaysNew;
-      port = env.edgePort;
-      valency = 1;
-    }];
-  });
-
-  config = builtins.toFile "config.json" (builtins.toJSON env.nodeConfig);
+  topology = builtins.toFile "topology.json" (builtins.toJSON network.topology);
+  config = builtins.toFile "config.json" (builtins.toJSON network.nodeConfig);
 in
 writeShellScriptBin "entrypoint" ''
   set -eEuo pipefail
