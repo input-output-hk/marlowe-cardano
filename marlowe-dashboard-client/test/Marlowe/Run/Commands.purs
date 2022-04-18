@@ -677,7 +677,7 @@ recvWebsocketMessage description expected = do
           Nothing -> do
             delay $ Milliseconds 10.0
             pure Nothing
-    , Nothing <$ delay (Milliseconds 100.0)
+    , Nothing <$ delay (Milliseconds 1000.0)
     ]
   case msg of
     Nothing -> throwError $ error $ joinWith "\n"

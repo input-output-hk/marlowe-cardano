@@ -107,6 +107,11 @@ import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
 import WebSocket.Support (FromSocket)
 
+-- Layers of infrastructure involved here:
+-- marloweRunTest (handles marlowe-specific test actions)
+--  -> runUITest (mounts a Halogen component using JSDOM, and runs halogen-specific test actions)
+--    -> runTestM + runUserM (perform testing-library and user-event testing actions agains an instance of JSDOM)
+
 marloweRunTest
   :: String
   -> ( forall m
