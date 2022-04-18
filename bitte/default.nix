@@ -43,7 +43,7 @@ in
   marlowe-run-entrypoint = pkgs.callPackage ./pab.nix {
     pabExe = "${marlowe-pab}/bin/marlowe-pab";
     staticPkg = marlowe-dashboard.client;
-    inherit wait-for-socket;
+    inherit wait-for-socket network;
   };
 
   marlowe-run-server-entrypoint = pkgs.callPackage ./marlowe-run-server.nix {

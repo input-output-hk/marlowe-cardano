@@ -6,10 +6,9 @@
 #   NOMAD_PORT_pab
 #   NOMAD_ALLOC_DIR # With node socket in $NOMAD_ALLOC_DIR/node.sock
 
-{ writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket }:
+{ writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket, network }:
 let
-  slotZeroTime = 1649976791000; # POSIX time of slot zero is milliseconds. See note [Datetime to slot] in Marlowe.Slot
-  slotLengthMillis = 1000;
+  inherit (network) slotZeroTime slotLengthMillis;
 
   constantFee = 10; # Constant fee per transaction in lovelace
   scriptsFeeFactor = 1.0; # Factor by which to multiply the size-dependent scripts fee in lovelace

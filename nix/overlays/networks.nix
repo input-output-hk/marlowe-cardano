@@ -13,8 +13,14 @@ let
 in
 {
   networks = {
-    testnet-pioneers = mkNetwork environments.marlowe-pioneers;
-    testnet-dev = mkNetwork environments.marlowe-dev;
+    testnet-pioneers = mkNetwork environments.marlowe-pioneers // {
+      slotZeroTime = 1649949631000;
+      slotLengthMillis = 1000;
+    };
+    testnet-dev = mkNetwork environments.marlowe-dev // {
+      slotZeroTime = 1649976791000;
+      slotLengthMillis = 1000;
+    };
     # TODO add testnet-public, mainnet in the future
   };
 }
