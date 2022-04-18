@@ -4,7 +4,6 @@
 #   NOMAD_PORT_node
 { writeShellScriptBin, cardano-node, coreutils, lib, network }:
 let
-  topology = builtins.toFile "topology.json" (builtins.toJSON network.topology);
   config = builtins.toFile "config.json" (builtins.toJSON network.nodeConfig);
 in
 writeShellScriptBin "entrypoint" ''
@@ -14,5 +13,5 @@ writeShellScriptBin "entrypoint" ''
 
   mkdir -p "$NODE_STATE_DIR"
 
-  exec cardano-node run --topology ${topology} --database-path "$NODE_STATE_DIR/db" --socket-path "$NOMAD_ALLOC_DIR/node.sock" --config ${config} --port "$NOMAD_PORT_node"
+  exec cardano-node run --topology ${network.topology} --database-path "$NODE_STATE_DIR/db" --socket-path "$NOMAD_ALLOC_DIR/node.sock" --config ${config} --port "$NOMAD_PORT_node"
 ''
