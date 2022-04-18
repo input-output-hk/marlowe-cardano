@@ -18,6 +18,7 @@ import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
+import Data.Slot as Slot
 import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
 import Data.UserNamedActions (UserNamedActions)
@@ -146,6 +147,7 @@ data Action
   | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint)
   | MarloweAppClosed (Maybe Json)
   | WalletCompanionAppClosed (Maybe Json)
+  | SlotChanged Slot.Slot
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where

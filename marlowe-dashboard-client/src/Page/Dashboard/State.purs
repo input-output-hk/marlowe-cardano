@@ -39,9 +39,11 @@ import Control.Parallel (parTraverse_)
 import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
+import Data.BigInt as BigInt
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
+import Data.Enum (fromEnum, toEnum)
 import Data.Foldable (foldMap, for_, traverse_)
 import Data.Lens
   ( assign
@@ -60,6 +62,7 @@ import Data.Map (filterKeys, toUnfoldable)
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.NewContract (NewContract(..))
+import Data.Newtype (unwrap)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _companionAppId
@@ -90,7 +93,6 @@ import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
-import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Language.Marlowe.Client
   ( EndpointResponse(..)
   , MarloweEndpointResult(..)
@@ -98,6 +100,7 @@ import Language.Marlowe.Client
   , _UnspentPayouts
   )
 import Language.Marlowe.Client.History (_RolePayout)
+import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
 import Marlowe.Run.Server
@@ -146,8 +149,9 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , InstanceStatusToClient(..)
   ) as PAB
-import Servant.PureScript (class MonadAjax)
+import Plutus.V1.Ledger.Slot as Plutus
 import Plutus.V1.Ledger.Value (_TokenName)
+import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts (followerContractExists, getContract, partitionContracts)
 import Store.RoleTokens (RoleTokenStore)
@@ -586,6 +590,10 @@ handleAction (UpdateWalletFunds { assets, sync }) = do
   updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
   updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
 
+handleAction (SlotChanged slot) = do
+  debug "Slot changed" $ encodeJson $ fromEnum slot
+  updateStore $ Store.SlotChanged slot
+
 reactivatePlutusScript
   :: forall m
    . MonadState State m
@@ -675,7 +683,8 @@ actionFromStream
   -> PAB.CombinedWSStreamToClient
   -> Maybe Action
 actionFromStream wallet = case _ of
-  SlotChange _ -> Nothing
+  SlotChange (Plutus.Slot { getSlot }) ->
+    SlotChanged <$> (toEnum =<< BigInt.toInt (unwrap getSlot))
   -- TODO handle with lite wallet support
   -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
   --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
@@ -771,4 +780,3 @@ toTemplate
   => H.HalogenM Template.State Template.Action ChildSlots Msg m Unit
   -> HalogenM m Unit
 toTemplate = mapSubmodule _templateState TemplateAction
-
