@@ -102,8 +102,8 @@ createAndRestoreWallet = marloweRunTest "Create and Restore Wallet" do
   dropWallet walletInfo
 
 multipleCompanionUpdates :: Spec Unit
-multipleCompanionUpdates = marloweRunTest "Receiving multiple companion updates"
-  do
+multipleCompanionUpdates =
+  marloweRunTest "Receiving multiple companion updates" do
     -- Arrange
     walletNickname <- makeTestWalletNickname "Wallet1"
     mnemonic <- newMnemonicPhrase
@@ -147,44 +147,43 @@ multipleCompanionUpdates = marloweRunTest "Receiving multiple companion updates"
 
 enterDashboardMarloweAppHung :: Spec Unit
 enterDashboardMarloweAppHung =
-  marloweRunTestWith "MarloweApp hung on entering dashboard" setupWallet
-    do
-      -- Arrange
-      walletNickname <- makeTestWalletNickname nicknameString
+  marloweRunTestWith "MarloweApp hung on entering dashboard" setupWallet do
+    -- Arrange
+    walletNickname <- makeTestWalletNickname nicknameString
 
-      -- Act
-      { walletId } <- restoreWalletWithoutUpdates walletNickname
+    -- Act
+    { walletId } <- restoreWalletWithoutUpdates walletNickname
 
-      walletCompanionId <- generateUUID
-      marloweAppId <- generateUUID
-      let
-        marloweAppInstance = appInstanceActive
-          []
+    walletCompanionId <- generateUUID
+    marloweAppId <- generateUUID
+    let
+      marloweAppInstance = appInstanceActive
+        []
+        walletId
+        MarloweApp
+        marloweAppId
+        jsonEmptyArray
+      walletCompanionInstance =
+        appInstanceActive
+          companionEndpoints
           walletId
-          MarloweApp
-          marloweAppId
-          jsonEmptyArray
-        walletCompanionInstance =
-          appInstanceActive
-            companionEndpoints
-            walletId
-            WalletCompanion
-            walletCompanionId
-            $ walletCompantionState Map.empty
-        instances = [ marloweAppInstance, walletCompanionInstance ]
-      handleGetContractInstances walletId instances
+          WalletCompanion
+          walletCompanionId
+          $ walletCompantionState Map.empty
+      instances = [ marloweAppInstance, walletCompanionInstance ]
+    handleGetContractInstances walletId instances
 
-      -- Assert
-      handlePutContractInstanceStop marloweAppId
-      sendContractFinished marloweAppId
-      marloweAppId2 <- generateUUID
-      handlePostActivate walletId MarloweApp marloweAppId2
-      recvInstanceSubscribe walletCompanionId
-      sendNewActiveEndpoints walletCompanionId companionEndpoints
-      recvInstanceSubscribe marloweAppId2
-      sendNewActiveEndpoints marloweAppId2 marloweAppEndpoints
-      sendWalletCompanionUpdate walletCompanionId Map.empty
-      sendWalletFunds walletNickname
+    -- Assert
+    handlePutContractInstanceStop marloweAppId
+    sendContractFinished marloweAppId
+    marloweAppId2 <- generateUUID
+    handlePostActivate walletId MarloweApp marloweAppId2
+    recvInstanceSubscribe walletCompanionId
+    sendNewActiveEndpoints walletCompanionId companionEndpoints
+    recvInstanceSubscribe marloweAppId2
+    sendNewActiveEndpoints marloweAppId2 marloweAppEndpoints
+    sendWalletCompanionUpdate walletCompanionId Map.empty
+    sendWalletFunds walletNickname
   where
   nicknameString = "Wallet"
   setupWallet = do
