@@ -39,7 +39,7 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.PABConnectedWallet (_walletDetails, _walletId)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
-import Data.Time.Duration (Milliseconds(..), Minutes(..))
+import Data.Time.Duration (Milliseconds(..))
 import Data.Wallet
   ( SyncStatus(..)
   , WalletDetails
@@ -113,7 +113,7 @@ mkEnv sources sinks = do
     , redeemBus
     , sinks
     , sources
-    , marloweAppTimeout: Minutes 3.0
+    , marloweAppTimeoutBlocks: 3
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a
