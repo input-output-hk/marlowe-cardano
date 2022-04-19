@@ -310,7 +310,7 @@ minLovelaceDeposit = 2_000_000
 -}
 
 waitForChainIndex :: forall st sc err. AsContractError err => Contract st sc err ()
-waitForChainIndex = void $ waitNMilliSeconds 5_000
+waitForChainIndex = void $ waitNMilliSeconds 2_500
 
 debugMsg :: String -> String -> String
 debugMsg fnName msg = "[DEBUG:" <> fnName <> "] " <> msg
@@ -341,7 +341,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             waitForTransitionPromise <- waitForTransition typedValidator
             waitForPayoutPromise <- waitForPayoutsChange $ rolesCurrency params
 
-            update <- awaitPromise (selectEither waitForTransitionPromise waitForPayoutPromise)
+            update <- awaitPromise (selectEither waitForPayoutPromise waitForTransitionPromise)
             -- FIXME: Super ugly workaround - see NOTE: Chain index / cardano-node query consistency
             waitForChainIndex
 
@@ -361,7 +361,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             -- We should probably move away from the statefull handling of the history and just
             -- recompute and override it in a similar fashion as we handle payouts.
             case update of
-              Left t -> do
+              Right t -> do
                 case t of
                   Transition Closed{..} -> do
                       debug' $ "found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
@@ -375,7 +375,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
                       debug' $ "found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
                       tell @FollowerContractState (created params historyData)
                       pure (Right InProgress)
-              Right payoutsChange -> do
+              Left payoutsChange -> do
                 updatePayouts unspentPayouts params
                 case payoutsChange of
                   PayoutSpent _ -> do
