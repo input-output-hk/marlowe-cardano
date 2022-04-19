@@ -321,7 +321,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)
             Trace.waitNSlots 2
             Trace.callEndpoint @"redeem" aliceHdl (reqId, pms, "alice", alicePkh)
-            void $ Trace.waitNSlots 2
+            void $ Trace.waitNSlots 5
     where
         alicePk = PK $ walletPubKeyHash alice
         bobPk = PK $ walletPubKeyHash bob
