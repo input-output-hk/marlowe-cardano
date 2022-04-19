@@ -6,5 +6,6 @@
 
 #cucumber tag
 tag=$1
+offlineFlag=$2
 
-yarn run cucumber --profile $tag || yarn run postcucumber
+yarn run $offlineFlag cucumber --profile $tag  || yarn run $offlineFlag postcucumber
