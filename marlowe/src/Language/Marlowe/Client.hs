@@ -289,7 +289,7 @@ mkMarloweTypedValidator = smallUntypedValidator
 
 
 minLovelaceDeposit :: Integer
-minLovelaceDeposit = 2000000
+minLovelaceDeposit = 2_000_000
 
 {- NOTE: Chain index / cardano-node query consistency
   It seems that we are able to experience inconsistency between chain-index state and
@@ -310,7 +310,7 @@ minLovelaceDeposit = 2000000
 -}
 
 waitForChainIndex :: forall st sc err. AsContractError err => Contract st sc err ()
-waitForChainIndex = void $ waitNMilliSeconds 4000
+waitForChainIndex = void $ waitNMilliSeconds 5_000
 
 debugMsg :: String -> String -> String
 debugMsg fnName msg = "[DEBUG:" <> fnName <> "] " <> msg
@@ -342,9 +342,9 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             waitForPayoutPromise <- waitForPayoutsChange $ rolesCurrency params
 
             update <- awaitPromise (selectEither waitForTransitionPromise waitForPayoutPromise)
-
             -- FIXME: Super ugly workaround - see NOTE: Chain index / cardano-node query consistency
             waitForChainIndex
+
             -- Stateless payouts handling is just simpler - we unconditionally override
             -- the payouts information.
             unspentPayouts@(UnspentPayouts ps) <- unspentPayoutsAtCurrency $ rolesCurrency params
@@ -604,7 +604,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                 catching _MarloweError payDeposit $ \err -> do
                     logWarn @String $ "Error " <> show err
                     logInfo @String $ "Retry PayDeposit in 2 seconds"
-                    _ <- awaitTime (time + 2000)
+                    _ <- awaitTime (time + 2_000)
                     continueWith marloweData
             WaitForTimeout timeout -> do
                 logInfo @String $ "WaitForTimeout " <> show timeout
@@ -857,6 +857,8 @@ marloweCompanionContract = checkExistingRoleTokens
         checkpointLoop (fmap Right <$> checkForUpdates) ownAddress
     checkForUpdates ownAddress = do
         txns <- NonEmpty.toList <$> awaitUtxoProduced ownAddress
+        -- See NOTE: Chain index / cardano-node query consistency
+        waitForChainIndex
         let txOuts = txns >>= view (citxOutputs . _ValidTx)
         forM_ txOuts notifyOnNewContractRoles
         pure ownAddress
@@ -1094,6 +1096,8 @@ waitForTransition typedValidator = do
                 -- at the address. Any output that appears needs to be checked
                 -- with scChooser'
                 pure $ promiseBind (utxoIsProduced addr) $ \txns -> do
+                    -- See NOTE: Chain index / cardano-node query consistency
+                    waitForChainIndex
                     produced <- concatMapM (marloweHistoryFrom typedValidator) $ NonEmpty.toList txns
                     case produced of
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
