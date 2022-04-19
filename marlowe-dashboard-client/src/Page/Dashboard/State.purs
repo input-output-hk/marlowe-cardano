@@ -7,7 +7,7 @@ import Prologue
 
 import API.Lenses (_cicContract)
 import Bridge (toFront)
-import Capability.Marlowe (class ManageMarlowe, initializeContract)
+import Capability.Marlowe (class ManageMarlowe, initializeContract, redeem)
 import Capability.PAB
   ( class ManagePAB
   , onNewActiveEndpoints
@@ -49,19 +49,9 @@ import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Enum (fromEnum, toEnum)
 import Data.Foldable (foldMap, for_, traverse_)
-import Data.Lens
-  ( assign
-  , modifying
-  , set
-  , toListOf
-  , traversed
-  , use
-  , view
-  , (^.)
-  , (^?)
-  )
+import Data.FoldableWithIndex (forWithIndex_)
+import Data.Lens (assign, modifying, set, to, use, view, (^.), (^?))
 import Data.Lens.Record (prop)
-import Data.List as List
 import Data.Map (filterKeys, toUnfoldable)
 import Data.Map as Map
 import Data.Maybe (maybe)
@@ -101,9 +91,8 @@ import Language.Marlowe.Client
   ( EndpointResponse(..)
   , MarloweEndpointResult(..)
   , _ContractHistory
-  , _UnspentPayouts
   )
-import Language.Marlowe.Client.History (_RolePayout)
+import Language.Marlowe.Client.History (RolePayout(..))
 import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
@@ -127,6 +116,7 @@ import Page.Dashboard.Lenses
   , _contractStore
   , _contracts
   , _menuOpen
+  , _roleTokens
   , _selectedContractIndex
   , _templateState
   , _tzOffset
@@ -154,11 +144,10 @@ import Plutus.PAB.Webserver.Types
   , InstanceStatusToClient(..)
   ) as PAB
 import Plutus.V1.Ledger.Slot as Plutus
-import Plutus.V1.Ledger.Value (_TokenName)
 import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts (followerContractExists, getContract, partitionContracts)
-import Store.RoleTokens (RoleTokenStore)
+import Store.RoleTokens (RoleTokenStore, getEligiblePayouts)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
@@ -298,6 +287,8 @@ handleInput
    . MonadAjax MarloweRun.Api m
   => MonadLogger StructuredLog m
   => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
   => Unit
   -> Maybe State
   -> HalogenM m Unit
@@ -315,6 +306,28 @@ handleInput _ oldState = do
         parties # Set.mapMaybe case _ of
           Role tokenName -> Just $ Token currencySymbol tokenName
           _ -> Nothing
+  let
+    oldPayouts =
+      maybe Map.empty (getEligiblePayouts <<< view _roleTokens) oldState
+  newPayouts <- use (_roleTokens <<< to getEligiblePayouts)
+  wallet <- use _wallet
+  when (oldPayouts /= newPayouts) do
+    forWithIndex_ newPayouts \marloweParams unspentPayouts -> do
+      for_ (unwrap unspentPayouts) \payout@(RolePayout { rolePayoutName }) -> do
+        let tokenName = (unwrap rolePayoutName).unTokenName
+        updateStore $ Store.PayoutStarted payout
+        ajaxResponse <- redeem wallet marloweParams tokenName
+        case ajaxResponse of
+          Left err ->
+            error "Failed to redeem payout" { tokenName, error: err }
+          Right awaitResponse -> do
+            debug "Payout redemption submitted" { tokenName }
+            response <- liftAff $ awaitResponse
+            case response of
+              Left err ->
+                error "Failed to redeem payout" { tokenName, error: err }
+              Right _ -> debug "Payout redeemed submitted" { tokenName }
+        updateStore $ Store.PayoutFinished payout
   updateStore $ Store.LoadRoleTokens addedTokens
   parTraverse_ loadRoleToken addedTokens
   where
@@ -493,25 +506,10 @@ handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
             <<< prop (Proxy :: Proxy "chParams")
         )
         $ contractHistory
-    roles = List.sort
-      $ toListOf
-          ( _ContractHistory
-              <<< prop (Proxy :: Proxy "chUnspentPayouts")
-              <<< _UnspentPayouts
-              <<< traversed
-              <<< _RolePayout
-              <<< prop (Proxy :: Proxy "rolePayoutName")
-              <<< _TokenName
-              <<< prop (Proxy :: Proxy "unTokenName")
-          )
-      $ contractHistory
-  -- wallet <- use _wallet
-  for_ roles \role -> do
-    debug ("Possible payouts for role: " <> role) $ encodeJson marloweParams
-    -- redeem wallet marloweParams role >>= case _ of
-    --   Right awaitResult -> liftAff awaitResult
-    --   Left _ -> pure unit
-    pure unit
+    unspentPayouts = contractHistory
+      ^. _ContractHistory <<< prop (Proxy :: Proxy "chUnspentPayouts")
+
+  updateStore $ Store.NewPayoutsReceived marloweParams unspentPayouts
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
@@ -546,7 +544,7 @@ for_ mStartedContract \{ executionState, userParties } ->
           Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
             marloweParams
             tokenName
-          _ -> pure unit
+            _ -> pure unit
 -}
 
 {- [UC-CONTRACT-1][2] Starting a Marlowe contract

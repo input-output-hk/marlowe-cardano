@@ -68,6 +68,8 @@ import Test.Data.Marlowe
   , createWalletResponse
   , followEndpoint
   , followerMessage
+  , redeemContent
+  , redeemEndpoint
   , restoreRequest
   , roleToken
   , walletCompantionMessage
@@ -464,6 +466,21 @@ handlePostApplyInputs
 handlePostApplyInputs marloweAppId reqId params input = do
   handlePostEndpoint marloweAppId applyInputsEndpoint ado
     expectJsonContent $ applyInputsContent reqId params input
+    in jsonEmptyArray
+
+handlePostRedeem
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> UUID
+  -> MarloweParams
+  -> TokenName
+  -> Address
+  -> m Unit
+handlePostRedeem marloweAppId reqId params tokenName address = do
+  handlePostEndpoint marloweAppId redeemEndpoint ado
+    expectJsonContent $ redeemContent reqId params tokenName address
     in jsonEmptyArray
 
 handlePostFollow

@@ -154,7 +154,7 @@ instance
       payload =
         [ encodeJson reqId
         , encodeJson marloweContractId
-        , encodeJson tokenName
+        , encodeJson { unTokenName: tokenName }
         , encodeJson address
         ]
     ExceptT $ PAB.invokeEndpoint plutusAppId "redeem" payload

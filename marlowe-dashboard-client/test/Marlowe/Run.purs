@@ -65,6 +65,7 @@ import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
+import Debug (spy)
 import Effect (Effect)
 import Effect.Aff (Aff, Error, bracket, error, launchAff_, message)
 import Effect.Aff.AVar as AVar
@@ -458,13 +459,12 @@ fundWallet walletName currencySymbol tokenName amount notify = do
   wallet <- getWallet walletName
   walletFunds <- asks _.walletFunds
   let
-    alter
-      :: forall k v. Ord k => k -> (Maybe v -> Maybe v) -> Map k v -> Map k v
-    alter = flip Map.alter
-    addAsset = alter currencySymbol $ Just <<< case _ of
-      Nothing -> Map.singleton tokenName amount
-      Just tokens -> alter tokenName (lift2 add (pure amount)) tokens
-    assets = over Assets addAsset wallet.assets
+    assets = over Assets
+      ( Map.unionWith (Map.unionWith add)
+          $ Map.singleton currencySymbol
+          $ Map.singleton tokenName amount
+      )
+      wallet.assets
     newWallet = wallet { assets = assets }
   setWallet walletName newWallet
   when notify do

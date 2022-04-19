@@ -4,6 +4,7 @@ module Test.Marlowe.Run.Action.Flows where
 
 import Prologue
 
+import Bridge (toBack)
 import Control.Logger.Capability (class MonadLogger, info)
 import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Now (class MonadTime, now)
@@ -13,8 +14,10 @@ import Data.Address (Address)
 import Data.Address as Address
 import Data.Argonaut (jsonEmptyArray)
 import Data.Bifunctor (lmap)
+import Data.BigInt.Argonaut as BigInt
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as CN
+import Data.DateTime.Instant (Instant)
 import Data.Foldable (traverse_)
 import Data.Int (decimal)
 import Data.Int as Int
@@ -25,7 +28,7 @@ import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.PaymentPubKeyHash as PPKH
 import Data.PubKeyHash as PK
-import Data.Time.Duration (Minutes(..))
+import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Traversable (traverse)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
@@ -33,7 +36,8 @@ import Data.UUID.Argonaut (UUID)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff (Error)
-import Language.Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory, UnspentPayouts(..))
+import Language.Marlowe.Client.History (RolePayout(..))
 import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Marlowe.Semantics
@@ -42,22 +46,29 @@ import Marlowe.Semantics
   , MarloweData
   , MarloweParams
   , Party(..)
+  , TokenName
   , _rolesCurrency
   )
 import Marlowe.Semantics as Semantics
 import MarloweContract (MarloweContract(..))
-import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)
+import Plutus.V1.Ledger.Tx (TxOutRef(..))
+import Test.Control.Monad.UUID (class MonadMockUUID, getLastUUID, getNextUUID)
 import Test.Data.Marlowe
   ( adaToken
+  , adjustInstant
   , companionEndpoints
   , contractHistory
   , followerEndpoints
   , fromNow
+  , iDepositRoleAda
   , loan
   , loanRoles
   , marloweAppEndpoints
   , marloweData
+  , newTxId
   , semanticState
+  , timeInterval
+  , transactionInput
   , walletCompantionState
   , walletInfo
   )
@@ -84,6 +95,7 @@ import Test.Marlowe.Run.Commands
   , handleGetContractInstances
   , handleGetRoleToken
   , handlePostActivate
+  , handlePostApplyInputs
   , handlePostCreate
   , handlePostCreateWallet
   , handlePostFollow
@@ -94,6 +106,7 @@ import Test.Marlowe.Run.Commands
   , openNewContractDialog
   , openRestoreDialog
   , recvInstanceSubscribe
+  , sendApplyInputsSuccess
   , sendCreateSuccess
   , sendFollowerUpdate
   , sendNewActiveEndpoints
@@ -324,7 +337,7 @@ createLoan
   sendNewActiveEndpoints followerId followerEndpoints
   handlePostFollow followerId params
   sendFollowerUpdate followerId
-    $ contractHistory params (marloweData contract contractState) []
+    $ contractHistory params (marloweData contract contractState) [] mempty
   handleGetRoleToken params "Borrower" borrower
   handleGetRoleToken params "Lender" lender
   pure { followerId, marloweData: marloweData contract contractState }
@@ -390,3 +403,117 @@ createLoanWithoutUpdates
       []
       createdAt
   pure { contract, contractState, reqId }
+
+applyDeposit
+  :: forall m
+   . MonadError Error m
+  => MonadTest m
+  => MonadUser m
+  => MonadTime m
+  => MonadUUID m
+  => MonadLogger String m
+  => MonadAsk Coenv m
+  => MonadMockUUID m
+  => MonadMockHTTP m
+  => UUID
+  -> UUID
+  -> MarloweParams
+  -> MarloweData
+  -> Instant
+  -> TokenName
+  -> TokenName
+  -> Int
+  -> m Unit
+applyDeposit
+  marloweAppId
+  followerId
+  params
+  datum
+  startTime
+  depositRole
+  payoutRole
+  amount = do
+  info "Apply input"
+  intervalMin <- adjustInstant (Minutes (-2.0)) startTime
+  intervalMax <- adjustInstant (Seconds (-1.0))
+    =<< adjustInstant (Minutes 10.0) startTime
+  reqId <- getLastUUID
+  txOutRefId <- newTxId
+  let
+    input = transactionInput
+      (timeInterval intervalMin intervalMax)
+      [ iDepositRoleAda depositRole depositRole amount ]
+
+    mkRolePayout roleName rolePayoutValue rolePayoutTxOutRef = RolePayout
+      { rolePayoutName: toBack $ roleName
+      , rolePayoutValue
+      , rolePayoutTxOutRef
+      }
+
+    txOutRef = TxOutRef
+      { txOutRefId
+      , txOutRefIdx: toBack $ BigInt.fromInt 2
+      }
+    borrowerPayout = mkRolePayout payoutRole
+      (toBack $ Semantics.ada $ BigInt.fromInt $ amount * 1_000_000)
+      txOutRef
+    unspentPayouts = UnspentPayouts [ borrowerPayout ]
+
+  handlePostApplyInputs marloweAppId reqId params input
+
+  sendFollowerUpdate followerId
+    $ contractHistory params datum [ input ] unspentPayouts
+
+  sendApplyInputsSuccess marloweAppId reqId
+
+applyClose
+  :: forall m
+   . MonadError Error m
+  => MonadTest m
+  => MonadUser m
+  => MonadTime m
+  => MonadUUID m
+  => MonadLogger String m
+  => MonadAsk Coenv m
+  => MonadMockUUID m
+  => MonadMockHTTP m
+  => UUID
+  -> UUID
+  -> MarloweParams
+  -> MarloweData
+  -> Instant
+  -> Array { tokenName :: TokenName, lovelace :: Int }
+  -> m Unit
+applyClose marloweAppId followerId params datum startTime payouts = do
+  info "Apply input (close)"
+  intervalMin <- adjustInstant (Minutes (10.0)) startTime
+  let intervalMax = top
+  reqId <- getLastUUID
+  let input = transactionInput (timeInterval intervalMin intervalMax) []
+  handlePostApplyInputs marloweAppId reqId params input
+  sendApplyInputsSuccess marloweAppId reqId
+  let
+    toPayout { tokenName, lovelace } = do
+      txOutRefId <- newTxId
+      let
+        mkRolePayout roleName rolePayoutValue rolePayoutTxOutRef = RolePayout
+          { rolePayoutName: toBack $ roleName
+          , rolePayoutValue
+          , rolePayoutTxOutRef
+          }
+
+        txOutRef = TxOutRef
+          { txOutRefId
+          , txOutRefIdx: toBack $ BigInt.fromInt 2
+          }
+      pure $ mkRolePayout tokenName
+        (toBack $ Semantics.ada $ BigInt.fromInt lovelace)
+        txOutRef
+  unspentPayouts <- UnspentPayouts <$> traverse toPayout payouts
+
+  handlePostApplyInputs marloweAppId reqId params input
+
+  sendFollowerUpdate followerId
+    $ contractHistory params datum [ input ] unspentPayouts
+
+  sendApplyInputsSuccess marloweAppId reqId
