@@ -33,6 +33,7 @@ import Data.RawJson (RawJson(..))
 import Data.String (splitAt)
 import Data.Traversable (sequence)
 import Data.Tuple.Nested (type (/\), (/\))
+import Debug (traceM)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Console (log)
@@ -160,12 +161,14 @@ handleAction (HandleEditorMessage Monaco.EditorReady) = do
 handleAction (HandleEditorMessage (Monaco.TextChanged _)) = pure unit
 
 handleAction (SetInitialTime initialTime) = do
+  traceM { msg: "setInitialtime", initialTime }
   assign
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted <<<
         _initialTime
     )
     initialTime
   setOraclePrice
+  traceM { msg: "setInitialtime finish" }
 
 handleAction (SetIntegerTemplateParam templateType key value) = do
   modifying

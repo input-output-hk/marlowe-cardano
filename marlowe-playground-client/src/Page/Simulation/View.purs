@@ -7,12 +7,14 @@ import Component.BottomPanel.View as BottomPanel
 import Component.CurrencyInput (currencyInput)
 import Component.Hint.State (hint)
 import Component.Icons as Icon
+import Component.InstantInput (instantInput)
 import Component.Popper (Placement(..))
 import Data.Array (concatMap, intercalate, length, reverse, sortWith)
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.DateTime.Instant (Instant, unInstant)
+import Data.DateTime.Instant as Instant
 import Data.Enum (fromEnum)
 import Data.Lens (has, only, previewOn, to, view, (^.), (^?))
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -25,6 +27,7 @@ import Data.Newtype (unwrap)
 import Data.Set.Ordered.OSet (OSet)
 import Data.String (trim)
 import Data.Tuple.Nested (type (/\), (/\))
+import Debug (spy)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Halogen.Classes
@@ -95,7 +98,12 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes, disabled)
 import Halogen.Monaco (monacoComponent)
-import MainFrame.Types (ChildSlots, _currencyInputSlot, _simulatorEditorSlot)
+import MainFrame.Types
+  ( ChildSlots
+  , _currencyInputSlot
+  , _dateTimeInputSlot
+  , _simulatorEditorSlot
+  )
 import Marlowe.Extended.Metadata (MetaData, NumberFormat(..), getChoiceFormat)
 import Marlowe.Monaco as MM
 import Marlowe.Semantics
@@ -358,7 +366,12 @@ startSimulationWidget
             [ spanText "Initial time (milliseconds since UNIX epoch):"
             , marloweInstantInput "initial-time"
                 [ "mx-2", "flex-grow", "flex-shrink-0" ]
-                SetInitialTime
+                ( \wachi ->
+                    let
+                      unused = spy "wachi" wachi
+                    in
+                      SetInitialTime wachi
+                )
                 initialTime
             ]
         , div_
@@ -759,10 +772,10 @@ inputItem _ state (MoveToTime time) =
     ( [ div [ classes [ ClassName "action" ] ]
           [ p [ class_ (ClassName "time-input") ]
               [ spanTextBreakWord "Move to POSIXTime "
-              , marloweInstantInput "move-to-instant"
-                  [ "mx-2", "flex-grow", "flex-shrink-0" ]
-                  SetTime
-                  time
+              -- , marloweInstantInput "move-to-instant"
+              --     [ "mx-2", "flex-grow", "flex-shrink-0" ]
+              --     SetTime
+              --     time
               ]
           , p [ class_ (ClassName "choice-error") ] error
           ]
@@ -820,10 +833,16 @@ marloweInstantInput
   -> (Instant -> action)
   -> Instant
   -> ComponentHTML action ChildSlots m
-marloweInstantInput ref classes f current =
-  marloweActionInput ref classes
-    (f <<< maybe current unwrap <<< POSIXTime.fromBigInt)
-    (POSIXTime.toBigInt $ POSIXTime current)
+marloweInstantInput ref classList f current =
+  slot
+    _dateTimeInputSlot
+    ref
+    instantInput
+    { classList
+    , value: Instant.toDateTime current
+    , trimSeconds: true
+    }
+    (f <<< Instant.fromDateTime)
 
 marloweActionInput
   :: forall m action

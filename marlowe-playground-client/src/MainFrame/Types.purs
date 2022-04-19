@@ -17,6 +17,7 @@ import Data.Argonaut.Core (jsonNull)
 import Data.Argonaut.Decode ((.:), (.:?))
 import Data.Argonaut.Decode.Decoders (decodeJObject)
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime (DateTime(..))
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens', has, lens, set, view, (^.))
 import Data.Lens.Record (prop)
@@ -151,6 +152,7 @@ type ChildSlots =
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , currencyInput :: forall query. H.Slot query BigInt String
+  , dateTimeInput :: forall query. H.Slot query DateTime String
   )
 
 _haskellEditorSlot :: Proxy "haskellEditorSlot"
@@ -176,6 +178,9 @@ _walletSlot = Proxy
 
 _currencyInputSlot :: Proxy "currencyInput"
 _currencyInputSlot = Proxy
+
+_dateTimeInputSlot :: Proxy "dateTimeInput"
+_dateTimeInputSlot = Proxy
 
 -----------------------------------------------------------
 type State =

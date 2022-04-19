@@ -12,6 +12,7 @@ import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe, maybe)
 import Data.String (Pattern(..), Replacement(..), length, replace, split, trim)
 import Data.String.CodeUnits (dropRight, fromCharArray)
+import Debug (spy)
 import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.HTML as HH
@@ -27,69 +28,82 @@ type Input =
   , numDecimals :: Int
   }
 
-currencyInput :: forall a m. H.Component a Input BigInt m
+type Output = BigInt
+
+type Tokens q s = Hooks.ComponentTokens q s Output
+
+currencyInput :: forall a m. H.Component a Input Output m
 currencyInput =
-  Hooks.component \{ outputToken } input@{ classList, prefix, numDecimals } ->
-    Hooks.do
-      Tuple value valueId <- Hooks.useState $ showBigIntAsCurrency input.value $
-        max 0 numDecimals
-      Hooks.captures { value } Hooks.useTickEffect do
-        let
-          parsed = parseInput numDecimals value
-        Hooks.put valueId
-          $ flip showBigIntAsCurrency (max 0 numDecimals)
-          $ fromMaybe zero parsed
-        traverse_ (Hooks.raise outputToken) $ filter (_ /= input.value) parsed
-        pure Nothing
-      Hooks.pure do
-        HH.div
-          [ classNames
-              ( [ "bg-gray-light"
-                , "flex"
-                , "items-center"
-                , "border-solid"
-                , "border"
-                , "rounded-sm"
-                , "overflow-hidden"
-                , "box-border"
-                , "focus-within:ring-1"
-                , "focus-within:ring-black"
-                ]
-                  <> classList
-              )
-          ]
-          $ compact
-              [ guard (trim prefix /= "")
-                  $> HH.div
-                    [ classNames
-                        [ "flex-none"
-                        , "px-2"
-                        , "py-0"
-                        , "box-border"
-                        , "self-center"
-                        ]
-                    ]
-                    [ HH.text prefix ]
-              , Just
-                  $ HH.input
+  Hooks.component
+    \(tokens :: Tokens _ _) input@{ classList, prefix, numDecimals } ->
+      Hooks.do
+        Tuple value valueId <- Hooks.useState $ showBigIntAsCurrency input.value
+          $
+            max 0 numDecimals
+        Hooks.captures { value } Hooks.useTickEffect do
+          let
+            parsed = parseInput numDecimals value
+          Hooks.put valueId
+            $ flip showBigIntAsCurrency (max 0 numDecimals)
+            $ fromMaybe zero parsed
+          traverse_
+            (Hooks.raise $ spy "currencyInput outputToken" tokens.outputToken)
+            $
+              filter (_ /= input.value) parsed
+          pure Nothing
+        Hooks.pure do
+          HH.div
+            [ classNames
+                ( [ "bg-gray-light"
+                  , "flex"
+                  , "items-center"
+                  , "border-solid"
+                  , "border"
+                  , "rounded-sm"
+                  , "overflow-hidden"
+                  , "box-border"
+                  , "focus-within:ring-1"
+                  , "focus-within:ring-black"
+                  ]
+                    <> classList
+                )
+            ]
+            $ compact
+                [ guard (trim prefix /= "")
+                    $> HH.div
                       [ classNames
-                          [ "flex-1"
-                          , "px-1"
+                          [ "flex-none"
+                          , "px-2"
+                          , "py-0"
                           , "box-border"
-                          , "self-stretch"
-                          , "border-0"
-                          , "outline-none"
+                          , "self-center"
                           ]
-                      , HE.onValueInput $ Hooks.put valueId
-                      , HP.type_ HP.InputNumber
-                      , HP.value value
                       ]
-              ]
+                      [ HH.text prefix ]
+                , Just
+                    $ HH.input
+                        [ classNames
+                            [ "flex-1"
+                            , "px-1"
+                            , "box-border"
+                            , "self-stretch"
+                            , "border-0"
+                            , "outline-none"
+                            ]
+                        , HE.onValueInput $ Hooks.put valueId
+                        , HP.type_ HP.InputNumber
+                        , HP.value value
+                        ]
+                ]
   where
-  parseInput numDecimals =
-    BigInt.fromString
-      <<< replace dot (Replacement "")
-      <<< fixDecimals numDecimals
+  parseInput numDecimals value =
+    let
+      unused = spy "currency input parseInput" value
+    in
+      BigInt.fromString
+        $ replace dot (Replacement "")
+        $ fixDecimals numDecimals
+        $ value
 
   fixDecimals numDecimals value = case compare providedDecimals numDecimals of
     GT -> dropRight (providedDecimals - numDecimals) value
