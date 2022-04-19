@@ -46,21 +46,22 @@ main = launchAff_ $ runSpec'
   defaultConfig { timeout = Just $ Milliseconds 15000.0 }
   [ consoleReporter ]
   do
-    parallel do
-      Bech32Address.spec
-      Bech32DataPart.spec
-      Bech32HRP.spec
-      DataPartCodePoint.spec
-      HRPCodePoint.spec
-      Execution.spec
-    testingLibrarySpec
-    halogenTestingLibrarySpec
+    -- Execution.spec
+    -- parallel do
+    --   Bech32Address.spec
+    --   Bech32DataPart.spec
+    --   Bech32HRP.spec
+    --   DataPartCodePoint.spec
+    --   HRPCodePoint.spec
+    --   Execution.spec
+    -- testingLibrarySpec
+    -- halogenTestingLibrarySpec
     testScripts
 
 testScripts :: Spec Unit
 testScripts = describe "Scripted scenarios" do
-  createAndRestoreWallet
-  multipleCompanionUpdates
+  -- createAndRestoreWallet
+  -- multipleCompanionUpdates
   contractScenarios
 
 -------------------------------------------------------------------------------

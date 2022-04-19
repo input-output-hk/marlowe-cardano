@@ -297,7 +297,7 @@ createLoan
   sendNewActiveEndpoints followerId followerEndpoints
   handlePostFollow followerId params
   sendFollowerUpdate followerId
-    $ contractHistory params (marloweData contract contractState) []
+    $ contractHistory params (marloweData contract contractState) [] mempty
   handleGetRoleToken params "Borrower" borrower
   handleGetRoleToken params "Lender" lender
   pure { followerId, marloweData: marloweData contract contractState }

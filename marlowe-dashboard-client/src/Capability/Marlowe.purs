@@ -45,8 +45,9 @@ import Language.Marlowe.Client (MarloweError)
 import Language.Marlowe.Client.Error (showContractError)
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Run.Server (Api) as MarloweApp
-import Marlowe.Semantics (MarloweParams, TokenName, TransactionInput)
+import Marlowe.Semantics (MarloweParams, TransactionInput)
 import Plutus.PAB.Webserver (Api) as PAB
+import Plutus.V1.Ledger.Value (TokenName(..))
 import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Text.Pretty (text)

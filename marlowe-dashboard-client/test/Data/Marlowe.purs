@@ -59,6 +59,7 @@ import Language.Marlowe.Client
   , EndpointResponse(..)
   , MarloweEndpointResult(..)
   , MarloweError
+  , UnspentPayouts(..)
   )
 import Marlowe.Run.Contract.V1.Types (RoleToken(..))
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
@@ -353,17 +354,22 @@ transactionInput interval inputs = TransactionInput
   }
 
 contractHistory
-  :: MarloweParams -> MarloweData -> Array TransactionInput -> ContractHistory
-contractHistory chParams chInitialData chHistory = ContractHistory
-  { chAddress: PAB.Address
-      { addressCredential: ScriptCredential ""
-      , addressStakingCredential: Nothing
-      }
-  , chParams
-  , chInitialData
-  , chHistory
-  , chUnspentPayouts: mempty
-  }
+  :: MarloweParams
+  -> MarloweData
+  -> Array TransactionInput
+  -> UnspentPayouts
+  -> ContractHistory
+contractHistory chParams chInitialData chHistory chUnspentPayouts =
+  ContractHistory
+    { chAddress: PAB.Address
+        { addressCredential: ScriptCredential ""
+        , addressStakingCredential: Nothing
+        }
+    , chParams
+    , chInitialData
+    , chHistory
+    , chUnspentPayouts
+    }
 
 -------------------------------------------------------------------------------
 -- Loan Contract

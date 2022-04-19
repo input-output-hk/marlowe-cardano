@@ -7,7 +7,7 @@ import Prologue
 
 import API.Lenses (_cicContract)
 import Bridge (toFront)
-import Capability.Marlowe (class ManageMarlowe, initializeContract)
+import Capability.Marlowe (class ManageMarlowe, initializeContract, redeem)
 import Capability.PAB
   ( class ManagePAB
   , onNewActiveEndpoints
@@ -74,6 +74,7 @@ import Data.Tuple.Nested ((/\))
 import Data.UserNamedActions (userNamedActions)
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
+import Debug (traceM)
 import Effect.Aff (Error, Fiber, launchAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
@@ -90,7 +91,6 @@ import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
-import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Language.Marlowe.Client
   ( EndpointResponse(..)
   , MarloweEndpointResult(..)
@@ -98,6 +98,7 @@ import Language.Marlowe.Client
   , _UnspentPayouts
   )
 import Language.Marlowe.Client.History (_RolePayout)
+import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
 import Marlowe.Run.Server
@@ -146,8 +147,8 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , InstanceStatusToClient(..)
   ) as PAB
-import Servant.PureScript (class MonadAjax)
 import Plutus.V1.Ledger.Value (_TokenName)
+import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts (followerContractExists, getContract, partitionContracts)
 import Store.RoleTokens (RoleTokenStore)
@@ -497,12 +498,13 @@ handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
               <<< prop (Proxy :: Proxy "unTokenName")
           )
       $ contractHistory
-  -- wallet <- use _wallet
+  traceM $ "payouts should be executed for roles" <> show roles
+  wallet <- use _wallet
   for_ roles \role -> do
     debug ("Possible payouts for role: " <> role) $ encodeJson marloweParams
-    -- redeem wallet marloweParams role >>= case _ of
-    --   Right awaitResult -> liftAff awaitResult
-    --   Left _ -> pure unit
+    redeem wallet marloweParams role >>= case _ of
+      Right awaitResult -> liftAff awaitResult
+      Left _ -> pure unit
     pure unit
 
 {- [UC-CONTRACT-4][1] Redeem payments

@@ -452,6 +452,20 @@ handlePostApplyInputs marloweAppId reqId params input = do
     expectJsonContent $ applyInputsContent reqId params input
     in jsonEmptyArray
 
+handlePostApplyInputs
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> UUID
+  -> MarloweParams
+  -> TransactionInput
+  -> m Unit
+handlePostApplyInputs marloweAppId reqId params input = do
+  handlePostEndpoint marloweAppId applyInputsEndpoint ado
+    expectJsonContent $ applyInputsContent reqId params input
+    in jsonEmptyArray
+
 handlePostFollow
   :: forall m
    . MonadLogger String m
