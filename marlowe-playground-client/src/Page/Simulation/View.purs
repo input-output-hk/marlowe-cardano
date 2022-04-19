@@ -5,6 +5,8 @@ import Prologue hiding (div)
 import Component.BottomPanel.Types as BottomPanelTypes
 import Component.BottomPanel.View as BottomPanel
 import Component.CurrencyInput (currencyInput)
+import Component.DateTimeLocalInput.State as DateTimeLocalInput
+import Component.DateTimeLocalInput.Types (Message(..))
 import Component.Hint.State (hint)
 import Component.Icons as Icon
 import Component.Popper (Placement(..))
@@ -13,6 +15,7 @@ import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.DateTime.Instant (Instant, unInstant)
+import Data.DateTime.Instant as Instant
 import Data.Enum (fromEnum)
 import Data.Lens (has, only, previewOn, to, view, (^.), (^?))
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -95,7 +98,12 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes, disabled)
 import Halogen.Monaco (monacoComponent)
-import MainFrame.Types (ChildSlots, _currencyInputSlot, _simulatorEditorSlot)
+import MainFrame.Types
+  ( ChildSlots
+  , _currencyInputSlot
+  , _dateTimeInputSlot
+  , _simulatorEditorSlot
+  )
 import Marlowe.Extended.Metadata (MetaData, NumberFormat(..), getChoiceFormat)
 import Marlowe.Monaco as MM
 import Marlowe.Semantics
@@ -820,10 +828,16 @@ marloweInstantInput
   -> (Instant -> action)
   -> Instant
   -> ComponentHTML action ChildSlots m
-marloweInstantInput ref classes f current =
-  marloweActionInput ref classes
-    (f <<< maybe current unwrap <<< POSIXTime.fromBigInt)
-    (POSIXTime.toBigInt $ POSIXTime current)
+marloweInstantInput ref classList f current =
+  slot
+    _dateTimeInputSlot
+    ref
+    DateTimeLocalInput.component
+    { classList
+    , value: Instant.toDateTime current
+    , trimSeconds: true
+    }
+    (\(ValueChanged dt) -> f $ Instant.fromDateTime dt)
 
 marloweActionInput
   :: forall m action

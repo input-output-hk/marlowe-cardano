@@ -6,6 +6,7 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Auth (AuthStatus)
 import Component.Blockly.Types as Blockly
 import Component.ConfirmUnsavedNavigation.Types as ConfirmUnsavedNavigation
+import Component.DateTimeLocalInput.Types as DateTimeLocalInput
 import Component.Demos.Types as Demos
 import Component.MetadataTab.Types (MetadataAction)
 import Component.NewProject.Types as NewProject
@@ -151,6 +152,8 @@ type ChildSlots =
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , currencyInput :: forall query. H.Slot query BigInt String
+  , dateTimeInput ::
+      forall query. H.Slot query DateTimeLocalInput.Message String
   )
 
 _haskellEditorSlot :: Proxy "haskellEditorSlot"
@@ -176,6 +179,9 @@ _walletSlot = Proxy
 
 _currencyInputSlot :: Proxy "currencyInput"
 _currencyInputSlot = Proxy
+
+_dateTimeInputSlot :: Proxy "dateTimeInput"
+_dateTimeInputSlot = Proxy
 
 -----------------------------------------------------------
 type State =
