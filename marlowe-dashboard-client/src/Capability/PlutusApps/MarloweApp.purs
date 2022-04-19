@@ -21,6 +21,7 @@ import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (asks)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.UUID (class MonadUUID, generateUUID)
+import Control.Parallel (parOneOf)
 import Data.Address (Address)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Lens (_1, over, view)
@@ -30,7 +31,12 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Effect.Aff (Aff, Error, forkAff, joinFiber)
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Env (_applyInputBus, _createBus, _redeemBus)
+import Effect.Class (class MonadEffect)
+import Env (_applyInputBus, _createBus, _marloweAppTimeoutBlocks, _redeemBus)
+import Halogen.Store.Monad (emitSelected)
+import Halogen.Store.Select (selectEq)
+import Halogen.Subscription as Emitter
+import Halogen.Subscription.Extra (subscribeOnce)
 import Language.Marlowe.Client (MarloweError)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
@@ -51,12 +57,15 @@ class MarloweApp m where
     :: PlutusAppId
     -> Map TokenName Address
     -> Contract
-    -> m (AjaxResponse (UUID /\ Aff (Either MarloweError MarloweParams)))
+    -> m
+         ( AjaxResponse
+             (UUID /\ Aff (Maybe (Either MarloweError MarloweParams)))
+         )
   applyInputs
     :: PlutusAppId
     -> MarloweParams
     -> TransactionInput
-    -> m (AjaxResponse (Aff (Either MarloweError Unit)))
+    -> m (AjaxResponse (Aff (Maybe (Either MarloweError Unit))))
   -- TODO auto
   -- TODO close
   redeem
@@ -64,7 +73,20 @@ class MarloweApp m where
     -> MarloweParams
     -> TokenName
     -> Address
-    -> m (AjaxResponse (Aff (Either MarloweError Unit)))
+    -> m (AjaxResponse (Aff (Maybe (Either MarloweError Unit))))
+
+-- | Gives an Aff a certain number of blocks to resolve, or cancels and returns Nothing.
+awaitTimeout :: forall m a. MonadEffect m => Aff a -> AppM m (Aff (Maybe a))
+awaitTimeout aff = do
+  blocksToWait <- asks $ view _marloweAppTimeoutBlocks
+  tipSlotE <- emitSelected (selectEq _.tipSlot)
+  -- Create an emitter that increments every time the tip slot changes.
+  let changeCountE = Emitter.fold (const $ add 1) tipSlotE 0
+  -- subscribe to the first time this count reaches or exceeds the limit.
+  pure $ parOneOf
+    [ subscribeOnce $ Nothing <$ Emitter.filter (_ >= blocksToWait) changeCountE
+    , Just <$> aff
+    ]
 
 instance
   ( MonadError Error m
@@ -80,8 +102,9 @@ instance
     -- Run and fork this aff now so we are already listening before we even send
     -- the request. Eliminates the risk that the response will come in before we
     -- can even subscribe to the event bus.
-    responseFiber <-
-      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
+    awaitResponse <-
+      lift $ awaitTimeout $ EventBus.subscribeOnce bus.emitter reqId
+    responseFiber <- liftAff $ forkAff awaitResponse
     let
       backRoles :: Map Back.TokenName Address
       backRoles = Map.fromFoldable
@@ -101,8 +124,9 @@ instance
     -- Run and fork this aff now so we are already listening before we even send
     -- the request. Removes the risk that the response will come in before we
     -- can even subscribe to the event bus.
-    responseFiber <-
-      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
+    awaitResponse <-
+      lift $ awaitTimeout $ EventBus.subscribeOnce bus.emitter reqId
+    responseFiber <- liftAff $ forkAff awaitResponse
     let
       backTimeInterval :: POSIXTime /\ POSIXTime
       backTimeInterval = (slotStart) /\ (slotEnd)
@@ -123,8 +147,9 @@ instance
     -- Run and fork this aff now so we are already listening before we even send
     -- the request. Removes the risk that the response will come in before we
     -- can even subscribe to the event bus.
-    responseFiber <-
-      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
+    awaitResponse <-
+      lift $ awaitTimeout $ EventBus.subscribeOnce bus.emitter reqId
+    responseFiber <- liftAff $ forkAff awaitResponse
     let
       payload =
         [ encodeJson reqId

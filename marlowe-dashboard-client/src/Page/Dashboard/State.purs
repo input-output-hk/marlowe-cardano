@@ -14,7 +14,11 @@ import Capability.PAB
   , subscribeToPlutusApp
   , unsubscribeFromPlutusApp
   )
-import Capability.PAB (activateContract, getWalletContractInstances) as PAB
+import Capability.PAB
+  ( activateContract
+  , getWalletContractInstances
+  , subscribeToPlutusApp
+  ) as PAB
 import Capability.PlutusApps.FollowerApp (class FollowerApp, followContract)
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
@@ -31,7 +35,7 @@ import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog, debug, error)
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
-import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
@@ -39,9 +43,11 @@ import Control.Parallel (parTraverse_)
 import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
+import Data.BigInt as BigInt
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
+import Data.Enum (fromEnum, toEnum)
 import Data.Foldable (foldMap, for_, traverse_)
 import Data.Lens
   ( assign
@@ -60,6 +66,7 @@ import Data.Map (filterKeys, toUnfoldable)
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.NewContract (NewContract(..))
+import Data.Newtype (unwrap)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _companionAppId
@@ -90,7 +97,6 @@ import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
-import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Language.Marlowe.Client
   ( EndpointResponse(..)
   , MarloweEndpointResult(..)
@@ -98,6 +104,7 @@ import Language.Marlowe.Client
   , _UnspentPayouts
   )
 import Language.Marlowe.Client.History (_RolePayout)
+import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
 import Marlowe.Run.Server
@@ -146,8 +153,9 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , InstanceStatusToClient(..)
   ) as PAB
-import Servant.PureScript (class MonadAjax)
+import Plutus.V1.Ledger.Slot as Plutus
 import Plutus.V1.Ledger.Value (_TokenName)
+import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts (followerContractExists, getContract, partitionContracts)
 import Store.RoleTokens (RoleTokenStore)
@@ -576,17 +584,21 @@ handleAction (NewActiveEndpoints plutusAppId activeEndpoints) = do
   onNewActiveEndpoints plutusAppId activeEndpoints
 
 handleAction (MarloweAppClosed mVal) = void $ runMaybeT do
-  reActivatePlutusScript MarloweApp mVal
+  reactivatePlutusScript MarloweApp mVal
 
 handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
-  reActivatePlutusScript WalletCompanion mVal
+  reactivatePlutusScript WalletCompanion mVal
 
 handleAction (UpdateWalletFunds { assets, sync }) = do
   debug "💰Wallet funds changed" $ encodeJson assets
   updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
   updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
 
-reActivatePlutusScript
+handleAction (SlotChanged slot) = do
+  debug "Slot changed" $ encodeJson $ fromEnum slot
+  updateStore $ Store.SlotChanged slot
+
+reactivatePlutusScript
   :: forall m
    . MonadState State m
   => MonadLogger StructuredLog m
@@ -594,17 +606,26 @@ reActivatePlutusScript
   => ManagePAB m
   => MarloweContract
   -> Maybe Json
-  -> MaybeT m Unit
-reActivatePlutusScript contractType mVal = do
+  -> m Unit
+reactivatePlutusScript contractType mVal = do
   walletId <- use (_wallet <<< _walletId)
-  Logger.error
-    ("Plutus script " <> show contractType <> " has closed unexpectedly")
+  Logger.info
+    ("Plutus script " <> show contractType <> " has stopped. Restarting now.")
     mVal
-  newAppId <- MaybeT $ hush <$> PAB.activateContract contractType walletId
-  H.lift
-    $ updateStore
-    $ Store.Wallet
-    $ Wallet.OnPlutusScriptChanged contractType newAppId
+  result <- PAB.activateContract contractType walletId
+  case result of
+    Left err ->
+      Logger.error
+        ("Plutus script " <> show contractType <> " failed to start.")
+        err
+    Right instanceId -> do
+      Logger.info
+        ("Plutus script " <> show contractType <> " started.")
+        (encodeJson instanceId)
+      PAB.subscribeToPlutusApp instanceId
+      updateStore
+        $ Store.Wallet
+        $ Wallet.OnPlutusScriptChanged contractType instanceId
 
 subscribeToSources
   :: forall m
@@ -667,7 +688,8 @@ actionFromStream
   -> PAB.CombinedWSStreamToClient
   -> Maybe Action
 actionFromStream wallet = case _ of
-  SlotChange _ -> Nothing
+  SlotChange (Plutus.Slot { getSlot }) ->
+    SlotChanged <$> (toEnum =<< BigInt.toInt (unwrap getSlot))
   -- TODO handle with lite wallet support
   -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
   --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
@@ -687,7 +709,7 @@ actionFromStream wallet = case _ of
     | appId == marloweAppId ->
         Just $ MarloweAppClosed message
     | otherwise ->
-        Just $ MarloweAppClosed message
+        Nothing
   InstanceUpdate appId (PAB.NewObservableState state)
     | appId == companionAppId ->
         case D.decode (D.maybe D.value) state of
@@ -763,4 +785,3 @@ toTemplate
   => H.HalogenM Template.State Template.Action ChildSlots Msg m Unit
   -> HalogenM m Unit
 toTemplate = mapSubmodule _templateState TemplateAction
-

@@ -6,12 +6,14 @@ module Test.Data.Plutus where
 import Prologue
 
 import Data.Argonaut (class EncodeJson, encodeJson)
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.UUID.Argonaut (UUID)
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
 import Marlowe.PAB (PlutusAppId(..))
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint(..))
+import Plutus.Contract.Resumable (IterationID(..), Request(..), RequestID(..))
 import Plutus.PAB.Events.ContractInstanceState (PartiallyDecodedResponse(..))
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)
@@ -48,7 +50,7 @@ appInstanceDone
   -> UUID
   -> observableState
   -> MarloweContractInstanceClientState
-appInstanceDone = appInstance Done
+appInstanceDone = appInstance Done []
 
 appInstanceStopped
   :: forall observableState
@@ -58,12 +60,13 @@ appInstanceStopped
   -> UUID
   -> observableState
   -> MarloweContractInstanceClientState
-appInstanceStopped = appInstance Stopped
+appInstanceStopped = appInstance Stopped []
 
 appInstanceActive
   :: forall observableState
    . EncodeJson observableState
-  => WalletId
+  => Array String
+  -> WalletId
   -> MarloweContract
   -> UUID
   -> observableState
@@ -74,18 +77,23 @@ appInstance
   :: forall observableState
    . EncodeJson observableState
   => ContractActivityStatus
+  -> Array String
   -> WalletId
   -> MarloweContract
   -> UUID
   -> observableState
   -> MarloweContractInstanceClientState
-appInstance cicStatus walletId cicDefinition instanceId state =
+appInstance cicStatus endpoints walletId cicDefinition instanceId state =
   ContractInstanceClientState
     { cicWallet: wallet walletId
     , cicCurrentState: PartiallyDecodedResponse
         { lastLogs: []
         , err: Nothing
-        , hooks: []
+        , hooks: endpoints # mapWithIndex \rqID endpoint -> Request
+            { rqID: RequestID rqID
+            , itID: IterationID 0
+            , rqRequest: activeEndpoint endpoint
+            }
         , logs: []
         , observableState: encodeJson state
         }
@@ -94,6 +102,13 @@ appInstance cicStatus walletId cicDefinition instanceId state =
     , cicYieldedExportTxs: []
     , cicDefinition
     }
+
+-- | Create an `ActiveEndpoint` from a string.
+activeEndpoint :: String -> ActiveEndpoint
+activeEndpoint = ActiveEndpoint
+  <<< { aeMetadata: Nothing, aeDescription: _ }
+  <<< EndpointDescription
+  <<< { getEndpointDescription: _ }
 
 -------------------------------------------------------------------------------
 -- Websocket traffic
@@ -107,12 +122,7 @@ newObservableState = NewObservableState <<< encodeJson
 -- | Create a `NewActiveEndpoints` `InstanceStatusToClient` for the given
 -- | endpoints.
 newActiveEndpoints :: Array String -> InstanceStatusToClient
-newActiveEndpoints = NewActiveEndpoints <<< map
-  ( ActiveEndpoint
-      <<< { aeMetadata: Nothing, aeDescription: _ }
-      <<< EndpointDescription
-      <<< { getEndpointDescription: _ }
-  )
+newActiveEndpoints = NewActiveEndpoints <<< map activeEndpoint
 
 -- | Create a `InstabceUpdate` `CombinedWSStreamToClient`.
 instanceUpdate :: UUID -> InstanceStatusToClient -> CombinedWSStreamToClient

@@ -59,6 +59,8 @@ newtype Env = Env
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
   , sources :: Sources
+  -- | The number of blocks to wait for a reply from the MarloweApp
+  , marloweAppTimeoutBlocks :: Int
   }
 
 derive instance newtypeEnv :: Newtype Env _
@@ -71,6 +73,10 @@ _applyInputBus = _Newtype <<< prop (Proxy :: _ "applyInputBus")
 
 _redeemBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
 _redeemBus = _Newtype <<< prop (Proxy :: _ "redeemBus")
+
+_marloweAppTimeoutBlocks :: Lens' Env Int
+_marloweAppTimeoutBlocks =
+  _Newtype <<< prop (Proxy :: _ "marloweAppTimeoutBlocks")
 
 _followerAVarMap :: Lens' Env (AVarMap MarloweParams Unit)
 _followerAVarMap = _Newtype <<< prop (Proxy :: _ "followerAVarMap")

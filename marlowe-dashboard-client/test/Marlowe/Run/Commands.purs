@@ -17,6 +17,7 @@ import Control.Parallel (parOneOf)
 import Data.Address (Address)
 import Data.Argonaut (class EncodeJson, encodeJson, jsonEmptyArray)
 import Data.Argonaut.Extra (encodeStringifyJson)
+import Data.BigInt.Argonaut as BigInt
 import Data.Foldable (class Foldable)
 import Data.HTTP.Method (Method(..))
 import Data.Lens ((^.))
@@ -48,9 +49,11 @@ import Marlowe.Semantics
   )
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToClient
+  ( CombinedWSStreamToClient(..)
   , ContractInstanceClientState
+  , InstanceStatusToClient(..)
   )
+import Plutus.V1.Ledger.Slot (Slot(..))
 import Test.Assertions (shouldEqualJson)
 import Test.Data.Marlowe
   ( applyInputsContent
@@ -424,6 +427,17 @@ handleGetContractInstances walletId = handleHTTPRequest GET uri <<< pure
   where
   uri = "/pab/api/contract/instances/wallet/" <> WI.toString walletId <> "?"
 
+handlePutContractInstanceStop
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> m Unit
+handlePutContractInstanceStop instanceId =
+  handleHTTPRequest PUT uri $ pure jsonEmptyArray
+  where
+  uri = "/pab/api/contract/instance/" <> UUID.toString instanceId <> "/stop"
+
 handlePostCreate
   :: forall m
    . MonadLogger String m
@@ -630,6 +644,28 @@ sendNewActiveEndpoints
 sendNewActiveEndpoints instanceId =
   sendWebsocketMessage "New active endpoints" <<< instanceUpdate instanceId <<<
     newActiveEndpoints
+
+sendSlotChange
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadLogger String m
+  => MonadEffect m
+  => Int
+  -> m Unit
+sendSlotChange slot = sendWebsocketMessage ("Slot change" <> show slot)
+  $ SlotChange
+  $ Slot { getSlot: BigInt.fromInt slot }
+
+sendContractFinished
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadLogger String m
+  => MonadEffect m
+  => UUID
+  -> m Unit
+sendContractFinished instanceId = sendWebsocketMessage "Contract finished"
+  $ instanceUpdate instanceId
+  $ ContractFinished Nothing
 
 recvInstanceSubscribe
   :: forall m

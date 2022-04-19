@@ -113,6 +113,7 @@ mkEnv sources sinks = do
     , redeemBus
     , sinks
     , sources
+    , marloweAppTimeoutBlocks: 3
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a

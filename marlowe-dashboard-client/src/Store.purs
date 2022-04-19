@@ -12,6 +12,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (_assets)
 import Data.Set (Set)
+import Data.Slot (Slot)
 import Data.Wallet (WalletDetails)
 import Errors.Explain (explainString)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
@@ -48,6 +49,11 @@ type Store =
   -- dropdown on blur.
   , openDropdown :: Maybe String
   , toast :: Maybe ToastMessage
+  -- | The slot of the current tip of the Cardano Node. Note that this
+  -- | generally lags behind the true "current slot" - i.e. the slot that a
+  -- | block produced this instant would have. This refers instead to the slot
+  -- | of the last block produced by the node.
+  , tipSlot :: Slot
   }
 
 type StoreLens a = Lens' Store a
@@ -76,11 +82,13 @@ mkStore currentTime addressBook contractNicknames wallet =
   -- # System wide components
   , openDropdown: Nothing
   , toast: Nothing
+  , tipSlot: bottom
   }
 
 data Action
   -- Time
   = Tick Instant
+  | SlotChanged Slot
   -- Contract
   | FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
   | ContractCreated NewContract
@@ -106,6 +114,10 @@ data Action
 reduce :: Store -> Action -> Store
 reduce store = case _ of
   -- Time
+  SlotChanged slot ->
+    -- Take the max of the current tip slot and the slot in the message
+    -- (prevents rollbacks from updating the store).
+    store { tipSlot = store.tipSlot <> slot }
   Tick currentTime -> case tick currentTime store.contracts of
     Left error -> reduce store
       $ ShowToast

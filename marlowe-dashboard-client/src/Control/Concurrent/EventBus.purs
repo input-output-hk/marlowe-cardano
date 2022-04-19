@@ -8,12 +8,14 @@ module Control.Concurrent.EventBus
   , subscribe
   , subscribeAll
   , subscribeOnce
+  , subscribeOnceWithTimeout
   ) where
 
 import Prologue
 
 import Control.Alt (class Alt, (<|>))
 import Control.Alternative (class Plus)
+import Control.Parallel (parOneOf)
 import Control.Plus (empty)
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Compactable (class Compactable, compact, separate)
@@ -21,11 +23,12 @@ import Data.Either (either, hush)
 import Data.Filterable (class Filterable, filterDefault, partitionDefault)
 import Data.Functor.Contravariant (class Contravariant, cmap)
 import Data.Profunctor (lcmap)
+import Data.Time.Duration (class Duration, fromDuration)
 import Data.Traversable (for_, sequence, traverse)
 import Data.Tuple (curry, uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, delay)
 import Effect.Aff as Aff
 import Effect.Ref as Ref
 import Halogen.Subscription as HS
@@ -148,6 +151,21 @@ subscribeOnce bus channel =
       resolve (Right event)
     Ref.write (Just subscription) refSubscription
     pure $ Aff.effectCanceler unsubscribe
+
+-- Helper function to subscribe for the first notification on a channel with a
+-- timeout.
+subscribeOnceWithTimeout
+  :: forall channel event duration
+   . Eq channel
+  => Duration duration
+  => BusEmitter channel event
+  -> duration
+  -> channel
+  -> Aff (Maybe event)
+subscribeOnceWithTimeout bus timeout channel = parOneOf
+  [ Just <$> subscribeOnce bus channel
+  , Nothing <$ delay (fromDuration timeout)
+  ]
 
 notify
   :: forall channel event

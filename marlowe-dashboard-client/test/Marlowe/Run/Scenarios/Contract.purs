@@ -36,6 +36,7 @@ import Test.Data.Marlowe
   , iDepositRoleAda
   , makeTestContractNickname
   , makeTestWalletNickname
+  , marloweAppEndpoints
   , marloweData
   , newAddress
   , newMarloweParams
@@ -60,12 +61,15 @@ import Test.Marlowe.Run.Commands
   , handlePostActivate
   , handlePostApplyInputs
   , handlePostFollow
+  , handlePutContractInstanceStop
   , recvInstanceSubscribe
   , sendApplyInputsSuccess
+  , sendContractFinished
   , sendCreateException
   , sendCreateSuccess
   , sendFollowerUpdate
   , sendNewActiveEndpoints
+  , sendSlotChange
   , sendWalletCompanionUpdate
   )
 import Test.Network.HTTP (class MonadMockHTTP)
@@ -267,7 +271,16 @@ startContractMarloweAppHangs = loanContractTest
     { contract, contractState, lenderApps, marloweParams, lenderWallet } <-
       setupLoanWithoutNotifications lenderNickname borrowerNickname
     -- Act
-    assertStartingContractShown
+    sendSlotChange 1
+
+    -- Assert
+    handlePutContractInstanceStop lenderApps.marloweAppId
+    sendContractFinished lenderApps.marloweAppId
+    marloweAppId2 <- generateUUID
+    handlePostActivate lenderWallet.walletId MarloweApp marloweAppId2
+    recvInstanceSubscribe marloweAppId2
+    sendNewActiveEndpoints marloweAppId2 marloweAppEndpoints
+
     sendWalletCompanionUpdate lenderApps.walletCompanionId
       [ Tuple marloweParams $ marloweData contract contractState
       ]

@@ -1,6 +1,7 @@
 module Capability.PAB
   ( class ManagePAB
   , activateContract
+  , stopContract
   , getWalletContractInstances
   , invokeEndpoint
   , onNewActiveEndpoints
@@ -61,6 +62,7 @@ import Wallet.Emulator.Wallet (Wallet(..))
 class Monad m <= ManagePAB m where
   activateContract
     :: MarloweContract -> WalletId -> m (AjaxResponse PlutusAppId)
+  stopContract :: PlutusAppId -> m (AjaxResponse Unit)
   invokeEndpoint
     :: forall d
      . EncodeJson d
@@ -82,6 +84,7 @@ instance
   , MonadAjax PAB.Api m
   ) =>
   ManagePAB (AppM m) where
+  stopContract = PAB.putApiContractInstanceByContractinstanceidStop
   activateContract contractActivationId wallet =
     PAB.postApiContractActivate
       $ ContractActivationArgs
@@ -175,6 +178,7 @@ sendWsMessage msg = do
   liftEffect $ HS.notify pabWebsocket msg
 
 instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
+  stopContract = lift <<< stopContract
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
@@ -188,6 +192,7 @@ instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
 
 instance ManagePAB m => ManagePAB (MaybeT m) where
+  stopContract = lift <<< stopContract
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
@@ -201,6 +206,7 @@ instance ManagePAB m => ManagePAB (MaybeT m) where
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
 
 instance ManagePAB m => ManagePAB (ReaderT r m) where
+  stopContract = lift <<< stopContract
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet

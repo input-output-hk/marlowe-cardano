@@ -27,6 +27,7 @@ import Test.Marlowe.Execution as Execution
 import Test.Marlowe.Run.Action.Scenarios.Contract (contractScenarios)
 import Test.Marlowe.Run.Action.Scenarios.Wallet
   ( createAndRestoreWallet
+  , enterDashboardMarloweAppHung
   , multipleCompanionUpdates
   )
 import Test.Spec (Spec, describe, it, parallel)
@@ -62,6 +63,7 @@ testScripts = describe "Scripted scenarios" do
   createAndRestoreWallet
   multipleCompanionUpdates
   contractScenarios
+  enterDashboardMarloweAppHung
 
 -------------------------------------------------------------------------------
 -- Demo tests for purescript-testing-library
