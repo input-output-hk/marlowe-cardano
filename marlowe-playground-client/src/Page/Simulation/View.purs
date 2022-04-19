@@ -122,8 +122,7 @@ import Marlowe.Semantics
   , timeouts
   )
 import Marlowe.Template
-  ( IntegerTemplateType(..)
-  , TemplateContent(..)
+  ( TemplateContent(..)
   , orderContentUsingMetadata
   )
 import Marlowe.Time (unixEpoch)
@@ -334,14 +333,13 @@ sidebar metadata state =
       ]
 
 ------------------------------------------------------------
+-- FIXME: Almost sure delete or remove a lot of stuff...
 type TemplateFormDisplayInfo =
   { lookupFormat ::
       String -> Maybe (String /\ Int) -- Gets the format for a given key
   , lookupDefinition ::
       String -> Maybe String -- Gets the definition for a given key
-  , typeName :: IntegerTemplateType -- Identifier for the type of template we are displaying
   , title :: String -- Title of the section of the template type
-  , prefix :: String -- Prefix for the explanation of the template
   , orderedMetadataSet ::
       OSet String -- Ordered set of parameters with metadata (in custom metadata order)
   }
@@ -362,17 +360,13 @@ startSimulationWidget
         [ div
             [ classes [ ClassName "time-input", ClassName "initial-time-input" ]
             ]
-            -- TODO use a real date time picker
-            [ spanText "Initial time (milliseconds since UNIX epoch):"
+            [ spanText "Initial time:"
             , marloweInstantInput "initial-time"
                 [ "mx-2", "flex-grow", "flex-shrink-0" ]
                 SetInitialTime
                 initialTime
             ]
-        , div_
-            [ ul [ class_ (ClassName "templates") ]
-                $ timeoutParameters <> valueParameters
-            ]
+        , div_ (timeoutParameters <> valueParameters)
         , div [ classNames [ "transaction-btns", "flex", "justify-center" ] ]
             [ button
                 [ classNames
@@ -389,12 +383,13 @@ startSimulationWidget
             ]
         ]
   where
-  timeoutParameters =
-    integerTemplateParameters SetIntegerTemplateParam timeParameterDisplayInfo
-      $ map (POSIXTime.toBigInt <<< POSIXTime) timeContent
+  timeoutParameters = timeTemplateParameters
+    SetTimeTemplateParam
+    timeParameterDisplayInfo
+    timeContent
 
   valueParameters = integerTemplateParameters
-    SetIntegerTemplateParam
+    SetValueTemplateParam
     valueParameterDisplayInfo
     valueContent
 
@@ -402,9 +397,7 @@ startSimulationWidget
     { lookupFormat: const Nothing
     , lookupDefinition: (flip Map.lookup)
         (Map.fromFoldableWithIndex metadata.timeParameterDescriptions) -- Convert to normal Map for efficiency
-    , typeName: TimeContent
     , title: "Timeout template parameters"
-    , prefix: "POSIX time for"
     , orderedMetadataSet: OMap.keys metadata.timeParameterDescriptions
     }
 
@@ -412,9 +405,7 @@ startSimulationWidget
     { lookupFormat: extractValueParameterNuberFormat
     , lookupDefinition: (flip lookupDescription)
         (Map.fromFoldableWithIndex metadata.valueParameterInfo) -- Convert to normal Map for efficiency
-    , typeName: ValueContent
     , title: "Value template parameters"
-    , prefix: "Constant for"
     , orderedMetadataSet: OMap.keys metadata.valueParameterInfo
     }
 
@@ -431,10 +422,38 @@ startSimulationWidget
         _ -> Nothing
     )
 
+templateFieldRef :: String -> String
+templateFieldRef fieldName = "template-parameter-" <> fieldName
+
+templateFieldTitle :: forall w i. String -> HTML w i
+templateFieldTitle title = h6 [ classNames [ "italic", "m-0", "mb-4" ] ]
+  [ text title ]
+
+emptyDiv :: forall w i. HTML w i
+emptyDiv = div_ []
+
+parameterHint
+  :: forall action m
+   . MonadAff m
+  => (String -> Maybe String)
+  -> String
+  -> ComponentHTML action ChildSlots m
+parameterHint lookupDefinition fieldName =
+  maybe emptyDiv
+    ( \explanation ->
+        hint
+          [ "leading-none" ]
+          (templateFieldRef fieldName)
+          Auto
+          (markdownHintWithTitle fieldName explanation)
+
+    )
+    $ lookupDefinition fieldName
+
 integerTemplateParameters
   :: forall action m
    . MonadAff m
-  => (IntegerTemplateType -> String -> BigInt -> action)
+  => (String -> BigInt -> action)
   -> TemplateFormDisplayInfo
   -> Map String BigInt
   -> Array (ComponentHTML action ChildSlots m)
@@ -442,69 +461,90 @@ integerTemplateParameters
   actionGen
   { lookupFormat
   , lookupDefinition
-  , typeName
   , title
-  , prefix
   , orderedMetadataSet
   }
   content =
   let
-    ref key = "template-parameter-" <> key
-
-    parameterHint key =
-      maybe []
-        ( \explanation ->
-            [ hint
-                [ "leading-none" ]
-                (ref key)
-                Auto
-                (markdownHintWithTitle key explanation)
+    templateParameter (fieldName /\ fieldValue) =
+      div
+        [ classNames
+            [ "m-2"
+            , "ml-6"
+            , "flex"
+            , "flex-wrap"
             ]
-        )
-        $ lookupDefinition key
+        ]
+        [ div_
+            [ strong_ [ text fieldName ]
+            , text ":"
+            ]
+        , parameterHint lookupDefinition fieldName
+        , case lookupFormat fieldName of
+            Just (currencyLabel /\ numDecimals) ->
+              marloweCurrencyInput (templateFieldRef fieldName)
+                [ "mx-2"
+                , "flex-grow"
+                , "flex-shrink-0"
+                ]
+                (actionGen fieldName)
+                currencyLabel
+                numDecimals
+                fieldValue
+            Nothing -> marloweActionInput (templateFieldRef fieldName)
+              [ "mx-2", "flex-grow", "flex-shrink-0" ]
+              (actionGen fieldName)
+              fieldValue
+        ]
+    orderedContent = orderContentUsingMetadata content orderedMetadataSet
   in
-    [ li_
-        if Map.isEmpty content then
-          []
-        else
-          ([ h6_ [ em_ [ text title ] ] ])
-            <>
-              ( map
-                  ( \(key /\ value) ->
-                      ( ( div [ class_ (ClassName "template-fields") ]
-                            ( [ div_
-                                  [ text (prefix <> " ")
-                                  , strong_ [ text key ]
-                                  , text ":"
-                                  ]
-                              ]
-                                <> parameterHint key
-                                <>
-                                  [ case lookupFormat key of
-                                      Just (currencyLabel /\ numDecimals) ->
-                                        marloweCurrencyInput (ref key)
-                                          [ "mx-2"
-                                          , "flex-grow"
-                                          , "flex-shrink-0"
-                                          ]
-                                          (actionGen typeName key)
-                                          currencyLabel
-                                          numDecimals
-                                          value
-                                      Nothing -> marloweActionInput (ref key)
-                                        [ "mx-2", "flex-grow", "flex-shrink-0" ]
-                                        (actionGen typeName key)
-                                        value
-                                  ]
-                            )
-                        )
-                      )
-                  )
-                  (OMap.toUnfoldable orderedContent)
-              )
-    ]
-  where
-  orderedContent = orderContentUsingMetadata content orderedMetadataSet
+    if Map.isEmpty content then
+      []
+    else
+      join
+        [ [ templateFieldTitle title ]
+        , OMap.toUnfoldable orderedContent <#> templateParameter
+        ]
+
+timeTemplateParameters
+  :: forall action m
+   . MonadAff m
+  => (String -> Instant -> action)
+  -- FIXME: remove TemplateFormDisplayInfo
+  -> TemplateFormDisplayInfo
+  -> Map String Instant
+  -> Array (ComponentHTML action ChildSlots m)
+timeTemplateParameters
+  actionGen
+  { lookupDefinition
+  , title
+  , orderedMetadataSet
+  }
+  content =
+  let
+    templateParameter (fieldName /\ fieldValue) =
+      div
+        [ classNames [ "m-2", "ml-6", "flex", "flex-wrap" ] ]
+        [ div_
+            [ strong_ [ text fieldName ]
+            , text ":"
+            ]
+        , parameterHint lookupDefinition fieldName
+        , marloweInstantInput
+            (templateFieldRef fieldName)
+            [ "mx-2", "flex-grow", "flex-shrink-0" ]
+            (actionGen fieldName)
+            fieldValue
+        ]
+    orderedContent = orderContentUsingMetadata content orderedMetadataSet
+  in
+    if Map.isEmpty content then
+      []
+    else
+      join
+        [ [ templateFieldTitle title ]
+        , OMap.toUnfoldable orderedContent <#> templateParameter
+        ]
 
 ------------------------------------------------------------
 simulationStateWidget :: forall p. State -> HTML p Action
@@ -610,8 +650,6 @@ participant metadata state party actionInputs =
         <> (map (inputItem metadata state) actionInputs)
     )
   where
-  emptyDiv = div_ []
-
   partyHint = case party of
     Role roleName ->
       maybe emptyDiv

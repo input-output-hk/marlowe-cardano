@@ -80,7 +80,12 @@ panelContents state metadata StaticAnalysisView =
           ]
       ]
     else
-      [ analysisResultPane metadata SetIntegerTemplateParam state
+      [ analysisResultPane
+          metadata
+          { valueAction: SetValueTemplateParam
+          , timeAction: SetTimeTemplateParam
+          }
+          state
       , div [ classes [ paddingRight ] ]
           [ analyzeButton loadingWarningAnalysis analysisEnabled
               "Analyse for warnings"

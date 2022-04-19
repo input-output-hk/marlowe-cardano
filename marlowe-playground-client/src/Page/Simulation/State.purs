@@ -57,7 +57,7 @@ import Marlowe.Semantics
   , Party(..)
   , inBounds
   )
-import Marlowe.Template (fillTemplate, typeToLens)
+import Marlowe.Template (_timeContent, _valueContent, fillTemplate)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Page.Simulation.Lenses
@@ -167,11 +167,20 @@ handleAction (SetInitialTime initialTime) = do
     initialTime
   setOraclePrice
 
-handleAction (SetIntegerTemplateParam templateType key value) = do
+handleAction (SetValueTemplateParam key value) = do
   modifying
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
         <<< _templateContent
-        <<< typeToLens templateType
+        <<< _valueContent
+    )
+    (Map.insert key value)
+  setOraclePrice
+
+handleAction (SetTimeTemplateParam key value) = do
+  modifying
+    ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+        <<< _templateContent
+        <<< _timeContent
     )
     (Map.insert key value)
   setOraclePrice

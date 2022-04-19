@@ -33,7 +33,12 @@ import Marlowe.Extended (Contract)
 import Marlowe.Extended.Metadata (MetadataHintInfo, getMetadataHintInfo)
 import Marlowe.Holes (fromTerm)
 import Marlowe.Parser (parseContract)
-import Marlowe.Template (getPlaceholderIds, typeToLens, updateTemplateContent)
+import Marlowe.Template
+  ( _timeContent
+  , _valueContent
+  , getPlaceholderIds
+  , updateTemplateContent
+  )
 import Monaco (IMarkerData, markerSeverity)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
@@ -151,9 +156,15 @@ handleAction (InitHaskellProject metadataHints contents) = do
   assign _metadataHintInfo metadataHints
   liftEffect $ SessionStorage.setItem haskellBufferLocalStorageKey contents
 
-handleAction (SetIntegerTemplateParam templateType key value) = modifying
-  (_analysisState <<< _templateContent <<< typeToLens templateType)
-  (Map.insert key value)
+handleAction (SetValueTemplateParam key value) =
+  modifying
+    (_analysisState <<< _templateContent <<< _valueContent)
+    (Map.insert key value)
+
+handleAction (SetTimeTemplateParam key value) =
+  modifying
+    (_analysisState <<< _templateContent <<< _timeContent)
+    (Map.insert key value)
 
 handleAction (MetadataAction _) = pure unit
 

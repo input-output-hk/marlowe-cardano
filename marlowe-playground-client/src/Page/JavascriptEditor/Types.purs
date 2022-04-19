@@ -7,6 +7,7 @@ import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Fold', Getter', Lens', Prism', prism, to, (^.))
 import Data.Lens.Record (prop)
@@ -17,7 +18,6 @@ import Language.Javascript.Interpreter (_result)
 import Language.Javascript.Interpreter as JS
 import Marlowe.Extended (Contract)
 import Marlowe.Extended.Metadata (MetadataHintInfo)
-import Marlowe.Template (IntegerTemplateType)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)
 import Type.Proxy (Proxy(..))
@@ -49,7 +49,8 @@ data Action
   | BottomPanelAction (BottomPanel.Action BottomPanelView Action)
   | SendResultToSimulator
   | InitJavascriptProject MetadataHintInfo String
-  | SetIntegerTemplateParam IntegerTemplateType String BigInt
+  | SetTimeTemplateParam String Instant
+  | SetValueTemplateParam String BigInt
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
@@ -68,8 +69,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent SendResultToSimulator = Just $ defaultEvent "SendResultToSimulator"
   toEvent (InitJavascriptProject _ _) = Just $ defaultEvent
     "InitJavascriptProject"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
-    "SetIntegerTemplateParam"
+  toEvent (SetTimeTemplateParam _ _) = Nothing
+  toEvent (SetValueTemplateParam _ _) = Nothing
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
   toEvent AnalyseReachabilityContract = Just $ defaultEvent
     "AnalyseReachabilityContract"

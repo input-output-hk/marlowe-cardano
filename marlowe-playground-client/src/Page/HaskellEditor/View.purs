@@ -206,7 +206,12 @@ panelContents state _ GeneratedOutputView =
 
 panelContents state metadata StaticAnalysisView =
   section_
-    ( [ analysisResultPane metadata SetIntegerTemplateParam state
+    ( [ analysisResultPane
+          metadata
+          { valueAction: SetValueTemplateParam
+          , timeAction: SetTimeTemplateParam
+          }
+          state
       , analyzeButton loadingWarningAnalysis analysisEnabled
           "Analyse for warnings"
           AnalyseContract

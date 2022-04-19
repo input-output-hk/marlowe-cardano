@@ -7,6 +7,7 @@ import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Fold', Getter', Lens', _Right, has, to)
 import Data.Lens.Record (prop)
@@ -20,7 +21,6 @@ import Language.Haskell.Interpreter
   )
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Parser (parseContract)
-import Marlowe.Template (IntegerTemplateType)
 import Network.RemoteData (RemoteData(..), _Loading, _Success)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)
@@ -34,7 +34,8 @@ data Action
   | BottomPanelAction (BottomPanel.Action BottomPanelView Action)
   | SendResultToSimulator
   | InitHaskellProject MetadataHintInfo String
-  | SetIntegerTemplateParam IntegerTemplateType String BigInt
+  | SetTimeTemplateParam String Instant
+  | SetValueTemplateParam String BigInt
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
@@ -52,8 +53,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent SendResultToSimulator = Just $ defaultEvent "SendResultToSimulator"
   toEvent (InitHaskellProject _ _) = Just $ defaultEvent "InitHaskellProject"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
-    "SetIntegerTemplateParam"
+  toEvent (SetTimeTemplateParam _ _) = Nothing
+  toEvent (SetValueTemplateParam _ _) = Nothing
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
   toEvent AnalyseReachabilityContract = Just $ defaultEvent
     "AnalyseReachabilityContract"

@@ -243,32 +243,6 @@ button.minus-btn:hover {
   align-self: center;
 }
 
-.templates > li {
-  margin: 1.5rem 0;
-}
-
-.templates h6 {
-  margin: 0 0 1rem 0;
-}
-
-.templates > em {
-  display: inline-block;
-}
-
-.template-fields {
-  margin: 0.5rem 0.5rem 0.5rem 1.5rem;
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.template-fields * {
-  word-break: break-word;
-}
-
-.template-fields > input {
-  margin-left: 1rem;
-}
-
 .metadata-input {
   display: inline;
   padding: 0.3rem 0.5rem;

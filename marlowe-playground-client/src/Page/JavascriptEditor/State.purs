@@ -33,7 +33,12 @@ import MainFrame.Types (ChildSlots, _jsEditorSlot)
 import Marlowe (Api)
 import Marlowe.Extended (Contract)
 import Marlowe.Extended.Metadata (MetadataHintInfo, getMetadataHintInfo)
-import Marlowe.Template (getPlaceholderIds, typeToLens, updateTemplateContent)
+import Marlowe.Template
+  ( _timeContent
+  , _valueContent
+  , getPlaceholderIds
+  , updateTemplateContent
+  )
 import Monaco (IRange, getModel, isError, setValue)
 import Page.JavascriptEditor.Types
   ( Action(..)
@@ -203,9 +208,15 @@ handleAction (InitJavascriptProject metadataHints prunedContent) = do
   assign _metadataHintInfo metadataHints
   liftEffect $ SessionStorage.setItem jsBufferLocalStorageKey prunedContent
 
-handleAction (SetIntegerTemplateParam templateType key value) = modifying
-  (_analysisState <<< _templateContent <<< typeToLens templateType)
-  (Map.insert key value)
+handleAction (SetValueTemplateParam key value) =
+  modifying
+    (_analysisState <<< _templateContent <<< _valueContent)
+    (Map.insert key value)
+
+handleAction (SetTimeTemplateParam key value) =
+  modifying
+    (_analysisState <<< _templateContent <<< _timeContent)
+    (Map.insert key value)
 
 handleAction (MetadataAction _) = pure unit
 

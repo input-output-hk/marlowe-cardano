@@ -40,10 +40,6 @@ derive newtype instance semigroupPlaceholders :: Semigroup Placeholders
 
 derive newtype instance monoidPlaceholders :: Monoid Placeholders
 
-data IntegerTemplateType
-  = TimeContent
-  | ValueContent
-
 newtype TemplateContent = TemplateContent
   { timeContent :: Map String Instant
   , valueContent :: Map String BigInt
@@ -54,14 +50,6 @@ _timeContent = _Newtype <<< prop (Proxy :: _ "timeContent")
 
 _valueContent :: Lens' TemplateContent (Map String BigInt)
 _valueContent = _Newtype <<< prop (Proxy :: _ "valueContent")
-
-typeToLens :: IntegerTemplateType -> Lens' TemplateContent (Map String BigInt)
-typeToLens TimeContent =
-  _timeContent <<< mapping
-    ( re _Newtype <<< iso POSIXTime.toBigInt
-        (fromMaybe bottom <<< POSIXTime.fromBigInt)
-    )
-typeToLens ValueContent = _valueContent
 
 derive instance newTypeTemplateContent :: Newtype TemplateContent _
 

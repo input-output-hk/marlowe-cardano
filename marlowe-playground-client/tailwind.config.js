@@ -165,7 +165,7 @@ module.exports = {
     textAlign: true,
     textOpacity: false,
     textOverflow: true,
-    fontStyle: false,
+    fontStyle: true,
     textTransform: true,
     textDecoration: true,
     fontSmoothing: false,

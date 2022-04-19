@@ -8,13 +8,13 @@ import Component.Blockly.Types as Blockly
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Show.Generic (genericShow)
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Linter (Warning)
-import Marlowe.Template (IntegerTemplateType)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Type.Proxy (Proxy(..))
 
@@ -29,7 +29,8 @@ data Action
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
   | MetadataAction MetadataAction
-  | SetIntegerTemplateParam IntegerTemplateType String BigInt
+  | SetTimeTemplateParam String Instant
+  | SetValueTemplateParam String BigInt
   | ClearAnalysisResults
   | SelectWarning Warning
 
@@ -51,8 +52,8 @@ instance blocklyActionIsEvent :: IsEvent Action where
     "AnalyseContractForCloseRefund"
   toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
     { label = Just $ showConstructor action }
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
-    "SetIntegerTemplateParam"
+  toEvent (SetTimeTemplateParam _ _) = Nothing
+  toEvent (SetValueTemplateParam _ _) = Nothing
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent (SelectWarning _) = Just $ defaultEvent "SelectWarning"
 

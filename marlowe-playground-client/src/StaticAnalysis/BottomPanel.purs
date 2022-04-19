@@ -8,6 +8,7 @@ import Prologue hiding (div)
 
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
+import Data.DateTime.Instant (Instant)
 import Data.Lens ((^.))
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.List (List, null, toUnfoldable)
@@ -45,10 +46,9 @@ import Marlowe.Semantics
   , TransactionInput(..)
   )
 import Marlowe.Symbolic.Types.Response as R
-import Marlowe.Template (IntegerTemplateType(..))
 import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
-import Page.Simulation.View (integerTemplateParameters)
+import Page.Simulation.View (integerTemplateParameters, timeTemplateParameters)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Plutus.V1.Ledger.Time as POSIXTime
 import Pretty (showPrettyToken)
@@ -87,7 +87,9 @@ analysisResultPane
   :: forall action m state
    . MonadAff m
   => MetaData
-  -> (IntegerTemplateType -> String -> BigInt -> action)
+  -> { valueAction :: String -> BigInt -> action
+     , timeAction :: String -> Instant -> action
+     }
   -> { analysisState :: AnalysisState | state }
   -> ComponentHTML action ChildSlots m
 analysisResultPane metadata actionGen state =
@@ -99,12 +101,15 @@ analysisResultPane metadata actionGen state =
 
     explanation = div [ classes [ ClassName "padded-explanation" ] ]
 
-    timeoutParameters =
-      integerTemplateParameters actionGen timeParameterDisplayInfo
-        $ map (POSIXTime.toBigInt <<< POSIXTime) timeContent
+    timeoutParameters = timeTemplateParameters
+      actionGen.timeAction
+      timeParameterDisplayInfo
+      timeContent
 
-    valueParameters =
-      integerTemplateParameters actionGen valueParameterDisplayInfo valueContent
+    valueParameters = integerTemplateParameters
+      actionGen.valueAction
+      valueParameterDisplayInfo
+      valueContent
   in
     case result of
       NoneAsked ->
@@ -336,9 +341,7 @@ analysisResultPane metadata actionGen state =
     { lookupFormat: const Nothing
     , lookupDefinition: (flip Map.lookup)
         (Map.fromFoldableWithIndex metadata.timeParameterDescriptions) -- Convert to normal Map for efficiency
-    , typeName: TimeContent
     , title: "Timeout template parameters"
-    , prefix: "Slot for"
     , orderedMetadataSet: OMap.keys metadata.timeParameterDescriptions
     }
 
@@ -346,9 +349,7 @@ analysisResultPane metadata actionGen state =
     { lookupFormat: extractValueParameterNuberFormat
     , lookupDefinition: (flip lookupDescription)
         (Map.fromFoldableWithIndex metadata.valueParameterInfo) -- Convert to normal Map for efficiency
-    , typeName: ValueContent
     , title: "Value template parameters"
-    , prefix: "Constant for"
     , orderedMetadataSet: OMap.keys metadata.valueParameterInfo
     }
 

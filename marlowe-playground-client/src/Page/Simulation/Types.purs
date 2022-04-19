@@ -15,7 +15,6 @@ import Halogen.Monaco as Monaco
 import Help (HelpContext)
 import Marlowe.Semantics (Bound, ChoiceId, ChosenNum, Input)
 import Marlowe.Symbolic.Types.Response (Result)
-import Marlowe.Template (IntegerTemplateType)
 import Network.RemoteData (RemoteData)
 import Simulator.Types (MarloweState)
 
@@ -35,7 +34,8 @@ data Action
   = HandleEditorMessage Monaco.Message
   -- marlowe actions
   | SetInitialTime Instant
-  | SetIntegerTemplateParam IntegerTemplateType String BigInt
+  | SetTimeTemplateParam String Instant
+  | SetValueTemplateParam String BigInt
   | StartSimulation
   | DownloadAsJson
   | MoveTime Instant
@@ -60,8 +60,8 @@ defaultEvent s = A.defaultEvent $ "Simulation." <> s
 
 instance isEventAction :: IsEvent Action where
   toEvent (SetInitialTime _) = Just $ defaultEvent "SetInitialTime"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
-    "SetIntegerTemplateParam"
+  toEvent (SetTimeTemplateParam _ _) = Nothing
+  toEvent (SetValueTemplateParam _ _) = Nothing
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent DownloadAsJson = Just $ defaultEvent "DownloadAsJson"
   toEvent (MoveTime _) = Just $ defaultEvent "MoveTime"

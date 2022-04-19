@@ -115,9 +115,14 @@ handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
 handleAction (BottomPanelAction action) = toBottomPanel
   (BottomPanel.handleAction action)
 
-handleAction (SetIntegerTemplateParam templateType key value) =
+handleAction (SetValueTemplateParam key value) =
   modifying
-    (_analysisState <<< _templateContent <<< Template.typeToLens templateType)
+    (_analysisState <<< _templateContent <<< Template._valueContent)
+    (Map.insert key value)
+
+handleAction (SetTimeTemplateParam key value) =
+  modifying
+    (_analysisState <<< _templateContent <<< Template._timeContent)
     (Map.insert key value)
 
 handleAction (MetadataAction _) = pure unit
