@@ -2,7 +2,7 @@ Feature: Creating a new contract with Javascript
   As a user, I would like to create a contract template using javascript,
   so that I can write contracts in my preferred language
 
-  # @dev
+  @dev
   # @smoke
   Scenario: Creating a new Javascript contract template
     Given I am on the "home" page of the "marlowe playground" application
