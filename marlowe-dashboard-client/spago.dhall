@@ -11,6 +11,7 @@
   , "arrays"
   , "avar"
   , "bifunctors"
+  , "bigints"
   , "concurrent-queues"
   , "console"
   , "contravariant"

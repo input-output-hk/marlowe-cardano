@@ -7,7 +7,6 @@ import Ansi.Output (bold, foreground, withGraphics)
 import AppM (runAppM)
 import Concurrent.Queue (Queue)
 import Concurrent.Queue as Queue
-import Control.Apply (lift2)
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger (Logger(..))
@@ -51,7 +50,6 @@ import Data.LocalContractNicknames
   ( LocalContractNicknames
   , emptyLocalContractNicknames
   )
-import Data.Map (Map)
 import Data.Map as Map
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Newtype (over)
@@ -65,7 +63,6 @@ import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
-import Debug (spy)
 import Effect (Effect)
 import Effect.Aff (Aff, Error, bracket, error, launchAff_, message)
 import Effect.Aff.AVar as AVar
@@ -348,6 +345,7 @@ marshallErrors errors m = catchError m \e -> do
 
 mkTestEnv :: Aff (Env /\ Coenv /\ SubscribeIO Error)
 mkTestEnv = do
+  pabAvar <- liftAff $ AVar.new unit
   contractStepCarouselSubscription <- liftAff AVar.empty
   endpointAVarMap <- AVarMap.empty
   followerAVarMap <- AVarMap.empty
@@ -387,6 +385,7 @@ mkTestEnv = do
       , sinks
       , sources
       , marloweAppTimeoutBlocks: 2
+      , pabAvar
       }
     coenv =
       { pabWebsocketIn: pabWebsocketIn.listener

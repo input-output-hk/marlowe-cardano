@@ -96,6 +96,7 @@ instance DecodeJson MainArgs where
 
 mkEnv :: Sources -> Sinks -> Aff Env
 mkEnv sources sinks = do
+  pabAvar <- AVar.new unit
   contractStepCarouselSubscription <- AVar.empty
   endpointAVarMap <- AVarMap.empty
   followerAVarMap <- AVarMap.empty
@@ -114,6 +115,7 @@ mkEnv sources sinks = do
     , sinks
     , sources
     , marloweAppTimeoutBlocks: 3
+    , pabAvar
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a

@@ -17,8 +17,8 @@ import Affjax.ResponseFormat as ResponseFormat
 import Affjax.StatusCode (StatusCode(..))
 import AppM (AppM)
 import Control.Concurrent.AVarMap as AVarMap
-import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
+import Control.Monad.Fork.Class (class MonadBracket, bracket)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec, untilJust)
@@ -34,15 +34,16 @@ import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String (Pattern(..), contains)
 import Data.These (theseLeft)
-import Data.Time.Duration (Minutes(..), fromDuration)
+import Data.Time.Duration (Milliseconds(..), Minutes(..), fromDuration)
 import Data.Traversable (sequence)
 import Data.UUID.Argonaut as UUID
 import Data.WalletId (WalletId)
 import Data.WalletId as WalletId
 import Effect.Aff (Error, delay, error)
+import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (_endpointAVarMap, _sinks)
+import Env (_endpointAVarMap, _pabAVar, _sinks)
 import Foreign.Class (decode)
 import Halogen (HalogenM)
 import Halogen.Subscription as HS
@@ -80,20 +81,37 @@ class Monad m <= ManagePAB m where
 instance
   ( MonadRec m
   , MonadAff m
-  , MonadError Error m
+  , MonadBracket Error f m
   , MonadAjax PAB.Api m
   ) =>
   ManagePAB (AppM m) where
-  stopContract = PAB.putApiContractInstanceByContractinstanceidStop
-  activateContract contractActivationId wallet =
-    PAB.postApiContractActivate
-      $ ContractActivationArgs
-          { caID: contractActivationId
-          , caWallet: Just $ Wallet
-              { prettyWalletName: Nothing
-              , getWalletId: WalletId.toString wallet
+  stopContract instanceId = do
+    -- Ugly hack to try and prevent multiple simultaneous requests to the PAB.
+    -- This can result in the SQLite database being locked and an error being
+    -- thrown.
+    pabAvar <- asks $ view _pabAVar
+    bracket
+      (liftAff $ AVar.take pabAvar)
+      (\_ -> liftAff <<< flip AVar.put pabAvar)
+      \_ -> PAB.putApiContractInstanceByContractinstanceidStop instanceId
+  activateContract contractActivationId wallet = do
+    -- Ugly hack to try and prevent multiple simultaneous requests to the PAB.
+    -- This can result in the SQLite database being locked and an error being
+    -- thrown.
+    pabAvar <- asks $ view _pabAVar
+    bracket
+      (liftAff $ AVar.take pabAvar)
+      (\_ -> liftAff <<< flip AVar.put pabAvar)
+      \_ -> do
+        liftAff $ delay $ Milliseconds 100.0
+        PAB.postApiContractActivate
+          $ ContractActivationArgs
+              { caID: contractActivationId
+              , caWallet: Just $ Wallet
+                  { prettyWalletName: Nothing
+                  , getWalletId: WalletId.toString wallet
+                  }
               }
-          }
 
   invokeEndpoint appId endpoint payload =
     runExceptT $ untilJust $ runMaybeT do

@@ -61,9 +61,15 @@ newtype Env = Env
   , sources :: Sources
   -- | The number of blocks to wait for a reply from the MarloweApp
   , marloweAppTimeoutBlocks :: Int
+  -- | Mutex to prevent simultaneous requests to the PAB, because it can't
+  -- | handle them without the SQLite database getting locked...
+  , pabAvar :: AVar Unit
   }
 
 derive instance newtypeEnv :: Newtype Env _
+
+_pabAVar :: Lens' Env (AVar Unit)
+_pabAVar = _Newtype <<< prop (Proxy :: _ "pabAvar")
 
 _createBus :: Lens' Env (EventBus UUID (Either MarloweError MarloweParams))
 _createBus = _Newtype <<< prop (Proxy :: _ "createBus")

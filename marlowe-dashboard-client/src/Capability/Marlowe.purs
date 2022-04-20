@@ -20,8 +20,8 @@ import Component.Template.State
   , instantiateExtendedContract
   )
 import Control.Logger.Structured (error, info, info', warning')
-import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
+import Control.Monad.Fork.Class (class MonadBracket)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
@@ -95,9 +95,9 @@ class
     -> m (AjaxResponse (Aff (Either RedeemError Unit)))
 
 withRestartOnTimeout
-  :: forall m e a b
+  :: forall f m e a b
    . MonadUnliftAff m
-  => MonadError Error m
+  => MonadBracket Error f m
   => MonadAjax PAB.Api m
   => MonadRec m
   => PlutusAppId
@@ -120,7 +120,7 @@ withRestartOnTimeout marloweAppId u aff timeoutError f = do
 
 instance
   ( MonadUnliftAff m
-  , MonadError Error m
+  , MonadBracket Error f m
   , MonadRec m
   , MonadAjax PAB.Api m
   , MonadAjax MarloweApp.Api m

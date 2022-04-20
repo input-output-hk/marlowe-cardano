@@ -16,8 +16,8 @@ import Bridge (toBack)
 import Capability.PAB (invokeEndpoint) as PAB
 import Control.Concurrent.EventBus as EventBus
 import Control.Monad.Cont.Trans (lift)
-import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), runExceptT)
+import Control.Monad.Fork.Class (class MonadBracket)
 import Control.Monad.Reader (asks)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.UUID (class MonadUUID, generateUUID)
@@ -89,7 +89,7 @@ awaitTimeout aff = do
     ]
 
 instance
-  ( MonadError Error m
+  ( MonadBracket Error f m
   , MonadAff m
   , MonadRec m
   , MonadAjax PAB.Api m
