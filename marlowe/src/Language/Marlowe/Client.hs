@@ -294,21 +294,11 @@ minLovelaceDeposit = 2_000_000
 {- NOTE: Chain index / cardano-node query consistency
   It seems that we are able to experience inconsistency between chain-index state and
   `cardano-node` state. For example we can be notified about `utxoIsProduced` but subsequent
-  query about the same address can result in an empty set. To work around that problem we
-  should probably provide some helper for check looping but for now we use trivial strategy
-  of using ad hoc `waitNMilliSeconds` in multiple places.
-
-  I think that consistency of a `Contract` block is just broken:
-
-    * We have no way to express "transactionallity" - that we want to work against single the same tip
-    in a particular query block.
-
-    * We have no quarantees about consistency between async and sync parts of the Contract interpretion
-    and the tip.
-
+  query about to the chain index like `utxosAt` for the same address can result in an empty set.
+  To work around that problem we should probably provide some proper conditional loop or sync check
+  primitive but... we for now let's just use `waitNMilliSeconds` with arbitrary timeout instead :-P
 
 -}
-
 waitForChainIndex :: forall st sc err. AsContractError err => Contract st sc err ()
 waitForChainIndex = void $ waitNMilliSeconds 2_500
 
@@ -918,9 +908,13 @@ getOnChainStateTxOuts ::
 getOnChainStateTxOuts validator = do
     (outRefs, utxos) <- mapError (review _MarloweError) $ marloweUtxoStatesAt validator
     case outRefs of
-        []       -> pure Nothing
+        []       -> do
+          debug "Language.Marlowe.Client.getOnChainState" "No state found on the chain"
+          pure Nothing
         [outRef] -> pure $ Just (OnChainState outRef, utxos)
-        _        -> throwing_ _AmbiguousOnChainState
+        _        -> do
+          debug "Language.Marlowe.Client.getOnChainState" "Multiple Marlowe UTxOs found"
+          throwing_ _AmbiguousOnChainState
 
 {-| Get the current on-chain state of the state machine instance.
     Return Nothing if there is no state on chain.
