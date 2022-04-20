@@ -37,6 +37,7 @@ module Language.Marlowe.CLI.Test.Types (
 , AppInstanceInfo(..)
 , FollowerInstanceInfo(..)
 , PatternJSON(..)
+, CompanionInstanceInfo(..)
 -- * Lenses
 , psFaucetKey
 , psFaucetAddress
@@ -45,6 +46,8 @@ module Language.Marlowe.CLI.Test.Types (
 , psWallets
 , psAppInstances
 , psFollowerInstances
+, psCompanionInstances
+, patternJSON
 ) where
 
 
@@ -69,6 +72,8 @@ import Servant.Client (BaseUrl, ClientM)
 import Wallet.Emulator.Wallet (WalletId)
 
 import qualified Cardano.Wallet.Primitive.Types as W (WalletId)
+import Control.Lens.Combinators (Lens')
+import Control.Lens.Lens (lens)
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.Map.Strict as M (Map)
 
@@ -157,6 +162,14 @@ instance FromJSON PatternJSON where
 instance ToJSON PatternJSON where
   toJSON (Parts json) = object $ pure $ "parts" .= json
   toJSON (Exact json) = object $ pure $ "exact" .= json
+
+patternJSON :: Lens' PatternJSON A.Value
+patternJSON = lens get set
+  where
+    get(Parts json) = json
+    get(Exact json) = json
+    set (Parts _) json = Parts json
+    set (Exact _) json = Exact json
 
 -- | On- and off-chain test operations for Marlowe contracts, via the Marlowe PAB.
 data PabOperation =
@@ -284,6 +297,15 @@ data PabOperation =
       poInstance        :: InstanceNickname
     , poResponsePattern :: Maybe PatternJSON
     }
+  | ActivateCompanion
+    {
+      poOwner    :: RoleName
+    , poInstance :: InstanceNickname
+    }
+  | AwaitCompanion
+    { poInstance        :: InstanceNickname
+    , poResponsePattern :: Maybe PatternJSON
+    }
     -- | Print the contents of a wallet.
   | PrintWallet
     {
@@ -392,18 +414,30 @@ instance Show FollowerInstanceInfo where
                            <> show fiParams
                            <> "}"
 
+data CompanionInstanceInfo =
+  CompanionInstanceInfo
+    { cmpInstance :: ContractInstanceId
+    , cmpChannel  :: Chan A.Value
+    }
+    deriving (Eq)
+
+instance Show CompanionInstanceInfo where
+  show CompanionInstanceInfo{..} =  "CompanionInstanceInfo {cmpInstance = "
+                           <> show cmpInstance
+                           <> "}"
 
 -- | The state of the PAB test framework.
 data PabState =
   PabState
   {
-    _psFaucetKey         :: SomePaymentSigningKey                       -- ^ The key to the faucet.
-  , _psFaucetAddress     :: AddressAny                                  -- ^ The address of the faucet.
-  , _psBurnAddress       :: AddressAny                                  -- ^ The address for burning role tokens.
-  , _psPassphrase        :: Passphrase "raw"                            -- ^ The default wallet passphrase.
-  , _psWallets           :: M.Map RoleName WalletInfo                   -- ^ The wallets being managed.
-  , _psAppInstances      :: M.Map InstanceNickname AppInstanceInfo      -- ^ The PAB contract instances being managed.
-  , _psFollowerInstances :: M.Map InstanceNickname FollowerInstanceInfo -- ^ The PAB follower instances being managed.
+    _psFaucetKey          :: SomePaymentSigningKey                       -- ^ The key to the faucet.
+  , _psFaucetAddress      :: AddressAny                                  -- ^ The address of the faucet.
+  , _psBurnAddress        :: AddressAny                                  -- ^ The address for burning role tokens.
+  , _psPassphrase         :: Passphrase "raw"                            -- ^ The default wallet passphrase.
+  , _psWallets            :: M.Map RoleName WalletInfo                   -- ^ The wallets being managed.
+  , _psAppInstances       :: M.Map InstanceNickname AppInstanceInfo      -- ^ The PAB contract instances being managed.
+  , _psFollowerInstances  :: M.Map InstanceNickname FollowerInstanceInfo -- ^ The PAB follower instances being managed.
+  , _psCompanionInstances :: M.Map InstanceNickname CompanionInstanceInfo -- ^ The PAB wallet companion
   }
     deriving (Show)
 

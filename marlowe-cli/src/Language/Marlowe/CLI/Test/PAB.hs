@@ -51,7 +51,7 @@ import Cardano.Wallet.Shelley.Compatibility (fromCardanoAddress)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Exception (SomeException, catch, displayException)
-import Control.Lens (use, (%=))
+import Control.Lens (use, (%=), (^.))
 import Control.Monad (unless, void, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
 import Control.Monad.Extra (untilJustM, whenJust)
@@ -67,11 +67,11 @@ import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.CLI.Export (buildAddress, buildRoleAddress)
 import Language.Marlowe.CLI.IO (liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.PAB (receiveStatus)
-import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), FollowerInstanceInfo (..), InstanceNickname,
-                                        PabAccess (..), PabOperation (..), PabState (..), PabTest (..),
-                                        PatternJSON (Exact, Parts), RoleName, WalletInfo (..), psAppInstances,
-                                        psBurnAddress, psFaucetAddress, psFaucetKey, psFollowerInstances, psPassphrase,
-                                        psWallets)
+import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), CompanionInstanceInfo (..), FollowerInstanceInfo (..),
+                                        InstanceNickname, PabAccess (..), PabOperation (..), PabState (..),
+                                        PabTest (..), PatternJSON (Exact, Parts), RoleName, WalletInfo (..),
+                                        patternJSON, psAppInstances, psBurnAddress, psCompanionInstances,
+                                        psFaucetAddress, psFaucetKey, psFollowerInstances, psPassphrase, psWallets)
 import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
@@ -135,7 +135,7 @@ pabTest access faucetKey faucetAddress burnAddress passphrase PabTest{..} =
           $ PabState
             faucetKey faucetAddress burnAddress
             (Passphrase . BA.pack $ toEnum . fromEnum <$> passphrase)
-            mempty mempty mempty
+            mempty mempty mempty mempty
       )
       $ \e ->
         -- TODO: Clean up wallets and instances.
@@ -383,6 +383,38 @@ interpret _ Follow{..} =
         poInstance
     liftIO . putStrLn $ "[Follow] Instance " <> show poInstance <> " now follows instance " <> show poOtherInstance <> "."
 
+interpret access po@ActivateCompanion{..} =
+  do
+    WalletInfo{..} <- findOwner poOwner
+    (cmpInstance, cmpChannel) <- runContract access WalletCompanion wiWalletId'
+    logPoMsg PoShow po $ "Activated companion instance for the " <> poOwner
+    psCompanionInstances %= M.insert poInstance CompanionInstanceInfo{..}
+
+interpret _ po@AwaitCompanion{..} =
+  do
+    CompanionInstanceInfo{..} <- findCompanionInstance poInstance
+    logPoMsg PoShow po "Fetching companion messages."
+    -- Skip all preceeding `null`s
+    companionState <- untilJustM $ do
+      res <- liftIO $ readChan cmpChannel
+      if res == Null
+        then do
+          logPoMsg PoShow po "Skipping `null` response."
+          pure Nothing
+        else pure $ Just res
+
+    case poResponsePattern of
+      Just pt -> if matchJSON pt companionState
+        then logPoMsg PoShow po "await confirmed."
+        else throwError $ CliError $ printPoMsg PoName po $ T.unpack $
+          "Given response does not match expected pattern. Expected: "
+          <> renderValue (pt ^. patternJSON)
+          <> ". Received: "
+          <> renderValue companionState
+          <> "."
+      Nothing ->
+        logPoMsg PoShow po "await confirmed."
+
 interpret access po@ActivateFollower{..} =
   do
     WalletInfo{..} <- findOwner poOwner
@@ -602,6 +634,15 @@ findFollowerInstance nickname =
     . M.lookup nickname
     =<< use psFollowerInstances
 
+-- | Find WalletCompanion contract instance corresponding to an instance nickname.
+findCompanionInstance :: MonadError CliError m
+             => MonadState PabState m
+             => InstanceNickname
+             -> m CompanionInstanceInfo
+findCompanionInstance nickname =
+  liftCliMaybe ("[findCompanionInstance] Follower instance not found for nickname " <> show nickname <> ".")
+    . M.lookup nickname
+    =<< use psCompanionInstances
 
 -- | Find the role tokens for the given instances.
 findRoleTokens :: MonadError CliError m
@@ -873,6 +914,8 @@ printPo PoName po = printName po
     printName UseWallet {}             = "UseWallet"
     printName PrintAppUTxOs {}         = "PrintAppUTxOs"
     printName PrintRoleUTxOs {}        = "PrintRoleUTxOs"
+    printName ActivateCompanion {}     = "ActivateCompanion"
+    printName AwaitCompanion {}        = "AwaitCompanion"
 
 printPoMsg :: PoFormat -> PabOperation -> String -> String
 printPoMsg format po = printTraceMsg (printPo format po)
