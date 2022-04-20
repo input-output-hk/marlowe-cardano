@@ -1,5 +1,6 @@
 module Store.RoleTokens
   ( RoleTokenStore
+  , Payout
   , getDisplayName
   , getRoleToken
   , getNickname
@@ -11,8 +12,8 @@ module Store.RoleTokens
   , updateMyRoleTokens
   , getEligiblePayouts
   , newPayoutsReceived
-  , addPendingPayout
-  , removePendingPayout
+  , redeemPayout
+  , redeemPayoutFailed
   ) where
 
 import Prologue
@@ -22,14 +23,13 @@ import Control.Bind (bindFlipped)
 import Data.Address (Address)
 import Data.Address as Address
 import Data.AddressBook (AddressBook, lookupNickname)
-import Data.Array (null)
 import Data.Filterable (filter)
 import Data.Foldable (oneOf)
 import Data.Lens (_Just, preview, to, (^.))
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
-import Data.Newtype (over, unwrap)
+import Data.Newtype (unwrap)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.WalletNickname (WalletNickname)
@@ -37,7 +37,13 @@ import Data.WalletNickname as WN
 import Language.Marlowe.Client (UnspentPayouts(..))
 import Language.Marlowe.Client.History (RolePayout(..))
 import Marlowe.Run.Contract.V1.Types (RoleToken, _token, _utxoAddress)
-import Marlowe.Semantics (Assets(..), MarloweParams, Token(..), _rolesCurrency)
+import Marlowe.Semantics
+  ( Assets(..)
+  , MarloweParams
+  , Token(..)
+  , TokenName
+  , _rolesCurrency
+  )
 import Network.RemoteData (RemoteData(..), toMaybe)
 import Plutus.V1.Ledger.Tx (TxOutRef)
 import Servant.PureScript (printAjaxError)
@@ -48,11 +54,17 @@ type RoleTokenWithNickname =
   , nickname :: Maybe WalletNickname
   }
 
+type Payout =
+  { txOutRef :: TxOutRef
+  , tokenName :: TokenName
+  , marloweParams :: MarloweParams
+  }
+
 newtype RoleTokenStore = RoleTokenStore
   { myRoleTokens :: Set Token
   , roleTokens :: Map Token (RemoteData String RoleTokenWithNickname)
-  , unspentPayouts :: Map MarloweParams UnspentPayouts
-  , pendingPayouts :: Set TxOutRef
+  , payouts :: Map TxOutRef Payout
+  , redeemdedPayouts :: Set TxOutRef
   }
 
 derive instance Eq RoleTokenStore
@@ -61,8 +73,8 @@ mkRoleTokenStore :: RoleTokenStore
 mkRoleTokenStore = RoleTokenStore
   { myRoleTokens: mempty
   , roleTokens: Map.empty
-  , unspentPayouts: Map.empty
-  , pendingPayouts: mempty
+  , payouts: Map.empty
+  , redeemdedPayouts: mempty
   }
 
 -- | Given a collection of assets the current user owns, update the contract
@@ -82,44 +94,43 @@ updateMyRoleTokens (Assets assets) (RoleTokenStore store) = RoleTokenStore
   isAda _ = false
 
 -- | Determines if the current user owns the given role token.
-getEligiblePayouts :: RoleTokenStore -> Map MarloweParams UnspentPayouts
-getEligiblePayouts (RoleTokenStore store) = filter notEmpty
-  $ map (over UnspentPayouts $ filter notPending)
-  $ Map.mapMaybeWithKey (map Just <<< filterEligible) store.unspentPayouts
+getEligiblePayouts :: RoleTokenStore -> Set Payout
+getEligiblePayouts (RoleTokenStore store) = Set.filter isEligible
+  $ Set.fromFoldable
+  $ Map.filterKeys notRedeemed store.payouts
   where
-  notEmpty (UnspentPayouts payouts) = not $ null payouts
-  filterEligible marloweParams = over UnspentPayouts
-    $ filter
-    $ isEligible marloweParams
-  isEligible marloweParams (RolePayout { rolePayoutName }) = Set.member
-    ( Token
-        (marloweParams ^. _rolesCurrency)
-        (unwrap rolePayoutName).unTokenName
-    )
+  isEligible ({ marloweParams, tokenName }) = Set.member
+    (Token (marloweParams ^. _rolesCurrency) tokenName)
     store.myRoleTokens
-  notPending (RolePayout { rolePayoutTxOutRef }) =
-    not $ Set.member rolePayoutTxOutRef store.pendingPayouts
+  notRedeemed txOutRef = not $ Set.member txOutRef store.redeemdedPayouts
 
 newPayoutsReceived
   :: MarloweParams -> UnspentPayouts -> RoleTokenStore -> RoleTokenStore
-newPayoutsReceived marloweParams payouts (RoleTokenStore store) = RoleTokenStore
+newPayoutsReceived
+  marloweParams
+  (UnspentPayouts newPayouts)
+  (RoleTokenStore store) = RoleTokenStore
   store
-    { unspentPayouts = Map.insert marloweParams payouts store.unspentPayouts
+    { payouts =
+        Map.union store.payouts $ Map.fromFoldable $ map toKvp newPayouts
+    }
+  where
+  toKvp (RolePayout payout) = Tuple
+    payout.rolePayoutTxOutRef
+    { txOutRef: payout.rolePayoutTxOutRef
+    , tokenName: (unwrap payout.rolePayoutName).unTokenName
+    , marloweParams
     }
 
-addPendingPayout :: RolePayout -> RoleTokenStore -> RoleTokenStore
-addPendingPayout (RolePayout { rolePayoutTxOutRef }) (RoleTokenStore store) =
-  RoleTokenStore
-    store
-      { pendingPayouts = Set.insert rolePayoutTxOutRef store.pendingPayouts
-      }
+redeemPayout :: Payout -> RoleTokenStore -> RoleTokenStore
+redeemPayout { txOutRef } (RoleTokenStore store) = RoleTokenStore store
+  { redeemdedPayouts = Set.insert txOutRef store.redeemdedPayouts
+  }
 
-removePendingPayout :: RolePayout -> RoleTokenStore -> RoleTokenStore
-removePendingPayout (RolePayout { rolePayoutTxOutRef }) (RoleTokenStore store) =
-  RoleTokenStore
-    store
-      { pendingPayouts = Set.delete rolePayoutTxOutRef store.pendingPayouts
-      }
+redeemPayoutFailed :: Payout -> RoleTokenStore -> RoleTokenStore
+redeemPayoutFailed { txOutRef } (RoleTokenStore store) = RoleTokenStore store
+  { redeemdedPayouts = Set.delete txOutRef store.redeemdedPayouts
+  }
 
 -- | Determines if the current user owns the given role token.
 isMyRoleToken :: Token -> RoleTokenStore -> Boolean

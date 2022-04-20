@@ -20,12 +20,14 @@ import Component.Template.State
   , instantiateExtendedContract
   )
 import Control.Logger.Structured (error, info, info', warning')
+import Control.Monad.Error.Class (catchError, throwError)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Fork.Class (class MonadBracket)
 import Control.Monad.Maybe.Trans (MaybeT)
-import Control.Monad.Reader (ReaderT)
+import Control.Monad.Reader (ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.UUID (class MonadUUID)
+import Control.Parallel (parOneOf)
 import Data.Argonaut (encodeJson)
 import Data.Bifunctor (lmap)
 import Data.DateTime.Instant (Instant)
@@ -43,18 +45,24 @@ import Effect.Aff.Unlift
   , askUnliftAff
   , unliftAff
   )
+import Env (_marloweAppTimeoutBlocks)
 import Errors.Debuggable (class Debuggable)
 import Errors.Explain (class Explain)
 import Halogen (HalogenM)
-import Halogen.Store.Monad (updateStore)
+import Halogen.Store.Monad (emitSelected, updateStore)
+import Halogen.Store.Select (selectEq)
+import Halogen.Subscription as HS
+import Halogen.Subscription.Extra (subscribeOnce)
 import Language.Marlowe.Client (MarloweError)
+import Marlowe.Execution.State (removePendingTransaction, setPendingTransaction)
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Server (Api) as MarloweApp
-import Marlowe.Semantics (MarloweParams, TokenName, TransactionInput)
+import Marlowe.Semantics (MarloweParams, TransactionInput)
 import Plutus.PAB.Webserver (Api) as PAB
 import Servant.PureScript (class MonadAjax)
 import Store as Store
+import Store.RoleTokens (Payout)
 import Text.Pretty (text)
 import Type.Proxy (Proxy(..))
 import Type.Row (type (+))
@@ -90,33 +98,56 @@ class
     -> m (AjaxResponse (Aff (Either ApplyInputError Unit)))
   redeem
     :: PABConnectedWallet
-    -> MarloweParams
-    -> TokenName
+    -> Payout
     -> m (AjaxResponse (Aff (Either RedeemError Unit)))
 
-withRestartOnTimeout
-  :: forall f m e a b
+awaitAndHandleResult
+  :: forall f m e a
    . MonadUnliftAff m
   => MonadBracket Error f m
   => MonadAjax PAB.Api m
   => MonadRec m
   => PlutusAppId
   -> UnliftAff (AppM m)
-  -> Aff (Maybe a)
+  -> Aff (Either MarloweError a)
   -> e
-  -> (a -> AppM m (Either e b))
-  -> Aff (Either e b)
-withRestartOnTimeout marloweAppId u aff timeoutError f = do
-  mResult <- aff
-  unliftAff u case mResult of
-    Nothing -> do
-      warning' "MarloweApp timed out, stoping instance."
-      stopResult <- stopContract marloweAppId
-      case stopResult of
-        Left err -> error "Failed to stop MarloweApp" err
-        Right _ -> info' "MarloweApp stopped successfully."
-      pure $ Left timeoutError
-    Just result -> f result
+  -> (MarloweError -> e)
+  -> (Either e a -> AppM m Unit)
+  -> AppM m (Aff (Either e a))
+awaitAndHandleResult
+  marloweAppId
+  u
+  aff
+  timeoutError
+  contractError
+  handleResult = do
+  -- Already fork and await the aff here, so we don't have to wait for the
+  -- caller to await it to run any updates.
+  fiber <- liftAff $ forkAff do
+    -- | Give the result Aff a certain number of blocks to resolve, or cancel
+    -- | it, stop the MarloweApp, and return an error.
+    blocksToWait <- unliftAff u $ asks $ view _marloweAppTimeoutBlocks
+    tipSlotE <- unliftAff u $ emitSelected (selectEq _.tipSlot)
+    -- Create an emitter that increments every time the tip slot changes.
+    let changeCountE = HS.fold (const $ add 1) tipSlotE 0
+    -- subscribe to the first time this count reaches or exceeds the limit.
+    mResult <- parOneOf
+      [ subscribeOnce $ Nothing <$ HS.filter (_ >= blocksToWait) changeCountE
+      , Just <<< lmap contractError <$> aff
+      ]
+    unliftAff u case mResult of
+      Nothing -> do
+        warning' "MarloweApp timed out, stoping instance."
+        stopResult <- stopContract marloweAppId
+        case stopResult of
+          Left err -> error "Failed to stop MarloweApp" err
+          Right _ -> info' "MarloweApp stopped successfully."
+        handleResult $ Left timeoutError
+        pure $ Left timeoutError
+      Just a -> do
+        handleResult a
+        pure a
+  pure $ joinFiber fiber
 
 instance
   ( MonadUnliftAff m
@@ -154,30 +185,25 @@ instance
       let
         newContract =
           NewContract reqId nickname template.metaData Nothing contract
-      lift $ updateStore $ Store.ContractCreated newContract
-
-      -- Already fork and await the pending result here, so we don't have to
-      -- wait for the caller to run it to update the store.
-      resultFiber <- liftAff $ forkAff $ withRestartOnTimeout
-        marloweAppId
-        u
-        awaitContractCreation
-        CreateTimeout
-        \mParams ->
-          do
-            -- Update the contract's representation in the store to use its
-            -- MarloweParams if successful, or show an error otherwise.
-            case mParams of
-              Left contractError -> do
-                updateStore $ Store.ContractStartFailed newContract
-                  contractError
-                pure $ Left $ CreateError contractError
-              Right marloweParams -> do
-                updateStore $ Store.ContractStarted newContract
-                  marloweParams
-                pure $ Right marloweParams
-
-      pure $ newContract /\ joinFiber resultFiber
+      lift do
+        updateStore $ Store.ContractCreated newContract
+        Tuple newContract <$> awaitAndHandleResult
+          marloweAppId
+          u
+          awaitContractCreation
+          CreateTimeout
+          CreateError
+          -- Update the contract's representation in the store to use its
+          -- MarloweParams if successful, or show an error otherwise.
+          case _ of
+            Left (CreateError marloweError) -> do
+              updateStore $ Store.ContractStartFailed newContract marloweError
+            Right marloweParams -> do
+              updateStore $ Store.ContractStarted newContract marloweParams
+            _ ->
+              -- Do nothing. We might still receive the marlowe params from the
+              -- wallet companion and start this contract.
+              pure unit
 
   -- "apply-inputs" to a Marlowe contract on the blockchain
   applyTransactionInput wallet marloweParams transactionInput = do
@@ -187,48 +213,75 @@ instance
       let marloweAppId = view _marloweAppId wallet
       awaitResult <- ExceptT
         $ MarloweApp.applyInputs marloweAppId marloweParams transactionInput
-      pure
-        $ withRestartOnTimeout marloweAppId u awaitResult ApplyInputTimeout
-        -- We wrap the MarloweError in an Explainable and Debuggable context
-        $ pure <<< lmap ApplyInputError
+      updateStore
+        $ Store.ModifySyncedContract marloweParams
+        $ setPendingTransaction transactionInput
+      lift $ awaitAndHandleResult
+        marloweAppId
+        u
+        awaitResult
+        ApplyInputTimeout
+        ApplyInputError
+        \_ -> updateStore
+          $ Store.ModifySyncedContract marloweParams removePendingTransaction
 
   -- "redeem" payments from a Marlowe contract on the blockchain
-  redeem wallet marloweParams tokenName = do
-    info "Redeeming payments" $ encodeJson { marloweParams, tokenName }
+  redeem wallet payout = do
+    info "Redeeming payout" $ encodeJson payout
     u <- askUnliftAff
     runExceptT do
       let marloweAppId = view _marloweAppId wallet
       let address = view _address wallet
-      awaitResult <- ExceptT
-        $ MarloweApp.redeem marloweAppId marloweParams tokenName address
-      pure
-        $ withRestartOnTimeout marloweAppId u awaitResult RedeemTimeout
-        -- We wrap the MarloweError in an Explainable and Debuggable context
-        $ pure <<< lmap RedeemError
+      updateStore $ Store.RedeemPayout payout
+      awaitResult <- catchError
+        (ExceptT $ MarloweApp.redeem marloweAppId payout address)
+        \err -> do
+          updateStore $ Store.RedeemPayoutFailed payout
+          throwError err
+      lift $ awaitAndHandleResult
+        marloweAppId
+        u
+        awaitResult
+        RedeemTimeout
+        RedeemError
+        case _ of
+          Right _ -> do
+            info "Payout redeemed" $ encodeJson payout
+            -- Do nothing. The TxId of this payout will remain in the store to
+            -- mark this payout as redeemed, preventing duplicate calls to
+            -- redeem.
+            pure unit
+          Left (RedeemError _) -> do
+            error "Failed to redeem payout" $ encodeJson payout
+            updateStore $ Store.RedeemPayoutFailed payout
+          _ ->
+            -- Don't record a failure here! The payout may still be processed
+            -- in which case we should get a follower update.
+            pure unit
 
 instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) where
   initializeContract currentInstant template params wallet =
     lift $ initializeContract currentInstant template params wallet
   applyTransactionInput walletDetails marloweParams transactionInput =
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
-  redeem walletDetails marloweParams tokenName =
-    lift $ redeem walletDetails marloweParams tokenName
+  redeem walletDetails tokenName =
+    lift $ redeem walletDetails tokenName
 
 instance ManageMarlowe m => ManageMarlowe (MaybeT m) where
   initializeContract currentInstant template params wallet =
     lift $ initializeContract currentInstant template params wallet
   applyTransactionInput walletDetails marloweParams transactionInput =
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
-  redeem walletDetails marloweParams tokenName =
-    lift $ redeem walletDetails marloweParams tokenName
+  redeem walletDetails tokenName =
+    lift $ redeem walletDetails tokenName
 
 instance ManageMarlowe m => ManageMarlowe (ReaderT r m) where
   initializeContract currentInstant template params wallet =
     lift $ initializeContract currentInstant template params wallet
   applyTransactionInput walletDetails marloweParams transactionInput =
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
-  redeem walletDetails marloweParams tokenName =
-    lift $ redeem walletDetails marloweParams tokenName
+  redeem walletDetails tokenName =
+    lift $ redeem walletDetails tokenName
 
 data ApplyInputError = ApplyInputTimeout | ApplyInputError MarloweError
 

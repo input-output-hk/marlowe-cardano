@@ -115,7 +115,6 @@ let
             --db-path /data/chain-index.sqlite \
             --socket-path ${socket-path} \
             --port ${chain-index-port}
-            --verbose
         ''
       ];
     };
@@ -153,7 +152,8 @@ let
             --out-file ./testnet.protocol
           ${marlowe-pab}/bin/marlowe-pab webserver \
             --config /config/pab.yaml \
-            --passphrase fixme-allow-pass-per-wallet
+            --passphrase fixme-allow-pass-per-wallet \
+            --memory
         ''
       ];
     };

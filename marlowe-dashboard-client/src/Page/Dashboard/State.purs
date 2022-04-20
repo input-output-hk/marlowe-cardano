@@ -49,10 +49,9 @@ import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Enum (fromEnum, toEnum)
 import Data.Foldable (foldMap, for_, traverse_)
-import Data.FoldableWithIndex (forWithIndex_)
-import Data.Lens (assign, modifying, set, to, use, view, (^.), (^?))
+import Data.Lens (_Just, assign, modifying, set, to, use, view, (^.), (^?))
 import Data.Lens.Record (prop)
-import Data.Map (filterKeys, toUnfoldable)
+import Data.Map (Map, filterKeys, toUnfoldable)
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.NewContract (NewContract(..))
@@ -64,6 +63,7 @@ import Data.PABConnectedWallet
   , _marloweAppId
   , _walletId
   )
+import Data.Set (Set)
 import Data.Set as Set
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
@@ -92,7 +92,6 @@ import Language.Marlowe.Client
   , MarloweEndpointResult(..)
   , _ContractHistory
   )
-import Language.Marlowe.Client.History (RolePayout(..))
 import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
@@ -147,7 +146,7 @@ import Plutus.V1.Ledger.Slot as Plutus
 import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts (followerContractExists, getContract, partitionContracts)
-import Store.RoleTokens (RoleTokenStore, getEligiblePayouts)
+import Store.RoleTokens (Payout, RoleTokenStore, getEligiblePayouts)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
@@ -294,6 +293,20 @@ handleInput
   -> HalogenM m Unit
 handleInput _ oldState = do
   let oldContracts = maybe Map.empty (view _contracts) oldState
+  let oldPayouts = oldState ^. _Just <<< _roleTokens <<< to getEligiblePayouts
+  handleContractChanges oldContracts
+  handlePayoutChanges oldPayouts
+
+handleContractChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Map MarloweParams ContractState
+  -> HalogenM m Unit
+handleContractChanges oldContracts = do
   currentContracts <- use _contracts
   let
     addedContracts = Array.fromFoldable
@@ -306,28 +319,6 @@ handleInput _ oldState = do
         parties # Set.mapMaybe case _ of
           Role tokenName -> Just $ Token currencySymbol tokenName
           _ -> Nothing
-  let
-    oldPayouts =
-      maybe Map.empty (getEligiblePayouts <<< view _roleTokens) oldState
-  newPayouts <- use (_roleTokens <<< to getEligiblePayouts)
-  wallet <- use _wallet
-  when (oldPayouts /= newPayouts) do
-    forWithIndex_ newPayouts \marloweParams unspentPayouts -> do
-      for_ (unwrap unspentPayouts) \payout@(RolePayout { rolePayoutName }) -> do
-        let tokenName = (unwrap rolePayoutName).unTokenName
-        updateStore $ Store.PayoutStarted payout
-        ajaxResponse <- redeem wallet marloweParams tokenName
-        case ajaxResponse of
-          Left err ->
-            error "Failed to redeem payout" { tokenName, error: err }
-          Right awaitResponse -> do
-            debug "Payout redemption submitted" { tokenName }
-            response <- liftAff $ awaitResponse
-            case response of
-              Left err ->
-                error "Failed to redeem payout" { tokenName, error: err }
-              Right _ -> debug "Payout redeemed submitted" { tokenName }
-        updateStore $ Store.PayoutFinished payout
   updateStore $ Store.LoadRoleTokens addedTokens
   parTraverse_ loadRoleToken addedTokens
   where
@@ -344,6 +335,21 @@ handleInput _ oldState = do
       Right roleToken -> do
         debug "Role token loaded" $ encodeJson roleToken
         updateStore $ Store.RoleTokenLoaded roleToken
+
+handlePayoutChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Set Payout
+  -> HalogenM m Unit
+handlePayoutChanges oldPayouts = do
+  wallet <- use _wallet
+  currentPayouts <- use (_roleTokens <<< to getEligiblePayouts)
+  let newPayouts = Set.difference currentPayouts oldPayouts
+  parTraverse_ (void <<< redeem wallet) newPayouts
 
 handleAction
   :: forall m

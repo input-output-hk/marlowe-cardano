@@ -16,7 +16,6 @@ import Data.Slot (Slot)
 import Data.Wallet (WalletDetails)
 import Errors.Explain (explainString)
 import Language.Marlowe.Client (ContractHistory, MarloweError, UnspentPayouts)
-import Language.Marlowe.Client.History (RolePayout)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
@@ -25,13 +24,14 @@ import Marlowe.Semantics (Assets(..), MarloweParams, Token)
 import Store.Contracts (ContractStore, mkContractStore, tick)
 import Store.Contracts as Contracts
 import Store.RoleTokens
-  ( RoleTokenStore
-  , addPendingPayout
+  ( Payout
+  , RoleTokenStore
   , loadRoleTokenFailed
   , loadRoleTokens
   , mkRoleTokenStore
   , newPayoutsReceived
-  , removePendingPayout
+  , redeemPayout
+  , redeemPayoutFailed
   , roleTokenLoaded
   , updateMyRoleTokens
   )
@@ -110,8 +110,8 @@ data Action
   | Wallet WalletAction
   -- Role Tokens
   | NewPayoutsReceived MarloweParams UnspentPayouts
-  | PayoutStarted RolePayout
-  | PayoutFinished RolePayout
+  | RedeemPayout Payout
+  | RedeemPayoutFailed Payout
   -- System wide components
   | Disconnect
   | ShowToast ToastMessage
@@ -189,8 +189,8 @@ reduce store = case _ of
   -- Role Tokens
   NewPayoutsReceived marloweParams unspentPayouts ->
     updateRoleTokenStore $ newPayoutsReceived marloweParams unspentPayouts
-  PayoutStarted payout -> updateRoleTokenStore $ addPendingPayout payout
-  PayoutFinished payout -> updateRoleTokenStore $ removePendingPayout payout
+  RedeemPayout payout -> updateRoleTokenStore $ redeemPayout payout
+  RedeemPayoutFailed payout -> updateRoleTokenStore $ redeemPayoutFailed payout
   where
   updateRoleTokenStore f =
     store { roleTokens = f store.roleTokens }

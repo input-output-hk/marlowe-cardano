@@ -336,7 +336,6 @@ startContractMarloweAppHangs = loanContractTest
     sendWalletCompanionUpdate lenderApps.walletCompanionId
       [ Tuple marloweParams $ marloweData contract contractState
       ]
-    assertStartingContractShown
     followerId <- generateUUID
     handlePostActivate lenderWallet.walletId MarloweFollower followerId
     assertStartingContractShown

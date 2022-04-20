@@ -36,13 +36,9 @@ import Errors (globalError)
 import Halogen as H
 import Halogen.Component.Reactive as HR
 import Halogen.Store.Connect (connect)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
-import Marlowe.Execution.State
-  ( mkTx
-  , removePendingTransaction
-  , setPendingTransaction
-  )
+import Marlowe.Execution.State (mkTx)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics (ChosenNum)
@@ -125,17 +121,12 @@ handleAction (ConfirmAction) = do
         (Left "Error")
       globalError "Failed to submit transaction." ajaxError
     Right awaitResult -> do
-      updateStore $ Store.ModifySyncedContract marloweParams $
-        setPendingTransaction txInput
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
         (Milliseconds 600.0)
         (Right "")
       addToast $ successToast "Transaction submitted, awating confirmation."
       H.raise DialogClosed
       mResult <- liftAff awaitResult
-      updateStore $ Store.ModifySyncedContract
-        marloweParams
-        removePendingTransaction
       case mResult of
         Right _ -> do
           addToast $ successToast "Contract update applied."

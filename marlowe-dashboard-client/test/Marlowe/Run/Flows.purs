@@ -511,8 +511,6 @@ applyClose marloweAppId followerId params datum startTime payouts = do
         txOutRef
   unspentPayouts <- UnspentPayouts <$> traverse toPayout payouts
 
-  handlePostApplyInputs marloweAppId reqId params input
-
   sendFollowerUpdate followerId
     $ contractHistory params datum [ input ] unspentPayouts
 
