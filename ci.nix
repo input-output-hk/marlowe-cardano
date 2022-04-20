@@ -1,8 +1,7 @@
 {
   # 'supportedSystems' restricts the set of systems that we will evaluate for. Useful when you're evaluting
   # on a machine with e.g. no way to build the Darwin IFDs you need!
-  # TODO re-enable Darwin after Hydra Darwin build issues are resolved.
-  supportedSystems ? [ "x86_64-linux" /* "x86_64-darwin" */ ]
+  supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
 , rootsOnly ? false
   # We explicitly pass true here in the GitHub action but don't want to slow down hydra
 , checkMaterialization ? false
