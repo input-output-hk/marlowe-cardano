@@ -18,5 +18,5 @@
   "https://github.com/Quid2/flat"."ee59880f47ab835dbd73bea0847dab7869fc20d8" = "1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm";
   "https://github.com/input-output-hk/hedgehog-extras"."edf6945007177a638fbeb8802397f3a6f4e47c14" = "0wc7qzkc7j4ns2rz562h6qrx2f8xyq7yjcb7zidnj7f6j0pcd0i9";
   "https://github.com/input-output-hk/optparse-applicative"."7497a29cb998721a9068d5725d49461f2bba0e7a" = "1gvsrg925vynwgqwplgjmp53vj953qyh3wbdf34pw21c8r47w35r";
-  "https://github.com/input-output-hk/plutus-apps"."c2b21fbabbf8d5362ba826f71bc2775deccfa8ba" = "1nicc309n6hq1xy5g8gb750lrhzxl509zqrn14l4k5xys1mzvzrl";
+  "https://github.com/input-output-hk/plutus-apps"."b62652c6ba264dc6744f74bc0c581f1768abc676" = "1mxxg1gm9vj30fba56xkxj3d56b3gvlqn4csdmwg6a6in262an5m";
 }
