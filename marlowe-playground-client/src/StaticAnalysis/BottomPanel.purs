@@ -6,18 +6,12 @@ module StaticAnalysis.BottomPanel
 
 import Prologue hiding (div)
 
-import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
-import Data.DateTime.Instant (Instant)
 import Data.Lens ((^.))
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.List (List, null, toUnfoldable)
 import Data.List as List
 import Data.List.NonEmpty (toList)
-import Data.Map as Map
-import Data.Map.Ordered.OMap as OMap
-import Data.String (trim)
-import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Classes (btn, spaceBottom, spaceRight, spaceTop, spanText)
@@ -36,9 +30,9 @@ import Halogen.HTML
   , ul
   )
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Properties (class_, classes, enabled)
+import Halogen.HTML.Properties (classes, enabled)
 import MainFrame.Types (ChildSlots)
-import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
+import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( ChoiceId(..)
   , Input(..)
@@ -46,11 +40,13 @@ import Marlowe.Semantics
   , TransactionInput(..)
   )
 import Marlowe.Symbolic.Types.Response as R
+import Marlowe.Template (TemplateContent(..))
 import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
-import Page.Simulation.View (integerTemplateParameters, timeTemplateParameters)
-import Plutus.V1.Ledger.Time (POSIXTime(..))
-import Plutus.V1.Ledger.Time as POSIXTime
+import Page.Simulation.View
+  ( TemplateParameterActionsGen
+  , templateParameters
+  )
 import Pretty (showPrettyToken)
 import Servant.PureScript (printAjaxError)
 import StaticAnalysis.Types
@@ -87,9 +83,7 @@ analysisResultPane
   :: forall action m state
    . MonadAff m
   => MetaData
-  -> { valueAction :: String -> BigInt -> action
-     , timeAction :: String -> Instant -> action
-     }
+  -> TemplateParameterActionsGen action
   -> { analysisState :: AnalysisState | state }
   -> ComponentHTML action ChildSlots m
 analysisResultPane metadata actionGen state =
@@ -97,26 +91,19 @@ analysisResultPane metadata actionGen state =
     { timeContent, valueContent } =
       state ^. (_analysisState <<< _templateContent <<< _Newtype)
 
+    templateContent = TemplateContent { timeContent, valueContent }
     result = state ^. (_analysisState <<< _analysisExecutionState)
 
     explanation = div [ classes [ ClassName "padded-explanation" ] ]
-
-    timeoutParameters = timeTemplateParameters
-      actionGen.timeAction
-      timeParameterDisplayInfo
-      timeContent
-
-    valueParameters = integerTemplateParameters
-      actionGen.valueAction
-      valueParameterDisplayInfo
-      valueContent
   in
     case result of
       NoneAsked ->
         explanation
           [ text ""
-          , ul [ class_ (ClassName "templates") ]
-              $ timeoutParameters <> valueParameters
+          , templateParameters
+              metadata
+              templateContent
+              actionGen
           ]
       WarningAnalysis staticSubResult -> case staticSubResult of
         NotAsked ->
@@ -336,35 +323,6 @@ analysisResultPane metadata actionGen state =
             , text
                 "None of the Close constructs refunds any money, all refunds are explicit."
             ]
-  where
-  timeParameterDisplayInfo =
-    { lookupFormat: const Nothing
-    , lookupDefinition: (flip Map.lookup)
-        (Map.fromFoldableWithIndex metadata.timeParameterDescriptions) -- Convert to normal Map for efficiency
-    , title: "Timeout template parameters"
-    , orderedMetadataSet: OMap.keys metadata.timeParameterDescriptions
-    }
-
-  valueParameterDisplayInfo =
-    { lookupFormat: extractValueParameterNuberFormat
-    , lookupDefinition: (flip lookupDescription)
-        (Map.fromFoldableWithIndex metadata.valueParameterInfo) -- Convert to normal Map for efficiency
-    , title: "Value template parameters"
-    , orderedMetadataSet: OMap.keys metadata.valueParameterInfo
-    }
-
-  extractValueParameterNuberFormat valueParameter =
-    case OMap.lookup valueParameter metadata.valueParameterInfo of
-      Just { valueParameterFormat: DecimalFormat numDecimals currencyLabel } ->
-        Just (currencyLabel /\ numDecimals)
-      _ -> Nothing
-
-  lookupDescription k m =
-    ( case Map.lookup k m of
-        Just { valueParameterDescription: description }
-          | trim description /= "" -> Just description
-        _ -> Nothing
-    )
 
 displayTransactionList
   :: forall p action. Array TransactionInput -> HTML p action
