@@ -14,12 +14,12 @@ let
   pab-port = "9080";
   run-port = "8080";
   socket-path = "/ipc/node.socket";
-  network-id = "1566";
+  network-id = toString network.magic;
   pab-params = {
     dbConfigFile = "/data/pab.db";
     baseUrl = "http://0.0.0.0:${pab-port}";
     walletUrl = "http://wallet:${wallet-port}";
-    inherit socket-path network-id;
+    inherit socket-path network;
     protocol-parameters = "./testnet.protocol";
   };
   run-params = { wallet-port = wallet-port-int; chain-index-port = chain-index-port-int; };
