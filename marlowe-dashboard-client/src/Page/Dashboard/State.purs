@@ -33,7 +33,7 @@ import Control.Alt ((<|>))
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Structured (StructuredLog, debug, error)
+import Control.Logger.Structured (StructuredLog, debug, error, info)
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Maybe.Trans (runMaybeT)
@@ -310,8 +310,8 @@ handleInput _ oldState = do
   let oldPayouts = oldState ^. _Just <<< _roleTokens <<< to getEligiblePayouts
   let oldAssets = oldState ^. _Just <<< _wallet <<< _assets
   let oldTipSlot = oldState ^. _Just <<< _tipSlot
-  handleContractChanges oldContracts
   handlePayoutChanges oldPayouts
+  handleContractChanges oldContracts
   handleAssetsChanges oldAssets
   handleTipSlotChanges oldTipSlot
 
@@ -341,7 +341,7 @@ handleContractChanges oldContracts = do
   parTraverse_ loadRoleToken addedTokens
   where
   loadRoleToken token@(Token currencySymbol tokenName) = do
-    debug "Loading role token" { currencySymbol, tokenName }
+    info "Loading role token" { currencySymbol, tokenName }
     result <- H.lift $ getApiContractsV1ByCurrencysymbolRoletokensByTokenname
       currencySymbol
       tokenName
@@ -351,7 +351,7 @@ handleContractChanges oldContracts = do
           { currencySymbol, tokenName, error: err }
         updateStore $ Store.LoadRoleTokenFailed token err
       Right roleToken -> do
-        debug "Role token loaded" $ encodeJson roleToken
+        info "Role token loaded" $ encodeJson roleToken
         updateStore $ Store.RoleTokenLoaded roleToken
 
 handlePayoutChanges
@@ -367,7 +367,7 @@ handlePayoutChanges oldPayouts = do
   wallet <- use _wallet
   currentPayouts <- use (_roleTokens <<< to getEligiblePayouts)
   let newPayouts = Set.difference currentPayouts oldPayouts
-  parTraverse_ (void <<< redeem wallet) newPayouts
+  parTraverse_ (redeem wallet) newPayouts
 
 handleAssetsChanges
   :: forall m
@@ -413,7 +413,7 @@ handleAssetsChanges oldAssets = do
     let
       { assetType, changeDisplayed } =
         if currencySymbol == "" then
-          { assetType: "Ada"
+          { assetType: "🪙 Ada"
           , changeDisplayed:
               encodeJson $ BigInt.toNumber (unwrap change) / 1_000_000.0
           }
@@ -425,7 +425,7 @@ handleAssetsChanges oldAssets = do
       msg
         | change > zero = " added to wallet"
         | otherwise = " removed from wallet"
-    debug (assetType <> msg) $ encodeJson
+    info (assetType <> msg) $ encodeJson
       { currencySymbol, tokenName, change: changeDisplayed }
 
 handleTipSlotChanges
@@ -440,7 +440,7 @@ handleTipSlotChanges
 handleTipSlotChanges oldTipSlot = do
   currentTipSlot <- use _tipSlot
   when (currentTipSlot > oldTipSlot) do
-    debug "Chain extended" $ encodeJson
+    info "⛓️ Chain extended" $ encodeJson
       { newTipSlot: fromEnum currentTipSlot }
 
 handleAction
