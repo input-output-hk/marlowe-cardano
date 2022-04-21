@@ -8,6 +8,7 @@ module Store.Contracts
   , getContractNicknames
   , getFollowerContract
   , getNewContract
+  , isFollowerContract
   , mkContractStore
   , partitionContracts
   , tick
@@ -277,6 +278,10 @@ tick currentTime =
 followerContractExists :: MarloweParams -> ContractStore -> Boolean
 followerContractExists marloweParams = view
   (_contractIndex <<< to (Bimap.memberL marloweParams))
+
+isFollowerContract :: PlutusAppId -> ContractStore -> Boolean
+isFollowerContract instanceId = view
+  (_contractIndex <<< to (Bimap.memberR instanceId))
 
 getFollowerContract :: MarloweParams -> ContractStore -> Maybe PlutusAppId
 getFollowerContract marloweParams = view

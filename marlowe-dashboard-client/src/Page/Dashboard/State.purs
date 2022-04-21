@@ -158,7 +158,13 @@ import Plutus.PAB.Webserver.Types
 import Plutus.V1.Ledger.Slot as Plutus
 import Servant.PureScript (class MonadAjax)
 import Store as Store
-import Store.Contracts (followerContractExists, getContract, partitionContracts)
+import Store.Contracts
+  ( ContractStore
+  , followerContractExists
+  , getContract
+  , isFollowerContract
+  , partitionContracts
+  )
 import Store.RoleTokens (Payout, RoleTokenStore, getEligiblePayouts)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
@@ -766,8 +772,9 @@ actionsFromSources = do
             debug "↓ Recv websocket message" msg
           _ -> pure unit
         let mWallet = store ^? Store._wallet <<< _connectedWallet
+        let contractStore = store ^. Store._contracts
         liftEffect $ for_ mWallet \w ->
-          subscriber $ actionFromWebsocket w websocketMsg
+          subscriber $ actionFromWebsocket contractStore w websocketMsg
       pure $ HS.unsubscribe canceller
   let walletUpdates = Just <<< UpdateWalletFunds <$> walletFunds
   -- Alt instance for Emitters "zips" them together. So the resulting Emitter
@@ -775,20 +782,23 @@ actionsFromSources = do
   pure $ websocketActions <|> walletUpdates
 
 actionFromWebsocket
-  :: PABConnectedWallet
+  :: ContractStore
+  -> PABConnectedWallet
   -> FromSocket CombinedWSStreamToClient
   -> Maybe Action
-actionFromWebsocket wallet = case _ of
+actionFromWebsocket contractStore wallet = case _ of
   WS.ReceiveMessage (Left jsonDecodeError) ->
     Just $ notificationParseFailed "websocket message" jsonNull jsonDecodeError
-  WS.ReceiveMessage (Right stream) -> actionFromStream wallet stream
+  WS.ReceiveMessage (Right stream) -> actionFromStream contractStore wallet
+    stream
   _ -> Nothing
 
 actionFromStream
-  :: PABConnectedWallet
+  :: ContractStore
+  -> PABConnectedWallet
   -> PAB.CombinedWSStreamToClient
   -> Maybe Action
-actionFromStream wallet = case _ of
+actionFromStream contractStore wallet = case _ of
   SlotChange (Plutus.Slot { getSlot }) ->
     SlotChanged <$> (toEnum =<< BigInt.toInt (unwrap getSlot))
   -- TODO handle with lite wallet support
@@ -843,15 +853,17 @@ actionFromStream wallet = case _ of
         Right (Just (EndpointSuccess uuid RedeemResponse)) ->
           Just $ PaymentRedeemed uuid
         _ -> Nothing
-    | otherwise -> case D.decode (D.maybe D.value) state of
-        Left error ->
-          Just $ notificationParseFailed
-            "follower app response"
-            state
-            error
-        Right (Just history) ->
-          Just $ ContractHistoryUpdated appId history
-        Right _ -> Nothing
+    | isFollowerContract appId contractStore ->
+        case D.decode (D.maybe D.value) state of
+          Left error ->
+            Just $ notificationParseFailed
+              "follower app response"
+              state
+              error
+          Right (Just history) ->
+            Just $ ContractHistoryUpdated appId history
+          Right _ -> Nothing
+    | otherwise -> Nothing
   where
   companionAppId = wallet ^. _companionAppId
   marloweAppId = wallet ^. _marloweAppId
