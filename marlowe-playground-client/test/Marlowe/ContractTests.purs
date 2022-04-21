@@ -18,6 +18,7 @@ import Data.Lens.NonEmptyList (_Head)
 import Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.NonEmpty ((:|))
+import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested ((/\))
 import Examples.Marlowe.Contracts as Contracts
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
@@ -69,7 +70,10 @@ import Text.Pretty (pretty)
 import Type.Prelude (Proxy(..))
 
 mkState :: Simulation.State
-mkState = Record.insert (Proxy :: Proxy "projectName") "Contract" mkStateBase
+mkState = Record.insert
+  (Proxy :: Proxy "projectName")
+  "Contract"
+  (mkStateBase $ Minutes 0.0)
 
 all :: Spec Unit
 all =

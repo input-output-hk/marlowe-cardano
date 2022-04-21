@@ -11,6 +11,7 @@ import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.List.Types (NonEmptyList)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Halogen.Monaco as Monaco
 import Help (HelpContext)
 import Marlowe.Semantics (Bound, ChoiceId, ChosenNum, Input)
@@ -22,6 +23,7 @@ type StateBase r =
   { showRightPanel :: Boolean
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , marloweState :: NonEmptyList MarloweState
+  , tzOffset :: Minutes
   , helpContext :: HelpContext
   -- List of decoration ids used by the monaco editor to track the running contract
   , decorationIds :: Array String

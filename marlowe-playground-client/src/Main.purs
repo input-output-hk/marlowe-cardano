@@ -3,9 +3,11 @@ module Main where
 import Prologue
 
 import AppM (runAppM)
+import Data.Time.Duration (negateDuration)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
+import Effect.Now (getTimezoneOffset)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
@@ -16,11 +18,12 @@ import Routing.Duplex as Routing
 import Routing.Hash (matchesWith)
 
 main :: Effect Unit
-main =
+main = do
+  tzOffset <- negateDuration <$> getTimezoneOffset
   HA.runHalogenAff do
     body <- HA.awaitBody
     let mainFrame = H.hoist runAppM MainFrame.component
-    driver <- runUI mainFrame unit body
+    driver <- runUI mainFrame tzOffset body
     void
       $ liftEffect
       $ matchesWith (Routing.parse Router.route) \old new -> do

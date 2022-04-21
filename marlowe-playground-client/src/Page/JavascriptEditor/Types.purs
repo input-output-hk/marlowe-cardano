@@ -12,6 +12,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Fold', Getter', Lens', Prism', prism, to, (^.))
 import Data.Lens.Record (prop)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Language.Javascript.Interpreter (_result)
@@ -99,6 +100,7 @@ type State =
   , decorationIds :: Maybe DecorationIds
   , metadataHintInfo :: MetadataHintInfo
   , analysisState :: AnalysisState
+  , tzOffset :: Minutes
   , editorReady :: Boolean
   }
 
@@ -128,14 +130,15 @@ isCompiling state = case state ^. _compilationResult of
   Compiling -> true
   _ -> false
 
-initialState :: State
-initialState =
+initialState :: Minutes -> State
+initialState tzOffset =
   { keybindings: DefaultBindings
   , bottomPanelState: BottomPanel.initialState MetadataView
   , compilationResult: NotCompiled
   , decorationIds: Nothing
   , metadataHintInfo: mempty
   , analysisState: initAnalysisState
+  , tzOffset
   , editorReady: false
   }
 

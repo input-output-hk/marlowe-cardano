@@ -13,6 +13,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Linter (Warning)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
@@ -76,6 +77,7 @@ type State =
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , metadataHintInfo :: MetadataHintInfo
   , analysisState :: AnalysisState
+  , tzOffset :: Minutes
   , warnings :: Array Warning
   }
 
@@ -100,13 +102,14 @@ _analysisState = prop (Proxy :: _ "analysisState")
 _warnings :: Lens' State (Array Warning)
 _warnings = prop (Proxy :: _ "warnings")
 
-initialState :: State
-initialState =
+initialState :: Minutes -> State
+initialState tzOffset =
   { errorMessage: Nothing
   , marloweCode: Nothing
   , hasHoles: false
   , bottomPanelState: BottomPanel.initialState MetadataView
   , metadataHintInfo: mempty
   , analysisState: initAnalysisState
+  , tzOffset
   , warnings: mempty
   }

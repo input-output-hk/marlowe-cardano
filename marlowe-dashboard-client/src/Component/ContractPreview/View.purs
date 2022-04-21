@@ -29,7 +29,7 @@ import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (title)
 import Halogen.HTML.Properties.ARIA (role)
 import Halogen.Store.Monad (class MonadStore)
-import Humanize (contractIcon)
+import Images (contractIcon)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Extended.Metadata (_contractName, _contractType)

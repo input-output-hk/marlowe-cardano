@@ -31,6 +31,7 @@ import Data.MediaType.Common (applicationJSON)
 import Data.NonEmptyList.Extra (tailIfNotEmpty)
 import Data.RawJson (RawJson(..))
 import Data.String (splitAt)
+import Data.Time.Duration (Minutes)
 import Data.Traversable (sequence)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
@@ -106,10 +107,11 @@ import Web.HTML as Web
 import Web.HTML.HTMLDocument (toDocument)
 import Web.HTML.Window as W
 
-mkStateBase :: StateBase ()
-mkStateBase =
+mkStateBase :: Minutes -> StateBase ()
+mkStateBase tzOffset =
   { showRightPanel: true
   , marloweState: NEL.singleton (emptyMarloweState Nothing)
+  , tzOffset
   , helpContext: MarloweHelp
   , bottomPanelState: BottomPanel.initialState CurrentStateView
   , decorationIds: []

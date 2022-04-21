@@ -51,7 +51,8 @@ import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id)
 import Halogen.HTML.Properties.ARIA (describedBy, labelledBy)
 import Halogen.Store.Monad (class MonadStore)
-import Humanize (contractIcon, humanizeValue)
+import Humanize (humanizeValue)
+import Images (contractIcon)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
   , MetaData

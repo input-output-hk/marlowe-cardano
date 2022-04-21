@@ -14,7 +14,7 @@ import Data.Array (concatMap, intercalate, length, reverse, sortWith)
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
-import Data.DateTime.Instant (Instant, unInstant)
+import Data.DateTime.Instant (Instant)
 import Data.DateTime.Instant as Instant
 import Data.Enum (fromEnum)
 import Data.Lens (has, only, previewOn, to, view, (^.), (^?))
@@ -27,6 +27,7 @@ import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.Newtype (unwrap)
 import Data.Set.Ordered.OSet (OSet)
 import Data.String (trim)
+import Data.Time.Duration (Minutes, negateDuration)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
@@ -97,6 +98,7 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes, disabled)
 import Halogen.Monaco (monacoComponent)
+import Humanize (adjustTimeZone, formatPOSIXTime, humanizeOffset)
 import MainFrame.Types
   ( ChildSlots
   , _currencyInputSlot
@@ -120,10 +122,7 @@ import Marlowe.Semantics
   , inBounds
   , timeouts
   )
-import Marlowe.Template
-  ( TemplateContent(..)
-  , orderContentUsingMetadata
-  )
+import Marlowe.Template (TemplateContent(..), orderContentUsingMetadata)
 import Marlowe.Time (unixEpoch)
 import Monaco as Monaco
 import Page.Simulation.BottomPanel (panelContents)
@@ -323,7 +322,7 @@ sidebar
 sidebar metadata state =
   case view (_marloweState <<< _Head <<< _executionState) state of
     SimulationNotStarted notStartedRecord ->
-      [ startSimulationWidget metadata notStartedRecord ]
+      [ startSimulationWidget metadata notStartedRecord state.tzOffset ]
     SimulationRunning _ ->
       [ div [ class_ smallSpaceBottom ] [ simulationStateWidget state ]
       , div [ class_ spaceBottom ] [ actionWidget metadata state ]
@@ -345,12 +344,14 @@ startSimulationWidget
    . MonadAff m
   => MetaData
   -> InitialConditionsRecord
+  -> Minutes
   -> ComponentHTML Action ChildSlots m
 startSimulationWidget
   metadata
   { initialTime
   , templateContent
-  } =
+  }
+  tzOffset =
   cardWidget "Simulation has not started yet"
     $ div_
         [ div
@@ -358,9 +359,10 @@ startSimulationWidget
             ]
             [ spanText "Initial time:"
             , marloweInstantInput "initial-time"
-                [ "mx-2", "flex-grow", "flex-shrink-0" ]
+                [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
                 SetInitialTime
                 initialTime
+                tzOffset
             ]
         , templateParameters
             metadata
@@ -368,6 +370,7 @@ startSimulationWidget
             { valueAction: SetValueTemplateParam
             , timeAction: SetTimeTemplateParam
             }
+            tzOffset
         , div [ classNames [ "transaction-btns", "flex", "justify-center" ] ]
             [ button
                 [ classNames
@@ -395,14 +398,16 @@ templateParameters
   => MetaData
   -> TemplateContent
   -> TemplateParameterActionsGen action
+  -> Minutes
   -> ComponentHTML action ChildSlots m
 templateParameters
   metadata
   (TemplateContent { timeContent, valueContent })
-  { valueAction, timeAction } =
+  { valueAction, timeAction }
+  tzOffset =
 
   let
-    inputCss = [ "mx-2", "flex-grow", "flex-shrink-0" ]
+    inputCss = [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
     timeoutParameters = templateParametersSection
       ( \fieldName fieldValue ->
           marloweInstantInput
@@ -410,6 +415,7 @@ templateParameters
             inputCss
             (timeAction fieldName)
             fieldValue
+            tzOffset
       )
       timeParameterDisplayInfo
       timeContent
@@ -520,12 +526,16 @@ templateParametersSection
 simulationStateWidget :: forall p. State -> HTML p Action
 simulationStateWidget state =
   let
+    tzOffset = state.tzOffset
+    offsetStr = humanizeOffset tzOffset
     currentTime = state ^.
       ( _currentMarloweState <<< _executionState <<< _SimulationRunning
           <<< _time
-          <<< to unInstant
-          <<< to unwrap
-          <<< to \ms -> show ms <> " POSIX ms"
+          <<< to POSIXTime
+          -- TODO SCP-3833 Add type safety to timezone conversions
+          <<< to (formatPOSIXTime $ negateDuration tzOffset)
+          <<< to \(dateStr /\ timeStr) ->
+            intercalate " " [ dateStr, timeStr, offsetStr ]
       )
 
     expirationTime = contractMaxTime (previewOn state _currentContract)
@@ -534,14 +544,15 @@ simulationStateWidget state =
       Nothing -> "Closed"
       Just contract ->
         let
-          POSIXTime t = (_.maxTime <<< unwrap <<< timeouts) contract
+          posixTime = (_.maxTime <<< unwrap <<< timeouts) contract
+          -- TODO SCP-3833 Add type safety to timezone conversions
+          dateStr /\ timeStr = formatPOSIXTime (negateDuration tzOffset)
+            posixTime
         in
-          if t == unixEpoch then "Closed"
-          else
-            show (unwrap $ unInstant t) <> " POSIX ms"
+          intercalate " " [ dateStr, timeStr, offsetStr ]
 
     indicator name value =
-      div_
+      div [ classNames [ "flex", "flex-col" ] ]
         [ span
             [ class_ bold ]
             [ text $ name <> ": " ]
@@ -774,11 +785,12 @@ inputItem _ state (MoveToTime time) =
     [ classes [ aHorizontal, ClassName "flex-nowrap" ] ]
     ( [ div [ classes [ ClassName "action" ] ]
           [ p [ class_ (ClassName "time-input") ]
-              [ spanTextBreakWord "Move to POSIXTime "
+              [ spanTextBreakWord "Move current time to"
               , marloweInstantInput "move-to-instant"
-                  [ "mx-2", "flex-grow", "flex-shrink-0" ]
+                  [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
                   SetTime
                   time
+                  state.tzOffset
               ]
           , p [ class_ (ClassName "choice-error") ] error
           ]
@@ -829,23 +841,35 @@ marloweCurrencyInput ref classList f currencyLabel numDecimals value =
     { classList, value, prefix: currencyLabel, numDecimals }
     f
 
+-- This component builds on top of the DateTimeLocal component to work
+-- with Instant and to do the UTC convertion. Value in and out are expressed
+-- in UTC.
 marloweInstantInput
   :: forall m action
    . String
   -> Array String
   -> (Instant -> action)
   -> Instant
+  -> Minutes
   -> ComponentHTML action ChildSlots m
-marloweInstantInput ref classList f current =
-  slot
-    _dateTimeInputSlot
-    ref
-    DateTimeLocalInput.component
-    { classList
-    , value: Instant.toDateTime current
-    , trimSeconds: true
-    }
-    (\(ValueChanged dt) -> f $ Instant.fromDateTime dt)
+marloweInstantInput ref classList f current tzOffset =
+  div [ classNames classList ]
+    [ slot
+        _dateTimeInputSlot
+        ref
+        DateTimeLocalInput.component
+        { classList: [ "flex-grow" ]
+        -- TODO: SCP-3833 Add type safety to timezone conversions
+        , value: adjustTimeZone (negateDuration tzOffset) $
+            Instant.toDateTime current
+        , trimSeconds: true
+        }
+        ( \(ValueChanged dt) -> f $ Instant.fromDateTime $ adjustTimeZone
+            tzOffset
+            dt
+        )
+    , text $ humanizeOffset tzOffset
+    ]
 
 marloweActionInput
   :: forall m action

@@ -5,10 +5,10 @@ module Humanize
   , formatDate'
   , formatTime
   , formatTime'
+  , formatPOSIXTime
   , humanizeInterval
   , humanizeValue
   , humanizeOffset
-  , contractIcon
   ) where
 
 import Prologue
@@ -26,10 +26,6 @@ import Data.Newtype (over, unwrap)
 import Data.Ord (abs)
 import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
-import Halogen.HTML (HTML, img)
-import Halogen.HTML.Properties (src)
-import Images (cfdIcon, loanIcon, purchaseIcon)
-import Marlowe.Extended (ContractType(..))
 import Marlowe.Semantics (TimeInterval(..), Token(..))
 import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Time as POSIXTime
@@ -87,6 +83,7 @@ formatPOSIXTime tzOffset time =
 -- Adjusts a DateTime via an offset (that can be obtained using timezoneOffset)
 -- The `adjust` function can overflow, if that happens (it shouldn't) we resolve to
 -- the original value
+-- TODO: SCP-3833 Add type safety to timezone conversions
 adjustTimeZone :: Minutes -> DateTime -> DateTime
 adjustTimeZone tzOffset dt =
   fromMaybe dt (adjust (over Minutes negate tzOffset :: Minutes) dt)
@@ -171,11 +168,3 @@ numberFormatter decimals =
     , abbreviations: false
     }
 
-contractIcon :: forall p a. ContractType -> HTML p a
-contractIcon contractType =
-  img
-    [ src case contractType of
-        Escrow -> purchaseIcon
-        ZeroCouponBond -> loanIcon
-        _ -> cfdIcon
-    ]

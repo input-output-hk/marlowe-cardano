@@ -13,6 +13,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens', to, view)
 import Data.Lens.Record (prop)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetadataHintInfo)
@@ -102,6 +103,7 @@ type State =
   , editorWarnings :: Array IMarkerData
   , hasHoles :: Boolean
   , editorReady :: Boolean
+  , tzOffset :: Minutes
   }
 
 _keybindings :: Lens' State KeyBindings
@@ -131,14 +133,15 @@ _hasHoles = prop (Proxy :: _ "hasHoles")
 _editorReady :: Lens' State Boolean
 _editorReady = prop (Proxy :: _ "editorReady")
 
-initialState :: State
-initialState =
+initialState :: Minutes -> State
+initialState tzOffset =
   { keybindings: DefaultBindings
   , bottomPanelState: BottomPanel.initialState MetadataView
   , showErrorDetail: false
   , selectedHole: Nothing
   , metadataHintInfo: mempty
   , analysisState: initAnalysisState
+  , tzOffset
   , editorErrors: mempty
   , editorWarnings: mempty
   , hasHoles: false

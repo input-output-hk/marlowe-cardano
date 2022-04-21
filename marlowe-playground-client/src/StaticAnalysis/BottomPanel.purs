@@ -12,6 +12,7 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.List (List, null, toUnfoldable)
 import Data.List as List
 import Data.List.NonEmpty (toList)
+import Data.Time.Duration (Minutes)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Classes (btn, spaceBottom, spaceRight, spaceTop, spanText)
@@ -43,10 +44,7 @@ import Marlowe.Symbolic.Types.Response as R
 import Marlowe.Template (TemplateContent(..))
 import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
-import Page.Simulation.View
-  ( TemplateParameterActionsGen
-  , templateParameters
-  )
+import Page.Simulation.View (TemplateParameterActionsGen, templateParameters)
 import Pretty (showPrettyToken)
 import Servant.PureScript (printAjaxError)
 import StaticAnalysis.Types
@@ -84,7 +82,7 @@ analysisResultPane
    . MonadAff m
   => MetaData
   -> TemplateParameterActionsGen action
-  -> { analysisState :: AnalysisState | state }
+  -> { analysisState :: AnalysisState, tzOffset :: Minutes | state }
   -> ComponentHTML action ChildSlots m
 analysisResultPane metadata actionGen state =
   let
@@ -93,7 +91,7 @@ analysisResultPane metadata actionGen state =
 
     templateContent = TemplateContent { timeContent, valueContent }
     result = state ^. (_analysisState <<< _analysisExecutionState)
-
+    tzOffset = state.tzOffset
     explanation = div [ classes [ ClassName "padded-explanation" ] ]
   in
     case result of
@@ -104,6 +102,7 @@ analysisResultPane metadata actionGen state =
               metadata
               templateContent
               actionGen
+              tzOffset
           ]
       WarningAnalysis staticSubResult -> case staticSubResult of
         NotAsked ->

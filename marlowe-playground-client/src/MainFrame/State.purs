@@ -26,6 +26,7 @@ import Data.Lens.Index (ix)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (un, unwrap)
+import Data.Time.Duration (Minutes)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
 import Gist (Gist, gistDescription, gistId)
@@ -120,16 +121,16 @@ import Web.HTML.Window as Window
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes (keyup)
 
-initialState :: State
-initialState =
+initialState :: Minutes -> State
+initialState tzOffset =
   { view: HomePage
   , jsCompilationResult: NotCompiled
   , showBottomPanel: true
-  , haskellState: HE.initialState
-  , javascriptState: JS.initialState
-  , marloweEditorState: ME.initialState
-  , blocklyEditorState: BE.initialState
-  , simulationState: Simulation.mkStateBase
+  , haskellState: HE.initialState tzOffset
+  , javascriptState: JS.initialState tzOffset
+  , marloweEditorState: ME.initialState tzOffset
+  , blocklyEditorState: BE.initialState tzOffset
+  , simulationState: Simulation.mkStateBase tzOffset
   , jsEditorKeybindings: DefaultBindings
   , activeJSDemo: mempty
   , contractMetadata: emptyContractMetadata
@@ -152,10 +153,10 @@ component
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => Component Query Unit Void m
+  => Component Query Minutes Void m
 component =
   H.mkComponent
-    { initialState: const initialState
+    { initialState
     , render
     , eval:
         H.mkEval

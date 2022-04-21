@@ -12,6 +12,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Fold', Getter', Lens', _Right, has, to)
 import Data.Lens.Record (prop)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Language.Haskell.Interpreter
@@ -72,6 +73,7 @@ type State =
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , metadataHintInfo :: MetadataHintInfo
   , analysisState :: AnalysisState
+  , tzOffset :: Minutes
   , editorReady :: Boolean
   }
 
@@ -112,13 +114,14 @@ _ContractString = _compilationResult <<< _Success <<< _Right
 _bottomPanelState :: Lens' State (BottomPanel.State BottomPanelView)
 _bottomPanelState = prop (Proxy :: _ "bottomPanelState")
 
-initialState :: State
-initialState =
+initialState :: Minutes -> State
+initialState tzOffset =
   { keybindings: DefaultBindings
   , compilationResult: NotAsked
   , bottomPanelState: BottomPanel.initialState MetadataView
   , metadataHintInfo: mempty
   , analysisState: initAnalysisState
+  , tzOffset
   , editorReady: false
   }
 
