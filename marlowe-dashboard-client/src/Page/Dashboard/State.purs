@@ -30,6 +30,7 @@ import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (handleAction, initialState) as Template
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Alt ((<|>))
+import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog, debug, error)
@@ -40,24 +41,31 @@ import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Control.Parallel (parTraverse_)
+import Data.Align (align)
 import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
+import Data.Bifunctor (lmap)
 import Data.BigInt as BigInt
+import Data.BigInt.Argonaut (BigInt)
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Enum (fromEnum, toEnum)
+import Data.Filterable (filter)
 import Data.Foldable (foldMap, for_, traverse_)
+import Data.FoldableWithIndex (forWithIndex_)
 import Data.Lens (_Just, assign, modifying, set, to, use, view, (^.), (^?))
 import Data.Lens.Record (prop)
 import Data.Map (Map, filterKeys, toUnfoldable)
 import Data.Map as Map
-import Data.Maybe (maybe)
+import Data.Map.Alignable (AlignableMap(..))
+import Data.Maybe (fromMaybe, maybe)
 import Data.NewContract (NewContract(..))
-import Data.Newtype (unwrap)
+import Data.Newtype (under2, unwrap)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
+  , _assets
   , _companionAppId
   , _initialFollowers
   , _marloweAppId
@@ -65,8 +73,11 @@ import Data.PABConnectedWallet
   )
 import Data.Set (Set)
 import Data.Set as Set
+import Data.Slot (Slot)
+import Data.These (These(..))
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
-import Data.Traversable (for)
+import Data.Traversable (for, traverse)
+import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.UserNamedActions (userNamedActions)
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
@@ -101,7 +112,8 @@ import Marlowe.Run.Server
 import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics
-  ( MarloweData
+  ( Assets
+  , MarloweData
   , MarloweParams
   , Party(..)
   , Token(..)
@@ -118,6 +130,7 @@ import Page.Dashboard.Lenses
   , _roleTokens
   , _selectedContractIndex
   , _templateState
+  , _tipSlot
   , _tzOffset
   , _wallet
   , _walletCompanionStatus
@@ -251,8 +264,9 @@ component = connect sliceSelector $ mkReactiveComponent
   }
   where
   sliceSelector =
-    selectEq \{ currentTime, contracts, roleTokens } ->
+    selectEq \{ currentTime, tipSlot, contracts, roleTokens } ->
       { currentTime
+      , tipSlot
       , contracts
       , roleTokens
       }
@@ -294,8 +308,12 @@ handleInput
 handleInput _ oldState = do
   let oldContracts = maybe Map.empty (view _contracts) oldState
   let oldPayouts = oldState ^. _Just <<< _roleTokens <<< to getEligiblePayouts
+  let oldAssets = oldState ^. _Just <<< _wallet <<< _assets
+  let oldTipSlot = oldState ^. _Just <<< _tipSlot
   handleContractChanges oldContracts
   handlePayoutChanges oldPayouts
+  handleAssetsChanges oldAssets
+  handleTipSlotChanges oldTipSlot
 
 handleContractChanges
   :: forall m
@@ -350,6 +368,80 @@ handlePayoutChanges oldPayouts = do
   currentPayouts <- use (_roleTokens <<< to getEligiblePayouts)
   let newPayouts = Set.difference currentPayouts oldPayouts
   parTraverse_ (void <<< redeem wallet) newPayouts
+
+handleAssetsChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Assets
+  -> HalogenM m Unit
+handleAssetsChanges oldAssets = do
+  currentAssets <- use (_wallet <<< _assets)
+  let leftAssocTuple (Tuple a (Tuple b c)) = Tuple (Tuple a b) c
+  let
+    -- Assets is a nested Map of Maps, which is a pain to work with here.
+    -- Flatten them out by merging the inner and outer keys into a Token
+    flattenAssets :: Assets -> Map Token BigInt
+    flattenAssets = Map.fromFoldable
+      -- left-associate the nested tuples and convert to a Token
+      <<< map (lmap (uncurry Token) <<< leftAssocTuple)
+      -- flatten the nested array
+      <<< bindFlipped
+        -- distribute the outer key into the inner array
+        -- i.e. Go from Tuple a (Array (Tuple b c)) to Array (Tuple a (Tuple b c))
+        ( traverse
+            -- enumerate the inner key value pairs
+            (Map.toUnfoldable :: _ -> Array _)
+        )
+      -- enumerate the outer key value pairs
+      <<< (Map.toUnfoldable :: _ -> Array _)
+      -- Unwrap to a Map
+      <<< unwrap
+  let oldFlat = flattenAssets oldAssets
+  let currentFlat = flattenAssets currentAssets
+  let
+    diffAssetClass (This oldValue) = negate oldValue
+    diffAssetClass (That newValue) = newValue
+    diffAssetClass (Both oldValue newValue) = newValue - oldValue
+  let
+    assetsChanged = filter (notEq zero)
+      $ under2 AlignableMap (align diffAssetClass) oldFlat currentFlat
+  forWithIndex_ assetsChanged \(Token currencySymbol tokenName) change -> do
+    let
+      { assetType, changeDisplayed } =
+        if currencySymbol == "" then
+          { assetType: "Ada"
+          , changeDisplayed:
+              encodeJson $ BigInt.toNumber (unwrap change) / 1_000_000.0
+          }
+        else
+          { assetType: "Tokens"
+          , changeDisplayed:
+              encodeJson $ fromMaybe 0 $ BigInt.toInt $ unwrap change
+          }
+      msg
+        | change > zero = " added to wallet"
+        | otherwise = " removed from wallet"
+    debug (assetType <> msg) $ encodeJson
+      { currencySymbol, tokenName, change: changeDisplayed }
+
+handleTipSlotChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Slot
+  -> HalogenM m Unit
+handleTipSlotChanges oldTipSlot = do
+  currentTipSlot <- use _tipSlot
+  when (currentTipSlot > oldTipSlot) do
+    debug "Chain extended" $ encodeJson
+      { newTipSlot: fromEnum currentTipSlot }
 
 handleAction
   :: forall m
@@ -594,12 +686,10 @@ handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
   reactivatePlutusScript WalletCompanion mVal
 
 handleAction (UpdateWalletFunds { assets, sync }) = do
-  debug "💰Wallet funds changed" $ encodeJson assets
   updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
   updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
 
 handleAction (SlotChanged slot) = do
-  debug "Slot changed" $ encodeJson $ fromEnum slot
   updateStore $ Store.SlotChanged slot
 
 reactivatePlutusScript

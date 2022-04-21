@@ -99,6 +99,7 @@ type Slice =
   { contracts :: ContractStore
   , currentTime :: Instant
   , roleTokens :: RoleTokenStore
+  , tipSlot :: Slot.Slot
   }
 
 data Msg

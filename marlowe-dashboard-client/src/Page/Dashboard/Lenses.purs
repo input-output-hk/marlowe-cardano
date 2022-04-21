@@ -10,6 +10,7 @@ import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
+import Data.Slot (Slot)
 import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
 import Halogen.Component.Reactive (_derived, _input, _transient)
@@ -51,6 +52,10 @@ _wallet = _input <<< prop (Proxy :: _ "input")
 _contractStore :: Lens' State ContractStore
 _contractStore =
   _input <<< prop (Proxy :: _ "context") <<< prop (Proxy :: _ "contracts")
+
+_tipSlot :: Lens' State Slot
+_tipSlot =
+  _input <<< prop (Proxy :: _ "context") <<< prop (Proxy :: _ "tipSlot")
 
 _roleTokens :: Lens' State RoleTokenStore
 _roleTokens =
