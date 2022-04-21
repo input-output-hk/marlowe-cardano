@@ -536,6 +536,13 @@ handleAction (TemplateAction templateAction) = do
                     $ Just
                     $ Started marloweParams
               addToast $ successToast "Contract created."
+              -- Follow the contract here, because the wallet companion takes
+              -- too long to respond now.
+              ajaxFollow <- followContract wallet marloweParams
+              case ajaxFollow of
+                Left err -> globalError "Can't follow the contract" err
+                Right _ -> do
+                  addToast $ successToast "Contract initialized."
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
