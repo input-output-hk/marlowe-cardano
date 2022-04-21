@@ -25,6 +25,7 @@ import Errors.Explain (explain)
 import Halogen (AttrName(..), ComponentHTML)
 import Halogen.Css (classNames)
 import Halogen.HTML (a, attr, div, h3, h3_, li, p, p_, slot, text)
+import Halogen.HTML as HH
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (title)
 import Halogen.HTML.Properties.ARIA (role)
@@ -124,9 +125,9 @@ contractPreviewCard currentTime { executionState, namedActions } =
 -- FIXME-3487: Factor out commonalities between contractStartingPreviewCard and contractPreviewCard
 contractStartingPreviewCard
   :: forall m. MonadAff m => NewContract -> ComponentHTML Action ChildSlots m
-contractStartingPreviewCard
-  (NewContract reqId contractNickname metadata mError _) =
+contractStartingPreviewCard = HH.lazy \newContract ->
   let
+    NewContract reqId contractNickname metadata mError _ = newContract
     nickname = ContractNickname.toString contractNickname
 
     contractType = metadata ^. _contractType
