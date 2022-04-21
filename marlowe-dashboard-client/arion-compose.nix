@@ -39,6 +39,7 @@ let
   node = {
     service = {
       image = "inputoutput/cardano-node:1.33.0";
+      ports = [ "${node-port}:${node-port}" ];
       restart = "on-failure";
       volumes = [
         "cardano-ipc:/ipc"
