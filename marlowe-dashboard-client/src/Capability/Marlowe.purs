@@ -132,7 +132,7 @@ awaitAndHandleResult
     let changeCountE = HS.fold (const $ add 1) tipSlotE 0
     -- subscribe to the first time this count reaches or exceeds the limit.
     mResult <- parOneOf
-      [ subscribeOnce $ Nothing <$ HS.filter (_ >= blocksToWait) changeCountE
+      [ subscribeOnce $ Nothing <$ HS.filter (_ > blocksToWait) changeCountE
       , Just <<< lmap contractError <$> aff
       ]
     unliftAff u case mResult of
