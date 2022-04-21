@@ -19,6 +19,7 @@ import Component.Template.State
   ( InstantiateContractErrorRow
   , instantiateExtendedContract
   )
+import Control.Concurrent.AVarMap as AVarMap
 import Control.Logger.Structured (error, info, info', warning')
 import Control.Monad.Error.Class (catchError, throwError)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
@@ -45,7 +46,7 @@ import Effect.Aff.Unlift
   , askUnliftAff
   , unliftAff
   )
-import Env (_marloweAppTimeoutBlocks)
+import Env (_marloweAppTimeoutBlocks, _redeemAvarMap)
 import Errors.Debuggable (class Debuggable)
 import Errors.Explain (class Explain)
 import Halogen (HalogenM)
@@ -53,12 +54,13 @@ import Halogen.Store.Monad (emitSelected, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (subscribeOnce)
-import Language.Marlowe.Client (MarloweError)
+import Language.Marlowe.Client (MarloweError(..))
 import Marlowe.Execution.State (removePendingTransaction, setPendingTransaction)
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Server (Api) as MarloweApp
 import Marlowe.Semantics (MarloweParams, TransactionInput)
+import Plutus.Contract.Error as P
 import Plutus.PAB.Webserver (Api) as PAB
 import Servant.PureScript (class MonadAjax)
 import Store as Store
@@ -222,42 +224,60 @@ instance
         awaitResult
         ApplyInputTimeout
         ApplyInputError
-        \_ -> updateStore
-          $ Store.ModifySyncedContract marloweParams removePendingTransaction
+        case _ of
+          Left _ -> updateStore
+            $ Store.ModifySyncedContract marloweParams removePendingTransaction
+          Right _ -> do
+            -- Note, we don't removed the pending transaction yet. If we do,
+            -- the contract card will still show the old, stale state for
+            -- several seconds while we wait for a follower update. We will
+            -- remove any pending transaction when we receive the next follower
+            -- update.
+            info' "Input applied"
 
   -- "redeem" payments from a Marlowe contract on the blockchain
   redeem wallet payout = do
-    info "Redeeming payout" $ encodeJson payout
+    redeemAvarMap <- asks $ view _redeemAvarMap
     u <- askUnliftAff
-    runExceptT do
-      let marloweAppId = view _marloweAppId wallet
-      let address = view _address wallet
-      updateStore $ Store.RedeemPayout payout
-      awaitResult <- catchError
-        (ExceptT $ MarloweApp.redeem marloweAppId payout address)
-        \err -> do
-          updateStore $ Store.RedeemPayoutFailed payout
-          throwError err
-      lift $ awaitAndHandleResult
-        marloweAppId
-        u
-        awaitResult
-        RedeemTimeout
-        RedeemError
-        case _ of
-          Right _ -> do
-            info "Payout redeemed" $ encodeJson payout
-            -- Do nothing. The TxId of this payout will remain in the store to
-            -- mark this payout as redeemed, preventing duplicate calls to
-            -- redeem.
-            pure unit
-          Left (RedeemError _) -> do
-            error "Failed to redeem payout" $ encodeJson payout
-            updateStore $ Store.RedeemPayoutFailed payout
-          _ ->
-            -- Don't record a failure here! The payout may still be processed
-            -- in which case we should get a follower update.
-            pure unit
+    -- put an AVar in the map, preventing future redeem attempts from
+    -- succeeding.
+    wasAbleToPutAvar <- AVarMap.tryPut payout unit redeemAvarMap
+    if wasAbleToPutAvar then
+      pure
+        $ Right
+        $ pure
+        $ Left
+        $ RedeemError
+        $ OtherContractError
+        $ P.OtherContractError "Already redeemed this payment"
+    else do
+      info "Redeeming payout" $ encodeJson payout
+      runExceptT do
+        let marloweAppId = view _marloweAppId wallet
+        let address = view _address wallet
+        awaitResult <- catchError
+          (ExceptT $ MarloweApp.redeem marloweAppId payout address)
+          \err -> AVarMap.take payout redeemAvarMap *> throwError err
+        lift $ awaitAndHandleResult
+          marloweAppId
+          u
+          awaitResult
+          RedeemTimeout
+          RedeemError
+          case _ of
+            Right _ -> do
+              info "Payout redeemed" $ encodeJson payout
+              -- Do not take the avar again. We still don't want to allow this
+              -- payout to be redeemed again.
+              pure unit
+            Left (RedeemError _) -> do
+              error "Failed to redeem payout" $ encodeJson payout
+              -- Take the Avar so we can try again
+              AVarMap.take payout redeemAvarMap
+            Left RedeemTimeout ->
+              -- Don't take the avar again here! The payout may still be processed
+              -- in which case we should get a follower update eventually
+              pure unit
 
 instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) where
   initializeContract currentInstant template params wallet =

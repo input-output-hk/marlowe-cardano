@@ -22,6 +22,7 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer
   )
+import Store.RoleTokens (Payout)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
@@ -64,9 +65,16 @@ newtype Env = Env
   -- | Mutex to prevent simultaneous requests to the PAB, because it can't
   -- | handle them without the SQLite database getting locked...
   , pabAvar :: AVar Unit
+  -- | Used to prevent the same payout from being redeemed multiple times in
+  -- | the presence of frequent store updates that can cause race conditions,
+  -- | making the store an inadequate place to keep this information.
+  , redeemAvarMap :: AVarMap Payout Unit
   }
 
 derive instance newtypeEnv :: Newtype Env _
+
+_redeemAvarMap :: Lens' Env (AVarMap Payout Unit)
+_redeemAvarMap = _Newtype <<< prop (Proxy :: _ "redeemAvarMap")
 
 _pabAVar :: Lens' Env (AVar Unit)
 _pabAVar = _Newtype <<< prop (Proxy :: _ "pabAvar")

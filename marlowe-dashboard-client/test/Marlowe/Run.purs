@@ -348,6 +348,7 @@ mkTestEnv = do
   pabAvar <- liftAff $ AVar.new unit
   contractStepCarouselSubscription <- liftAff AVar.empty
   endpointAVarMap <- AVarMap.empty
+  redeemAvarMap <- AVarMap.empty
   followerAVarMap <- AVarMap.empty
   createBus <- liftEffect EventBus.create
   applyInputBus <- liftEffect EventBus.create
@@ -384,8 +385,9 @@ mkTestEnv = do
       , followerBus
       , sinks
       , sources
-      , marloweAppTimeoutBlocks: 2
+      , marloweAppTimeoutBlocks: 1
       , pabAvar
+      , redeemAvarMap
       }
     coenv =
       { pabWebsocketIn: pabWebsocketIn.listener

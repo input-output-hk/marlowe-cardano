@@ -24,14 +24,11 @@ import Marlowe.Semantics (Assets(..), MarloweParams, Token)
 import Store.Contracts (ContractStore, mkContractStore, tick)
 import Store.Contracts as Contracts
 import Store.RoleTokens
-  ( Payout
-  , RoleTokenStore
+  ( RoleTokenStore
   , loadRoleTokenFailed
   , loadRoleTokens
   , mkRoleTokenStore
   , newPayoutsReceived
-  , redeemPayout
-  , redeemPayoutFailed
   , roleTokenLoaded
   , updateMyRoleTokens
   )
@@ -110,8 +107,6 @@ data Action
   | Wallet WalletAction
   -- Role Tokens
   | NewPayoutsReceived MarloweParams UnspentPayouts
-  | RedeemPayout Payout
-  | RedeemPayoutFailed Payout
   -- System wide components
   | Disconnect
   | ShowToast ToastMessage
@@ -189,8 +184,6 @@ reduce store = case _ of
   -- Role Tokens
   NewPayoutsReceived marloweParams unspentPayouts ->
     updateRoleTokenStore $ newPayoutsReceived marloweParams unspentPayouts
-  RedeemPayout payout -> updateRoleTokenStore $ redeemPayout payout
-  RedeemPayoutFailed payout -> updateRoleTokenStore $ redeemPayoutFailed payout
   where
   updateRoleTokenStore f =
     store { roleTokens = f store.roleTokens }

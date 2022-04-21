@@ -100,6 +100,7 @@ mkEnv sources sinks = do
   contractStepCarouselSubscription <- AVar.empty
   endpointAVarMap <- AVarMap.empty
   followerAVarMap <- AVarMap.empty
+  redeemAvarMap <- AVarMap.empty
   createBus <- liftEffect EventBus.create
   applyInputBus <- liftEffect EventBus.create
   redeemBus <- liftEffect EventBus.create
@@ -116,6 +117,7 @@ mkEnv sources sinks = do
     , sources
     , marloweAppTimeoutBlocks: 3
     , pabAvar
+    , redeemAvarMap
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a

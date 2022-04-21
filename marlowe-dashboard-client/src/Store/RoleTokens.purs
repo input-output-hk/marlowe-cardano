@@ -12,8 +12,6 @@ module Store.RoleTokens
   , updateMyRoleTokens
   , getEligiblePayouts
   , newPayoutsReceived
-  , redeemPayout
-  , redeemPayoutFailed
   ) where
 
 import Prologue
@@ -64,7 +62,6 @@ newtype RoleTokenStore = RoleTokenStore
   { myRoleTokens :: Set Token
   , roleTokens :: Map Token (RemoteData String RoleTokenWithNickname)
   , payouts :: Map TxOutRef Payout
-  , redeemdedPayouts :: Set TxOutRef
   }
 
 derive instance Eq RoleTokenStore
@@ -74,7 +71,6 @@ mkRoleTokenStore = RoleTokenStore
   { myRoleTokens: mempty
   , roleTokens: Map.empty
   , payouts: Map.empty
-  , redeemdedPayouts: mempty
   }
 
 -- | Given a collection of assets the current user owns, update the contract
@@ -95,14 +91,12 @@ updateMyRoleTokens (Assets assets) (RoleTokenStore store) = RoleTokenStore
 
 -- | Determines if the current user owns the given role token.
 getEligiblePayouts :: RoleTokenStore -> Set Payout
-getEligiblePayouts (RoleTokenStore store) = Set.filter isEligible
-  $ Set.fromFoldable
-  $ Map.filterKeys notRedeemed store.payouts
+getEligiblePayouts (RoleTokenStore store) =
+  Set.filter isEligible $ Set.fromFoldable store.payouts
   where
   isEligible ({ marloweParams, tokenName }) = Set.member
     (Token (marloweParams ^. _rolesCurrency) tokenName)
     store.myRoleTokens
-  notRedeemed txOutRef = not $ Set.member txOutRef store.redeemdedPayouts
 
 newPayoutsReceived
   :: MarloweParams -> UnspentPayouts -> RoleTokenStore -> RoleTokenStore
@@ -121,16 +115,6 @@ newPayoutsReceived
     , tokenName: (unwrap payout.rolePayoutName).unTokenName
     , marloweParams
     }
-
-redeemPayout :: Payout -> RoleTokenStore -> RoleTokenStore
-redeemPayout { txOutRef } (RoleTokenStore store) = RoleTokenStore store
-  { redeemdedPayouts = Set.insert txOutRef store.redeemdedPayouts
-  }
-
-redeemPayoutFailed :: Payout -> RoleTokenStore -> RoleTokenStore
-redeemPayoutFailed { txOutRef } (RoleTokenStore store) = RoleTokenStore store
-  { redeemdedPayouts = Set.delete txOutRef store.redeemdedPayouts
-  }
 
 -- | Determines if the current user owns the given role token.
 isMyRoleToken :: Token -> RoleTokenStore -> Boolean
