@@ -21,22 +21,27 @@ import Component.ConfirmContractActionDialog.Types
 import Component.ConfirmContractActionDialog.Types as CCAD
 import Component.ConfirmContractActionDialog.View (render)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
+import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill, fork, kill)
 import Control.Monad.Fork.Class as MF
 import Control.Monad.Now (class MonadTime)
-import Data.Lens (assign, use)
+import Control.Monad.Reader (class MonadAsk, asks)
+import Data.Foldable (for_)
+import Data.Lens (assign, use, view)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Unfoldable as Unfoldable
 import Effect.Aff (Error, Fiber, error)
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Class (liftAff)
+import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
+import Env (Env, _followerBus)
 import Errors (globalError)
 import Halogen as H
 import Halogen.Component.Reactive as HR
 import Halogen.Store.Connect (connect)
-import Halogen.Store.Monad (class MonadStore)
+import Halogen.Store.Monad (class MonadStore, getStore)
 import Halogen.Store.Select (selectEq)
 import Marlowe.Execution.State (mkTx)
 import Marlowe.Execution.Types (NamedAction(..))
@@ -44,13 +49,15 @@ import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics (ChosenNum)
 import Marlowe.Semantics as Semantic
 import Store as Store
+import Store.Contracts (getFollowerContract)
 import Toast.Types (successToast)
 
 --
 component
   :: forall m
-   . MonadAff m
+   . MonadUnliftAff m
   => MonadKill Error Fiber m
+  => MonadAsk Env m
   => ManageMarlowe m
   => MonadLogger StructuredLog m
   => MonadStore Store.Action Store.Store m
@@ -85,7 +92,8 @@ handleAction
   :: forall m
    . ManageMarlowe m
   => MonadStore Store.Action Store.Store m
-  => MonadAff m
+  => MonadUnliftAff m
+  => MonadAsk Env m
   => MonadKill Error Fiber m
   => MonadTime m
   => MonadLogger StructuredLog m
@@ -129,7 +137,16 @@ handleAction (ConfirmAction) = do
       mResult <- liftAff awaitResult
       case mResult of
         Right _ -> do
-          addToast $ successToast "Contract update applied."
+          -- Wait to get a follower update before showing this message, because
+          -- otherwise it happens far too early.
+          followerBus <- asks $ view _followerBus
+          u <- H.lift askUnliftAff
+          store <- getStore
+          let mFollowerId = getFollowerContract marloweParams store.contracts
+          for_ mFollowerId \followerId ->
+            liftAff do
+              void $ EventBus.subscribeOnce followerBus.emitter followerId
+              unliftAff u $ addToast $ successToast "Contract update applied."
         Left error -> do
           globalError "Failed to update contract" error
 

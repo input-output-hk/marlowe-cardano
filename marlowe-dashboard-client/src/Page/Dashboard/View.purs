@@ -53,6 +53,7 @@ import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
 import Halogen.Css (applyWhen, classNames)
@@ -121,7 +122,7 @@ type ComponentHTML m = HH.ComponentHTML Action ChildSlots m
 
 render
   :: forall m
-   . MonadAff m
+   . MonadUnliftAff m
   => MonadKill Error Fiber m
   => MonadAsk Env m
   => MonadTime m
@@ -217,7 +218,7 @@ dashboardScreen state =
 dashboardCard
   :: forall m
    . MonadClipboard m
-  => MonadAff m
+  => MonadUnliftAff m
   => MonadKill Error Fiber m
   => MonadAsk Env m
   => MonadTime m
