@@ -41,7 +41,6 @@ import Control.Monad.Extra (concatMapM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import Data.Functor (($>))
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty as NonEempty
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -325,9 +324,9 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
 
       awaitNewState prevState = do
         let
-          -- Brings back one of the utxos which change woken us up
+          -- Brings back one of the utxos which status change has woken us up
           waitForContractChange = case prevState >>= (fst >>> lastUtxo) of
-            Nothing   -> NonEempty.head <$> (utxoIsProduced $ validatorAddress $ mkMarloweTypedValidator params)
+            Nothing   -> NonEmpty.head <$> (utxoIsProduced $ validatorAddress $ mkMarloweTypedValidator params)
             Just utxo -> utxoIsSpent utxo
           waitForPayoutChange =
             let
@@ -350,6 +349,17 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             debug' "Unable to detect any changes on the chain... Looping back with previously known state"
             pure prevState
 
+      tellTheState (Just (history, payouts)) =
+        case history of
+          Created {historyData} -> do
+            tell @FollowerContractState $ Just $ mkContractHistory params historyData (foldInputs history) payouts
+            debug' $ "Marlowe contract status: " <> show (status history)
+            pure ()
+          _ -> throwError $ OtherContractError $ Contract.OtherContractError $
+            "Invalid history trace head found: " <> T.pack (show history)
+      tellTheState Nothing =
+        tell @FollowerContractState $ Nothing
+
       -- Essentially the follower is a `do {..} while` loop:
       --  - we use simple `QueryResult` wrapper so *every* query is wrapped in the `checkpointLoop`.
       --  - we pass in it the last known state and put it to the stream
@@ -359,23 +369,13 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       --  - we loop back with possibly new state
       follow UnknownOnChainState = do
         currOnChainState <- fetchOnChainState
+        tellTheState currOnChainState
         pure $ Right $ LastResult currOnChainState
 
-      follow (LastResult Nothing) = do
-        tell @FollowerContractState Nothing
-        possiblyNewState <- awaitNewState Nothing
+      follow (LastResult prevState) = do
+        possiblyNewState <- awaitNewState prevState
+        tellTheState possiblyNewState
         pure $ Right $ LastResult possiblyNewState
-
-      follow (LastResult currOnChainState@(Just (history, payouts))) =
-        case history of
-          Created {historyData} -> do
-            tell @FollowerContractState $ Just $ mkContractHistory params historyData (foldInputs history) payouts
-            debug' $ "Marlowe contract status: " <> show (status history)
-
-            possiblyNewState <- awaitNewState currOnChainState
-            pure (Right $ LastResult possiblyNewState)
-          _ -> throwError $ OtherContractError $ Contract.OtherContractError $
-            "Invalid history trace head found: " <> T.pack (show history)
 
     checkpointLoop follow UnknownOnChainState
   where
