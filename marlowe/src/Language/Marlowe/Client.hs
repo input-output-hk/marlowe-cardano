@@ -45,6 +45,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isNothing, listToMaybe, mapMaybe)
+import Data.Monoid (Last)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
@@ -182,10 +183,10 @@ data ContractHistory =
 instance Semigroup ContractHistory where
     _ <> last  = last
 
--- The FollowerContractState is a Maybe because the Contract monad requires the state
+-- The FollowerContractNotification is a Maybe because the Contract monad requires the state
 -- to have a Monoid instance. `Nothing` is the initial state of the contract, and then
 -- with the first `tell` we have a valid initial ContractHistory
-type FollowerContractState = Maybe ContractHistory
+type FollowerContractNotification = Maybe ContractHistory
 
 newtype OnChainState = OnChainState {ocsTxOutRef :: MarloweTxOutRef}
 
@@ -303,8 +304,13 @@ data QueryResult a
   deriving (Show,Eq,Generic)
   deriving anyclass (ToJSON, FromJSON)
 
+type FollowerM a = Contract FollowerContractNotification MarloweFollowSchema MarloweError a
 
-marloweFollowContract :: Contract FollowerContractState MarloweFollowSchema MarloweError ()
+-- Internally we use this detailed information to represent
+-- the state of the contract on the chain
+type FollowerContractState = Maybe (History, UnspentPayouts)
+
+marloweFollowContract :: FollowerM ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
     debug' $ "call parameters: " <> show params <> "."
@@ -313,15 +319,18 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       -- FIXME:
       -- For simplicity we don't bother with "artifical" payouts which are "outside"
       -- of the contract context when the contract is missing from the chain.
-      -- On the other hand we include them when the contract is present on the chain.
+      -- On the other hand we include them (not filter them out) when the contract is
+      -- present on the chain.
       -- This should not make any difference for the marlowe-run but it would be nice
       -- to be fully consistent here ;-)
+      fetchOnChainState :: FollowerM FollowerContractState
       fetchOnChainState = marloweHistory params >>= \case
         Nothing -> pure Nothing
         Just history -> do
           payouts <- unspentPayoutsAtCurrency (rolesCurrency params)
           pure $ Just (history, payouts)
 
+      awaitNewState :: FollowerContractState -> FollowerM FollowerContractState
       awaitNewState prevState = do
         let
           -- Brings back one of the utxos which status change has woken us up
@@ -349,32 +358,39 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             debug' "Unable to detect any changes on the chain... Looping back with previously known state"
             pure prevState
 
-      tellTheState (Just (history, payouts)) =
+      -- Push a possible state update to the stream
+      notify :: FollowerContractState -> FollowerM ()
+      notify (Just (history, payouts)) =
         case history of
           Created {historyData} -> do
-            tell @FollowerContractState $ Just $ mkContractHistory params historyData (foldInputs history) payouts
+            tell @FollowerContractNotification $ Just $ mkContractHistory params historyData (foldInputs history) payouts
             debug' $ "Marlowe contract status: " <> show (status history)
             pure ()
           _ -> throwError $ OtherContractError $ Contract.OtherContractError $
             "Invalid history trace head found: " <> T.pack (show history)
-      tellTheState Nothing =
-        tell @FollowerContractState $ Nothing
+      notify Nothing =
+        tell @FollowerContractNotification $ Nothing
 
-      -- Essentially the follower is a `do {..} while` loop:
-      --  - we use simple `QueryResult` wrapper so *every* query is wrapped in the `checkpointLoop`.
-      --  - we pass in it the last known state and put it to the stream
-      --  - we try to use only previous state pieces when constrcuting async requests
-      --  - we wait for the changes on the chain
-      --  - we ask the chain index for the update till it actually provides the new state
-      --  - we loop back with possibly new state
+      -- Essentially the follower is a loop step:
+      --  * we use simple `QueryResult` wrapper so *every* query is wrapped in the `checkpointLoop`.
+      --  * we pass in it the last known state and put it to the stream
+      --  * we try to use only previous state pieces when constrcuting async requests
+      --  * we wait for the changes on the chain
+      --  * we ask (up to `maxRetries * pollingInterval`) the chain index for the update
+      --    till it actually provides the new state
+      --  * we loop back (by returning `Right`) with possibly new state
+      --
+      --  The `Either` wrapper here is required by the `checkpointLoop`
+      --  protocol (essentially `whileRight`).
+      follow :: QueryResult FollowerContractState -> FollowerM (Either () (QueryResult FollowerContractState))
       follow UnknownOnChainState = do
         currOnChainState <- fetchOnChainState
-        tellTheState currOnChainState
+        notify currOnChainState
         pure $ Right $ LastResult currOnChainState
 
       follow (LastResult prevState) = do
         possiblyNewState <- awaitNewState prevState
-        tellTheState possiblyNewState
+        notify possiblyNewState
         pure $ Right $ LastResult possiblyNewState
 
     checkpointLoop follow UnknownOnChainState
