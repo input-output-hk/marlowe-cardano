@@ -421,7 +421,8 @@ interpret access po@ActivateFollower{..} =
     (fiInstance, fiChannel) <- runContract access MarloweFollower wiWalletId'
     AppInstanceInfo{..} <- findAppInstance poAppInstance
     case aiParams of
-      Nothing -> throwError . CliError $ printPoMsg PoName po "Not able to follow AppInstance with missinng MarloweParams."
+      Nothing -> throwError . CliError $ printPoMsg PoName po
+        "Unable to follow AppInstance with missinng MarloweParams. You should probably wait till app is fully initialized using AwaitCreate."
       Just params -> do
                         let
                           fiParams = params
