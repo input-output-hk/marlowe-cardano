@@ -1,306 +1,513 @@
 ptTestName: Zero-Coupon Bond
 
 ptPabOperations:
+  - tag: Comment
+    poComment: Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
 
-- tag: Comment
-  poComment: Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
+  - tag: CreateWallet
+    poOwner: Lender
 
-- tag: CreateWallet
-  poOwner: Lender
+  - tag: FundWallet
+    poOwner: Lender
+    poValue:
+      lovelace: 80000000
 
-- tag: FundWallet
-  poOwner: Lender
-  poValue:
-    lovelace: 80000000
+  - tag: ActivateApp
+    poOwner: Lender
+    poInstance: LenderApp
 
-- tag: ActivateApp
-  poOwner: Lender
-  poInstance: LenderApp
+  - tag: Comment
+    poComment: Create the wallet for the borrower and fund it with 10 ADA, and activate the Marlowe endpoints.
 
-- tag: Comment
-  poComment: Create the wallet for the borrower and fund it with 10 ADA, and activate the Marlowe endpoints.
+  - tag: CreateWallet
+    poOwner: Borrower
 
-- tag: CreateWallet
-  poOwner: Borrower
+  - tag: FundWallet
+    poOwner: Borrower
+    poValue:
+      lovelace: 10000000
 
-- tag: FundWallet
-  poOwner: Borrower
-  poValue:
-    lovelace: 10000000
+  - tag: Comment
+    poComment: Show the contents of the wallets.
 
-- tag: ActivateApp
-  poOwner: Borrower
-  poInstance: BorrowerApp
+  - tag: PrintWallet
+    poOwner: Lender
 
-- tag: Comment
-  poComment: Show the contents of the wallets.
+  - tag: PrintWallet
+    poOwner: Borrower
 
-- tag: PrintWallet
-  poOwner: Lender
+  - tag: Comment
+    poComment: The lender creates the ZCB contract, which was downloaded from Marlowe Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
 
-- tag: PrintWallet
-  poOwner: Borrower
-
-- tag: Comment
-  poComment: The lender creates the ZCB contract, which was downloaded from Marlowe Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
-
-- tag: CallCreate
-  poInstance: LenderApp
-  poOwners:
-  - Lender
-  - Borrower
-  poContract:
-    when:
-    - case:
-        party:
-          role_token: Lender
-        deposits: 50000000
-        of_token:
-          currency_symbol: ''
-          token_name: ''
-        into_account:
-          role_token: Lender
-      then:
-        pay: 50000000
-        token:
-          currency_symbol: ''
-          token_name: ''
-        from_account:
-          role_token: Lender
-        to:
-          party:
-            role_token: Borrower
-        then:
-          when:
-          - case:
+  - tag: CallCreate
+    poInstance: LenderApp
+    poOwners:
+      - Lender
+      - Borrower
+    poContract:
+      when:
+        - case:
+            party:
+              role_token: Lender
+            deposits: 50000000
+            of_token:
+              currency_symbol: ""
+              token_name: ""
+            into_account:
+              role_token: Lender
+          then:
+            pay: 50000000
+            token:
+              currency_symbol: ""
+              token_name: ""
+            from_account:
+              role_token: Lender
+            to:
               party:
                 role_token: Borrower
-              deposits:
-                add: 50000000
-                and: 3000000
-              of_token:
-                currency_symbol: ''
-                token_name: ''
-              into_account:
-                role_token: Borrower
             then:
-              pay:
-                add: 50000000
-                and: 3000000
-              token:
-                currency_symbol: ''
-                token_name: ''
-              from_account:
-                role_token: Borrower
-              to:
-                party:
-                  role_token: Lender
-              then: close
-          timeout: 1961123625000
-          timeout_continuation: close
-    timeout: 1929587625000
-    timeout_continuation: close
+              when:
+                - case:
+                    party:
+                      role_token: Borrower
+                    deposits:
+                      add: 50000000
+                      and: 3000000
+                    of_token:
+                      currency_symbol: ""
+                      token_name: ""
+                    into_account:
+                      role_token: Borrower
+                  then:
+                    pay:
+                      add: 50000000
+                      and: 3000000
+                    token:
+                      currency_symbol: ""
+                      token_name: ""
+                    from_account:
+                      role_token: Borrower
+                    to:
+                      party:
+                        role_token: Lender
+                    then: close
+              timeout: 1961123625000
+              timeout_continuation: close
+      timeout: 1929587625000
+      timeout_continuation: close
 
-- tag: AwaitCreate
-  poInstance: LenderApp
+  - tag: AwaitCreate
+    poInstance: LenderApp
 
-- tag: Comment
-  poComment: The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
+  - tag: ActivateFollower
+    poAppInstance: LenderApp
+    poInstance: Lender
+    poOwner: Lender
 
-- tag: CheckFunds
-  poOwner: Lender
-  poValue:
-    lovelace: 76000000
-  poMaximumFees: 1000000
-  poInstances:
-  - LenderApp
+  - tag: CallFollow
+    poInstance: Lender
 
-- tag: Comment
-  poComment: The borrower should now have their original 10 ADA plus the 2 ADA that arrived with the role token.
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponsePattern:
+      parts:
+        chUnspentPayouts: []
+        chHistory: []
 
-- tag: CheckFunds
-  poOwner: Borrower
-  poValue:
-    lovelace: 12000000
-  poMaximumFees: 0
-  poInstances:
-  - LenderApp
+  - tag: ActivateApp
+    poOwner: Borrower
+    poInstance: BorrowerApp
 
-- tag: Comment
-  poComment: The borrower needs to follow this contract in order to interact with it.
+  - tag: Follow
+    poInstance: BorrowerApp
+    poOtherInstance: LenderApp
 
-- tag: Follow
-  poInstance: BorrowerApp
-  poOtherInstance: LenderApp
+  - tag: ActivateFollower
+    poAppInstance: BorrowerApp
+    poInstance: Borrower
+    poOwner: Borrower
 
-- tag: Comment
-  poComment: The lender deposits the 50 ADA loan amount.
+  - tag: CallFollow
+    poInstance: Borrower
 
-- tag: CallApplyInputs
-  poInstance: LenderApp
-  poInputs:
-  - input_from_party:
-      role_token: Lender
-    that_deposits: 50000000
-    of_token:
-      currency_symbol: ''
-      token_name: ''
-    into_account:
-      role_token: Lender
-  poTimes:
-  - 1645590825000
-  - 1898051625000
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponsePattern:
+      parts:
+        chUnspentPayouts: []
+        chHistory: []
 
-- tag: AwaitApplyInputs
-  poInstance: LenderApp
+  - tag: Comment
+    poComment: The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
 
-- tag: Comment
-  poComment: The lender will have 50 ADA less for the loan and may have paid up to another 2 ADA in fees, leaving a balance of 26 ADA minus up to 3 ADA in fees.
+  - tag: CheckFunds
+    poOwner: Lender
+    poValue:
+      lovelace: 76000000
+    poMaximumFees: 1000000
+    poInstances:
+      - LenderApp
 
-- tag: CheckFunds
-  poOwner: Lender
-  poValue:
-    lovelace: 26000000
-  poMaximumFees: 3000000
-  poInstances:
-  - LenderApp
+  - tag: Comment
+    poComment: The borrower should now have their original 10 ADA plus the 2 ADA that arrived with the role token.
 
-- tag: Comment
-  poComment: The borrower's funds are unchanged.
+  - tag: CheckFunds
+    poOwner: Borrower
+    poValue:
+      lovelace: 12000000
+    poMaximumFees: 0
+    poInstances:
+      - LenderApp
 
-- tag: CheckFunds
-  poOwner: Borrower
-  poValue:
-    lovelace: 12000000
-  poMaximumFees: 0
-  poInstances:
-  - BorrowerApp
+  - tag: Comment
+    poComment: The borrower needs to follow this contract in order to interact with it.
 
-- tag: Comment
-  poComment: Now the borrower redeems the 50 ADA from the payout script.
+  - tag: Comment
+    poComment: The lender deposits the 50 ADA loan amount.
 
-- tag: CallRedeem
-  poInstance: BorrowerApp
-  poOwner: Borrower
+  - tag: CallApplyInputs
+    poInstance: LenderApp
+    poInputs:
+      - input_from_party:
+          role_token: Lender
+        that_deposits: 50000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: Lender
+    poTimes:
+      - 1645590825000
+      - 1898051625000
 
-- tag: AwaitRedeem
-  poInstance: BorrowerApp
+  - tag: AwaitApplyInputs
+    poInstance: LenderApp
 
-- tag: Comment
-  poComment: The lender's funds are unchanged.
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponsePattern:
+      parts:
+        {
+          "chHistory":
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+                "tx_interval": { "from": 1645590825000, "to": 1898051625000 },
+              },
+            ],
+          "chUnspentPayouts":
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Borrower" },
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 50000000]],
+                        ],
+                      ],
+                  },
+              },
+            ],
+        }
 
-- tag: CheckFunds
-  poOwner: Lender
-  poValue:
-    lovelace: 26000000
-  poMaximumFees: 3000000
-  poInstances:
-  - LenderApp
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponsePattern:
+      parts:
+        {
+          "chHistory":
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+                "tx_interval": { "from": 1645590825000, "to": 1898051625000 },
+              },
+            ],
+          "chUnspentPayouts":
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Borrower" },
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 50000000]],
+                        ],
+                      ],
+                  },
+              },
+            ],
+        }
 
-- tag: Comment
-  poComment: The borrower has an additional 50 ADA but may have paid up to 1 ADA in fees for the redemption, leaving a balance of 62 ADA minus up to 1 ADA in fees.
+  - tag: Comment
+    poComment: The lender will have 50 ADA less for the loan and may have paid up to another 2 ADA in fees, leaving a balance of 26 ADA minus up to 3 ADA in fees.
 
-- tag: CheckFunds
-  poOwner: Borrower
-  poValue:
-    lovelace: 62000000
-  poMaximumFees: 1000000
-  poInstances:
-  - BorrowerApp
+  - tag: CheckFunds
+    poOwner: Lender
+    poValue:
+      lovelace: 26000000
+    poMaximumFees: 3000000
+    poInstances:
+      - LenderApp
 
-- tag: Comment
-  poComment: The borrower pays back the 53 ADA of loan plus interest.
+  - tag: Comment
+    poComment: The borrower's funds are unchanged.
 
-- tag: CallApplyInputs
-  poInstance: BorrowerApp
-  poInputs:
-  - input_from_party:
-      role_token: Borrower
-    that_deposits: 53000000
-    of_token:
-      currency_symbol: ''
-      token_name: ''
-    into_account:
-      role_token: Borrower
-  poTimes:
-  - 1645590825000
-  - 1898051625000
+  - tag: CheckFunds
+    poOwner: Borrower
+    poValue:
+      lovelace: 12000000
+    poMaximumFees: 0
+    poInstances:
+      - BorrowerApp
 
-- tag: AwaitApplyInputs
-  poInstance: BorrowerApp
+  - tag: Comment
+    poComment: Now the borrower redeems the 50 ADA from the payout script.
 
-- tag: Comment
-  poComment: Because the contract is closed when the borrower makes their deposit, the lender receives back their 2 ADA that they contributed to create the contract.
+  - tag: CallRedeem
+    poInstance: BorrowerApp
+    poOwner: Borrower
 
-- tag: CheckFunds
-  poOwner: Lender
-  poValue:
-    lovelace: 28000000
-  poMaximumFees: 3000000
-  poInstances:
-  - LenderApp
+  - tag: AwaitRedeem
+    poInstance: BorrowerApp
 
-- tag: Comment
-  poComment: The borrower has 53 ADA less and may have paid another 2 ADA in fees, leaving a balance of 9 ADA minus up to 3 ADA in fees.
+  - tag: Comment
+    poComment: The lender's funds are unchanged.
 
-- tag: CheckFunds
-  poOwner: Borrower
-  poValue:
-    lovelace: 9000000
-  poMaximumFees: 3000000
-  poInstances:
-  - BorrowerApp
+  - tag: CheckFunds
+    poOwner: Lender
+    poValue:
+      lovelace: 26000000
+    poMaximumFees: 3000000
+    poInstances:
+      - LenderApp
 
-- tag: Comment
-  poComment: The lender redeems the 53 ADA.
+  - tag: Comment
+    poComment: The borrower has an additional 50 ADA but may have paid up to 1 ADA in fees for the redemption, leaving a balance of 62 ADA minus up to 1 ADA in fees.
 
-- tag: CallRedeem
-  poInstance: LenderApp
-  poOwner: Lender
+  - tag: CheckFunds
+    poOwner: Borrower
+    poValue:
+      lovelace: 62000000
+    poMaximumFees: 1000000
+    poInstances:
+      - BorrowerApp
 
-- tag: AwaitRedeem
-  poInstance: LenderApp
+  - tag: Comment
+    poComment: The borrower pays back the 53 ADA of loan plus interest.
 
-- tag: Comment
-  poComment: The lender now has an additional 53 ADA but may have paid another 1 ADA in fees, leaving a balance of 81 ADA minus up to 4 ADA in fees.
+  - tag: CallApplyInputs
+    poInstance: BorrowerApp
+    poInputs:
+      - input_from_party:
+          role_token: Borrower
+        that_deposits: 53000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: Borrower
+    poTimes:
+      - 1645590825000
+      - 1898051625000
 
-- tag: CheckFunds
-  poOwner: Lender
-  poValue:
-    lovelace: 81000000
-  poMaximumFees: 4000000
-  poInstances:
-  - LenderApp
+  - tag: AwaitApplyInputs
+    poInstance: BorrowerApp
 
-- tag: Comment
-  poComment: The borrower's funds are unchanged.
+  - tag: Comment
+    poComment: Because the contract is closed when the borrower makes their deposit, the lender receives back their 2 ADA that they contributed to create the contract.
 
-- tag: CheckFunds
-  poOwner: Borrower
-  poValue:
-    lovelace: 9000000
-  poMaximumFees: 3000000
-  poInstances:
-  - BorrowerApp
+  - tag: CheckFunds
+    poOwner: Lender
+    poValue:
+      lovelace: 28000000
+    poMaximumFees: 3000000
+    poInstances:
+      - LenderApp
 
-- tag: Comment
-  poComment: Return unused funds.
+  - tag: Comment
+    poComment: The borrower has 53 ADA less and may have paid another 2 ADA in fees, leaving a balance of 9 ADA minus up to 3 ADA in fees.
 
-- tag: ReturnFunds
-  poOwner: Lender
-  poInstances:
-  - LenderApp
+  - tag: CheckFunds
+    poOwner: Borrower
+    poValue:
+      lovelace: 9000000
+    poMaximumFees: 3000000
+    poInstances:
+      - BorrowerApp
 
-- tag: ReturnFunds
-  poOwner: Borrower
-  poInstances:
-  - BorrowerApp
+  - tag: Comment
+    poComment: The lender redeems the 53 ADA.
 
-- tag: Comment
-  poComment: Stop the Marlowe application.
+  - tag: CallRedeem
+    poInstance: LenderApp
+    poOwner: Lender
 
-- tag: Stop
-  poInstance: LenderApp
+  - tag: AwaitRedeem
+    poInstance: LenderApp
 
-- tag: Stop
-  poInstance: BorrowerApp
+  - tag: Comment
+    poComment: The lender now has an additional 53 ADA but may have paid another 1 ADA in fees, leaving a balance of 81 ADA minus up to 4 ADA in fees.
+
+  - tag: CheckFunds
+    poOwner: Lender
+    poValue:
+      lovelace: 81000000
+    poMaximumFees: 4000000
+    poInstances:
+      - LenderApp
+
+  - tag: Comment
+    poComment: The borrower's funds are unchanged.
+
+  - tag: CheckFunds
+    poOwner: Borrower
+    poValue:
+      lovelace: 9000000
+    poMaximumFees: 3000000
+    poInstances:
+      - BorrowerApp
+
+  - tag: Comment
+    poComment: Return unused funds.
+
+  - tag: ReturnFunds
+    poOwner: Lender
+    poInstances:
+      - LenderApp
+
+  - tag: ReturnFunds
+    poOwner: Borrower
+    poInstances:
+      - BorrowerApp
+
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponsePattern:
+      parts:
+        {
+          "chHistory":
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+                "tx_interval": { "from": 1645590825000, "to": 1898051625000 },
+              },
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Borrower" },
+                      "into_account": { "role_token": "Borrower" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 53000000,
+                    },
+                  ],
+                "tx_interval": { "from": 1645590825000, "to": 1898051625000 },
+              },
+            ],
+          "chUnspentPayouts":
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Lender" },
+                "rolePayoutTxOutRef": {},
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 53000000]],
+                        ],
+                      ],
+                  },
+              },
+            ],
+        }
+
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponsePattern:
+      parts:
+        {
+          "chHistory":
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+                "tx_interval": { "from": 1645590825000, "to": 1898051625000 },
+              },
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Borrower" },
+                      "into_account": { "role_token": "Borrower" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 53000000,
+                    },
+                  ],
+                "tx_interval": { "from": 1645590825000, "to": 1898051625000 },
+              },
+            ],
+          "chUnspentPayouts":
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Lender" },
+                "rolePayoutTxOutRef": {},
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 53000000]],
+                        ],
+                      ],
+                  },
+              },
+            ],
+        }
+
+  - tag: Comment
+    poComment: Stop the Marlowe application.
+
+  - tag: Stop
+    poInstance: LenderApp
+
+  - tag: Stop
+    poInstance: BorrowerApp
