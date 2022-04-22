@@ -58,5 +58,5 @@ do
                --burn-address "$BURN_ADDRESS"            \
                --passphrase "$PAB_PASSPHRASE"            \
                "$f"                                      \
-  | tee "${t%%.yaml}".log
+  | tee "${f%%.yaml}".log
 done
