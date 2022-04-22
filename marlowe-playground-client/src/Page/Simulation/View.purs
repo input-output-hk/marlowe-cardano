@@ -322,7 +322,11 @@ sidebar
 sidebar metadata state =
   case view (_marloweState <<< _Head <<< _executionState) state of
     SimulationNotStarted notStartedRecord ->
-      [ startSimulationWidget metadata notStartedRecord state.tzOffset ]
+      [ startSimulationWidget
+          metadata
+          notStartedRecord
+          state.tzOffset
+      ]
     SimulationRunning _ ->
       [ div [ class_ smallSpaceBottom ] [ simulationStateWidget state ]
       , div [ class_ spaceBottom ] [ actionWidget metadata state ]
@@ -365,6 +369,7 @@ startSimulationWidget
                 tzOffset
             ]
         , templateParameters
+            "simulator"
             metadata
             templateContent
             { valueAction: SetValueTemplateParam
@@ -395,12 +400,14 @@ type TemplateParameterActionsGen action =
 templateParameters
   :: forall action m
    . MonadAff m
-  => MetaData
+  => String
+  -> MetaData
   -> TemplateContent
   -> TemplateParameterActionsGen action
   -> Minutes
   -> ComponentHTML action ChildSlots m
 templateParameters
+  refPrefix
   metadata
   (TemplateContent { timeContent, valueContent })
   { valueAction, timeAction }
@@ -409,9 +416,10 @@ templateParameters
   let
     inputCss = [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
     timeoutParameters = templateParametersSection
+      refPrefix
       ( \fieldName fieldValue ->
           marloweInstantInput
-            (templateFieldRef fieldName)
+            (templateFieldRef refPrefix fieldName)
             inputCss
             (timeAction fieldName)
             fieldValue
@@ -421,16 +429,17 @@ templateParameters
       timeContent
 
     valueParameters = templateParametersSection
+      refPrefix
       ( \fieldName fieldValue ->
           case extractValueParameterNuberFormat fieldName of
             Just (currencyLabel /\ numDecimals) ->
-              marloweCurrencyInput (templateFieldRef fieldName)
+              marloweCurrencyInput (templateFieldRef refPrefix fieldName)
                 inputCss
                 (valueAction fieldName)
                 currencyLabel
                 numDecimals
                 fieldValue
-            Nothing -> marloweActionInput (templateFieldRef fieldName)
+            Nothing -> marloweActionInput (templateFieldRef refPrefix fieldName)
               inputCss
               (valueAction fieldName)
               fieldValue
@@ -465,8 +474,15 @@ templateParameters
   in
     div_ (timeoutParameters <> valueParameters)
 
-templateFieldRef :: String -> String
-templateFieldRef fieldName = "template-parameter-" <> fieldName
+-- NOTE: The refPrefix parameter is used to avoid sharing the same component between
+--       different views (like Simulator and Static analyisis bottom bar). The proper
+--       solution would be to make each page a proper component.
+templateFieldRef :: String -> String -> String
+templateFieldRef refPrefix fieldName =
+  "template-parameter-"
+    <> refPrefix
+    <> "-"
+    <> fieldName
 
 emptyDiv :: forall w i. HTML w i
 emptyDiv = div_ []
@@ -474,11 +490,13 @@ emptyDiv = div_ []
 templateParametersSection
   :: forall inputType action m
    . MonadAff m
-  => (String -> inputType -> ComponentHTML action ChildSlots m)
+  => String
+  -> (String -> inputType -> ComponentHTML action ChildSlots m)
   -> TemplateFormDisplayInfo
   -> Map String inputType
   -> Array (ComponentHTML action ChildSlots m)
 templateParametersSection
+  refPrefix
   componentGen
   { lookupDefinition
   , title
@@ -495,7 +513,7 @@ templateParametersSection
         ( \explanation ->
             hint
               [ "leading-none" ]
-              (templateFieldRef fieldName)
+              (templateFieldRef refPrefix fieldName)
               Auto
               (markdownHintWithTitle fieldName explanation)
 

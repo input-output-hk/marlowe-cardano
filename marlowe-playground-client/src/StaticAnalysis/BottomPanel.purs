@@ -99,6 +99,7 @@ analysisResultPane metadata actionGen state =
         explanation
           [ text ""
           , templateParameters
+              "static-analisys"
               metadata
               templateContent
               actionGen
