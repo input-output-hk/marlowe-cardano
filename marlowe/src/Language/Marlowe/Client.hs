@@ -306,6 +306,8 @@ data QueryResult a
 
 type FollowerM a = Contract FollowerContractNotification MarloweFollowSchema MarloweError a
 
+type FollowerPromise a = Promise FollowerContractNotification MarloweFollowSchema MarloweError a
+
 -- Internally we use this detailed information to represent
 -- the state of the contract on the chain
 type FollowerContractState = Maybe (History, UnspentPayouts)
@@ -333,10 +335,13 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       awaitNewState :: FollowerContractState -> FollowerM FollowerContractState
       awaitNewState prevState = do
         let
-          -- Brings back one of the utxos which status change has woken us up
+          -- In both cases we bring back one of the transactions which have woken us up.
+          -- We do this only to perform the logging.
+          waitForContractChange :: FollowerPromise ChainIndexTx
           waitForContractChange = case prevState >>= (fst >>> continuationUtxo) of
             Nothing   -> NonEmpty.head <$> (utxoIsProduced $ validatorAddress $ mkMarloweTypedValidator params)
             Just utxo -> utxoIsSpent utxo
+          waitForPayoutChange :: FollowerPromise ChainIndexTx
           waitForPayoutChange =
             let
               payoutScriptAddress = scriptHashAddress $ mkRolePayoutValidatorHash $ rolesCurrency params
@@ -348,8 +353,8 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
 
         update <- awaitPromise (selectEither waitForPayoutChange waitForContractChange)
         debug' $ either
-          (mappend "Payout change detected at:" <<< show)
-          (mappend "Contract change detected at: " <<< show)
+          (mappend "Payout change detected through:" <<< show)
+          (mappend "Contract change detected through: " <<< show)
           update
 
         waitForContractUpdate' prevState fetchOnChainState >>= \case
