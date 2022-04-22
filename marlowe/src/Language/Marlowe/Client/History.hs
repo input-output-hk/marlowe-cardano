@@ -17,6 +17,8 @@ module Language.Marlowe.Client.History (
 , RolePayoutTxOut
 , RolePayoutTxOutRef
 , RolePayout(..)
+-- * Helpers
+, foldlHistory
 -- * Contract History
 , marloweHistory
 , marloweHistoryFrom
@@ -117,6 +119,17 @@ data History =
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON, FromJSON)
+
+
+foldlHistory :: forall a. (a -> History -> a) -> a -> History -> a
+foldlHistory f acc entry = case next entry of
+  Just n  -> foldlHistory f (f acc entry) n
+  Nothing -> f acc entry
+  where
+    next Created { historyNext=n }     = n
+    next InputApplied { historyNext=n} = n
+    next Closed {}                     = Nothing
+
 
 -- | A transaction-output reference specific to Marlowe role payout.
 type RolePayoutTxOut = TypedScriptTxOut TypedRolePayoutValidator
