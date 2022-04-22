@@ -26,6 +26,7 @@ import Data.Lens.Record (prop)
 import Data.These (These(..))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
@@ -71,7 +72,7 @@ _addContact = Proxy :: Proxy "addContact"
 
 component
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MonadStore Store.Action Store.Store m
   => Component m
 component = connect (selectEq _.addressBook) $ H.mkComponent
@@ -116,7 +117,7 @@ handleAction = case _ of
 
 render
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
@@ -151,7 +152,7 @@ render { addressBook, result, fields } =
 
 nicknameInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => AddressBook
   -> FieldState WalletNickname
   -> ComponentHTML m
@@ -166,7 +167,13 @@ nicknameInput addressBook fieldState =
     , validate: either This That <<<
         (notInAddressBook <=< lmap Left <<< WN.fromString)
     , render: \{ error, value, result } ->
-        renderTextInput id label result error (Input.setInputProps value [])
+        renderTextInput
+          id
+          label
+          Nothing
+          result
+          error
+          (Input.setInputProps value [])
           case _ of
             Left WN.Empty -> "Required."
             Left WN.ContainsNonAlphaNumeric ->
@@ -179,7 +186,7 @@ nicknameInput addressBook fieldState =
 
 addressInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => AddressBook
   -> FieldState Address
   -> ComponentHTML m
@@ -194,7 +201,13 @@ addressInput addressBook fieldState =
     , validate:
         either This That <<< (notInAddressBook <=< lmap Left <<< A.fromString)
     , render: \{ error, value, result } ->
-        renderTextInput id label result error (Input.setInputProps value [])
+        renderTextInput
+          id
+          label
+          Nothing
+          result
+          error
+          (Input.setInputProps value [])
           case _ of
             Left A.Empty -> "Required."
             Left A.Invalid -> "Invalid."

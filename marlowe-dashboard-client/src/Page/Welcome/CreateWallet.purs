@@ -129,7 +129,7 @@ handleAction = case _ of
 
 render
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
@@ -167,7 +167,7 @@ render state = do
 
 nicknameInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => AddressBook
   -> FieldState WalletNickname
   -> ComponentHTML m

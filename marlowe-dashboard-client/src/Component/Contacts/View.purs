@@ -24,7 +24,7 @@ import Data.PABConnectedWallet (PABConnectedWallet, _walletNickname)
 import Data.Tuple.Nested ((/\))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
-import Effect.Class (class MonadEffect)
+import Effect.Aff.Class (class MonadAff)
 import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -50,7 +50,7 @@ type ComponentHTML m = H.ComponentHTML Action ChildSlots m
 
 contactsCard
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m

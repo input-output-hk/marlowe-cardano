@@ -4,7 +4,7 @@ import Prologue
 
 import Component.Button.Types as Button
 import Component.Button.View (button)
-import Component.Form (renderTextInput)
+import Component.Form (HasHintSlot, renderTextInput)
 import Component.Progress.Circular as Progress
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -16,6 +16,7 @@ import Data.MnemonicPhrase as MP
 import Data.These (These(..))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
+import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
@@ -83,19 +84,25 @@ renderForm { body, inProgress, onCancel, onSkip, onSubmit, title } =
           ]
 
 mkNicknameInput
-  :: forall action m
-   . Boolean
+  :: forall action m slots
+   . MonadAff m
+  => Boolean
   -> AddressBook
   -> FieldState WalletNickname
-  -> Input.Input action (Either WN.WalletNicknameError Unit) WalletNickname () m
-
+  -> Input.Input
+       action
+       (Either WN.WalletNicknameError Unit)
+       WalletNickname
+       (HasHintSlot slots)
+       m
 mkNicknameInput warnOnExists addressBook fieldState =
   { fieldState
   , format: WN.toString
   , validate:
       notInAddressBook <=< either This That <<< lmap Left <<< WN.fromString
   , render: \{ error, value, result } ->
-      renderTextInput id label result error (Input.setInputProps value [])
+      renderTextInput id label Nothing result error
+        (Input.setInputProps value [])
         case _ of
           Left WN.Empty -> "Required."
           Left WN.ContainsNonAlphaNumeric ->
@@ -114,15 +121,22 @@ mkNicknameInput warnOnExists addressBook fieldState =
     | otherwise = That nickname
 
 mkMnemonicInput
-  :: forall action m
-   . FieldState MnemonicPhrase
-  -> Input.Input action MP.MnemonicPhraseError MnemonicPhrase () m
+  :: forall action slots m
+   . MonadAff m
+  => FieldState MnemonicPhrase
+  -> Input.Input
+       action
+       MP.MnemonicPhraseError
+       MnemonicPhrase
+       (HasHintSlot slots)
+       m
 mkMnemonicInput fieldState =
   { fieldState
   , format: MP.toString
   , validate: either This That <<< MP.fromString
   , render: \{ error, value, result } ->
-      renderTextInput id label result error (Input.setInputProps value [])
+      renderTextInput id label Nothing result error
+        (Input.setInputProps value [])
         case _ of
           MP.Empty -> "Required."
           MP.WrongWordCount -> "24 words required."

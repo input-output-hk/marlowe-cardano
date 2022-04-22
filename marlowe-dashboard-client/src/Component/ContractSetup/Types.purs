@@ -12,7 +12,7 @@ import Data.Set (Set)
 import Data.Show.Generic (genericShow)
 import Halogen as H
 import Halogen.Form.Input (FieldState)
-import Marlowe.Extended.Metadata (NumberFormat)
+import Marlowe.Extended.Metadata (MetaData, NumberFormat)
 import Marlowe.Semantics (TokenName)
 import Type.Proxy (Proxy(..))
 
@@ -22,6 +22,7 @@ type Input =
   , templateValues :: Map String NumberFormat
   , templateName :: String
   , fields :: ContractFields
+  , metaData :: MetaData
   }
 
 data Msg

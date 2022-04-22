@@ -35,6 +35,7 @@ import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.Form.FieldState (FieldState(..))
+import Halogen.HTML (PlainHTML)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
@@ -51,6 +52,7 @@ data Query (a :: Type)
 type Input output =
   { id :: String
   , label :: String
+  , hint :: Maybe PlainHTML
   , fieldState :: FieldState String output
   , options :: Bimap String output
   }
@@ -65,7 +67,7 @@ data Action output
 _select = Proxy :: Proxy "select"
 
 type ChildSlots output =
-  ( "select" :: Select.Slot (Action output) Unit
+  ( select :: Select.Slot (Action output) Unit
   )
 
 type ComponentHTML output m =
@@ -83,6 +85,7 @@ type State output =
   , visited :: Boolean
   , id :: String
   , label :: String
+  , hint :: Maybe PlainHTML
   , openDropdown :: Maybe String
   }
 
@@ -111,7 +114,9 @@ initialState
   => Boolean
   -> Connected (Maybe String) (Input output)
   -> State output
-initialState visited { context, input: { fieldState, options, id, label } } =
+initialState
+  visited
+  { context, input: { fieldState, options, id, label, hint } } =
   setFieldState fieldState
     { fieldState
     , visited
@@ -119,6 +124,7 @@ initialState visited { context, input: { fieldState, options, id, label } } =
     , filtered: []
     , id
     , label
+    , hint
     , openDropdown: context
     }
 
@@ -156,7 +162,7 @@ render
   => MonadAff m
   => State output
   -> ComponentHTML output m
-render { visited, fieldState, id, label, options, filtered } =
+render { visited, fieldState, id, label, options, filtered, hint } =
   HH.slot _select unit Select.component selectInput OnNSelectMsg
   where
   selectInput = { itemCount: Array.length filtered, render: renderSelect }
@@ -181,7 +187,7 @@ render { visited, fieldState, id, label, options, filtered } =
             ]
         )
         [ HH.text v ]
-      rootClasses = [ "relative", if isOpen then "z-20" else "z-10" ]
+      rootClasses = [ "relative", if isOpen then "z-10" else "" ]
       boxClasses =
         [ "flex-col"
         , "absolute"
@@ -195,8 +201,7 @@ render { visited, fieldState, id, label, options, filtered } =
         ]
     in
       HH.div (Select.setRootProps ([ classNames rootClasses ]))
-        [ renderLabel id label
-        , HH.div [ HP.style "height: 54.4px" ] []
+        [ HH.div [ HP.style "height: 54.4px" ] []
         , renderInputBox false error boxClasses $ join
             [ pure $ renderInput id
                 ( Select.setInputProps
@@ -206,6 +211,7 @@ render { visited, fieldState, id, label, options, filtered } =
                 )
             , guard isOpen $> dropdown
             ]
+        , renderLabel id label hint
         , renderErrorLabel false error
         ]
 

@@ -70,6 +70,7 @@ setup { metaData, extendedContract } mFields = Setup
   , templateValues: mapWithIndex getValue valueContent
   , templateName: metaData.contractName
   , fields: fromMaybe blank mFields
+  , metaData
   }
   where
   TemplateContent { timeContent, valueContent } =

@@ -142,7 +142,7 @@ handleAction = case _ of
 
 render
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
@@ -181,7 +181,7 @@ render { addressBook, result, fields, walletDetails } = do
 
 nicknameInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => AddressBook
   -> FieldState WalletNickname
   -> ComponentHTML m
@@ -195,7 +195,7 @@ nicknameInput addressBook fieldState =
     $ prop _nickname
 
 mnemonicInput
-  :: forall m. MonadEffect m => FieldState MnemonicPhrase -> ComponentHTML m
+  :: forall m. MonadAff m => FieldState MnemonicPhrase -> ComponentHTML m
 mnemonicInput fieldState =
   HH.slot
     _mnemonic
