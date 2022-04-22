@@ -254,7 +254,7 @@ minLovelaceDeposit = 2_000_000
 
 -}
 waitForChainIndex :: forall st sc err. AsContractError err => Contract st sc err ()
-waitForChainIndex = void $ waitNMilliSeconds 10000
+waitForChainIndex = void $ waitNMilliSeconds 2_500
 
 
 debugMsg :: String -> String -> String
@@ -325,7 +325,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       awaitNewState prevState = do
         let
           -- Brings back one of the utxos which status change has woken us up
-          waitForContractChange = case prevState >>= (fst >>> lastUtxo) of
+          waitForContractChange = case prevState >>= (fst >>> continuationUtxo) of
             Nothing   -> NonEmpty.head <$> (utxoIsProduced $ validatorAddress $ mkMarloweTypedValidator params)
             Just utxo -> utxoIsSpent utxo
           waitForPayoutChange =
@@ -387,7 +387,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       where
         step _ new = new
 
-    lastUtxo = last >>> \case
+    continuationUtxo = last >>> \case
       Created { historyTxOutRef }      -> Just historyTxOutRef
       InputApplied { historyTxOutRef } -> Just historyTxOutRef
       _                                -> Nothing
@@ -560,16 +560,16 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         case maybeState of
             Nothing ->
                 waitForTimeoutOrTransition typedValidator untilTime >>= \case
-                Left _ -> do
-                    logInfo @String $ "Contract Timeout for party " <> show party
-                    tell $ Just $ EndpointSuccess reqId AutoResponse
-                    marlowePlutusContract
-                Right (Transition Closed{}) -> do
-                    logInfo @String $ "Contract Ended for party " <> show party
-                    tell $ Just $ EndpointSuccess reqId AutoResponse
-                    marlowePlutusContract
-                Right (Transition InputApplied{historyData}) -> continueWith historyData
-                Right (Transition Created{historyData}) -> continueWith historyData
+                    Left _ -> do
+                        logInfo @String $ "Contract Timeout for party " <> show party
+                        tell $ Just $ EndpointSuccess reqId AutoResponse
+                        marlowePlutusContract
+                    Right (Transition Closed{}) -> do
+                        logInfo @String $ "Contract Ended for party " <> show party
+                        tell $ Just $ EndpointSuccess reqId AutoResponse
+                        marlowePlutusContract
+                    Right (Transition InputApplied{historyData}) -> continueWith historyData
+                    Right (Transition Created{historyData}) -> continueWith historyData
             Just OnChainState{ocsTxOutRef=st} -> do
                 let marloweData = toMarloweState st
                 continueWith marloweData
