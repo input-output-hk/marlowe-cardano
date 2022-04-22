@@ -1,12 +1,13 @@
 module Simulator.State
-  ( applyInput
-  , hasHistory
-  , advanceTime
+  ( advanceTime
+  , applyInput
   , emptyExecutionStateWithTime
   , emptyMarloweState
+  , getAllActions
+  , hasHistory
+  , initialMarloweState
   , startSimulation
   , updateChoice
-  , getAllActions
   ) where
 
 import Prologue
@@ -29,7 +30,7 @@ import Data.List as List
 import Data.List.Types (NonEmptyList)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, maybe)
+import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap, wrap)
 import Data.NonEmpty ((:|))
 import Data.NonEmptyList.Extra (extendWith)
@@ -114,26 +115,30 @@ emptyExecutionStateWithTime time cont =
     , contract: cont
     }
 
-simulationNotStartedWithTime
-  :: Instant -> Maybe (Term T.Contract) -> ExecutionState
-simulationNotStartedWithTime time mContract =
+simulationNotStarted
+  :: Instant -> Term T.Contract -> ExecutionState
+simulationNotStarted time termContract =
   SimulationNotStarted
     { initialTime: time
-    , termContract: mContract
-    , templateContent: maybe mempty
-        (initializeTemplateContent <<< getPlaceholderIds)
-        mContract
+    , termContract
+    , templateContent:
+        initializeTemplateContent $ getPlaceholderIds $ termContract
     }
 
-simulationNotStarted :: Maybe (Term T.Contract) -> ExecutionState
-simulationNotStarted = simulationNotStartedWithTime unixEpoch
-
-emptyMarloweState :: Maybe (Term T.Contract) -> MarloweState
-emptyMarloweState mContract =
+emptyMarloweState :: MarloweState
+emptyMarloweState =
   { editorErrors: mempty
   , editorWarnings: mempty
   , holes: mempty
-  , executionState: simulationNotStarted mContract
+  , executionState: Nothing
+  }
+
+initialMarloweState :: Instant -> Term T.Contract -> MarloweState
+initialMarloweState initialTime contract =
+  { editorErrors: mempty
+  , editorWarnings: mempty
+  , holes: mempty
+  , executionState: Just $ simulationNotStarted initialTime contract
   }
 
 minimumBound :: Array Bound -> ChosenNum
@@ -191,7 +196,7 @@ simplifyBoundList l = l
 
 updatePossibleActions :: MarloweState -> MarloweState
 updatePossibleActions
-  oldState@{ executionState: SimulationRunning executionState } =
+  oldState@{ executionState: Just (SimulationRunning executionState) } =
   let
     contract = executionState ^. _contract
 
@@ -318,7 +323,8 @@ extractRequiredActions contract = case contract of
   _ -> mempty
 
 applyPendingInputs :: MarloweState -> MarloweState
-applyPendingInputs oldState@{ executionState: SimulationRunning executionState } =
+applyPendingInputs
+  oldState@{ executionState: Just (SimulationRunning executionState) } =
   newState
   where
   txInput@(TransactionInput txIn) = pendingTransactionInputs executionState
@@ -486,7 +492,9 @@ hasHistory state = case state ^. (_marloweState <<< _Tail) of
   Cons _ _ -> true
 
 evalObservation :: MarloweState -> Observation -> Boolean
-evalObservation { executionState: SimulationRunning executionState } observation =
+evalObservation
+  { executionState: Just (SimulationRunning executionState) }
+  observation =
   let
     txInput = pendingTransactionInputs executionState
   in

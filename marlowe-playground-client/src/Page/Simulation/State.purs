@@ -20,7 +20,7 @@ import Data.Either (fromRight, hush)
 import Data.Foldable (for_)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Hashable (hash)
-import Data.Lens (_Just, assign, modifying, use)
+import Data.Lens (assign, modifying, use)
 import Data.Lens.Extra (peruse)
 import Data.List.NonEmpty (last)
 import Data.List.NonEmpty as NEL
@@ -37,7 +37,7 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Console (log)
-import Effect.Now (nowDateTime)
+import Effect.Now (now, nowDateTime)
 import Foreign.Generic (ForeignError, decode)
 import Foreign.JSON (parseJSON)
 import Halogen (HalogenM, query, tell)
@@ -87,6 +87,7 @@ import Simulator.State
   ( advanceTime
   , applyInput
   , emptyMarloweState
+  , initialMarloweState
   , startSimulation
   , updateChoice
   )
@@ -110,7 +111,7 @@ import Web.HTML.Window as W
 mkStateBase :: Minutes -> StateBase ()
 mkStateBase tzOffset =
   { showRightPanel: true
-  , marloweState: NEL.singleton (emptyMarloweState Nothing)
+  , marloweState: NEL.singleton emptyMarloweState
   , tzOffset
   , helpContext: MarloweHelp
   , bottomPanelState: BottomPanel.initialState CurrentStateView
@@ -137,9 +138,10 @@ mkContract
   => HalogenM State Action ChildSlots Void m (Maybe (Term Term.Contract))
 mkContract = runMaybeT do
   termContract <- MaybeT $ peruse
-    ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+    ( _currentMarloweState
+        <<< _executionState
+        <<< _SimulationNotStarted
         <<< _termContract
-        <<< _Just
     )
   templateContent <- MaybeT $ peruse
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
@@ -252,7 +254,14 @@ handleAction (LoadContract contents) = do
   liftEffect $ SessionStorage.setItem simulatorBufferLocalStorageKey contents
   let
     mTermContract = hush $ parseContract contents
-  assign _marloweState $ NEL.singleton $ emptyMarloweState mTermContract
+  currentTime <- liftEffect $ now
+  for_ mTermContract \termContract ->
+    assign
+      _marloweState
+      ( NEL.singleton
+          $ initialMarloweState currentTime termContract
+      )
+
   editorSetValue contents
 
 handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
@@ -282,9 +291,9 @@ setOraclePrice
   => MonadAjax Api m
   => HalogenM State Action ChildSlots Void m Unit
 setOraclePrice = do
-  execState <- use (_currentMarloweState <<< _executionState)
+  execState <- peruse (_currentMarloweState <<< _executionState)
   case execState of
-    SimulationRunning esr -> do
+    Just (SimulationRunning esr) -> do
       let
         (Parties actions) = esr.possibleActions
       case Map.lookup (Role "kraken") actions of

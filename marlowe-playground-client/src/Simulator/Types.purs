@@ -240,9 +240,7 @@ type ExecutionStateRecord =
 
 type InitialConditionsRecord =
   { initialTime :: Instant
-  -- TODO: Should we remove the Maybe and just not set InitialConditionsRecord if we cannot
-  --       parse the contract?
-  , termContract :: Maybe (Term T.Contract)
+  , termContract :: Term T.Contract
   , templateContent :: TemplateContent
   }
 
@@ -251,7 +249,7 @@ data ExecutionState
   | SimulationNotStarted InitialConditionsRecord
 
 type MarloweState =
-  { executionState :: ExecutionState
+  { executionState :: Maybe ExecutionState
   , holes :: Holes
   -- NOTE: as part of the marlowe editor and simulator split this part of the
   --       state wont be used, but it is left as it is because it may make sense

@@ -17,7 +17,7 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.DateTime.Instant (Instant)
 import Data.DateTime.Instant as Instant
 import Data.Enum (fromEnum)
-import Data.Lens (has, only, previewOn, to, view, (^.), (^?))
+import Data.Lens (has, only, preview, previewOn, to, view, (^.), (^?))
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.NonEmptyList (_Head)
 import Data.Map (Map)
@@ -320,18 +320,19 @@ sidebar
   -> State
   -> Array (ComponentHTML Action ChildSlots m)
 sidebar metadata state =
-  case view (_marloweState <<< _Head <<< _executionState) state of
-    SimulationNotStarted notStartedRecord ->
+  case preview (_marloweState <<< _Head <<< _executionState) state of
+    Just (SimulationNotStarted notStartedRecord) ->
       [ startSimulationWidget
           metadata
           notStartedRecord
           state.tzOffset
       ]
-    SimulationRunning _ ->
+    Just (SimulationRunning _) ->
       [ div [ class_ smallSpaceBottom ] [ simulationStateWidget state ]
       , div [ class_ spaceBottom ] [ actionWidget metadata state ]
       , logWidget metadata state
       ]
+    Nothing -> [ div_ [ text "Simulation not ready" ] ]
 
 ------------------------------------------------------------
 
