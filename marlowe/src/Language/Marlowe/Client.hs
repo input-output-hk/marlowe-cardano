@@ -391,12 +391,14 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       follow UnknownOnChainState = do
         currOnChainState <- fetchOnChainState
         notify currOnChainState
-        pure $ Right $ LastResult currOnChainState
+        loop currOnChainState
 
       follow (LastResult prevState) = do
         possiblyNewState <- awaitNewState prevState
         notify possiblyNewState
-        pure $ Right $ LastResult possiblyNewState
+        loop possiblyNewState
+
+      loop st = pure $ Right $ LastResult st
 
     checkpointLoop follow UnknownOnChainState
   where
@@ -406,7 +408,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
 
     last h = foldlHistory step h h
       where
-        step _ new = new
+        step _ next = next
 
     continuationUtxo = last >>> \case
       Created { historyTxOutRef }      -> Just historyTxOutRef
