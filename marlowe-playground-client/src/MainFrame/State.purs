@@ -425,7 +425,8 @@ handleAction (BlocklyEditorAction action) = do
     _ -> pure unit
 
 handleAction (SimulationAction action) = do
-  toSimulation (Simulation.handleAction action)
+  metadata <- use _contractMetadata
+  toSimulation (Simulation.handleAction metadata action)
   case action of
     ST.EditSource -> do
       mLang <- use _workflow
@@ -610,8 +611,9 @@ sendToSimulation
   => String
   -> HalogenM State Action ChildSlots Void m Unit
 sendToSimulation contract = do
+  metadata <- use _contractMetadata
   selectView Simulation
-  toSimulation $ Simulation.handleAction (ST.LoadContract contract)
+  toSimulation $ Simulation.handleAction metadata (ST.LoadContract contract)
 
 selectLanguageView :: Lang -> View
 selectLanguageView = case _ of

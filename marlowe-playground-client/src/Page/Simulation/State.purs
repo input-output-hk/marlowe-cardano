@@ -47,6 +47,7 @@ import Help (HelpContext(..))
 import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
 import Marlowe (Api)
 import Marlowe as Server
+import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Holes (Contract) as Term
 import Marlowe.Holes (Location(..), Term, fromTerm, getLocation)
 import Marlowe.Monaco as MM
@@ -153,43 +154,44 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => Action
+  => MetaData
+  -> Action
   -> HalogenM State Action ChildSlots Void m Unit
-handleAction (HandleEditorMessage Monaco.EditorReady) = do
+handleAction metadata (HandleEditorMessage Monaco.EditorReady) = do
   contents <- fromMaybe "" <$>
     (liftEffect $ SessionStorage.getItem simulatorBufferLocalStorageKey)
-  handleAction $ LoadContract contents
+  handleAction metadata $ LoadContract contents
   editorSetTheme
 
-handleAction (HandleEditorMessage (Monaco.TextChanged _)) = pure unit
+handleAction _ (HandleEditorMessage (Monaco.TextChanged _)) = pure unit
 
-handleAction (SetInitialTime initialTime) = do
+handleAction metadata (SetInitialTime initialTime) = do
   assign
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted <<<
         _initialTime
     )
     initialTime
-  setOraclePrice
+  setOraclePrice metadata
 
-handleAction (SetValueTemplateParam key value) = do
+handleAction metadata (SetValueTemplateParam key value) = do
   modifying
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
         <<< _templateContent
         <<< _valueContent
     )
     (Map.insert key value)
-  setOraclePrice
+  setOraclePrice metadata
 
-handleAction (SetTimeTemplateParam key value) = do
+handleAction metadata (SetTimeTemplateParam key value) = do
   modifying
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
         <<< _templateContent
         <<< _timeContent
     )
     (Map.insert key value)
-  setOraclePrice
+  setOraclePrice metadata
 
-handleAction StartSimulation = do
+handleAction metadata StartSimulation = do
   {- The marloweState is a non empty list of an object that includes the ExecutionState (SimulationRunning | SimulationNotStarted)
   Inside the SimulationNotStarted we can find the information needed to start the simulation. By running
   this code inside of a maybeT, we make sure that the Head of the list has the state SimulationNotStarted -}
@@ -199,9 +201,9 @@ handleAction StartSimulation = do
     )
   contract <- mkContract
   void $ sequence $ startSimulation <$> initialTime <*> contract
-  updateOracleAndContractEditor
+  updateOracleAndContractEditor metadata
 
-handleAction DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
+handleAction _ DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
   Just (contract :: Contract) -> do
     dateTime <- liftEffect $ nowDateTime
     projectName <- use _projectName
@@ -218,39 +220,39 @@ handleAction DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
       download (FileDownload fullName) blob
   Nothing -> pure unit
 
-handleAction (MoveTime instant) = void $ runMaybeT do
+handleAction metadata (MoveTime instant) = void $ runMaybeT do
   advanceTime instant
-  lift updateOracleAndContractEditor
+  lift $ updateOracleAndContractEditor metadata
 
-handleAction (SetTime time) = do
+handleAction metadata (SetTime time) = do
   assign
     ( _currentMarloweState <<< _executionState <<< _SimulationRunning
         <<< _possibleActions
         <<< _moveToAction
     )
     (Just $ MoveToTime time)
-  setOraclePrice
+  setOraclePrice metadata
 
-handleAction (AddInput input bounds) = do
+handleAction metadata (AddInput input bounds) = do
   when validInput do
     applyInput input
-    updateOracleAndContractEditor
+    updateOracleAndContractEditor metadata
   where
   validInput = case input of
     (IChoice _ chosenNum) -> inBounds chosenNum bounds
     _ -> true
 
-handleAction (SetChoice choiceId chosenNum) = updateChoice choiceId chosenNum
+handleAction _ (SetChoice choiceId chosenNum) = updateChoice choiceId chosenNum
 
-handleAction ResetSimulator = do
+handleAction metadata ResetSimulator = do
   modifying _marloweState (NEL.singleton <<< last)
-  updateOracleAndContractEditor
+  updateOracleAndContractEditor metadata
 
-handleAction Undo = do
+handleAction metadata Undo = do
   modifying _marloweState tailIfNotEmpty
-  updateOracleAndContractEditor
+  updateOracleAndContractEditor metadata
 
-handleAction (LoadContract contents) = do
+handleAction metadata (LoadContract contents) = do
   liftEffect $ SessionStorage.setItem simulatorBufferLocalStorageKey contents
   let
     mTermContract = hush $ parseContract contents
@@ -259,24 +261,26 @@ handleAction (LoadContract contents) = do
     assign
       _marloweState
       ( NEL.singleton
-          $ initialMarloweState currentTime termContract
+          $ initialMarloweState currentTime termContract metadata
       )
 
   editorSetValue contents
 
-handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
-  action
+handleAction metadata (BottomPanelAction (BottomPanel.PanelAction action)) =
+  handleAction
+    metadata
+    action
 
-handleAction (BottomPanelAction action) = do
+handleAction _ (BottomPanelAction action) = do
   toBottomPanel (BottomPanel.handleAction action)
 
-handleAction (ChangeHelpContext help) = do
+handleAction _ (ChangeHelpContext help) = do
   assign _helpContext help
   scrollHelpPanel
 
-handleAction (ShowRightPanel val) = assign _showRightPanel val
+handleAction _ (ShowRightPanel val) = assign _showRightPanel val
 
-handleAction EditSource = pure unit
+handleAction _ EditSource = pure unit
 
 stripPair :: String -> Boolean /\ String
 stripPair pair = case splitAt 4 pair of
@@ -289,8 +293,9 @@ setOraclePrice
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => HalogenM State Action ChildSlots Void m Unit
-setOraclePrice = do
+  => MetaData
+  -> HalogenM State Action ChildSlots Void m Unit
+setOraclePrice metadata = do
   execState <- peruse (_currentMarloweState <<< _executionState)
   case execState of
     Just (SimulationRunning esr) -> do
@@ -303,7 +308,7 @@ setOraclePrice = do
               let
                 inverse /\ strippedPair = stripPair pair
               price <- getPrice inverse "kraken" strippedPair
-              handleAction (SetChoice choiceId price)
+              handleAction metadata (SetChoice choiceId price)
             _ -> pure unit
         Nothing -> pure unit
     _ -> pure unit
@@ -406,8 +411,9 @@ updateOracleAndContractEditor
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => HalogenM State Action ChildSlots Void m Unit
-updateOracleAndContractEditor = do
+  => MetaData
+  -> HalogenM State Action ChildSlots Void m Unit
+updateOracleAndContractEditor metadata = do
   mContract <- peruse _currentContract
   -- Update the decorations around the current part of the running contract
   oldDecorationIds <- use _decorationIds
@@ -433,4 +439,4 @@ updateOracleAndContractEditor = do
       assign _decorationIds []
       void $ tell _simulatorEditorSlot unit $ Monaco.SetPosition
         { column: 1, lineNumber: 1 }
-  setOraclePrice
+  setOraclePrice metadata
