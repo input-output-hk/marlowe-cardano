@@ -1,3 +1,5 @@
+# This is meant to be called from:
+#  * nix/default.nix
 { pkgs
 , checkMaterialization
 , system ? builtins.currentSystem
@@ -38,7 +40,15 @@ let
   # These are needed to pull the cardano-cli and cardano-node in the nix-shell.
   inherit (haskell.project.hsPkgs.cardano-cli.components.exes) cardano-cli;
   inherit (haskell.project.hsPkgs.cardano-node.components.exes) cardano-node;
-
+  # HACK WARNING:
+  # plutus-chain-index should be the following commented line, but that is currently causing
+  # a baffling segfault, instead I'm just using the string `plutus-chain-index` because nix-shell
+  # is already putting it on the $PATH
+  # inherit (haskell.project.hsPkgs.plutus-chain-index.components.exes) plutus-chain-index;
+  plutus-chain-index = "plutus-chain-index";
+  # same hack warning:
+  # inherit (haskell.project.hsPkgs.marlowe.components.exes) marlowe-pab;
+  marlowe-pab = "marlowe-pab";
   #
   # dev convenience scripts
   #
@@ -63,6 +73,88 @@ let
     $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-linux "$@") &
     $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-darwin "$@") &
     wait
+  '';
+
+  network = pkgs.networks.testnet-dev;
+
+  devNetworkConfig = rec {
+    node = {
+      config-file = pkgs.writeTextFile {
+        name = "node-config.json";
+        text = builtins.toJSON (import ../../marlowe-dashboard-client/dev/node-config.nix { config = network.nodeConfig; });
+      };
+      port = 3001;
+      socket-path = "ipc/node.socket";
+      database-path = "db/node.db";
+    };
+    wallet = {
+      testnet = network.nodeConfig.ByronGenesisFile;
+      database-path = "db/wallet.db";
+      port = 8090;
+    };
+    chain-index = {
+      network-id = network.magic;
+      database-path = "db/chain-index.db";
+      port = 9083;
+    };
+    pab = {
+      database-path = "db/pab.db";
+      port = 9080;
+      config-params = {
+        dbConfigFile = pab.database-path + "/marlowe-pab.db";
+        baseUrl = "http://localhost:${toString pab.port}";
+        walletUrl = "http://localhost:${toString wallet.port}";
+        socket-path = node.socket-path;
+        inherit network;
+        protocol-parameters = "ipc/testnet.protocol";
+      };
+      config-file = pkgs.writeTextFile {
+        name = "marlowe-pab.yaml";
+        text = builtins.toJSON (import ../../marlowe-dashboard-client/dev/pab-config.nix pab.config-params);
+      };
+    };
+    topology = network.topology;
+  };
+
+  start-cardano-node = writeShellScriptBinInRepoRoot "start-cardano-node" ''
+    mkdir -p ${devNetworkConfig.node.database-path}
+    mkdir ipc
+    cardano-node run \
+            --config ${devNetworkConfig.node.config-file} \
+            --topology ${devNetworkConfig.topology} \
+            --port ${toString devNetworkConfig.node.port} \
+            --socket-path ${devNetworkConfig.node.socket-path} \
+            --database-path ${devNetworkConfig.node.database-path}
+  '';
+
+  start-wallet = writeShellScriptBinInRepoRoot "start-cardano-wallet" ''
+    mkdir -p ${devNetworkConfig.wallet.database-path}
+
+    cardano-wallet serve \
+      --testnet ${devNetworkConfig.wallet.testnet} \
+      --database ${devNetworkConfig.wallet.database-path} \
+      --node-socket ${devNetworkConfig.node.socket-path} \
+      --port ${toString devNetworkConfig.wallet.port}
+  '';
+
+  start-chain-index = writeShellScriptBinInRepoRoot "start-chain-index" ''
+    mkdir -p ${devNetworkConfig.chain-index.database-path}
+
+    ${plutus-chain-index} start-index \
+      --network-id ${toString devNetworkConfig.chain-index.network-id} \
+      --db-path ${devNetworkConfig.chain-index.database-path}/ci.sqlite \
+      --socket-path ${devNetworkConfig.node.socket-path} \
+      --port ${toString devNetworkConfig.chain-index.port}
+
+  '';
+
+  start-marlowe-pab = writeShellScriptBinInRepoRoot "start-marlowe-pab" ''
+    mkdir -p ${devNetworkConfig.pab.database-path}
+    echo "before"
+    [ ! -f ${devNetworkConfig.pab.config-params.dbConfigFile}/marlowe-pab.db ] && \
+      ${marlowe-pab} migrate --config ${devNetworkConfig.pab.config-file}
+    echo ${devNetworkConfig.pab.config-file}
+    echo "after"
   '';
 
   updateClientDeps = pkgs.callPackage ./update-client-deps.nix {
@@ -151,5 +243,6 @@ in
   inherit easyPS plutus-haddock-combined;
   inherit lib;
   inherit webCommon;
+  inherit start-cardano-node start-wallet start-chain-index start-marlowe-pab;
   inherit (formatting) fix-prettier fix-purs-tidy fix-dhall purs-tidy-hook dhall-hook;
 }

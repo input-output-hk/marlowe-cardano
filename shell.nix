@@ -98,6 +98,10 @@ let
   localInputs = (with marlowe; [
     cabal-install
     cardano-node
+    start-cardano-node
+    start-wallet
+    start-chain-index
+    start-marlowe-pab
     cardano-repo-tool
     cardano-wallet
     fixPngOptimization

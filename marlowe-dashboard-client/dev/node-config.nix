@@ -1,7 +1,9 @@
-config: config // {
-  AlonzoGenesisFile = "alonzo-genesis.json";
-  ByronGenesisFile = "byron-genesis.json";
-  ShelleyGenesisFile = "shelley-genesis.json";
+{ AlonzoGenesisFile ? config.AlonzoGenesisFile
+, ByronGenesisFile ? config.ByronGenesisFile
+, ShelleyGenesisFile ? config.ShelleyGenesisFile
+, config
+}: config // {
+  inherit AlonzoGenesisFile ByronGenesisFile ShelleyGenesisFile;
   TraceDNSResolver = false;
   TraceDNSSubscription = false;
   TraceIpSubscription = false;
