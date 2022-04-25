@@ -1,6 +1,5 @@
 module Marlowe.Execution.State
-  ( contractName
-  , currentStep
+  ( currentStep
   , expandBalances
   , extractNamedActions
   , getActionParticipant
@@ -21,14 +20,12 @@ import Prologue
 
 import Data.Array (foldl, length)
 import Data.Array as Array
-import Data.ContractNickname (ContractNickname)
-import Data.ContractNickname as ContractNickname
 import Data.DateTime.Instant (Instant)
 import Data.Function (on)
 import Data.Lens (view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
-import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe, maybe')
+import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe)
 import Data.Newtype (unwrap)
 import Data.Time.Duration (Days(..), Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
@@ -64,7 +61,6 @@ import Marlowe.Semantics
   , TransactionInput(..)
   , TransactionOutput(..)
   , _accounts
-  , _rolesCurrency
   , computeTransaction
   , emptyState
   , evalValue
@@ -80,14 +76,12 @@ import Safe.Coerce (coerce)
 
 mkInitialState
   :: PlutusAppId
-  -> Maybe ContractNickname
   -> MarloweParams
   -> MetaData
   -> Contract
   -> State
-mkInitialState followerAppId contractNickname marloweParams metadata contract =
+mkInitialState followerAppId marloweParams metadata contract =
   { semanticState: emptyState
-  , contractNickname
   , contract
   , initialContract: contract
   , metadata
@@ -102,11 +96,10 @@ mkInitialState followerAppId contractNickname marloweParams metadata contract =
 restoreState
   :: PlutusAppId
   -> Instant
-  -> Maybe ContractNickname
   -> MetaData
   -> ContractHistory
   -> Either TransactionError State
-restoreState followerAppId currentTime contractNickname metadata history = do
+restoreState followerAppId currentTime metadata history = do
   let
     MarloweData { marloweContract, marloweState } = getInitialData history
     marloweParams = getMarloweParams history
@@ -114,7 +107,6 @@ restoreState followerAppId currentTime contractNickname metadata history = do
     -- Derive the initial params from the Follower Contract params
     initialState =
       { semanticState: marloweState
-      , contractNickname
       , contract: marloweContract
       , initialContract: marloweContract
       , metadata
@@ -133,15 +125,6 @@ restoreState followerAppId currentTime contractNickname metadata history = do
 
   -- See if any step has timeouted
   timeoutState currentTime appliedInputState
-
--- Each contract should always have a name, if we
--- have given a Local nickname, we use that, if not we
--- show the currency symbol
-contractName :: State -> String
-contractName { contractNickname, marloweParams } = maybe'
-  (\_ -> view _rolesCurrency marloweParams)
-  ContractNickname.toString
-  contractNickname
 
 setPendingTransaction :: TransactionInput -> State -> State
 setPendingTransaction txInput state = state

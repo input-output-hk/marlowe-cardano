@@ -31,7 +31,6 @@ import Halogen.HTML.Properties (title)
 import Halogen.HTML.Properties.ARIA (role)
 import Halogen.Store.Monad (class MonadStore)
 import Images (contractIcon)
-import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (_rolesCurrency)
@@ -47,12 +46,11 @@ contractPreviewCard
   => Instant
   -> ContractState
   -> ComponentHTML Action ChildSlots m
-contractPreviewCard currentTime { executionState, namedActions } =
+contractPreviewCard currentTime { executionState, namedActions, nickname } =
   let
     contractType = executionState ^. (_metadata <<< _contractType)
     contractName = executionState ^. (_metadata <<< _contractName)
     marloweParams = executionState ^. _marloweParams
-    nickname = Execution.contractName executionState
     stepPanel =
       div
         [ classNames [ "px-4", "py-2" ] ]

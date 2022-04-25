@@ -39,6 +39,7 @@ import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Int (round)
 import Data.Lens (folded, toArrayOf, view, (^.))
+import Data.Map as Map
 import Data.Maybe (isJust)
 import Data.NewContract (getContractNickname)
 import Data.PABConnectedWallet
@@ -88,7 +89,6 @@ import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
-import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Semantics (PubKey)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
@@ -97,7 +97,7 @@ import Page.Dashboard.Lenses
   , _cardOpen
   , _closedContracts
   , _contractFilter
-  , _contractStore
+  , _contracts
   , _currentTime
   , _menuOpen
   , _newContracts
@@ -116,7 +116,6 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (getContract, getNewContract)
 
 type ComponentHTML m = HH.ComponentHTML Action ChildSlots m
 
@@ -169,7 +168,6 @@ dashboardScreen
 dashboardScreen state =
   let
     currentTime = state ^. _currentTime
-    contracts = state ^. _contractStore
     wallet = state ^. _wallet
     walletNickname = wallet ^. _walletNickname
     menuOpen = state ^. _menuOpen
@@ -178,11 +176,16 @@ dashboardScreen state =
     mSelectedContractStringId = do
       contractIndex <- mSelectedContractIndex
       case contractIndex of
-        Starting reqId -> ContractNickname.toString <<< getContractNickname <$>
-          getNewContract reqId contracts
-        Started marloweParams -> Execution.contractName <$> getContract
-          marloweParams
-          contracts
+        Starting reqId -> do
+          let
+            newContracts = state ^. _newContracts
+            mContract = Map.lookup reqId newContracts
+          ContractNickname.toString <<< getContractNickname <$> mContract
+        Started marloweParams -> do
+          let
+            contracts = state ^. _contracts
+            mContract = Map.lookup marloweParams contracts
+          _.nickname <$> mContract
   in
     appTemplate cardOpen (dashboardHeader (WN.toString walletNickname) menuOpen)
       $ div

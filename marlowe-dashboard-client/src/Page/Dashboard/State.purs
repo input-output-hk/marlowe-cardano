@@ -48,6 +48,7 @@ import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt as BigInt
 import Data.BigInt.Argonaut (BigInt)
+import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
@@ -57,6 +58,7 @@ import Data.Foldable (foldMap, for_, traverse_)
 import Data.FoldableWithIndex (forWithIndex_)
 import Data.Lens (_Just, assign, modifying, set, to, use, view, (^.), (^?))
 import Data.Lens.Record (prop)
+import Data.LocalContractNicknames (LocalContractNicknames, getContractNickname)
 import Data.Map (Map, filterKeys, toUnfoldable)
 import Data.Map as Map
 import Data.Map.Alignable (AlignableMap(..))
@@ -162,6 +164,7 @@ import Store.Contracts
   ( ContractStore
   , followerContractExists
   , getContract
+  , getContractNicknames
   , isFollowerContract
   , partitionContracts
   )
@@ -282,21 +285,29 @@ deriveState { context } =
   let
     { contracts, currentTime, roleTokens } = context
     { started, starting } = partitionContracts contracts
+    nicknames = getContractNicknames contracts
   in
     { newContracts: starting
-    , contracts: deriveContractState currentTime roleTokens <$> started
+    , contracts:
+        deriveContractState currentTime nicknames roleTokens <$> started
     }
 
 deriveContractState
   :: Instant
+  -> LocalContractNicknames
   -> RoleTokenStore
   -> Execution.State
   -> ContractState
-deriveContractState currentTime roleTokens executionState =
+deriveContractState currentTime nicknames roleTokens executionState =
   { executionState
   , namedActions: userNamedActions roleTokens executionState
       $ extractNamedActions currentTime executionState
   , isClosed: isClosed executionState
+  , nickname:
+      maybe
+        (executionState.marloweParams ^. _rolesCurrency)
+        (ContractNickname.toString)
+        $ getContractNickname executionState.marloweParams nicknames
   }
 
 type HalogenM = H.HalogenM State Action ChildSlots Msg

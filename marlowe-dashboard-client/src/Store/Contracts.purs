@@ -168,8 +168,6 @@ historyUpdated currentTime followerId metadata history store =
     marloweParams = getMarloweParams history
     mNewContract =
       newContractById marloweParams store <|> newContractByMatch store
-    mContractNickname = getContractNickname marloweParams store
-      <|> NC.getContractNickname <$> mNewContract
     updateIndexes = over _contractIndex $ Bimap.insert marloweParams
       followerId
     updateSyncedContracts = traverseOf _startedContracts
@@ -179,15 +177,21 @@ historyUpdated currentTime followerId metadata history store =
           ( Execution.restoreState
               followerId
               currentTime
-              mContractNickname
               metadata
               history
           )
           <<< pure
+    mNickname = getContractNickname marloweParams store
+      <|> NC.getContractNickname <$> mNewContract
+    updateNicknames = maybe
+      identity
+      (modifyContractNicknames <<< insertContractNickname marloweParams)
+      mNickname
   in
     either
       (const store)
       ( maybe identity (removeNewContract marloweParams) mNewContract
+          <<< updateNicknames
           <<< updateIndexes
       )
       (updateSyncedContracts store)
@@ -228,15 +232,11 @@ contractStarted (NewContract reqId nickname _ _ _) marloweParams =
         { newMarloweParams =
             Map.insert marloweParams reqId store.newMarloweParams
         }
-      -- If so, we can just delete the new contract now. We also need to update
-      -- the contract added by `historyUpdated` with the correct nickname.
-      Just contract -> store
+      -- If so, we can just delete the new contract now. We also need to record
+      -- the contract's nickname in the contract nicknames collection.
+      Just _ -> store
         { newContracts = Map.delete reqId store.newContracts
         , newMarloweParams = Map.delete marloweParams store.newMarloweParams
-        , startedContracts = Map.insert
-            marloweParams
-            (contract { contractNickname = Just nickname })
-            store.startedContracts
         }
 
 contractStartFailed

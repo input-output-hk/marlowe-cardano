@@ -45,6 +45,7 @@ type ContractState =
   { executionState :: Execution.State
   , namedActions :: UserNamedActions
   , isClosed :: Boolean
+  , nickname :: String
   }
 
 type State = Reactive.State

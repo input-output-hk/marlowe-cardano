@@ -43,9 +43,8 @@ import Marlowe.Semantics (State) as Semantic
 -- contracts (even the closed ones).
 -- TODO: Consider using Lazy computations
 type State =
-  { contractNickname :: Maybe ContractNickname
-  -- Current contract and state
-  , semanticState :: Semantic.State
+  { -- Current contract and state
+    semanticState :: Semantic.State
   , contract :: Contract
   -- The initial contract is needed to calculate the participants
   , initialContract :: Contract

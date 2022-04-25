@@ -294,7 +294,6 @@ restoreLoanState { currentTime, startTime } loanParams chHistory = do
     mState = restoreState
       (PlutusAppId UUID.emptyUUID)
       currentTime
-      Nothing
       Loan.metaData
       contractHistory
   case mState of
@@ -329,4 +328,3 @@ unsafeRemoveInstant a b =
   case runExcept $ adjustInstant (negateDuration $ unInstant b) a of
     Left _ -> unsafeThrow $ "Cannot remove " <> show a <> " - " <> show b
     Right i -> i
-
