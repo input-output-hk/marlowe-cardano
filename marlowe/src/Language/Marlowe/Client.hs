@@ -255,7 +255,7 @@ minLovelaceDeposit = 2_000_000
 
 -}
 waitForChainIndex :: forall st sc err. AsContractError err => Contract st sc err ()
-waitForChainIndex = void $ waitNMilliSeconds 2_500
+waitForChainIndex = void $ waitNMilliSeconds 5000
 
 
 debugMsg :: String -> String -> String
@@ -265,37 +265,65 @@ debugMsg fnName msg = "[DEBUG:" <> fnName <> "] " <> msg
 debug :: forall st sc err. String -> String -> Contract st sc err ()
 debug fnName msg = logInfo $ debugMsg fnName msg
 
-retryTillJust :: Monad m => Int -> m (Maybe a) -> m (Maybe a)
-retryTillJust maxRetries action
-  | maxRetries <= 0 = pure Nothing
-  | otherwise = do
-      action >>= \case
-        Nothing -> retryTillJust (maxRetries - 1) action
-        res     -> pure res
+-- | During first pass the counter equals to 0 - first pass is not a retry
+newtype RetryCounter = RetryCounter Int
+newtype MaxRetries = MaxRetries Int
 
-retryTillChanged :: Monad m => Eq a => Int -> a -> m a -> m (Maybe a)
-retryTillChanged maxRetries known action = do
-  retryTillJust maxRetries $ do
-    new <- action
+retryTillJust :: Monad m => MaxRetries -> (RetryCounter -> m (Maybe a)) -> m (Maybe a)
+retryTillJust (MaxRetries maxRetries) action = go 0
+  where
+    go cnt
+      | maxRetries <= cnt = pure Nothing
+      | otherwise = do
+          (action $ RetryCounter cnt) >>= \case
+            Nothing -> go (cnt + 1)
+            res     -> pure res
+
+-- | Our retries defaults
+pollingInterval :: Ledger.DiffMilliSeconds
+pollingInterval = 1000
+
+maxRetries :: MaxRetries
+maxRetries = MaxRetries 120
+
+-- | The same as above but specializd to the PAB Contract monad with
+-- | constant delay between retries.
+-- |
+-- | Used to do polling of the PAB because we have to
+-- | wait till chain index catches up with
+-- | the recent responses from the cardano-node (PAB STM)
+retryRequestTillJust :: AsContractError err => MaxRetries -> (RetryCounter -> Contract st sc err (Maybe a)) -> Contract st sc err (Maybe a)
+retryRequestTillJust maxRetries query = do
+  retryTillJust maxRetries $ \cnt@(RetryCounter cntVal) -> do
+    when (cntVal > 0) $ do
+      debug "retryRequestTillJust" $ "Still waiting for desired change - iteration: " <> show cntVal
+      void $ waitNMilliSeconds pollingInterval
+    query cnt
+
+retryRequestTillJust' :: AsContractError err => (RetryCounter -> Contract st sc err (Maybe a)) -> Contract st sc err (Maybe a)
+retryRequestTillJust' = retryRequestTillJust maxRetries
+
+retryTillDiffers :: Monad m => Eq a => MaxRetries -> a -> (RetryCounter -> m a) -> m (Maybe a)
+retryTillDiffers maxRetries known action = do
+  retryTillJust maxRetries $ \cnt -> do
+    new <- action cnt
     if new == known
       then pure Nothing
       else pure $ Just new
 
-pollingInterval :: Ledger.DiffMilliSeconds
-pollingInterval = 1000
+-- | The same as above but specializd to the PAB Contract monad with
+-- | constant delay between retries.
+-- |
+retryTillResponseDiffers :: Eq a => AsContractError err => MaxRetries -> a -> (RetryCounter -> Contract st sc err a) -> Contract st sc err (Maybe a)
+retryTillResponseDiffers maxRetries known query = do
+  retryTillDiffers maxRetries known $ \cnt@(RetryCounter cntVal) -> do
+    when (cntVal > 0) $ do
+      debug "retryTillResponseDiffers" $ "Still waiting for desired change - iteration: " <> show cntVal
+      void $ waitNMilliSeconds pollingInterval
+    query cnt
 
--- | Used to wait till chain index is synced with
--- | the recent responses from cardano-node (PAB STM)
-waitForContractUpdate :: Eq a => AsContractError err => Int -> a -> Contract st sc err a -> Contract st sc err (Maybe a)
-waitForContractUpdate maxRetries known query = do
-  retryTillChanged maxRetries known $ do
-    void $ waitNMilliSeconds pollingInterval
-    query
-
-waitForContractUpdate' :: Eq a => AsContractError err => a -> Contract st sc err a -> Contract st sc err (Maybe a)
-waitForContractUpdate' = waitForContractUpdate maxRetries
-  where
-    maxRetries = 60
+retryTillResponseDiffers' :: Eq a => AsContractError err => a -> Contract st sc err a -> Contract st sc err (Maybe a)
+retryTillResponseDiffers' a query = retryTillResponseDiffers maxRetries a (const query)
 
 -- | Trivial data type (a bit more redable than `Maybe`) which helps fully embed contract into `checkpointLoop`
 data QueryResult a
@@ -351,13 +379,17 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             in
               raceList $ waitTillPayoutIsProduced : waitTillPayoutIsSpent
 
-        update <- awaitPromise (selectEither waitForPayoutChange waitForContractChange)
+        -- We are here notified that there should be a new state on the chain...
+        changeNotification <- awaitPromise
+          (selectEither waitForPayoutChange waitForContractChange)
         debug' $ either
           (mappend "Payout change detected through:" <<< show)
           (mappend "Contract change detected through: " <<< show)
-          update
+          changeNotification
 
-        waitForContractUpdate' prevState fetchOnChainState >>= \case
+        -- ...so let's actually fetch it by enforcing chain index to
+        -- catch up with just received notification.
+        retryTillResponseDiffers' prevState fetchOnChainState >>= \case
           Just newOnChainState -> pure newOnChainState
           Nothing -> do
             debug' "Unable to detect any changes on the chain... Looping back with previously known state"
@@ -376,29 +408,29 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       notify Nothing =
         tell @FollowerContractNotification $ Nothing
 
-      -- Essentially the follower is a loop step:
+      -- In `checkpointLoop` we tail rec by returning `Right` ~ `whileRight` loop.
+      rec :: forall a err sc st w. st -> Contract w sc err (Either a st)
+      rec st = pure $ Right st
+
+      -- `follower` is a loop which iterates over on chain updates:
       --  * we use simple `QueryResult` wrapper so *every* query is wrapped in the `checkpointLoop`.
       --  * we pass in it the last known state and put it to the stream
       --  * we try to use only previous state pieces when constrcuting async requests
       --  * we wait for the changes on the chain
       --  * we ask (up to `maxRetries * pollingInterval`) the chain index for the update
       --    till it actually provides the new state
-      --  * we loop back (by returning `Right`) with possibly new state
+      --  * we loop back (by returning `Right`) with the new state.
       --
-      --  The `Either` wrapper here is required by the `checkpointLoop`
-      --  protocol (essentially `whileRight`).
       follow :: QueryResult FollowerContractState -> FollowerM (Either () (QueryResult FollowerContractState))
       follow UnknownOnChainState = do
         currOnChainState <- fetchOnChainState
         notify currOnChainState
-        loop currOnChainState
+        rec $ LastResult currOnChainState
 
       follow (LastResult prevState) = do
         possiblyNewState <- awaitNewState prevState
         notify possiblyNewState
-        loop possiblyNewState
-
-      loop st = pure $ Right $ LastResult st
+        rec $ LastResult possiblyNewState
 
     checkpointLoop follow UnknownOnChainState
   where
@@ -968,7 +1000,8 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
         posixTimeRangeToContainedSlotRange
           unsafeGetSlotConfig
           times
-    maybeState <- getOnChainStateTxOuts typedValidator
+    maybeState <- retryRequestTillJust' $ const $ do
+      getOnChainStateTxOuts typedValidator
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
         Just (OnChainState{ocsTxOutRef}, utxo) -> do
@@ -1117,7 +1150,7 @@ waitForTransition typedValidator = do
                 -- with scChooser'
                 pure $ promiseBind (utxoIsProduced addr) $ \txns -> do
                     -- See NOTE: Chain index / cardano-node query consistency
-                    waitForChainIndex
+                    void $ retryTillResponseDiffers' mempty (utxosAt addr)
                     produced <- concatMapM (marloweHistoryFrom typedValidator) $ NonEmpty.toList txns
                     case produced of
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
