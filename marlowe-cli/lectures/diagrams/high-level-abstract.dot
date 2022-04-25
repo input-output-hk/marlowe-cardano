@@ -1,0 +1,45 @@
+digraph MarloweHL {
+
+
+node [shape=box]
+
+
+UserSelect [shape=oval label="User decides on contract and its parameters."]
+
+
+Template [label=<<font face="monospace">marlowe-cli template</font><br/><i>Create a contract from a template.</i>>]
+
+UserSelect -> Template
+
+
+Initialize [label=<<font face="monospace">marlowe-cli run initialize</font><br/><i>Bundle the information needed to start the contract.</i>>]
+
+Template -> Initialize
+
+
+Payments [shape=oval label="Payments."]
+
+Prepare -> Payments
+
+
+UserInput [shape=oval label="User decides on next input to the contract."]
+
+Initialize -> UserInput
+
+Prepare -> UserInput [label="Contract is\nnot complete."]
+
+
+Prepare [label=<<font face="monospace">marlowe-cli run prepare</font><br/><i>Prepare the next step of the contract.</i>>]
+
+UserInput -> Prepare [label="apply inputs"]
+
+
+Prepare -> Prepare [label="time out"]
+
+
+Close [shape=oval label="Finish."]
+
+Prepare -> Close [label="Contract is\ncomplete."]
+
+
+}

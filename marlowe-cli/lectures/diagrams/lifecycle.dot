@@ -1,0 +1,48 @@
+digraph MarloweHL {
+
+
+node [shape=box]
+
+
+UserSelect [shape=oval label="User decides on contract and its parameters."]
+
+
+ApplicationScript [label="Marlowe Application Script"]
+
+UserSelect -> ApplicationScript [label=<<i>submit transaction to create contract</i>>]
+
+ApplicationScript-> ApplicationScript [label=<<i>contract times out</i>>]
+
+
+Close [shape=oval label="Contract finished."]
+
+ApplicationScript -> Close [label=<<i>contract closes</i>>]
+
+
+UserDecide [shape=oval label="User decides what actions to take."]
+
+ApplicationScript -> UserDecide [label=<<i>contract continues</i>>]
+
+
+Inputs [shape=oval label="Inputs to contract."]
+
+UserDecide -> Inputs [label=<<i>make deposit</i>>]
+
+UserDecide -> Inputs [label=<<i>make choice</i>>]
+
+UserDecide -> Inputs [label=<<i>notify</i>>]
+
+Inputs -> ApplicationScript [label=<<i>submit transaction with inputs</i>>]
+
+
+PayoutScript [label="Marlowe Payout Script"]
+
+ApplicationScript -> PayoutScript [label=<<i>contract pays</i>>]
+
+
+UserFunds [shape=oval label="User receives payout."]
+
+PayoutScript -> UserFunds [label=<<i>submit transaction to withdraw funds</i>>]
+
+
+}
