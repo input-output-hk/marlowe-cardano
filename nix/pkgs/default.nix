@@ -1,3 +1,5 @@
+# This is meant to be called from:
+#  * nix/default.nix
 { pkgs
 , checkMaterialization
 , system ? builtins.currentSystem
@@ -137,7 +139,6 @@ let
       CoreServices = pkgs.darwin.apple_sdk.frameworks.CoreServices;
       xcodebuild = pkgs.xcodebuild;
     });
-
   };
 
 in
