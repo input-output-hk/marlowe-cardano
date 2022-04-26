@@ -70,10 +70,11 @@ pkgs/.stack
 # Frontend files (NPM/Yarn, Spago, etc.)
 # N.B. officially we use NPM; ignoring Yarn files allows the local use of Yarn for those that want
 **/generated-docs/
-**/node_modules/
+**/node_modules
 **/output/
 **/yarn-error.log
 **/yarn.lock
+!e2e/yarn.lock
 **/.psci_modules/
 **/.spago/
 **/.spago2nix/
@@ -123,3 +124,6 @@ compose.yaml
 
 marlowe-test/out/
 **/.golden/*/actual
+
+# Testing
+e2e/reports
