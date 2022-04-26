@@ -8,7 +8,7 @@ then
 fi
 
 # Select network.
-MAGIC=(--testnet-magic 1564)
+MAGIC=(--testnet-magic 1566)
 
 # Wallet and PAB services.
 WALLET_API=http://localhost:8090

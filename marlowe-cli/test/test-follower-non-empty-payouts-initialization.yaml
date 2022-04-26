@@ -104,27 +104,28 @@ ptPabOperations:
 
   - tag: AwaitFollow
     poInstance: Follower
-    poResponsePattern:
-      parts:
-        chHistory:
-          - tx_inputs:
-              - input_from_party:
-                  role_token: PAB
-                that_deposits: 15000000
-                of_token:
-                  currency_symbol: ""
-                  token_name: ""
-                into_account:
-                  role_token: PAB
-        chUnspentPayouts:
-          - rolePayoutName:
-              unTokenName: "PAB"
-            rolePayoutTxOutRef: {}
-            rolePayoutValue:
-              getValue:
-                [
+    poResponsePatterns:
+      - exact: null
+      - parts:
+          chHistory:
+            - tx_inputs:
+                - input_from_party:
+                    role_token: PAB
+                  that_deposits: 15000000
+                  of_token:
+                    currency_symbol: ""
+                    token_name: ""
+                  into_account:
+                    role_token: PAB
+          chUnspentPayouts:
+            - rolePayoutName:
+                unTokenName: "PAB"
+              rolePayoutTxOutRef: {}
+              rolePayoutValue:
+                getValue:
                   [
-                    { "unCurrencySymbol": "" },
-                    [[{ "unTokenName": "" }, 8000000]],
-                  ],
-                ]
+                    [
+                      { "unCurrencySymbol": "" },
+                      [[{ "unTokenName": "" }, 8000000]],
+                    ],
+                  ]

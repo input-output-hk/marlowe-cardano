@@ -44,7 +44,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, isNothing, listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
 import Data.Monoid (Last)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -79,6 +79,7 @@ import qualified Ledger.Value as Val
 import Plutus.ChainIndex (ChainIndexTx (..), _ValidTx, citxOutputs)
 import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractError)
 import qualified Plutus.Contract as Contract (ContractError (..))
+import Plutus.Contract.Request (txsFromTxIds)
 import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
@@ -189,6 +190,7 @@ instance Semigroup ContractHistory where
 type FollowerContractNotification = Maybe ContractHistory
 
 newtype OnChainState = OnChainState {ocsTxOutRef :: MarloweTxOutRef}
+    deriving stock (Generic, Eq)
 
 newtype Transition = Transition History     -- ^ The state machine instance transitioned to a new state
     deriving stock (Show, Generic)
@@ -246,18 +248,6 @@ mkMarloweTypedValidator = smallUntypedValidator
 minLovelaceDeposit :: Integer
 minLovelaceDeposit = 2_000_000
 
-{- NOTE: Chain index / cardano-node query consistency
-  It seems that we are able to experience inconsistency between chain-index state and
-  `cardano-node` state. For example we can be notified about `utxoIsProduced` but subsequent
-  query about to the chain index like `utxosAt` for the same address can result in an empty set.
-  To work around that problem we should probably provide some proper conditional loop or sync check
-  primitive but... we for now let's just use `waitNMilliSeconds` with arbitrary timeout instead :-P
-
--}
-waitForChainIndex :: forall st sc err. AsContractError err => Contract st sc err ()
-waitForChainIndex = void $ waitNMilliSeconds 5000
-
-
 debugMsg :: String -> String -> String
 debugMsg fnName msg = "[DEBUG:" <> fnName <> "] " <> msg
 
@@ -300,8 +290,8 @@ retryRequestTillJust maxRetries query = do
       void $ waitNMilliSeconds pollingInterval
     query cnt
 
-retryRequestTillJust' :: AsContractError err => (RetryCounter -> Contract st sc err (Maybe a)) -> Contract st sc err (Maybe a)
-retryRequestTillJust' = retryRequestTillJust maxRetries
+retryRequestTillJust' :: AsContractError err => Contract st sc err (Maybe a) -> Contract st sc err (Maybe a)
+retryRequestTillJust' action = retryRequestTillJust maxRetries (const action)
 
 retryTillDiffers :: Monad m => Eq a => MaxRetries -> a -> (RetryCounter -> m a) -> m (Maybe a)
 retryTillDiffers maxRetries known action = do
@@ -313,7 +303,6 @@ retryTillDiffers maxRetries known action = do
 
 -- | The same as above but specializd to the PAB Contract monad with
 -- | constant delay between retries.
--- |
 retryTillResponseDiffers :: Eq a => AsContractError err => MaxRetries -> a -> (RetryCounter -> Contract st sc err a) -> Contract st sc err (Maybe a)
 retryTillResponseDiffers maxRetries known query = do
   retryTillDiffers maxRetries known $ \cnt@(RetryCounter cntVal) -> do
@@ -324,6 +313,18 @@ retryTillResponseDiffers maxRetries known query = do
 
 retryTillResponseDiffers' :: Eq a => AsContractError err => a -> Contract st sc err a -> Contract st sc err (Maybe a)
 retryTillResponseDiffers' a query = retryTillResponseDiffers maxRetries a (const query)
+
+awaitTxConfirmed' :: AsContractError e => Ledger.TxId -> Contract w s e ()
+awaitTxConfirmed' txId = do
+  awaitTxConfirmed txId
+  void $ retryRequestTillJust' $ listToMaybe <$> txsFromTxIds [txId]
+
+awaitUtxoProduced' :: AsContractError e => Address -> Contract w s e (NonEmpty ChainIndexTx)
+awaitUtxoProduced' addr = do
+  prev <- utxosAt addr
+  txns <- awaitUtxoProduced addr
+  void $ retryTillResponseDiffers' prev (utxosAt addr)
+  pure txns
 
 -- | Trivial data type (a bit more redable than `Maybe`) which helps fully embed contract into `checkpointLoop`
 data QueryResult a
@@ -340,6 +341,9 @@ type FollowerPromise a = Promise FollowerContractNotification MarloweFollowSchem
 -- the state of the contract on the chain
 type FollowerContractState = Maybe (History, UnspentPayouts)
 
+-- Follower puts a single `null` to the websocket automatically.
+-- You can expect another `null` (so two `null`s) if you start the follower
+-- before the actual contract is on the chain.
 marloweFollowContract :: FollowerM ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
@@ -383,29 +387,44 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
         changeNotification <- awaitPromise
           (selectEither waitForPayoutChange waitForContractChange)
         debug' $ either
-          (mappend "Payout change detected through:" <<< show)
-          (mappend "Contract change detected through: " <<< show)
+          (mappend "Payout change detected through txId =" <<< show <<< _citxTxId)
+          (mappend "Contract change detected through txId " <<< show <<< _citxTxId)
           changeNotification
 
         -- ...so let's actually fetch it by enforcing chain index to
-        -- catch up with just received notification.
+        -- catch up with just received notification but...
         retryTillResponseDiffers' prevState fetchOnChainState >>= \case
-          Just newOnChainState -> pure newOnChainState
+          Just newOnChainState -> do
+            pure newOnChainState
           Nothing -> do
             debug' "Unable to detect any changes on the chain... Looping back with previously known state"
             pure prevState
 
+        -- ...chain index can still be in an incosistent state (it seems impossible but I had
+        -- encountered this results during testing) so we wait a bit more
+        -- here.
+        -- Incosistency between `unspentPayouts` and `history` should not be a problem
+        -- for the frontend. Additionally follower should catch up to the correct state because
+        -- its queries above are based on the state itself.
+        -- On the other hand the incosistency makes testing difficult so we prefer to have proper
+        -- and reproducible entries in follower notification stream.
+        -- void $ waitNMilliSeconds 8000
+        -- fetchOnChainState
+
       -- Push a possible state update to the stream
       notify :: FollowerContractState -> FollowerM ()
-      notify (Just (history, payouts)) =
+      notify (Just (history, payouts)) = do
+        debug' $ "notifying about new state: inputs = " <> show (foldInputs history)
+        debug' $ "notifying about new state: payouts = " <> show payouts
+        debug' $ "status = " <> show (status history)
         case history of
           Created {historyData} -> do
             tell @FollowerContractNotification $ Just $ mkContractHistory params historyData (foldInputs history) payouts
-            debug' $ "Marlowe contract status: " <> show (status history)
             pure ()
-          _ -> throwError $ OtherContractError $ Contract.OtherContractError $
-            "Invalid history trace head found: " <> T.pack (show history)
-      notify Nothing =
+          _ -> do
+            throwError $ OtherContractError $ Contract.OtherContractError $ "Invalid history trace head found: " <> T.pack (show history)
+      notify Nothing = do
+        debug' "notifying about empty state"
         tell @FollowerContractNotification $ Nothing
 
       -- In `checkpointLoop` we tail rec by returning `Right` ~ `whileRight` loop.
@@ -420,9 +439,9 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       --  * we ask (up to `maxRetries * pollingInterval`) the chain index for the update
       --    till it actually provides the new state
       --  * we loop back (by returning `Right`) with the new state.
-      --
       follow :: QueryResult FollowerContractState -> FollowerM (Either () (QueryResult FollowerContractState))
       follow UnknownOnChainState = do
+        debug' "Staring follower loop..."
         currOnChainState <- fetchOnChainState
         notify currOnChainState
         rec $ LastResult currOnChainState
@@ -436,6 +455,10 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   where
     debug' = debug "Language.Marlowe.Client.marloweFollowContract"
 
+    isClosed = last >>> \case
+      Closed {} -> True
+      _         -> False
+
     status history = if isClosed history then Finished else InProgress
 
     last h = foldlHistory step h h
@@ -446,10 +469,6 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       Created { historyTxOutRef }      -> Just historyTxOutRef
       InputApplied { historyTxOutRef } -> Just historyTxOutRef
       _                                -> Nothing
-
-    isClosed = last >>> \case
-      Closed {} -> True
-      _         -> False
 
     foldInputs = reverse <<< foldlHistory step []
       where
@@ -530,7 +549,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         stx <- submitBalancedTx btx
         debug'' $ "stx = " <> show stx
         let txId = Tx.getCardanoTxId stx
-        awaitTxConfirmed txId
+        awaitTxConfirmed' txId
         debug'' $ "txId = " <> show txId
         debug'' $ "MarloweApp contract creation confirmed for parameters " <> show params <> "."
         tell $ Just $ EndpointSuccess reqId $ CreateResponse params
@@ -904,9 +923,7 @@ marloweCompanionContract = checkExistingRoleTokens
         -- currently not doing that.
         checkpointLoop (fmap Right <$> checkForUpdates) ownAddress
     checkForUpdates ownAddress = do
-        txns <- NonEmpty.toList <$> awaitUtxoProduced ownAddress
-        -- See NOTE: Chain index / cardano-node query consistency
-        waitForChainIndex
+        txns <- NonEmpty.toList <$> awaitUtxoProduced' ownAddress
         let txOuts = txns >>= view (citxOutputs . _ValidTx)
         forM_ txOuts notifyOnNewContractRoles
         pure ownAddress
@@ -1000,7 +1017,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
         posixTimeRangeToContainedSlotRange
           unsafeGetSlotConfig
           times
-    maybeState <- retryRequestTillJust' $ const $ do
+    maybeState <- retryRequestTillJust' $ do
       getOnChainStateTxOuts typedValidator
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
@@ -1039,7 +1056,8 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
             -- TODO: Move to debug log.
             logInfo $ "[DEBUG:mkStep] stx = " <> show stx
             let txId = Tx.getCardanoTxId stx
-            awaitTxConfirmed txId
+            awaitTxConfirmed' txId
+
             -- TODO: Move to debug log.
             logInfo $ "[DEBUG:mkStep] txId = " <> show txId
             pure marloweData
@@ -1159,8 +1177,7 @@ waitForTransition typedValidator = do
             Just OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}} -> do
                 debug' $ "wait till utxo is spent = " <> show tyTxOutRefRef
                 pure $ promiseBind (utxoIsSpent tyTxOutRefRef) $ \txn -> do
-                    -- See NOTE: Chain index / cardano-node query consistency
-                    waitForChainIndex
+                    void $ retryTillResponseDiffers' currentState $ getOnChainState typedValidator
                     spent <- marloweHistoryFrom typedValidator txn
                     case spent of
                         [history] -> pure $ Transition history

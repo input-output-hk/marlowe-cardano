@@ -157,7 +157,8 @@ instance FromJSON PatternJSON where
   parseJSON (A.Object v) =
     Parts <$> v .: "parts"
     <|> Exact  <$> v .: "exact"
-  parseJSON _ = fail "JSONPattern should be a singleton object"
+  parseJSON _ = fail
+    "JSONPattern should be a singleton object where key = [ parts | exact ]"
 
 instance ToJSON PatternJSON where
   toJSON (Parts json) = object $ pure $ "parts" .= json
@@ -294,8 +295,8 @@ data PabOperation =
     }
   | AwaitFollow
     {
-      poInstance        :: InstanceNickname
-    , poResponsePattern :: Maybe PatternJSON
+      poInstance         :: InstanceNickname
+    , poResponsePatterns :: [PatternJSON]
     }
   | ActivateCompanion
     {

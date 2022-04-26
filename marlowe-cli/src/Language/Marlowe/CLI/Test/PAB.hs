@@ -98,6 +98,7 @@ import qualified Cardano.Wallet.Primitive.Types.TokenMap as W (AssetId (AssetId)
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.ByteArray as BA (pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
+import Data.Foldable (for_)
 import qualified Data.HashMap.Strict as H (foldrWithKey, lookup)
 import qualified Data.Map.Strict as M (adjust, insert, lookup)
 import qualified Data.Quantity as W (Quantity (..))
@@ -445,21 +446,13 @@ interpret _ po@AwaitFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
     logPoMsg PoShow po "Fetching follower messages."
-    --  Skipp all preceeding `null`s
-    contractHistoryJSON <- untilJustM $ do
-      res <- liftIO $ readChan fiChannel
-      if res == Null
-        then do
-          logPoMsg PoShow po "Skipping `null` response."
-          pure Nothing
-        else pure $ Just res
-
     let
       extractPatternJSON (Parts json) = json
       extractPatternJSON (Exact json) = json
 
-    case poResponsePattern of
-      Just pt -> if matchJSON pt contractHistoryJSON
+    for_ poResponsePatterns $ \pt -> do
+      contractHistoryJSON <- liftIO $ readChan fiChannel
+      if matchJSON pt contractHistoryJSON
         then logPoMsg PoShow po "Follow confirmed."
         else throwError $ CliError $ printPoMsg PoName po $ T.unpack $
           "Given response does not match expected pattern. Expected: "
@@ -467,8 +460,6 @@ interpret _ po@AwaitFollow{..} =
           <> ". Received: "
           <> renderValue contractHistoryJSON
           <> "."
-      Nothing ->
-        logPoMsg PoShow po "Follow confirmed."
 
 interpret PabAccess{..} po@PrintPABInstanceState{..} =
   do
