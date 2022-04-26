@@ -20,6 +20,7 @@ let
     dbConfigFile = "/data/pab.db";
     baseUrl = "http://0.0.0.0:${pab-port}";
     walletUrl = "http://wallet:${wallet-port}";
+    chainIndexUrl = "http://chain-index:${chain-index-port}";
     inherit socket-path network;
     protocol-parameters = "./testnet.protocol";
   };

@@ -1,6 +1,7 @@
 { dbConfigFile
 , baseUrl
 , walletUrl
+, chainIndexUrl
 , socket-path
 , network
 , protocol-parameters
@@ -39,7 +40,7 @@
     pscProtocolParametersJsonPath = protocol-parameters;
   };
   chainIndexConfig = {
-    ciBaseUrl = "http://chain-index:9083";
+    ciBaseUrl = chainIndexUrl;
     ciWatchedAddresses = [ ];
   };
   requestProcessingConfig = {
