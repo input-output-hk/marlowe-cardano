@@ -1,3 +1,4 @@
+# This gets called by arion: https://docs.hercules-ci.com/arion/
 { lib
 , pkgs
 , ...
@@ -22,12 +23,25 @@ let
     inherit socket-path network;
     protocol-parameters = "./testnet.protocol";
   };
-  run-params = { wallet-port = wallet-port-int; chain-index-port = chain-index-port-int; };
+  run-params = {
+    wallet-host = "wallet";
+    wallet-port = wallet-port-int;
+    chain-index-port = chain-index-port-int;
+    chain-index-host = "chain-index";
+
+
+  };
+  nodeConfigArgs = {
+    config = network.nodeConfig;
+    AlonzoGenesisFile = "alonzo-genesis.json";
+    ByronGenesisFile = "byron-genesis.json";
+    ShelleyGenesisFile = "shelley-genesis.json";
+  };
   config = pkgs.runCommand "config"
     { }
     ''
       mkdir $out
-      echo '${builtins.toJSON (import ./dev/node-config.nix network.nodeConfig)}' > $out/config.json
+      echo '${builtins.toJSON (import ./dev/node-config.nix nodeConfigArgs)}' > $out/config.json
       echo '${builtins.toJSON (import ./dev/pab-config.nix pab-params)}' > $out/pab.yaml
       echo '${builtins.toJSON (import ./dev/marlowe-run.nix run-params)}' > $out/marlowe-run.json
       cp ${network.networkConfig.AlonzoGenesisFile} $out/alonzo-genesis.json

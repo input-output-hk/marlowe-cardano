@@ -66,6 +66,15 @@ rec {
       generate-purescript start-backend build-client test-client;
   };
 
+
+  dev-scripts = import ./nix/dev/scripts.nix {
+    inherit pkgs;
+    inherit cardano-cli marlowe-pab cardano-node plutus-chain-index;
+    network = pkgs.networks.testnet-dev;
+    marlowe-dashboard = marlowe-dashboard.marlowe-run-backend-invoker;
+
+  };
+
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;
     inherit (marlowe.lib) gitignore-nix;
