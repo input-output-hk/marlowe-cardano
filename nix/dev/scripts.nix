@@ -37,6 +37,7 @@ let
         dbConfigFile = pab.database-path + "/marlowe-pab.db";
         baseUrl = "http://localhost:${toString pab.port}";
         walletUrl = "http://localhost:${toString wallet.port}";
+        chainIndexUrl = "http://localhost:${toString chain-index.port}";
         socket-path = node.socket-path;
         inherit network;
         protocol-parameters = "/tmp/testnet.protocol";
