@@ -96,7 +96,7 @@ import Halogen.HTML
   , ul
   )
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Properties (class_, classes, disabled)
+import Halogen.HTML.Properties (class_, classes, disabled, enabled)
 import Halogen.Monaco (monacoComponent)
 import Humanize (adjustTimeZone, formatPOSIXTime, humanizeOffset)
 import MainFrame.Types
@@ -682,6 +682,14 @@ participant metadata state party actionInputs =
     (PK name) -> name
     (Role name) -> name
 
+choiceRef :: String -> ChoiceId -> String
+choiceRef prefix (ChoiceId choiceName choiceOwner) = intercalate "-"
+  [ prefix, choiceName, choiceOwnerStr ]
+  where
+  choiceOwnerStr = case choiceOwner of
+    PK pk -> pk
+    Role name -> name
+
 inputItem
   :: forall m
    . MonadAff m
@@ -707,7 +715,7 @@ inputItem
   _
   (ChoiceInput choiceId@(ChoiceId choiceName choiceOwner) bounds chosenNum) =
   let
-    ref = "choice-hint-" <> choiceName
+    ref = choiceRef "choice-hint" choiceId
 
     choiceHint =
       maybe (div_ [])
@@ -757,23 +765,21 @@ inputItem
   mExtractDescription _ = Nothing
 
   addButton =
-    if inBounds chosenNum bounds then
-      [ button
-          [ classes
-              [ btn
-              , plusBtn
-              , smallBtn
-              , ClassName "align-top"
-              , ClassName "flex-noshrink"
-              ]
-          , onClick $ const $ AddInput
-              (IChoice (ChoiceId choiceName choiceOwner) chosenNum)
-              bounds
-          ]
-          [ text "+" ]
-      ]
-    else
-      []
+    [ button
+        [ classes
+            [ btn
+            , plusBtn
+            , smallBtn
+            , ClassName "align-top"
+            , ClassName "flex-noshrink"
+            ]
+        , onClick $ const $ AddInput
+            (IChoice (ChoiceId choiceName choiceOwner) chosenNum)
+            bounds
+        , enabled $ inBounds chosenNum bounds
+        ]
+        [ text "+" ]
+    ]
 
   error = if inBounds chosenNum bounds then [] else [ text boundsError ]
 
