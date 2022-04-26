@@ -19,7 +19,7 @@ benchmarks: true
 constraints:
      -- Because later versions of hedgehog introduce a change which break 'cardano-ledger':
      -- Test/Cardano/Chain/Delegation/Model.hs:91:41: error:
-     --   • Could not deduce (TraversableB SignalSDELEG)
+     --   * Could not deduce (TraversableB SignalSDELEG)
      -- TODO: Try to remove on next `cardano-node` version upgrade.
      hedgehog >= 1.0.2 && < 1.1
 
