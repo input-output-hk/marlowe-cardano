@@ -7,13 +7,15 @@ import Prologue hiding (div)
 
 import Capability.Marlowe (CreateError(..))
 import Component.Contract.View (startingStepActions, timeoutString)
+import Component.ContractPreview.Nickname as Nickname
 import Component.CurrentStepActions.State as CurrentStepActions
 import Component.CurrentStepActions.Types (Msg(..), _currentStepActions)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
 import DOM.HTML.Indexed (HTMLli)
-import Data.ContractNickname as ContractNickname
+import Data.ContractNickname (ContractNickname)
+import Data.ContractNickname as CN
 import Data.ContractStatus (ContractStatus(..), ContractStatusId)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (view, (^.))
@@ -22,6 +24,7 @@ import Data.NewContract (NewContract(..))
 import Data.Newtype (unwrap)
 import Data.UUID.Argonaut as UUID
 import Effect.Aff.Class (class MonadAff)
+import Effect.Class (class MonadEffect)
 import Errors.Explain (explain)
 import Halogen (AttrName(..), ComponentHTML)
 import Halogen.Css (classNames)
@@ -36,7 +39,12 @@ import Marlowe.Execution.State (currentStep)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics (_rolesCurrency)
 import Page.Contract.Lenses (_marloweParams, _metadata)
-import Page.Dashboard.Types (Action(..), ChildSlots, ContractState)
+import Page.Dashboard.Types
+  ( Action(..)
+  , ChildSlots
+  , ContractState
+  , _contractNickname
+  )
 import Store as Store
 
 -- This card shows a preview of synced contracts (intended to be used in the dashboard)
@@ -118,7 +126,7 @@ contractStartingPreviewCard = HH.lazy \newContract ->
     mkContractCard
       { index: Starting reqId
       , metadata
-      , nickname: ContractNickname.toString contractNickname
+      , nickname: Just contractNickname
       , extraAttrs:
           [ attr (AttrName "data-request-id") $ UUID.toString $ reqId
           , role case mError of
@@ -132,22 +140,26 @@ contractStartingPreviewCard = HH.lazy \newContract ->
 type ContractCardOptions m =
   { index :: ContractStatusId
   , metadata :: MetaData
-  , nickname :: String
+  , nickname :: Maybe ContractNickname
   , extraAttrs :: Array (IProp HTMLli Action)
   , stepPanelChildren :: Array (ComponentHTML Action ChildSlots m)
   , stepActions :: ComponentHTML Action ChildSlots m
   }
 
 mkContractCard
-  :: forall m. ContractCardOptions m -> ComponentHTML Action ChildSlots m
+  :: forall m
+   . MonadEffect m
+  => ContractCardOptions m
+  -> ComponentHTML Action ChildSlots m
 mkContractCard
   { index, metadata, nickname, extraAttrs, stepPanelChildren, stepActions } =
   let
     { contractType, contractName } = metadata
     liClasses = [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
+    displayName = maybe "" CN.toString nickname
   in
     li
-      ([ title nickname, classNames liClasses ] <> extraAttrs)
+      ([ title displayName, classNames liClasses ] <> extraAttrs)
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]
           [ div
@@ -157,18 +169,12 @@ mkContractCard
                   [ contractIcon contractType
                   , text contractName
                   ]
-              -- FIXME-3562: Make an input again
-              , text nickname
-              -- , input
-              --     [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
-              --     , type_ InputText
-              --     , value nickname
-              --     , onValueInput_
-              --         ( SetNickname <<< fromRight ContractNickname.unknown <<<
-              --             ContractNickname.fromString
-              --         )
-              --     , placeholder "Please rename"
-              --     ]
+              , slot
+                  _contractNickname
+                  index
+                  Nickname.component
+                  nickname
+                  (NicknameUpdated index)
               ]
           , a
               [ classNames [ "flex", "items-center" ]

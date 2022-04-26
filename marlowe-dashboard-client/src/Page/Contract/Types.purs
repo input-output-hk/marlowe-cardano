@@ -7,7 +7,6 @@ import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.Array (length)
-import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatus, ContractStatusId)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
@@ -102,7 +101,6 @@ data Action
   = Init
   | Finalize
   | Receive (Connected Slice Input)
-  | SetNickname ContractNickname
   | SelectTab Int Tab
   | ToggleExpandPayment Int
   | OnActionSelected NamedAction (Maybe ChosenNum)
@@ -132,7 +130,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent Init = Nothing
   toEvent Finalize = Nothing
   toEvent (Receive _) = Nothing
-  toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
   toEvent (OnActionSelected _ _) = Nothing

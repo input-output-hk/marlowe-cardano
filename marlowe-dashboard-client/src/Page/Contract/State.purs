@@ -19,14 +19,13 @@ import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, use, (^.))
 import Data.Lens.Extra (peruse)
 import Data.List (toUnfoldable)
-import Data.LocalContractNicknames (insertContractNickname)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.NewContract (NewContract(..))
 import Data.Ord (abs)
 import Data.Set as Set
 import Data.Time.Duration (Minutes(..))
-import Data.Traversable (traverse, traverse_)
+import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (emptyUUID)
 import Data.UserNamedActions (userNamedActions)
@@ -36,10 +35,10 @@ import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Env (Env(..))
-import Halogen (HalogenM, raise)
+import Halogen (raise)
 import Halogen as H
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
@@ -164,13 +163,6 @@ mkInitialState currentTime roleTokens executionState =
       # selectLastStep
       # Started
 
-withStarted
-  :: forall action slots msg m
-   . Monad m
-  => (StartedState -> HalogenM State action slots msg m Unit)
-  -> HalogenM State action slots msg m Unit
-withStarted f = peruse (_contract <<< _Started) >>= traverse_ f
-
 handleAction
   :: forall m
    . MonadAff m
@@ -213,11 +205,6 @@ handleAction (Receive { input, context }) = do
           regenerateStepCards context.roleTokens context.currentTime
             <<< set _executionState executionState
     _ -> pure unit
-handleAction (SetNickname nickname) =
-  withStarted \{ executionState: { marloweParams } } -> do
-    updateStore
-      $ Store.ModifyContractNicknames
-      $ insertContractNickname marloweParams nickname
 
 handleAction (SelectTab stepNumber tab) =
   assign (_contract <<< _Started <<< _tab stepNumber) tab

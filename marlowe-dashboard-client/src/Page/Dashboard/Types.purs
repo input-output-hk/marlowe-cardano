@@ -6,6 +6,7 @@ import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
 import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.Contacts.Types as Contacts
+import Component.ContractPreview.Nickname as Nickname
 import Component.ContractSetup.Types as ContractSetup
 import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.Expand as Expand
@@ -13,6 +14,7 @@ import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Template.Types (Action, State) as Template
 import Component.Tooltip.Types (ReferenceId)
 import Data.Argonaut (Json, JsonDecodeError)
+import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatusId)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
@@ -45,7 +47,7 @@ type ContractState =
   { executionState :: Execution.State
   , namedActions :: UserNamedActions
   , isClosed :: Boolean
-  , nickname :: String
+  , nickname :: Maybe ContractNickname
   }
 
 type State = Reactive.State
@@ -111,6 +113,7 @@ type Slot = H.Slot Query Msg Unit
 
 type ChildSlots =
   ( contacts :: Contacts.Slot Unit
+  , contractNickname :: Nickname.Slot ContractStatusId
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
@@ -122,6 +125,8 @@ type ChildSlots =
   )
 
 _dashboard = Proxy :: Proxy "dashboard"
+
+_contractNickname = Proxy :: Proxy "contractNickname"
 
 data Action
   = DisconnectWallet
@@ -150,6 +155,7 @@ data Action
   | MarloweAppClosed (Maybe Json)
   | WalletCompanionAppClosed (Maybe Json)
   | SlotChanged Slot.Slot
+  | NicknameUpdated ContractStatusId ContractNickname
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where

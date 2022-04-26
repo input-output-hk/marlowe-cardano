@@ -3,6 +3,7 @@ module Page.Dashboard.Lenses where
 import Prologue
 
 import Component.Template.Types (State) as Template
+import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatusId)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (Fold', Lens', filtered, folded)
@@ -70,6 +71,9 @@ _tzOffset = _transient <<< prop (Proxy :: _ "tzOffset")
 
 _templateState :: Lens' State Template.State
 _templateState = _transient <<< prop (Proxy :: _ "templateState")
+
+_nickname :: Lens' ContractState (Maybe ContractNickname)
+_nickname = prop (Proxy :: _ "nickname")
 
 _contracts :: Lens' State (Map MarloweParams ContractState)
 _contracts = _derived <<< prop (Proxy :: _ "contracts")

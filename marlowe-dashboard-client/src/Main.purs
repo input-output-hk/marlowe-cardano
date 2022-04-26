@@ -127,7 +127,7 @@ exitBadArgs e = throwError
 
 main :: Json -> Effect Unit
 main args = do
-  MainArgs { pollingInterval, webpackBuildMode } <-
+  MainArgs { pollingInterval } <-
     either exitBadArgs pure $ decodeJson args
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
@@ -140,10 +140,11 @@ main args = do
     -- | it.
     storeIO <- liftEffect HS.create
     let
-      logger = case webpackBuildMode of
-        -- TODO Add backend logging capability
-        Production -> mempty
-        Development -> Console.structuredLogger
+      -- TODO setup a proper production logger
+      logger = Console.structuredLogger
+    -- logger = case webpackBuildMode of
+    -- Production -> mempty
+    -- Development -> Console.structuredLogger
     walletFunds <- mkWalletFundsEmitter logger pollingInterval storeIO.emitter
     pabWebsocketOut <- liftEffect HS.create
     void

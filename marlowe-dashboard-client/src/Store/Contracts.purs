@@ -21,6 +21,7 @@ import Control.Apply (lift2)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
+import Data.ContractStatus (ContractStatus(..), ContractStatusId)
 import Data.DateTime.Instant (Instant)
 import Data.Either (either)
 import Data.Foldable (find, foldr)
@@ -71,7 +72,7 @@ data Action
   = FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
   | ContractCreated NewContract
   | ContractHistoryUpdated Instant PlutusAppId MetaData ContractHistory
-  | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
+  | ContractNicknameUpdated ContractStatusId ContractNickname
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   | ContractStarted NewContract MarloweParams
   | ContractStartFailed NewContract MarloweError
@@ -90,7 +91,7 @@ type ContractStoreFields =
   , newContracts :: Map UUID NewContract
   -- A lookup to find the originating request ID for a particular marlowe
   -- params.
-  , newMarloweParams :: Map MarloweParams UUID
+  , newMarloweParams :: Bimap MarloweParams UUID
   -- This bimap help us have one Follower contract per Marlowe contract.
   , contractIndex :: Bimap MarloweParams PlutusAppId
   , contractNicknames :: LocalContractNicknames
@@ -99,15 +100,34 @@ type ContractStoreFields =
 derive instance Eq ContractStore
 
 reduce :: ContractStore -> Action -> ContractStore
-reduce store = case _ of
+reduce store@(ContractStore s) = case _ of
   FollowerAppsActivated followers ->
     followerAppsActivated followers store
   ContractCreated startingContractInfo ->
     contractCreated startingContractInfo store
   ContractHistoryUpdated currentTime followerId metadata history ->
     historyUpdated currentTime followerId metadata history store
-  ModifyContractNicknames f ->
-    modifyContractNicknames f store
+  ContractNicknameUpdated (Started marloweParams) nickname ->
+    modifyContractNicknames
+      (insertContractNickname marloweParams nickname)
+      store
+  ContractNicknameUpdated (Starting reqId) nickname -> ContractStore s
+    { newContracts =
+        let
+          setNickname (NewContract id _ metadata error contract) =
+            NewContract id nickname metadata error contract
+        in
+          Map.update (Just <<< setNickname) reqId s.newContracts
+    , contractNicknames =
+        maybe
+          s.contractNicknames
+          ( \marloweParams -> insertContractNickname
+              marloweParams
+              nickname
+              s.contractNicknames
+          )
+          $ Bimap.lookupR reqId s.newMarloweParams
+    }
   ModifySyncedContract marloweParams f ->
     modifyContract marloweParams f store
   ContractStarted newContract marloweParams ->
@@ -139,7 +159,7 @@ mkContractStore :: LocalContractNicknames -> ContractStore
 mkContractStore nicknames = ContractStore
   { startedContracts: Map.empty
   , newContracts: Map.empty
-  , newMarloweParams: Map.empty
+  , newMarloweParams: Bimap.empty
   , contractIndex: Bimap.empty
   , contractNicknames: nicknames
   }
@@ -198,7 +218,7 @@ historyUpdated currentTime followerId metadata history store =
   where
   newContractById marloweParams (ContractStore s) =
     flip Map.lookup s.newContracts
-      =<< Map.lookup marloweParams s.newMarloweParams
+      =<< Bimap.lookupL marloweParams s.newMarloweParams
   newContractByMatch (ContractStore s) =
     find (matchingContract emptyUUID) s.newContracts
   matchingContract _ (NewContract _ _ _ _ contract) =
@@ -208,7 +228,7 @@ historyUpdated currentTime followerId metadata history store =
     (NewContract reqId _ _ _ _)
     (ContractStore s) = ContractStore s
     { newContracts = Map.delete reqId s.newContracts
-    , newMarloweParams = Map.delete marloweParams s.newMarloweParams
+    , newMarloweParams = Bimap.deleteL marloweParams s.newMarloweParams
     }
 
 -- Called upon receipt of the MarloweParams when creating a contract.
@@ -230,13 +250,13 @@ contractStarted (NewContract reqId nickname _ _ _) marloweParams =
       -- `historyUpdated` can remove the new contract when it gets called.
       Nothing -> store
         { newMarloweParams =
-            Map.insert marloweParams reqId store.newMarloweParams
+            Bimap.insert marloweParams reqId store.newMarloweParams
         }
       -- If so, we can just delete the new contract now. We also need to record
       -- the contract's nickname in the contract nicknames collection.
       Just _ -> store
         { newContracts = Map.delete reqId store.newContracts
-        , newMarloweParams = Map.delete marloweParams store.newMarloweParams
+        , newMarloweParams = Bimap.deleteL marloweParams store.newMarloweParams
         }
 
 contractStartFailed

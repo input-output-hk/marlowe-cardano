@@ -34,7 +34,7 @@ import Css as Css
 import Data.Address as A
 import Data.Array as Array
 import Data.Compactable (compact)
-import Data.ContractNickname as ContractNickname
+import Data.ContractNickname as CN
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Int (round)
@@ -175,17 +175,17 @@ dashboardScreen state =
     mSelectedContractIndex = state ^. _selectedContractIndex
     mSelectedContractStringId = do
       contractIndex <- mSelectedContractIndex
-      case contractIndex of
+      CN.toString <$> case contractIndex of
         Starting reqId -> do
           let
             newContracts = state ^. _newContracts
             mContract = Map.lookup reqId newContracts
-          ContractNickname.toString <<< getContractNickname <$> mContract
+          getContractNickname <$> mContract
         Started marloweParams -> do
           let
             contracts = state ^. _contracts
             mContract = Map.lookup marloweParams contracts
-          _.nickname <$> mContract
+          _.nickname =<< mContract
   in
     appTemplate cardOpen (dashboardHeader (WN.toString walletNickname) menuOpen)
       $ div

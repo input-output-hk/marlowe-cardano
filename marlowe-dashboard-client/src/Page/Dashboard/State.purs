@@ -48,7 +48,6 @@ import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt as BigInt
 import Data.BigInt.Argonaut (BigInt)
-import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
@@ -303,11 +302,7 @@ deriveContractState currentTime nicknames roleTokens executionState =
   , namedActions: userNamedActions roleTokens executionState
       $ extractNamedActions currentTime executionState
   , isClosed: isClosed executionState
-  , nickname:
-      maybe
-        (executionState.marloweParams ^. _rolesCurrency)
-        (ContractNickname.toString)
-        $ getContractNickname executionState.marloweParams nicknames
+  , nickname: getContractNickname executionState.marloweParams nicknames
   }
 
 type HalogenM = H.HalogenM State Action ChildSlots Msg
@@ -715,6 +710,9 @@ handleAction (UpdateWalletFunds { assets, sync }) = do
 
 handleAction (SlotChanged slot) = do
   updateStore $ Store.SlotChanged slot
+
+handleAction (NicknameUpdated id nickname) = do
+  updateStore $ Store.ContractNicknameUpdated id nickname
 
 reactivatePlutusScript
   :: forall m

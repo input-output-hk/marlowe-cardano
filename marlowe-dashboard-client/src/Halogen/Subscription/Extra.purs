@@ -108,4 +108,3 @@ subscribeOnce emitter =
       resolve (Right a)
     Ref.write (Just subscription) refSubscription
     pure $ Aff.effectCanceler unsubscribe
-

@@ -11,7 +11,6 @@ module Marlowe.Execution.Types
 import Prologue
 
 import Data.BigInt.Argonaut (BigInt)
-import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.List (List)

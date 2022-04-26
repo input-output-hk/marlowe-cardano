@@ -3,6 +3,8 @@ module Store where
 import Prologue
 
 import Data.AddressBook (AddressBook)
+import Data.ContractNickname (ContractNickname)
+import Data.ContractStatus (ContractStatusId)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens', (^?))
 import Data.Lens.Record (prop)
@@ -94,7 +96,7 @@ data Action
   | FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
   | ContractCreated NewContract
   | ContractHistoryUpdated PlutusAppId MetaData ContractHistory
-  | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
+  | ContractNicknameUpdated ContractStatusId ContractNickname
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   | ContractStarted NewContract MarloweParams
   | ContractStartFailed NewContract MarloweError
@@ -141,8 +143,8 @@ reduce store = case _ of
       followerId
       metadata
       history
-  ModifyContractNicknames f ->
-    updateContractStore $ Contracts.ModifyContractNicknames f
+  ContractNicknameUpdated id nickname ->
+    updateContractStore $ Contracts.ContractNicknameUpdated id nickname
   ModifySyncedContract marloweParams f ->
     updateContractStore $ Contracts.ModifySyncedContract marloweParams f
   ContractStarted newContract marloweParams ->
