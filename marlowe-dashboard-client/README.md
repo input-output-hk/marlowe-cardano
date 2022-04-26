@@ -6,12 +6,12 @@ Marlowe Run is written in [PureScript](https://www.purescript.org/) and uses npm
 
 The [marlowe-pab](https://github.com/input-output-hk/marlowe-cardano/tree/master/marlowe/pab) is a version of the [plutus-pab](https://github.com/input-output-hk/plutus-apps/tree/master/plutus-pab) with the Marlowe Plutus contracts built in.
 
-**Note**: _The workflow described here relies heavily on Nix. This means you should either be working inside a nix-shell environment or use tools such as [lorri](https://github.com/target/lorri) or [nix-direnv](https://github.com/nix-community/nix-direnv) or similar to provide a suitable environment._
+**Note**: _The workflow described here relies heavily on Nix. This means you should either be working inside a nix-shell environment or use tools such as [lorri](https://github.com/target/lorri) or [nix-direnv](https://github.com/nix-community/nix-direnv) or similar to provide a suitable environment._ If you are using Mac and you run into a segmentation fault running nix-shell, you can try running it as `GC_DONT_GC=1 nix-shell` as this [issue suggest](https://github.com/NixOS/nix/issues/4246).
 
 ### Starting the backend server
 
 If you want a running backend quickly, we have a script in the nix shell that
-will launch all the required services using Docker Compose. From anywhere in
+will launch all the required services using Docker Compose (WARNING, currently this only works on Linux). From anywhere in
 the repo, you just need to run:
 
 ```bash
@@ -19,6 +19,16 @@ the repo, you just need to run:
 ```
 
 This starts all 5 services required to run Marlowe Run.
+
+If you are using Windows or Mac for the moment you should start 5 nix-shell terminals and run the following commands instead (one per terminal)
+
+```bash
+[nix-shell] $ start-cardano-node
+[nix-shell] $ start-cardano-wallet
+[nix-shell] $ start-chain-index
+[nix-shell] $ start-marlowe-pab
+[nix-shell] $ start-dashboard-server
+```
 
 ### Starting the frontend server
 
