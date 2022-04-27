@@ -35,7 +35,7 @@ import Cardano.Api.Shelley (StakeCredential (..))
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Category ((<<<), (>>>))
 import Control.Lens
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, guard, void, when)
 import Control.Monad.Error.Lens (catching, handling, throwing, throwing_)
 import Control.Monad.Extra (concatMapM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
@@ -337,9 +337,11 @@ type FollowerM a = Contract FollowerContractNotification MarloweFollowSchema Mar
 
 type FollowerPromise a = Promise FollowerContractNotification MarloweFollowSchema MarloweError a
 
--- Internally we use this detailed information to represent
--- the state of the contract on the chain
-type FollowerContractState = Maybe (History, UnspentPayouts)
+-- In theory we can have role payouts "outside" of the contract - our payout query
+-- doesn't prevent that (we filter just on the payout script).
+type FollowerContractState = (Maybe History, UnspentPayouts)
+
+data FollowerContractUpdate = PayoutChange | HistoryChange
 
 -- Follower puts a single `null` to the websocket automatically.
 -- You can expect another `null` (so two `null`s) if you start the follower
@@ -350,34 +352,23 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
     debug' $ "call parameters: " <> show params <> "."
 
     let
-      -- FIXME:
-      -- For simplicity we don't bother with "artifical" payouts which are "outside"
-      -- of the contract context when the contract is missing from the chain.
-      -- On the other hand we include them (not filter them out) when the contract is
-      -- present on the chain.
-      -- This should not make any difference for the marlowe-run but it would be nice
-      -- to be fully consistent here ;-)
       fetchOnChainState :: FollowerM FollowerContractState
-      fetchOnChainState = marloweHistory params >>= \case
-        Nothing -> pure Nothing
-        Just history -> do
-          payouts <- unspentPayoutsAtCurrency (rolesCurrency params)
-          pure $ Just (history, payouts)
+      fetchOnChainState = (,) <$> marloweHistory params <*> unspentPayoutsAtCurrency (rolesCurrency params)
 
       awaitNewState :: FollowerContractState -> FollowerM FollowerContractState
-      awaitNewState prevState = do
+      awaitNewState prevState@(prevHistory, prevPayouts) = do
         let
           -- In both cases we bring back one of the transactions which have woken us up.
           -- We do this only to perform the logging.
           waitForContractChange :: FollowerPromise ChainIndexTx
-          waitForContractChange = case prevState >>= (fst >>> continuationUtxo) of
+          waitForContractChange = case prevHistory >>= continuationUtxo of
             Nothing   -> NonEmpty.head <$> (utxoIsProduced $ validatorAddress $ mkMarloweTypedValidator params)
             Just utxo -> utxoIsSpent utxo
           waitForPayoutChange :: FollowerPromise ChainIndexTx
           waitForPayoutChange =
             let
               payoutScriptAddress = scriptHashAddress $ mkRolePayoutValidatorHash $ rolesCurrency params
-              UnspentPayouts payouts = foldMap snd prevState
+              UnspentPayouts payouts = prevPayouts
               waitTillPayoutIsSpent = fmap (utxoIsSpent <<< rolePayoutTxOutRef) payouts
               waitTillPayoutIsProduced = NonEmpty.head <$> utxoIsProduced payoutScriptAddress
             in
@@ -390,30 +381,31 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
           (mappend "Payout change detected through txId =" <<< show <<< _citxTxId)
           (mappend "Contract change detected through txId " <<< show <<< _citxTxId)
           changeNotification
+        let
+          updateType = either (const PayoutChange) (const HistoryChange) changeNotification
 
         -- ...so let's actually fetch it by enforcing chain index to
         -- catch up with just received notification but...
-        retryTillResponseDiffers' prevState fetchOnChainState >>= \case
-          Just newOnChainState -> do
-            pure newOnChainState
+        maybeNewState <- retryRequestTillJust' $ do
+          newState <- fetchOnChainState
+          case (updateType, prevState, newState) of
+            -- History update notification means that we have the contract on chain
+            (HistoryChange, _, (Nothing, _)) -> pure Nothing
+            (HistoryChange, (prevHistory, _), (newHistory, _)) -> pure $ do
+              guard (prevHistory /= newHistory)
+              Just newState
+            (PayoutChange, (_, prevPayouts), (_, newPayouts)) -> pure $ do
+              guard (prevPayouts /= newPayouts)
+              Just newState
+        case maybeNewState of
           Nothing -> do
-            debug' "Unable to detect any changes on the chain... Looping back with previously known state"
+            debug' "Unable to grab appropriate state update!!! Falling back to the previous one."
             pure prevState
-
-        -- ...chain index can still be in an incosistent state (it seems impossible but I had
-        -- encountered this results during testing) so we wait a bit more
-        -- here.
-        -- Incosistency between `unspentPayouts` and `history` should not be a problem
-        -- for the frontend. Additionally follower should catch up to the correct state because
-        -- its queries above are based on the state itself.
-        -- On the other hand the incosistency makes testing difficult so we prefer to have proper
-        -- and reproducible entries in follower notification stream.
-        -- void $ waitNMilliSeconds 8000
-        -- fetchOnChainState
+          Just newState -> pure newState
 
       -- Push a possible state update to the stream
       notify :: FollowerContractState -> FollowerM ()
-      notify (Just (history, payouts)) = do
+      notify (Just history, payouts) = do
         debug' $ "notifying about new state: inputs = " <> show (foldInputs history)
         debug' $ "notifying about new state: payouts = " <> show payouts
         debug' $ "status = " <> show (status history)
@@ -423,7 +415,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             pure ()
           _ -> do
             throwError $ OtherContractError $ Contract.OtherContractError $ "Invalid history trace head found: " <> T.pack (show history)
-      notify Nothing = do
+      notify (Nothing, _) = do
         debug' "notifying about empty state"
         tell @FollowerContractNotification $ Nothing
 
