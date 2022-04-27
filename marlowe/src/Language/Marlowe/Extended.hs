@@ -382,7 +382,7 @@ instance ToJSON Contract where
       ]
   toJSON (When caseList timeout cont) = object
       [ "when" .= toJSONList (map toJSON caseList)
-      , "timeout" .= toTimeout timeout
+      , "timeout" .= toJSONTimeout timeout
       , "timeout_continuation" .= cont
       ]
   toJSON (Let valId value cont) = object
@@ -395,6 +395,6 @@ instance ToJSON Contract where
       , "then" .= cont
       ]
 
-toTimeout :: Timeout -> JSON.Value
-toTimeout (POSIXTime t) = toJSON t
-toTimeout (TimeParam p) = object [ "time_param" .= p ]
+toJSONTimeout :: Timeout -> JSON.Value
+toJSONTimeout (POSIXTime t) = toJSON t
+toJSONTimeout (TimeParam p) = object [ "time_param" .= p ]
