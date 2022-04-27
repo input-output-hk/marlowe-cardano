@@ -276,7 +276,7 @@ pollingInterval :: Ledger.DiffMilliSeconds
 pollingInterval = 1000
 
 maxRetries :: MaxRetries
-maxRetries = MaxRetries 120
+maxRetries = MaxRetries 30
 
 -- | The same as above but specializd to the PAB Contract monad with
 -- | constant delay between retries.
