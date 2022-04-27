@@ -139,3 +139,20 @@ ptPabOperations:
           - marloweContract: {}
         - - {}
           - marloweContract: {}
+
+  - tag: ReturnFunds
+    poOwner: Sender
+    poInstances:
+      - Sender-1
+      - Sender-2
+
+  - tag: ReturnFunds
+    poOwner: Receiver
+    poInstances:
+      - Receiver
+
+  - tag: Stop
+    poInstance: Sender-1
+
+  - tag: Stop
+    poInstance: Sender-2

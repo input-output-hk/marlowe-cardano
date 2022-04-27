@@ -160,8 +160,10 @@ data PartyAction
 
 type RoleOwners = AssocMap.Map Val.TokenName (AddressInEra ShelleyEra)
 
--- This data type contains all the information needed to reconstruct the
--- state of a Marlowe Contract.
+-- FIXME: We should probably switch to the plain `FollowerContractState` here
+-- (which is just `(Maybe MarloweHistory, UnspentPayouts)`)
+-- so we can capture and report all the possible on chain states.
+-- Now we are not able to notify about role payouts before the contract is on the chain.
 data ContractHistory =
     ContractHistory
         { chParams         :: MarloweParams      -- ^ The "instance id" of the contract

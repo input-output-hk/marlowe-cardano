@@ -196,3 +196,11 @@ ptPabOperations:
     poTimes:
       - 1645590825000
       - 1898051625000
+
+  - tag: ReturnFunds
+    poOwner: PAB
+    poInstances:
+      - App
+
+  - tag: Stop
+    poInstance: App

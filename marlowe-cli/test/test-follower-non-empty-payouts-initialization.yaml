@@ -102,6 +102,25 @@ ptPabOperations:
   - tag: Comment
     poComment: "We should see a payout in the reported state."
 
+  - tag: CallApplyInputs
+    poInstance: App
+    poInputs:
+      - input_notify
+    poTimes:
+      - 1645590825000
+      - 1898051625000
+
+  - tag: AwaitApplyInputs
+    poInstance: App
+
+  - tag: ReturnFunds
+    poOwner: PAB
+    poInstances:
+      - App
+
+  - tag: Stop
+    poInstance: App
+
   - tag: AwaitFollow
     poInstance: Follower
     poResponsePatterns:
@@ -120,12 +139,44 @@ ptPabOperations:
           chUnspentPayouts:
             - rolePayoutName:
                 unTokenName: "PAB"
-              rolePayoutTxOutRef: {}
               rolePayoutValue:
                 getValue:
                   [
                     [
                       { "unCurrencySymbol": "" },
                       [[{ "unTokenName": "" }, 8000000]],
+                    ],
+                  ]
+      - parts:
+          chHistory:
+            - tx_inputs:
+                - input_from_party:
+                    role_token: PAB
+                  that_deposits: 15000000
+                  of_token:
+                    currency_symbol: ""
+                    token_name: ""
+                  into_account:
+                    role_token: PAB
+                - input_notify:
+          chUnspentPayouts:
+            - rolePayoutName:
+                unTokenName: "PAB"
+              rolePayoutValue:
+                getValue:
+                  [
+                    [
+                      { "unCurrencySymbol": "" },
+                      [[{ "unTokenName": "" }, 8000000]],
+                    ],
+                  ]
+            - rolePayoutName:
+                unTokenName: "PAB"
+              rolePayoutValue:
+                getValue:
+                  [
+                    [
+                      { "unCurrencySymbol": "" },
+                      [[{ "unTokenName": "" }, 3000000]],
                     ],
                   ]
