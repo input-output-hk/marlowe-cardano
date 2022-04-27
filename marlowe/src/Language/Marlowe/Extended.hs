@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
 
@@ -24,8 +25,14 @@ module Language.Marlowe.Extended ( module Language.Marlowe.Extended
                                  , (%)
                                  ) where
 
+import Control.Applicative ((<|>))
+import qualified Data.Aeson as JSON
+import Data.Aeson.Types hiding (Error, Value)
+import qualified Data.Foldable as F
 import Data.Ratio ((%))
+import Data.Text (pack)
 import GHC.Generics
+import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..), pretty)
 import qualified Language.Marlowe.Semantics.Types as S
 import Language.Marlowe.Util (ada)
@@ -168,3 +175,226 @@ instance ToCore Payee S.Payee where
 
 instance ToCore Case (S.Case S.Contract) where
   toCore (Case act c) = S.Case <$> toCore act <*> toCore c
+
+instance FromJSON Value where
+  parseJSON (Object v) =
+        (AvailableMoney <$> (v .: "in_account")
+                        <*> (v .: "amount_of_token"))
+    <|> (NegValue <$> (v .: "negate"))
+    <|> (AddValue <$> (v .: "add")
+                  <*> (v .: "and"))
+    <|> (SubValue <$> (v .: "value")
+                  <*> (v .: "minus"))
+    <|> (MulValue <$> (v .: "multiply")
+                  <*> (v .: "times"))
+    <|> (DivValue <$> (v .: "divide") <*> (v .: "by"))
+    <|> (ChoiceValue <$> (v .: "value_of_choice"))
+    <|> (UseValue <$> (v .: "use_value"))
+    <|> (Cond <$> (v .: "if")
+              <*> (v .: "then")
+              <*> (v .: "else"))
+    <|> (ConstantParam <$> (v .: "constant_param"))
+  parseJSON (String "time_interval_start") = return TimeIntervalStart
+  parseJSON (String "time_interval_end") = return TimeIntervalEnd
+  parseJSON (Number n) = Constant <$> getInteger n
+  parseJSON _ = fail "Value must be either an object or an integer"
+instance ToJSON Value where
+  toJSON (AvailableMoney accountId token) = object
+      [ "amount_of_token" .= token
+      , "in_account" .= accountId
+      ]
+  toJSON (Constant x) = toJSON x
+  toJSON (ConstantParam x) = object
+      [ "constant_param" .= x ]
+  toJSON (NegValue x) = object
+      [ "negate" .= x ]
+  toJSON (AddValue lhs rhs) = object
+      [ "add" .= lhs
+      , "and" .= rhs
+      ]
+  toJSON (SubValue lhs rhs) = object
+      [ "value" .= lhs
+      , "minus" .= rhs
+      ]
+  toJSON (MulValue lhs rhs) = object
+      [ "multiply" .= lhs
+      , "times" .= rhs
+      ]
+  toJSON (DivValue lhs rhs) = object
+      [ "divide" .= lhs
+      , "by" .= rhs
+      ]
+  toJSON (ChoiceValue choiceId) = object
+      [ "value_of_choice" .= choiceId ]
+  toJSON TimeIntervalStart = JSON.String $ pack "time_interval_start"
+  toJSON TimeIntervalEnd = JSON.String $ pack "time_interval_end"
+  toJSON (UseValue valueId) = object
+      [ "use_value" .= valueId ]
+  toJSON (Cond obs tv ev) = object
+      [ "if" .= obs
+      , "then" .= tv
+      , "else" .= ev
+      ]
+
+
+instance FromJSON Observation where
+  parseJSON (Bool True) = return TrueObs
+  parseJSON (Bool False) = return FalseObs
+  parseJSON (Object v) =
+        (AndObs <$> (v .: "both")
+                <*> (v .: "and"))
+    <|> (OrObs <$> (v .: "either")
+               <*> (v .: "or"))
+    <|> (NotObs <$> (v .: "not"))
+    <|> (ChoseSomething <$> (v .: "chose_something_for"))
+    <|> (ValueGE <$> (v .: "value")
+                 <*> (v .: "ge_than"))
+    <|> (ValueGT <$> (v .: "value")
+                 <*> (v .: "gt"))
+    <|> (ValueLT <$> (v .: "value")
+                 <*> (v .: "lt"))
+    <|> (ValueLE <$> (v .: "value")
+                 <*> (v .: "le_than"))
+    <|> (ValueEQ <$> (v .: "value")
+                 <*> (v .: "equal_to"))
+  parseJSON _ = fail "Observation must be either an object or a boolean"
+
+instance ToJSON Observation where
+  toJSON (AndObs lhs rhs) = object
+      [ "both" .= lhs
+      , "and" .= rhs
+      ]
+  toJSON (OrObs lhs rhs) = object
+      [ "either" .= lhs
+      , "or" .= rhs
+      ]
+  toJSON (NotObs v) = object
+      [ "not" .= v ]
+  toJSON (ChoseSomething choiceId) = object
+      [ "chose_something_for" .= choiceId ]
+  toJSON (ValueGE lhs rhs) = object
+      [ "value" .= lhs
+      , "ge_than" .= rhs
+      ]
+  toJSON (ValueGT lhs rhs) = object
+      [ "value" .= lhs
+      , "gt" .= rhs
+      ]
+  toJSON (ValueLT lhs rhs) = object
+      [ "value" .= lhs
+      , "lt" .= rhs
+      ]
+  toJSON (ValueLE lhs rhs) = object
+      [ "value" .= lhs
+      , "le_than" .= rhs
+      ]
+  toJSON (ValueEQ lhs rhs) = object
+      [ "value" .= lhs
+      , "equal_to" .= rhs
+      ]
+  toJSON TrueObs = toJSON True
+  toJSON FalseObs = toJSON False
+
+instance FromJSON Action where
+  parseJSON = withObject "Action" (\v ->
+       (Deposit <$> (v .: "into_account")
+                <*> (v .: "party")
+                <*> (v .: "of_token")
+                <*> (v .: "deposits"))
+   <|> (Choice <$> (v .: "for_choice")
+               <*> ((v .: "choose_between") >>=
+                    withArray "Bound list" (\bl ->
+                      mapM parseJSON (F.toList bl)
+                                            )))
+   <|> (Notify <$> (v .: "notify_if"))
+                                  )
+instance ToJSON Action where
+  toJSON (Deposit accountId party token val) = object
+      [ "into_account" .= accountId
+      , "party" .= party
+      , "of_token" .= token
+      , "deposits" .= val
+      ]
+  toJSON (Choice choiceId bounds) = object
+      [ "for_choice" .= choiceId
+      , "choose_between" .= toJSONList (map toJSON bounds)
+      ]
+  toJSON (Notify obs) = object
+      [ "notify_if" .= obs ]
+
+instance FromJSON Case where
+  parseJSON = withObject "Case" (\v ->
+        Case <$> (v .: "case")
+             <*> (v .: "then"))
+instance ToJSON Case where
+  toJSON (Case act cont) = object
+      [ "case" .= act
+      , "then" .= cont
+      ]
+
+instance FromJSON Payee where
+  parseJSON = withObject "Payee" (\v ->
+                (Account <$> (v .: "account"))
+            <|> (Party <$> (v .: "party")))
+
+instance ToJSON Payee where
+  toJSON (Account acc) = object ["account" .= acc]
+  toJSON (Party party) = object ["party" .= party]
+
+instance FromJSON Contract where
+  parseJSON (String "close") = return Close
+  parseJSON (Object v) =
+        (Pay <$> (v .: "from_account")
+             <*> (v .: "to")
+             <*> (v .: "token")
+             <*> (v .: "pay")
+             <*> (v .: "then"))
+    <|> (If <$> (v .: "if")
+            <*> (v .: "then")
+            <*> (v .: "else"))
+    <|> (When <$> ((v .: "when") >>=
+                   withArray "Case list" (\cl ->
+                     mapM parseJSON (F.toList cl)
+                                          ))
+              <*> ((POSIXTime <$> (withInteger =<< (v .: "timeout")))
+                <|> (TimeParam <$> (v .: "time_param")))
+              <*> (v .: "timeout_continuation"))
+    <|> (Let <$> (v .: "let")
+             <*> (v .: "be")
+             <*> (v .: "then"))
+    <|> (Assert <$> (v .: "assert")
+                <*> (v .: "then"))
+  parseJSON _ = fail "Contract must be either an object or a the string \"close\""
+
+instance ToJSON Contract where
+  toJSON Close = JSON.String $ pack "close"
+  toJSON (Pay accountId payee token value contract) = object
+      [ "from_account" .= accountId
+      , "to" .= payee
+      , "token" .= token
+      , "pay" .= value
+      , "then" .= contract
+      ]
+  toJSON (If obs cont1 cont2) = object
+      [ "if" .= obs
+      , "then" .= cont1
+      , "else" .= cont2
+      ]
+  toJSON (When caseList timeout cont) = object
+      [ "when" .= toJSONList (map toJSON caseList)
+      , "timeout" .= toTimeout timeout
+      , "timeout_continuation" .= cont
+      ]
+  toJSON (Let valId value cont) = object
+      [ "let" .= valId
+      , "be" .= value
+      , "then" .= cont
+      ]
+  toJSON (Assert obs cont) = object
+      [ "assert" .= obs
+      , "then" .= cont
+      ]
+
+toTimeout :: Timeout -> JSON.Value
+toTimeout (POSIXTime t) = toJSON t
+toTimeout (TimeParam p) = object [ "time_param" .= p ]
