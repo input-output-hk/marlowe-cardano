@@ -25,12 +25,12 @@ then
 fi
 FAUCET_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$FAUCET_VKEY")
 
-# Fund the faucet with 25k tADA.
+# Fund the faucet with 5k tADA.
 marlowe-cli util faucet "${MAGIC[@]}"                             \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
-                        --lovelace 25000000000                    \
+                        --lovelace 5000000000                     \
                         "$FAUCET_ADDRESS"                         \
 > /dev/null
 
@@ -53,10 +53,10 @@ do
                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                --wallet-url "$WALLET_API"                \
                --pab-url "$PAB_API"                      \
-               --faucet-key "$FAUCET_SKEY"                \
+               --faucet-key "$FAUCET_SKEY"               \
                --faucet-address "$FAUCET_ADDRESS"        \
                --burn-address "$BURN_ADDRESS"            \
                --passphrase "$PAB_PASSPHRASE"            \
                "$f"                                      \
-  | tee "${f%%.yaml}".log
+  |& tee "${f%%.yaml}".log
 done
