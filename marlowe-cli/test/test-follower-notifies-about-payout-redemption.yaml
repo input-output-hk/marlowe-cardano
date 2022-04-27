@@ -160,6 +160,9 @@ ptPabOperations:
       - 1645590825000
       - 1898051625000
 
+  - tag: AwaitApplyInputs
+    poInstance: App
+
   - tag: AwaitFollow
     poInstance: Follower
     poResponsePatterns:
@@ -196,6 +199,9 @@ ptPabOperations:
     poTimes:
       - 1645590825000
       - 1898051625000
+
+  - tag: AwaitApplyInputs
+    poInstance: App
 
   - tag: ReturnFunds
     poOwner: PAB
