@@ -316,6 +316,7 @@ retryTillResponseDiffers maxRetries known query = do
 retryTillResponseDiffers' :: Eq a => AsContractError err => a -> Contract st sc err a -> Contract st sc err (Maybe a)
 retryTillResponseDiffers' a query = retryTillResponseDiffers maxRetries a (const query)
 
+-- | Queries which perform some extra polling to possibly sync the chain index
 awaitTxConfirmed' :: AsContractError e => Ledger.TxId -> Contract w s e ()
 awaitTxConfirmed' txId = do
   awaitTxConfirmed txId
