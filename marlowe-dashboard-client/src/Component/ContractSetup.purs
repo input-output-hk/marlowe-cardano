@@ -60,6 +60,7 @@ import Halogen.HTML (PlainHTML)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Properties (autocomplete)
 import Halogen.HTML.Properties as HP
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
@@ -189,6 +190,7 @@ render state = do
   HH.div [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
     [ HH.form
         [ HE.onSubmit OnFormSubmit
+        , autocomplete false
         , classNames
             [ "overflow-y-auto"
             , "p-4"

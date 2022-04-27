@@ -26,6 +26,7 @@ import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties (autocomplete)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
@@ -154,6 +155,7 @@ render { addressBook, result, fields, walletDetails } = do
         [ HH.form
             [ HE.onSubmit OnFormSubmit
             , classNames [ "relative", "space-y-4" ]
+            , autocomplete false
             ]
             [ nicknameInput addressBook fields.nickname
             , mnemonicInput fields.mnemonic
