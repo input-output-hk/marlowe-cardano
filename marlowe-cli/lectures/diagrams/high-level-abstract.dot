@@ -1,4 +1,4 @@
-digraph MarloweHL {
+digraph HighLevelAbstract {
 
 
 node [shape=box]
@@ -34,7 +34,7 @@ Prepare [label=<<font face="monospace">marlowe-cli run prepare</font><br/><i>Pre
 UserInput -> Prepare [label="apply inputs"]
 
 
-Prepare -> Prepare [label="time out"]
+Prepare -> Prepare [label="Step times out."]
 
 
 Close [shape=oval label="Finish."]

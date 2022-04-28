@@ -1,4 +1,5 @@
-digraph escrow {
+digraph EscrowFlow {
+
 
 minAda [shape=oval, label="Mediator deposits minimum ADA."]
 
@@ -29,5 +30,12 @@ dispute -> mediate [label="Dispute problem."]
 mediate -> sale [label="Dismiss claim."]
 
 mediate -> refund [label="Confirm claim."]
+
+problem -> sale [label="Buyer doesn't report."]
+
+dispute -> refund [label="Seller doesn't respond."]
+
+mediate -> refund [label="Mediator doesn't rule."]
+
 
 }

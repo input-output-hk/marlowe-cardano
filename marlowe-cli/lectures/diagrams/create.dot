@@ -38,9 +38,9 @@ Tx1_Ditto [shape=none label= ". . ."]
 Tx1 -> Tx1_Ditto
 
 
-Tx1_N [label="Nth Role|2 ₳ + role token"]
+Tx1_N [label="nth Role|2 ₳ + role token"]
 
-Tx1 -> Tx1_N [label="#N"]
+Tx1 -> Tx1_N [label="# n+1"]
 
 
 Tx1_Fee [label="Fee\n0.2 ₳"]

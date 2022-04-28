@@ -1,4 +1,4 @@
-digraph Create {
+digraph ApplyInputs {
 
 rankdir=LR
 
