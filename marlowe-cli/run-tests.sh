@@ -41,6 +41,7 @@ TESTNET_MAGIC=$CARDANO_TESTNET_MAGIC
 WALLET_URL=
 PAB_URL=
 FUND=
+TREASURY_DIR=$TREASURY
 
 PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-tests" -o "m:s:bvt:fh" --long "testnet-magic:,node-socket-path:,build,verbose,treasury:,fund,help" -- "$@")
 VALID_ARGUMENTS=$?
@@ -57,7 +58,7 @@ do
       -n | --testnet-magic)             TESTNET_MAGIC="$2";     shift 2 ;;
       -w | --wallet-url)                WALLET_URL="$2";        shift 2 ;;
       -p | --pab-url)                   PAB_URL="$2";           shift 2 ;;
-      -t | --treasury)                  TREASURY="$2";          shift 2 ;;
+      -t | --treasury)                  TREASURY_DIR="$2";      shift 2 ;;
       -b | --build)                     BUILD=1;                shift   ;;
       -v | --verbose)                   VERBOSE=1;              shift   ;;
       -h | --help)                      echo "$USAGE";          exit  0 ;;
@@ -74,8 +75,8 @@ if [[ -z "$NODE_SOCKET_PATH" ]]; then
   NODE_SOCKET_PATH="./node.socket"
 fi
 
-if [[ -z $TREASURY ]]; then
-  TREASURY="./"
+if [[ -z $TREASURY_DIR ]]; then
+  TREASURY_DIR="./"
 fi
 
 if [[ -z $WALLET_URL ]]; then
@@ -86,8 +87,24 @@ if [[ -z $PAB_URL ]]; then
   PAB_URL="http://localhost:9080"
 fi
 
-FAUCET_SKEY="$TREASURY"/payment.skey
-FAUCET_VKEY="$TREASURY"/payment.vkey
+if [[ "${#@}" -eq 0 ]]; then
+  TEST_CASES=(companion-notifications-for-two-contracts wait refund wallet-failure simple escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption)
+else
+  TEST_CASES=("$@")
+fi
+
+# Report missing test check before running anything.
+for TEST_CASE in "${TEST_CASES[@]}"
+do
+  TEST_FILE="./test/test-$TEST_CASE.yaml"
+  if [[ ! -e $TEST_FILE ]]; then
+      echo "Given test file doesn't exist: $TEST_FILE."
+      exit 1
+  fi
+done
+
+FAUCET_SKEY="$TREASURY_DIR"/payment.skey
+FAUCET_VKEY="$TREASURY_DIR"/payment.vkey
 
 # Create the payment signing and verification keys if they do not already exist.
 if [[ ! -e "$FAUCET_SKEY" ]]
@@ -114,12 +131,6 @@ BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
 # The PAB passphrase must match the `--passphrase` argument of `marlowe-pab`.
 PAB_PASSPHRASE=fixme-allow-pass-per-wallet
 
-if [[ "${#@}" -eq 0 ]]; then
-  TEST_CASES=(companion-notifications-for-two-contracts wait refund wallet-failure simple escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption)
-else
-  TEST_CASES=("$@")
-fi
-
 if [[ -z "$BUILD" ]];then
   EXEC="marlowe-cli"
 else
@@ -143,15 +154,9 @@ if [[ -n "$VERBOSE" ]]; then
   echo "Running test cases in order: ${TEST_CASES[*]}"
 fi
 
-
 for TEST_CASE in "${TEST_CASES[@]}"
 do
   TEST_FILE="./test/test-$TEST_CASE.yaml"
-  if [[ ! -e $TEST_FILE ]]; then
-      echo "Given test file doesn't exist: $TEST_FILE. Skipping."
-      continue
-  fi
-
   if [ -z "$VERBOSE" ]; then
     echo -n "$TEST_CASE: "
     if runTest "$TEST_FILE" >& "${TEST_FILE%%.yaml}".log
