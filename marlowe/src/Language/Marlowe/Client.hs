@@ -287,7 +287,7 @@ retryTillJust (MaxRetries maxRetries) action = go 0
 
 -- | Our retries defaults
 pollingInterval :: Ledger.DiffMilliSeconds
-pollingInterval = 100
+pollingInterval = 1000
 
 maxRetries :: MaxRetries
 maxRetries = MaxRetries 30
