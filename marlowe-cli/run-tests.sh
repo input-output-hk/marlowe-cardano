@@ -166,7 +166,7 @@ do
       echo "FAIL"
     fi
   else
-    runTest "$TEST_FILE" | tee "${TEST_FILE%%.yaml}".log
+    runTest "$TEST_FILE" |& tee "${TEST_FILE%%.yaml}".log
   fi
 done
 
