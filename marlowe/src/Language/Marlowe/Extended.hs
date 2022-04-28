@@ -28,6 +28,7 @@ module Language.Marlowe.Extended ( module Language.Marlowe.Extended
 import Control.Applicative ((<|>))
 import qualified Data.Aeson as JSON
 import Data.Aeson.Types hiding (Error, Value)
+import Data.ByteString.Lazy.Char8 as C (putStr)
 import qualified Data.Foldable as F
 import Data.Ratio ((%))
 import Data.Text (pack)
@@ -398,3 +399,6 @@ instance ToJSON Contract where
 toJSONTimeout :: Timeout -> JSON.Value
 toJSONTimeout (POSIXTime t) = toJSON t
 toJSONTimeout (TimeParam p) = object [ "time_param" .= p ]
+
+printJSON :: Contract -> IO ()
+printJSON = C.putStr . JSON.encode
