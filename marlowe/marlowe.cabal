@@ -63,7 +63,6 @@ library
     mtl,
     newtype-generics,
     template-haskell -any,
-    plutus-chain-index -any,
     plutus-chain-index-core -any,
     plutus-contract -any,
     plutus-core,
