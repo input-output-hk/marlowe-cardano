@@ -530,6 +530,8 @@ payoutsAtCurrency rolesCurrency = do
   let
     address = scriptHashAddress $ mkRolePayoutValidatorHash rolesCurrency
   utxosRefs <- Map.keys <$> utxosTxOutTxAt address
+  -- FIXME: We should notify through the API that we have possibly more payouts on the chain and not just
+  --        ignore our payouts buffer overflow here.
   txoutRefs <- txOutRefsAt address (MaxPages 30) <&> \case
     Left (items, _) -> items
     Right items     -> items
