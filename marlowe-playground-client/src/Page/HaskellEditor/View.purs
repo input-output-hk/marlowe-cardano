@@ -5,6 +5,8 @@ import Prologue hiding (div)
 import Component.BottomPanel.Types (Action(..)) as BottomPanel
 import Component.BottomPanel.View (render) as BottomPanel
 import Component.MetadataTab (render) as MetadataTab
+import Data.Argonaut.Decode (JsonDecodeError)
+import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
@@ -54,6 +56,7 @@ import Language.Haskell.Interpreter
   )
 import Language.Haskell.Monaco as HM
 import MainFrame.Types (ChildSlots, _haskellEditorSlot)
+import Marlowe.Extended as E
 import Marlowe.Extended.Metadata (MetaData)
 import Network.RemoteData (RemoteData(..), _Success)
 import Page.HaskellEditor.Types
@@ -78,6 +81,7 @@ import StaticAnalysis.Types
   , isReachabilityLoading
   , isStaticLoading
   )
+import Text.Pretty (pretty)
 
 render
   :: forall m
@@ -201,8 +205,11 @@ panelContents state _ GeneratedOutputView =
       where
       numberedText = (code_ <<< Array.singleton <<< text) <$> split
         (Pattern "\n")
-        result.result
+        ((show <<< map pretty <<< parseJSONContract <<< _.result) result)
     _ -> [ text "There is no generated code" ]
+  where
+  parseJSONContract :: String -> Either JsonDecodeError E.Contract
+  parseJSONContract = parseDecodeJson
 
 panelContents state metadata StaticAnalysisView =
   section_

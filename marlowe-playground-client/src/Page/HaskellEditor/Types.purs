@@ -6,6 +6,8 @@ import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
+import Data.Argonaut.Decode (JsonDecodeError)
+import Data.Argonaut.Extra (parseDecodeJson)
 import Data.BigInt.Argonaut (BigInt)
 import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
@@ -20,8 +22,8 @@ import Language.Haskell.Interpreter
   , InterpreterResult
   , _InterpreterResult
   )
+import Marlowe.Extended as E
 import Marlowe.Extended.Metadata (MetadataHintInfo)
-import Marlowe.Parser (parseContract)
 import Network.RemoteData (RemoteData(..), _Loading, _Success)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)
@@ -101,9 +103,12 @@ _result = prop (Proxy :: _ "result")
 _Pretty :: Getter' String String
 _Pretty = to f
   where
-  f ugly = case parseContract ugly of
+  f ugly = case parseJSONContract ugly of
     Right contract -> (show <<< pretty) contract
     Left _ -> ugly
+
+  parseJSONContract :: String -> Either JsonDecodeError E.Contract
+  parseJSONContract = parseDecodeJson
 
 _ContractString :: forall r. Monoid r => Fold' r State String
 _ContractString = _compilationResult <<< _Success <<< _Right

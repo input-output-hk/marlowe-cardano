@@ -9,6 +9,7 @@ import CloseAnalysis (analyseClose)
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State) as BottomPanel
 import Control.Monad.Trans.Class (lift)
+import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array (catMaybes)
 import Data.Either (hush)
 import Data.Foldable (for_)
@@ -31,8 +32,6 @@ import MainFrame.Types (ChildSlots, _haskellEditorSlot)
 import Marlowe (Api, postApiCompile)
 import Marlowe.Extended (Contract)
 import Marlowe.Extended.Metadata (MetadataHintInfo, getMetadataHintInfo)
-import Marlowe.Holes (fromTerm)
-import Marlowe.Parser (parseContract)
 import Marlowe.Template
   ( _timeContent
   , _valueContent
@@ -123,7 +122,7 @@ handleAction Compile = do
         Success (Right (InterpreterResult interpretedResult)) ->
           let
             mContract :: Maybe Contract
-            mContract = (fromTerm <=< hush <<< parseContract)
+            mContract = (hush <<< parseDecodeJson)
               interpretedResult.result
 
             metadataHints :: MetadataHintInfo
@@ -190,7 +189,7 @@ analyze doAnalyze = do
   case compilationResult of
     Success (Right (InterpreterResult interpretedResult)) ->
       let
-        mContract = (fromTerm <=< hush <<< parseContract)
+        mContract = (hush <<< parseDecodeJson)
           interpretedResult.result
       in
         for_ mContract doAnalyze

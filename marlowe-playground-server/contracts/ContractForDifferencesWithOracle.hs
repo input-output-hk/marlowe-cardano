@@ -5,7 +5,7 @@ module ContractForDifferencesWithOracle where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 -- We can set explicitRefunds True to run Close refund analysis
 -- but we get a shorter contract if we set it to False
