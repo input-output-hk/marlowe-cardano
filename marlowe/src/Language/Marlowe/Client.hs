@@ -59,8 +59,8 @@ import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, RolePayou
 import Language.Marlowe.Scripts
 import Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics as Marlowe
-import Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
-import qualified Language.Marlowe.SemanticsTypes as Marlowe
+import Language.Marlowe.Semantics.Types hiding (Contract, getAction)
+import qualified Language.Marlowe.Semantics.Types as Marlowe
 import Language.Marlowe.Util (extractNonMerkleizedContractRoles)
 import Ledger (CurrencySymbol, Datum (..), POSIXTime (..), PaymentPubKeyHash (..), PubKeyHash (..), TokenName,
                TxOut (..), TxOutRef (txOutRefId), dataHash, txOutValue)

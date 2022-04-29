@@ -30,7 +30,7 @@ module Language.Marlowe.Scripts where
 import GHC.Generics
 import Language.Marlowe.Pretty (Pretty (..))
 import Language.Marlowe.Semantics
-import Language.Marlowe.SemanticsTypes
+import Language.Marlowe.Semantics.Types
 import Ledger
 import Ledger.Ada (adaSymbol)
 import qualified Ledger.Interval as Interval

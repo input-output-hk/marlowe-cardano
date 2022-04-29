@@ -28,7 +28,7 @@ import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken)
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.Extended as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
 import Language.Marlowe.Semantics (MarloweData (..))
-import Language.Marlowe.SemanticsTypes as C (Contract, State (..))
+import Language.Marlowe.Semantics.Types as C (Contract, State (..))
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
