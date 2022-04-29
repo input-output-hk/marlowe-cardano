@@ -3,4 +3,4 @@
 *.pptx
 .ipynb_checkpoints/
 marlowe-cardano/
-build
+my-wallet.*
