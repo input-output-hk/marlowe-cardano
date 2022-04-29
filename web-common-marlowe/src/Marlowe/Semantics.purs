@@ -223,7 +223,11 @@ type Accounts = Map (Tuple AccountId Token) BigInt
 -- TODO: fix primitive obsession
 type ChoiceName = String
 
--- TODO: fix primitive obsession
+-- The cardano Blockchain has Multi-Asset support, each monetary policy is identified
+-- by a policyId which is also known as the CurrencySymbol. The ADA token is a special
+-- case that has the empty string as both the token name and the currency symbol
+-- https://docs.cardano.org/native-tokens/learn
+-- https://github.com/input-output-hk/plutus/blob/1f31e640e8a258185db01fa899da63f9018c0e85/plutus-ledger-api/src/Plutus/V1/Ledger/Ada.hs#L45
 newtype Assets = Assets (Map CurrencySymbol (Map TokenName BigInt))
 
 derive instance genericAssets :: Generic Assets _
@@ -247,6 +251,26 @@ instance semigroupAssets :: Semigroup Assets where
 
 instance monoidAssets :: Monoid Assets where
   mempty = Assets Map.empty
+
+asset :: CurrencySymbol -> TokenName -> BigInt -> Assets
+asset cur tok balance = Assets (Map.singleton cur (Map.singleton tok balance))
+
+ada :: BigInt -> Assets
+ada = asset "" ""
+
+adaCurrencySymbol :: CurrencySymbol
+adaCurrencySymbol = ""
+
+adaTokenName :: TokenName
+adaTokenName = ""
+
+adaToken :: Token
+adaToken = Token adaCurrencySymbol adaTokenName
+
+getAda :: Assets -> BigInt
+getAda assets = fromMaybe zero $ Map.lookup adaTokenName =<< Map.lookup
+  adaCurrencySymbol
+  (unwrap assets)
 
 newtype Ada = Lovelace BigInt
 
@@ -1534,12 +1558,6 @@ evalObservation env state obs =
       ValueEQ lhs rhs -> evalVal lhs == evalVal rhs
       TrueObs -> true
       FalseObs -> false
-
-asset :: CurrencySymbol -> TokenName -> BigInt -> Assets
-asset cur tok balance = Assets (Map.singleton cur (Map.singleton tok balance))
-
-ada :: BigInt -> Assets
-ada = asset "" ""
 
 -- | Pick the first account with money in it
 refundOne :: Accounts -> Maybe (Tuple (Tuple Party Money) Accounts)

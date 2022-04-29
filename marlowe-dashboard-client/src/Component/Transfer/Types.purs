@@ -2,7 +2,6 @@ module Component.Transfer.Types where
 
 import Prologue
 
-import Component.Contacts.State (adaToken, getAda)
 import Data.BigInt.Argonaut (BigInt)
 import Marlowe.Semantics
   ( AccountId
@@ -11,6 +10,8 @@ import Marlowe.Semantics
   , Payee(..)
   , Payment(..)
   , Token(..)
+  , adaToken
+  , getAda
   )
 import Store.RoleTokens
   ( RoleTokenStore

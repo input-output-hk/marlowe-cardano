@@ -4,7 +4,6 @@ module Page.Contract.View
 
 import Prologue hiding (div)
 
-import Component.Contacts.State (adaToken)
 import Component.Contract.View
   ( firstLetterInCircle
   , participantWithNickname
@@ -70,6 +69,7 @@ import Marlowe.Semantics
   , Token(..)
   , TransactionInput(..)
   , _accounts
+  , adaToken
   )
 import Marlowe.Semantics (Input(..)) as S
 import Page.Contract.Lenses

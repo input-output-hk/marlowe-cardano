@@ -100,5 +100,6 @@
   , "test/**/*.purs"
   , "generated/**/*.purs"
   , "../web-common-marlowe/src/**/*.purs"
+  , "../web-common-marlowe/test/**/*.purs"
   ]
 }

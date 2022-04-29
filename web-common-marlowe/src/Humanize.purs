@@ -1,5 +1,6 @@
 module Humanize
-  ( adjustTimeZone
+  ( utcToLocal
+  , localToUtc
   , humanizeDuration
   , formatDate
   , formatDate'
@@ -13,7 +14,8 @@ module Humanize
 
 import Prologue
 
-import Data.BigInt.Argonaut (BigInt, toNumber)
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime, adjust)
 import Data.DateTime.Instant (toDateTime)
 import Data.Formatter.DateTime (FormatterCommand(..), format) as DateTime
@@ -84,9 +86,13 @@ formatPOSIXTime tzOffset time =
 -- The `adjust` function can overflow, if that happens (it shouldn't) we resolve to
 -- the original value
 -- TODO: SCP-3833 Add type safety to timezone conversions
-adjustTimeZone :: Minutes -> DateTime -> DateTime
-adjustTimeZone tzOffset dt =
+utcToLocal :: Minutes -> DateTime -> DateTime
+utcToLocal tzOffset dt =
   fromMaybe dt (adjust (over Minutes negate tzOffset :: Minutes) dt)
+
+localToUtc :: Minutes -> DateTime -> DateTime
+localToUtc tzOffset dt =
+  fromMaybe dt (adjust tzOffset dt)
 
 minutesFormatter :: Number.Formatter
 minutesFormatter =
@@ -101,10 +107,12 @@ minutesFormatter =
 formatMinutes :: Int -> String
 formatMinutes = Number.format minutesFormatter <<< Int.toNumber
 
+-- This functions provides a human readable string for the Browser offset,
+-- which can be obtained using Effect.Now (getTimezoneOffset)
 humanizeOffset :: Minutes -> String
 humanizeOffset (Minutes 0.0) = "GMT"
 
-humanizeOffset (Minutes min) = "GMT" <> (if min < zero then "-" else "+") <>
+humanizeOffset (Minutes min) = "GMT" <> (if min > zero then "-" else "+") <>
   offsetString
   where
   min' = floor $ abs min
@@ -118,7 +126,7 @@ humanizeOffset (Minutes min) = "GMT" <> (if min < zero then "-" else "+") <>
       show hours <> ":" <> formatMinutes (min' - hours * 60)
 
 formatDate :: Minutes -> DateTime -> String
-formatDate tzOffset dt = formatDate' $ adjustTimeZone tzOffset dt
+formatDate tzOffset dt = formatDate' $ utcToLocal tzOffset dt
 
 formatDate' :: DateTime -> String
 formatDate' =
@@ -132,7 +140,7 @@ formatDate' =
         ]
 
 formatTime :: Minutes -> DateTime -> String
-formatTime tzOffset dt = formatTime' $ adjustTimeZone tzOffset dt
+formatTime tzOffset dt = formatTime' $ utcToLocal tzOffset dt
 
 formatTime' :: DateTime -> String
 formatTime' =
@@ -143,20 +151,25 @@ formatTime' =
         , DateTime.MinutesTwoDigits
         ]
 
+oneMillion :: BigInt
+oneMillion = BigInt.fromInt 1_000_000
+
 humanizeValue :: Token -> BigInt -> String
 -- TODO: use a different currencyFormatter with no decimal places when they're all zero
-humanizeValue (Token "" "") value = "₳ " <> Number.format (numberFormatter 6)
-  (toAda value)
-
+humanizeValue (Token "" "") value
+  | value `mod` oneMillion == zero =
+      "₳ " <> Number.format (numberFormatter 0) (toAda value)
+humanizeValue (Token "" "") value =
+  "₳ " <> Number.format (numberFormatter 6) (toAda value)
 humanizeValue (Token "" "dollar") value = "$ " <> Number.format
   (numberFormatter 2)
-  (toNumber value)
+  (BigInt.toNumber value / 100.0)
 
 humanizeValue (Token _ name) value =
-  Number.format (numberFormatter 0) (toNumber value) <> " " <> name
+  Number.format (numberFormatter 0) (BigInt.toNumber value) <> " " <> name
 
 toAda :: BigInt -> Number
-toAda lovelace = (toNumber lovelace) / 1000000.0
+toAda lovelace = (BigInt.toNumber lovelace) / 1_000_000.0
 
 numberFormatter :: Int -> Number.Formatter
 numberFormatter decimals =

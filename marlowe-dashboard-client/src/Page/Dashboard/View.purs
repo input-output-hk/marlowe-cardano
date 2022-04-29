@@ -12,7 +12,6 @@ import Component.ConfirmContractActionDialog.Types
   ( Msg(..)
   , _confirmActionDialog
   )
-import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.State as Contacts
 import Component.Contacts.Types (_contacts)
 import Component.ContractPreview.View
@@ -89,7 +88,7 @@ import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
-import Marlowe.Semantics (PubKey)
+import Marlowe.Semantics (PubKey, adaToken, getAda)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses

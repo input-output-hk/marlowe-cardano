@@ -23,7 +23,6 @@ import Component.ConfirmContractActionDialog.Types
   , _txInput
   , _wallet
   )
-import Component.Contacts.State (getAda)
 import Component.Expand as Expand
 import Component.Heading (Preset(..), heading)
 import Component.IconButton.View (iconButton)
@@ -51,7 +50,7 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
-import Marlowe.Semantics (Token(..), computeTransaction)
+import Marlowe.Semantics (Token(..), computeTransaction, getAda)
 
 render :: forall m. MonadAff m => State -> ComponentHTML m
 render state =

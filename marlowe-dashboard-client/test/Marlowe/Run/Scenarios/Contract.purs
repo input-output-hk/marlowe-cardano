@@ -198,7 +198,7 @@ loanContract = loanContractTest
       depositButton <- shouldCast =<< getBy role do
         nameRegexi "deposit"
         pure Button
-      depositButton `shouldHaveText` "Deposit:₳ 1,000.000000"
+      depositButton `shouldHaveText` "Deposit:₳ 1,000"
       shouldNotBeDisabled depositButton
       click depositButton
 
@@ -226,7 +226,7 @@ loanContract = loanContractTest
       depositButton <- shouldCast =<< getBy role do
         nameRegexi "deposit"
         pure Button
-      depositButton `shouldHaveText` "Deposit:₳ 1,100.000000"
+      depositButton `shouldHaveText` "Deposit:₳ 1,100"
       shouldBeDisabled depositButton
 
 loanToSelf :: Spec Unit

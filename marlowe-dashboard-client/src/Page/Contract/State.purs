@@ -4,7 +4,6 @@ import Prologue
 
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.Toast (class Toast)
-import Component.Contacts.State (adaToken)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (class MonadTime, timezoneOffset)
@@ -47,7 +46,7 @@ import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics (Contract(..), _accounts)
+import Marlowe.Semantics (Contract(..), _accounts, adaToken)
 import Page.Contract.Lenses
   ( _Started
   , _contract

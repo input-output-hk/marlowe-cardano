@@ -2,7 +2,6 @@ module Component.Template.View (contractTemplateCard) where
 
 import Prologue hiding (Either(..), div)
 
-import Component.Contacts.State (adaToken, getAda)
 import Component.ContractSetup (_contractSetup, markdownHintWithTitle)
 import Component.ContractSetup as ContractSetup
 import Component.ContractSetup.Types (ContractFields, ContractParams)
@@ -60,7 +59,7 @@ import Marlowe.Extended.Metadata
   )
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
-import Marlowe.Semantics (Assets)
+import Marlowe.Semantics (Assets, adaToken, getAda)
 import Page.Dashboard.Types (ChildSlots)
 import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)

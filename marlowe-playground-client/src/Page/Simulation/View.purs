@@ -98,7 +98,7 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes, disabled, enabled)
 import Halogen.Monaco (monacoComponent)
-import Humanize (adjustTimeZone, formatPOSIXTime, humanizeOffset)
+import Humanize (formatPOSIXTime, humanizeOffset, localToUtc, utcToLocal)
 import MainFrame.Types
   ( ChildSlots
   , _currencyInputSlot
@@ -885,11 +885,11 @@ marloweInstantInput ref classList f current tzOffset =
         DateTimeLocalInput.component
         { classList: [ "flex-grow" ]
         -- TODO: SCP-3833 Add type safety to timezone conversions
-        , value: adjustTimeZone (negateDuration tzOffset) $
+        , value: utcToLocal tzOffset $
             Instant.toDateTime current
         , trimSeconds: true
         }
-        ( \(ValueChanged dt) -> f $ Instant.fromDateTime $ adjustTimeZone
+        ( \(ValueChanged dt) -> f $ Instant.fromDateTime $ localToUtc
             tzOffset
             dt
         )
