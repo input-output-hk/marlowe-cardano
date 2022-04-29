@@ -206,7 +206,7 @@ panelContents state _ GeneratedOutputView =
       where
       numberedText = (code_ <<< Array.singleton <<< text) <$> split
         (Pattern "\n")
-        ((show <<< printContractOrError <<< _.result) result)
+        ((printContractOrError <<< _.result) result)
     _ -> [ text "There is no generated code" ]
   where
   parseJSONContract :: String -> Either JsonDecodeError E.Contract
