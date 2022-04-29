@@ -1,0 +1,27 @@
+ptTestName: Funding Wallets
+
+ptPabOperations:
+
+- tag: CreateWallet
+  poOwner: PAB_1
+
+- tag: FundWallet
+  poOwner: PAB_1
+  poValue:
+    lovelace: 500000000
+
+- tag: CreateWallet
+  poOwner: PAB_2
+
+- tag: FundWallet
+  poOwner: PAB_2
+  poValue:
+    lovelace: 500000000
+
+- tag: CreateWallet
+  poOwner: PAB_3
+
+- tag: FundWallet
+  poOwner: PAB_3
+  poValue:
+    lovelace: 500000000

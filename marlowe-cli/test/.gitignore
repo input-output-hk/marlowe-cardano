@@ -1,3 +1,4 @@
 *.plutus
 *.protocol
+*.log
 tx-*.*
