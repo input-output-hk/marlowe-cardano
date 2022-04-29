@@ -49,7 +49,7 @@ Close [shape=oval label="Finish."]
 Execute -> Close [label="Contract is\ncomplete."]
 
 
-Execute -> Prepare [label="Step times out."]
+Execute -> Prepare [label="'When' clause times out."]
 
 
 }

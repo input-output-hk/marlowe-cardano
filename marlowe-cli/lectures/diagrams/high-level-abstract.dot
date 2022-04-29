@@ -34,7 +34,7 @@ Prepare [label=<<font face="monospace">marlowe-cli run prepare</font><br/><i>Pre
 UserInput -> Prepare [label="apply inputs"]
 
 
-Prepare -> Prepare [label="Step times out."]
+Prepare -> Prepare [label="'When' clause times out."]
 
 
 Close [shape=oval label="Finish."]

@@ -11,7 +11,7 @@ ApplicationScript [label="Marlowe Application Script"]
 
 UserSelect -> ApplicationScript [label=<<i>submit transaction to create contract</i>>]
 
-ApplicationScript-> ApplicationScript [label=<<i>step times out</i>>]
+ApplicationScript-> ApplicationScript [label=<<i>'When' clause times out</i>>]
 
 
 Close [shape=oval label="Contract finished."]
