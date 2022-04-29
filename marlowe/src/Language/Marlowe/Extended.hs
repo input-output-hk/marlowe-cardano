@@ -27,7 +27,7 @@ module Language.Marlowe.Extended ( module Language.Marlowe.Extended
 import Data.Ratio ((%))
 import GHC.Generics
 import Language.Marlowe.Pretty (Pretty (..), pretty)
-import qualified Language.Marlowe.SemanticsTypes as S
+import qualified Language.Marlowe.Semantics.Types as S
 import Language.Marlowe.Util (ada)
 import qualified Ledger as L (POSIXTime (..))
 import Ledger.Ada (adaSymbol, adaToken)

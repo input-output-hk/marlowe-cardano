@@ -20,7 +20,7 @@ The `marlowe-cli contract datum` command writes a Marlowe datum to a JSON file i
       --print-stats            Print statistics.
       -h,--help                Show this help text
 
-See the `Contract` and `State` data types in [`Language.Marlowe.SemanticTypes`](../src/Language/Marlowe/SemanticsTypes.hs) for valid JSON to represent the contract and its state. The simplest contract is [`Close`](example.contract) and the [simplest state](example.state) is a public key for the actor withdrawing funds from the script and the amount withdrawn, along with a minimum slot number for the withdrawal.
+See the `Contract` and `State` data types in [`Language.Marlowe.SemanticTypes`](../src/Language/Marlowe/Semantics/Types.hs) for valid JSON to represent the contract and its state. The simplest contract is [`Close`](example.contract) and the [simplest state](example.state) is a public key for the actor withdrawing funds from the script and the amount withdrawn, along with a minimum slot number for the withdrawal.
 
 This command prints the hash of the datum on `stdout`. Optionally, it will print on `stderr` the size in bytes of the datum.
 

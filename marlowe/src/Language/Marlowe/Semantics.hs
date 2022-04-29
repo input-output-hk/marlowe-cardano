@@ -52,10 +52,10 @@ import Data.Text (pack)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
-                                        Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
-                                        Observation (..), Party, Payee (..), State (..), TimeInterval, Token (..),
-                                        Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
+import Language.Marlowe.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
+                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
+                                         Observation (..), Party, Payee (..), State (..), TimeInterval, Token (..),
+                                         Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
 import Ledger (POSIXTime (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
 import qualified Ledger.Value as Val

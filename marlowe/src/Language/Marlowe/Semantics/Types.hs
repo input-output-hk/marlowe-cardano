@@ -23,7 +23,7 @@
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 
-module Language.Marlowe.SemanticsTypes where
+module Language.Marlowe.Semantics.Types where
 
 import Control.Applicative ((<*>), (<|>))
 import Control.Newtype.Generics (Newtype)

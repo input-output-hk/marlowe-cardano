@@ -41,7 +41,7 @@ import Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
 import qualified Language.Marlowe.ACTUS.Domain.ContractTerms as CT
 import Language.Marlowe.ACTUS.Domain.Schedule as SC
 import Language.Marlowe.Extended
-import Language.Marlowe.SemanticsTypes (State (..))
+import Language.Marlowe.Semantics.Types (State (..))
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), PSType, SumType (..),
                                    TypeInfo (TypeInfo), _typeName, argonaut, buildBridge, equal, genericShow, mkSumType,
                                    order, psTypeParameters, typeModule, typeName, (^==))
@@ -84,7 +84,7 @@ psContract =
 contractBridge :: BridgePart
 contractBridge = do
     typeName ^== "Contract"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psContract
 
 psState :: MonadReader BridgeData m => m PSType
@@ -95,7 +95,7 @@ psState =
 stateBridge :: BridgePart
 stateBridge = do
     typeName ^== "State"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psState
 
 psObservation :: MonadReader BridgeData m => m PSType
@@ -106,7 +106,7 @@ psObservation =
 observationBridge :: BridgePart
 observationBridge = do
     typeName ^== "Observation"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psObservation
 
 psValue :: MonadReader BridgeData m => m PSType
@@ -117,7 +117,7 @@ psValue =
 valueBridge :: BridgePart
 valueBridge = do
     typeName ^== "Value"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psValue
 
 psTransactionInput :: MonadReader BridgeData m => m PSType

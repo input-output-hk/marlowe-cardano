@@ -78,7 +78,7 @@ import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, C
                                 EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
 import Language.Marlowe.Semantics (MarloweParams (rolesCurrency))
-import Language.Marlowe.SemanticsTypes (Party (Role))
+import Language.Marlowe.Semantics.Types (Party (Role))
 import Network.WebSockets (Connection)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (PabClient, activateContract, instanceClient))

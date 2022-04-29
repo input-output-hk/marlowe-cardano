@@ -25,7 +25,7 @@ module Language.Marlowe.CLI.Command.Input (
 import Control.Monad.Except (MonadIO)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseToken)
 import Language.Marlowe.CLI.Run (makeChoice, makeDeposit, makeNotification)
-import Language.Marlowe.SemanticsTypes (AccountId, ChoiceName, ChosenNum, Party, Token)
+import Language.Marlowe.Semantics.Types (AccountId, ChoiceName, ChosenNum, Party, Token)
 
 import qualified Options.Applicative as O
 
