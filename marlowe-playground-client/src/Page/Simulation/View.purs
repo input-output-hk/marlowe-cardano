@@ -10,7 +10,16 @@ import Component.DateTimeLocalInput.Types (Message(..))
 import Component.Hint.State (hint)
 import Component.Icons as Icon
 import Component.Popper (Placement(..))
-import Data.Array (concatMap, intercalate, length, reverse, sortWith)
+import Component.Tooltip.State (tooltip)
+import Component.Tooltip.Types (ReferenceId(..))
+import Data.Array
+  ( concatMap
+  , intercalate
+  , length
+  , mapWithIndex
+  , reverse
+  , sortWith
+  )
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
@@ -28,7 +37,7 @@ import Data.Newtype (unwrap)
 import Data.Set.Ordered.OSet (OSet)
 import Data.String (trim)
 import Data.Time.Duration (Minutes, negateDuration)
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Halogen.Classes
@@ -96,9 +105,15 @@ import Halogen.HTML
   , ul
   )
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Properties (class_, classes, disabled, enabled)
+import Halogen.HTML.Properties (class_, classes, disabled, enabled, id)
 import Halogen.Monaco (monacoComponent)
-import Humanize (formatPOSIXTime, humanizeOffset, localToUtc, utcToLocal)
+import Humanize
+  ( formatPOSIXTime
+  , humanizeInterval
+  , humanizeOffset
+  , localToUtc
+  , utcToLocal
+  )
 import MainFrame.Types
   ( ChildSlots
   , _currencyInputSlot
@@ -106,18 +121,21 @@ import MainFrame.Types
   , _simulatorEditorSlot
   )
 import Marlowe.Extended.Metadata (MetaData, NumberFormat(..), getChoiceFormat)
+import Marlowe.Holes as Holes
 import Marlowe.Monaco as MM
 import Marlowe.Semantics
   ( AccountId
   , Assets(..)
   , Bound(..)
   , ChoiceId(..)
+  , CurrencySymbol
   , Input(..)
   , Party(..)
   , Payee(..)
   , Payment(..)
   , TimeInterval(..)
   , Token(..)
+  , TokenName
   , TransactionInput(..)
   , inBounds
   , timeouts
@@ -552,7 +570,7 @@ simulationStateWidget state =
           <<< _time
           <<< to POSIXTime
           -- TODO SCP-3833 Add type safety to timezone conversions
-          <<< to (formatPOSIXTime $ negateDuration tzOffset)
+          <<< to (formatPOSIXTime tzOffset)
           <<< to \(dateStr /\ timeStr) ->
             intercalate " " [ dateStr, timeStr, offsetStr ]
       )
@@ -561,12 +579,12 @@ simulationStateWidget state =
 
     contractMaxTime = case _ of
       Nothing -> "Closed"
+      Just (Holes.Term Holes.Close _) -> "Closed"
       Just contract ->
         let
           posixTime = (_.maxTime <<< unwrap <<< timeouts) contract
           -- TODO SCP-3833 Add type safety to timezone conversions
-          dateStr /\ timeStr = formatPOSIXTime (negateDuration tzOffset)
-            posixTime
+          dateStr /\ timeStr = formatPOSIXTime tzOffset posixTime
         in
           intercalate " " [ dateStr, timeStr, offsetStr ]
 
@@ -929,47 +947,107 @@ renderDeposit metadata accountOwner party tok money =
 
 ------------------------------------------------------------
 logWidget
-  :: forall p
-   . MetaData
+  :: forall m
+   . MonadAff m
+  => MetaData
   -> State
-  -> HTML p Action
+  -> ComponentHTML Action ChildSlots m
 logWidget metadata state =
   cardWidget "Transaction log"
     $ div [ classes [ grid, gridColsDescriptionLocation, fullWidth ] ]
-        ( [ div [ class_ fontBold ] [ text "Action" ]
-          , div [ class_ fontBold ] [ text "POSIX time" ]
+        ( [ div [ class_ fontBold ] [ text "Event" ]
+          , div [ class_ fontBold ] [ text "Time" ]
           ]
             <> inputLines
         )
   where
-  inputLines = state ^.
+  logEntries = state ^.
     ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning
         <<< _log
-        <<< to (concatMap (logToLines metadata) <<< reverse)
+        <<< to reverse
     )
+  inputLines = join $ logToLines state.tzOffset metadata `mapWithIndex`
+    logEntries
 
-logToLines :: forall p a. MetaData -> LogEntry -> Array (HTML p a)
-logToLines _ (StartEvent time) =
+logTime
+  :: forall m a
+   . MonadAff m
+  => Int /\ Int
+  -> Minutes
+  -> TimeInterval
+  -> ComponentHTML a ChildSlots m
+logTime (step /\ subStep) tzOffset time@(TimeInterval start _) = span
+  [ class_ justifyEnd, id ref ]
+  [ text startTime
+  , tooltip fullTime (RefId ref) Auto
+  ]
+  where
+  ref = intercalate "-" [ "log", "time", show step, show subStep ]
+  _ /\ startTime = formatPOSIXTime tzOffset start
+  fullTime = intercalate " "
+    [ "Event executed"
+    , humanizeInterval tzOffset time
+    , humanizeOffset tzOffset
+    ]
+
+logToLines
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
+  -> Int
+  -> LogEntry
+  -> Array (ComponentHTML a ChildSlots m)
+logToLines tzOffset _ stepNumber (StartEvent time) =
   [ span_ [ text "Contract started" ]
-  , span [ class_ justifyEnd ] [ text $ show time ]
+  , logTime (stepNumber /\ 0) tzOffset interval
   ]
-
-logToLines metadata (InputEvent (TransactionInput { interval, inputs })) =
-  inputToLine metadata interval =<< Array.fromFoldable inputs
-
-logToLines metadata (OutputEvent interval payment) = paymentToLines metadata
-  interval
-  payment
-
-logToLines _ (CloseEvent (TimeInterval start end)) =
-  [ span_ [ text $ "Contract ended" ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
-  ]
-
-inputToLine :: forall p a. MetaData -> TimeInterval -> Input -> Array (HTML p a)
-inputToLine
+  where
+  interval = TimeInterval time' time'
+  time' = POSIXTime time
+logToLines
+  tzOffset
   metadata
-  (TimeInterval start end)
+  stepNumber
+  (InputEvent (TransactionInput { interval, inputs })) =
+  join $
+    mapWithIndex
+      ( \subStep input -> inputToLine
+          tzOffset
+          metadata
+          interval
+          (stepNumber /\ subStep)
+          input
+      )
+      (Array.fromFoldable inputs)
+
+logToLines tzOffset metadata stepNumber (OutputEvent interval payment) =
+  paymentToLines
+    tzOffset
+    metadata
+    interval
+    stepNumber
+    payment
+
+logToLines tzOffset _ stepNumber (CloseEvent timeInterval) =
+  [ span_ [ text $ "Contract ended" ]
+  , logTime (stepNumber /\ 0) tzOffset timeInterval
+  ]
+
+inputToLine
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
+  -> TimeInterval
+  -> (Int /\ Int)
+  -> Input
+  -> Array (ComponentHTML a ChildSlots m)
+inputToLine
+  tzOffset
+  metadata
+  timeInterval
+  stepNumber
   (IDeposit accountOwner party token money) =
   [ span_
       [ text "Deposit "
@@ -981,12 +1059,14 @@ inputToLine
       , text " as "
       , strong_ [ renderPrettyParty metadata party ]
       ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
 
 inputToLine
+  tzOffset
   metadata
-  (TimeInterval start end)
+  timeInterval
+  stepNumber
   (IChoice (ChoiceId choiceName choiceOwner) chosenNum) =
   [ span_
       [ text "Participant "
@@ -999,29 +1079,75 @@ inputToLine
       , text " for choice with id "
       , strong_ [ text (show choiceName) ]
       ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
 
-inputToLine _ (TimeInterval start end) INotify =
+inputToLine tzOffset _ timeInterval stepNumber INotify =
   [ text "Notify"
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
 
 paymentToLines
-  :: forall p a. MetaData -> TimeInterval -> Payment -> Array (HTML p a)
-paymentToLines metadata timeInterval (Payment accountId payee money) = join $
-  unfoldAssets money (paymentToLine metadata timeInterval accountId payee)
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
+  -> TimeInterval
+  -> Int
+  -> Payment
+  -> Array (ComponentHTML a ChildSlots m)
+paymentToLines
+  tzOffset
+  metadata
+  timeInterval
+  stepNumber
+  (Payment accountId payee money) =
+  let
+    Assets money' = money
+
+    assets :: Array (CurrencySymbol /\ TokenName /\ BigInt)
+    assets = do
+      currencySymbol /\ asset <- Map.toUnfoldable money'
+      tokenName /\ value <- Map.toUnfoldable asset
+      pure $ currencySymbol /\ tokenName /\ value
+
+  in
+    join $
+      mapWithIndex
+        ( \subStep (currencySymbol /\ tokenName /\ value) ->
+            paymentToLine
+              tzOffset
+              metadata
+              timeInterval
+              accountId
+              payee
+              (stepNumber /\ subStep)
+              (Token currencySymbol tokenName)
+              value
+        )
+        assets
 
 paymentToLine
-  :: forall p a
-   . MetaData
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
   -> TimeInterval
   -> AccountId
   -> Payee
+  -> Int /\ Int
   -> Token
   -> BigInt
-  -> Array (HTML p a)
-paymentToLine metadata (TimeInterval start end) accountId payee token money =
+  -> Array (ComponentHTML a ChildSlots m)
+paymentToLine
+  tzOffset
+  metadata
+  timeInterval
+  accountId
+  payee
+  stepNumber
+  token
+  money =
   [ span_
       [ text "The contract pays "
       , strong_ [ text (showPrettyMoney money) ]
@@ -1032,15 +1158,8 @@ paymentToLine metadata (TimeInterval start end) accountId payee token money =
       , text " from "
       , strong_ $ renderPrettyPayee metadata (Account accountId)
       ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
-
-showTimeRange :: POSIXTime -> POSIXTime -> String
-showTimeRange start end =
-  if start == end then
-    show start
-  else
-    (show start) <> " - " <> (show end)
 
 unfoldAssets :: forall a. Assets -> (Token -> BigInt -> a) -> Array a
 unfoldAssets (Assets mon) f =

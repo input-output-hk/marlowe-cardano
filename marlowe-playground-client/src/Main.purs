@@ -19,7 +19,7 @@ import Routing.Hash (matchesWith)
 
 main :: Effect Unit
 main = do
-  tzOffset <- negateDuration <$> getTimezoneOffset
+  tzOffset <- getTimezoneOffset
   HA.runHalogenAff do
     body <- HA.awaitBody
     let mainFrame = H.hoist runAppM MainFrame.component
