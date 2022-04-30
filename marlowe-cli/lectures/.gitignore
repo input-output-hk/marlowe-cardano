@@ -4,3 +4,6 @@
 .ipynb_checkpoints/
 marlowe-cardano/
 my-wallet.*
+*.skey
+*.vkey
+*.address
