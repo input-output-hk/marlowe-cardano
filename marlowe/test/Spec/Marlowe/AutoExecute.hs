@@ -20,7 +20,7 @@ import Data.Text.Lazy (toStrict)
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
 import Language.Marlowe.Semantics
-import Language.Marlowe.SemanticsTypes
+import Language.Marlowe.Semantics.Types
 import Language.Marlowe.Util
 
 import Data.Aeson (decode, encode)
@@ -112,7 +112,7 @@ autoexecZCBTest = checkPredicate "ZCB Auto Execute Contract"
     Trace.waitNSlots 2
 
     -- Now Alice should be able to retry and pay to Bob
-    void $ Trace.waitNSlots 2
+    void $ Trace.waitNSlots 5
 
 
 autoexecZCBTestAliceWalksAway :: TestTree

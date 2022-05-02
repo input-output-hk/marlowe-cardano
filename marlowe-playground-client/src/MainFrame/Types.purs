@@ -6,6 +6,7 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Auth (AuthStatus)
 import Component.Blockly.Types as Blockly
 import Component.ConfirmUnsavedNavigation.Types as ConfirmUnsavedNavigation
+import Component.DateTimeLocalInput.Types as DateTimeLocalInput
 import Component.Demos.Types as Demos
 import Component.MetadataTab.Types (MetadataAction)
 import Component.NewProject.Types as NewProject
@@ -23,7 +24,8 @@ import Data.Lens.Record (prop)
 import Data.Maybe (maybe)
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
-import Gist (Gist, GistId)
+import Gist (Gist)
+import Gists.Extra (GistId)
 import Gists.Types (GistAction)
 import Halogen (ClassName)
 import Halogen as H
@@ -150,6 +152,8 @@ type ChildSlots =
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , currencyInput :: forall query. H.Slot query BigInt String
+  , dateTimeInput ::
+      forall query. H.Slot query DateTimeLocalInput.Message String
   )
 
 _haskellEditorSlot :: Proxy "haskellEditorSlot"
@@ -175,6 +179,9 @@ _walletSlot = Proxy
 
 _currencyInputSlot :: Proxy "currencyInput"
 _currencyInputSlot = Proxy
+
+_dateTimeInputSlot :: Proxy "dateTimeInput"
+_dateTimeInputSlot = Proxy
 
 -----------------------------------------------------------
 type State =

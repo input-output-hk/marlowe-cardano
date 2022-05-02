@@ -1,9 +1,0 @@
-{
-  "Producers": [
-    {
-      "addr": "relays.marlowe-testnet.dev.cardano.org",
-      "port": 3001,
-      "valency": 1
-    }
-  ]
-}

@@ -96,5 +96,5 @@
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/web-ghc; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/web-ghc; echo source root reset to $sourceRoot";
     }

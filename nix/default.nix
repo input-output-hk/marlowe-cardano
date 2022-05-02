@@ -16,6 +16,7 @@ let
       (import ./overlays/nixpkgs-overrides.nix)
       # fix r-modules
       (import ./overlays/r.nix)
+      (import ./overlays/networks.nix)
       # stdenv.lib is still needed by the pinned version of easy purescipt
       (final: prev: { stdenv = prev.stdenv // { inherit (final) lib; }; })
     ];
@@ -28,6 +29,7 @@ let
     # our own overlays:
     # needed for cardano-api wich uses a patched libsodium
     ++ iohkNixMain.overlays.crypto
+    ++ iohkNixMain.overlays.iohkNix
     ++ ownOverlays;
 
   pkgs = import sources.nixpkgs {

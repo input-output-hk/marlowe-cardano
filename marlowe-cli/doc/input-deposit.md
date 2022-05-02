@@ -7,9 +7,9 @@ The `marlowe input deposit` command creates the JSON input file representing a d
 
     $ marlowe-cli input deposit --help
     
-    Usage: marlowe-cli input deposit --deposit-account PARTY --deposit-party PARTY
+    Usage: marlowe-cli input deposit --deposit-account PARTY --deposit-party PARTY 
                                      [--deposit-token TOKEN]
-                                     --deposit-amount INTEGER
+                                     --deposit-amount INTEGER 
                                      [--out-file OUTPUT_FILE]
       Create Marlowe input for a deposit.
     

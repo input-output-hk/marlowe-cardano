@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -21,14 +22,15 @@ module Language.Marlowe.CLI.Orphans (
 ) where
 
 
-import Cardano.Api (AddressAny (..), AsType (AsAddressAny), deserialiseAddress)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value (String), object, withObject, withText, (.:), (.=))
+import Cardano.Api (AddressAny (..), AsType (AsAddressAny), BlockHeader (..), BlockNo (..), ChainPoint (..),
+                    SlotNo (..), deserialiseAddress, serialiseAddress)
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (Null, String), object, withObject, withText, (.:), (.=))
 import Data.ByteString.Short (ShortByteString, fromShort, toShort)
 import Language.Marlowe.Semantics (Payment (..), TransactionOutput (..))
 
 import qualified Data.ByteString.Base16 as Base16 (decode, encode)
 import qualified Data.ByteString.Char8 as BS8 (pack, unpack)
-import qualified Data.Text as T (pack, unpack)
+import qualified Data.Text as T (unpack)
 
 
 instance ToJSON ShortByteString where
@@ -80,7 +82,7 @@ instance FromJSON Payment where
 
 
 instance ToJSON AddressAny where
-  toJSON = String . T.pack . show
+  toJSON = String . serialiseAddress
 
 instance FromJSON AddressAny where
   parseJSON =
@@ -89,3 +91,42 @@ instance FromJSON AddressAny where
         case deserialiseAddress AsAddressAny s of
           Just address -> pure address
           Nothing      -> fail $ "Failed to parse address \"" <> T.unpack s <> "\"."
+
+
+instance Show BlockHeader where
+  show (BlockHeader slotNo blockHash blockNo) =
+    "BlockHeader ("
+      <> show slotNo
+      <> ") ("
+      <> show blockHash
+      <> ") ("
+      <> show blockNo
+      <> ")"
+
+instance ToJSON BlockHeader where
+  toJSON (BlockHeader (SlotNo slotNo) blockHash (BlockNo blockNo)) =
+    object
+      [
+        "slot"  .= slotNo
+      , "hash"  .= blockHash
+      , "block" .= blockNo
+      ]
+
+instance FromJSON BlockHeader where
+  parseJSON =
+    withObject "BlockHeader"
+      $ \o ->
+        BlockHeader
+          <$> (SlotNo <$> o .: "slot")
+          <*> (o .: "hash")
+          <*> (BlockNo <$> o .: "block")
+
+
+instance ToJSON ChainPoint where
+  toJSON ChainPointAtGenesis = Null
+  toJSON (ChainPoint slot blockHeader) =
+    object
+      [
+        "slot" .= slot
+      , "hash" .= blockHeader
+      ]

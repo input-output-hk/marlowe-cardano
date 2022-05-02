@@ -10,6 +10,7 @@ module Halogen.Form.Input
   , State
   , component
   , setInputProps
+  , toString
   ) where
 
 import Prologue
@@ -27,14 +28,22 @@ import Halogen.Form.FieldState as FS
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Web.Event.Event (Event)
+import Web.HTML (HTMLInputElement)
 import Web.HTML.HTMLElement as HTMLElement
+import Web.HTML.HTMLInputElement (fromHTMLElement)
 import Web.UIEvent.FocusEvent (FocusEvent)
 
 type FieldState = FS.FieldState String
 
+toString :: forall a. (a -> String) -> FieldState a -> String
+toString _ FS.Blank = ""
+toString _ (FS.Incomplete s) = s
+toString render (FS.Complete a) = render a
+
 data Query a
   = Focus a
   | Blur a
+  | GetElement (HTMLInputElement -> a)
 
 derive instance Functor Query
 
@@ -270,3 +279,6 @@ handleQuery = case _ of
     element <- H.getHTMLElementRef refLabel
     H.liftEffect $ traverse_ HTMLElement.blur element
     pure $ Just a
+  GetElement k -> do
+    element <- H.getHTMLElementRef refLabel
+    pure $ map k $ fromHTMLElement =<< element

@@ -2,8 +2,7 @@ module Component.Template.View (contractTemplateCard) where
 
 import Prologue hiding (Either(..), div)
 
-import Component.Contacts.State (adaToken, getAda)
-import Component.ContractSetup (_contractSetup)
+import Component.ContractSetup (_contractSetup, markdownHintWithTitle)
 import Component.ContractSetup as ContractSetup
 import Component.ContractSetup.Types (ContractFields, ContractParams)
 import Component.Hint.State (hint)
@@ -29,14 +28,12 @@ import Halogen.Css (classNames)
 import Halogen.HTML
   ( ComponentHTML
   , HTML
-  , PlainHTML
   , a
   , button
   , div
   , div_
   , h2
   , h3
-  , h4
   , h4_
   , li
   , p
@@ -51,7 +48,8 @@ import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id)
 import Halogen.HTML.Properties.ARIA (describedBy, labelledBy)
 import Halogen.Store.Monad (class MonadStore)
-import Humanize (contractIcon, humanizeValue)
+import Humanize (humanizeValue)
+import Images (contractIcon)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
   , MetaData
@@ -61,7 +59,7 @@ import Marlowe.Extended.Metadata
   )
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
-import Marlowe.Semantics (Assets)
+import Marlowe.Semantics (Assets, adaToken, getAda)
 import Page.Dashboard.Types (ChildSlots)
 import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)
@@ -416,30 +414,3 @@ parameter label description value =
         ]
     , p_ [ text value ]
     ]
-
--- TODO: This function is also included in the Marlowe Playground code. We could/should move it
--- into a shared folder, but it's not obvious where. It could go in the Hint module, but then it
--- would introduce an unnecessary markdown dependency into the Plutus Playground. So some more
--- thought/restructuring is required.
-markdownHintWithTitle :: String -> String -> PlainHTML
-markdownHintWithTitle title markdown =
-  div_
-    $
-      [ h4
-          -- With min-w-max we define that the title should never break into
-          -- a different line.
-          [ classNames
-              [ "no-margins"
-              , "text-lg"
-              , "font-semibold"
-              , "flex"
-              , "items-center"
-              , "pb-2"
-              , "min-w-max"
-              ]
-          ]
-          [ icon Icon.HelpOutline [ "mr-1", "font-normal" ]
-          , text title
-          ]
-      ]
-        <> markdownToHTML markdown

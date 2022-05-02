@@ -20,7 +20,7 @@ Now we will build and run the front end:
 [nix-shell] $ npm run build:spago
 # Precompile js dependencies bundle
 [nix-shell] $ npm run build:webpack:dev:vendor
-# Run aun auto-reloading dev build on http://localhost:8010
+# Run aun auto-reloading dev build on https://localhost:8009
 [nix-shell] $ npm run build:webpack:dev
 ```
 

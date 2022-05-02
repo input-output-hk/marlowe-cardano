@@ -50,7 +50,7 @@
       flake = false;
     };
     iohk-nix = {
-      url = "github:input-output-hk/iohk-nix";
+      url = "github:input-output-hk/iohk-nix/marlowe-dev-testnet";
       flake = false;
     };
     npmlock2nix = {
@@ -62,7 +62,7 @@
       flake = false;
     };
     plutus-apps = {
-      url = "github:input-output-hk/plutus-apps?rev=88d3ec7634d3aa80db8569cc6caa2f94434abf7e";
+      url = "github:input-output-hk/plutus-apps?rev=682977c8c9fe181a0dc066ac2b40a4b1c1b5072c";
       flake = false;
     };
     pre-commit-hooks-nix = {

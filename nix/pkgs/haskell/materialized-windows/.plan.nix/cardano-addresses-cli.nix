@@ -158,13 +158,13 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "16";
+      url = "17";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "16";
+      url = "17";
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/command-line; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/command-line; echo source root reset to $sourceRoot";
     }) // { cabal-generator = "hpack"; }

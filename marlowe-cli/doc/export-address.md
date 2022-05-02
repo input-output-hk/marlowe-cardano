@@ -6,21 +6,18 @@ The `marlowe-cli contract address` command computes the address of the Marlowe v
 ## Options
 
     $ marlowe-cli contract address --help
-    
-    Usage: marlowe-cli contract address [--testnet-magic INTEGER]
-                                        [--slot-length INTEGER]
-                                        [--slot-offset INTEGER]
-                                        [--stake-address ADDRESS]
+        
+    Usage: marlowe-cli contract address [--testnet-magic INTEGER] 
+                                        [--stake-address ADDRESS] 
                                         [--roles-currency CURRENCY_SYMBOL]
       Print a contract validator address.
     
     Available options:
-      --testnet-magic INTEGER           Network magic, or omit for mainnet.
-      --slot-length INTEGER             The slot length, in milliseconds.
-      --slot-offset INTEGER             The effective POSIX time of slot zero, in milliseconds.
-      --stake-address ADDRESS           Stake address, if any.
-      --roles-currency CURRENCY_SYMBOL  The currency symbol for roles, if any.
-      -h,--help                         Show this help text
+      --testnet-magic INTEGER  Network magic, or omit for mainnet.
+      --stake-address ADDRESS  Stake address, if any.
+      --roles-currency CURRENCY_SYMBOL
+                               The currency symbol for roles, if any.
+      -h,--help                Show this help text
 
 The stake address can be omitted if no staking will be done at the script address. If the currency symbol is omitted, then ADA is used as the currency for the Marlowe roles.
 

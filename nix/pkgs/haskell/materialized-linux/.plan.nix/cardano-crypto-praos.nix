@@ -78,13 +78,13 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "13";
+      url = "14";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "13";
+      url = "14";
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/cardano-crypto-praos; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/cardano-crypto-praos; echo source root reset to $sourceRoot";
     }

@@ -6,11 +6,15 @@ import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
+import Data.Argonaut.Decode (JsonDecodeError)
+import Data.Argonaut.Extra (parseDecodeJson)
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Fold', Getter', Lens', _Right, has, to)
 import Data.Lens.Record (prop)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Language.Haskell.Interpreter
@@ -18,9 +22,8 @@ import Language.Haskell.Interpreter
   , InterpreterResult
   , _InterpreterResult
   )
+import Marlowe.Extended as E
 import Marlowe.Extended.Metadata (MetadataHintInfo)
-import Marlowe.Parser (parseContract)
-import Marlowe.Template (IntegerTemplateType)
 import Network.RemoteData (RemoteData(..), _Loading, _Success)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)
@@ -34,7 +37,8 @@ data Action
   | BottomPanelAction (BottomPanel.Action BottomPanelView Action)
   | SendResultToSimulator
   | InitHaskellProject MetadataHintInfo String
-  | SetIntegerTemplateParam IntegerTemplateType String BigInt
+  | SetTimeTemplateParam String Instant
+  | SetValueTemplateParam String BigInt
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
@@ -52,8 +56,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent SendResultToSimulator = Just $ defaultEvent "SendResultToSimulator"
   toEvent (InitHaskellProject _ _) = Just $ defaultEvent "InitHaskellProject"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
-    "SetIntegerTemplateParam"
+  toEvent (SetTimeTemplateParam _ _) = Nothing
+  toEvent (SetValueTemplateParam _ _) = Nothing
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
   toEvent AnalyseReachabilityContract = Just $ defaultEvent
     "AnalyseReachabilityContract"
@@ -71,6 +75,7 @@ type State =
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , metadataHintInfo :: MetadataHintInfo
   , analysisState :: AnalysisState
+  , tzOffset :: Minutes
   , editorReady :: Boolean
   }
 
@@ -98,9 +103,12 @@ _result = prop (Proxy :: _ "result")
 _Pretty :: Getter' String String
 _Pretty = to f
   where
-  f ugly = case parseContract ugly of
+  f ugly = case parseJSONContract ugly of
     Right contract -> (show <<< pretty) contract
     Left _ -> ugly
+
+  parseJSONContract :: String -> Either JsonDecodeError E.Contract
+  parseJSONContract = parseDecodeJson
 
 _ContractString :: forall r. Monoid r => Fold' r State String
 _ContractString = _compilationResult <<< _Success <<< _Right
@@ -111,13 +119,14 @@ _ContractString = _compilationResult <<< _Success <<< _Right
 _bottomPanelState :: Lens' State (BottomPanel.State BottomPanelView)
 _bottomPanelState = prop (Proxy :: _ "bottomPanelState")
 
-initialState :: State
-initialState =
+initialState :: Minutes -> State
+initialState tzOffset =
   { keybindings: DefaultBindings
   , compilationResult: NotAsked
   , bottomPanelState: BottomPanel.initialState MetadataView
   , metadataHintInfo: mempty
   , analysisState: initAnalysisState
+  , tzOffset
   , editorReady: false
   }
 

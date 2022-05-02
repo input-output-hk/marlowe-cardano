@@ -148,5 +148,5 @@
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/playground-common; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/playground-common; echo source root reset to $sourceRoot";
     }

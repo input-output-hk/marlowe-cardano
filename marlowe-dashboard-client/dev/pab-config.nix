@@ -1,8 +1,9 @@
 { dbConfigFile
 , baseUrl
 , walletUrl
+, chainIndexUrl
 , socket-path
-, network-id
+, network
 , protocol-parameters
 }: {
   dbConfig = {
@@ -23,10 +24,10 @@
     pscSocketPath = socket-path;
     pscBaseUrl = "node";
     pscKeptBlocks = 2160;
-    pscNetworkId = network-id;
+    pscNetworkId = "${toString network.magic}";
     pscSlotConfig = {
-      scSlotZeroTime = 1644929640000;
-      scSlotLength = 1000;
+      scSlotZeroTime = network.slotZeroTime;
+      scSlotLength = network.slotLengthMillis;
     };
     pscFeeConfig = {
       fcConstantFee = {
@@ -39,20 +40,20 @@
     pscProtocolParametersJsonPath = protocol-parameters;
   };
   chainIndexConfig = {
-    ciBaseUrl = "http://chain-index:9083";
+    ciBaseUrl = chainIndexUrl;
     ciWatchedAddresses = [ ];
   };
   requestProcessingConfig = {
     requestProcessingInterval = 1;
   };
   signingProcessConfig = {
-    spBaseUrl = "http://0.0.0.0:9084";
+    spBaseUrl = "http://fixme";
     spWallet = {
       getWallet = 1;
     };
   };
   metadataServerConfig = {
-    mdBaseUrl = "http://0.0.0.0:9085";
+    mdBaseUrl = "http://fixme";
   };
   developmentOptions = {
     pabRollbackHistory = null;

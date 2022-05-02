@@ -50,7 +50,7 @@ import Data.String (IsString)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Semantics (Payment)
-import Language.Marlowe.SemanticsTypes (Contract, Input, State)
+import Language.Marlowe.Semantics.Types (Contract, Input, State)
 import Ledger.TimeSlot (SlotConfig)
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 

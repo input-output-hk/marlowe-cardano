@@ -56,6 +56,7 @@ library
     cardano-ledger-alonzo -any,
     cardano-ledger-core -any,
     containers -any,
+    data-default -any,
     deriving-aeson -any,
     extra -any,
     lens,
@@ -84,7 +85,7 @@ library
     Language.Marlowe
     Language.Marlowe.Extended
     Language.Marlowe.Semantics
-    Language.Marlowe.SemanticsTypes
+    Language.Marlowe.Semantics.Types
     Language.Marlowe.FindInputs
     Language.Marlowe.Client
     Language.Marlowe.Client.History
@@ -209,6 +210,8 @@ executable marlowe-pab
     freer-simple -any,
     prettyprinter -any,
     freer-extras -any,
+    plutus-chain-index -any,
+    plutus-chain-index-core -any,
     plutus-contract -any,
     plutus-ledger -any,
     plutus-pab -any,

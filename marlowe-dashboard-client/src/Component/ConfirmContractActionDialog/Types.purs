@@ -5,7 +5,6 @@ import Prologue
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Data.BigInt.Argonaut (BigInt)
-import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
@@ -17,7 +16,10 @@ import Halogen.Component.Reactive as HR
 import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (ChosenNum, TransactionInput)
+import Marlowe.Semantics (ChosenNum, CurrencySymbol, TransactionInput)
+import Marlowe.Semantics as Semantics
+import Page.Contract.Lenses (_marloweParams)
+import Store.RoleTokens (RoleTokenStore)
 import Type.Proxy (Proxy(..))
 
 data Msg = DialogClosed
@@ -26,18 +28,19 @@ data Action
   = ConfirmAction
   | CancelConfirmation
 
-type Input' = (Connected Instant Input)
+type Slice =
+  { currentTime :: Instant
+  , roleTokens :: RoleTokenStore
+  }
+
+type Input' = (Connected Slice Input)
 
 type State = HR.State Input' Derived Transient
 
 type Derived =
-  { contractUserParties :: ContractUserParties
-  , transactionFeeQuote :: BigInt
+  { transactionFeeQuote :: BigInt
   , txInput :: TransactionInput
   }
-
-_contractUserParties :: Lens' State ContractUserParties
-_contractUserParties = _derived <<< prop (Proxy :: _ "contractUserParties")
 
 _transactionFeeQuote :: Lens' State BigInt
 _transactionFeeQuote = _derived <<< prop (Proxy :: _ "transactionFeeQuote")
@@ -66,6 +69,9 @@ _executionState :: Lens' State Execution.State
 _executionState = _input <<< prop (Proxy :: _ "input") <<< prop
   (Proxy :: _ "executionState")
 
+_rolesCurrency :: Lens' State CurrencySymbol
+_rolesCurrency = _executionState <<< _marloweParams <<< Semantics._rolesCurrency
+
 _wallet :: Lens' State PABConnectedWallet
 _wallet = _input <<< prop (Proxy :: _ "input") <<< prop (Proxy :: _ "wallet")
 
@@ -73,8 +79,14 @@ _chosenNum :: Lens' State (Maybe ChosenNum)
 _chosenNum = _input <<< prop (Proxy :: _ "input") <<< prop
   (Proxy :: _ "chosenNum")
 
+_roleTokens :: Lens' State RoleTokenStore
+_roleTokens = _input
+  <<< prop (Proxy :: _ "context")
+  <<< prop (Proxy :: _ "roleTokens")
+
 _currentTime :: Lens' State Instant
-_currentTime = _input <<< prop (Proxy :: _ "context")
+_currentTime = _input <<< prop (Proxy :: _ "context") <<< prop
+  (Proxy :: _ "currentTime")
 
 type ChildSlots =
   ( expandSlot :: Expand.Slot Void String

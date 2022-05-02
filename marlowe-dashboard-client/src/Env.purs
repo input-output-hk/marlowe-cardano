@@ -22,6 +22,7 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer
   )
+import Store.RoleTokens (Payout)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
@@ -59,9 +60,24 @@ newtype Env = Env
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
   , sources :: Sources
+  -- | The number of blocks to wait for a reply from the MarloweApp
+  , marloweAppTimeoutBlocks :: Int
+  -- | Mutex to prevent simultaneous requests to the PAB, because it can't
+  -- | handle them without the SQLite database getting locked...
+  , pabAvar :: AVar Unit
+  -- | Used to prevent the same payout from being redeemed multiple times in
+  -- | the presence of frequent store updates that can cause race conditions,
+  -- | making the store an inadequate place to keep this information.
+  , redeemAvarMap :: AVarMap Payout Unit
   }
 
 derive instance newtypeEnv :: Newtype Env _
+
+_redeemAvarMap :: Lens' Env (AVarMap Payout Unit)
+_redeemAvarMap = _Newtype <<< prop (Proxy :: _ "redeemAvarMap")
+
+_pabAVar :: Lens' Env (AVar Unit)
+_pabAVar = _Newtype <<< prop (Proxy :: _ "pabAvar")
 
 _createBus :: Lens' Env (EventBus UUID (Either MarloweError MarloweParams))
 _createBus = _Newtype <<< prop (Proxy :: _ "createBus")
@@ -71,6 +87,10 @@ _applyInputBus = _Newtype <<< prop (Proxy :: _ "applyInputBus")
 
 _redeemBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
 _redeemBus = _Newtype <<< prop (Proxy :: _ "redeemBus")
+
+_marloweAppTimeoutBlocks :: Lens' Env Int
+_marloweAppTimeoutBlocks =
+  _Newtype <<< prop (Proxy :: _ "marloweAppTimeoutBlocks")
 
 _followerAVarMap :: Lens' Env (AVarMap MarloweParams Unit)
 _followerAVarMap = _Newtype <<< prop (Proxy :: _ "followerAVarMap")

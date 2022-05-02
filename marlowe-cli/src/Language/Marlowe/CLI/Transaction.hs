@@ -31,6 +31,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildFaucet
 , buildFaucet'
 , buildMinting
+, querySlotting
 -- * Submitting
 , submit
 -- * Low-Level Functions
@@ -42,22 +43,23 @@ module Language.Marlowe.CLI.Transaction (
 , queryUtxos
 , selectUtxos
 , submitBody
+, querySlotConfig
 ) where
 
 
 import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), AssetId (..), AssetName (..),
                     BalancedTxBody (..), BuildTx, BuildTxWith (..), CardanoEra (..), CardanoMode,
-                    CollateralSupportedInEra (..), ConsensusModeIsMultiEra (..), CtxTx, EraInMode (..),
+                    CollateralSupportedInEra (..), ConsensusModeIsMultiEra (..), CtxTx, EraHistory (..), EraInMode (..),
                     ExecutionUnits (..), Hash, KeyWitnessInCtx (..), LocalNodeConnectInfo (..), Lovelace,
                     MultiAssetSupportedInEra (..), PaymentCredential (PaymentCredentialByScript), PaymentKey,
                     PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), PolicyId (..), Quantity (..),
                     QueryInEra (..), QueryInMode (..), QueryInShelleyBasedEra (..), QueryUTxOFilter (..), Script (..),
                     ScriptDataSupportedInEra (..), ScriptDatum (..), ScriptHash, ScriptLanguageInEra (..),
                     ScriptValidity (ScriptInvalid), ScriptWitness (..), ScriptWitnessInCtx (..), ShelleyBasedEra (..),
-                    ShelleyWitnessSigningKey (..), SimpleScript (..), SimpleScriptV2, SimpleScriptVersion (..), SlotNo,
-                    StakeAddressReference (NoStakeAddress), TimeLocksSupported (..), TxAuxScripts (..), TxBody (..),
-                    TxBodyContent (..), TxBodyErrorAutoBalance (..), TxBodyScriptData (..), TxCertificates (..),
-                    TxExtraKeyWitnesses (..), TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
+                    ShelleyWitnessSigningKey (..), SimpleScript (..), SimpleScriptV2, SimpleScriptVersion (..),
+                    SlotNo (..), StakeAddressReference (NoStakeAddress), TimeLocksSupported (..), TxAuxScripts (..),
+                    TxBody (..), TxBodyContent (..), TxBodyErrorAutoBalance (..), TxBodyScriptData (..),
+                    TxCertificates (..), TxExtraKeyWitnesses (..), TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
                     TxFeesExplicitInEra (..), TxId, TxIn (..), TxInMode (..), TxInsCollateral (..), TxIx (..),
                     TxMetadataInEra (..), TxMetadataJsonSchema (TxMetadataJsonNoSchema),
                     TxMetadataSupportedInEra (TxMetadataInAlonzoEra), TxMintValue (..), TxOut (..), TxOutDatum (..),
@@ -76,15 +78,23 @@ import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolPara
                             protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
+import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
 import Control.Concurrent (threadDelay)
 import Control.Monad (forM_, void, when, (<=<))
-import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
+import Control.Monad.Except (MonadError, MonadIO, liftIO, runExcept, throwError)
+import Data.Fixed (div')
 import Data.Maybe (isNothing, maybeToList)
-import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, readSigningKey)
+import Data.Ratio ((%))
+import Data.Time.Clock (nominalDiffTimeToSeconds)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, maybeWriteJson,
+                                readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Types (CliError (..), OutputQuery (..), PayFromScript (..), PayToScript (..),
                                    SomePaymentSigningKey)
+import Ledger.TimeSlot (SlotConfig (..))
+import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
-import Plutus.V1.Ledger.Api (Datum (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
+import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import System.IO (hPutStrLn, stderr)
 
 import qualified Data.Aeson as A (Value (Object))
@@ -104,13 +114,15 @@ buildSimple :: MonadError CliError m
             -> [TxIn]                              -- ^ The transaction inputs.
             -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
             -> AddressAny                          -- ^ The change address.
+            -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
             -> FilePath                            -- ^ The output file for the transaction body.
             -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> Bool                                -- ^ Whether to print statistics about the transaction.
             -> Bool                                -- ^ Assertion that the transaction is invalid.
             -> m TxId                              -- ^ Action to build the transaction body.
-buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout printStats invalid =
+buildSimple connection signingKeyFiles inputs outputs changeAddress metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
@@ -120,7 +132,7 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
         Nothing
         []
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -401,13 +413,15 @@ buildIncoming :: MonadError CliError m
               -> [TxIn]                              -- ^ The transaction inputs.
               -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
               -> AddressAny                          -- ^ The change address.
+              -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
               -> FilePath                            -- ^ The output file for the transaction body.
               -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                -- ^ Whether to print statistics about the transaction.
               -> Bool                                -- ^ Assertion that the transaction is invalid.
               -> m TxId                              -- ^ Action to build the transaction body.
-buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout printStats invalid =
+buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
     signingKeys <- mapM readSigningKey signingKeyFiles
@@ -419,7 +433,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
         Nothing
         []
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -450,13 +464,15 @@ buildContinuing :: MonadError CliError m
                 -> AddressAny                          -- ^ The change address.
                 -> SlotNo                              -- ^ The first valid slot for the transaction.
                 -> SlotNo                              -- ^ The last valid slot for the transaction.
+                -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
                 -> FilePath                            -- ^ The output file for the transaction body.
                 -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                 -> Bool                                -- ^ Whether to print statistics about the transaction.
                 -> Bool                                -- ^ Assertion that the transaction is invalid.
                 -> m TxId                              -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
@@ -471,7 +487,7 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -499,13 +515,15 @@ buildOutgoing :: MonadError CliError m
               -> AddressAny                          -- ^ The change address.
               -> SlotNo                              -- ^ The first valid slot for the transaction.
               -> SlotNo                              -- ^ The last valid slot for the transaction.
+              -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
               -> FilePath                            -- ^ The output file for the transaction body.
               -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                -- ^ Whether to print statistics about the transaction.
               -> Bool                                -- ^ Assertion that the transaction is invalid.
               -> m TxId                              -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
@@ -518,7 +536,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
         TxMintNone
-        TxMetadataNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -904,3 +922,46 @@ selectUtxos connection address query =
       . mapM_ (print . fst)
       . filter query'
       $ M.toList candidates
+
+
+-- | Query the slot configuration parameters.
+querySlotConfig :: MonadError CliError m
+                => MonadIO m
+                => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+                -> m SlotConfig                      -- ^ Action to extract the slot configuration.
+querySlotConfig connection =
+  do
+    epochNo <- queryAlonzo connection QueryEpoch
+    systemStart <-
+      liftCliIO
+        $ queryNodeLocalState connection Nothing QuerySystemStart
+    EraHistory _ interpreter <-
+      liftCliIO
+        . queryNodeLocalState connection Nothing
+        $ QueryEraHistory CardanoModeIsMultiEra
+    let
+      epochInfo =
+        hoistEpochInfo (liftCli . runExcept)
+          $ interpreterToEpochInfo interpreter
+    (slot0, slot1) <- epochInfoRange epochInfo epochNo
+    time0 <- utcTimeToPOSIXSeconds <$> epochInfoSlotToUTCTime epochInfo systemStart slot0
+    time1 <- utcTimeToPOSIXSeconds <$> epochInfoSlotToUTCTime epochInfo systemStart slot1
+    let
+      toMilliseconds x = 1000 * (nominalDiffTimeToSeconds x `div'` 1)
+      fromSlotNo = toInteger . unSlotNo
+      deltaSlots = fromSlotNo $ slot1 - slot0
+      deltaSeconds = time1 - time0
+      scSlotLength = round $ toMilliseconds deltaSeconds % deltaSlots
+      scSlotZeroTime = POSIXTime $ toMilliseconds time0 - scSlotLength * fromSlotNo slot0
+    pure SlotConfig{..}
+
+
+-- | Query the slot configuration parameters.
+querySlotting :: MonadError CliError m
+              => MonadIO m
+              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+              -> Maybe FilePath                    -- ^ The output file for the slot configuration.
+              -> m ()                              -- ^ Action to extract the slot configuration.
+querySlotting connection outputFile =
+  querySlotConfig connection
+    >>= maybeWriteJson outputFile

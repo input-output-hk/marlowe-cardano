@@ -16,13 +16,13 @@ import Component.ConfirmContractActionDialog.Types
   , ComponentHTML
   , State
   , _action
-  , _contractUserParties
   , _executionState
+  , _roleTokens
+  , _rolesCurrency
   , _transactionFeeQuote
   , _txInput
   , _wallet
   )
-import Component.Contacts.State (getAda)
 import Component.Expand as Expand
 import Component.Heading (Preset(..), heading)
 import Component.IconButton.View (iconButton)
@@ -50,7 +50,7 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
-import Marlowe.Semantics (Token(..), computeTransaction)
+import Marlowe.Semantics (Token(..), computeTransaction, getAda)
 
 render :: forall m. MonadAff m => State -> ComponentHTML m
 render state =
@@ -79,7 +79,8 @@ render state =
 summary :: forall m. Monad m => State -> ComponentHTML m
 summary state = do
   let action = state ^. _action
-  let contractUserParties = state ^. _contractUserParties
+  let roleTokens = state ^. _roleTokens
+  let currencySymbol = state ^. _rolesCurrency
   sectionBox [ "overflow-y-scroll" ]
     $ column Column.Divided [ "space-y-4" ]
         [ column default []
@@ -96,12 +97,10 @@ summary state = do
             , box Box.Card [] case action of
                 MakeDeposit recipient sender token quantity ->
                   transfer
-                    { sender: partyToParticipant
-                        contractUserParties
-                        sender
-                    , recipient: partyToParticipant
-                        contractUserParties
-                        recipient
+                    { sender:
+                        partyToParticipant roleTokens currencySymbol sender
+                    , recipient:
+                        partyToParticipant roleTokens currencySymbol recipient
                     , token
                     , quantity
                     , termini: WalletToAccount sender recipient
@@ -135,10 +134,9 @@ results state = case _ of
     layout Icon.ExpandLess
       $ box Box.Card []
           <$>
-            ( fromFoldable $
-                transfer <<< paymentToTransfer
-                  contractUserParties <$>
-                  payments
+            ( fromFoldable $ map
+                (transfer <<< paymentToTransfer roleTokens currencySymbol)
+                payments
             )
               <>
                 if willClose then
@@ -151,9 +149,10 @@ results state = case _ of
                   []
   Expand.Closed -> layout Icon.ExpandMore []
   where
+  roleTokens = state ^. _roleTokens
   action = state ^. _action
-  contractUserParties = state ^. _contractUserParties
   executionState = state ^. _executionState
+  currencySymbol = state ^. _rolesCurrency
   txInput = state ^. _txInput
   layout icon children =
     column Column.Snug []

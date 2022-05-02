@@ -146,11 +146,11 @@
     "hackage-nix": {
       "flake": false,
       "locked": {
-        "lastModified": 1643591633,
-        "narHash": "sha256-a7zfy31bJoFtKVep+ILDtIKJDE7bHWpX14vdbQgqxNk=",
+        "lastModified": 1649726070,
+        "narHash": "sha256-vG/6vsU+UnUfA6BU/91rUJx5mDyz/Cp1SXphDTK9hCI=",
         "owner": "input-output-hk",
         "repo": "hackage.nix",
-        "rev": "572e9538c4b08c5900fce36189eace16e370ee77",
+        "rev": "f36ccb146faecba563bd3f360869ced55b789f57",
         "type": "github"
       },
       "original": {
@@ -179,11 +179,11 @@
     "haskell-nix": {
       "flake": false,
       "locked": {
-        "lastModified": 1643591791,
-        "narHash": "sha256-1epbmfgHY+9PzP0tIvNB5I26sSX+AKTDVnnEn6pboEs=",
+        "lastModified": 1649730942,
+        "narHash": "sha256-pV/njieG1tJTsvKEk3Y2dHa46dDBADkfLwrFbb817/s=",
         "owner": "input-output-hk",
         "repo": "haskell.nix",
-        "rev": "bfb828ccb8621613677a9c226f65e3b46f3ef4ce",
+        "rev": "8a32c395cbebd9c341b18dd4e64030e145f8d593",
         "type": "github"
       },
       "original": {
@@ -195,15 +195,16 @@
     "iohk-nix": {
       "flake": false,
       "locked": {
-        "lastModified": 1626953580,
-        "narHash": "sha256-iEI9aTOaZMGsjWzcrctrC0usmiagwKT2v1LSDe9/tMU=",
+        "lastModified": 1649981543,
+        "narHash": "sha256-g2HWd6+odqUj4Xdb1wipow5F7A21fmuNTXm5NWlU9wk=",
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "cbd497f5844249ef8fe617166337d59f2a6ebe90",
+        "rev": "3b90a1bd7472eb39fd4eba83832310718df58dc4",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
+        "ref": "marlowe-dev-testnet",
         "repo": "iohk-nix",
         "type": "github"
       }
@@ -334,17 +335,17 @@
     "plutus-apps": {
       "flake": false,
       "locked": {
-        "lastModified": 1641930340,
-        "narHash": "sha256-Z+r8XOHyjjMZutgnXecfNdQbcU4xnYNs7inL6mu+Yvg=",
+        "lastModified": 1650639146,
+        "narHash": "sha256-BkousDlOZ7WnJJm9A98MKMD7YzBESjY0scm9Nc/4ZAE=",
         "owner": "input-output-hk",
         "repo": "plutus-apps",
-        "rev": "88d3ec7634d3aa80db8569cc6caa2f94434abf7e",
+        "rev": "682977c8c9fe181a0dc066ac2b40a4b1c1b5072c",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
         "repo": "plutus-apps",
-        "rev": "88d3ec7634d3aa80db8569cc6caa2f94434abf7e",
+        "rev": "682977c8c9fe181a0dc066ac2b40a4b1c1b5072c",
         "type": "github"
       }
     },

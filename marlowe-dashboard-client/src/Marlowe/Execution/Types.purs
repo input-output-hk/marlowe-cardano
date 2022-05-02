@@ -11,7 +11,6 @@ module Marlowe.Execution.Types
 import Prologue
 
 import Data.BigInt.Argonaut (BigInt)
-import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.List (List)
@@ -43,9 +42,8 @@ import Marlowe.Semantics (State) as Semantic
 -- contracts (even the closed ones).
 -- TODO: Consider using Lazy computations
 type State =
-  { contractNickname :: Maybe ContractNickname
-  -- Current contract and state
-  , semanticState :: Semantic.State
+  { -- Current contract and state
+    semanticState :: Semantic.State
   , contract :: Contract
   -- The initial contract is needed to calculate the participants
   , initialContract :: Contract

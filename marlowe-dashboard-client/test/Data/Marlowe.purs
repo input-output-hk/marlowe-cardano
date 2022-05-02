@@ -29,6 +29,7 @@ import Data.Enum (class BoundedEnum, Cardinality(..), cardinality, toEnum)
 import Data.Foldable (class Foldable, fold)
 import Data.Function (on)
 import Data.Int (hexadecimal, toStringAs)
+import Data.Lens ((^.))
 import Data.List as L
 import Data.List.Lazy (replicateM)
 import Data.Map (Map)
@@ -58,7 +59,9 @@ import Language.Marlowe.Client
   , EndpointResponse(..)
   , MarloweEndpointResult(..)
   , MarloweError
+  , UnspentPayouts
   )
+import Marlowe.Run.Contract.V1.Types (RoleToken(..))
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CreatePostData(..)
   , RestorePostData(..)
@@ -85,11 +88,13 @@ import Marlowe.Semantics
   , ValidatorHash
   , Value(..)
   , ValueId
+  , _rolesCurrency
   )
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
 import Plutus.V1.Ledger.Address as PAB
 import Plutus.V1.Ledger.Credential (Credential(..))
 import Plutus.V1.Ledger.Time (POSIXTime(..))
+import Plutus.V1.Ledger.TxId (TxId(..))
 import Plutus.V1.Ledger.Value as PV
 import Safe.Coerce (coerce)
 import Test.Data.Plutus (instanceUpdate, newObservableState)
@@ -98,6 +103,13 @@ import Unsafe.Coerce (unsafeCoerce)
 -------------------------------------------------------------------------------
 -- Webserver
 -------------------------------------------------------------------------------
+
+roleToken :: MarloweParams -> TokenName -> Address -> RoleToken
+roleToken params tokenName utxoAddress = RoleToken
+  { currencySymbol: params ^. _rolesCurrency
+  , utxoAddress
+  , tokenName
+  }
 
 walletInfo :: WalletId -> Address -> PubKeyHash -> WalletInfo
 walletInfo walletId address pubKeyHash = WalletInfo
@@ -163,6 +175,14 @@ applyInputsContent
   , encodeJson params
   , encodeJson $ Tuple start end
   , encodeJson inputs
+  ]
+
+redeemContent :: UUID -> MarloweParams -> TokenName -> Address -> Array Json
+redeemContent reqId params tokenName address =
+  [ encodeJson reqId
+  , encodeJson params
+  , encodeJson { unTokenName: tokenName }
+  , encodeJson address
   ]
 
 -------------------------------------------------------------------------------
@@ -271,6 +291,9 @@ makeTestContractNickname
 makeTestContractNickname name =
   expectRight ("invalid contract nickname: " <> name) $ CN.fromString name
 
+newTxId :: forall m. MonadEffect m => m TxId
+newTxId = TxId <<< { getTxId: _ } <$> (fold <$> replicateM 64 newHexChar)
+
 newMarloweParams :: forall m. MonadEffect m => m MarloweParams
 newMarloweParams = marloweParams
   <$> (fold <$> replicateM 56 newHexChar)
@@ -343,16 +366,22 @@ transactionInput interval inputs = TransactionInput
   }
 
 contractHistory
-  :: MarloweParams -> MarloweData -> Array TransactionInput -> ContractHistory
-contractHistory chParams chInitialData chHistory = ContractHistory
-  { chAddress: PAB.Address
-      { addressCredential: ScriptCredential ""
-      , addressStakingCredential: Nothing
-      }
-  , chParams
-  , chInitialData
-  , chHistory
-  }
+  :: MarloweParams
+  -> MarloweData
+  -> Array TransactionInput
+  -> UnspentPayouts
+  -> ContractHistory
+contractHistory chParams chInitialData chHistory chUnspentPayouts =
+  ContractHistory
+    { chAddress: PAB.Address
+        { addressCredential: ScriptCredential ""
+        , addressStakingCredential: Nothing
+        }
+    , chParams
+    , chInitialData
+    , chHistory
+    , chUnspentPayouts
+    }
 
 -------------------------------------------------------------------------------
 -- Loan Contract

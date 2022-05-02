@@ -107,13 +107,13 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "11";
+      url = "12";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "11";
+      url = "12";
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/eras/byron/ledger/executable-spec; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/eras/byron/ledger/executable-spec; echo source root reset to $sourceRoot";
     }

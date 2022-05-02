@@ -62,13 +62,13 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "12";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "12";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/ouroboros-consensus-protocol; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/ouroboros-consensus-protocol; echo source root reset to $sourceRoot";
     }

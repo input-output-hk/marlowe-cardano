@@ -16,7 +16,7 @@ import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.PubKeyHash (PubKeyHash)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.String.Regex.Unsafe (unsafeRegex)
-import Data.Time.Duration (Minutes(..), Seconds(..))
+import Data.Time.Duration (Minutes(..))
 import Data.Traversable (traverse)
 import Data.UUID.Argonaut (UUID)
 import Data.WalletId (WalletId)
@@ -28,19 +28,17 @@ import Marlowe.Semantics (Assets, Contract, MarloweParams)
 import Marlowe.Semantics as Semantics
 import MarloweContract (MarloweContract(..))
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
-import Test.Control.Monad.UUID (class MonadMockUUID, getLastUUID)
+import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)
 import Test.Data.Marlowe
-  ( adjustInstant
+  ( borrowerTokenName
   , contractHistory
   , followerEndpoints
-  , iDepositRoleAda
   , makeTestContractNickname
   , makeTestWalletNickname
+  , marloweAppEndpoints
   , marloweData
   , newAddress
   , newMarloweParams
-  , timeInterval
-  , transactionInput
   )
 import Test.Halogen (class MonadHalogenTest)
 import Test.Marlowe.Run
@@ -50,21 +48,26 @@ import Test.Marlowe.Run
   , marloweRunTestWith
   )
 import Test.Marlowe.Run.Action.Flows
-  ( createLoan
+  ( applyClose
+  , applyDeposit
+  , createLoan
   , createLoanWithoutUpdates
   , restoreWallet
   )
 import Test.Marlowe.Run.Commands
   ( clickConfirm
+  , handleGetRoleToken
   , handlePostActivate
-  , handlePostApplyInputs
   , handlePostFollow
+  , handlePostRedeem
+  , handlePutContractInstanceStop
   , recvInstanceSubscribe
-  , sendApplyInputsSuccess
+  , sendContractFinished
   , sendCreateException
   , sendCreateSuccess
   , sendFollowerUpdate
   , sendNewActiveEndpoints
+  , sendSlotChange
   , sendWalletCompanionUpdate
   )
 import Test.Network.HTTP (class MonadMockHTTP)
@@ -85,6 +88,7 @@ import Web.ARIA (ARIARole(..))
 contractScenarios :: Spec Unit
 contractScenarios = do
   loanContract
+  loanToSelf
   startContractCompanionBeforeMarloweApp
   startContractMarloweAppBeforeCompanion
   startContractMarloweAppHangs
@@ -117,7 +121,7 @@ loanContractTimeout = loanContractTest
     withContainer card do
       void $ findBy text $ pure "Timed out"
       void $ findBy text $ pure "Lender (you)"
-      void $ findBy text $ pure "Borrower"
+      void $ findBy text $ pure "Borrower (Borrower)"
       closeButtons <- traverse shouldCast =<< getAllBy role do
         nameRegexi "close contract"
         pure Button
@@ -133,14 +137,13 @@ loanContractTimeout = loanContractTest
     withContainer confirmDialog clickConfirm
     pure unit
 
-    intervalMin <- adjustInstant (Minutes (10.0)) startTime
-    let intervalMax = top
-    reqId <- getLastUUID
-    let input = transactionInput (timeInterval intervalMin intervalMax) []
-    handlePostApplyInputs lenderApps.marloweAppId reqId marloweParams input
-    sendApplyInputsSuccess lenderApps.marloweAppId reqId
-    sendFollowerUpdate followerId
-      $ contractHistory marloweParams datum [ input ]
+    applyClose
+      lenderApps.marloweAppId
+      followerId
+      marloweParams
+      datum
+      startTime
+      []
 
     clickM $ getBy role do
       nameRegexi "completed contracts"
@@ -195,7 +198,7 @@ loanContract = loanContractTest
       depositButton <- shouldCast =<< getBy role do
         nameRegexi "deposit"
         pure Button
-      depositButton `shouldHaveText` "Deposit:₳ 1,000.000000"
+      depositButton `shouldHaveText` "Deposit:₳ 1,000"
       shouldNotBeDisabled depositButton
       click depositButton
 
@@ -203,22 +206,19 @@ loanContract = loanContractTest
     withContainer confirmDialog clickConfirm
     pure unit
 
-    intervalMin <- adjustInstant (Minutes (-2.0)) startTime
-    intervalMax <- adjustInstant (Seconds (-1.0))
-      =<< adjustInstant (Minutes 10.0) startTime
-    reqId <- getLastUUID
-    let
-      input = transactionInput
-        (timeInterval intervalMin intervalMax)
-        [ iDepositRoleAda "Lender" "Lender" 1000 ]
-    handlePostApplyInputs lenderApps.marloweAppId reqId marloweParams input
-    sendFollowerUpdate followerId
-      $ contractHistory marloweParams datum [ input ]
-    sendApplyInputsSuccess lenderApps.marloweAppId reqId
+    applyDeposit
+      lenderApps.marloweAppId
+      followerId
+      marloweParams
+      datum
+      startTime
+      "Lender"
+      "Borrower"
+      1000
 
     withContainer card do
       void $ findBy text $ pure "Current step:2"
-      void $ findBy text $ pure "Borrower"
+      void $ findBy text $ pure "Borrower (Borrower)"
       timeoutText <- getBy text $ pure $ unsafeRegex "left" ignoreCase
       timeoutText `shouldHaveText` "23min 30s left"
       advanceTime (Minutes 1.5)
@@ -226,8 +226,64 @@ loanContract = loanContractTest
       depositButton <- shouldCast =<< getBy role do
         nameRegexi "deposit"
         pure Button
-      depositButton `shouldHaveText` "Deposit:₳ 1,100.000000"
+      depositButton `shouldHaveText` "Deposit:₳ 1,100"
       shouldBeDisabled depositButton
+
+loanToSelf :: Spec Unit
+loanToSelf = loanContractTest
+  "Loan to yourself"
+  \lenderNickname _ -> do
+    -- Arrange
+    lenderApps <- restoreWallet lenderNickname []
+    lenderWallet <- getWallet lenderNickname
+    marloweParams <- newMarloweParams
+    contractNickname <- makeTestContractNickname "Test loan"
+    startTime <- now
+    { followerId, marloweData: datum } <- createLoan
+      lenderWallet
+      lenderApps
+      marloweParams
+      contractNickname
+      lenderNickname
+      lenderNickname
+      1000
+      100
+    card <- getBy role do
+      nameRegexi "Test loan"
+      pure Listitem
+    withContainer card do
+      void $ findBy text $ pure "Current step:1"
+      void $ findBy text $ pure "Lender (you)"
+      clickM $ getBy role do
+        nameRegexi "deposit"
+        pure Button
+
+    confirmDialog <- findBy role $ pure Dialog
+    withContainer confirmDialog clickConfirm
+    pure unit
+
+    applyDeposit
+      lenderApps.marloweAppId
+      followerId
+      marloweParams
+      datum
+      startTime
+      "Lender"
+      "Borrower"
+      1000
+
+    redeemReqId <- getNextUUID
+
+    handlePostRedeem
+      lenderApps.marloweAppId
+      redeemReqId
+      marloweParams
+      borrowerTokenName
+      lenderWallet.address
+
+    withContainer card do
+      void $ findBy text $ pure "Current step:2"
+      void $ findBy text $ pure "Borrower (you)"
 
 startContractCompanionBeforeMarloweApp :: Spec Unit
 startContractCompanionBeforeMarloweApp = loanContractTest
@@ -253,6 +309,9 @@ startContractCompanionBeforeMarloweApp = loanContractTest
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
+          mempty
+    handleGetRoleToken marloweParams "Borrower" borrowerNickname
+    handleGetRoleToken marloweParams "Lender" lenderNickname
     assertStartedContractShown
     expectError assertStartingContractShown
 
@@ -264,11 +323,19 @@ startContractMarloweAppHangs = loanContractTest
     { contract, contractState, lenderApps, marloweParams, lenderWallet } <-
       setupLoanWithoutNotifications lenderNickname borrowerNickname
     -- Act
-    assertStartingContractShown
+    sendSlotChange 1
+
+    -- Assert
+    handlePutContractInstanceStop lenderApps.marloweAppId
+    sendContractFinished lenderApps.marloweAppId
+    marloweAppId2 <- generateUUID
+    handlePostActivate lenderWallet.walletId MarloweApp marloweAppId2
+    recvInstanceSubscribe marloweAppId2
+    sendNewActiveEndpoints marloweAppId2 marloweAppEndpoints
+
     sendWalletCompanionUpdate lenderApps.walletCompanionId
       [ Tuple marloweParams $ marloweData contract contractState
       ]
-    assertStartingContractShown
     followerId <- generateUUID
     handlePostActivate lenderWallet.walletId MarloweFollower followerId
     assertStartingContractShown
@@ -278,6 +345,9 @@ startContractMarloweAppHangs = loanContractTest
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
+          mempty
+    handleGetRoleToken marloweParams "Borrower" borrowerNickname
+    handleGetRoleToken marloweParams "Lender" lenderNickname
     assertStartedContractShown
     expectError assertStartingContractShown
 
@@ -307,6 +377,9 @@ startContractMarloweAppBeforeCompanion = loanContractTest
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
+          mempty
+    handleGetRoleToken marloweParams "Borrower" borrowerNickname
+    handleGetRoleToken marloweParams "Lender" lenderNickname
     assertStartedContractShown
     expectError assertStartingContractShown
 

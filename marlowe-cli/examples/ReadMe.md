@@ -7,6 +7,8 @@
 *   [escrow](escrow/ReadMe.md)
 *   [swap](swap/ReadMe.md)
 *   [zero-coupon bond](zcb/ReadMe.md)
+*   [contract for differences](cfd/ReadMe.md)
+*   [covered call](coveredCall/ReadMe.md)
 
 
 ## Testing
@@ -19,3 +21,5 @@
     *   ["confirm claim"](escrow/run-confirm-claim.sh)
 *   [swap](swap/run-swap.sh)
 *   [zero-coupon bond](zcb/run-zcb.sh)
+*   [contract for differences](cfd/run-cfd.sh)
+*   [covered call](coveredCall/run-coveredCall.sh)

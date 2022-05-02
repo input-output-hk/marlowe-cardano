@@ -26,6 +26,7 @@ import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties (autocomplete)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
@@ -142,7 +143,7 @@ handleAction = case _ of
 
 render
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
@@ -154,6 +155,7 @@ render { addressBook, result, fields, walletDetails } = do
         [ HH.form
             [ HE.onSubmit OnFormSubmit
             , classNames [ "relative", "space-y-4" ]
+            , autocomplete false
             ]
             [ nicknameInput addressBook fields.nickname
             , mnemonicInput fields.mnemonic
@@ -181,7 +183,7 @@ render { addressBook, result, fields, walletDetails } = do
 
 nicknameInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => AddressBook
   -> FieldState WalletNickname
   -> ComponentHTML m
@@ -195,7 +197,7 @@ nicknameInput addressBook fieldState =
     $ prop _nickname
 
 mnemonicInput
-  :: forall m. MonadEffect m => FieldState MnemonicPhrase -> ComponentHTML m
+  :: forall m. MonadAff m => FieldState MnemonicPhrase -> ComponentHTML m
 mnemonicInput fieldState =
   HH.slot
     _mnemonic

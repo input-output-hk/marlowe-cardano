@@ -30,6 +30,7 @@ type State =
   , tzOffset :: Minutes
   , store :: Slice
   , subState :: Either Welcome.State PABConnectedWallet
+  , enteringDashboardState :: Boolean
   }
 
 data WebSocketStatus

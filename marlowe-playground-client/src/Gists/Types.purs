@@ -8,7 +8,7 @@ import Data.Array.NonEmpty as NonEmptyArray
 import Data.Either (Either, note)
 import Data.String.Regex (Regex, match, regex)
 import Data.String.Regex.Flags (ignoreCase)
-import Gist (GistId(..))
+import Gists.Extra (GistId(..))
 import Prelude (bind, ($), (<$>))
 
 data GistAction

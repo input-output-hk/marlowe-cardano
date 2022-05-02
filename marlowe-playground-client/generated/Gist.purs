@@ -21,7 +21,7 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
-import Servant.PureScript (class ToPathSegment)
+import Gists.Extra (GistId)
 import Type.Proxy (Proxy(Proxy))
 
 newtype Gist = Gist
@@ -185,34 +185,6 @@ gistFileTruncated = _Newtype <<< prop (Proxy :: _ "_gistFileTruncated")
 
 gistFileContent :: Lens' GistFile (Maybe String)
 gistFileContent = _Newtype <<< prop (Proxy :: _ "_gistFileContent")
-
---------------------------------------------------------------------------------
-
-newtype GistId = GistId String
-
-derive newtype instance ToPathSegment GistId
-
-derive instance Eq GistId
-
-derive instance Ord GistId
-
-instance Show GistId where
-  show a = genericShow a
-
-instance EncodeJson GistId where
-  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
-
-instance DecodeJson GistId where
-  decodeJson = defer \_ -> D.decode $ (GistId <$> D.value)
-
-derive instance Generic GistId _
-
-derive instance Newtype GistId _
-
---------------------------------------------------------------------------------
-
-_GistId :: Iso' GistId String
-_GistId = _Newtype
 
 --------------------------------------------------------------------------------
 

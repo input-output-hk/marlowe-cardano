@@ -2,20 +2,37 @@ module Component.Form where
 
 import Prologue
 
+import Component.Hint.State (hint)
+import Component.Popper (Placement(..))
 import Control.Alternative (guard)
 import Css as Css
 import DOM.HTML.Indexed (HTMLinput)
+import Data.Compactable (compact)
 import Data.Maybe (fromMaybe, isJust, maybe)
+import Effect.Aff.Class (class MonadAff)
+import Halogen as H
 import Halogen.Css (classNames)
+import Halogen.HTML (PlainHTML)
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Halogen.HTML.Properties.ARIA as HPA
 import Marlowe.Extended.Metadata (NumberFormat(..))
 
-renderLabel :: forall w i. String -> String -> HH.HTML w i
-renderLabel id label =
-  HH.label [ classNames $ Css.labelBox <> Css.labelText, HP.for id ]
-    [ HH.text label ]
+type HasHintSlot slots =
+  (hintSlot :: forall query. H.Slot query Void String | slots)
+
+renderLabel
+  :: forall action slots m
+   . MonadAff m
+  => String
+  -> String
+  -> Maybe PlainHTML
+  -> HH.ComponentHTML action (HasHintSlot slots) m
+renderLabel id label hintHtml =
+  HH.div [ classNames Css.labelBox ] $ compact
+    [ pure $ HH.label [ classNames Css.labelText, HP.for id ] [ HH.text label ]
+    , hint [] ("hint-" <> label) Auto <$> hintHtml
+    ]
 
 renderErrorLabel :: forall w i. Boolean -> Maybe String -> HH.HTML w i
 renderErrorLabel isWarning error = HH.span
@@ -46,34 +63,38 @@ renderInput id props = HH.input
   )
 
 renderTextInput
-  :: forall error output w i
-   . String
+  :: forall error output action slots m
+   . MonadAff m
+  => String
   -> String
+  -> Maybe PlainHTML
   -> Maybe output
   -> Maybe error
-  -> Array (HP.IProp HTMLinput i)
+  -> Array (HP.IProp HTMLinput action)
   -> (error -> String)
-  -> HH.HTML w i
-renderTextInput id label output error props renderError =
+  -> HH.ComponentHTML action (HasHintSlot slots) m
+renderTextInput id label hintHtml output error props renderError =
   HH.div [ classNames [ "relative" ] ]
-    [ renderLabel id label
-    , renderInputBox (isJust output) error [] [ renderInput id props ]
+    [ renderInputBox (isJust output) error [] [ renderInput id props ]
+    , renderLabel id label hintHtml
     , renderErrorLabel (isJust output) $ renderError <$> error
     ]
 
 renderNumberInput
-  :: forall error output w i
-   . NumberFormat
+  :: forall error output action slots m
+   . MonadAff m
+  => NumberFormat
   -> String
   -> String
+  -> Maybe PlainHTML
   -> Maybe output
   -> Maybe error
-  -> Array (HP.IProp HTMLinput i)
+  -> Array (HP.IProp HTMLinput action)
   -> (error -> String)
-  -> HH.HTML w i
-renderNumberInput format id label output error props renderError =
+  -> HH.ComponentHTML action (HasHintSlot slots) m
+renderNumberInput format id label hintHtml output error props renderError =
   HH.div [ classNames [ "relative" ] ]
-    [ renderLabel id label
+    [ renderLabel id label hintHtml
     , renderInputBox (isJust output) error [] $ join
         [ case format of
             DecimalFormat _ symbol -> [ HH.span_ [ HH.text symbol ] ]

@@ -115,6 +115,8 @@ fromHandleActionAndInput { handleAction, handleInput } =
 mkReactiveComponent
   :: forall resources derived transient query action slots input output m
    . Monad m
+  => Eq derived
+  => Eq input
   => Spec
        resources
        derived
@@ -149,13 +151,20 @@ mkReactiveComponent { deriveState, initialTransient, render, eval } =
               resources <- H.gets _.resources
               imapState _state $ traverse_ eval.finalize resources
             Receive input -> do
-              let derived = deriveState input
               { resources, state } <- H.get
-              let state' = state { derived = derived, input = input }
-              H.modify_ _ { state = state' }
-              imapState _state $ traverse_
-                (flip eval.handleInput $ Just state)
-                resources
+              when (state.input /= input) do
+                let derived = deriveState input
+                let
+                  state' = state
+                    { derived =
+                        if derived == state.derived then state.derived
+                        else derived
+                    , input = input
+                    }
+                H.modify_ _ { state = state' }
+                imapState _state $ traverse_
+                  (flip eval.handleInput $ Just state)
+                  resources
             Action action ->
               imapState _state $ eval.handleAction action
         , handleQuery: const $ pure Nothing

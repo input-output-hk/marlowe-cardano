@@ -33,10 +33,10 @@ import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol,
                                            parsePOSIXTime, parseStakeAddressReference, parseTokenName, parseTxIn,
                                            parseTxOut)
 import Language.Marlowe.CLI.Run (initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
+import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
-import Language.Marlowe.SemanticsTypes (Input)
-import Ledger.TimeSlot (SlotConfig (..))
+import Language.Marlowe.Semantics.Types (Input)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName, defaultCostModelParams)
 
 import qualified Cardano.Api as Api (Value)
@@ -48,15 +48,14 @@ data RunCommand =
     -- | Initialize a Marlowe transaction.
     Initialize
     {
-      network        :: Maybe NetworkId              -- ^ The network ID, if any.
-    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
-    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
-    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , contractFile   :: FilePath                     -- ^ The JSON file containing the contract.
-    , stateFile      :: FilePath                     -- ^ The JSON file containing the contract's state.
-    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for the validator information.
-    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract.
+      network       :: Maybe NetworkId              -- ^ The network ID, if any.
+    , socketPath    :: FilePath                     -- ^ The path to the node socket.
+    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+    , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
+    , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
+    , outputFile    :: Maybe FilePath               -- ^ The output JSON file for the validator information.
+    , printStats    :: Bool                         -- ^ Whether to print statistics about the contract.
     }
     -- | Prepare a Marlowe transaction for execution.
   | Prepare
@@ -79,6 +78,7 @@ data RunCommand =
     , outputs         :: [(AddressAny, Api.Value)]     -- ^ The ordinary transaction outputs.
     , change          :: AddressAny                    -- ^ The change address.
     , signingKeyFiles :: [FilePath]                    -- ^ The files containing the required signing keys.
+    , metadataFile    :: Maybe FilePath                -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                      -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                     -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                          -- ^ Whether to print statistics about the contract and transaction.
@@ -96,6 +96,7 @@ data RunCommand =
     , outputs         :: [(AddressAny, Api.Value)] -- ^ The ordinary transaction outputs.
     , change          :: AddressAny                -- ^ The change address.
     , signingKeyFiles :: [FilePath]                -- ^ The files containing the required signing keys.
+    , metadataFile    :: Maybe FilePath            -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                  -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                 -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                      -- ^ Whether to print statistics about the contract and transaction.
@@ -125,18 +126,19 @@ runRunCommand command =
         , localNodeSocketPath      = socketPath command
         }
       marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
-      slotConfig = SlotConfig (slotLength command) (POSIXTime $ slotZeroOffset command)
       stake'         = fromMaybe NoStakeAddress $ stake command
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
       guardMainnet = when (network' == Mainnet) $ throwError "Mainnet usage is not supported."
       padTxOut (address, value) = (address, Nothing, value)
       outputs' = padTxOut <$> outputs command
     case command of
-      Initialize{..} -> initializeTransaction
-                          marloweParams' slotConfig costModel network' stake'
-                          contractFile stateFile
-                          outputFile
-                          printStats
+      Initialize{..} -> do
+                          slotConfig <- querySlotConfig connection
+                          initializeTransaction
+                            marloweParams' slotConfig costModel network' stake'
+                            contractFile stateFile
+                            outputFile
+                            printStats
       Prepare{..}    -> prepareTransaction
                           marloweInFile
                           inputs' minimumTime maximumTime
@@ -148,6 +150,7 @@ runRunCommand command =
                             marloweIn marloweOut
                             inputs outputs' change
                             signingKeyFiles
+                            metadataFile
                             bodyFile
                             submitTimeout
                             printStats
@@ -159,6 +162,7 @@ runRunCommand command =
                             marloweOut roleName collateral
                             inputs outputs' change
                             signingKeyFiles
+                            metadataFile
                             bodyFile
                             submitTimeout
                             printStats
@@ -189,15 +193,14 @@ initializeCommand =
 initializeOptions :: O.Parser RunCommand
 initializeOptions =
   Initialize
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
-    <*> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
-    <*> O.option O.auto                                    (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                                  <> O.help "Stake address, if any."                                 )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
-    <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"                            <> O.help "JSON input file for the contract."                      )
-    <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"                               <> O.help "JSON input file for the contract state."                )
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                              <> O.help "JSON output file for initialize."                       )
-    <*> O.switch                                           (O.long "print-stats"                                                            <> O.help "Print statistics."                                      )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."    )
+    <*> O.strOption                                        (O.long "socket-path"    <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any." )
+    <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for initialize."       )
+    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "prepare" command.
@@ -240,6 +243,7 @@ runOptions =
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."                        )
     <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                           )
     <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                            )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                                     )
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."                                  )
     <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."            )
     <*> O.switch                               (O.long "print-stats"                                  <> O.help "Print statistics."                                                  )
@@ -274,6 +278,7 @@ withdrawOptions =
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"           <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."                        )
     <*> O.option parseAddressAny               (O.long "change-address"   <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                           )
     <*> (O.many . O.strOption)                 (O.long "required-signer"  <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                            )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."                                     )
     <*> O.strOption                            (O.long "out-file"         <> O.metavar "FILE"          <> O.help "Output file for transaction body."                                  )
     <*> (O.optional . O.option O.auto)         (O.long "submit"           <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."            )
     <*> O.switch                               (O.long "print-stats"                                   <> O.help "Print statistics."                                                  )

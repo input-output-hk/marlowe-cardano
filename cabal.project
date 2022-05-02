@@ -1,5 +1,5 @@
 -- Bump this if you need newer packages
-index-state: 2022-01-22T00:00:00Z
+index-state: 2022-02-22T20:47:03Z
 
 packages: marlowe
           marlowe-actus
@@ -16,11 +16,27 @@ write-ghc-environment-files: never
 tests: true
 benchmarks: true
 
+constraints:
+     -- Because later versions of hedgehog introduce a change which break 'cardano-ledger':
+     -- Test/Cardano/Chain/Delegation/Model.hs:91:41: error:
+     --   * Could not deduce (TraversableB SignalSDELEG)
+     -- TODO: Try to remove on next `cardano-node` version upgrade.
+     hedgehog >= 1.0.2 && < 1.1
+
+
 -- The only sensible test display option.
 test-show-details: streaming
 
 allow-newer:
   size-based:template-haskell
+
+-- NEVER do that because it breaks inlining and all plutus
+-- scripts gona fail with cryptic errors:
+--
+-- package marlowe
+--   optimization: False
+-- package marlowe-cli
+--   optimization: False
 
 -- Copied from plutus-apps.
 package cardano-ledger-alonzo
@@ -48,14 +64,14 @@ package cardano-wallet-core-integration
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
-  tag: 83b3547d3a8412e26fce6ff5a9e0ee63438a4be1
-  --sha256: 19cjb8ng6d64r30vpdp32i228bz2iq7r79zrw2mfz09h7266zqsx
+  tag: 682977c8c9fe181a0dc066ac2b40a4b1c1b5072c
   subdir:
     freer-extras
     playground-common
     plutus-chain-index
     plutus-chain-index-core
     plutus-contract
+    plutus-contract-certification
     plutus-ledger
     plutus-ledger-constraints
     plutus-pab
@@ -79,7 +95,6 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
   tag: 46f994e216a1f8b36fe4669b47b2a7011b0e153c
-  --sha256: 1il8fx3misp3650ryj368b3x95ksz01zz3x0z9k00807j93d0ka0
   subdir:
     contra-tracer
     iohk-monitoring
@@ -93,6 +108,12 @@ source-repository-package
     plugins/scribe-systemd
     plugins/backend-trace-acceptor
 
+-- | Copied from follow plutus-apps
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/ekg-forward
+  tag: 297cd9db5074339a2fb2e5ae7d0780debb670c63
+
 -- A lot of marlowe dependencies have to be syncronized with the dependencies of
 -- plutus. If you update plutus, please make sure that all dependencies of plutus
 -- are also updated.
@@ -100,7 +121,6 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus
   tag: 4127e9cd6e889824d724c30eae55033cb50cbf3e
-  --sha256: 186w0x7vk8m8npmsfg9pdkxds0rlj6bmhr8nkgn96rkvaz5azjsb
   subdir:
     plutus-core
     plutus-ledger-api
@@ -115,29 +135,24 @@ source-repository-package
   type: git
   location: https://github.com/Quid2/flat
   tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
-  --sha256: 1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm
 
 -- Upgrading this breaks purescript bridges.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/servant-purescript
   tag: 002e172173ad2f2f69f98a3b56b7312364f23afe
-  --sha256: 178vp5xbr6bn534qlnrwjlp4klj8mrswx506lk50j240205d5d5n
-
 
 -- Copied from plutus-apps.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/purescript-bridge
   tag: 47a1f11825a0f9445e0f98792f79172efef66c00
-  --sha256: 0da1vn2l6iyfxcjk58qal1l4755v92zi6yppmjmqvxf1gacyf9px
 
 -- Copied from plutus-apps.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-wallet
-  tag: a5085acbd2670c24251cf8d76a4e83c77a2679ba
-  --sha256: 1apzfy7qdgf6l0lb3icqz3rvaq2w3a53xq6wvhqnbfi8i7cacy03
+  tag: f6d4db733c4e47ee11683c343b440552f59beff7
   subdir:
     lib/cli
     lib/core
@@ -156,34 +171,35 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 814df2c146f5d56f8c35a681fe75e85b905aed5d
-  --sha256: 1hr00wqzmcyc3x0kp2hyw78rfmimf6z4zd4vv85b9zv3nqbjgrik
+  tag: 73f9a746362695dc2cb63ba757fbcabb81733d23
   subdir:
     cardano-api
     cardano-cli
+    cardano-git-rev
     cardano-node
+    cardano-submit-api
     cardano-testnet
+    trace-dispatcher
+    trace-forward
+    trace-resources
 
 -- Copied from plutus-apps.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-config
   tag: e9de7a2cf70796f6ff26eac9f9540184ded0e4e6
-  --sha256: 1wm1c99r5zvz22pdl8nhkp13falvqmj8dgkm8fxskwa9ydqz01ld
 
 -- Copied from plutus-apps.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/optparse-applicative
   tag: 7497a29cb998721a9068d5725d49461f2bba0e7a
-  --sha256: 1gvsrg925vynwgqwplgjmp53vj953qyh3wbdf34pw21c8r47w35r
 
 -- Copied from plutus-apps.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/hedgehog-extras
   tag: edf6945007177a638fbeb8802397f3a6f4e47c14
-  --sha256: 0wc7qzkc7j4ns2rz562h6qrx2f8xyq7yjcb7zidnj7f6j0pcd0i9
 
 
 -- Copied from plutus-apps.
@@ -191,7 +207,6 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
   tag: 1a9ec4ae9e0b09d54e49b2a40c4ead37edadcce5
-  --sha256: 0avzyiqq0m8njd41ck9kpn992yq676b1az9xs77977h7cf85y4wm
   subdir:
     eras/alonzo/impl
     eras/byron/chain/executable-spec
@@ -217,8 +232,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: d2d219a86cda42787325bb8c20539a75c2667132
-  --sha256: 18xk7r0h2pxrbx76d6flsxifh0a9rz1cj1rjqs1pbs5kdmy8b7kx
+  tag: 4fac197b6f0d2ff60dc3486c593b68dc00969fbf
   subdir:
     io-classes
     io-sim
@@ -243,7 +257,6 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
   tag: 41545ba3ac6b3095966316a99883d678b5ab8da8
-  --sha256: 0icq9y3nnl42fz536da84414av36g37894qnyw4rk3qkalksqwir
   subdir:
     base-deriving-via
     binary
@@ -260,7 +273,6 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
   tag: bb4ed71ba8e587f672d06edf9d2e376f4b055555
-  --sha256: 00h10l5mmiza9819p9v5q5749nb9pzgi20vpzpy1d34zmh6gf1cj
   subdir:
     cardano-prelude
     cardano-prelude-test
@@ -270,14 +282,12 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-crypto
   tag: f73079303f663e028288f9f4a9e08bcca39a923e
-  --sha256: 1n87i15x54s0cjkh3nsxs4r1x016cdw1fypwmr68936n3xxsjn6q
 
 -- Copied from plutus-apps.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-addresses
   tag: 71006f9eb956b0004022e80aadd4ad50d837b621
-  --sha256: 11dl3fmq7ry5wdmz8kw07ji8yvrxnrsf7pgilw5q9mi4aqyvnaqk
   subdir:
     command-line
     core
@@ -287,11 +297,9 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/goblins
   tag: cde90a2b27f79187ca8310b6549331e59595e7ba
-  --sha256: 17c88rbva3iw82yg9srlxjv2ia5wjb9cyqw44hik565f5v9svnyg
 
 -- Copied from plutus-apps
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/Win32-network
   tag: 3825d3abf75f83f406c1f7161883c438dac7277d
-  --sha256: 19wahfv726fa3mqajpqdqhnl9ica3xmf68i254q45iyjcpj1psqx

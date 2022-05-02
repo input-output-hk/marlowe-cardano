@@ -8,26 +8,22 @@ module Component.Contract.View
 
 import Prologue hiding (div)
 
-import Data.ContractUserParties
-  ( ContractUserParties
-  , getNickname
-  , isCurrentUser
-  )
 import Data.DateTime (diff)
 import Data.DateTime.Instant (Instant, toDateTime)
+import Data.Foldable (foldMap)
 import Data.Function (on)
 import Data.Lens ((^.))
 import Data.Maybe (maybe')
 import Data.String (take)
 import Data.String.Extra (capitalize)
-import Data.WalletNickname as WN
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, text)
 import Humanize (humanizeDuration)
 import Marlowe.Execution.Lenses (_mNextTimeout)
 import Marlowe.Execution.State (isClosed)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (Party(..))
+import Marlowe.Semantics (CurrencySymbol, Party(..), Token(..))
+import Store.RoleTokens (RoleTokenStore, getDisplayName)
 
 timeoutString :: Instant -> Execution.State -> String
 timeoutString currentTime executionState =
@@ -46,13 +42,17 @@ timeoutString currentTime executionState =
 
 -- TODO: In zeplin all participants have a different color. We need to decide how are we going to assing
 --       colors to users. For now they all have purple
-renderParty :: forall p a. ContractUserParties -> Party -> HTML p a
-renderParty contractUserParties party =
+renderParty
+  :: forall w i
+   . CurrencySymbol
+  -> RoleTokenStore
+  -> Party
+  -> HTML w i
+renderParty currencySymbol roleTokens party =
   let
-    participantName = participantWithNickname contractUserParties party
-
+    participantName = participantWithNickname currencySymbol roleTokens party
   in
-    div [ classNames $ [ "text-xs", "flex", "gap-1" ] ]
+    div [ classNames [ "text-xs", "flex", "gap-1", "whitespace-nowrap" ] ]
       [ firstLetterInCircle
           { styles:
               [ "bg-gradient-to-r"
@@ -62,24 +62,28 @@ renderParty contractUserParties party =
               ]
           , name: participantName
           }
-      , div [ classNames [ "font-semibold" ] ]
-          [ text $
-              if isCurrentUser party contractUserParties then participantName <>
-                " (you)"
-              else participantName
+      , div
+          [ classNames
+              [ "font-semibold"
+              , "overflow-ellipsis"
+              , "overflow-hidden"
+              , "w-4/5"
+              ]
           ]
+          [ text participantName ]
       ]
 
-participantWithNickname :: ContractUserParties -> Party -> String
-participantWithNickname contractUserParties party =
-  let
-    mNickname = getNickname party contractUserParties
-  in
-    capitalize case party, mNickname of
-      PK publicKey, _ -> publicKey
-      Role roleName, Just nickname -> roleName <> " (" <> WN.toString nickname
-        <> ")"
-      Role roleName, Nothing -> roleName
+participantWithNickname
+  :: CurrencySymbol -> RoleTokenStore -> Party -> String
+participantWithNickname currencySymbol roleTokens party =
+  capitalize case party of
+    PK publicKey -> publicKey
+    Role tokenName ->
+      let
+        suffix = foldMap (\n -> " (" <> n <> ")")
+          $ getDisplayName (Token currencySymbol tokenName) roleTokens
+      in
+        tokenName <> suffix
 
 firstLetterInCircle
   :: forall p a. { styles :: Array String, name :: String } -> HTML p a

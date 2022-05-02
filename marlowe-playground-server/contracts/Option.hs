@@ -4,7 +4,7 @@ module Option where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $
+main = printJSON $
   coveredCall
     (Role "Party")
     (Role "Counterparty")

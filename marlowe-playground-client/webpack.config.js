@@ -34,8 +34,8 @@ module.exports = {
   devServer: {
     contentBase: path.join(__dirname, "dist"),
     compress: true,
-    port: 8010,
-    https: false,
+    port: 8009,
+    https: true,
     proxy: {
       "/api": {
         target: "http://localhost:8080",

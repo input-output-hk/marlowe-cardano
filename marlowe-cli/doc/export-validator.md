@@ -7,25 +7,22 @@ The `marlowe contract validator` command writes the default Marlowe validator to
 
     $ marlowe-cli contract validator --help
     
-    Usage: marlowe-cli contract validator [--testnet-magic INTEGER]
-                                          [--slot-length INTEGER]
-                                          [--slot-offset INTEGER]
-                                          [--stake-address ADDRESS]
-                                          [--roles-currency CURRENCY_SYMBOL]
-                                          [--out-file OUTPUT_FILE] [--print-hash]
+    Usage: marlowe-cli contract validator [--testnet-magic INTEGER] 
+                                          [--stake-address ADDRESS] 
+                                          [--roles-currency CURRENCY_SYMBOL] 
+                                          [--out-file OUTPUT_FILE] [--print-hash] 
                                           [--print-stats]
       Export a contract validator to a JSON file.
     
     Available options:
-      --testnet-magic INTEGER           Network magic, or omit for mainnet.
-      --slot-length INTEGER             The slot length, in milliseconds.
-      --slot-offset INTEGER             The effective POSIX time of slot zero, in milliseconds.
-      --stake-address ADDRESS           Stake address, if any.
-      --roles-currency CURRENCY_SYMBOL  The currency symbol for roles, if any.
-      --out-file OUTPUT_FILE            JSON output file for validator.
-      --print-hash                      Print validator hash.
-      --print-stats                     Print statistics.
-      -h,--help                         Show this help text
+      --testnet-magic INTEGER  Network magic, or omit for mainnet.
+      --stake-address ADDRESS  Stake address, if any.
+      --roles-currency CURRENCY_SYMBOL
+                               The currency symbol for roles, if any.
+      --out-file OUTPUT_FILE   JSON output file for validator.
+      --print-hash             Print validator hash.
+      --print-stats            Print statistics.
+      -h,--help                Show this help text
 
 The stake address can be omitted if no staking will be done at the script address. If the currency symbol is omitted, then ADA is used as the currency for the Marlowe roles.
 

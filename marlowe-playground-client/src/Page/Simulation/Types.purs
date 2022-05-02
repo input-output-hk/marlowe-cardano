@@ -11,11 +11,11 @@ import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.List.Types (NonEmptyList)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Halogen.Monaco as Monaco
 import Help (HelpContext)
 import Marlowe.Semantics (Bound, ChoiceId, ChosenNum, Input)
 import Marlowe.Symbolic.Types.Response (Result)
-import Marlowe.Template (IntegerTemplateType)
 import Network.RemoteData (RemoteData)
 import Simulator.Types (MarloweState)
 
@@ -23,6 +23,7 @@ type StateBase r =
   { showRightPanel :: Boolean
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , marloweState :: NonEmptyList MarloweState
+  , tzOffset :: Minutes
   , helpContext :: HelpContext
   -- List of decoration ids used by the monaco editor to track the running contract
   , decorationIds :: Array String
@@ -35,7 +36,8 @@ data Action
   = HandleEditorMessage Monaco.Message
   -- marlowe actions
   | SetInitialTime Instant
-  | SetIntegerTemplateParam IntegerTemplateType String BigInt
+  | SetTimeTemplateParam String Instant
+  | SetValueTemplateParam String BigInt
   | StartSimulation
   | DownloadAsJson
   | MoveTime Instant
@@ -60,8 +62,8 @@ defaultEvent s = A.defaultEvent $ "Simulation." <> s
 
 instance isEventAction :: IsEvent Action where
   toEvent (SetInitialTime _) = Just $ defaultEvent "SetInitialTime"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
-    "SetIntegerTemplateParam"
+  toEvent (SetTimeTemplateParam _ _) = Nothing
+  toEvent (SetValueTemplateParam _ _) = Nothing
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent DownloadAsJson = Just $ defaultEvent "DownloadAsJson"
   toEvent (MoveTime _) = Just $ defaultEvent "MoveTime"

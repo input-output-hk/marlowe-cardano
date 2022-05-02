@@ -33,7 +33,7 @@ button =
   ]
 
 withShadow :: Array String
-withShadow = [ "shadow", "hover:shadow-lg" ]
+withShadow = [ "shadow", "hover:shadow-lg", "active:shadow" ]
 
 withAnimation :: Array String
 withAnimation = [ "transition-all", "duration-200" ]
@@ -180,7 +180,6 @@ hasNestedLabel = [ "-mt-4" ]
 nestedLabel :: Array String
 nestedLabel =
   [ "relative"
-  , "z-10"
   , "left-2"
   , "top-2.5"
   , "px-1"
@@ -191,14 +190,15 @@ nestedLabel =
 
 labelBox :: Array String
 labelBox =
-  [ "space-x-2"
+  [ "gap-1"
   , "leading-none"
   , "absolute"
-  , "z-10"
   , "left-2"
   , "-top-1.5"
   , "px-2"
   , "bg-white"
+  , "flex"
+  , "items-center"
   ]
 
 labelText :: Array String

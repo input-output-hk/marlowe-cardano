@@ -18,21 +18,25 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
--- {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
+-- | Uncomment this if you would like to ignore Plutus errors and have partial LSP support during coding
+-- | BUT never commit it back ;-)
+-- | {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
 
 
 module Language.Marlowe.Scripts where
 import GHC.Generics
 import Language.Marlowe.Pretty (Pretty (..))
 import Language.Marlowe.Semantics
-import Language.Marlowe.SemanticsTypes
+import Language.Marlowe.Semantics.Types
 import Ledger
 import Ledger.Ada (adaSymbol)
 import qualified Ledger.Interval as Interval
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
+import Plutus.Debug
 import Plutus.V1.Ledger.Credential (Credential (..))
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
@@ -54,6 +58,12 @@ data TypedMarloweValidator
 instance Scripts.ValidatorTypes TypedMarloweValidator where
     type instance RedeemerType TypedMarloweValidator = MarloweInput
     type instance DatumType TypedMarloweValidator = MarloweData
+
+data TypedRolePayoutValidator
+
+instance Scripts.ValidatorTypes TypedRolePayoutValidator where
+  type instance RedeemerType TypedRolePayoutValidator = ()
+  type instance DatumType TypedRolePayoutValidator = TokenName
 
 
 data MarloweTxInput = Input InputContent
@@ -143,7 +153,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                         totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
-                        in checkOwnOutputConstraint marloweData finalBalance
+                        in debugIfFalse "L1+" interval  -- TODO: Switch to `traceIfFalse` if SCP-3624 does not reoccur.
+                             $ checkOwnOutputConstraint marloweData finalBalance
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousTimeIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"

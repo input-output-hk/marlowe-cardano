@@ -1,15 +1,20 @@
 module Images
-  ( marloweRunLogo
+  ( arrowBack
+  , backgroundShape
+  , cfdIcon
+  , contractIcon
+  , getStartedThumbnail
+  , linkHighlight
+  , loanIcon
+  , marloweRunLogo
   , marloweRunNavLogo
   , marloweRunNavLogoDark
-  , backgroundShape
-  , arrowBack
-  , linkHighlight
-  , getStartedThumbnail
-  , cfdIcon
-  , loanIcon
   , purchaseIcon
   ) where
+
+import Halogen.HTML (HTML, img)
+import Halogen.HTML.Properties (src)
+import Marlowe.Extended (ContractType(..))
 
 foreign import marloweRunLogo :: String
 
@@ -30,3 +35,13 @@ foreign import cfdIcon :: String
 foreign import loanIcon :: String
 
 foreign import purchaseIcon :: String
+
+contractIcon :: forall p a. ContractType -> HTML p a
+contractIcon contractType =
+  img
+    [ src case contractType of
+        Escrow -> purchaseIcon
+        ZeroCouponBond -> loanIcon
+        _ -> cfdIcon
+    ]
+

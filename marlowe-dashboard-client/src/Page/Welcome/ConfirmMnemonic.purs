@@ -90,7 +90,7 @@ handleAction = case _ of
 
 render
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => State
   -> ComponentHTML m
 render { fieldState, newWalletDetails } = do
@@ -123,7 +123,7 @@ render { fieldState, newWalletDetails } = do
 
 mnemonicInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MnemonicPhrase
   -> FieldState MnemonicPhrase
   -> ComponentHTML m
@@ -137,7 +137,13 @@ mnemonicInput mnemonic fieldState =
     , format: MP.toString
     , validate: either This That <<< (matches <=< lmap Right <<< MP.fromString)
     , render: \{ error, value, result } ->
-        renderTextInput id label result error (Input.setInputProps value [])
+        renderTextInput
+          id
+          label
+          Nothing
+          result
+          error
+          (Input.setInputProps value [])
           case _ of
             (Right MP.Empty) -> "Required."
             (Right MP.WrongWordCount) -> "24 words required."

@@ -13,11 +13,13 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Either (hush)
 import Data.Int (round)
-import Data.Lens (_Just, preview, previewOn, (^.))
+import Data.Lens (_Just, preview, previewOn, set, (^.))
 import Data.Lens.NonEmptyList (_Head)
+import Data.List.NonEmpty as NEL
 import Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.NonEmpty ((:|))
+import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested ((/\))
 import Examples.Marlowe.Contracts as Contracts
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
@@ -29,6 +31,7 @@ import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Marlowe.Extended (resolveRelativeTimes)
 import Marlowe.Extended as EM
+import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Marlowe.Holes (Term(..), fromTerm)
 import Marlowe.Holes as T
 import Marlowe.Parser (parseContract)
@@ -58,7 +61,13 @@ import Simulator.Lenses
   , _transactionError
   , _transactionWarnings
   )
-import Simulator.State (advanceTime, applyInput, getAllActions, startSimulation)
+import Simulator.State
+  ( advanceTime
+  , applyInput
+  , getAllActions
+  , initialMarloweState
+  , startSimulation
+  )
 import Simulator.Types (ActionInput(..))
 import Test.QuickCheck (Result(..))
 import Test.QuickCheck.Gen (Gen)
@@ -68,8 +77,20 @@ import Test.Spec.QuickCheck (quickCheck)
 import Text.Pretty (pretty)
 import Type.Prelude (Proxy(..))
 
-mkState :: Simulation.State
-mkState = Record.insert (Proxy :: Proxy "projectName") "Contract" mkStateBase
+mkState :: Term T.Contract -> Simulation.State
+mkState contract =
+  let
+    baseState = Record.insert
+      (Proxy :: Proxy "projectName")
+      "Contract"
+      (mkStateBase $ Minutes 0.0)
+  in
+    set
+      _marloweState
+      ( NEL.singleton $ initialMarloweState unixEpoch contract
+          emptyContractMetadata
+      )
+      baseState
 
 all :: Spec Unit
 all =
@@ -272,7 +293,7 @@ filledContractForDifferencesWithOracle =
 --       test we care that the compute transaction of term and semantic are the same, in here we care about the output of the simulation.
 escrowSimpleFlow :: Spec Unit
 escrowSimpleFlow =
-  it "Escrow" do
+  it "Escrow simple flow" do
     -- A simple test that runs the Escrow contract to completion
     let
       deposit = IDeposit seller buyer ada (BigInt.fromInt 450)
@@ -282,7 +303,7 @@ escrowSimpleFlow =
       choice2 = IChoice ((ChoiceId "Confirm problem") seller) (BigInt.fromInt 1)
 
       finalState =
-        (flip execState mkState) do
+        (flip execState (mkState filledEscrow)) do
           startSimulation unixEpoch filledEscrow
           applyInput deposit
           applyInput choice1
@@ -318,7 +339,7 @@ contractHasNoErrors :: String -> Term T.Contract -> Spec Unit
 contractHasNoErrors contractName contract =
   it contractName
     $ quickCheck
-    $ evalStateT property mkState
+    $ evalStateT property (mkState contract)
   where
   property :: StateT Simulation.State Gen Result
   property = do

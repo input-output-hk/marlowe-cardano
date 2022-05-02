@@ -37,9 +37,9 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode, Local
                     MultiAssetSupportedInEra (MultiAssetInAlonzoEra), NetworkId,
                     QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
                     Script (..), ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraAlonzo), SlotNo (..),
-                    StakeAddressReference (..), TxId, TxIn, TxMetadataInEra (TxMetadataNone), TxMintValue (TxMintNone),
-                    TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId,
-                    lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue, writeFileTextEnvelope)
+                    StakeAddressReference (..), TxId, TxIn, TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..),
+                    TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace,
+                    toAddressAny, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
@@ -52,7 +52,7 @@ import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as S (singleton)
 import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer, buildRoleValidator,
                                     buildValidator)
-import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readSigningKey)
+import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, hashSigningKey, queryAlonzo,
                                          submitBody)
@@ -60,8 +60,8 @@ import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweTransac
                                    ValidatorInfo (..))
 import Language.Marlowe.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
                                    TransactionOutput (..), TransactionWarning, computeTransaction)
-import Language.Marlowe.SemanticsTypes (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
-                                        InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
+import Language.Marlowe.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
+                                         InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
 import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
@@ -251,13 +251,15 @@ runTransaction :: MonadError CliError m
                -> [(AddressAny, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
                -> AddressAny                              -- ^ The change address.
                -> [FilePath]                              -- ^ The files for required signing keys.
+               -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
                -> FilePath                                -- ^ The output file for the transaction body.
                -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                -> Bool                                    -- ^ Whether to print statistics about the transaction.
                -> Bool                                    -- ^ Assertion that the transaction is invalid.
                -> m TxId                                  -- ^ Action to build the transaction body.
-runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles bodyFile timeout printStats invalid =
+runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     protocol <- queryAlonzo connection QueryProtocolParameters
     marloweOut <- decodeFileStrict marloweOutFile
     (spend, collateral) <-
@@ -337,7 +339,8 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
         collateral changeAddress
         (mtRange marloweOut)
         (hashSigningKey <$> signingKeys)
-        TxMintNone TxMetadataNone
+        TxMintNone
+        metadata
         printStats
         invalid
     liftCliIO
@@ -384,13 +387,15 @@ withdrawFunds :: MonadError CliError m
               -> [(AddressAny, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
               -> AddressAny                              -- ^ The change address.
               -> [FilePath]                              -- ^ The files for required signing keys.
+              -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
               -> FilePath                                -- ^ The output file for the transaction body.
               -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                    -- ^ Whether to print statistics about the transaction.
               -> Bool                                    -- ^ Assertion that the transaction is invalid.
               -> m TxId                                  -- ^ Action to build the transaction body.
-withdrawFunds connection marloweOutFile roleName collateral inputs outputs changeAddress signingKeyFiles bodyFile timeout printStats invalid =
+withdrawFunds connection marloweOutFile roleName collateral inputs outputs changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
   do
+    metadata <- readMaybeMetadata metadataFile
     marloweOut <- decodeFileStrict marloweOutFile
     signingKeys <- mapM readSigningKey signingKeyFiles
     roleHash <- liftCli . toCardanoScriptDataHash . diHash $ buildRoleDatum roleName
@@ -425,7 +430,8 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         (Just collateral) changeAddress
         (mtRange marloweOut)
         (hashSigningKey <$> signingKeys)
-        TxMintNone TxMetadataNone
+        TxMintNone
+        metadata
         printStats
         invalid
     liftCliIO

@@ -296,9 +296,8 @@ createWalletCard = case _ of
         OnCreateWalletMsg
     ]
   CreateWalletPresentMnemonic r@{ mnemonic } ->
-    [ div
-        [ classNames [ "p-5", "lg:p-6", "space-y-2" ] ]
-        [ div_
+    [ div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
+        [ div [ classNames [ "space-y-2" ] ]
             [ h2
                 [ classNames [ "font-bold" ] ]
                 [ text "Testnet wallet mnemonic phrase" ]
@@ -306,16 +305,20 @@ createWalletCard = case _ of
                 [ text
                     "Please save this mnemonic phrase if you want to preserve accesses to your testnet account:"
                 ]
-            , mark
-                [ ARIA.role "mark", classNames [ "font-bold", "m-2", "mb-6" ] ]
-                [ text $ MnemonicPhrase.toString mnemonic ]
-            , B.button
-                B.Primary
-                ( Just $ OnAcknowledgeMnemonic r
-                )
-                [ "flex-1", "w-full" ]
-                [ text "Ok" ]
+            , p [ classNames [ "px-2" ] ]
+                [ mark
+                    [ ARIA.role "mark"
+                    , classNames [ "font-bold", "bg-transparent" ]
+                    ]
+                    [ text $ MnemonicPhrase.toString mnemonic ]
+                ]
             ]
+        , B.button
+            B.Primary
+            ( Just $ OnAcknowledgeMnemonic r
+            )
+            [ "flex-1", "w-full" ]
+            [ text "Ok" ]
         ]
     ]
   CreateWalletConfirmMnemonic newWalletDetails ->

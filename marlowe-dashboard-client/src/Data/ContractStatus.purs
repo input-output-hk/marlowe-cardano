@@ -11,11 +11,17 @@ data ContractStatus starting started
   = Starting starting
   | Started started
 
-derive instance eqContractStatus ::
+derive instance
   ( Eq starting
   , Eq started
   ) =>
   Eq (ContractStatus starting started)
+
+derive instance
+  ( Ord starting
+  , Ord started
+  ) =>
+  Ord (ContractStatus starting started)
 
 -- When we want to reference a Starting contract we use the UUID
 -- of the request, once the contract has started we use the MarloweParams

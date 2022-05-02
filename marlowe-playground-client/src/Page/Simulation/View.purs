@@ -5,16 +5,28 @@ import Prologue hiding (div)
 import Component.BottomPanel.Types as BottomPanelTypes
 import Component.BottomPanel.View as BottomPanel
 import Component.CurrencyInput (currencyInput)
+import Component.DateTimeLocalInput.State as DateTimeLocalInput
+import Component.DateTimeLocalInput.Types (Message(..))
 import Component.Hint.State (hint)
 import Component.Icons as Icon
 import Component.Popper (Placement(..))
-import Data.Array (concatMap, intercalate, length, reverse, sortWith)
+import Component.Tooltip.State (tooltip)
+import Component.Tooltip.Types (ReferenceId(..))
+import Data.Array
+  ( concatMap
+  , intercalate
+  , length
+  , mapWithIndex
+  , reverse
+  , sortWith
+  )
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
-import Data.DateTime.Instant (Instant, unInstant)
+import Data.DateTime.Instant (Instant)
+import Data.DateTime.Instant as Instant
 import Data.Enum (fromEnum)
-import Data.Lens (has, only, previewOn, to, view, (^.), (^?))
+import Data.Lens (has, only, preview, previewOn, to, view, (^.), (^?))
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.NonEmptyList (_Head)
 import Data.Map (Map)
@@ -24,6 +36,7 @@ import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.Newtype (unwrap)
 import Data.Set.Ordered.OSet (OSet)
 import Data.String (trim)
+import Data.Time.Duration (Minutes)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
@@ -81,7 +94,6 @@ import Halogen.HTML
   , h6
   , h6_
   , li
-  , li_
   , p
   , p_
   , section
@@ -93,38 +105,48 @@ import Halogen.HTML
   , ul
   )
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Properties (class_, classes, disabled)
+import Halogen.HTML.Properties (class_, classes, disabled, enabled, id)
 import Halogen.Monaco (monacoComponent)
-import MainFrame.Types (ChildSlots, _currencyInputSlot, _simulatorEditorSlot)
+import Humanize
+  ( formatPOSIXTime
+  , humanizeInterval
+  , humanizeOffset
+  , localToUtc
+  , utcToLocal
+  )
+import MainFrame.Types
+  ( ChildSlots
+  , _currencyInputSlot
+  , _dateTimeInputSlot
+  , _simulatorEditorSlot
+  )
 import Marlowe.Extended.Metadata (MetaData, NumberFormat(..), getChoiceFormat)
+import Marlowe.Holes as Holes
 import Marlowe.Monaco as MM
 import Marlowe.Semantics
   ( AccountId
   , Assets(..)
   , Bound(..)
   , ChoiceId(..)
+  , CurrencySymbol
   , Input(..)
   , Party(..)
   , Payee(..)
   , Payment(..)
   , TimeInterval(..)
   , Token(..)
+  , TokenName
   , TransactionInput(..)
   , inBounds
   , timeouts
   )
-import Marlowe.Template
-  ( IntegerTemplateType(..)
-  , TemplateContent(..)
-  , orderContentUsingMetadata
-  )
+import Marlowe.Template (TemplateContent(..), orderContentUsingMetadata)
 import Marlowe.Time (unixEpoch)
 import Monaco as Monaco
 import Page.Simulation.BottomPanel (panelContents)
 import Page.Simulation.Lenses (_bottomPanelState)
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
-import Plutus.V1.Ledger.Time as POSIXTime
 import Pretty
   ( renderPrettyParty
   , renderPrettyPayee
@@ -316,24 +338,26 @@ sidebar
   -> State
   -> Array (ComponentHTML Action ChildSlots m)
 sidebar metadata state =
-  case view (_marloweState <<< _Head <<< _executionState) state of
-    SimulationNotStarted notStartedRecord ->
-      [ startSimulationWidget metadata notStartedRecord ]
-    SimulationRunning _ ->
+  case preview (_marloweState <<< _Head <<< _executionState) state of
+    Just (SimulationNotStarted notStartedRecord) ->
+      [ startSimulationWidget
+          metadata
+          notStartedRecord
+          state.tzOffset
+      ]
+    Just (SimulationRunning _) ->
       [ div [ class_ smallSpaceBottom ] [ simulationStateWidget state ]
       , div [ class_ spaceBottom ] [ actionWidget metadata state ]
       , logWidget metadata state
       ]
+    Nothing -> [ div_ [ text "Simulation not ready" ] ]
 
 ------------------------------------------------------------
+
 type TemplateFormDisplayInfo =
-  { lookupFormat ::
-      String -> Maybe (String /\ Int) -- Gets the format for a given key
-  , lookupDefinition ::
+  { lookupDefinition ::
       String -> Maybe String -- Gets the definition for a given key
-  , typeName :: IntegerTemplateType -- Identifier for the type of template we are displaying
   , title :: String -- Title of the section of the template type
-  , prefix :: String -- Prefix for the explanation of the template
   , orderedMetadataSet ::
       OSet String -- Ordered set of parameters with metadata (in custom metadata order)
   }
@@ -343,28 +367,34 @@ startSimulationWidget
    . MonadAff m
   => MetaData
   -> InitialConditionsRecord
+  -> Minutes
   -> ComponentHTML Action ChildSlots m
 startSimulationWidget
   metadata
   { initialTime
-  , templateContent: TemplateContent { timeContent, valueContent }
-  } =
+  , templateContent
+  }
+  tzOffset =
   cardWidget "Simulation has not started yet"
     $ div_
         [ div
             [ classes [ ClassName "time-input", ClassName "initial-time-input" ]
             ]
-            -- TODO use a real date time picker
-            [ spanText "Initial time (milliseconds since UNIX epoch):"
+            [ spanText "Initial time:"
             , marloweInstantInput "initial-time"
-                [ "mx-2", "flex-grow", "flex-shrink-0" ]
+                [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
                 SetInitialTime
                 initialTime
+                tzOffset
             ]
-        , div_
-            [ ul [ class_ (ClassName "templates") ]
-                $ timeoutParameters <> valueParameters
-            ]
+        , templateParameters
+            "simulator"
+            metadata
+            templateContent
+            { valueAction: SetValueTemplateParam
+            , timeAction: SetTimeTemplateParam
+            }
+            tzOffset
         , div [ classNames [ "transaction-btns", "flex", "justify-center" ] ]
             [ button
                 [ classNames
@@ -380,150 +410,186 @@ startSimulationWidget
                 [ text "Start simulation" ]
             ]
         ]
-  where
-  timeoutParameters =
-    integerTemplateParameters SetIntegerTemplateParam timeParameterDisplayInfo
-      $ map (POSIXTime.toBigInt <<< POSIXTime) timeContent
 
-  valueParameters = integerTemplateParameters
-    SetIntegerTemplateParam
-    valueParameterDisplayInfo
-    valueContent
+type TemplateParameterActionsGen action =
+  { valueAction :: String -> BigInt -> action
+  , timeAction :: String -> Instant -> action
+  }
 
-  timeParameterDisplayInfo =
-    { lookupFormat: const Nothing
-    , lookupDefinition: (flip Map.lookup)
-        (Map.fromFoldableWithIndex metadata.timeParameterDescriptions) -- Convert to normal Map for efficiency
-    , typeName: TimeContent
-    , title: "Timeout template parameters"
-    , prefix: "POSIX time for"
-    , orderedMetadataSet: OMap.keys metadata.timeParameterDescriptions
-    }
-
-  valueParameterDisplayInfo =
-    { lookupFormat: extractValueParameterNuberFormat
-    , lookupDefinition: (flip lookupDescription)
-        (Map.fromFoldableWithIndex metadata.valueParameterInfo) -- Convert to normal Map for efficiency
-    , typeName: ValueContent
-    , title: "Value template parameters"
-    , prefix: "Constant for"
-    , orderedMetadataSet: OMap.keys metadata.valueParameterInfo
-    }
-
-  extractValueParameterNuberFormat valueParameter =
-    case OMap.lookup valueParameter metadata.valueParameterInfo of
-      Just { valueParameterFormat: DecimalFormat numDecimals currencyLabel } ->
-        Just (currencyLabel /\ numDecimals)
-      _ -> Nothing
-
-  lookupDescription k m =
-    ( case Map.lookup k m of
-        Just { valueParameterDescription: description }
-          | trim description /= "" -> Just description
-        _ -> Nothing
-    )
-
-integerTemplateParameters
+templateParameters
   :: forall action m
    . MonadAff m
-  => (IntegerTemplateType -> String -> BigInt -> action)
+  => String
+  -> MetaData
+  -> TemplateContent
+  -> TemplateParameterActionsGen action
+  -> Minutes
+  -> ComponentHTML action ChildSlots m
+templateParameters
+  refPrefix
+  metadata
+  (TemplateContent { timeContent, valueContent })
+  { valueAction, timeAction }
+  tzOffset =
+
+  let
+    inputCss = [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
+    timeoutParameters = templateParametersSection
+      refPrefix
+      ( \fieldName fieldValue ->
+          marloweInstantInput
+            (templateFieldRef refPrefix fieldName)
+            inputCss
+            (timeAction fieldName)
+            fieldValue
+            tzOffset
+      )
+      timeParameterDisplayInfo
+      timeContent
+
+    valueParameters = templateParametersSection
+      refPrefix
+      ( \fieldName fieldValue ->
+          case extractValueParameterNuberFormat fieldName of
+            Just (currencyLabel /\ numDecimals) ->
+              marloweCurrencyInput (templateFieldRef refPrefix fieldName)
+                inputCss
+                (valueAction fieldName)
+                currencyLabel
+                numDecimals
+                fieldValue
+            Nothing -> marloweActionInput (templateFieldRef refPrefix fieldName)
+              inputCss
+              (valueAction fieldName)
+              fieldValue
+      )
+      valueParameterDisplayInfo
+      valueContent
+    lookupDescription k m =
+      ( case Map.lookup k m of
+          Just { valueParameterDescription: description }
+            | trim description /= "" -> Just description
+          _ -> Nothing
+      )
+
+    timeParameterDisplayInfo =
+      { lookupDefinition: (flip Map.lookup)
+          (Map.fromFoldableWithIndex metadata.timeParameterDescriptions) -- Convert to normal Map for efficiency
+      , title: "Timeout template parameters"
+      , orderedMetadataSet: OMap.keys metadata.timeParameterDescriptions
+      }
+
+    valueParameterDisplayInfo =
+      { lookupDefinition: (flip lookupDescription)
+          (Map.fromFoldableWithIndex metadata.valueParameterInfo) -- Convert to normal Map for efficiency
+      , title: "Value template parameters"
+      , orderedMetadataSet: OMap.keys metadata.valueParameterInfo
+      }
+    extractValueParameterNuberFormat fieldName =
+      case OMap.lookup fieldName metadata.valueParameterInfo of
+        Just { valueParameterFormat: DecimalFormat numDecimals currencyLabel } ->
+          Just (currencyLabel /\ numDecimals)
+        _ -> Nothing
+  in
+    div_ (timeoutParameters <> valueParameters)
+
+-- NOTE: The refPrefix parameter is used to avoid sharing the same component between
+--       different views (like Simulator and Static analyisis bottom bar). The proper
+--       solution would be to make each page a proper component.
+templateFieldRef :: String -> String -> String
+templateFieldRef refPrefix fieldName =
+  "template-parameter-"
+    <> refPrefix
+    <> "-"
+    <> fieldName
+
+emptyDiv :: forall w i. HTML w i
+emptyDiv = div_ []
+
+templateParametersSection
+  :: forall inputType action m
+   . MonadAff m
+  => String
+  -> (String -> inputType -> ComponentHTML action ChildSlots m)
   -> TemplateFormDisplayInfo
-  -> Map String BigInt
+  -> Map String inputType
   -> Array (ComponentHTML action ChildSlots m)
-integerTemplateParameters
-  actionGen
-  { lookupFormat
-  , lookupDefinition
-  , typeName
+templateParametersSection
+  refPrefix
+  componentGen
+  { lookupDefinition
   , title
-  , prefix
   , orderedMetadataSet
   }
   content =
   let
-    ref key = "template-parameter-" <> key
+    templateFieldTitle =
+      h6 [ classNames [ "italic", "m-0", "mb-4" ] ]
+        [ text title ]
 
-    parameterHint key =
-      maybe []
+    parameterHint fieldName =
+      maybe emptyDiv
         ( \explanation ->
-            [ hint
-                [ "leading-none" ]
-                (ref key)
-                Auto
-                (markdownHintWithTitle key explanation)
-            ]
+            hint
+              [ "leading-none" ]
+              (templateFieldRef refPrefix fieldName)
+              Auto
+              (markdownHintWithTitle fieldName explanation)
+
         )
-        $ lookupDefinition key
+        $ lookupDefinition fieldName
+
+    templateParameter (fieldName /\ fieldValue) =
+      div
+        [ classNames [ "m-2", "ml-6", "flex", "flex-wrap" ] ]
+        [ div_
+            [ strong_ [ text fieldName ]
+            , text ":"
+            ]
+        , parameterHint fieldName
+        , componentGen fieldName fieldValue
+        ]
+    orderedContent = orderContentUsingMetadata content orderedMetadataSet
   in
-    [ li_
-        if Map.isEmpty content then
-          []
-        else
-          ([ h6_ [ em_ [ text title ] ] ])
-            <>
-              ( map
-                  ( \(key /\ value) ->
-                      ( ( div [ class_ (ClassName "template-fields") ]
-                            ( [ div_
-                                  [ text (prefix <> " ")
-                                  , strong_ [ text key ]
-                                  , text ":"
-                                  ]
-                              ]
-                                <> parameterHint key
-                                <>
-                                  [ case lookupFormat key of
-                                      Just (currencyLabel /\ numDecimals) ->
-                                        marloweCurrencyInput (ref key)
-                                          [ "mx-2"
-                                          , "flex-grow"
-                                          , "flex-shrink-0"
-                                          ]
-                                          (actionGen typeName key)
-                                          currencyLabel
-                                          numDecimals
-                                          value
-                                      Nothing -> marloweActionInput (ref key)
-                                        [ "mx-2", "flex-grow", "flex-shrink-0" ]
-                                        (actionGen typeName key)
-                                        value
-                                  ]
-                            )
-                        )
-                      )
-                  )
-                  (OMap.toUnfoldable orderedContent)
-              )
-    ]
-  where
-  orderedContent = orderContentUsingMetadata content orderedMetadataSet
+    if Map.isEmpty content then
+      []
+    else
+      join
+        [ [ templateFieldTitle ]
+        , OMap.toUnfoldable orderedContent <#> templateParameter
+        ]
 
 ------------------------------------------------------------
 simulationStateWidget :: forall p. State -> HTML p Action
 simulationStateWidget state =
   let
+    tzOffset = state.tzOffset
+    offsetStr = humanizeOffset tzOffset
     currentTime = state ^.
       ( _currentMarloweState <<< _executionState <<< _SimulationRunning
           <<< _time
-          <<< to unInstant
-          <<< to unwrap
-          <<< to \ms -> show ms <> " POSIX ms"
+          <<< to POSIXTime
+          -- TODO SCP-3833 Add type safety to timezone conversions
+          <<< to (formatPOSIXTime tzOffset)
+          <<< to \(dateStr /\ timeStr) ->
+            intercalate " " [ dateStr, timeStr, offsetStr ]
       )
 
     expirationTime = contractMaxTime (previewOn state _currentContract)
 
     contractMaxTime = case _ of
       Nothing -> "Closed"
+      Just (Holes.Term Holes.Close _) -> "Closed"
       Just contract ->
         let
-          POSIXTime t = (_.maxTime <<< unwrap <<< timeouts) contract
+          posixTime = (_.maxTime <<< unwrap <<< timeouts) contract
+          -- TODO SCP-3833 Add type safety to timezone conversions
+          dateStr /\ timeStr = formatPOSIXTime tzOffset posixTime
         in
-          if t == unixEpoch then "Closed"
-          else
-            show (unwrap $ unInstant t) <> " POSIX ms"
+          intercalate " " [ dateStr, timeStr, offsetStr ]
 
     indicator name value =
-      div_
+      div [ classNames [ "flex", "flex-col" ] ]
         [ span
             [ class_ bold ]
             [ text $ name <> ": " ]
@@ -602,8 +668,6 @@ participant metadata state party actionInputs =
         <> (map (inputItem metadata state) actionInputs)
     )
   where
-  emptyDiv = div_ []
-
   partyHint = case party of
     Role roleName ->
       maybe emptyDiv
@@ -636,6 +700,14 @@ participant metadata state party actionInputs =
     (PK name) -> name
     (Role name) -> name
 
+choiceRef :: String -> ChoiceId -> String
+choiceRef prefix (ChoiceId choiceName choiceOwner) = intercalate "-"
+  [ prefix, choiceName, choiceOwnerStr ]
+  where
+  choiceOwnerStr = case choiceOwner of
+    PK pk -> pk
+    Role name -> name
+
 inputItem
   :: forall m
    . MonadAff m
@@ -661,7 +733,7 @@ inputItem
   _
   (ChoiceInput choiceId@(ChoiceId choiceName choiceOwner) bounds chosenNum) =
   let
-    ref = "choice-hint-" <> choiceName
+    ref = choiceRef "choice-hint" choiceId
 
     choiceHint =
       maybe (div_ [])
@@ -711,23 +783,21 @@ inputItem
   mExtractDescription _ = Nothing
 
   addButton =
-    if inBounds chosenNum bounds then
-      [ button
-          [ classes
-              [ btn
-              , plusBtn
-              , smallBtn
-              , ClassName "align-top"
-              , ClassName "flex-noshrink"
-              ]
-          , onClick $ const $ AddInput
-              (IChoice (ChoiceId choiceName choiceOwner) chosenNum)
-              bounds
-          ]
-          [ text "+" ]
-      ]
-    else
-      []
+    [ button
+        [ classes
+            [ btn
+            , plusBtn
+            , smallBtn
+            , ClassName "align-top"
+            , ClassName "flex-noshrink"
+            ]
+        , onClick $ const $ AddInput
+            (IChoice (ChoiceId choiceName choiceOwner) chosenNum)
+            bounds
+        , enabled $ inBounds chosenNum bounds
+        ]
+        [ text "+" ]
+    ]
 
   error = if inBounds chosenNum bounds then [] else [ text boundsError ]
 
@@ -758,11 +828,12 @@ inputItem _ state (MoveToTime time) =
     [ classes [ aHorizontal, ClassName "flex-nowrap" ] ]
     ( [ div [ classes [ ClassName "action" ] ]
           [ p [ class_ (ClassName "time-input") ]
-              [ spanTextBreakWord "Move to POSIXTime "
+              [ spanTextBreakWord "Move current time to"
               , marloweInstantInput "move-to-instant"
-                  [ "mx-2", "flex-grow", "flex-shrink-0" ]
+                  [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
                   SetTime
                   time
+                  state.tzOffset
               ]
           , p [ class_ (ClassName "choice-error") ] error
           ]
@@ -813,17 +884,35 @@ marloweCurrencyInput ref classList f currencyLabel numDecimals value =
     { classList, value, prefix: currencyLabel, numDecimals }
     f
 
+-- This component builds on top of the DateTimeLocal component to work
+-- with Instant and to do the UTC convertion. Value in and out are expressed
+-- in UTC.
 marloweInstantInput
   :: forall m action
    . String
   -> Array String
   -> (Instant -> action)
   -> Instant
+  -> Minutes
   -> ComponentHTML action ChildSlots m
-marloweInstantInput ref classes f current =
-  marloweActionInput ref classes
-    (f <<< maybe current unwrap <<< POSIXTime.fromBigInt)
-    (POSIXTime.toBigInt $ POSIXTime current)
+marloweInstantInput ref classList f current tzOffset =
+  div [ classNames classList ]
+    [ slot
+        _dateTimeInputSlot
+        ref
+        DateTimeLocalInput.component
+        { classList: [ "flex-grow" ]
+        -- TODO: SCP-3833 Add type safety to timezone conversions
+        , value: utcToLocal tzOffset $
+            Instant.toDateTime current
+        , trimSeconds: true
+        }
+        ( \(ValueChanged dt) -> f $ Instant.fromDateTime $ localToUtc
+            tzOffset
+            dt
+        )
+    , text $ humanizeOffset tzOffset
+    ]
 
 marloweActionInput
   :: forall m action
@@ -858,47 +947,107 @@ renderDeposit metadata accountOwner party tok money =
 
 ------------------------------------------------------------
 logWidget
-  :: forall p
-   . MetaData
+  :: forall m
+   . MonadAff m
+  => MetaData
   -> State
-  -> HTML p Action
+  -> ComponentHTML Action ChildSlots m
 logWidget metadata state =
   cardWidget "Transaction log"
     $ div [ classes [ grid, gridColsDescriptionLocation, fullWidth ] ]
-        ( [ div [ class_ fontBold ] [ text "Action" ]
-          , div [ class_ fontBold ] [ text "POSIX time" ]
+        ( [ div [ class_ fontBold ] [ text "Event" ]
+          , div [ class_ fontBold ] [ text "Time" ]
           ]
             <> inputLines
         )
   where
-  inputLines = state ^.
+  logEntries = state ^.
     ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning
         <<< _log
-        <<< to (concatMap (logToLines metadata) <<< reverse)
+        <<< to reverse
     )
+  inputLines = join $ logToLines state.tzOffset metadata `mapWithIndex`
+    logEntries
 
-logToLines :: forall p a. MetaData -> LogEntry -> Array (HTML p a)
-logToLines _ (StartEvent time) =
+logTime
+  :: forall m a
+   . MonadAff m
+  => Int /\ Int
+  -> Minutes
+  -> TimeInterval
+  -> ComponentHTML a ChildSlots m
+logTime (step /\ subStep) tzOffset time@(TimeInterval start _) = span
+  [ class_ justifyEnd, id ref ]
+  [ text startTime
+  , tooltip fullTime (RefId ref) Auto
+  ]
+  where
+  ref = intercalate "-" [ "log", "time", show step, show subStep ]
+  _ /\ startTime = formatPOSIXTime tzOffset start
+  fullTime = intercalate " "
+    [ "Event executed"
+    , humanizeInterval tzOffset time
+    , humanizeOffset tzOffset
+    ]
+
+logToLines
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
+  -> Int
+  -> LogEntry
+  -> Array (ComponentHTML a ChildSlots m)
+logToLines tzOffset _ stepNumber (StartEvent time) =
   [ span_ [ text "Contract started" ]
-  , span [ class_ justifyEnd ] [ text $ show time ]
+  , logTime (stepNumber /\ 0) tzOffset interval
   ]
-
-logToLines metadata (InputEvent (TransactionInput { interval, inputs })) =
-  inputToLine metadata interval =<< Array.fromFoldable inputs
-
-logToLines metadata (OutputEvent interval payment) = paymentToLines metadata
-  interval
-  payment
-
-logToLines _ (CloseEvent (TimeInterval start end)) =
-  [ span_ [ text $ "Contract ended" ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
-  ]
-
-inputToLine :: forall p a. MetaData -> TimeInterval -> Input -> Array (HTML p a)
-inputToLine
+  where
+  interval = TimeInterval time' time'
+  time' = POSIXTime time
+logToLines
+  tzOffset
   metadata
-  (TimeInterval start end)
+  stepNumber
+  (InputEvent (TransactionInput { interval, inputs })) =
+  join $
+    mapWithIndex
+      ( \subStep input -> inputToLine
+          tzOffset
+          metadata
+          interval
+          (stepNumber /\ subStep)
+          input
+      )
+      (Array.fromFoldable inputs)
+
+logToLines tzOffset metadata stepNumber (OutputEvent interval payment) =
+  paymentToLines
+    tzOffset
+    metadata
+    interval
+    stepNumber
+    payment
+
+logToLines tzOffset _ stepNumber (CloseEvent timeInterval) =
+  [ span_ [ text $ "Contract ended" ]
+  , logTime (stepNumber /\ 0) tzOffset timeInterval
+  ]
+
+inputToLine
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
+  -> TimeInterval
+  -> (Int /\ Int)
+  -> Input
+  -> Array (ComponentHTML a ChildSlots m)
+inputToLine
+  tzOffset
+  metadata
+  timeInterval
+  stepNumber
   (IDeposit accountOwner party token money) =
   [ span_
       [ text "Deposit "
@@ -910,12 +1059,14 @@ inputToLine
       , text " as "
       , strong_ [ renderPrettyParty metadata party ]
       ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
 
 inputToLine
+  tzOffset
   metadata
-  (TimeInterval start end)
+  timeInterval
+  stepNumber
   (IChoice (ChoiceId choiceName choiceOwner) chosenNum) =
   [ span_
       [ text "Participant "
@@ -928,29 +1079,75 @@ inputToLine
       , text " for choice with id "
       , strong_ [ text (show choiceName) ]
       ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
 
-inputToLine _ (TimeInterval start end) INotify =
+inputToLine tzOffset _ timeInterval stepNumber INotify =
   [ text "Notify"
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
 
 paymentToLines
-  :: forall p a. MetaData -> TimeInterval -> Payment -> Array (HTML p a)
-paymentToLines metadata timeInterval (Payment accountId payee money) = join $
-  unfoldAssets money (paymentToLine metadata timeInterval accountId payee)
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
+  -> TimeInterval
+  -> Int
+  -> Payment
+  -> Array (ComponentHTML a ChildSlots m)
+paymentToLines
+  tzOffset
+  metadata
+  timeInterval
+  stepNumber
+  (Payment accountId payee money) =
+  let
+    Assets money' = money
+
+    assets :: Array (CurrencySymbol /\ TokenName /\ BigInt)
+    assets = do
+      currencySymbol /\ asset <- Map.toUnfoldable money'
+      tokenName /\ value <- Map.toUnfoldable asset
+      pure $ currencySymbol /\ tokenName /\ value
+
+  in
+    join $
+      mapWithIndex
+        ( \subStep (currencySymbol /\ tokenName /\ value) ->
+            paymentToLine
+              tzOffset
+              metadata
+              timeInterval
+              accountId
+              payee
+              (stepNumber /\ subStep)
+              (Token currencySymbol tokenName)
+              value
+        )
+        assets
 
 paymentToLine
-  :: forall p a
-   . MetaData
+  :: forall m a
+   . MonadAff m
+  => Minutes
+  -> MetaData
   -> TimeInterval
   -> AccountId
   -> Payee
+  -> Int /\ Int
   -> Token
   -> BigInt
-  -> Array (HTML p a)
-paymentToLine metadata (TimeInterval start end) accountId payee token money =
+  -> Array (ComponentHTML a ChildSlots m)
+paymentToLine
+  tzOffset
+  metadata
+  timeInterval
+  accountId
+  payee
+  stepNumber
+  token
+  money =
   [ span_
       [ text "The contract pays "
       , strong_ [ text (showPrettyMoney money) ]
@@ -961,15 +1158,8 @@ paymentToLine metadata (TimeInterval start end) accountId payee token money =
       , text " from "
       , strong_ $ renderPrettyPayee metadata (Account accountId)
       ]
-  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
+  , logTime stepNumber tzOffset timeInterval
   ]
-
-showTimeRange :: POSIXTime -> POSIXTime -> String
-showTimeRange start end =
-  if start == end then
-    show start
-  else
-    (show start) <> " - " <> (show end)
 
 unfoldAssets :: forall a. Assets -> (Token -> BigInt -> a) -> Array a
 unfoldAssets (Assets mon) f =

@@ -29,9 +29,11 @@ import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSl
                     lovelaceToValue)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Data.Maybe (fromMaybe)
+import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseOutputQuery, parseSlotNo,
                                            parseTokenName)
-import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, selectUtxos)
+import Language.Marlowe.CLI.Sync (watchMarlowe)
+import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, querySlotting, selectUtxos)
 import Language.Marlowe.CLI.Types (CliError, OutputQuery)
 import Plutus.V1.Ledger.Api (TokenName)
 
@@ -84,6 +86,34 @@ data UtilCommand =
     , query      :: OutputQuery      -- ^ Filter the query results.
     , address    :: AddressAny       -- ^ The addresses.
     }
+    -- | Decode Bech32.
+  | DecodeBech32
+    {
+      content :: String  -- ^ The Bech32 encoded data.
+    }
+    -- | Encode Bech32.
+  | EncodeBech32
+    {
+      prefix  :: String  -- ^ The Bech32 prefix.
+    , content :: String  -- ^ The base16-encoded bytes to be encoded in Bech32.
+    }
+    -- | Extract slot configuation.
+  | Slotting
+    {
+      network      :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath   :: FilePath         -- ^ The path to the node socket.
+    , slottingFile :: Maybe FilePath   -- ^ The output file for the slot configuration.
+    }
+    -- | Watch Marlowe transactions.
+  | Watch
+    {
+      network     :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath  :: FilePath         -- ^ The path to the node socket.
+    , cbor        :: Bool             -- ^ Whether to output CBOR instead of JSON.
+    , continue    :: Bool             -- ^ Whether to continue watching when the tip of the chain is reached.
+    , restartFile :: Maybe FilePath   -- ^ File for restoring and saving current point on the chain.
+    , outputFile  :: Maybe FilePath   -- ^ File for recording Marlowe transactions.
+    }
 
 
 -- | Run a miscellaneous command.
@@ -104,39 +134,53 @@ runUtilCommand command =
         }
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
     case command of
-      Clean{..}  -> buildClean
-                      connection
-                      signingKeyFiles
-                      lovelace
-                      change
-                      Nothing
-                      TxMintNone
-                      TxMetadataNone
-                      bodyFile
-                      submitTimeout
-                      >>= printTxId
-      Mint{..}   -> buildMinting
-                      connection
-                      signingKeyFile
-                      tokenNames
-                      metadataFile
-                      count
-                      expires
-                      lovelace
-                      change
-                      bodyFile
-                      submitTimeout
-      Faucet{..} -> buildFaucet'
-                      connection
-                      (lovelaceToValue lovelace)
-                      addresses
-                      bodyFile
-                      submitTimeout
-                      >>= printTxId
-      Output{..} -> selectUtxos
-                      connection
-                      address
-                      query
+      Clean{..}        -> buildClean
+                            connection
+                            signingKeyFiles
+                            lovelace
+                            change
+                            Nothing
+                            TxMintNone
+                            TxMetadataNone
+                            bodyFile
+                            submitTimeout
+                            >>= printTxId
+      Mint{..}         -> buildMinting
+                            connection
+                            signingKeyFile
+                            tokenNames
+                            metadataFile
+                            count
+                            expires
+                            lovelace
+                            change
+                            bodyFile
+                            submitTimeout
+      Faucet{..}       -> buildFaucet'
+                            connection
+                            (lovelaceToValue lovelace)
+                            addresses
+                            bodyFile
+                            submitTimeout
+                            >>= printTxId
+      Output{..}       -> selectUtxos
+                            connection
+                            address
+                            query
+      DecodeBech32{..} -> decodeBech32
+                            content
+      EncodeBech32{..} -> encodeBech32
+                            prefix
+                            content
+      Slotting{..}     -> querySlotting
+                            connection
+                            slottingFile
+      Watch{..}        -> watchMarlowe
+                            connection
+                            cbor
+                            continue
+                            restartFile
+                            outputFile
 
 
 -- | Parser for miscellaneous commands.
@@ -145,9 +189,13 @@ parseUtilCommand =
   O.hsubparser
     $ O.commandGroup "Miscellaneous low-level commands:"
     <> cleanCommand
+    <> decodeBechCommand
+    <> encodeBechCommand
     <> faucetCommand
     <> mintCommand
     <> selectCommand
+    <> slottingCommand
+    <> watchCommand
 
 
 -- | Parser for the "clean" command.
@@ -232,3 +280,71 @@ selectOptions =
     <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file." )
     <*> parseOutputQuery
     <*> O.argument parseAddressAny             (                          O.metavar "ADDRESS"     <> O.help "The address."                              )
+
+
+-- | Parser for the "decode-bech32" command.
+decodeBechCommand :: O.Mod O.CommandFields UtilCommand
+decodeBechCommand =
+  O.command "decode-bech32"
+    $ O.info decodeBechOptions
+    $ O.progDesc "DecodBech32 data."
+
+
+-- | Parser for the "decode-bech32" options.
+decodeBechOptions :: O.Parser UtilCommand
+decodeBechOptions =
+  DecodeBech32
+    <$> O.strArgument (O.metavar "BECH32" <> O.help "The Bech32 text.")
+
+
+-- | Parser for the "encode-bech32" command.
+encodeBechCommand :: O.Mod O.CommandFields UtilCommand
+encodeBechCommand =
+  O.command "encode-bech32"
+    $ O.info encodeBechOptions
+    $ O.progDesc "EncodBech32 data."
+
+
+-- | Parser for the "encode-bech32" options.
+encodeBechOptions :: O.Parser UtilCommand
+encodeBechOptions =
+  EncodeBech32
+    <$> O.strArgument (O.metavar "PREFIX" <> O.help "The Bech32 human-readable prefix.")
+    <*> O.strArgument (O.metavar "BASE16" <> O.help "The base 16 data to be encoded."  )
+
+
+-- | Parser for the "slotting" command.
+slottingCommand :: O.Mod O.CommandFields UtilCommand
+slottingCommand =
+  O.command "slotting"
+    $ O.info slottingOptions
+    $ O.progDesc "Find the slot-to-time relationship for the current epoch."
+
+
+-- | Parser for the "slotting" options.
+slottingOptions :: O.Parser UtilCommand
+slottingOptions =
+  Slotting
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."      )
+    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file.")
+    <*> (O.optional .O.strOption             ) (O.long "out-file"      <> O.metavar "FILE"        <> O.help "Output file for slot configuration."      )
+
+
+-- | Parser for the "watch" command.
+watchCommand :: O.Mod O.CommandFields UtilCommand
+watchCommand =
+  O.command "watch"
+    $ O.info watchOptions
+    $ O.progDesc "Watch Marlowe transactions on a Cardano node."
+
+
+-- | Parser for the "watch" options.
+watchOptions :: O.Parser UtilCommand
+watchOptions =
+  Watch
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."                              )
+    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file."                        )
+    <*> O.switch                               (O.long "cbor"                                     <> O.help "Whether to output CBOR instead of JSON."                          )
+    <*> O.switch                               (O.long "continue"                                 <> O.help "Whether to continue when the current tip of the chain is reached.")
+    <*> (O.optional . O.strOption)             (O.long "restart"       <> O.metavar "POINT_FILE"  <> O.help "File for restoring and saving current point on the chain."        )
+    <*> (O.optional . O.strOption)             (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "File in which to store JSON records of Marlowe transactions."     )

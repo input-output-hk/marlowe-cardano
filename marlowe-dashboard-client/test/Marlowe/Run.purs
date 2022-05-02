@@ -7,7 +7,6 @@ import Ansi.Output (bold, foreground, withGraphics)
 import AppM (runAppM)
 import Concurrent.Queue (Queue)
 import Concurrent.Queue as Queue
-import Control.Apply (lift2)
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger (Logger(..))
@@ -51,7 +50,6 @@ import Data.LocalContractNicknames
   ( LocalContractNicknames
   , emptyLocalContractNicknames
   )
-import Data.Map (Map)
 import Data.Map as Map
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Newtype (over)
@@ -106,6 +104,11 @@ import Test.Spec (Spec, before, it)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
 import WebSocket.Support (FromSocket)
+
+-- Layers of infrastructure involved here:
+-- marloweRunTest (handles marlowe-specific test actions)
+--  -> runUITest (mounts a Halogen component using JSDOM, and runs halogen-specific test actions)
+--    -> runTestM + runUserM (perform testing-library and user-event testing actions agains an instance of JSDOM)
 
 marloweRunTest
   :: String
@@ -342,8 +345,10 @@ marshallErrors errors m = catchError m \e -> do
 
 mkTestEnv :: Aff (Env /\ Coenv /\ SubscribeIO Error)
 mkTestEnv = do
+  pabAvar <- liftAff $ AVar.new unit
   contractStepCarouselSubscription <- liftAff AVar.empty
   endpointAVarMap <- AVarMap.empty
+  redeemAvarMap <- AVarMap.empty
   followerAVarMap <- AVarMap.empty
   createBus <- liftEffect EventBus.create
   applyInputBus <- liftEffect EventBus.create
@@ -380,6 +385,9 @@ mkTestEnv = do
       , followerBus
       , sinks
       , sources
+      , marloweAppTimeoutBlocks: 1
+      , pabAvar
+      , redeemAvarMap
       }
     coenv =
       { pabWebsocketIn: pabWebsocketIn.listener
@@ -452,13 +460,12 @@ fundWallet walletName currencySymbol tokenName amount notify = do
   wallet <- getWallet walletName
   walletFunds <- asks _.walletFunds
   let
-    alter
-      :: forall k v. Ord k => k -> (Maybe v -> Maybe v) -> Map k v -> Map k v
-    alter = flip Map.alter
-    addAsset = alter currencySymbol $ Just <<< case _ of
-      Nothing -> Map.singleton tokenName amount
-      Just tokens -> alter tokenName (lift2 add (pure amount)) tokens
-    assets = over Assets addAsset wallet.assets
+    assets = over Assets
+      ( Map.unionWith (Map.unionWith add)
+          $ Map.singleton currencySymbol
+          $ Map.singleton tokenName amount
+      )
+      wallet.assets
     newWallet = wallet { assets = assets }
   setWallet walletName newWallet
   when notify do

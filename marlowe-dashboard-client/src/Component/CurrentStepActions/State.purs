@@ -4,7 +4,7 @@ module Component.CurrentStepActions.State
 
 import Prologue
 
-import Component.CurrentStepActions.Types (Action(..), DSL, Input, Msg(..))
+import Component.CurrentStepActions.Types (Action(..), DSL, Input', Msg(..))
 import Component.CurrentStepActions.View (currentStepActions)
 import Data.Map as Map
 import Data.Maybe (maybe)
@@ -12,12 +12,17 @@ import Effect.Aff.Class (class MonadAff)
 import Halogen (raise)
 import Halogen as H
 import Halogen.Component.Reactive as HR
+import Halogen.Store.Connect (connect)
+import Halogen.Store.Monad (class MonadStore)
+import Halogen.Store.Select (selectEq)
+import Store as Store
 
 component
   :: forall query m
    . MonadAff m
-  => H.Component query Input Msg m
-component =
+  => MonadStore Store.Action Store.Store m
+  => H.Component query Input' Msg m
+component = connect (selectEq _.roleTokens) $
   HR.mkReactiveComponent
     { deriveState: const unit
     , initialTransient: { choiceValues: Map.empty }

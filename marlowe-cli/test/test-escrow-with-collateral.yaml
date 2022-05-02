@@ -412,6 +412,21 @@ ptPabOperations:
 - tag: Comment
   poComment: Stop the Marlowe application.
 
+- tag: ReturnFunds
+  poOwner: Buyer
+  poInstances:
+  - BuyerApp
+
+- tag: ReturnFunds
+  poOwner: Seller
+  poInstances:
+  - SellerApp
+
+- tag: ReturnFunds
+  poOwner: Mediator
+  poInstances:
+  - MediatorApp
+
 - tag: Stop
   poInstance: BuyerApp
 

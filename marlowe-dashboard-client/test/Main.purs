@@ -23,10 +23,12 @@ import Test.Data.Address.Bech32.HRP as Bech32HRP
 import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
+import Test.Humanize (humanizeSpec)
 import Test.Marlowe.Execution as Execution
 import Test.Marlowe.Run.Action.Scenarios.Contract (contractScenarios)
 import Test.Marlowe.Run.Action.Scenarios.Wallet
   ( createAndRestoreWallet
+  , enterDashboardMarloweAppHung
   , multipleCompanionUpdates
   )
 import Test.Spec (Spec, describe, it, parallel)
@@ -56,12 +58,22 @@ main = launchAff_ $ runSpec'
     testingLibrarySpec
     halogenTestingLibrarySpec
     testScripts
+    webCommon
+
+-- TODO: We currently don't have the web-commons as an indepented spago package, so the actual
+--       specs are being referenced here. Eventually, we should create the package so we can publish
+--       the interesting parts to pursuit, but for now the web-common tests are run as part of
+--       the Marlowe Run tests.
+webCommon :: Spec Unit
+webCommon = do
+  humanizeSpec
 
 testScripts :: Spec Unit
 testScripts = describe "Scripted scenarios" do
   createAndRestoreWallet
   multipleCompanionUpdates
   contractScenarios
+  enterDashboardMarloweAppHung
 
 -------------------------------------------------------------------------------
 -- Demo tests for purescript-testing-library

@@ -23,6 +23,33 @@ let
 
     socat -u OPEN:/dev/null "UNIX-CONNECT:''${sock_path}"
   '';
+
+  run-entrypoints = network: {
+    marlowe-run-entrypoint = pkgs.callPackage ./pab.nix {
+      pabExe = "${marlowe-pab}/bin/marlowe-pab";
+      staticPkg = marlowe-dashboard.client;
+      inherit wait-for-socket network;
+    };
+
+    marlowe-run-server-entrypoint = pkgs.callPackage ./marlowe-run-server.nix {
+      marlowe-dashboard-server = marlowe-dashboard-server;
+      inherit network;
+    };
+
+    node = pkgs.callPackage ./node {
+      inherit cardano-node network;
+    };
+
+    wbe = pkgs.callPackage ./wbe.nix { inherit cardano-wallet wait-for-socket network; };
+
+    chain-index = pkgs.callPackage ./chain-index.nix { inherit plutus-chain-index wait-for-socket network; };
+  };
+
+  runs = builtins.listToAttrs (map
+    (name: {
+      inherit name;
+      value = run-entrypoints pkgs.networks.${name};
+    }) [ "testnet-dev" "testnet-pioneers" ]);
 in
 {
   web-ghc-server-entrypoint = pkgs.callPackage (sources.plutus-apps + "/bitte/web-ghc-server.nix") {
@@ -37,22 +64,4 @@ in
     client = marlowe-playground.client;
     variant = "marlowe";
   };
-
-  marlowe-run-entrypoint = pkgs.callPackage ./pab.nix {
-    pabExe = "${marlowe-pab}/bin/marlowe-pab";
-    staticPkg = marlowe-dashboard.client;
-    inherit wait-for-socket;
-  };
-
-  marlowe-run-server-entrypoint = pkgs.callPackage ./marlowe-run-server.nix {
-    marlowe-dashboard-server = marlowe-dashboard-server;
-  };
-
-  node = pkgs.callPackage ./node {
-    inherit cardano-node;
-  };
-
-  wbe = pkgs.callPackage ./wbe.nix { inherit cardano-wallet wait-for-socket; };
-
-  chain-index = pkgs.callPackage ./chain-index.nix { inherit plutus-chain-index wait-for-socket; };
-}
+} // runs.testnet-dev // runs

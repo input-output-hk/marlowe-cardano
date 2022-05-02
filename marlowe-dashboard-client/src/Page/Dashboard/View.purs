@@ -1,4 +1,4 @@
-module Page.Dashboard.View (render) where
+module Page.Dashboard.View (render, appTemplate, appTemplateHeader) where
 
 import Prologue hiding (Either(..), div)
 
@@ -12,7 +12,6 @@ import Component.ConfirmContractActionDialog.Types
   ( Msg(..)
   , _confirmActionDialog
   )
-import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.State as Contacts
 import Component.Contacts.Types (_contacts)
 import Component.ContractPreview.View
@@ -33,11 +32,13 @@ import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
 import Data.Array as Array
-import Data.ContractNickname as ContractNickname
+import Data.Compactable (compact)
+import Data.ContractNickname as CN
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Int (round)
-import Data.Lens (view, (^.))
+import Data.Lens (folded, toArrayOf, view, (^.))
+import Data.Map as Map
 import Data.Maybe (isJust)
 import Data.NewContract (getContractNickname)
 import Data.PABConnectedWallet
@@ -52,6 +53,7 @@ import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
 import Halogen.Css (applyWhen, classNames)
@@ -86,8 +88,7 @@ import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
-import Marlowe.Execution.State (contractName) as Execution
-import Marlowe.Semantics (PubKey)
+import Marlowe.Semantics (PubKey, adaToken, getAda)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
@@ -114,13 +115,12 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (getContract, getNewContract)
 
 type ComponentHTML m = HH.ComponentHTML Action ChildSlots m
 
 render
   :: forall m
-   . MonadAff m
+   . MonadUnliftAff m
   => MonadKill Error Fiber m
   => MonadAsk Env m
   => MonadTime m
@@ -136,6 +136,22 @@ render state = HH.div [ classNames [ "h-full" ] ]
   , dashboardCard state
   ]
 
+appTemplate :: forall w i. Boolean -> HH.HTML w i -> HH.HTML w i -> HH.HTML w i
+appTemplate cardOpen header body =
+  div
+    [ classNames
+        $
+          [ "h-full"
+          , "grid"
+          , "grid-rows-auto-1fr-auto"
+          , "transition-all"
+          , "duration-500"
+          , "overflow-x-hidden"
+          ]
+            <> applyWhen cardOpen [ "lg:mr-sidebar" ]
+    ]
+    [ header, body, dashboardFooter ]
+
 dashboardScreen
   :: forall m
    . MonadAff m
@@ -145,12 +161,12 @@ dashboardScreen
   => ManageMarlowe m
   => Toast m
   => MonadStore Store.Action Store.Store m
+  => MonadClipboard m
   => State
   -> ComponentHTML m
 dashboardScreen state =
   let
     currentTime = state ^. _currentTime
-    contracts = state ^. _contracts
     wallet = state ^. _wallet
     walletNickname = wallet ^. _walletNickname
     menuOpen = state ^. _menuOpen
@@ -158,27 +174,20 @@ dashboardScreen state =
     mSelectedContractIndex = state ^. _selectedContractIndex
     mSelectedContractStringId = do
       contractIndex <- mSelectedContractIndex
-      case contractIndex of
-        Starting reqId -> ContractNickname.toString <<< getContractNickname <$>
-          getNewContract reqId contracts
-        Started marloweParams -> Execution.contractName <$> getContract
-          marloweParams
-          contracts
+      CN.toString <$> case contractIndex of
+        Starting reqId -> do
+          let
+            newContracts = state ^. _newContracts
+            mContract = Map.lookup reqId newContracts
+          getContractNickname <$> mContract
+        Started marloweParams -> do
+          let
+            contracts = state ^. _contracts
+            mContract = Map.lookup marloweParams contracts
+          _.nickname =<< mContract
   in
-    div
-      [ classNames
-          $
-            [ "h-full"
-            , "grid"
-            , "grid-rows-auto-1fr-auto"
-            , "transition-all"
-            , "duration-500"
-            , "overflow-x-hidden"
-            ]
-              <> applyWhen cardOpen [ "lg:mr-sidebar" ]
-      ]
-      [ dashboardHeader (WN.toString walletNickname) menuOpen
-      , div
+    appTemplate cardOpen (dashboardHeader (WN.toString walletNickname) menuOpen)
+      $ div
           [ classNames [ "relative" ] ] -- this wrapper is relative because the mobile menu is absolutely positioned inside it
           [ mobileMenu menuOpen
           , div [ classNames [ "h-full", "grid", "grid-rows-auto-1fr" ] ]
@@ -191,7 +200,7 @@ dashboardScreen state =
                           _contractPage
                           unit
                           ContractPage.component
-                          { wallet, contractIndex }
+                          { contractIndex }
                           ( \(AskConfirmation namedAction num) ->
                               case contractIndex of
                                 -- This should never happen (famous last words)
@@ -207,12 +216,11 @@ dashboardScreen state =
                     _ -> [ contractsScreen currentTime state ]
               ]
           ]
-      , dashboardFooter
-      ]
 
 dashboardCard
   :: forall m
-   . MonadAff m
+   . MonadClipboard m
+  => MonadUnliftAff m
   => MonadKill Error Fiber m
   => MonadAsk Env m
   => MonadTime m
@@ -265,13 +273,9 @@ dashboardCard state = case view _card state of
   Nothing -> div_ []
 
 ------------------------------------------------------------
-dashboardHeader
-  :: forall m
-   . MonadAff m
-  => PubKey
-  -> Boolean
-  -> ComponentHTML m
-dashboardHeader walletNickname menuOpen =
+appTemplateHeader
+  :: forall w i. Maybe i -> Boolean -> Array (HH.HTML w i) -> HH.HTML w i
+appTemplateHeader onLogoClick menuOpen navItems =
   header
     [ classNames
         $ [ "relative", "border-gray", "transition-colors", "duration-200" ]
@@ -298,7 +302,7 @@ dashboardHeader walletNickname menuOpen =
             ]
         ]
         [ a
-            [ onClick_ $ SelectContract Nothing ]
+            (compact [ onClick_ <$> onLogoClick ])
             [ img
                 [ classNames [ "w-16", "md:hidden" ]
                 , src
@@ -311,66 +315,74 @@ dashboardHeader walletNickname menuOpen =
                 , src marloweRunNavLogo
                 ]
             ]
-        , nav
-            [ classNames [ "flex", "items-center" ] ]
-            [ navigation
-                (OpenCard ContactsCard)
-                Icon.Contacts
-                "contactsHeader"
-                "Contacts"
-            , navigation
-                (OpenCard TutorialsCard)
-                Icon.Tutorials
-                "tutorialsHeader"
-                "Tutorials"
-            , a
-                [ classNames [ "ml-6", "font-bold", "text-sm" ]
-                , id "currentWalletHeader"
-                , onClick_ $ OpenCard CurrentWalletCard
-                , href "#"
-                , ARIA.label "My wallet"
+        , nav [ classNames [ "flex", "items-center" ] ] navItems
+        ]
+    ]
+
+dashboardHeader
+  :: forall m
+   . MonadAff m
+  => PubKey
+  -> Boolean
+  -> ComponentHTML m
+dashboardHeader walletNickname menuOpen =
+  appTemplateHeader (Just $ SelectContract Nothing) menuOpen
+    [ navigation
+        (OpenCard ContactsCard)
+        Icon.Contacts
+        "contactsHeader"
+        "Contacts"
+    , navigation
+        (OpenCard TutorialsCard)
+        Icon.Tutorials
+        "tutorialsHeader"
+        "Tutorials"
+    , a
+        [ classNames [ "ml-6", "font-bold", "text-sm" ]
+        , id "currentWalletHeader"
+        , onClick_ $ OpenCard CurrentWalletCard
+        , href "#"
+        , ARIA.label "My wallet"
+        ]
+        [ span
+            [ classNames $
+                [ "flex"
+                , "items-baseline"
+                , "gap-2"
+                , "bg-white"
+                , "rounded-lg"
+                , "p-4"
+                , "leading-none"
                 ]
-                [ span
-                    [ classNames $
-                        [ "flex"
-                        , "items-baseline"
-                        , "gap-2"
-                        , "bg-white"
-                        , "rounded-lg"
-                        , "p-4"
-                        , "leading-none"
-                        ]
-                    ]
-                    [ span
-                        [ classNames $
-                            [ "-m-1"
-                            , "rounded-full"
-                            , "text-white"
-                            , "w-5"
-                            , "h-5"
-                            , "flex"
-                            , "justify-center"
-                            , "items-center"
-                            , "uppercase"
-                            , "font-semibold"
-                            ] <> Css.bgBlueGradient
-                        ]
-                        [ text $ take 1 walletNickname ]
-                    , span
-                        [ classNames
-                            [ "hidden", "md:inline", "truncate", "max-w-16" ]
-                        ]
-                        [ text walletNickname ]
-                    ]
+            ]
+            [ span
+                [ classNames $
+                    [ "-m-1"
+                    , "rounded-full"
+                    , "text-white"
+                    , "w-5"
+                    , "h-5"
+                    , "flex"
+                    , "justify-center"
+                    , "items-center"
+                    , "uppercase"
+                    , "font-semibold"
+                    ] <> Css.bgBlueGradient
                 ]
-            , tooltip "My wallet" (RefId "currentWalletHeader") Bottom
-            , a
-                [ classNames [ "ml-4", "md:hidden" ]
-                , onClick_ ToggleMenu
+                [ text $ take 1 walletNickname ]
+            , span
+                [ classNames
+                    [ "hidden", "md:inline", "truncate", "max-w-16" ]
                 ]
-                [ if menuOpen then icon_ Icon.Close else icon_ Icon.Menu ]
+                [ text walletNickname ]
             ]
         ]
+    , tooltip "My wallet" (RefId "currentWalletHeader") Bottom
+    , a
+        [ classNames [ "ml-4", "md:hidden" ]
+        , onClick_ ToggleMenu
+        ]
+        [ if menuOpen then icon_ Icon.Close else icon_ Icon.Menu ]
     ]
   where
   navigation action icon' refId label =
@@ -447,7 +459,7 @@ dashboardBreadcrumb mSelectedContractStringId =
               Nothing -> []
     ]
 
-dashboardFooter :: forall p. HTML p Action
+dashboardFooter :: forall w i. HTML w i
 dashboardFooter =
   footer
     [ classNames [ "hidden", "md:block", "border-t", "border-gray" ] ]
@@ -464,7 +476,7 @@ dashboardFooter =
         ]
     ]
 
-dashboardLinks :: forall p. Array (HTML p Action)
+dashboardLinks :: forall w i. Array (HTML w i)
 dashboardLinks =
   -- FIXME: SCP-2589 Add link to Docs
   [ link "Docs" ""
@@ -474,13 +486,13 @@ dashboardLinks =
   , link "Support" "" -}
   ]
 
-iohkLinks :: forall p. Array (HTML p Action)
+iohkLinks :: forall w i. Array (HTML w i)
 iohkLinks =
   [ link "cardano.org" "https://cardano.org"
   , link "iohk.io" "https://iohk.io"
   ]
 
-link :: forall p. String -> String -> HTML p Action
+link :: forall w i. String -> String -> HTML w i
 link label url =
   a
     [ classNames [ "px-4", "py-2", "font-bold", "cursor-pointer" ]
@@ -492,6 +504,7 @@ link label url =
 contractsScreen
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
@@ -636,6 +649,7 @@ contractNavigation contractFilter =
 contractCards
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
@@ -709,6 +723,7 @@ contractGridClasses =
 contractGridRunning
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
@@ -722,8 +737,8 @@ contractGridRunning currentTime state =
           <> (contractStartingPreviewCard <$> newContracts)
           <> (contractPreviewCard currentTime <$> runningContracts)
   where
-  runningContracts = state ^. _runningContracts
-  newContracts = state ^. _newContracts
+  runningContracts = toArrayOf _runningContracts state
+  newContracts = toArrayOf (_newContracts <<< folded) state
   newContractCard =
     a
       [ classNames
@@ -747,12 +762,13 @@ contractGridRunning currentTime state =
 contractGridCompleted
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Instant
   -> State
   -> ComponentHTML m
 contractGridCompleted currentTime state =
   let
-    closedContracts = state ^. _closedContracts
+    closedContracts = toArrayOf _closedContracts state
   in
     if Array.null closedContracts then noContractsMessage Completed
     else

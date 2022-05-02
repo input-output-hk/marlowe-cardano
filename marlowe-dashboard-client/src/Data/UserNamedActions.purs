@@ -13,19 +13,17 @@ import Prologue
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
-import Data.ContractUserParties
-  ( ContractUserParties
-  , getParticipants
-  , getUserParties
-  )
-import Data.Lens (Lens', Traversal', _2, iso, traversed, view)
+import Data.Lens (Lens', Traversal', _2, iso, traversed, view, (^.))
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Tuple as Tuple
 import Data.Tuple.Nested ((/\))
 import Marlowe.Execution.State (getActionParticipant)
 import Marlowe.Execution.Types (NamedAction)
-import Marlowe.Semantics (Party)
+import Marlowe.Execution.Types as Execution
+import Marlowe.HasParties (getParties)
+import Marlowe.Semantics (Party(..), Token(..), _rolesCurrency)
+import Store.RoleTokens (RoleTokenStore, isMyRoleToken)
 
 -- These are the Execution.NamedActions viewed as an User (grouped by participants
 -- and sorted by "logged-in" user)
@@ -41,10 +39,11 @@ _UserNamedActions = iso
   (\m -> UserNamedActions m)
 
 userNamedActions
-  :: ContractUserParties
+  :: RoleTokenStore
+  -> Execution.State
   -> Array NamedAction
   -> UserNamedActions
-userNamedActions contractUserParties actions =
+userNamedActions roleTokens executionState actions =
   -- First we expand the actions that can be taken by every party
   expandedActions
     # Array.sortBy currentPartiesFirst
@@ -52,8 +51,7 @@ userNamedActions contractUserParties actions =
     # map extractGroupedParty
     # UserNamedActions
   where
-  userParties = getUserParties contractUserParties
-  allParticipants = getParticipants contractUserParties
+  allParticipants = getParties executionState.contract
 
   -- If an action has a participant, just use that, if it doesn't expand it to all
   -- participants
@@ -65,7 +63,12 @@ userNamedActions contractUserParties actions =
           Nothing -> Set.toUnfoldable allParticipants <#> \participant ->
             participant /\ action
 
-  isUserParty party = Set.member party userParties
+  marloweParams = executionState.marloweParams
+  currencySymbol = marloweParams ^. _rolesCurrency
+
+  isUserParty (Role tokenName) =
+    isMyRoleToken (Token currencySymbol tokenName) roleTokens
+  isUserParty _ = false
 
   currentPartiesFirst (Tuple party1 _) (Tuple party2 _)
     | isUserParty party1 == isUserParty party2 = compare party1 party2

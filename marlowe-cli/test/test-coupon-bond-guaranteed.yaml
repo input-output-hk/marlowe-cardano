@@ -420,6 +420,21 @@ ptPabOperations:
   poInstances:
   - GuarantorApp
 
+- tag: ReturnFunds
+  poOwner: Lender
+  poInstances:
+  - LenderApp
+
+- tag: ReturnFunds
+  poOwner: Borrower
+  poInstances:
+  - BorrowerApp
+
+- tag: ReturnFunds
+  poOwner: Guarantor
+  poInstances:
+  - GuarantorApp
+
 - tag: Stop
   poInstance: LenderApp
 

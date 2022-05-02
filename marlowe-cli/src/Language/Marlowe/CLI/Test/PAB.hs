@@ -51,30 +51,34 @@ import Cardano.Wallet.Shelley.Compatibility (fromCardanoAddress)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Exception (SomeException, catch, displayException)
-import Control.Lens (use, (%=))
+import Control.Lens (use, (%=), (^.))
 import Control.Monad (unless, void, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
-import Control.Monad.Extra (whenJust)
+import Control.Monad.Extra (untilJustM, whenJust)
 import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift, put)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object, String))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (Null, Object, String))
+import Data.Aeson.OneLine (renderValue)
 import Data.Aeson.Types (parseEither)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.CLI.Export (buildAddress, buildRoleAddress)
 import Language.Marlowe.CLI.IO (liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.PAB (receiveStatus)
-import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), InstanceNickname, PabAccess (..), PabOperation (..),
-                                        PabState (..), PabTest (..), RoleName, WalletInfo (..), psAppInstances,
-                                        psBurnAddress, psFaucetAddress, psFaucetKey, psPassphrase, psWallets)
+import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), CompanionInstanceInfo (..), FollowerInstanceInfo (..),
+                                        InstanceNickname, PabAccess (..), PabOperation (..), PabState (..),
+                                        PabTest (..), PatternJSON (Exact, Parts), RoleName, WalletInfo (..),
+                                        patternJSON, psAppInstances, psBurnAddress, psCompanionInstances,
+                                        psFaucetAddress, psFaucetKey, psFollowerInstances, psPassphrase, psWallets)
 import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
                                 EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
 import Language.Marlowe.Semantics (MarloweParams (rolesCurrency))
-import Language.Marlowe.SemanticsTypes (Party (Role))
+import Language.Marlowe.Semantics.Types (Party (Role))
 import Network.WebSockets (Connection)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (PabClient, activateContract, instanceClient))
@@ -91,13 +95,16 @@ import qualified Cardano.Wallet.Api.Types as W (ApiWallet (id, state))
 import qualified Cardano.Wallet.Primitive.Types as W (WalletId (..))
 import qualified Cardano.Wallet.Primitive.Types.Hash as W (Hash (Hash))
 import qualified Cardano.Wallet.Primitive.Types.TokenMap as W (AssetId (AssetId), toFlatList)
+import qualified Data.Aeson as A (Value (..))
 import qualified Data.ByteArray as BA (pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
-import qualified Data.HashMap.Strict as H (lookup)
+import Data.Foldable (for_)
+import qualified Data.HashMap.Strict as H (foldrWithKey, lookup)
 import qualified Data.Map.Strict as M (adjust, insert, lookup)
 import qualified Data.Quantity as W (Quantity (..))
 import qualified Data.Text as T (pack, unpack)
 import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
+import qualified Data.Vector as V (all, zip)
 import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
 
@@ -129,7 +136,7 @@ pabTest access faucetKey faucetAddress burnAddress passphrase PabTest{..} =
           $ PabState
             faucetKey faucetAddress burnAddress
             (Passphrase . BA.pack $ toEnum . fromEnum <$> passphrase)
-            mempty mempty
+            mempty mempty mempty mempty
       )
       $ \e ->
         -- TODO: Clean up wallets and instances.
@@ -193,7 +200,7 @@ interpret PabAccess{..} ReturnFunds{..} =
     let
       go =
         do
-          liftIO $ threadDelay 5_000_000
+          liftIO $ threadDelay 10_000_000
           ApiTransaction{pendingSince} <-
             liftCliIO
               . runWallet
@@ -201,6 +208,7 @@ interpret PabAccess{..} ReturnFunds{..} =
           whenJust pendingSince
             $ const go
     go
+    liftIO $ threadDelay 10_000_000
     faucetKey <- use psFaucetKey
     burnAddress <- use psBurnAddress
     roleTokens <- findRoleTokens poOwner poInstances
@@ -241,7 +249,7 @@ interpret access CheckFunds{..} =
 interpret access ActivateApp{..} =
   do
     WalletInfo{..} <- findOwner poOwner
-    (aiInstance, aiChannel) <- lift $ runContract access MarloweApp wiWalletId'
+    (aiInstance, aiChannel) <- runContract access MarloweApp wiWalletId'
     let
       aiParams = Nothing
     liftIO . putStrLn $ "[ActivateApp] Activated MarloweApp instance " <> show poInstance <> " with identifier " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
@@ -250,7 +258,7 @@ interpret access ActivateApp{..} =
 interpret access CallCreate{..} =
   do
     uuid <- liftIO nextRandom
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     owners <-
       mapM
         (
@@ -283,7 +291,7 @@ interpret PabAccess{localConnection = LocalNodeConnectInfo _ network _} AwaitCre
 interpret access CallApplyInputs{..} =
   do
     uuid <- liftIO nextRandom
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     params <- maybe (throwError $ CliError "[CallApplyInputs] Contract parameters are not known.") pure aiParams
     lift
       $ call access aiInstance "apply-inputs" ((uuid, params, poTimes, poInputs) :: ApplyInputsEndpointSchema)
@@ -299,7 +307,7 @@ interpret _ AwaitApplyInputs{..} =
 interpret access CallAuto{..} =
   do
     uuid <- liftIO nextRandom
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     params <- maybe (throwError $ CliError "[CallAuto] Contract parameters are not known.") pure aiParams
     lift
       $ call access aiInstance "auto"
@@ -321,7 +329,7 @@ interpret _ AwaitAuto{..} =
 interpret access CallRedeem{..} =
   do
     uuid <- liftIO nextRandom
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     WalletInfo{..} <- findOwner poOwner
     params <- maybe (throwError $ CliError "[CallRedeem] Contract parameters are not known.") pure aiParams
     lift
@@ -344,7 +352,7 @@ interpret _ AwaitRedeem{..} =
 interpret access CallClose{..} =
   do
     uuid <- liftIO nextRandom
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     lift
       $ call access aiInstance "close" uuid
     liftIO . putStrLn $ "[CallClose] Endpoint \"close\" called on instance " <> show poInstance <> "."
@@ -358,7 +366,7 @@ interpret _ AwaitClose{..} =
 
 interpret PabAccess{..} Stop{..} =
   do
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     let
       PabClient{..} = client
       InstanceClient{..} = instanceClient aiInstance
@@ -369,12 +377,111 @@ interpret PabAccess{..} Stop{..} =
 
 interpret _ Follow{..} =
   do
-    aiOther <- findInstance poOtherInstance
+    aiOther <- findAppInstance poOtherInstance
     psAppInstances %=
       M.adjust
         (\ai -> ai {aiParams = aiParams aiOther})
         poInstance
     liftIO . putStrLn $ "[Follow] Instance " <> show poInstance <> " now follows instance " <> show poOtherInstance <> "."
+
+interpret access po@ActivateCompanion{..} =
+  do
+    WalletInfo{..} <- findOwner poOwner
+    (cmpInstance, cmpChannel) <- runContract access WalletCompanion wiWalletId'
+    logPoMsg PoShow po $ "Activated companion instance for the " <> poOwner
+    psCompanionInstances %= M.insert poInstance CompanionInstanceInfo{..}
+
+interpret _ po@AwaitCompanion{..} =
+  do
+    CompanionInstanceInfo{..} <- findCompanionInstance poInstance
+    logPoMsg PoShow po "Fetching companion messages."
+    -- Skip all preceeding `null`s
+    companionState <- untilJustM $ do
+      res <- liftIO $ readChan cmpChannel
+      if res == Null
+        then do
+          logPoMsg PoShow po "Skipping `null` response."
+          pure Nothing
+        else pure $ Just res
+
+    case poResponsePattern of
+      Just pt -> if matchJSON pt companionState
+        then logPoMsg PoShow po "await confirmed."
+        else throwError $ CliError $ printPoMsg PoName po $ T.unpack $
+          "Given response does not match expected pattern. Expected: "
+          <> renderValue (pt ^. patternJSON)
+          <> ". Received: "
+          <> renderValue companionState
+          <> "."
+      Nothing ->
+        logPoMsg PoShow po "await confirmed."
+
+interpret access po@ActivateFollower{..} =
+  do
+    WalletInfo{..} <- findOwner poOwner
+    (fiInstance, fiChannel) <- runContract access MarloweFollower wiWalletId'
+    AppInstanceInfo{..} <- findAppInstance poAppInstance
+    case aiParams of
+      Nothing -> throwError . CliError $ printPoMsg PoName po
+        "Unable to follow AppInstance with missinng MarloweParams. You should probably wait till app is fully initialized using AwaitCreate."
+      Just params -> do
+                        let
+                          fiParams = params
+                        liftIO . putStrLn $
+                          "[ActivateFollower] Activated MarloweFollower instance "
+                          <> show (unContractInstanceId fiInstance)
+                          <> " for role "
+                          <> show poOwner
+                          <> "."
+                        psFollowerInstances %= M.insert poInstance FollowerInstanceInfo{..}
+
+interpret access po@CallFollow{..} =
+  do
+    FollowerInstanceInfo{..} <- findFollowerInstance poInstance
+    lift
+      $ call access fiInstance "follow" fiParams
+    logPoMsg PoShow po "Endpoint \"follow\" called."
+
+interpret _ po@AwaitFollow{..} =
+  do
+    FollowerInstanceInfo{..} <- findFollowerInstance poInstance
+    logPoMsg PoShow po "Fetching follower messages."
+    let
+      extractPatternJSON (Parts json) = json
+      extractPatternJSON (Exact json) = json
+
+    for_ poResponsePatterns $ \pt -> do
+      contractHistoryJSON <- liftIO $ readChan fiChannel
+      if matchJSON pt contractHistoryJSON
+        then logPoMsg PoShow po "Follow confirmed."
+        else throwError $ CliError $ printPoMsg PoName po $ T.unpack $
+          "Given response does not match expected pattern. Expected: "
+          <> renderValue (extractPatternJSON pt)
+          <> ". Received: "
+          <> renderValue contractHistoryJSON
+          <> "."
+
+interpret PabAccess{..} po@PrintPABInstanceState{..} =
+  do
+    instanceId <- case poMarloweContract of
+      MarloweApp -> do
+        AppInstanceInfo{..} <- findAppInstance poInstance
+        pure aiInstance
+      MarloweFollower -> do
+        FollowerInstanceInfo{..} <- findFollowerInstance poInstance
+        pure fiInstance
+      WalletCompanion -> do
+        throwError . CliError $ printTraceMsg "PrintPABInstanceState" "WalletCompanion contracts are not supported"
+
+    let
+      PabClient{..} = client
+      InstanceClient{..} = instanceClient instanceId
+
+    response <- liftCliIO
+      . runApi
+      $ getInstanceStatus
+
+    logPoMsg PoShow po $ T.unpack $ renderValue $ toJSON response
 
 interpret _ PrintState =
   do
@@ -389,7 +496,7 @@ interpret access PrintWallet{..} =
 
 interpret PabAccess{..} PrintAppUTxOs{..} =
   do
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     params <- maybe (throwError $ CliError "[PrintAppUTxOs] Contract parameters are not known.") pure aiParams
     let
       toAddressAny' (AddressInEra _ address') = toAddressAny address'
@@ -400,7 +507,7 @@ interpret PabAccess{..} PrintAppUTxOs{..} =
 
 interpret PabAccess{..} PrintRoleUTxOs{..} =
   do
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     params <- maybe (throwError $ CliError "[PrintRoleUTxOs] Contract parameters are not known.") pure aiParams
     let
       toAddressAny' (AddressInEra _ address') = toAddressAny address'
@@ -472,7 +579,7 @@ awaitApp :: MonadError CliError m
          -> m MarloweEndpointResult  -- ^ Action to return the endpoint result from the websocket channel.
 awaitApp nickname nothings =
   do
-    AppInstanceInfo{..} <- findInstance nickname
+    AppInstanceInfo{..} <- findAppInstance nickname
     let
       go i =
         do
@@ -498,16 +605,36 @@ findOwner owner =
     =<< use psWallets
 
 
--- | Find the contract instance corresponding to an instance nickname.
-findInstance :: MonadError CliError m
-             => MonadState PabState m
-             => InstanceNickname   -- ^ The nickname.
-             -> m AppInstanceInfo  -- ^ Action returning the instance.
-findInstance nickname =
-  liftCliMaybe ("[findInstance] Instance not found for nickname " <> show nickname <> ".")
+-- | Find MarloweApp contract instance corresponding to an instance nickname.
+findAppInstance :: MonadError CliError m
+                => MonadState PabState m
+                => InstanceNickname   -- ^ The nickname.
+                -> m AppInstanceInfo  -- ^ Action returning the instance.
+findAppInstance nickname =
+  liftCliMaybe ("[findAppInstance] App instance not found for nickname " <> show nickname <> ".")
     . M.lookup nickname
     =<< use psAppInstances
 
+
+-- | Find MarloweFollower contract instance corresponding to an instance nickname.
+findFollowerInstance :: MonadError CliError m
+             => MonadState PabState m
+             => InstanceNickname
+             -> m FollowerInstanceInfo
+findFollowerInstance nickname =
+  liftCliMaybe ("[findFollowerInstance] Follower instance not found for nickname " <> show nickname <> ".")
+    . M.lookup nickname
+    =<< use psFollowerInstances
+
+-- | Find WalletCompanion contract instance corresponding to an instance nickname.
+findCompanionInstance :: MonadError CliError m
+             => MonadState PabState m
+             => InstanceNickname
+             -> m CompanionInstanceInfo
+findCompanionInstance nickname =
+  liftCliMaybe ("[findCompanionInstance] Follower instance not found for nickname " <> show nickname <> ".")
+    . M.lookup nickname
+    =<< use psCompanionInstances
 
 -- | Find the role tokens for the given instances.
 findRoleTokens :: MonadError CliError m
@@ -520,7 +647,7 @@ findRoleTokens poOwner poInstances =
     <$> sequence
     [
       do
-        AppInstanceInfo{..} <- findInstance poInstance
+        AppInstanceInfo{..} <- findAppInstance poInstance
         CurrencySymbol currency <-
           liftCliMaybe ("[findRoleTokens] Parameters not found for instance " <> show poInstance <> ".")
             $ rolesCurrency
@@ -592,7 +719,7 @@ useWallet :: MonadError CliError m
              => PabAccess         -- ^ Access to the PAB API.
              -> WalletId          -- ^ The wallet ID.
              -> Passphrase "raw"  -- ^ The passphrase for the wallet.
-             -> m WalletInfo      -- ^ Action returning the new wallet information.
+             -> m WalletInfo      -- ^ Action returning the new wallet informatio.
 useWallet PabAccess{..} wiWalletId'@(WalletId wiWalletId) wiPassphrase =
   do
     addresses <- liftCliIO . runWallet $ listAddresses addressClient (ApiT wiWalletId) Nothing
@@ -627,6 +754,8 @@ totalBalance :: MonadError CliError m
              -> m C.Value   -- ^ Action returning the total balance.
 totalBalance PabAccess{..} walletId =
   do
+    -- Cardano Wallet may lag the PAB and chain index, so wait a bit before querying funds.
+    liftIO $ threadDelay 15000
     ApiWallet{balance,assets} <- liftCliIO $ runWallet (getWallet walletClient $ ApiT walletId)
     let
       ApiWalletBalance (W.Quantity lovelace) _ _ = balance
@@ -674,9 +803,13 @@ runContract PabAccess{..} contract walletId =
       go :: Connection -> ExceptT CliError IO ()
       go connection =
         do
+          let
+            repr (NewObservableState s) = T.unpack $ renderValue s
+            repr other                  = show other
+
           status <- receiveStatus connection
           when verbose
-            $ liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> show status <> "."
+            $ liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> repr status <> "."
           case status of
             NewObservableState s -> do
                                       state <- liftCli $ parseEither parseJSON s
@@ -709,3 +842,75 @@ call PabAccess{..} instanceId endpoint arguments =
       . runApi
       . callInstanceEndpoint endpoint
       $ toJSON arguments
+
+matchJSON :: PatternJSON -> A.Value -> Bool
+matchJSON (Exact expected) given = expected == given
+-- ^ Pattern match on the the array prefixes and subsets of fields.
+matchJSON (Parts expected) given = case (expected, given) of
+  (A.Array eItems, A.Array gItems) ->
+    length gItems == length eItems && (V.all (\(ev, gv) -> matchJSON (Parts ev) gv) . V.zip eItems $ gItems)
+  (A.Object eProps, A.Object gProps) ->
+    let
+      step key ev acc = (&&) acc $ fromMaybe False $ do
+        gv <- H.lookup key gProps
+        pure $ matchJSON (Parts ev) gv
+    in
+      H.foldrWithKey step True eProps
+  (A.String ev, A.String gv) -> ev == gv
+  (A.Number ev, A.Number gv) -> ev == gv
+  (A.Bool ev, A.Bool gv) -> ev == gv
+  (A.Null, A.Null) -> True
+  (_, _) -> False
+
+
+data PoFormat = PoName | PoShow
+
+printTraceMsg :: String -> String -> String
+printTraceMsg loc msg = "[" <> loc <> "]" <> " " <> msg
+
+logTraceMsg :: MonadIO m => String -> String -> m ()
+logTraceMsg loc msg = liftIO . putStrLn $ printTraceMsg loc msg
+
+printPo :: PoFormat -> PabOperation -> String
+printPo PoShow po = show po
+printPo PoName po = printName po
+  where
+    printName CreateWallet {}          = "CreateWallet"
+    printName FundWallet {}            = "FundWallet"
+    printName ReturnFunds {}           = "ReturnFunds"
+    printName CheckFunds {}            = "CheckFunds"
+    printName ActivateApp {}           = "ActivateApp"
+    printName CallCreate {}            = "CallCreate"
+    printName AwaitCreate {}           = "AwaitCreate"
+    printName CallApplyInputs {}       = "CallApplyInputs"
+    printName AwaitApplyInputs {}      = "AwaitApplyInputs"
+    printName CallAuto {}              = "CallAuto"
+    printName AwaitAuto {}             = "AwaitAuto"
+    printName CallRedeem {}            = "CallRedeem"
+    printName AwaitRedeem {}           = "AwaitRedeem"
+    printName CallClose {}             = "CallClose"
+    printName AwaitClose {}            = "AwaitClose"
+    printName Follow {}                = "Follow"
+    printName Stop {}                  = "Stop"
+    printName PrintState               = "PrintState"
+    printName ActivateFollower {}      = "ActivateFollower"
+    printName CallFollow {}            = "CallFollow"
+    printName AwaitFollow {}           = "AwaitFollow"
+    printName PrintWallet {}           = "PrintWallet"
+    printName Comment {}               = "Comment"
+    printName WaitFor {}               = "WaitFor"
+    printName WaitUntil {}             = "WaitUntil"
+    printName Timeout {}               = "Timeout"
+    printName ShouldFail {}            = "ShouldFail"
+    printName PrintPABInstanceState {} = "PrintPABInstanceState"
+    printName UseWallet {}             = "UseWallet"
+    printName PrintAppUTxOs {}         = "PrintAppUTxOs"
+    printName PrintRoleUTxOs {}        = "PrintRoleUTxOs"
+    printName ActivateCompanion {}     = "ActivateCompanion"
+    printName AwaitCompanion {}        = "AwaitCompanion"
+
+printPoMsg :: PoFormat -> PabOperation -> String -> String
+printPoMsg format po = printTraceMsg (printPo format po)
+
+logPoMsg :: MonadIO m => PoFormat -> PabOperation -> String -> m ()
+logPoMsg frmt po = logTraceMsg (printPo frmt po)

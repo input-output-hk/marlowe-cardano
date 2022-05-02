@@ -2,7 +2,17 @@ module Simulator.Lenses where
 
 import Prologue
 
-import Data.Lens (Lens', Optic', Prism', Traversal', lens, preview, prism, set)
+import Data.Lens
+  ( Lens'
+  , Optic'
+  , Prism'
+  , Traversal'
+  , _Just
+  , lens
+  , preview
+  , prism
+  , set
+  )
 import Data.Lens.At (at)
 import Data.Lens.Index (ix)
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -119,8 +129,12 @@ _SimulationNotStarted =
 --------------------------------------------------------------------------
 -- MarloweState Lenses
 --
-_executionState :: forall s a. Lens' { executionState :: a | s } a
-_executionState = prop (Proxy :: _ "executionState")
+_executionState
+  :: forall s p a
+   . Strong p
+  => Choice p
+  => Optic' p { executionState :: Maybe a | s } a
+_executionState = prop (Proxy :: _ "executionState") <<< _Just
 
 _editorErrors :: forall s a. Lens' { editorErrors :: a | s } a
 _editorErrors = prop (Proxy :: _ "editorErrors")
@@ -151,7 +165,8 @@ _currentContract
    . Strong p
   => Choice p
   => Optic' p { marloweState :: NonEmptyList MarloweState | s } (Term Contract)
-_currentContract = _currentMarloweState <<< _executionState
+_currentContract = _currentMarloweState
+  <<< _executionState
   <<< _SimulationRunning
   <<< _contract
 
@@ -160,6 +175,7 @@ _currentPossibleActions
    . Strong p
   => Choice p
   => Optic' p { marloweState :: NonEmptyList MarloweState | s } Parties
-_currentPossibleActions = _currentMarloweState <<< _executionState
+_currentPossibleActions = _currentMarloweState
+  <<< _executionState
   <<< _SimulationRunning
   <<< _possibleActions

@@ -117,3 +117,4 @@ plutus-pab/test-node/alonzo-purple/db
 
 # Arion
 *.tmp-arion-docker*
+treasury

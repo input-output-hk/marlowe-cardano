@@ -8,7 +8,7 @@ module Example where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 
 {- Define a contract, Close is the simplest contract which just ends the contract straight away
@@ -26,7 +26,7 @@ module Escrow where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 -- We can set explicitRefunds True to run Close refund analysis
 -- but we get a shorter contract if we set it to False
@@ -114,7 +114,7 @@ module EscrowWithCollateral where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 -- We can set explicitRefunds True to run Close refund analysis
 -- but we get a shorter contract if we set it to False
@@ -221,7 +221,7 @@ module ZeroCouponBond where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 discountedPrice, notionalPrice :: Value
 discountedPrice = ConstantParam "Amount"
@@ -256,7 +256,7 @@ module CouponBondGuaranteed where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 -- We can set explicitRefunds True to run Close refund analysis
 -- but we get a shorter contract if we set it to False
@@ -323,7 +323,7 @@ module Swap where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 -- We can set explicitRefunds True to run Close refund analysis
 -- but we get a shorter contract if we set it to False
@@ -391,7 +391,7 @@ module ContractForDifferences where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 -- We can set explicitRefunds True to run Close refund analysis
 -- but we get a shorter contract if we set it to False
@@ -497,7 +497,7 @@ module ContractForDifferencesWithOracle where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 -- We can set explicitRefunds True to run Close refund analysis
 -- but we get a shorter contract if we set it to False

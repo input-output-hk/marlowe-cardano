@@ -5,7 +5,15 @@ module Component.CurrentStepActions.View
 import Prologue hiding (div)
 
 import Component.Contract.View (renderParty)
-import Component.CurrentStepActions.Types (Action(..), ComponentHTML, State)
+import Component.CurrentStepActions.Types
+  ( Action(..)
+  , ComponentHTML
+  , State
+  , _executionState
+  , _namedActions
+  , _roleTokens
+  , _rolesCurrency
+  )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Css as Css
@@ -13,13 +21,13 @@ import Data.Array (intercalate)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromString)
 import Data.BigInt.Argonaut as BigInt
-import Data.ContractUserParties (isCurrentUser)
 import Data.Lens ((^.))
 import Data.Map (lookup) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.String (trim)
 import Data.String.Extra (capitalize)
 import Data.UserNamedActions (haveActions, mapActions)
+import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (applyWhen, classNames)
 import Halogen.HTML (HTML, button, div, div_, h4, input, p_, span, span_, text)
 import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
@@ -33,22 +41,30 @@ import Halogen.HTML.Properties
 import Humanize (humanizeValue)
 import Marlowe.Execution.State (isClosed)
 import Marlowe.Execution.Types (NamedAction(..))
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Party(..), getEncompassBound)
-import Page.Contract.Lenses (_contractUserParties, _executionState, _metadata)
+import Marlowe.Semantics
+  ( Bound(..)
+  , ChoiceId(..)
+  , Party(..)
+  , Token(..)
+  , getEncompassBound
+  )
+import Page.Contract.Lenses (_metadata)
+import Store.RoleTokens (isMyRoleToken)
 import Text.Markdown.TrimmedInline (markdownToHTML)
 
 currentStepActions
   :: forall m
-   . State
+   . MonadAff m
+  => State
   -> ComponentHTML m
 currentStepActions state =
   let
-    executionState = state.input ^. _executionState
+    executionState = state ^. _executionState
   in
     case
       isClosed executionState,
       isJust executionState.mPendingTransaction,
-      state.input.namedActions
+      state ^. _namedActions
       of
       true, _, _ ->
         div
@@ -114,10 +130,18 @@ currentStepActions state =
           $ renderPartyTasks state `mapActions` namedActions
 
 renderPartyTasks
-  :: forall p. State -> Party -> Array NamedAction -> HTML p Action
+  :: forall m
+   . MonadAff m
+  => State
+  -> Party
+  -> Array NamedAction
+  -> ComponentHTML m
 renderPartyTasks state party actions =
   let
-    contractUserParties = state.input ^. _contractUserParties
+    roleTokens = state ^. _roleTokens
+
+    currencySymbol = state ^. _rolesCurrency
+
     actionsSeparatedByOr =
       intercalate
         [ div [ classNames [ "font-semibold", "text-center", "text-xs" ] ]
@@ -126,15 +150,24 @@ renderPartyTasks state party actions =
         (Array.singleton <<< renderAction state party <$> actions)
   in
     div [ classNames [ "space-y-2" ] ]
-      ([ renderParty contractUserParties party ] <> actionsSeparatedByOr)
+      ([ renderParty currencySymbol roleTokens party ] <> actionsSeparatedByOr)
 
 -- The Party parameter represents who is taking the action
 renderAction :: forall p. State -> Party -> NamedAction -> HTML p Action
 renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) =
   let
-    contractUserParties = state.input ^. _contractUserParties
+    roleTokens = state ^. _roleTokens
 
-    isActiveParticipant = isCurrentUser party contractUserParties
+    currencySymbol = state ^. _rolesCurrency
+
+    isCurrentUser = case _ of
+      Role tokenName ->
+        isMyRoleToken (Token currencySymbol tokenName) roleTokens
+      -- FIXME check against current user's addres when public key hashes are
+      -- replaced with addresses in the semantics.
+      _ -> false
+
+    isActiveParticipant = isCurrentUser party
 
     fromDescription =
       if isActiveParticipant then
@@ -144,7 +177,7 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
         Role roleName -> capitalize roleName <> " makes"
 
     toDescription =
-      if isCurrentUser intoAccountOf contractUserParties then
+      if isCurrentUser intoAccountOf then
         "your"
       else if by == intoAccountOf then
         "their"
@@ -175,13 +208,22 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
 
 renderAction state party namedAction@(MakeChoice choiceId bounds) =
   let
-    contractUserParties = state.input ^. _contractUserParties
+    roleTokens = state ^. _roleTokens
+
+    currencySymbol = state ^. _rolesCurrency
+
+    isCurrentUser = case _ of
+      Role tokenName ->
+        isMyRoleToken (Token currencySymbol tokenName) roleTokens
+      -- FIXME check against current user's addres when public key hashes are
+      -- replaced with addresses in the semantics.
+      _ -> false
 
     mChosenNum = Map.lookup choiceId $ state.transient.choiceValues
 
-    isActiveParticipant = isCurrentUser party contractUserParties
+    isActiveParticipant = isCurrentUser party
 
-    metadata = state.input ^. (_executionState <<< _metadata)
+    metadata = state ^. _executionState <<< _metadata
 
     -- NOTE': We could eventually add an heuristic that if the difference between min and max is less
     --        than 10 elements, we could show a `select` instead of a input[number]
@@ -283,9 +325,18 @@ renderAction _ _ (Evaluate _) = div []
 
 renderAction state party CloseContract =
   let
-    contractUserParties = state.input ^. _contractUserParties
+    roleTokens = state ^. _roleTokens
 
-    isActiveParticipant = isCurrentUser party contractUserParties
+    currencySymbol = state ^. _rolesCurrency
+
+    isCurrentUser = case _ of
+      Role tokenName ->
+        isMyRoleToken (Token currencySymbol tokenName) roleTokens
+      -- FIXME check against current user's addres when public key hashes are
+      -- replaced with addresses in the semantics.
+      _ -> false
+
+    isActiveParticipant = isCurrentUser party
   in
     div [ classNames [ "space-y-2" ] ]
       -- FIXME: revisit the text

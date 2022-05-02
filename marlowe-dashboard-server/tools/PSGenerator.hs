@@ -16,18 +16,21 @@ where
 
 import Control.Applicative (Alternative (empty), (<|>))
 import Control.Lens (ix, set, view, (&))
+import Control.Monad (join)
 import Data.Functor (($>))
 import Data.Monoid ()
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as T ()
 import qualified Data.Text.IO as T ()
-import Language.Marlowe.Client (ContractHistory, EndpointResponse, MarloweEndpointResult, MarloweError)
+import Language.Marlowe.Client (ContractHistory, EndpointResponse, MarloweEndpointResult, MarloweError, UnspentPayouts)
+import Language.Marlowe.Client.History (RolePayout)
 import Language.PureScript.Bridge (BridgePart, HasHaskType (haskType), Language (Haskell, PureScript),
                                    SumType (SumType), TypeInfo (..), argonaut, buildBridge, typeModule, typeName, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
-import Language.PureScript.Bridge.SumType (Instance (..), equal, genericShow, mkSumType, order)
-import Language.PureScript.Bridge.TypeInfo (typeParameters)
+import Language.PureScript.Bridge.SumType (CustomInstance (..), Instance (..), InstanceImplementation (..),
+                                           InstanceMember (..), equal, genericShow, mkSumType, order)
+import Language.PureScript.Bridge.TypeInfo (mkTypeInfo, typeParameters)
 import Language.PureScript.Bridge.TypeParameters (A, E)
 import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
@@ -203,11 +206,41 @@ instance HasBridge MyBridge where
 dto :: SumType 'Haskell -> SumType 'Haskell
 dto = equal . genericShow . argonaut
 
-dtoNoShow :: SumType 'Haskell -> SumType 'Haskell
-dtoNoShow = equal . argonaut
+customInstance :: forall t. CustomInstance t -> SumType t -> SumType t
+customInstance i (SumType ti dc is) = SumType ti dc $ Custom i : is
+
+unspentPayouts :: SumType 'Haskell
+unspentPayouts = customInstance monoid $ customInstance semigroup $ mkSumType @UnspentPayouts
+  where
+
+    appendImpl = InstanceMember
+      "append"
+      ["(UnspentPayouts p1)", "(UnspentPayouts p2)"]
+      "UnspentPayouts $ nubEq (append p1 p2)"
+      [ TypeInfo "purescript-arrays" "Data.Array" "nubEq" []
+      , TypeInfo "purescript-prelude" "Data.Semigroup" "append" []
+      ]
+      mempty
+
+    semigroupImpl = Explicit [ appendImpl ]
+    semigroupInstanceHead = TypeInfo "purescript-prelude" "Data.Semigroup" "Semigroup" [mkTypeInfo @UnspentPayouts]
+    semigroup = CustomInstance [] semigroupInstanceHead semigroupImpl
+
+    -- We are not able to use newtype deriving here because of: https://github.com/purescript/purescript/issues/3168
+    memptyImpl = InstanceMember
+      "mempty"
+      []
+      "UnspentPayouts mempty"
+      [TypeInfo "purescript-prelude" "Data.Monoid" "mempty" []]
+      mempty
+
+    monoidImpl = Explicit [ memptyImpl ]
+    monoidHead = TypeInfo "purescript-prelude" "Data.Monoid" "Monoid" [mkTypeInfo @UnspentPayouts]
+    monoid = CustomInstance [] monoidHead monoidImpl
 
 myTypes :: [SumType 'Haskell]
-myTypes = dto <$>
+myTypes = join
+  [ dto <$>
     [ mkSumType @StreamToServer,
       mkSumType @StreamToClient,
       mkSumType @RestorePostData,
@@ -217,19 +250,19 @@ myTypes = dto <$>
       mkSumType @(EndpointResponse A E),
       mkSumType @MarloweEndpointResult,
       mkSumType @WalletInfo,
-      mkSumType @ContractHistory
+      mkSumType @ContractHistory,
+      mkSumType @RolePayout,
+      unspentPayouts
     ]
+  , equal . argonaut <$>
+    [ mkSumType @MarloweError ]
+  ]
 
-myTypesNoShow :: [SumType 'Haskell]
-myTypesNoShow = dtoNoShow <$>
-    [ mkSumType @MarloweError
-    ]
 
 marloweRunSettings :: Settings
 marloweRunSettings = defaultSettings
   & set apiModuleName "Marlowe.Run.Server"
   & addTypes myTypes
-  & addTypes myTypesNoShow
 
 pabSettings :: Settings
 pabSettings = defaultSettings

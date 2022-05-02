@@ -6,10 +6,9 @@
 #   NOMAD_PORT_pab
 #   NOMAD_ALLOC_DIR # With node socket in $NOMAD_ALLOC_DIR/node.sock
 
-{ writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket }:
+{ writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket, network }:
 let
-  slotZeroTime = 1638215277000; # POSIX time of slot zero is milliseconds. See note [Datetime to slot] in Marlowe.Slot
-  slotLengthMillis = 1000;
+  inherit (network) slotZeroTime slotLengthMillis;
 
   constantFee = 10; # Constant fee per transaction in lovelace
   scriptsFeeFactor = 1.0; # Factor by which to multiply the size-dependent scripts fee in lovelace
@@ -37,8 +36,7 @@ let
       pscSocketPath = "@NOMAD_ALLOC_DIR@/node.sock";
       pscBaseUrl = "@NOMAD_ADDR_node@";
       pscKeptBlocks = 2160;
-      pscRandomTxInterval = 20000000;
-      pscNetworkId = "1564";
+      pscNetworkId = "${toString network.magic}";
       pscSlotConfig = {
         scSlotZeroTime = slotZeroTime;
         scSlotLength = slotLengthMillis;
@@ -120,7 +118,7 @@ writeShellScriptBin "entrypoint" ''
   ${pab-init-cmd}/bin/pab-init-cmd
 
   # Ugly ugly hack to kill the PAB at midnight UTC
-  ${pabExe} --config=pab.yaml webserver &
+  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet --verbose &
   sleep $(($(date -f - +%s- <<< $'tomorrow 00:00\nnow')0))&
   wait -n
   exit 1

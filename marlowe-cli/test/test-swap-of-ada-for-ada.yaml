@@ -237,6 +237,16 @@ ptPabOperations:
 - tag: Comment
   poComment: Stop the Marlowe application.
 
+- tag: ReturnFunds
+  poOwner: Ada provider
+  poInstances:
+  - AdaApp
+
+- tag: ReturnFunds
+  poOwner: Other provider
+  poInstances:
+  - OtherApp
+
 - tag: Stop
   poInstance: AdaApp
 

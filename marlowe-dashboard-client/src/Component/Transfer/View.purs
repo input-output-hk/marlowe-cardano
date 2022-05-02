@@ -12,10 +12,9 @@ import Component.Icons (icon)
 import Component.Row (row)
 import Component.Row as Row
 import Component.Transfer.Types (Participant, Termini(..), Transfer)
-import Data.Maybe (fromMaybe)
+import Data.Foldable (foldMap)
 import Data.String (Pattern(..))
 import Data.String.Extra (capitalize, endsWith)
-import Data.WalletNickname as WN
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, span, text)
 import Marlowe.Semantics (Party(..))
@@ -39,10 +38,10 @@ transfer { sender, recipient, token, quantity, termini } = case termini of
 -- TODO add read more icon and figure out action. Should it open the contact in
 -- the contacts menu?
 account :: forall w i. Party -> Participant -> String -> HTML w i
-account party { nickname, isCurrentUser } accountTypeLabel =
+account party { nickname } accountTypeLabel =
   row Row.Cramped [ "items-center" ]
     [ avatar
-        { nickname: fromMaybe defaultName $ WN.toString <$> nickname
+        { nickname: avatarName
         , background: [ "bg-gradient-to-r", "from-purple", "to-lightpurple" ]
         , size: Avatar.Small
         }
@@ -63,12 +62,12 @@ account party { nickname, isCurrentUser } accountTypeLabel =
                 Role _ -> accountTypeLabel
             ]
         , span [ classNames [ "whitespace-pre" ] ]
-            [ text $ if isCurrentUser then " (you)" else "" ]
+            [ text $ foldMap (\n -> " (" <> n <> ")") nickname ]
         ]
 
     ]
   where
-  defaultName = case party of
+  avatarName = case party of
     PK pk -> pk
     Role role -> role
 

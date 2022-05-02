@@ -1,4 +1,8 @@
-module Component.ContractSetup (component, _contractSetup) where
+module Component.ContractSetup
+  ( component
+  , _contractSetup
+  , markdownHintWithTitle
+  ) where
 
 import Prologue
 
@@ -38,6 +42,7 @@ import Data.Lens.Record (prop)
 import Data.List as List
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, isJust)
 import Data.Newtype (unwrap)
 import Data.Set as Set
@@ -51,16 +56,19 @@ import Halogen.Css (classNames)
 import Halogen.Form.Injective (blank, inject, project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
+import Halogen.HTML (PlainHTML)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Properties (autocomplete)
 import Halogen.HTML.Properties as HP
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
-import Marlowe.Extended.Metadata (NumberFormat(..))
+import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
 import Marlowe.Semantics (TokenName)
 import Store as Store
+import Text.Markdown.TrimmedInline (markdownToHTML)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
@@ -78,6 +86,7 @@ type State =
   , templateName :: String
   , fields :: ContractFields
   , result :: Maybe ContractParams
+  , metaData :: MetaData
   }
 
 type ChildSlots =
@@ -119,6 +128,7 @@ initialState
       , templateTimeouts
       , templateValues
       , templateName
+      , metaData
       , fields
       }
   } =
@@ -134,6 +144,7 @@ initialState
       , timeouts = mapWithIndex mkTimeoutField templateTimeouts
       , values = mapWithIndex mkValueField templateValues
       }
+  , metaData
   }
   where
   mkRoleField name _ = fromMaybe blank $ Map.lookup name fields.roles
@@ -179,6 +190,7 @@ render state = do
   HH.div [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
     [ HH.form
         [ HE.onSubmit OnFormSubmit
+        , autocomplete false
         , classNames
             [ "overflow-y-auto"
             , "p-4"
@@ -199,7 +211,7 @@ render state = do
         , templateInputsSection Icon.Terms "Terms" $
             ( List.toUnfoldable
                 $ Map.values
-                $ mapWithIndex timeoutInput fields.timeouts
+                $ mapWithIndex (timeoutInput state) fields.timeouts
             )
               <>
                 ( List.toUnfoldable
@@ -236,7 +248,7 @@ render state = do
     ]
 
 nicknameInput
-  :: forall m. MonadEffect m => FieldState ContractNickname -> ComponentHTML m
+  :: forall m. MonadAff m => FieldState ContractNickname -> ComponentHTML m
 nicknameInput fieldState =
   HH.slot _nickname unit Input.component input $ adaptInput $ prop _nickname
   where
@@ -247,10 +259,36 @@ nicknameInput fieldState =
     , format: CN.toString
     , validate: either This That <<< CN.fromString
     , render: \{ error, value, result } ->
-        renderTextInput id label result error (Input.setInputProps value [])
+        renderTextInput id label Nothing result error
+          (Input.setInputProps value [])
           case _ of
             CN.Empty -> "Required."
     }
+
+-- TODO: This function is also included in the Marlowe Playground code. We could/should move it
+-- into a shared folder, but it's not obvious where. It could go in the Hint module, but then it
+-- would introduce an unnecessary markdown dependency into the Plutus Playground. So some more
+-- thought/restructuring is required.
+markdownHintWithTitle :: String -> String -> PlainHTML
+markdownHintWithTitle title markdown = HH.div_ $
+  [ HH.h4
+      -- With min-w-max we define that the title should never break into
+      -- a different line.
+      [ classNames
+          [ "no-margins"
+          , "text-lg"
+          , "font-semibold"
+          , "flex"
+          , "items-center"
+          , "pb-2"
+          , "min-w-max"
+          ]
+      ]
+      [ icon Icon.HelpOutline [ "mr-1", "font-normal" ]
+      , HH.text title
+      ]
+  ]
+    <> markdownToHTML markdown
 
 roleInput
   :: forall m
@@ -265,25 +303,32 @@ roleInput state name fieldState =
     Autocomplete.Updated field ->
       OnUpdate $ set (prop _roles <<< at name) $ Just field
   where
-  { addressBook } = state
+  { addressBook, metaData } = state
+
   input =
     { id: "role-" <> name
     , label: name
+    , hint:
+        markdownHintWithTitle name <$> Map.lookup name metaData.roleDescriptions
     , fieldState
     , options: addressBook
     }
 
 timeoutInput
   :: forall m
-   . MonadEffect m
-  => String
+   . MonadAff m
+  => State
+  -> String
   -> FieldState ContractTimeout
   -> ComponentHTML m
-timeoutInput name fieldState =
+timeoutInput state name fieldState =
   HH.slot _timeouts name Input.component input
     $ adaptIndexedInput (prop _timeouts) name
   where
+  { metaData } = state
   id = "timeout-" <> name
+  mHint = markdownHintWithTitle name <$> OMap.lookup name
+    metaData.timeParameterDescriptions
   input =
     { fieldState
     , format: CT.toString
@@ -293,6 +338,7 @@ timeoutInput name fieldState =
           TimeFormat
           id
           name
+          mHint
           result
           error
           (Input.setInputProps value [ HP.readOnly true ])
@@ -304,7 +350,7 @@ timeoutInput name fieldState =
 
 valueInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => State
   -> String
   -> FieldState ContractValue
@@ -313,9 +359,11 @@ valueInput state name fieldState =
   HH.slot _values name Input.component input
     $ adaptIndexedInput (prop _values) name
   where
-  { templateValues } = state
+  { metaData, templateValues } = state
   format = fromMaybe DefaultFormat $ Map.lookup name templateValues
   id = "value-" <> name
+  mHint = markdownHintWithTitle name <<< _.valueParameterDescription <$>
+    OMap.lookup name metaData.valueParameterInfo
   input =
     { fieldState
     , format: CV.toString
@@ -323,7 +371,13 @@ valueInput state name fieldState =
         DecimalFormat d cs -> CV.currencyFromString cs d
         _ -> CV.fromString
     , render: \{ error, value, result } ->
-        renderNumberInput format id name result error
+        renderNumberInput
+          format
+          id
+          name
+          mHint
+          result
+          error
           (Input.setInputProps value [])
           case _ of
             CV.Empty -> "Required."

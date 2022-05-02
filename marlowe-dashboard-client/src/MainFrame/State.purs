@@ -7,11 +7,17 @@ import API.Lenses
   , _cicCurrentState
   , _cicDefinition
   , _cicStatus
+  , _hooks
   , _observableState
+  , _rqRequest
   )
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.PAB (class ManagePAB, subscribeToPlutusApp)
-import Capability.PAB (activateContract, getWalletContractInstances) as PAB
+import Capability.PAB
+  ( activateContract
+  , getWalletContractInstances
+  , stopContract
+  ) as PAB
 import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
@@ -28,7 +34,7 @@ import Data.Array (filter, find) as Array
 import Data.Either (hush)
 import Data.Filterable (filterMap)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (assign, lens, preview, set, use, view, (^.))
+import Data.Lens (assign, folded, hasn't, lens, preview, set, use, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Maybe (fromMaybe)
 import Data.PABConnectedWallet (_syncStatus, connectWallet)
@@ -53,6 +59,7 @@ import Halogen.Store.Select (selectEq)
 import Language.Marlowe.Client (ContractHistory(..))
 import MainFrame.Lenses
   ( _dashboardState
+  , _enteringDashboardState
   , _store
   , _subState
   , _tzOffset
@@ -70,11 +77,13 @@ import MainFrame.Types
   )
 import MainFrame.View (render)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Run.Server as MarloweRun
 import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types (ContractInstanceClientState)
+import Servant.PureScript (class MonadAjax)
 import Store (_wallet)
 import Store as Store
 import Store.Wallet (WalletStore(..), _Connecting)
@@ -98,6 +107,7 @@ mkMainFrame
    . MonadAff m
   => MonadKill Error Fiber m
   => MonadUnliftAff m
+  => MonadAjax MarloweRun.Api m
   => MonadLogger StructuredLog m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
@@ -130,6 +140,7 @@ emptyState =
       { addressBook: AddressBook.empty
       , wallet: Disconnected
       }
+  , enteringDashboardState: false
   }
 
 deriveState :: State -> Connected Slice Unit -> State
@@ -187,6 +198,8 @@ handleAction (Receive context) = do
         $ Store.ModifyAddressBook
         $ AddressBook.insert walletNickname address
       assign _subState $ Right connectedWallet
+      assign _enteringDashboardState false
+    Connecting _, _ -> assign _enteringDashboardState false
     Connected _, Disconnecting _ ->
       updateStore Store.Disconnect
     Disconnecting _, Disconnected ->
@@ -246,14 +259,15 @@ enterDashboardState
   => WalletDetails
   -> HalogenM State Action ChildSlots Msg m Unit
 enterDashboardState disconnectedWallet = do
+  assign _enteringDashboardState true
   let
     walletId = view Disconnected._walletId disconnectedWallet
   ajaxPlutusApps <- PAB.getWalletContractInstances walletId
   -- TODO: Refactor with runExceptT
   case ajaxPlutusApps of
-    Left ajaxError -> globalError
-      "Failed to access the plutus contracts."
-      ajaxError
+    Left ajaxError -> do
+      globalError "Failed to access the plutus contracts." ajaxError
+      updateStore $ Store.Wallet $ Wallet.OnDisconnected
     Right plutusApps -> do
       -- Get instances of the WalletCompanion and the MarloweApp control app.
       -- We try to reutilize an active plutus contract if possible,
@@ -262,9 +276,11 @@ enterDashboardState disconnectedWallet = do
         walletId
         plutusApps
       case ajaxCompanionContracts of
-        Left ajaxError -> globalError
-          "Failed to create the companion plutus contracts."
-          ajaxError
+        Left ajaxError -> do
+          globalError
+            "Failed to create the companion plutus contracts."
+            ajaxError
+          updateStore $ Store.Wallet $ Wallet.OnDisconnected
         Right { companionAppId, marloweAppId } -> do
           let
             initialFollowers = Set.fromFoldable
@@ -307,6 +323,11 @@ activateOrRestorePlutusCompanionContracts
 activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
   do
     let
+      isHanging contract = case view _cicDefinition contract of
+        MarloweApp -> hasn't
+          (_cicCurrentState <<< _hooks <<< folded <<< _rqRequest)
+          contract
+        _ -> false
       isActiveContract contractType cic =
         let
           definition = view _cicDefinition cic
@@ -320,9 +341,14 @@ activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
           Nothing ->
             -- If we cannot find it, activate a new one
             ExceptT $ PAB.activateContract contractType walletId
-          Just contract ->
-            -- If we find it, return the id
-            pure $ view _cicContract contract
+          Just contract
+            | not (isHanging contract) ->
+                -- If we find it, and it is not hanging, return the id
+                pure $ view _cicContract contract
+            | otherwise -> do
+                -- If we find it, and it is hanging, stop and restart it.
+                ExceptT $ PAB.stopContract $ view _cicContract contract
+                ExceptT $ PAB.activateContract contractType walletId
     { companionAppId: _, marloweAppId: _ }
       <$> findOrActivateContract WalletCompanion
       <*> findOrActivateContract MarloweApp

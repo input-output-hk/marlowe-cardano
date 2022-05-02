@@ -1,25 +1,4 @@
-module Page.Contract.Types
-  ( Action(..)
-  , ChildSlots
-  , ComponentHTML
-  , ContractState(..)
-  , DSL
-  , Input
-  , Msg(..)
-  , PreviousStep
-  , PreviousStepState(..)
-  , Query(..)
-  , Slice
-  , Slot
-  , StartedState
-  , State
-  , StepBalance
-  , Tab(..)
-  , TimeoutInfo
-  , _contractPage
-  , currentStep
-  , scrollContainerRef
-  ) where
+module Page.Contract.Types where
 
 import Prologue
 
@@ -28,13 +7,11 @@ import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.Array (length)
-import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatus, ContractStatusId)
-import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.NewContract (NewContract)
-import Data.PABConnectedWallet (PABConnectedWallet)
+import Data.Set (Set)
 import Data.Time.Duration (Minutes)
 import Data.UserNamedActions (UserNamedActions)
 import Halogen (RefLabel(..))
@@ -46,10 +23,12 @@ import Marlowe.Semantics
   ( Accounts
   , ChosenNum
   , MarloweParams
+  , Party
   , Payment
   , TransactionInput
   )
 import Store.Contracts (ContractStore)
+import Store.RoleTokens (RoleTokenStore)
 import Type.Proxy (Proxy(..))
 
 type ContractState = ContractStatus NewContract StartedState
@@ -58,7 +37,7 @@ type State =
   { contract :: ContractState
   , currentTime :: Instant
   , tzOffset :: Minutes
-  , wallet :: PABConnectedWallet
+  , roleTokens :: RoleTokenStore
   }
 
 type StartedState =
@@ -70,12 +49,11 @@ type StartedState =
   -- TODO: fix primitive obsession - maybe a zipper is a better representation
   -- than an index + the execution state?
   , selectedStep :: Int
-  -- How the "logged-in" user sees the different Parties of the contract
-  , contractUserParties :: ContractUserParties
   -- These are the possible actions a user can make in the current step (grouped by party).
   , namedActions :: UserNamedActions
   , tabs :: Map Int Tab
   , expandPayments :: Map Int Boolean
+  , participants :: Set Party
   }
 
 type StepBalance =
@@ -110,11 +88,11 @@ derive instance eqTab :: Eq Tab
 type Slice =
   { contracts :: ContractStore
   , currentTime :: Instant
+  , roleTokens :: RoleTokenStore
   }
 
 type Input =
-  { wallet :: PABConnectedWallet
-  , contractIndex :: ContractStatusId
+  { contractIndex :: ContractStatusId
   }
 
 data Msg = AskConfirmation NamedAction (Maybe ChosenNum)
@@ -123,7 +101,6 @@ data Action
   = Init
   | Finalize
   | Receive (Connected Slice Input)
-  | SetNickname ContractNickname
   | SelectTab Int Tab
   | ToggleExpandPayment Int
   | OnActionSelected NamedAction (Maybe ChosenNum)
@@ -153,7 +130,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent Init = Nothing
   toEvent Finalize = Nothing
   toEvent (Receive _) = Nothing
-  toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
   toEvent (OnActionSelected _ _) = Nothing

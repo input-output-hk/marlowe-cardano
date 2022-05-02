@@ -7,14 +7,18 @@ import Prologue
 
 import API.Lenses (_cicContract)
 import Bridge (toFront)
-import Capability.Marlowe (class ManageMarlowe, initializeContract)
+import Capability.Marlowe (class ManageMarlowe, initializeContract, redeem)
 import Capability.PAB
   ( class ManagePAB
   , onNewActiveEndpoints
   , subscribeToPlutusApp
   , unsubscribeFromPlutusApp
   )
-import Capability.PAB (activateContract, getWalletContractInstances) as PAB
+import Capability.PAB
+  ( activateContract
+  , getWalletContractInstances
+  , subscribeToPlutusApp
+  ) as PAB
 import Capability.PlutusApps.FollowerApp (class FollowerApp, followContract)
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
@@ -26,36 +30,55 @@ import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (handleAction, initialState) as Template
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Alt ((<|>))
+import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Structured (StructuredLog, debug, error)
+import Control.Logger.Structured (StructuredLog, debug, error, info)
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
-import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Control.Parallel (parTraverse_)
+import Data.Align (align)
 import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
+import Data.Bifunctor (lmap)
+import Data.BigInt as BigInt
+import Data.BigInt.Argonaut (BigInt)
 import Data.ContractStatus (ContractStatus(..))
-import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
-import Data.Foldable (for_, traverse_)
-import Data.Lens (assign, modifying, set, use, view, (^.), (^?))
-import Data.Map (filterKeys, toUnfoldable)
+import Data.Enum (fromEnum, toEnum)
+import Data.Filterable (filter)
+import Data.Foldable (foldMap, for_, traverse_)
+import Data.FoldableWithIndex (forWithIndex_)
+import Data.Lens (_Just, assign, modifying, set, to, use, view, (^.), (^?))
+import Data.Lens.Record (prop)
+import Data.LocalContractNicknames (LocalContractNicknames, getContractNickname)
+import Data.Map (Map, filterKeys, toUnfoldable)
+import Data.Map as Map
+import Data.Map.Alignable (AlignableMap(..))
+import Data.Maybe (fromMaybe, maybe)
 import Data.NewContract (NewContract(..))
+import Data.Newtype (under2, unwrap)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
+  , _assets
   , _companionAppId
   , _initialFollowers
   , _marloweAppId
   , _walletId
   )
+import Data.Set (Set)
+import Data.Set as Set
+import Data.Slot (Slot)
+import Data.These (These(..))
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
-import Data.Traversable (for)
+import Data.Traversable (for, traverse)
+import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.UserNamedActions (userNamedActions)
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
@@ -76,21 +99,39 @@ import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
-import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
-import Marlowe.Client (getMarloweParams)
-import Marlowe.Execution.State (extractNamedActions)
+import Language.Marlowe.Client
+  ( EndpointResponse(..)
+  , MarloweEndpointResult(..)
+  , _ContractHistory
+  )
+import Marlowe.Execution.State (extractNamedActions, isClosed)
 import Marlowe.Execution.Types as Execution
+import Marlowe.HasParties (getParties)
+import Marlowe.Run.Server
+  ( getApiContractsV1ByCurrencysymbolRoletokensByTokenname
+  )
+import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Semantics (MarloweData, MarloweParams)
+import Marlowe.Semantics
+  ( Assets
+  , MarloweData
+  , MarloweParams
+  , Party(..)
+  , Token(..)
+  , _rolesCurrency
+  )
 import MarloweContract (MarloweContract(..))
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
   , _contractFilter
+  , _contractStore
   , _contracts
   , _menuOpen
+  , _roleTokens
   , _selectedContractIndex
   , _templateState
+  , _tipSlot
   , _tzOffset
   , _wallet
   , _walletCompanionStatus
@@ -115,18 +156,23 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , InstanceStatusToClient(..)
   ) as PAB
+import Plutus.V1.Ledger.Slot as Plutus
+import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts
-  ( followerContractExists
-  , getClosedContracts
+  ( ContractStore
+  , followerContractExists
   , getContract
-  , getNewContracts
-  , getRunningContracts
+  , getContractNicknames
+  , isFollowerContract
+  , partitionContracts
   )
+import Store.RoleTokens (Payout, RoleTokenStore, getEligiblePayouts)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (successToast)
+import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 import WebSocket.Support as WS
 
@@ -187,6 +233,7 @@ unsubscribeFromPlutusApps = do
 component
   :: forall m
    . MonadAff m
+  => MonadAjax MarloweRun.Api m
   => MonadLogger StructuredLog m
   => MonadUnliftAff m
   => MonadAsk Env m
@@ -219,47 +266,194 @@ component = connect sliceSelector $ mkReactiveComponent
           tzOffset <- timezoneOffset
           assign _tzOffset tzOffset
       , finalize: \_ -> unsubscribeFromPlutusApps
-      , handleInput: \_ _ -> pure unit
+      , handleInput
       , handleAction
       }
   }
   where
   sliceSelector =
-    selectEq \{ currentTime, contracts } -> { currentTime, contracts }
+    selectEq \{ currentTime, tipSlot, contracts, roleTokens } ->
+      { currentTime
+      , tipSlot
+      , contracts
+      , roleTokens
+      }
 
 deriveState :: Connected Slice PABConnectedWallet -> DerivedState
-deriveState { input, context } =
+deriveState { context } =
   let
-    wallet = input
-    { contracts, currentTime } = context
-    runningContracts =
-      deriveContractState currentTime wallet <$> getRunningContracts contracts
-    closedContracts =
-      deriveContractState currentTime wallet <$> getClosedContracts contracts
-    newContracts = getNewContracts contracts
+    { contracts, currentTime, roleTokens } = context
+    { started, starting } = partitionContracts contracts
+    nicknames = getContractNicknames contracts
   in
-    { newContracts
-    , runningContracts
-    , closedContracts
+    { newContracts: starting
+    , contracts:
+        deriveContractState currentTime nicknames roleTokens <$> started
     }
 
 deriveContractState
   :: Instant
-  -> PABConnectedWallet
+  -> LocalContractNicknames
+  -> RoleTokenStore
   -> Execution.State
   -> ContractState
-deriveContractState currentTime wallet executionState =
-  let
-    { marloweParams, contract } = executionState
-    userParties = contractUserParties wallet marloweParams contract
-  in
-    { executionState
-    , contractUserParties: userParties
-    , namedActions: userNamedActions userParties
-        $ extractNamedActions currentTime executionState
-    }
+deriveContractState currentTime nicknames roleTokens executionState =
+  { executionState
+  , namedActions: userNamedActions roleTokens executionState
+      $ extractNamedActions currentTime executionState
+  , isClosed: isClosed executionState
+  , nickname: getContractNickname executionState.marloweParams nicknames
+  }
 
 type HalogenM = H.HalogenM State Action ChildSlots Msg
+
+handleInput
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Unit
+  -> Maybe State
+  -> HalogenM m Unit
+handleInput _ oldState = do
+  let oldContracts = maybe Map.empty (view _contracts) oldState
+  let oldPayouts = oldState ^. _Just <<< _roleTokens <<< to getEligiblePayouts
+  let oldAssets = oldState ^. _Just <<< _wallet <<< _assets
+  let oldTipSlot = oldState ^. _Just <<< _tipSlot
+  handlePayoutChanges oldPayouts
+  handleContractChanges oldContracts
+  handleAssetsChanges oldAssets
+  handleTipSlotChanges oldTipSlot
+
+handleContractChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Map MarloweParams ContractState
+  -> HalogenM m Unit
+handleContractChanges oldContracts = do
+  currentContracts <- use _contracts
+  let
+    addedContracts = Array.fromFoldable
+      $ Map.difference currentContracts oldContracts
+    addedTokens = addedContracts # foldMap \{ executionState } ->
+      let
+        currencySymbol = executionState.marloweParams ^. _rolesCurrency
+        parties = getParties executionState.contract
+      in
+        parties # Set.mapMaybe case _ of
+          Role tokenName -> Just $ Token currencySymbol tokenName
+          _ -> Nothing
+  updateStore $ Store.LoadRoleTokens addedTokens
+  parTraverse_ loadRoleToken addedTokens
+  where
+  loadRoleToken token@(Token currencySymbol tokenName) = do
+    info "Loading role token" { currencySymbol, tokenName }
+    result <- H.lift $ getApiContractsV1ByCurrencysymbolRoletokensByTokenname
+      currencySymbol
+      tokenName
+    case result of
+      Left err -> do
+        error "Failed to load role token"
+          { currencySymbol, tokenName, error: err }
+        updateStore $ Store.LoadRoleTokenFailed token err
+      Right roleToken -> do
+        info "Role token loaded" $ encodeJson roleToken
+        updateStore $ Store.RoleTokenLoaded roleToken
+
+handlePayoutChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Set Payout
+  -> HalogenM m Unit
+handlePayoutChanges oldPayouts = do
+  wallet <- use _wallet
+  currentPayouts <- use (_roleTokens <<< to getEligiblePayouts)
+  let newPayouts = Set.difference currentPayouts oldPayouts
+  parTraverse_ (redeem wallet) newPayouts
+
+handleAssetsChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Assets
+  -> HalogenM m Unit
+handleAssetsChanges oldAssets = do
+  currentAssets <- use (_wallet <<< _assets)
+  let leftAssocTuple (Tuple a (Tuple b c)) = Tuple (Tuple a b) c
+  let
+    -- Assets is a nested Map of Maps, which is a pain to work with here.
+    -- Flatten them out by merging the inner and outer keys into a Token
+    flattenAssets :: Assets -> Map Token BigInt
+    flattenAssets = Map.fromFoldable
+      -- left-associate the nested tuples and convert to a Token
+      <<< map (lmap (uncurry Token) <<< leftAssocTuple)
+      -- flatten the nested array
+      <<< bindFlipped
+        -- distribute the outer key into the inner array
+        -- i.e. Go from Tuple a (Array (Tuple b c)) to Array (Tuple a (Tuple b c))
+        ( traverse
+            -- enumerate the inner key value pairs
+            (Map.toUnfoldable :: _ -> Array _)
+        )
+      -- enumerate the outer key value pairs
+      <<< (Map.toUnfoldable :: _ -> Array _)
+      -- Unwrap to a Map
+      <<< unwrap
+  let oldFlat = flattenAssets oldAssets
+  let currentFlat = flattenAssets currentAssets
+  let
+    diffAssetClass (This oldValue) = negate oldValue
+    diffAssetClass (That newValue) = newValue
+    diffAssetClass (Both oldValue newValue) = newValue - oldValue
+  let
+    assetsChanged = filter (notEq zero)
+      $ under2 AlignableMap (align diffAssetClass) oldFlat currentFlat
+  forWithIndex_ assetsChanged \(Token currencySymbol tokenName) change -> do
+    let
+      { assetType, changeDisplayed } =
+        if currencySymbol == "" then
+          { assetType: "🪙 Ada"
+          , changeDisplayed:
+              encodeJson $ BigInt.toNumber (unwrap change) / 1_000_000.0
+          }
+        else
+          { assetType: "Tokens"
+          , changeDisplayed:
+              encodeJson $ fromMaybe 0 $ BigInt.toInt $ unwrap change
+          }
+      msg
+        | change > zero = " added to wallet"
+        | otherwise = " removed from wallet"
+    info (assetType <> msg) $ encodeJson
+      { currencySymbol, tokenName, change: changeDisplayed }
+
+handleTipSlotChanges
+  :: forall m
+   . MonadAjax MarloweRun.Api m
+  => MonadLogger StructuredLog m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => MonadAff m
+  => Slot
+  -> HalogenM m Unit
+handleTipSlotChanges oldTipSlot = do
+  currentTipSlot <- use _tipSlot
+  when (currentTipSlot > oldTipSlot) do
+    info "⛓️ Chain extended" $ encodeJson
+      { newTipSlot: fromEnum currentTipSlot }
 
 handleAction
   :: forall m
@@ -310,42 +504,6 @@ handleAction (SelectContract marloweParams) = assign
   _selectedContractIndex
   marloweParams
 
-{- [UC-CONTRACT-4][1] Redeem payments
-This action is triggered every time we receive a status update for a `MarloweFollower` app. The
-handler looks, in the corresponding contract, for any payments to roles for which the current
-wallet holds the token, and then calls the "redeem" endpoint of the wallet's `MarloweApp` for each
-one, to make sure those funds reach the user's wallet (without the user having to do anything).
-This is not very sophisticated, and results in the "redeem" endpoint being called more times than
-necessary (we are not attempting to keep track of which payments have already been redeemed). Also,
-we thought it would be more user-friendly for now to trigger this automatically - but when we
-integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
-manually (and sign the transaction). So this will almost certainly have to change.
--}
-handleAction (RedeemPayments _) = pure unit
-
-{-
-  -- FIXME-3559 Fix redeem logic
-handleAction { wallet } (RedeemPayments marloweParams) = do
- mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
-for_ mStartedContract \{ executionState, userParties } ->
-  let
-    payments = getAllPayments executionState
-    { marloweParams } = executionState
-    isToParty party (Payment _ payee _) = case payee of
-      Party p -> p == party
-      _ -> false
-  in
-    for (List.fromFoldable userParties) \party ->
-      let
-        paymentsToParty = List.filter (isToParty party) payments
-      in
-        for paymentsToParty \payment -> case payment of
-          Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
-            marloweParams
-            tokenName
-          _ -> pure unit
--}
-
 handleAction (TemplateAction templateAction) = do
   wallet <- use _wallet
   case templateAction of
@@ -390,6 +548,13 @@ handleAction (TemplateAction templateAction) = do
                     $ Just
                     $ Started marloweParams
               addToast $ successToast "Contract created."
+              -- Follow the contract here, because the wallet companion takes
+              -- too long to respond now.
+              ajaxFollow <- followContract wallet marloweParams
+              case ajaxFollow of
+                Left err -> globalError "Can't follow the contract" err
+                Right _ -> do
+                  addToast $ successToast "Contract initialized."
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
@@ -409,7 +574,7 @@ handleAction (SetContactForRole _ _) = do
 
 handleAction
   (OnAskContractActionConfirmation marloweParams action chosenNum) = do
-  contracts <- use _contracts
+  contracts <- use _contractStore
   wallet <- use _wallet
   let
     mExecutionState = getContract marloweParams contracts
@@ -426,7 +591,7 @@ handleAction (NotificationParseFailed error) = do
 
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
 handleAction (CompanionAppStateUpdated companionAppState) = do
-  contracts <- use _contracts
+  contracts <- use _contractStore
   wallet <- use _wallet
   walletCompanionStatus <- use _walletCompanionStatus
   let
@@ -451,8 +616,53 @@ handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   {- [UC-CONTRACT-3][1] Apply an input to a contract -}
   FollowerApp.onNewObservableState plutusAppId contractHistory
   {- [UC-CONTRACT-4][0] Redeem payments -}
-  let marloweParams = getMarloweParams contractHistory
-  handleAction $ RedeemPayments marloweParams
+  let
+    marloweParams =
+      view
+        ( _ContractHistory
+            <<< prop (Proxy :: Proxy "chParams")
+        )
+        $ contractHistory
+    unspentPayouts = contractHistory
+      ^. _ContractHistory <<< prop (Proxy :: Proxy "chUnspentPayouts")
+
+  updateStore $ Store.NewPayoutsReceived marloweParams unspentPayouts
+
+{- [UC-CONTRACT-4][1] Redeem payments
+This action is triggered every time we receive a status update for a `MarloweFollower` app. The
+handler looks, in the corresponding contract, for any payments to roles for which the current
+wallet holds the token, and then calls the "redeem" endpoint of the wallet's `MarloweApp` for each
+one, to make sure those funds reach the user's wallet (without the user having to do anything).
+This is not very sophisticated, and results in the "redeem" endpoint being called more times than
+necessary (we are not attempting to keep track of which payments have already been redeemed). Also,
+we thought it would be more user-friendly for now to trigger this automatically - but when we
+integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
+manually (and sign the transaction). So this will almost certainly have to change.
+-}
+handleAction (RedeemPayments _) = pure unit
+
+{-
+  -- FIXME-3559 Fix redeem logic
+handleAction { wallet } (RedeemPayments marloweParams) = do
+ mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
+for_ mStartedContract \{ executionState, userParties } ->
+  let
+    payments = getAllPayments executionState
+    { marloweParams } = executionState
+    isToParty party (Payment _ payee _) = case payee of
+      Party p -> p == party
+      _ -> false
+  in
+    for (List.fromFoldable userParties) \party ->
+      let
+        paymentsToParty = List.filter (isToParty party) payments
+      in
+        for paymentsToParty \payment -> case payment of
+          Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
+            marloweParams
+            tokenName
+            _ -> pure unit
+-}
 
 {- [UC-CONTRACT-1][2] Starting a Marlowe contract
   After the PAB endpoint finishes creating the contract, it modifies
@@ -489,17 +699,22 @@ handleAction (NewActiveEndpoints plutusAppId activeEndpoints) = do
   onNewActiveEndpoints plutusAppId activeEndpoints
 
 handleAction (MarloweAppClosed mVal) = void $ runMaybeT do
-  reActivatePlutusScript MarloweApp mVal
+  reactivatePlutusScript MarloweApp mVal
 
 handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
-  reActivatePlutusScript WalletCompanion mVal
+  reactivatePlutusScript WalletCompanion mVal
 
 handleAction (UpdateWalletFunds { assets, sync }) = do
-  debug "💰Wallet funds changed" $ encodeJson assets
   updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
   updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
 
-reActivatePlutusScript
+handleAction (SlotChanged slot) = do
+  updateStore $ Store.SlotChanged slot
+
+handleAction (NicknameUpdated id nickname) = do
+  updateStore $ Store.ContractNicknameUpdated id nickname
+
+reactivatePlutusScript
   :: forall m
    . MonadState State m
   => MonadLogger StructuredLog m
@@ -507,17 +722,26 @@ reActivatePlutusScript
   => ManagePAB m
   => MarloweContract
   -> Maybe Json
-  -> MaybeT m Unit
-reActivatePlutusScript contractType mVal = do
+  -> m Unit
+reactivatePlutusScript contractType mVal = do
   walletId <- use (_wallet <<< _walletId)
-  Logger.error
-    ("Plutus script " <> show contractType <> " has closed unexpectedly")
+  Logger.info
+    ("Plutus script " <> show contractType <> " has stopped. Restarting now.")
     mVal
-  newAppId <- MaybeT $ hush <$> PAB.activateContract contractType walletId
-  H.lift
-    $ updateStore
-    $ Store.Wallet
-    $ Wallet.OnPlutusScriptChanged contractType newAppId
+  result <- PAB.activateContract contractType walletId
+  case result of
+    Left err ->
+      Logger.error
+        ("Plutus script " <> show contractType <> " failed to start.")
+        err
+    Right instanceId -> do
+      Logger.info
+        ("Plutus script " <> show contractType <> " started.")
+        (encodeJson instanceId)
+      PAB.subscribeToPlutusApp instanceId
+      updateStore
+        $ Store.Wallet
+        $ Wallet.OnPlutusScriptChanged contractType instanceId
 
 subscribeToSources
   :: forall m
@@ -557,8 +781,9 @@ actionsFromSources = do
             debug "↓ Recv websocket message" msg
           _ -> pure unit
         let mWallet = store ^? Store._wallet <<< _connectedWallet
+        let contractStore = store ^. Store._contracts
         liftEffect $ for_ mWallet \w ->
-          subscriber $ actionFromWebsocket w websocketMsg
+          subscriber $ actionFromWebsocket contractStore w websocketMsg
       pure $ HS.unsubscribe canceller
   let walletUpdates = Just <<< UpdateWalletFunds <$> walletFunds
   -- Alt instance for Emitters "zips" them together. So the resulting Emitter
@@ -566,21 +791,25 @@ actionsFromSources = do
   pure $ websocketActions <|> walletUpdates
 
 actionFromWebsocket
-  :: PABConnectedWallet
+  :: ContractStore
+  -> PABConnectedWallet
   -> FromSocket CombinedWSStreamToClient
   -> Maybe Action
-actionFromWebsocket wallet = case _ of
+actionFromWebsocket contractStore wallet = case _ of
   WS.ReceiveMessage (Left jsonDecodeError) ->
     Just $ notificationParseFailed "websocket message" jsonNull jsonDecodeError
-  WS.ReceiveMessage (Right stream) -> actionFromStream wallet stream
+  WS.ReceiveMessage (Right stream) -> actionFromStream contractStore wallet
+    stream
   _ -> Nothing
 
 actionFromStream
-  :: PABConnectedWallet
+  :: ContractStore
+  -> PABConnectedWallet
   -> PAB.CombinedWSStreamToClient
   -> Maybe Action
-actionFromStream wallet = case _ of
-  SlotChange _ -> Nothing
+actionFromStream contractStore wallet = case _ of
+  SlotChange (Plutus.Slot { getSlot }) ->
+    SlotChanged <$> (toEnum =<< BigInt.toInt (unwrap getSlot))
   -- TODO handle with lite wallet support
   -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
   --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
@@ -600,7 +829,7 @@ actionFromStream wallet = case _ of
     | appId == marloweAppId ->
         Just $ MarloweAppClosed message
     | otherwise ->
-        Just $ MarloweAppClosed message
+        Nothing
   InstanceUpdate appId (PAB.NewObservableState state)
     | appId == companionAppId ->
         case D.decode (D.maybe D.value) state of
@@ -633,15 +862,17 @@ actionFromStream wallet = case _ of
         Right (Just (EndpointSuccess uuid RedeemResponse)) ->
           Just $ PaymentRedeemed uuid
         _ -> Nothing
-    | otherwise -> case D.decode (D.maybe D.value) state of
-        Left error ->
-          Just $ notificationParseFailed
-            "follower app response"
-            state
-            error
-        Right (Just history) ->
-          Just $ ContractHistoryUpdated appId history
-        Right _ -> Nothing
+    | isFollowerContract appId contractStore ->
+        case D.decode (D.maybe D.value) state of
+          Left error ->
+            Just $ notificationParseFailed
+              "follower app response"
+              state
+              error
+          Right (Just history) ->
+            Just $ ContractHistoryUpdated appId history
+          Right _ -> Nothing
+    | otherwise -> Nothing
   where
   companionAppId = wallet ^. _companionAppId
   marloweAppId = wallet ^. _marloweAppId

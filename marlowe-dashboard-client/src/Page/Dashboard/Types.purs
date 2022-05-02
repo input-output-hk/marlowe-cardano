@@ -6,6 +6,7 @@ import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
 import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.Contacts.Types as Contacts
+import Component.ContractPreview.Nickname as Nickname
 import Component.ContractSetup.Types as ContractSetup
 import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.Expand as Expand
@@ -13,12 +14,13 @@ import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Template.Types (Action, State) as Template
 import Component.Tooltip.Types (ReferenceId)
 import Data.Argonaut (Json, JsonDecodeError)
+import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatusId)
-import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
+import Data.Slot as Slot
 import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
 import Data.UserNamedActions (UserNamedActions)
@@ -37,13 +39,15 @@ import Marlowe.Semantics (ChosenNum, MarloweData, MarloweParams)
 import Page.Contract.Types as ContractPage
 import Plutus.Contract.Effects (ActiveEndpoint)
 import Store.Contracts (ContractStore)
+import Store.RoleTokens (RoleTokenStore)
 import Text.Pretty (text)
 import Type.Proxy (Proxy(..))
 
 type ContractState =
   { executionState :: Execution.State
-  , contractUserParties :: ContractUserParties
   , namedActions :: UserNamedActions
+  , isClosed :: Boolean
+  , nickname :: Maybe ContractNickname
   }
 
 type State = Reactive.State
@@ -64,9 +68,8 @@ type TransientState =
   }
 
 type DerivedState =
-  { newContracts :: Array NewContract
-  , runningContracts :: Array ContractState
-  , closedContracts :: Array ContractState
+  { newContracts :: Map UUID NewContract
+  , contracts :: Map MarloweParams ContractState
   }
 
 -- This represents the status of the wallet companion. When we start the application
@@ -98,6 +101,8 @@ data Query (a :: Type)
 type Slice =
   { contracts :: ContractStore
   , currentTime :: Instant
+  , roleTokens :: RoleTokenStore
+  , tipSlot :: Slot.Slot
   }
 
 data Msg
@@ -108,6 +113,7 @@ type Slot = H.Slot Query Msg Unit
 
 type ChildSlots =
   ( contacts :: Contacts.Slot Unit
+  , contractNickname :: Nickname.Slot ContractStatusId
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
@@ -119,6 +125,8 @@ type ChildSlots =
   )
 
 _dashboard = Proxy :: Proxy "dashboard"
+
+_contractNickname = Proxy :: Proxy "contractNickname"
 
 data Action
   = DisconnectWallet
@@ -146,6 +154,8 @@ data Action
   | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint)
   | MarloweAppClosed (Maybe Json)
   | WalletCompanionAppClosed (Maybe Json)
+  | SlotChanged Slot.Slot
+  | NicknameUpdated ContractStatusId ContractNickname
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where

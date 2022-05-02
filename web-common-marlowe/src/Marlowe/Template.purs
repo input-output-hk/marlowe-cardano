@@ -5,8 +5,7 @@ import Prelude
 import Data.BigInt.Argonaut (BigInt)
 import Data.DateTime.Instant (Instant)
 import Data.Foldable (foldl)
-import Data.Lens (Lens', iso, re)
-import Data.Lens.Iso (mapping)
+import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
@@ -20,7 +19,6 @@ import Data.Set as Set
 import Data.Set.Ordered.OSet (OSet)
 import Data.Traversable (foldMap)
 import Marlowe.Time (unixEpoch)
-import Plutus.V1.Ledger.Time as POSIXTime
 import Type.Proxy (Proxy(..))
 
 newtype Placeholders = Placeholders
@@ -40,10 +38,6 @@ derive newtype instance semigroupPlaceholders :: Semigroup Placeholders
 
 derive newtype instance monoidPlaceholders :: Monoid Placeholders
 
-data IntegerTemplateType
-  = TimeContent
-  | ValueContent
-
 newtype TemplateContent = TemplateContent
   { timeContent :: Map String Instant
   , valueContent :: Map String BigInt
@@ -54,14 +48,6 @@ _timeContent = _Newtype <<< prop (Proxy :: _ "timeContent")
 
 _valueContent :: Lens' TemplateContent (Map String BigInt)
 _valueContent = _Newtype <<< prop (Proxy :: _ "valueContent")
-
-typeToLens :: IntegerTemplateType -> Lens' TemplateContent (Map String BigInt)
-typeToLens TimeContent =
-  _timeContent <<< mapping
-    ( re _Newtype <<< iso POSIXTime.toBigInt
-        (fromMaybe bottom <<< POSIXTime.fromBigInt)
-    )
-typeToLens ValueContent = _valueContent
 
 derive instance newTypeTemplateContent :: Newtype TemplateContent _
 

@@ -4,7 +4,7 @@ module Example where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 
 {- Define a contract, Close is the simplest contract which just ends the contract straight away

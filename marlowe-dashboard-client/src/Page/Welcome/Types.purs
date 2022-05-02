@@ -22,7 +22,6 @@ type State =
   -- cards has to be different for different screen sizes (on large screens some cards slide in
   -- from the right) - and that's much easier to do with media queries.
   , cardOpen :: Boolean
-  , enteringDashboardState :: Boolean
   }
 
 -- This type is probably not testnet specific.

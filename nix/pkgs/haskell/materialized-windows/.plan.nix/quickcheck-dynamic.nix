@@ -77,5 +77,5 @@
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/quickcheck-dynamic; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/quickcheck-dynamic; echo source root reset to $sourceRoot";
     }

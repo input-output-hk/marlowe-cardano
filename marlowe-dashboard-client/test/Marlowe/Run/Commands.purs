@@ -17,8 +17,10 @@ import Control.Parallel (parOneOf)
 import Data.Address (Address)
 import Data.Argonaut (class EncodeJson, encodeJson, jsonEmptyArray)
 import Data.Argonaut.Extra (encodeStringifyJson)
+import Data.BigInt.Argonaut as BigInt
 import Data.Foldable (class Foldable)
 import Data.HTTP.Method (Method(..))
+import Data.Lens ((^.))
 import Data.Map (Map)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.String (joinWith)
@@ -41,13 +43,17 @@ import Marlowe.Semantics
   ( Contract
   , MarloweData
   , MarloweParams
+  , TokenName
   , TransactionInput
+  , _rolesCurrency
   )
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToClient
+  ( CombinedWSStreamToClient(..)
   , ContractInstanceClientState
+  , InstanceStatusToClient(..)
   )
+import Plutus.V1.Ledger.Slot (Slot(..))
 import Test.Assertions (shouldEqualJson)
 import Test.Data.Marlowe
   ( applyInputsContent
@@ -62,7 +68,10 @@ import Test.Data.Marlowe
   , createWalletResponse
   , followEndpoint
   , followerMessage
+  , redeemContent
+  , redeemEndpoint
   , restoreRequest
+  , roleToken
   , walletCompantionMessage
   )
 import Test.Data.Plutus
@@ -71,7 +80,7 @@ import Test.Data.Plutus
   , newActiveEndpoints
   , subscribeApp
   )
-import Test.Marlowe.Run (Coenv)
+import Test.Marlowe.Run (Coenv, getWallet)
 import Test.Network.HTTP
   ( class MonadMockHTTP
   , RequestMatcher
@@ -420,6 +429,17 @@ handleGetContractInstances walletId = handleHTTPRequest GET uri <<< pure
   where
   uri = "/pab/api/contract/instances/wallet/" <> WI.toString walletId <> "?"
 
+handlePutContractInstanceStop
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> m Unit
+handlePutContractInstanceStop instanceId =
+  handleHTTPRequest PUT uri $ pure jsonEmptyArray
+  where
+  uri = "/pab/api/contract/instance/" <> UUID.toString instanceId <> "/stop"
+
 handlePostCreate
   :: forall m
    . MonadLogger String m
@@ -446,6 +466,21 @@ handlePostApplyInputs
 handlePostApplyInputs marloweAppId reqId params input = do
   handlePostEndpoint marloweAppId applyInputsEndpoint ado
     expectJsonContent $ applyInputsContent reqId params input
+    in jsonEmptyArray
+
+handlePostRedeem
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> UUID
+  -> MarloweParams
+  -> TokenName
+  -> Address
+  -> m Unit
+handlePostRedeem marloweAppId reqId params tokenName address = do
+  handlePostEndpoint marloweAppId redeemEndpoint ado
+    expectJsonContent $ redeemContent reqId params tokenName address
     in jsonEmptyArray
 
 handlePostFollow
@@ -492,6 +527,31 @@ handlePostActivate walletId contractType instanceId =
   handleHTTPRequest POST "/pab/api/contract/activate" ado
     expectJsonContent $ contractActivationArgs walletId contractType
     in PlutusAppId instanceId
+
+handleGetRoleToken
+  :: forall m
+   . MonadLogger String m
+  => MonadError Error m
+  => MonadEffect m
+  => MonadAsk Coenv m
+  => MonadMockHTTP m
+  => MarloweParams
+  -> TokenName
+  -> WalletNickname
+  -> m Unit
+handleGetRoleToken params tokenName walletName = do
+  { address } <- getWallet walletName
+  handleHTTPRequest GET uri $ pure $ roleToken params tokenName address
+  where
+  uri = joinWith "/"
+    [ ""
+    , "api"
+    , "contracts"
+    , "v1"
+    , params ^. _rolesCurrency
+    , "role-tokens"
+    , tokenName
+    ]
 
 handleHTTPRequest
   :: forall a m
@@ -602,6 +662,28 @@ sendNewActiveEndpoints instanceId =
   sendWebsocketMessage "New active endpoints" <<< instanceUpdate instanceId <<<
     newActiveEndpoints
 
+sendSlotChange
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadLogger String m
+  => MonadEffect m
+  => Int
+  -> m Unit
+sendSlotChange slot = sendWebsocketMessage ("Slot change" <> show slot)
+  $ SlotChange
+  $ Slot { getSlot: BigInt.fromInt slot }
+
+sendContractFinished
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadLogger String m
+  => MonadEffect m
+  => UUID
+  -> m Unit
+sendContractFinished instanceId = sendWebsocketMessage "Contract finished"
+  $ instanceUpdate instanceId
+  $ ContractFinished Nothing
+
 recvInstanceSubscribe
   :: forall m
    . MonadMockHTTP m
@@ -648,7 +730,7 @@ recvWebsocketMessage description expected = do
           Nothing -> do
             delay $ Milliseconds 10.0
             pure Nothing
-    , Nothing <$ delay (Milliseconds 100.0)
+    , Nothing <$ delay (Milliseconds 1000.0)
     ]
   case msg of
     Nothing -> throwError $ error $ joinWith "\n"

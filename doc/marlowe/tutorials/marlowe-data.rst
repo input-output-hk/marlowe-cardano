@@ -9,7 +9,7 @@ a number of assumptions about the infrastructure in which contracts will
 be run. It also introduces *Extended Marlowe* which we use for describing *contract templates* in Marlowe.
 
 The code that we describe here comes from the Haskell modules
-`SemanticsTypes.hs <https://github.com/input-output-hk/marlowe/blob/master/src/Language/Marlowe/SemanticsTypes.hs>`_
+`Semantics/Types.hs <https://github.com/input-output-hk/marlowe/blob/master/src/Language/Marlowe/Semantics/Types.hs>`_
 ,
 `Semantics.hs <https://github.com/input-output-hk/marlowe/blob/master/src/Language/Marlowe/Semantics.hs>`_
 and

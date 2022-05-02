@@ -37,3 +37,10 @@ hr {
 .border-left-green {
   border-left-color: #00a551;
 }
+
+/* This is used to affect the style of the edit icon when the parent contract
+ * nickname field is hovered. */
+.nickname-input:hover .material-icons-round {
+  transform: translateX(0px);
+  opacity: 1;
+}

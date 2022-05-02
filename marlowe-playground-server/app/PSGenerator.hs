@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
@@ -40,10 +41,10 @@ import Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
 import qualified Language.Marlowe.ACTUS.Domain.ContractTerms as CT
 import Language.Marlowe.ACTUS.Domain.Schedule as SC
 import Language.Marlowe.Extended
-import Language.Marlowe.SemanticsTypes (State (..))
-import Language.PureScript.Bridge (BridgePart, Language (Haskell), PSType, SumType, TypeInfo (TypeInfo), argonaut,
-                                   buildBridge, equal, genericShow, mkSumType, order, psTypeParameters, typeModule,
-                                   typeName, (^==))
+import Language.Marlowe.Semantics.Types (State (..))
+import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), PSType, SumType (..),
+                                   TypeInfo (TypeInfo), _typeName, argonaut, buildBridge, equal, genericShow, mkSumType,
+                                   order, psTypeParameters, typeModule, typeName, (^==))
 import Language.PureScript.Bridge.Builder (BridgeData)
 import Language.PureScript.Bridge.PSTypes (psString)
 import Language.PureScript.Bridge.TypeParameters (A)
@@ -64,6 +65,16 @@ import System.FilePath ((</>))
 import qualified Webghc.Server as Webghc
 import qualified ZeroCouponBond
 
+-- See Note [GistID hotfix]
+psGistId :: TypeInfo 'PureScript
+psGistId = TypeInfo "marlowe-playground-client" "Gists.Extra" "GistId" []
+
+-- See Note [GistID hotfix]
+gistIdBridge :: BridgePart
+gistIdBridge = do
+    typeName ^== "GistId"
+    typeModule ^== "Gist"
+    pure psGistId
 
 psContract :: MonadReader BridgeData m => m PSType
 psContract =
@@ -73,7 +84,7 @@ psContract =
 contractBridge :: BridgePart
 contractBridge = do
     typeName ^== "Contract"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psContract
 
 psState :: MonadReader BridgeData m => m PSType
@@ -84,7 +95,7 @@ psState =
 stateBridge :: BridgePart
 stateBridge = do
     typeName ^== "State"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psState
 
 psObservation :: MonadReader BridgeData m => m PSType
@@ -95,7 +106,7 @@ psObservation =
 observationBridge :: BridgePart
 observationBridge = do
     typeName ^== "Observation"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psObservation
 
 psValue :: MonadReader BridgeData m => m PSType
@@ -106,7 +117,7 @@ psValue =
 valueBridge :: BridgePart
 valueBridge = do
     typeName ^== "Value"
-    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    typeModule ^== "Language.Marlowe.Semantics.Types"
     psValue
 
 psTransactionInput :: MonadReader BridgeData m => m PSType
@@ -139,6 +150,8 @@ timeBridge = typeName ^== "LocalTime" >> return psString
 
 myBridge :: BridgePart
 myBridge =
+    -- See Note [GistID hotfix]
+    gistIdBridge <|>
     PSGenerator.Common.aesonBridge <|>
     PSGenerator.Common.containersBridge <|>
     PSGenerator.Common.languageBridge <|>
@@ -163,11 +176,17 @@ myBridgeProxy = Proxy
 instance HasBridge MyBridge where
     languageBridge _ = buildBridge myBridge
 
+-- See Note [GistID hotfix]
+playgroundTypes' :: [SumType 'Haskell]
+playgroundTypes' = filter (\(SumType TypeInfo{_typeName} _ _) -> _typeName /= "GistId" )
+    PSGenerator.Common.playgroundTypes
+
+
 myTypes :: [SumType 'Haskell]
 myTypes =
     PSGenerator.Common.ledgerTypes <>
     PSGenerator.Common.walletTypes <>
-    PSGenerator.Common.playgroundTypes <>
+    playgroundTypes' <>
     [ argonaut $ mkSumType @SourceCode
     , argonaut $ mkSumType @CompilationError
     , argonaut $ mkSumType @InterpreterError

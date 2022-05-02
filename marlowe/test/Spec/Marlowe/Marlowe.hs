@@ -47,7 +47,7 @@ import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
 import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValidator, smallUntypedValidator)
 import Language.Marlowe.Semantics
-import Language.Marlowe.SemanticsTypes
+import Language.Marlowe.Semantics.Types
 import Language.Marlowe.Util
 import Ledger (POSIXTime (..), PaymentPubKeyHash (..), PubKeyHash (..), pubKeyHash, validatorHash)
 import Ledger.Ada (adaValueOf, lovelaceValueOf)
@@ -321,7 +321,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)
             Trace.waitNSlots 2
             Trace.callEndpoint @"redeem" aliceHdl (reqId, pms, "alice", alicePkh)
-            void $ Trace.waitNSlots 2
+            void $ Trace.waitNSlots 5
     where
         alicePk = PK $ walletPubKeyHash alice
         bobPk = PK $ walletPubKeyHash bob

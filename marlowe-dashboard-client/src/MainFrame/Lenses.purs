@@ -28,6 +28,9 @@ _subState = prop (Proxy :: _ "subState")
 _store :: Lens' State Slice
 _store = prop (Proxy :: _ "store")
 
+_enteringDashboardState :: Lens' State Boolean
+_enteringDashboardState = prop (Proxy :: _ "enteringDashboardState")
+
 _welcomeState :: AffineTraversal' State Welcome.State
 _welcomeState = _subState <<< _Left
 

@@ -4,7 +4,7 @@ module ZeroCouponBond where
 import Language.Marlowe.Extended
 
 main :: IO ()
-main = print . pretty $ contract
+main = printJSON $ contract
 
 discountedPrice, notionalPrice :: Value
 discountedPrice = ConstantParam "Amount"

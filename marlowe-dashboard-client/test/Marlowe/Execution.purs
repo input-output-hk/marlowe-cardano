@@ -294,7 +294,6 @@ restoreLoanState { currentTime, startTime } loanParams chHistory = do
     mState = restoreState
       (PlutusAppId UUID.emptyUUID)
       currentTime
-      Nothing
       Loan.metaData
       contractHistory
   case mState of
@@ -311,6 +310,7 @@ restoreLoanState { currentTime, startTime } loanParams chHistory = do
           }
     , chHistory
     , chAddress: scriptAddress
+    , chUnspentPayouts: mempty
     }
 
 infixl 6 unsafeAddInstant as /+/
