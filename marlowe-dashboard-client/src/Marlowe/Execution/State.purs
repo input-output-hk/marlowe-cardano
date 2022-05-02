@@ -185,9 +185,9 @@ nextState txInput state =
 nextTimeout :: Contract -> Maybe Instant
 nextTimeout = timeouts >>> \(Timeouts { minTime }) -> coerce minTime
 
-mkTx :: Instant -> Contract -> List Input -> TransactionInput
-mkTx currentTime contract inputs =
-  TransactionInput { interval: mkInterval currentTime contract, inputs }
+mkTx :: Instant -> Maybe Instant -> List Input -> TransactionInput
+mkTx currentTime mNextTimeout inputs =
+  TransactionInput { interval: mkInterval currentTime mNextTimeout, inputs }
 
 -- This function checks if the are any new timeouts in the current execution state
 timeoutState :: Instant -> State -> Either TransactionError State
@@ -311,7 +311,7 @@ extractActionsFromContract currentTime semanticState contract@(When cases _ _) =
   where
   toNamedAction (Deposit a p t v) =
     let
-      timeInterval = mkInterval currentTime contract
+      timeInterval = mkInterval currentTime $ nextTimeout contract
       env = Environment { timeInterval }
       amount = evalValue env semanticState v
     in
@@ -340,9 +340,9 @@ expandBalances participants tokens stateAccounts =
         in
           key /\ (fromMaybe zero $ Map.lookup key stateAccounts)
 
-mkInterval :: Instant -> Contract -> TimeInterval
-mkInterval currentTime contract =
-  case nextTimeout contract of
+mkInterval :: Instant -> Maybe Instant -> TimeInterval
+mkInterval currentTime mNextTimeout =
+  case mNextTimeout of
     -- There are no timeouts in the remaining contract. i.e. the contract is
     -- not an executable contract.
     Nothing -> TimeInterval

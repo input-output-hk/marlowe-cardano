@@ -21,9 +21,11 @@ import Data.Array (intercalate)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromString)
 import Data.BigInt.Argonaut as BigInt
+import Data.Compactable (compact)
+import Data.Filterable (filter)
 import Data.Lens ((^.))
 import Data.Map (lookup) as Map
-import Data.Maybe (isJust, maybe, maybe')
+import Data.Maybe (isJust)
 import Data.String (trim)
 import Data.String.Extra (capitalize)
 import Data.UserNamedActions (haveActions, mapActions)
@@ -237,7 +239,8 @@ renderAction state party namedAction@(MakeChoice choiceId bounds) =
             description
       _ -> div_ []
 
-    isValid = maybe false (between minBound maxBound) mChosenNum
+    mValidChosen = filter (between minBound maxBound) mChosenNum
+    isValid = isJust mValidChosen
 
     multipleInput = \_ ->
       div
@@ -252,8 +255,8 @@ renderAction state party namedAction@(MakeChoice choiceId bounds) =
               ]
                 <> applyWhen isActiveParticipant Css.withShadow
         ]
-        [ input
-            [ classNames
+        [ input $ compact
+            [ Just $ classNames
                 [ "border-0"
                 , "py-4"
                 , "pl-4"
@@ -264,34 +267,35 @@ renderAction state party namedAction@(MakeChoice choiceId bounds) =
                 , "text-sm"
                 , "disabled:bg-lightgray"
                 ]
-            , type_ InputNumber
-            , enabled isActiveParticipant
-            , maybe'
-                ( \_ -> placeholder $ "Choose between "
-                    <> BigInt.toString minBound
-                    <> " and "
-                    <> BigInt.toString maxBound
-                )
-                (value <<< BigInt.toString)
-                mChosenNum
-            , onValueInput_ $ ChangeChoice choiceId <<< fromString
+            , Just $ type_ InputNumber
+            , Just $ enabled isActiveParticipant
+            , Just $ placeholder $ "Choose between "
+                <> BigInt.toString minBound
+                <> " and "
+                <> BigInt.toString maxBound
+            , value <<< BigInt.toString <$> mChosenNum
+            , Just $ onValueInput_ $ ChangeChoice choiceId <<< fromString
             ]
         , button
-            [ classNames
-                ( [ "px-5", "font-bold" ]
-                    <>
-                      if isValid then
-                        Css.bgBlueGradient
-                      else
-                        [ "bg-darkgray"
-                        , "text-white"
-                        , "opacity-50"
-                        , "cursor-default"
-                        ]
-                )
-            , onClick_ $ SelectAction namedAction Nothing
-            , enabled $ isValid && isActiveParticipant
-            ]
+            ( compact
+                [ Just $ classNames
+                    ( [ "px-5", "font-bold" ]
+                        <>
+                          if isValid then
+                            Css.bgBlueGradient
+                          else
+                            [ "bg-darkgray"
+                            , "text-white"
+                            , "opacity-50"
+                            , "cursor-default"
+                            ]
+                    )
+                -- TODO add note
+                , mValidChosen <#> \validChosen ->
+                    onClick_ $ SelectAction namedAction $ Just validChosen
+                , Just $ enabled $ isValid && isActiveParticipant
+                ]
+            )
             [ text "..." ]
         ]
 
