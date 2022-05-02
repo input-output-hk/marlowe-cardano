@@ -55,7 +55,7 @@ do
     case "$1" in
       -s | --node-socket-path)          NODE_SOCKET_PATH="$2";  shift 2 ;;
       -f | --fund)                      FUND=1;                 shift   ;;
-      -n | --testnet-magic)             TESTNET_MAGIC="$2";     shift 2 ;;
+      -m | --testnet-magic)             TESTNET_MAGIC="$2";     shift 2 ;;
       -w | --wallet-url)                WALLET_URL="$2";        shift 2 ;;
       -p | --pab-url)                   PAB_URL="$2";           shift 2 ;;
       -t | --treasury)                  TREASURY_DIR="$2";      shift 2 ;;
