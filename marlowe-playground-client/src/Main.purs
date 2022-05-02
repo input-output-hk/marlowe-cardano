@@ -3,7 +3,6 @@ module Main where
 import Prologue
 
 import AppM (runAppM)
-import Data.Time.Duration (negateDuration)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
