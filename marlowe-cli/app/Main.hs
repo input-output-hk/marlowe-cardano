@@ -34,7 +34,7 @@ import Paths_marlowe_cli (version)
 main :: IO () -- ^ Action to run the tool.
 main =
   runCLI
-    $ showVersion version <> " @ " <> fromMaybe mempty fromGit
+    $ showVersion version <> fromMaybe mempty fromGit
 
 
 fromGit :: Maybe String
@@ -42,6 +42,6 @@ fromGit :: Maybe String
   -- cross compiling to arm fails; due to a linker bug
 fromGit = Nothing
 #else
-fromGit = Just (unpack . strip $ pack $(gitRevFromGit))
+fromGit = Just ((\v -> if null v then mempty else " @ " <> v) . unpack . strip $ pack $(gitRevFromGit))
 #endif
 

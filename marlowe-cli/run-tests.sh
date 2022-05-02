@@ -43,7 +43,7 @@ PAB_URL=
 FUND=
 TREASURY_DIR=$TREASURY
 
-PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-tests" -o "m:s:bvt:fh" --long "testnet-magic:,node-socket-path:,build,verbose,treasury:,fund,help" -- "$@")
+PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-tests" -o "m:s:bvt:fh" --long "testnet-magic:,node-socket-path:,build,verbose,treasury:,fund,wallet-url:,pab-url:,help" -- "$@")
 VALID_ARGUMENTS=$?
 if [ "$VALID_ARGUMENTS" != "0" ]; then
   echo "$USAGE"
