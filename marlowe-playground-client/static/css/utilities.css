@@ -41,3 +41,7 @@
 .box-shadow-inverted {
   box-shadow: var(--box-shadow-inverted);
 }
+
+.underline-dotted {
+  text-decoration: underline dotted;
+}

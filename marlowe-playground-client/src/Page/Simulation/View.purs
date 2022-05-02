@@ -70,7 +70,6 @@ import Halogen.Classes
   , spaceLeft
   , spaceRight
   , spanText
-  , spanTextBreakWord
   , textSecondaryColor
   , textXs
   , uppercase
@@ -173,6 +172,7 @@ import Simulator.Types
   , ExecutionState(..)
   , InitialConditionsRecord
   , LogEntry(..)
+  , MoveToTimeType(..)
   , otherActionsParty
   )
 import Text.Markdown.TrimmedInline (markdownToHTML)
@@ -568,6 +568,7 @@ simulationStateWidget state =
     currentTime = state ^.
       ( _currentMarloweState <<< _executionState <<< _SimulationRunning
           <<< _time
+          -- TODO: SCP-3887 unify time construct
           <<< to POSIXTime
           -- TODO SCP-3833 Add type safety to timezone conversions
           <<< to (formatPOSIXTime tzOffset)
@@ -823,19 +824,21 @@ inputItem _ _ NotifyInput =
         [ text "+" ]
     ]
 
-inputItem _ state (MoveToTime time) =
+inputItem _ state (MoveToTime moveType time) =
   div
     [ classes [ aHorizontal, ClassName "flex-nowrap" ] ]
     ( [ div [ classes [ ClassName "action" ] ]
-          [ p [ class_ (ClassName "time-input") ]
-              [ spanTextBreakWord "Move current time to"
-              , marloweInstantInput "move-to-instant"
-                  [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
-                  SetTime
-                  time
-                  state.tzOffset
+          [ p_
+              [ text "Move current time to "
+              , span [ id ref, classNames [ "font-bold", "underline-dotted" ] ]
+                  [ text $ case moveType of
+                      NextTime -> "next minute"
+                      NextTimeout -> "next timeout"
+                      ExpirationTime -> "expiration time"
+                  ]
               ]
           , p [ class_ (ClassName "choice-error") ] error
+          , tooltip fullTime (RefId ref) Bottom
           ]
       ]
         <> addButton
@@ -844,6 +847,13 @@ inputItem _ state (MoveToTime time) =
   currentTime = fromMaybe unixEpoch $ state ^?
     _currentMarloweState <<< _executionState <<< _SimulationRunning <<< _time
 
+  ref = "move-to-" <> show moveType
+  fullTime =
+    formatPOSIXTime
+      state.tzOffset
+      (POSIXTime time)
+      # \(dateStr /\ timeStr) ->
+          intercalate " " [ dateStr, timeStr, humanizeOffset state.tzOffset ]
   isForward = currentTime < time
 
   addButton =
