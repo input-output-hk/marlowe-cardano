@@ -9,7 +9,10 @@ on:
       - shlevy
       - sprint-*
 jobs:
+  tests:
+    uses: ./.github/workflows/test.yml
   deploy:
+    needs: [tests]
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.PLUTUS_OPS_GITHUB_TOKEN }}

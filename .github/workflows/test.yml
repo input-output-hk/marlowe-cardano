@@ -12,6 +12,7 @@ on:
       - deploy-hernan
       - deploy-pablo
       - shlevy
+  workflow_call:
 jobs:
   nix-instantiate:
     strategy:
