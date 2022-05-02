@@ -180,4 +180,3 @@ numberFormatter decimals =
     , after: decimals
     , abbreviations: false
     }
-

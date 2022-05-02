@@ -8,7 +8,6 @@ import Data.DateTime.Instant (instant, toDateTime)
 import Data.Enum (toEnum)
 import Data.Maybe (fromJust)
 import Data.Time (hour)
-import Data.Time.Component (Hour)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Tuple.Nested ((/\))
 import Humanize
@@ -113,7 +112,6 @@ localToUtcSpec = describe "localToUtc" do
       Milliseconds 1651089446000.0
     tzOffset = Minutes 180.0
     someLocalDateTime = utcToLocal tzOffset someUTCDateTime
-    hour' = Just <<< hour <<< time
   -- This could be a property based test, but is probably not worth it.
   it "localToUtc <<< utcToLocal should not modify the time" do
     localToUtc tzOffset someLocalDateTime `shouldEqual` someUTCDateTime
