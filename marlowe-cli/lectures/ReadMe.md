@@ -6,3 +6,8 @@
 *   [Running Marlowe Contacts on the Blockchain](04-marlowe-cli-concrete.ipynb)
 *   [Running Marlowe Contracts with the Plutus Application Backend (PAB)](05-marlowe-cli-pab.ipynb)
 *   [Reference for Marlowe CLI Commands](06-marlowe-cli-reference.ipynb)
+
+
+The lectures above can be viewed, edited, and run as Jupyter notebooks. Execute the command `nix run` from this folder in order to start JupyterLabs.
+
+Run `make` in this folder to regenerate slides from the Jupyter notebooks.
