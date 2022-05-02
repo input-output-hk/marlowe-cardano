@@ -734,6 +734,7 @@ lintValue env t@(Term (DivValue a b) pos) = do
     (ConstantSimp _ _ v1 /\ ConstantSimp _ _ v2) ->
       let
         evaluated = evalValue
+          -- TODO: SCP-3887 unify time construct
           (makeEnvironment (POSIXTime unixEpoch) (POSIXTime unixEpoch))
           emptyState
           (S.DivValue (S.Constant v1) (S.Constant v2))

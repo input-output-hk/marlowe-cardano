@@ -73,14 +73,11 @@ import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import Simulator.Lenses
   ( _SimulationNotStarted
-  , _SimulationRunning
   , _currentContract
   , _currentMarloweState
   , _executionState
   , _initialTime
   , _marloweState
-  , _moveToAction
-  , _possibleActions
   , _templateContent
   , _termContract
   )
@@ -93,10 +90,9 @@ import Simulator.State
   , updateChoice
   )
 import Simulator.Types
-  ( ActionInput(..)
-  , ActionInputId(..)
+  ( ActionInputId(..)
   , ExecutionState(..)
-  , Parties(..)
+  , PartiesAction(..)
   )
 import StaticData (simulatorBufferLocalStorageKey)
 import Web.Blob.Download (HandleMethod(..), download)
@@ -224,15 +220,6 @@ handleAction metadata (MoveTime instant) = void $ runMaybeT do
   advanceTime instant
   lift $ updateOracleAndContractEditor metadata
 
-handleAction metadata (SetTime time) = do
-  assign
-    ( _currentMarloweState <<< _executionState <<< _SimulationRunning
-        <<< _possibleActions
-        <<< _moveToAction
-    )
-    (Just $ MoveToTime time)
-  setOraclePrice metadata
-
 handleAction metadata (AddInput input bounds) = do
   when validInput do
     applyInput input
@@ -300,7 +287,7 @@ setOraclePrice metadata = do
   case execState of
     Just (SimulationRunning esr) -> do
       let
-        (Parties actions) = esr.possibleActions
+        (PartiesAction actions) = esr.possibleActions
       case Map.lookup (Role "kraken") actions of
         Just acts -> do
           case Array.head (Map.toUnfoldable acts) of

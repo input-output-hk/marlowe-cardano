@@ -378,7 +378,7 @@ contractHasNoErrors contractName contract =
       Just possibleActions -> do
         action <- lift $ elements possibleActions
         mRunActionResult <- case action of
-          MoveToTime newTime -> runMaybeT $ advanceTime newTime
+          MoveToTime _ newTime -> runMaybeT $ advanceTime newTime
           DepositInput accountId party token value -> pure
             <$> applyInput (IDeposit accountId party token value)
           ChoiceInput choiceId bounds value -> pure <$> do

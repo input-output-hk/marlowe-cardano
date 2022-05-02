@@ -12,12 +12,20 @@ module Simulator.State
 
 import Prologue
 
-import Control.Alt ((<|>))
 import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
 import Control.Monad.Maybe.Trans (MaybeT(..))
 import Control.Monad.State (class MonadState)
-import Data.Array (fromFoldable, mapMaybe, snoc, sort, toUnfoldable, uncons)
+import Data.Array
+  ( catMaybes
+  , fold
+  , fromFoldable
+  , mapMaybe
+  , snoc
+  , sort
+  , toUnfoldable
+  , uncons
+  )
 import Data.DateTime (adjust)
 import Data.DateTime.Instant (Instant, fromDateTime, toDateTime)
 import Data.DateTime.Instant as Instant
@@ -39,7 +47,7 @@ import Data.NonEmptyList.Extra (extendWith)
 import Data.NonEmptyList.Lens (_Tail)
 import Data.Semigroup.Foldable (foldl1)
 import Data.Set.Ordered.OSet (OSet)
-import Data.Time.Duration (class Duration, Milliseconds(..), Minutes(..))
+import Data.Time.Duration (class Duration, Minutes(..))
 import Data.Traversable (scanl)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Extended.Metadata (MetaData)
@@ -93,7 +101,6 @@ import Simulator.Lenses
   , _log
   , _marloweState
   , _moneyInContract
-  , _moveToAction
   , _pendingInputs
   , _possibleActions
   , _state
@@ -108,7 +115,9 @@ import Simulator.Types
   , ExecutionStateRecord
   , LogEntry(..)
   , MarloweState
-  , Parties(..)
+  , MoveToTimeType(..)
+  , PartiesAction(..)
+  , moveToTimePartyAction
   , otherActionsParty
   )
 
@@ -272,27 +281,30 @@ updatePossibleActions
 
     currentTime = executionState.time
 
-    nextJump = fromMaybe
-      currentTime
-      ( nextTimeout oldState
-          <|> map fromDateTime
-            (adjust (Milliseconds one) $ toDateTime currentTime)
-      )
-
     rawActionInputs = Map.fromFoldableWith combineChoices $ map
       (actionToActionInput nextState)
       usefulActions
 
     actionInputs = map simplifyActionInput rawActionInputs
 
-    moveTo = case contract of
-      Term Close _ -> Nothing
-      _ -> Just $ MoveToTime nextJump
+    mNextTimeout = nextTimeout oldState
+    moveTo = fold case contract of
+      Term Close _ -> []
+      _ ->
+        catMaybes
+          [ moveToTimePartyAction NextTimeout <$> mNextTimeout
+          , moveToTimePartyAction <$> Just NextTime <*>
+              (fromDateTime <$> (adjust (Minutes one) $ toDateTime currentTime))
+          , let
+              expirationTime = (unwrap <<< _.maxTime <<< unwrap <<< timeouts)
+                contract
+            in
+              Just $ moveToTimePartyAction ExpirationTime expirationTime
+          ]
 
     newExecutionState =
       executionState
-        # over _possibleActions (updateActions actionInputs)
-        # set (_possibleActions <<< _moveToAction) moveTo
+        # over _possibleActions (updateActions actionInputs >>> append moveTo)
   in
     set _executionState (SimulationRunning newExecutionState) oldState
   where
@@ -302,14 +314,19 @@ updatePossibleActions
 
   removeUseless action = Just action
 
-  updateActions :: Map ActionInputId ActionInput -> Parties -> Parties
+  updateActions
+    :: Map ActionInputId ActionInput -> PartiesAction -> PartiesAction
   updateActions actionInputs oldInputs = foldlWithIndex
     (addButPreserveActionInputs oldInputs)
     mempty
     actionInputs
 
   addButPreserveActionInputs
-    :: Parties -> ActionInputId -> Parties -> ActionInput -> Parties
+    :: PartiesAction
+    -> ActionInputId
+    -> PartiesAction
+    -> ActionInput
+    -> PartiesAction
   addButPreserveActionInputs oldInputs actionInputIdx m actionInput =
     let
       party = actionPerson actionInput
@@ -511,7 +528,23 @@ startSimulation initialTime contract =
   let
     initialExecutionState =
       emptyExecutionStateWithTime initialTime contract
-        # over (_SimulationRunning <<< _log) (append [ StartEvent initialTime ])
+        # over (_SimulationRunning <<< _log)
+            ( append
+                ( catMaybes
+                    [ case contract of
+                        Term Close _ -> Just $ CloseEvent
+                          -- TODO: SCP-3887 unify time construct
+                          ( TimeInterval
+                              (POSIXTime initialTime)
+                              (POSIXTime initialTime)
+                          )
+                        _ -> Nothing
+                    , Just $ StartEvent initialTime
+                    ]
+                )
+
+            )
+
   in
     updateMarloweState
       ( {- This code was taken/adapted from the SimulationPage, we should revisit if applyPendingInputs is necesary
@@ -575,11 +608,12 @@ nextTimeout state = do
     Timeouts { minTime } = timeouts contract
   map unwrap minTime
 
-mapPartiesActionInput :: (ActionInput -> ActionInput) -> Parties -> Parties
-mapPartiesActionInput f (Parties m) = Parties $ (map <<< map) f m
+mapPartiesActionInput
+  :: (ActionInput -> ActionInput) -> PartiesAction -> PartiesAction
+mapPartiesActionInput f (PartiesAction m) = PartiesAction $ (map <<< map) f m
 
-getAllActions :: Parties -> Array ActionInput
-getAllActions (Parties p) =
+getAllActions :: PartiesAction -> Array ActionInput
+getAllActions (PartiesAction p) =
   Map.toUnfoldable p
     # map snd
     # bindFlipped (map snd <<< Map.toUnfoldable)
