@@ -73,7 +73,7 @@ which indicates the price of the cat, and so the value of the money
 under escrow.
 
 We can also describe the choices made by Alice and Bob, noting that
-we’re also asked for a default value ``defValue`` just in case the
+we're also asked for a default value ``defValue`` just in case the
 choices have not been made.
 
 .. code:: haskell

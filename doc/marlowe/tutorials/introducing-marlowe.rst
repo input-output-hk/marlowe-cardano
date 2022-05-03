@@ -84,7 +84,7 @@ Timeouts, deposits and commitments
 Where we differ from non-blockchain approaches is in how we make sure
 that the contract is followed. This means not only that the instructions
 of the contract are not disobeyed – *“nothing bad happens”* – but also
-that the participants participate and don’t walk away early, leaving
+that the participants participate and don't walk away early, leaving
 money locked up in the contract forever: “\ *good things actually
 happen*\ ”. We do this using **timeouts**.
 
@@ -103,7 +103,7 @@ participant to a contract is *finite*: we can predict when the contract
 will have nothing left to do – when it can be closed. At this point any
 unspent funds left in the contract are **refunded** to participants, and
 the contract stops, or *terminates*. So, any funds put into the contract
-by a participant *can’t be locked up forever*: at this point the
+by a participant *can't be locked up forever*: at this point the
 commitment effectively ends.
 
 What is more, it is easy for us to *read off* from the contract when it
@@ -123,19 +123,24 @@ Marlowe in action
 -----------------
 
 We are working on a production release of Marlowe on the Cardano
-blockchain early in 2021. From today, you are able to explore Marlowe
+blockchain early in 2023. There already exists a prototype of Marlowe
+and it can be used on top of Cardano, but we are working on making
+sure it is stable and, therefore, we don't recommend using it in
+production at this stage. You are able to explore Marlowe
 for yourself, either by downloading it and using the Haskell
-implementation directly, or by using the online Marlowe Playground
-simulation tool; these are both covered in subsequent tutorials. These
+implementation directly, by using the online Marlowe Playground
+development tool, the Marlowe Run simulator, and the `marlowe-cli`.
+These are all covered in subsequent tutorials. We
 will also cover the details of Marlowe, introduce a series of examples,
-look deeper into the tools for Marlowe.
+and look deeper into the tools for Marlowe.
 
-We have also worked on developing a set of templates for popular
-financial instruments taken from the Actus standard, and are able to
-generate particular contracts from these templates according to the
-various parameters and options that can be set.
+..
+   We have also worked on developing a set of templates for popular
+   financial instruments taken from the Actus standard, and are able to
+   generate particular contracts from these templates according to the
+   various parameters and options that can be set.
 
-Because Marlowe is a DSL we can work out how Marlowe contracts will
+Because Marlowe is a DSL, we can work out how Marlowe contracts will
 behave without running them: this means that we can provide valuable
 diagnostics to potential participants before they commit to a contract,
 using *static analysis*. We can also use logic tools to *formally prove

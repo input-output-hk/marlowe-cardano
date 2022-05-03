@@ -147,11 +147,11 @@ alternative execution of the contract is given by
    *Lang...V2> state2
    State {accounts = fromList [("alice", ada), 450)], choices = fromList [(ChoiceId "choice" "alice",0),(ChoiceId "choice" "bob",1)], boundValues = fromList [] , minSlot = 0}
 
-This shows that we’re now in a contract where the choice is up to Carol,
+This shows that we're now in a contract where the choice is up to Carol,
 and that there is still the 450 Lovelace in the ``"alice"`` account.
 
 -  Third step: Carol makes a choice. If she chooses 0, payment to Bob is
-   made. If she chooses 1, Alice is refunded. Let’s do that now:
+   made. If she chooses 1, Alice is refunded. Let's do that now:
 
 .. code:: haskell
 

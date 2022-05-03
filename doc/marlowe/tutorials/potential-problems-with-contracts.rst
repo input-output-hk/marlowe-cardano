@@ -56,7 +56,7 @@ When a contract is supposed to expect an amount of money that is less
 than one unit of a currency of token, it will still wait for a
 ``IDeposit`` transaction, but that transaction does not need to transfer
 any money into the contract and no money is transferred to the
-participant that issues the transaction. Once this ‘fake’ deposit is
+participant that issues the transaction. Once this 'fake' deposit is
 successful, the contract will issue a ``NonPositiveDeposit`` warning.
 
 Negative deposits should always be implemented as positive payments.
@@ -92,7 +92,7 @@ some other different amount.
 Bad smells
 ----------
 
-There are some other ‘bad smells’ that indicate that a contract has
+There are some other 'bad smells' that indicate that a contract has
 probably been poorly designed.
 
 These contracts are valid, in the sense that they will not necessarily

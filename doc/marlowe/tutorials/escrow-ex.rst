@@ -60,7 +60,7 @@ choice, rather than ``alice``, like this:
 
 In this contract, either Alice or Bob can make the first choice; the
 other then makes a choice. If they agree, then that is done; if not,
-Carol arbitrates. In the remainder of the tutorial we’ll revert to the
+Carol arbitrates. In the remainder of the tutorial we'll revert to the
 simpler version where ``alice`` chooses first.
 
    **Exercise**
@@ -116,7 +116,7 @@ participants; we will describe this in more detail when we look at
 in a later tutorial. In this particular case, refund will happen at slot
 number ``40``.
 
-Looking at the inner constructs, if Alice’s choice has been made, then
+Looking at the inner constructs, if Alice's choice has been made, then
 we wait for one from Bob. If that is not forthcoming by slot ``60``,
 then Carol is called upon to arbitrate. [2]_
 
@@ -182,8 +182,8 @@ Notes
 
 -  While the names of Alice, Bob and so on are “hard wired” into the contract here,
    we will see later on that these can be represented by *roles* in an account, such as *buyer* and *seller*. 
-   These roles can then be associated with specific *participants* when a contract is run; we discuss this 
-   further in the next section.
+   These roles can then be associated with specific *participants* when a contract is run;
+   we discuss this further in the next section.
 
 
 Background
