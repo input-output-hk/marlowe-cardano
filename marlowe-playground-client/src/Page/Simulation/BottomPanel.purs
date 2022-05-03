@@ -3,6 +3,7 @@ module Page.Simulation.BottomPanel (panelContents) where
 import Prologue hiding (div)
 
 import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Foldable (foldMap)
 import Data.Lens (preview, to, view, (^.))
 import Data.Lens.NonEmptyList (_Head)
@@ -15,6 +16,7 @@ import Halogen.Classes as Classes
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, br_, div, div_, h4, text)
 import Halogen.HTML.Properties (class_, classes)
+import Humanize (humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
@@ -30,7 +32,7 @@ import Marlowe.Semantics
   )
 import Marlowe.ViewPartials (displayWarningList)
 import Page.Simulation.Types (BottomPanelView(..), State)
-import Pretty (renderPrettyParty, renderPrettyToken, showPrettyMoney)
+import Pretty (renderPrettyParty)
 import Simulator.Lenses
   ( _SimulationRunning
   , _executionState
@@ -71,7 +73,7 @@ currentStateView metadata state =
     ( tableRow
         { title: "Accounts"
         , emptyMessage: "No accounts have been used"
-        , columns: ("Participant" /\ "Token" /\ "Money")
+        , columns: ("Participant" /\ "Value" /\ mempty)
         , rowData: accountsData
         }
         <> tableRow
@@ -98,8 +100,9 @@ currentStateView metadata state =
         )
 
       asTuple (Tuple (Tuple accountOwner tok) value) =
-        renderPrettyParty metadata accountOwner /\ renderPrettyToken tok /\ text
-          (showPrettyMoney value)
+        renderPrettyParty metadata accountOwner
+          /\ text (humanizeValue tok value)
+          /\ text mempty
     in
       map asTuple accounts
 
@@ -114,7 +117,7 @@ currentStateView metadata state =
 
       asTuple (Tuple (ChoiceId choiceName choiceOwner) value) =
         text (show choiceName) /\ renderPrettyParty metadata choiceOwner /\ text
-          (showPrettyMoney value)
+          (BigInt.toString value)
     in
       map asTuple choices
 
@@ -128,7 +131,7 @@ currentStateView metadata state =
         )
 
       asTuple (Tuple (ValueId valueId) value) = text (show valueId)
-        /\ text (showPrettyMoney value)
+        /\ text (BigInt.toString value)
         /\ text ""
     in
       map asTuple bindings

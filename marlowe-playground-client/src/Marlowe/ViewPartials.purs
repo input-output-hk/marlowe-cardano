@@ -11,9 +11,9 @@ import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
 import Halogen.HTML (ClassName(..), b_, div_, h4, li_, ol, text)
 import Halogen.HTML.Properties (classes)
+import Humanize (humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Semantics (Payee(..), TransactionWarning(..))
-import Pretty (showPrettyToken)
 
 displayWarningList
   :: forall m action
@@ -61,9 +61,7 @@ displayWarning index (TransactionNonPositiveDeposit party owner tok amount) =
   , text " - Party "
   , b_ [ text $ show party ]
   , text " is asked to deposit "
-  , b_ [ text $ BigInt.toString amount ]
-  , text " units of "
-  , b_ [ text $ showPrettyToken tok ]
+  , b_ [ text $ humanizeValue tok amount ]
   , text " into account of "
   , b_ [ text (show owner) ]
   , text "."
@@ -74,9 +72,7 @@ displayWarning index (TransactionNonPositivePay owner payee tok amount) =
   , warningHint index
       "A non-positive pay is when the contract needs to pay a participant a value which is 0 or lower."
   , text " - The contract is supposed to make a payment of "
-  , b_ [ text $ BigInt.toString amount ]
-  , text " units of "
-  , b_ [ text $ showPrettyToken tok ]
+  , b_ [ text $ humanizeValue tok amount ]
   , text " from account of "
   , b_ [ text (show owner) ]
   , text " to "
@@ -93,9 +89,7 @@ displayWarning index (TransactionPartialPay owner payee tok amount expected) =
   , warningHint index
       "A partial pay is when the contract needs to pay a participant a value grater than the funds available in the origin account."
   , text " - The contract is supposed to make a payment of "
-  , b_ [ text $ BigInt.toString expected ]
-  , text " units of "
-  , b_ [ text $ showPrettyToken tok ]
+  , b_ [ text $ humanizeValue tok expected ]
   , text " from account of "
   , b_ [ text (show owner) ]
   , text " to "
