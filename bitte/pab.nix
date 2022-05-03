@@ -118,7 +118,7 @@ writeShellScriptBin "entrypoint" ''
   ${pab-init-cmd}/bin/pab-init-cmd
 
   # Ugly ugly hack to kill the PAB at midnight UTC
-  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet --verbose &
+  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet &
   sleep $(($(date -f - +%s- <<< $'tomorrow 00:00\nnow')0))&
   wait -n
   exit 1
