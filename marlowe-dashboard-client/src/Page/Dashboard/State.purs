@@ -19,7 +19,11 @@ import Capability.PAB
   , getWalletContractInstances
   , subscribeToPlutusApp
   ) as PAB
-import Capability.PlutusApps.FollowerApp (class FollowerApp, followContract)
+import Capability.PlutusApps.FollowerApp
+  ( class FollowerApp
+  , followContract
+  , stopFollower
+  )
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -164,6 +168,7 @@ import Store.Contracts
   , followerContractExists
   , getContract
   , getContractNicknames
+  , getMarloweParamsForFollower
   , isFollowerContract
   , partitionContracts
   )
@@ -171,7 +176,7 @@ import Store.RoleTokens (Payout, RoleTokenStore, getEligiblePayouts)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (successToast)
+import Toast.Types (infoToast, successToast)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 import WebSocket.Support as WS
@@ -701,6 +706,15 @@ handleAction (NewActiveEndpoints plutusAppId activeEndpoints) = do
 handleAction (MarloweAppClosed mVal) = void $ runMaybeT do
   reactivatePlutusScript MarloweApp mVal
 
+handleAction (FollowerAppClosed _ marloweParams) = do
+  wallet <- use _wallet
+  result <- followContract wallet marloweParams
+  case result of
+    Left err ->
+      globalError "Failed to start new contract follower" err
+    Right _ -> do
+      addToast $ successToast "Contract follower restarted."
+
 handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
   reactivatePlutusScript WalletCompanion mVal
 
@@ -713,6 +727,15 @@ handleAction (SlotChanged slot) = do
 
 handleAction (NicknameUpdated id nickname) = do
   updateStore $ Store.ContractNicknameUpdated id nickname
+
+handleAction (RestartFollower appId marloweParams) = do
+  result <- stopFollower appId
+  case result of
+    Left err ->
+      globalError "Failed to stop contract follower" err
+    Right _ -> do
+      addToast $ infoToast "Restarting contract follower..."
+      handleAction $ FollowerAppClosed Nothing marloweParams
 
 reactivatePlutusScript
   :: forall m
@@ -829,7 +852,10 @@ actionFromStream contractStore wallet = case _ of
     | appId == marloweAppId ->
         Just $ MarloweAppClosed message
     | otherwise ->
-        Nothing
+        case getMarloweParamsForFollower appId contractStore of
+          Nothing -> Nothing
+          Just marloweParams -> do
+            Just $ FollowerAppClosed message marloweParams
   InstanceUpdate appId (PAB.NewObservableState state)
     | appId == companionAppId ->
         case D.decode (D.maybe D.value) state of

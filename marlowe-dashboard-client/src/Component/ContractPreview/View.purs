@@ -14,6 +14,7 @@ import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
 import DOM.HTML.Indexed (HTMLli)
+import Data.Compactable (compact)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as CN
 import Data.ContractStatus (ContractStatus(..), ContractStatusId)
@@ -92,6 +93,12 @@ contractPreviewCard currentTime { executionState, namedActions, nickname } =
           ]
       , stepPanelChildren
       , stepActions
+      , mRefresh: Just $ a
+          [ classNames [ "flex", "items-center" ]
+          , onClick_
+              $ RestartFollower executionState.followerAppId marloweParams
+          ]
+          [ icon Icon.Refresh [ "text-28px" ] ]
       }
 
 contractStartingPreviewCard
@@ -135,6 +142,7 @@ contractStartingPreviewCard = HH.lazy \newContract ->
           ]
       , stepPanelChildren
       , stepActions: maybe startingStepActions startingStepActionsFailed mError
+      , mRefresh: Nothing
       }
 
 type ContractCardOptions m =
@@ -144,6 +152,7 @@ type ContractCardOptions m =
   , extraAttrs :: Array (IProp HTMLli Action)
   , stepPanelChildren :: Array (ComponentHTML Action ChildSlots m)
   , stepActions :: ComponentHTML Action ChildSlots m
+  , mRefresh :: Maybe (ComponentHTML Action ChildSlots m)
   }
 
 mkContractCard
@@ -152,7 +161,14 @@ mkContractCard
   => ContractCardOptions m
   -> ComponentHTML Action ChildSlots m
 mkContractCard
-  { index, metadata, nickname, extraAttrs, stepPanelChildren, stepActions } =
+  { index
+  , metadata
+  , nickname
+  , extraAttrs
+  , stepPanelChildren
+  , mRefresh
+  , stepActions
+  } =
   let
     { contractType, contractName } = metadata
     liClasses = [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
@@ -162,26 +178,29 @@ mkContractCard
       ([ title displayName, classNames liClasses ] <> extraAttrs)
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]
-          [ div
-              [ classNames [ "flex-1", "truncate" ] ]
-              [ h3
-                  [ classNames [ "flex", "gap-2", "items-center" ] ]
-                  [ contractIcon contractType
-                  , text contractName
+          ( compact
+              [ Just $ div
+                  [ classNames [ "flex-1", "truncate" ] ]
+                  [ h3
+                      [ classNames [ "flex", "gap-2", "items-center" ] ]
+                      [ contractIcon contractType
+                      , text contractName
+                      ]
+                  , slot
+                      _contractNickname
+                      index
+                      Nickname.component
+                      nickname
+                      (NicknameUpdated index)
                   ]
-              , slot
-                  _contractNickname
-                  index
-                  Nickname.component
-                  nickname
-                  (NicknameUpdated index)
+              , mRefresh
+              , Just $ a
+                  [ classNames [ "flex", "items-center" ]
+                  , onClick_ $ SelectContract $ Just index
+                  ]
+                  [ icon Icon.ArrowRight [ "text-28px" ] ]
               ]
-          , a
-              [ classNames [ "flex", "items-center" ]
-              , onClick_ $ SelectContract $ Just index
-              ]
-              [ icon Icon.ArrowRight [ "text-28px" ] ]
-          ]
+          )
       , div
           [ classNames
               [ "px-4"

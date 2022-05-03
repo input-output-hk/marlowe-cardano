@@ -153,9 +153,11 @@ data Action
   | ContractHistoryUpdated PlutusAppId ContractHistory
   | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint)
   | MarloweAppClosed (Maybe Json)
+  | FollowerAppClosed (Maybe Json) MarloweParams
   | WalletCompanionAppClosed (Maybe Json)
   | SlotChanged Slot.Slot
   | NicknameUpdated ContractStatusId ContractNickname
+  | RestartFollower PlutusAppId MarloweParams
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where

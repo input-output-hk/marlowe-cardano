@@ -1,7 +1,9 @@
 module Capability.PlutusApps.FollowerApp
   ( class FollowerApp
   , FollowContractError
+  , StopFollowerError
   , followContract
+  , stopFollower
   , onNewObservableState
   ) where
 
@@ -9,7 +11,7 @@ import Prologue
 
 import AppM (AppM)
 import Capability.PAB (activateContract, invokeEndpoint) as PAB
-import Capability.PAB (subscribeToPlutusApp)
+import Capability.PAB (stopContract, subscribeToPlutusApp)
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Monad.Cont (lift)
@@ -19,6 +21,7 @@ import Control.Monad.Fork.Class (class MonadBracket, bracket)
 import Control.Monad.Reader (class MonadAsk, ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut (encodeJson)
+import Data.Bifunctor (lmap)
 import Data.Lens (view, (^.))
 import Data.Maybe (maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
@@ -63,6 +66,17 @@ instance Debuggable FollowContractError where
     , error: debuggable error
     }
 
+data StopFollowerError = StopError JsonAjaxError
+
+instance Explain StopFollowerError where
+  explain (StopError _) = text "Failed to stop the contract follower."
+
+instance Debuggable StopFollowerError where
+  debuggable (StopError error) = encodeJson
+    { type: "StopFollowerError.StopError"
+    , error: debuggable error
+    }
+
 class Monad m <= FollowerApp m where
   -- This function makes sure that there is a follower contract for the specified
   -- marloweParams. It tries to see if we are already following, and if not, it creates
@@ -71,6 +85,7 @@ class Monad m <= FollowerApp m where
     :: PABConnectedWallet
     -> MarloweParams
     -> m (Either FollowContractError PlutusAppId)
+  stopFollower :: PlutusAppId -> m (Either StopFollowerError Unit)
 
 instance
   ( MonadAff m
@@ -122,15 +137,22 @@ instance
       pure followerAVarMap
     unlockFollowerActivation _ = AVarMap.take marloweParams
 
+  stopFollower appId = do
+    updateStore $ Store.FollowerAppClosed appId
+    result <- stopContract appId
+    pure $ lmap StopError result
+
 instance FollowerApp m => FollowerApp (HalogenM state action slots msg m) where
   followContract wallet marloweParams = lift $ followContract
     wallet
     marloweParams
+  stopFollower = lift <<< stopFollower
 
 instance FollowerApp m => FollowerApp (ReaderT r m) where
   followContract wallet marloweParams = lift $ followContract
     wallet
     marloweParams
+  stopFollower = lift <<< stopFollower
 
 {- [UC-CONTRACT-1][4] Start a new marlowe contract
    [UC-CONTRACT-2][X] Receive a role token for a marlowe contract
