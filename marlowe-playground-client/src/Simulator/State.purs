@@ -416,7 +416,8 @@ applyPendingInputs
         { txOutWarnings, txOutPayments, txOutState, txOutContract } ->
         let
           mContractCloseLog = case txOutContract of
-            Term Close _ -> over _log (append [ CloseEvent txIn.interval ])
+            Term Close _ -> over _log
+              (\logs -> logs <> [ CloseEvent txIn.interval ])
             _ -> identity
 
           newExecutionState =
@@ -428,12 +429,12 @@ applyPendingInputs
                 <<< set _moneyInContract (moneyInContract txOutState)
                 <<< mContractCloseLog
                 <<< over _log
-                  ( append
+                  ( \logs -> logs <>
                       ( fromFoldable
                           (map (OutputEvent txIn.interval) txOutPayments)
                       )
                   )
-                <<< over _log (append [ InputEvent txInput ])
+                <<< over _log (\logs -> logs <> [ InputEvent txInput ])
             )
               executionState
         in
@@ -528,21 +529,18 @@ startSimulation initialTime contract =
   let
     initialExecutionState =
       emptyExecutionStateWithTime initialTime contract
-        # over (_SimulationRunning <<< _log)
-            ( append
-                ( catMaybes
-                    [ case contract of
-                        Term Close _ -> Just $ CloseEvent
-                          -- TODO: SCP-3887 unify time construct
-                          ( TimeInterval
-                              (POSIXTime initialTime)
-                              (POSIXTime initialTime)
-                          )
-                        _ -> Nothing
-                    , Just $ StartEvent initialTime
-                    ]
-                )
-
+        # set (_SimulationRunning <<< _log)
+            ( catMaybes
+                [ Just $ StartEvent initialTime
+                , case contract of
+                    Term Close _ -> Just $ CloseEvent
+                      -- TODO: SCP-3887 unify time construct
+                      ( TimeInterval
+                          (POSIXTime initialTime)
+                          (POSIXTime initialTime)
+                      )
+                    _ -> Nothing
+                ]
             )
 
   in
