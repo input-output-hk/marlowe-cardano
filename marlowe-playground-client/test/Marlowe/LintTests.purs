@@ -490,7 +490,7 @@ payDepositDifferentCurrency = testWarningSimple
 payInsufficientDeposit :: forall m. MonadThrow Error m => m Unit
 payInsufficientDeposit = testWarningSimple
   (depositAndThenDo "(Constant 9)" continuation)
-  "The contract makes a payment of 10 ADA from account \"role\" but the account only has 9"
+  "The contract makes a payment of ₳ 0.000010 from account \"role\" but the account only has ₳ 0.000009"
   where
   continuation =
     "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
@@ -498,7 +498,7 @@ payInsufficientDeposit = testWarningSimple
 payTwiceInsufficientDeposit :: forall m. MonadThrow Error m => m Unit
 payTwiceInsufficientDeposit = testWarningSimple
   (depositAndThenDo "(Constant 9)" continuation)
-  "The contract makes a payment of 5 ADA from account \"role\" but the account only has 4"
+  "The contract makes a payment of ₳ 0.000005 from account \"role\" but the account only has ₳ 0.000004"
   where
   continuation =
     "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) "
