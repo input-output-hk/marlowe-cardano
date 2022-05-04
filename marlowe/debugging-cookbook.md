@@ -102,7 +102,7 @@ Transaction failures occur in either phase 1 validation (ledger rules) or phase 
     *   `"L1+"`: The datum or value at the script output does not match the contract's transition.
     *   `"O0"`: Outputing to two Marlowe scripts with the same address in the same transaction is forbidden.
     *   `"P"`: Insufficient value is paid to a public-key address.
-    *   `"R"`: Insufficient value is paid in a role payout.
+    *   `"R"`: Insufficient value is paid in a role payout. This may occur because the role payout was adjusted to satisfy the minimum-ADA ledger rule, despite that adjustment violating the terms of the contract.
     *   `"R0"`: The slot/time validity range for the transaction is infinite or semi-infinite. The range should be finite/bounded.
     *   `"S"`: A required public-key signature was not present in the transaction.
     *   `"T"`: The role token authorizing the application of input is not present in the transaction.
