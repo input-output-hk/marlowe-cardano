@@ -1,7 +1,10 @@
-module Toast.State (component) where
+module Component.Toast.State (component) where
 
 import Prologue
 
+import Component.Toast.Lenses (_expanded, _timeoutSubscription)
+import Component.Toast.Types (Action(..), State, ToastMessage)
+import Component.Toast.View (renderToast)
 import Data.Foldable (for_)
 import Data.Lens (assign)
 import Data.Lens.Extra (peruse)
@@ -26,9 +29,6 @@ import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Store as Store
-import Toast.Lenses (_expanded, _timeoutSubscription)
-import Toast.Types (Action(..), State, ToastMessage)
-import Toast.View (renderToast)
 
 component
   :: forall query input msg m

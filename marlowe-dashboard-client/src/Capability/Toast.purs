@@ -6,6 +6,7 @@ module Capability.Toast
 import Prologue
 
 import AppM (AppM)
+import Component.Toast.Types (ToastMessage)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader.Trans (ReaderT)
 import Control.Monad.Trans.Class (lift)
@@ -13,7 +14,6 @@ import Effect.Class (class MonadEffect)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (updateStore)
 import Store (Action(..))
-import Toast.Types (ToastMessage)
 
 -- This class allows any component to trigger a toast notification
 class Monad m <= Toast m where
