@@ -29,17 +29,25 @@ its source code here: https://github.com/input-output-hk/plutus/blob/master/marl
 It is based on the principle that for each Haskell *type* there is a corresponding TypeScript type, and
 corresponding to each *constructor* there is a constant definition.
 
-.. image:: images/JavaScriptImport.png
-   :alt: JavaScript import
+.. code:: typescript
 
-   
+   import {
+      PK, Role, Account, Party, ada, AvailableMoney, Constant, ConstantParam,
+      NegValue, AddValue, SubValue, MulValue, DivValue, ChoiceValue, TimeIntervalStart,
+      TimeIntervalEnd, UseValue, Cond, AndObs, OrObs, NotObs, ChoseSomething,
+      ValueGE, ValueGT, ValueLT, ValueLE, ValueEQ, TrueObs, FalseObs, Deposit,
+      Choice, Notify, Close, Pay, If, When, Let, Assert, SomeNumber, AccountId,
+      ChoiceId, Token, ValueId, Value, EValue, Observation, Bound, Action, Payee,
+      Case, Timeout, ETimeout, TimeParam, Contract
+   } from 'marlowe-js';
+
 The JavaScript/TypeScript library provides constant definitions for
 Marlowe constructs that have no arguments, as is the case of
-``SlotIntervalEnd``:
+``TimeIntervalStart``:
 
 .. code:: typescript
 
-   const SlotIntervalStart: Value
+   const TimeIntervalStart: Value
 
 or the ``Close`` contract:
 
@@ -240,20 +248,19 @@ party wants to exchange in the amount field:
 
 Now we are ready to start writing our contract. First let's define the
 deposits. We take the information from the party that must do the
-deposit, the slot number until which we'll wait for the deposit to be
+deposit, the timeout until which we'll wait for the deposit to be
 made, and the continuation contract that will be enforced if the deposit
 is successful.
 
 .. code:: typescript
 
-   const makeDeposit = function(src : SwapParty, timeout : SomeNumber,
-                                continuation : Contract) : Contract
-   {
-      return When([Case(Deposit(src.party, src.party, src.currency, src.amount),
-                        continuation)],
-                  timeout,
-                  Close);
-   }
+    function makeDeposit(src: SwapParty, timeout: ETimeout,
+                         timeoutContinuation: Contract, continuation: Contract): Contract {
+        return When([Case(Deposit(src.party, src.party, src.currency, src.amount),
+                          continuation)],
+                    timeout,
+                    timeoutContinuation);
+    }
 
 We only need a ``When`` construct with a single ``Case`` that represents
 a ``Deposit`` of the ``src`` party into their own account, this way if
@@ -266,12 +273,11 @@ contract that will be enforced after the payment.
 
 .. code:: typescript
 
-   const makePayment = function(src : SwapParty, dest : SwapParty,
-                                continuation : Contract) : Contract
-   {
-      return Pay(src.party, Party(dest.party), src.currency, src.amount,
-                 continuation);
-   }
+    const makePayment = function (src: SwapParty, dest: SwapParty,
+                                  continuation: Contract): Contract {
+        return Pay(src.party, Party(dest.party), src.currency, src.amount,
+                   continuation);
+    }
 
 For this, we just need to use the ``Pay`` construct to pay from the
 account where the source party made the deposit to the destination
@@ -281,22 +287,23 @@ Finally we can combine all the pieces:
 
 .. code:: typescript
 
-   const contract : Contract = makeDeposit(alice, 10n,
-                                  makeDeposit(bob, 20n,
-                                      makePayment(alice, bob,
-                                          makePayment(bob, alice,
-                                              Close))));
+    const contract: Contract = makeDeposit(alice, 1700000000n, Close,
+                                 makeDeposit(bob, 1700003600n, Close,
+                                     makePayment(alice, bob,
+                                         makePayment(bob, alice,
+                                             Close))))
 
-   return contract;
+    return contract;
+
 
 The contract has four steps:
 
-1. Alice can deposit until slot 10
+1. Alice can deposit until POSIX time 1700000000 (2023-11-14 22:13:20 GMT).
 
-2. Bob can deposit until slot 20 (otherwise Alice gets a refund and the
-   contract is aborted)
+2. Bob can deposit until POSIX time 1700003600 (2023-11-14 23:13:20 GMT),
+   one hour later, otherwise Alice gets a refund and the contract is aborted.
 
-3. Then we pay Alice's deposit to Bob
+3. Then we pay Alice's deposit to Bob.
 
 4. We pay Bob's deposit to Alice.
 

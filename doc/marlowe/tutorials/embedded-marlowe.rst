@@ -25,7 +25,7 @@ contract:
 
    contract :: Contract
    contract = When [Case (Deposit "alice" "alice" ada price) inner]
-                   10
+                   1700000000
                    Close
 
    inner :: Contract
@@ -33,13 +33,13 @@ contract:
      When [ Case aliceChoice
                  (When [ Case bobChoice
                              (If (aliceChosen `ValueEQ` bobChosen)
-                                agreement
-                                arbitrate) ]
-                       60
+                                 agreement
+                                 arbitrate) ]
+                       1700007200
                        arbitrate)
-           ]
-           40
-           Close
+          ]
+          1700003600
+          Close
 
 Many of the terms here are themselves defined within Haskell.
 Principally, we have the two contracts that deal with what happens when
@@ -50,17 +50,16 @@ should ``arbitrate`` between them:
 
    agreement :: Contract
    agreement =
-     If
-       (aliceChosen `ValueEQ` (Constant 0))
-       (Pay "alice" (Party "bob") ada price Close)
-       Close
+     If (aliceChosen `ValueEQ` (Constant 0))
+        (Pay "alice" (Party "bob") ada price Close)
+        Close
 
    arbitrate :: Contract
    arbitrate =
-     When  [ Case carolClose Close,
-             Case carolPay (Pay "alice" (Party "bob") ada price Close) ]
-           100
-           Close
+     When [ Case carolClose Close,
+            Case carolPay (Pay "alice" (Party "bob") ada price Close) ]
+          1700010800
+          Close
 
 Within these contracts we are also using simple abbreviations such as:
 

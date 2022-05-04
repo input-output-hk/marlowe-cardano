@@ -236,23 +236,27 @@ context.
    evaluated statically if we extend the ``When`` construct to support
    “many of many” inputs.
 
-Inclusion of SlotIntervals
+Inclusion of TimeIntervals
 --------------------------
 
-The EUTxO specification provides validation scripts with slot-intervals
+The EUTxO specification provides validation scripts with time-intervals
 instead of with slot numbers. This is to promote determinism in
 validation scripts. Nevertheless, we have kept the timeout of ``When``
-(the only timeout) as a slot number. The way we deal with slot-intervals
+(the only timeout) as a single timestamp even though it is now represented
+using POSIX time. The way we deal with time-intervals
 is by requiring that the interval of a transaction does not include any
 timeout over which the semantics has to make a choice. For example: if a
-timeout is 10, a transaction with interval 5-15 will fail with
-``AmbiguousSlotInterval``. Participants would have to issue a
-transaction with interval 5-9 or 10-15 (or both).
+timeout is noon of the 3rd of January, a transaction with
+interval 2nd of January to 4th of January will fail with
+``AmbiguousTimeInterval``. Participants would have to issue a
+transaction with interval from 2nd of January till one second
+before noon or one from noon on the 3rd of January to
+the 4th (or both).
 
 Nevertheless, for ``Values``, we provide the two constructs
-``SlotIntervalStart`` and ``SlotIntervalEnd``. An alternative to
+``TimeIntervalStart`` and ``TimeIntervalEnd``. An alternative to
 consider would be to modify the semantics so that Values are
-non-deterministic, that way we could include a ``CurrentSlot`` construct
+non-deterministic, that way we could include a ``CurrentTime`` construct
 and just invalidate transactions that are ambiguous, but this would
 complicate the semantics and make them less predictable.
 

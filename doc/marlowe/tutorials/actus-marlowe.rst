@@ -40,9 +40,10 @@ the bond is redeemed for its full face value.
 
 For example, an ``investor`` can buy a bond that costs 1000 Lovelace
 with 15% discount. She pays 850 Lovelace to the bond issuer before
-*start time*, here ``10``.
+*start time*, here ``1672531200`` (2023-01-01 00:00:00 GMT).
 
-Later, after *maturity date*, time ``20`` here, the investor can
+One month later, after *maturity date*, time ``1675209600``
+(2023-02-01 00:00:00 GMT) here, the investor can
 exchange the bond for its full notional, i.e. 1000 Lovelace.
 
 .. code:: haskell
@@ -69,10 +70,10 @@ exchange the bond for its full notional, i.e. 1000 Lovelace.
                     (Constant 1000)
                     Close))
                ]
-               20
+               1675209600
                Close)))
         ]
-        10
+        1672531200
         Close
 
 This contract has a significant drawback. Once the ``investor`` has
@@ -116,7 +117,7 @@ Guaranteed Coupon Bond Example
 
 This more complex bond involves an ``investor`` who deposits 1000
 Lovelace, which is immediately paid to the ``issuer``. The ``issuer``
-then has to pay as interest 10 Lovelace every 10 slots. On maturity the
+then has to pay as interest 10 Lovelace every month. On maturity the
 investor should receive back the interest plus the full value of the
 bond.
 
@@ -127,24 +128,24 @@ bond.
        When [ Case (Deposit "investor" "investor" ada (Constant 1000))
            -- and pays it to the issuer
            (Pay "investor" (Party "issuer") ada (Constant 1000)
-               -- after 10 slots expect to receive 10 Lovelace interest
+               -- after 1 month expect to receive 10 Lovelace interest
                (When [ Case (Deposit "investor" "issuer" ada (Constant 10))
                    -- and pay it to the investor
                    (Pay "investor" (Party "investor" ) ada (Constant 10)
-                       -- same for 2nd 10 slots
+                       -- same for 2nd month
                        (When [ Case (Deposit "investor" "issuer" ada (Constant 10))
                            (Pay "investor" (Party "investor" ) ada (Constant 10)
                                -- after maturity date investor
                                -- expects to receive notional + interest payment
                                (When [ Case (Deposit "investor" "issuer" ada (Constant 1010))
                                    (Pay "investor" (Party "investor" ) ada (Constant 1010) Close)]
-                               (Slot 40)
+                               1680307200 -- 2023-04-01 00:00:00 GMT
                                Close))]
-                       (Slot 30)
+                       1677628800 -- 2023-03-01 00:00:00 GMT
                        Close))]
-               (Slot 20)
+               1675209600 -- 2023-02-01 00:00:00 GMT
                Close))]
-       (Slot 10)
+       1672531200 -- 2023-01-01 00:00:00 GMT
        Close
 
 ..
@@ -156,6 +157,3 @@ bond.
    before the bond is issued, and who will pay that counterparty if the
    issuer defaults; if the issuer does make the payment in time, then
    the guarantor should recover their money.
-
-IOHK plans to implement the full ACTUS standard using Marlowe and Plutus
-over the coming year.

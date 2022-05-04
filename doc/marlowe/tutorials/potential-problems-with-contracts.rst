@@ -239,18 +239,18 @@ should never need to send an erroneous transaction to the blockchain.
 Ambiguous interval
 ~~~~~~~~~~~~~~~~~~
 
-When a transaction reaches a timeout, its slot interval must be
+When a transaction reaches a timeout, its time interval must be
 unambiguous about whether the timeout has passed or not. For example, if
-the top-most ``When`` of a contract has timeout ``10`` and a transaction
-with slot interval ``[6, 14]`` is issued, the transaction will cause an
-``AmbiguousSlotIntervalError`` error, because it is impossible to know
+the top-most ``When`` of a contract has timeout ``1700003600`` and a transaction
+with time interval ``[1700000000, 1700007200]`` is issued, the transaction will cause an
+``AmbiguousTimeIntervalError`` error, because it is impossible to know
 whether the timeout has passed just by looking at the transaction. To
 avoid this, the transaction must be split into two separate
 transactions:
 
-1. One with slot interval ``[6, 9]``.
+1. One with time interval ``[1700000000, 1700003599]``.
 
-2. Another one with slot interval ``[10, 14]``.
+2. Another one with time interval ``[1700003600, 1700007200]``.
 
 Apply no-match
 ~~~~~~~~~~~~~~
