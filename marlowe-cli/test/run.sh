@@ -38,38 +38,22 @@ then
 fi
 FAUCET_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$FAUCET_VKEY")
 
-Fund the faucet with 10000 tADA.
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 10000000000                      \
-                        "$FAUCET_ADDRESS"                         \
-> /dev/null
-
-marlowe-cli test contracts --testnet-magic "$MAGIC"                  \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --wallet-url "$WALLET_API"                \
-                           --pab-url "$PAB_API"                      \
-                           --faucet-key "$FAUCET_SKEY"               \
-                           --faucet-address "$FAUCET_ADDRESS"        \
-                           --burn-address "$BURN_ADDRESS"            \
-                           --passphrase "$PAB_PASSPHRASE"            \
-                           setup-wallets.yaml                        \
-| tee setup-wallets.log
-
+# Create the payment signing and verification keys if they do not already exist.
 # sed 
 sed -n -e '/CreateWallet/{s/^.*Created wallet identified as \(.*\) for role "\(.*\)"\.$/\1/ ; p}' setup-wallets.log > wallet.ids
 
+test_run=0
 pids=()
 function run() {
   for wid in $(cat wallet.ids)
   do
     test_file="test-$wid.yaml"
     log_file="test-$wid.log"
-    echo "TEST WALLET: $wid"
+    # NOTE: The line below is replacing any instances of WALLET_ID with $wid
     sed -e "s/WALLET_ID/$wid/" template.yaml > "$test_file"
+    # NOTE: below is a way to replace more than 1 variable
     # sed -e "s/WALLET_ID/$wid/;s/PAYOR_ID/$payorid/" template.yaml > "$test_file"
+    # NOTE: below is a way to apply commands stored in a file to the template.yaml
     # sed -f "file_with_commands" template.yaml > "$test_file"
 
     marlowe-cli test contracts --testnet-magic "$MAGIC"                  \
@@ -83,22 +67,39 @@ function run() {
                               "$test_file"                              \
                               >& "$log_file"                             &
     pids+=($!)
-    echo "RUN 1 ${pids[*]}"
+    echo "TEST RUN: $test_run"
   done
-  wait
 }
 
 for ((n=1; n <= 100; n++))
 do
-  run &
+  test_run="$n"
+  run
 done
 
-rets=()
+echo "finished enqueuing runs"
+failures=0
+
+echo "set failures variable to $failures"
 
 for pid in ${pids[*]}; do
+  echo "inside loop for pid $pid"
   wait $pid
-  rets+=($?)
+  echo "finished waiting for $pid"
+  ec=$?
+  echo "exit code: $ec"
+  if [ "$ec" -eq "1" ]
+  then
+    failures=$((failures+1))
+  fi
 done
+echo "finished failure count"
+if [ "$failures" -ne "0" ]
+then
+  echo "Failed contract runs: $failures"
+  exit 1
+fi
 
-echo "Return codes: ${rets[*]}"
 wait
+
+echo "There were $(grep FAIL *.log | wc -l) failures in the log files."
