@@ -21,6 +21,7 @@ import Component.ConfirmContractActionDialog.Types
 import Component.ConfirmContractActionDialog.Types as CCAD
 import Component.ConfirmContractActionDialog.View (render)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
+import Component.Toast.Types (successToast)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
@@ -50,7 +51,6 @@ import Marlowe.Semantics (ChosenNum)
 import Marlowe.Semantics as Semantic
 import Store as Store
 import Store.Contracts (getFollowerContract)
-import Toast.Types (successToast)
 
 --
 component

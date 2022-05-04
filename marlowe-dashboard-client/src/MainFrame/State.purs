@@ -21,6 +21,7 @@ import Capability.PAB
 import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
+import Component.Toast.Types (infoToast, successToast)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Except (ExceptT(..), runExceptT)
@@ -89,7 +90,6 @@ import Store as Store
 import Store.Wallet (WalletStore(..), _Connecting)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (infoToast, successToast)
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
 

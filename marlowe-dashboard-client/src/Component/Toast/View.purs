@@ -1,8 +1,10 @@
-module Toast.View (renderToast) where
+module Component.Toast.View (renderToast) where
 
 import Prologue hiding (div)
 
 import Component.Icons (Icon(..), icon, icon_)
+import Component.Toast.Lenses (_expanded, _toastMessage)
+import Component.Toast.Types (Action(..), State, ToastMessage)
 import Css as Css
 import Data.Lens (preview)
 import Data.Maybe (fromMaybe)
@@ -12,8 +14,6 @@ import Halogen.HTML (HTML, a, div, div_, span, text)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (id, ref)
 import Halogen.HTML.Properties.ARIA (describedBy, labelledBy, role)
-import Toast.Lenses (_expanded, _toastMessage)
-import Toast.Types (Action(..), State, ToastMessage)
 
 renderToast
   :: forall p

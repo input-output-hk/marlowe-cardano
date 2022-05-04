@@ -2,6 +2,7 @@ module Store where
 
 import Prologue
 
+import Component.Toast.Types (ToastMessage, errorToast)
 import Data.AddressBook (AddressBook)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatusId)
@@ -36,7 +37,6 @@ import Store.RoleTokens
   )
 import Store.Wallet (WalletAction, WalletStore, _connectedWallet)
 import Store.Wallet as Wallet
-import Toast.Types (ToastMessage, errorToast)
 import Type.Proxy (Proxy(..))
 import Types (JsonAjaxError)
 
