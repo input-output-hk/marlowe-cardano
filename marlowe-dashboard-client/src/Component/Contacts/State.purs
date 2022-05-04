@@ -19,6 +19,7 @@ import Component.Contacts.Types
   , State
   )
 import Component.Contacts.View (contactsCard)
+import Component.Toast.Types (successToast)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Lens (assign)
 import Effect.Aff.Class (class MonadAff)
@@ -30,7 +31,6 @@ import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Store as Store
-import Toast.Types (successToast)
 
 type HalogenM = H.HalogenM State Action ChildSlots Msg
 

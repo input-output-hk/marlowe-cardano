@@ -1,4 +1,4 @@
-module Toast.Lenses
+module Component.Toast.Lenses
   ( _mToast
   , _toastMessage
   , _expanded
@@ -7,11 +7,11 @@ module Toast.Lenses
 
 import Prologue
 
+import Component.Toast.Types (State, ToastMessage, ToastState)
 import Data.Lens (Lens', _Just)
 import Data.Lens.Record (prop)
 import Data.Lens.Traversal (Traversal')
 import Halogen (SubscriptionId)
-import Toast.Types (State, ToastMessage, ToastState)
 import Type.Proxy (Proxy(..))
 
 -- TODO: when we upgrade to 0.14 change this to AffineTraversal

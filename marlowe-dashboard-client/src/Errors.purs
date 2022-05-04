@@ -5,12 +5,12 @@ module Errors
 import Prologue
 
 import Capability.Toast (class Toast, addToast)
+import Component.Toast.Types (explainableErrorToast)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Logger.Structured as Logger
 import Errors.Debuggable (class Debuggable)
 import Errors.Explain (class Explain)
-import Toast.Types (explainableErrorToast)
 
 globalError
   :: forall m error

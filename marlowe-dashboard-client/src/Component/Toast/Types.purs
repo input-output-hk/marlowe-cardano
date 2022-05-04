@@ -1,4 +1,4 @@
-module Toast.Types
+module Component.Toast.Types
   ( Action(..)
   , State
   , ToastMessage
