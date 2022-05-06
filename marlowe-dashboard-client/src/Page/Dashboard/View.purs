@@ -56,6 +56,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
+import Halogen (RefLabel(..))
 import Halogen.Css (applyWhen, classNames)
 import Halogen.HTML
   ( HTML
@@ -81,7 +82,7 @@ import Halogen.HTML
 import Halogen.HTML as HH
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (href, id, src, title)
+import Halogen.HTML.Properties (href, id, ref, src, title)
 import Halogen.HTML.Properties.ARIA (labelledBy, role)
 import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
@@ -230,48 +231,47 @@ dashboardCard
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
-dashboardCard state = case view _card state of
-  Just card ->
-    let
-      wallet = state ^. _wallet
-      cardOpen = state ^. _cardOpen
-      templateInput = wallet
-    in
-      div
-        [ classNames $ Css.sidebarCardOverlay cardOpen ]
-        [ div
-            [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
-            $
-              [ a
-                  [ classNames [ "absolute", "top-4", "right-4" ]
-                  , onClick_ CloseCard
-                  ]
-                  [ icon_ Icon.Close ]
-              , case card of
-                  TutorialsCard -> tutorialsCard
-                  CurrentWalletCard -> currentWalletCard wallet
-                  ContactsCard -> HH.slot
-                    _contacts
+dashboardCard state =
+  let
+    wallet = state ^. _wallet
+    cardOpen = state ^. _cardOpen
+    templateInput = wallet
+  in
+    div
+      [ ref $ RefLabel "card", classNames $ Css.sidebarCardOverlay cardOpen ]
+      [ div
+          [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
+          $
+            [ a
+                [ classNames [ "absolute", "top-4", "right-4" ]
+                , onClick_ CloseCard
+                ]
+                [ icon_ Icon.Close ]
+            , case state ^. _card of
+                Just TutorialsCard -> tutorialsCard
+                Just CurrentWalletCard -> currentWalletCard wallet
+                Just ContactsCard -> HH.slot
+                  _contacts
+                  unit
+                  Contacts.component
+                  wallet
+                  OnContactsMsg
+                Just ContractTemplateCard -> slot
+                  _template
+                  unit
+                  Template.component
+                  templateInput
+                  OnTemplateMsg
+                Just (ContractActionConfirmationCard input) ->
+                  slot
+                    _confirmActionDialog
                     unit
-                    Contacts.component
-                    wallet
-                    OnContactsMsg
-                  ContractTemplateCard -> slot
-                    _template
-                    unit
-                    Template.component
-                    templateInput
-                    OnTemplateMsg
-                  ContractActionConfirmationCard input ->
-                    slot
-                      _confirmActionDialog
-                      unit
-                      ConfirmContractActionDialog.component
-                      input
-                      (\DialogClosed -> CloseCard)
-              ]
-        ]
-  Nothing -> div_ []
+                    ConfirmContractActionDialog.component
+                    input
+                    (\DialogClosed -> CloseCard)
+                Nothing -> HH.text ""
+            ]
+      ]
 
 ------------------------------------------------------------
 appTemplateHeader

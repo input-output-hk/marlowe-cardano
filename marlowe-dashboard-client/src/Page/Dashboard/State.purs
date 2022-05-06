@@ -91,8 +91,9 @@ import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
 import Effect.Class (liftEffect)
 import Env (Env, _applyInputBus, _createBus, _redeemBus, _sources)
 import Errors (globalError)
-import Halogen (modify_)
+import Halogen (RefLabel(..), modify_)
 import Halogen as H
+import Halogen.Animation (waitForAllAnimations)
 import Halogen.Component.Reactive (mkReactiveComponent)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
@@ -491,7 +492,14 @@ handleAction (OpenCard card) = do
     $ set _cardOpen true
         <<< set _menuOpen false
 
-handleAction CloseCard = assign _cardOpen false
+handleAction CloseCard = do
+  assign _cardOpen false
+  void
+    $ H.fork
+    $ H.getHTMLElementRef (RefLabel "card") >>= traverse_ \cardElement -> do
+        liftAff $ waitForAllAnimations cardElement
+        unlessM (use _cardOpen) do
+          assign _card Nothing
 
 handleAction (SetContractFilter contractFilter) = assign _contractFilter
   contractFilter
