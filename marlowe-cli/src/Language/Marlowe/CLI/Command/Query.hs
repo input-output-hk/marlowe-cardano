@@ -27,11 +27,13 @@ import Cardano.Api (AddressAny, TxId)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Language.Marlowe.CLI.ChainIndex (queryAddress, queryApp, queryHistory, queryOutput, queryPayout,
                                         queryTransaction)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseOutputQuery, parseTxId, parseUrl)
+import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseOutputQuery, parsePOSIXTime,
+                                           parseTxId, parseUrl)
 import Language.Marlowe.CLI.Types (CliError (..), OutputQuery)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
+import Ledger.TimeSlot (SlotConfig (..))
 import Network.HTTP.Client (defaultManagerSettings, newManager)
-import Plutus.V1.Ledger.Api (CurrencySymbol)
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime)
 import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
 
 import qualified Options.Applicative as O
@@ -58,9 +60,11 @@ data QueryCommand =
     -- | Query the contract histories.
   | Histories
     {
-      indexUrl      :: BaseUrl               -- ^ The URL for the chain index.
-    , rolesCurrency :: Maybe CurrencySymbol  -- ^ The role currency symbols, if any.
-    , outputFile    :: Maybe FilePath        -- ^ The output JSON file for Marlowe histories.
+      scSlotLength   :: Integer               -- ^ The slot length, in milliseconds.
+    , scSlotZeroTime :: POSIXTime             -- ^ The effective POSIX time of slot zero, in milliseconds.
+    , indexUrl       :: BaseUrl               -- ^ The URL for the chain index.
+    , rolesCurrency  :: Maybe CurrencySymbol  -- ^ The role currency symbols, if any.
+    , outputFile     :: Maybe FilePath        -- ^ The output JSON file for Marlowe histories.
     }
     -- | Query transaction details.
   | Transaction
@@ -106,12 +110,12 @@ runQueryCommand command =
             Right result' -> pure result'
             Left  e       -> throwError . CliError $ show e
     case command of
-      App{..}         -> queryApp         runApi marloweParams'  spent outputFile
-      Payout{..}      -> queryPayout      runApi marloweParams'  spent outputFile
-      Histories{..}   -> queryHistory     runApi marloweParams'        outputFile
-      Transaction{..} -> queryTransaction runApi txIds                 outputFile
-      Address{..}     -> queryAddress     runApi addresses       spent outputFile
-      Output{..}      -> queryOutput      runApi addresses query spent outputFile
+      App{..}         -> queryApp                    runApi marloweParams'  spent outputFile
+      Payout{..}      -> queryPayout                 runApi marloweParams'  spent outputFile
+      Histories{..}   -> queryHistory SlotConfig{..} runApi marloweParams'        outputFile
+      Transaction{..} -> queryTransaction            runApi txIds                 outputFile
+      Address{..}     -> queryAddress                runApi addresses       spent outputFile
+      Output{..}      -> queryOutput                 runApi addresses query spent outputFile
 
 
 -- | Parser for query commands.
@@ -175,9 +179,11 @@ historyCommand =
 historyOptions :: O.Parser QueryCommand
 historyOptions =
   Histories
-    <$> O.option parseUrl                           (O.long "index-url"      <> O.metavar "URL"             <> O.help "URL for the Plutus chain index."           )
-    <*> (O.optional . O.option parseCurrencySymbol) (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any."    )
-    <*> (O.optional . O.strOption)                  (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for history data."        )
+    <$> O.option O.auto                             (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.help "The slot length, in milliseconds."                      )
+    <*> O.option parsePOSIXTime                     (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.help "The effective POSIX time of slot zero, in milliseconds.")
+    <*> O.option parseUrl                           (O.long "index-url"      <> O.metavar "URL"             <> O.help "URL for the Plutus chain index."                        )
+    <*> (O.optional . O.option parseCurrencySymbol) (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any."                 )
+    <*> (O.optional . O.strOption)                  (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for history data."                     )
 
 
 -- | Parser for the "address" command.

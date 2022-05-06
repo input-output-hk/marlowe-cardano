@@ -375,7 +375,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       printState (Nothing, payouts) = "{ inputs = Nothing," <> "payouts = " <> show payouts <> "}"
 
       fetchOnChainState :: FollowerM FollowerContractState
-      fetchOnChainState = (,) <$> marloweHistory params <*> payoutsAtCurrency (rolesCurrency params)
+      fetchOnChainState = (,) <$> marloweHistory unsafeGetSlotConfig params <*> payoutsAtCurrency (rolesCurrency params)
 
       awaitNewState :: FollowerContractState -> FollowerM (Maybe FollowerContractState)
       awaitNewState prevState@(prevHistory, prevPayouts) = do
@@ -577,6 +577,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
         let
           debug'' = debug' "create"
+        debug'' $ "slotConfig = " <> show unsafeGetSlotConfig
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]
         ownPubKey <- unPaymentPubKeyHash <$> Contract.ownPaymentPubKeyHash
@@ -1229,7 +1230,7 @@ waitForTransition typedValidator = do
                 pure $ promiseBind (utxoIsProduced addr) $ \txns -> do
                     -- See NOTE: Chain index / cardano-node query consistency
                     void $ retryTillResponseDiffers' (DebugTraceStr "waitForTransition:Nothing") mempty (utxosAt addr)
-                    produced <- concatMapM (marloweHistoryFrom typedValidator) $ NonEmpty.toList txns
+                    produced <- concatMapM (marloweHistoryFrom typedValidator unsafeGetSlotConfig) $ NonEmpty.toList txns
                     case produced of
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
                         [history] -> pure $ Transition history
@@ -1238,7 +1239,7 @@ waitForTransition typedValidator = do
                 debug' $ "wait till utxo is spent = " <> show tyTxOutRefRef
                 pure $ promiseBind (utxoIsSpent tyTxOutRefRef) $ \txn -> do
                     void $ retryTillResponseDiffers' (DebugTraceStr "waitForTimeoutOrTransition:Just") currentState $ getOnChainState typedValidator
-                    spent <- marloweHistoryFrom typedValidator txn
+                    spent <- marloweHistoryFrom typedValidator unsafeGetSlotConfig txn
                     case spent of
                         [history] -> pure $ Transition history
                         _         -> throwing_ _UnableToExtractTransition
