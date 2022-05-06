@@ -1,11 +1,12 @@
 module Component.Toast.Types
   ( Action(..)
   , State
-  , ToastMessage
   , ToastEntry
   , ToastIndex(..)
+  , ToastMessage
   , errorToast
   , explainableErrorToast
+  , indexRef
   , infoToast
   , successToast
   ) where
@@ -38,6 +39,9 @@ derive newtype instance Semiring ToastIndex
 derive newtype instance Eq ToastIndex
 derive newtype instance Ord ToastIndex
 
+indexRef :: String -> ToastIndex -> String
+indexRef pre (ToastIndex n) = pre <> "-" <> show n
+
 type ToastEntry =
   { index :: ToastIndex
   , message :: ToastMessage
@@ -48,7 +52,7 @@ data Action
   = Receive (List ToastEntry)
   | ExpandToast ToastIndex
   | CloseToast ToastIndex
-  | ToastTimeout ToastIndex
+  | AnimateCloseToast ToastIndex
 
 type State =
   { toasts :: List ToastEntry
@@ -63,7 +67,7 @@ successToast shortDescription =
   , iconColor: "text-lightgreen"
   , textColor: "text-white"
   , bgColor: "bg-black"
-  , timeout: 25000.0
+  , timeout: 2500000.0
   , role: Status
   }
 
@@ -88,7 +92,7 @@ errorToast shortDescription longDescription =
   , iconColor: "text-white"
   , textColor: "text-white"
   , bgColor: "bg-red"
-  , timeout: 50000.0
+  , timeout: 5000000.0
   , role: Alert
   }
 

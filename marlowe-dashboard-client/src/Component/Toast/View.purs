@@ -1,43 +1,113 @@
-module Component.Toast.View (renderToast) where
+module Component.Toast.View (render) where
 
 import Prologue hiding (div)
 
 import Component.Icons (Icon(..), icon, icon_)
-import Component.Toast.Types (Action(..), State, ToastEntry, ToastMessage)
+import Component.Toast.Types
+  ( Action(..)
+  , State
+  , ToastEntry
+  , ToastMessage
+  , indexRef
+  )
 import Css as Css
 import Data.Lens (preview)
 import Data.List (List(..), (:))
+import Data.List as List
 import Data.Maybe (fromMaybe)
-import Data.Tuple.Nested ((/\))
-import Halogen (RefLabel(..))
+import Data.Tuple.Nested (type (/\), (/\))
+import Halogen (AttrName(..), ElemName(..), RefLabel(..))
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, div, div_, span, text)
+import Halogen.HTML (HTML, a, attr, div, div_, span, text)
+import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (id, ref)
 import Halogen.HTML.Properties.ARIA (describedBy, labelledBy, role)
 
-renderToast
+render
   :: forall p
    . State
   -> HTML p Action
-renderToast state = case state.toasts of
+render state = case state.toasts of
   Nil -> div_ []
-  (firstEntry : _) ->
-    if (firstEntry.expanded) then
-      renderExpanded firstEntry
-    else
-      renderCollapsed firstEntry
+  toasts ->
+    let
+      renderedToasts = renderToast <$> List.toUnfoldable toasts
+    in
+      HK.div
+        [ classNames
+            [ "fixed"
+            , "bottom-3"
+            , "left-0"
+            , "right-0"
+            , "flex"
+            , "flex-col"
+            , "items-center"
+            , "z-50"
+            ]
+        ]
+        renderedToasts
 
--- FIXME: redo
--- doRender (preview _toastMessage state)
---   (fromMaybe false $ preview _expanded state)
---   where
---   doRender Nothing _ = div_ []
+renderToast
+  :: forall p
+   . ToastEntry
+  -> String /\ HTML p Action
+renderToast { index, message: toast } =
+  let
+    readMore = case toast.longDescription of
+      Nothing -> div_ []
+      Just _ ->
+        div
+          [ classNames [ "ml-4", "font-semibold", "underline", "flex-shrink-0" ]
+          ]
+          [ a
+              [ onClick_ $ ExpandToast index ]
+              [ text "Read more" ]
+          ]
+  in
+    (indexRef "toast-message" index) /\ div
+      [ classNames
+          [ "px-4"
+          , "py-2"
+          , "mb-3"
+          , "md:mb-6"
+          , "rounded"
+          , "shadow-lg"
+          , "min-w-90pc"
+          , "max-w-90pc"
+          , "sm:min-w-sm"
+          , "flex"
+          , "justify-between"
+          , toast.bgColor
+          , toast.textColor
+          ]
+      , ref $ RefLabel $ indexRef "toast-message" index
+      , attr (AttrName "data-custom-ref") $ indexRef "toast-message" index
+      , role $ show toast.role
+      , labelledBy $ indexRef "toast-short-message" index
+      ]
+      [ div [ classNames [ "flex-grow", "flex", "overflow-hidden" ] ]
+          [ icon toast.icon [ "mr-2", toast.iconColor ]
+          , span
+              [ classNames
+                  [ "font-semibold"
+                  , "overflow-ellipsis"
+                  , "whitespace-nowrap"
+                  , "overflow-hidden"
+                  ]
+              , id "toast-short-message"
+              ]
+              [ text toast.shortDescription ]
+          ]
+      , readMore
+      , a
+          [ classNames [ "ml-2", "leading-none", toast.textColor ]
+          , onClick_ $ AnimateCloseToast index
+          ]
+          [ icon_ Close ]
+      ]
 
---   doRender (Just toast) true = renderExpanded toast
-
---   doRender (Just toast) false = renderCollapsed toast
-
+-- FIXME: Delete
 renderExpanded
   :: forall p
    . ToastEntry
@@ -78,6 +148,7 @@ renderExpanded { index: toastIndex, message: toast } =
         ]
     ]
 
+-- FIXME: Delete
 renderCollapsed
   :: forall p
    . ToastEntry
