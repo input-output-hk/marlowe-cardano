@@ -21,7 +21,7 @@ import Component.ContractPreview.View
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.Popper (Placement(..))
-import Component.Template.View (contractTemplateCard)
+import Component.Template.State as Template
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
 import Control.Logger.Capability (class MonadLogger)
@@ -57,7 +57,6 @@ import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
 import Halogen.Css (applyWhen, classNames)
-import Halogen.Extra (renderSubmodule)
 import Halogen.HTML
   ( HTML
   , a
@@ -102,7 +101,6 @@ import Page.Dashboard.Lenses
   , _newContracts
   , _runningContracts
   , _selectedContractIndex
-  , _templateState
   , _wallet
   , _walletCompanionStatus
   )
@@ -113,6 +111,7 @@ import Page.Dashboard.Types
   , ContractFilter(..)
   , State
   , WalletCompanionStatus(..)
+  , _template
   )
 import Store as Store
 
@@ -236,7 +235,7 @@ dashboardCard state = case view _card state of
     let
       wallet = state ^. _wallet
       cardOpen = state ^. _cardOpen
-      assets = wallet ^. _assets
+      templateInput = wallet
     in
       div
         [ classNames $ Css.sidebarCardOverlay cardOpen ]
@@ -257,10 +256,12 @@ dashboardCard state = case view _card state of
                     Contacts.component
                     wallet
                     OnContactsMsg
-                  ContractTemplateCard -> renderSubmodule _templateState
-                    TemplateAction
-                    (contractTemplateCard assets)
-                    state
+                  ContractTemplateCard -> slot
+                    _template
+                    unit
+                    Template.component
+                    templateInput
+                    OnTemplateMsg
                   ContractActionConfirmationCard input ->
                     slot
                       _confirmActionDialog

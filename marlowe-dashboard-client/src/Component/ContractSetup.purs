@@ -19,7 +19,7 @@ import Component.ContractSetup.Types
   , _values
   )
 import Component.Form (renderNumberInput, renderTextInput)
-import Component.Icons (Icon, icon)
+import Component.Icons (Icon, icon, icon_)
 import Component.Icons as Icon
 import Css as Css
 import Data.Address (Address)
@@ -76,6 +76,7 @@ data Action
   = OnInit
   | OnReceive (Connected AddressBook Input)
   | OnUpdate (ContractFields -> ContractFields)
+  | OnNoMatchClick String
   | OnFormSubmit Event
   | OnBack
   | OnReview ContractParams
@@ -302,6 +303,8 @@ roleInput state name fieldState =
   HH.slot _roles name Autocomplete.component input case _ of
     Autocomplete.Updated field ->
       OnUpdate $ set (prop _roles <<< at name) $ Just field
+    Autocomplete.NoMatchClicked n ->
+      OnNoMatchClick n
   where
   { addressBook, metaData } = state
 
@@ -312,6 +315,13 @@ roleInput state name fieldState =
         markdownHintWithTitle name <$> Map.lookup name metaData.roleDescriptions
     , fieldState
     , options: addressBook
+    , noMatchView: Just \n ->
+        HH.div [ classNames [ "flex", "items-center", "gap-2" ] ]
+          [ icon_ Icon.Add
+          , HH.text "Add "
+          , HH.span [ classNames [ "italic" ] ] [ HH.text n ]
+          , HH.text " to contacts"
+          ]
     }
 
 timeoutInput
@@ -415,6 +425,8 @@ handleAction = case _ of
     oldState <- H.get
     let newState = initialState input
     when (oldState /= newState) $ H.put newState
+  OnNoMatchClick name -> do
+    H.raise $ NewContactRequested name
   OnUpdate update -> do
     old <- H.get
     new <- H.modify \s ->

@@ -21,12 +21,14 @@ import Component.Form
 import Control.Alternative (guard)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (runMaybeT)
+import Data.Array (fromFoldable, null)
 import Data.Array as Array
+import Data.Bifunctor (bimap)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.Foldable (for_)
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, maybe)
 import Data.Set as Set
 import Data.String (Pattern(..))
 import Data.String.Extra as String
@@ -53,14 +55,18 @@ type Input output =
   { id :: String
   , label :: String
   , hint :: Maybe PlainHTML
+  , noMatchView :: Maybe (String -> PlainHTML)
   , fieldState :: FieldState String output
   , options :: Bimap String output
   }
 
-data Msg output = Updated (FieldState String output)
+data Msg output
+  = Updated (FieldState String output)
+  | NoMatchClicked String
 
 data Action output
   = OnNSelectMsg (Select.Message (Action output))
+  | OnInit
   | OnReceive (Connected (Maybe String) (Input output))
   | OnBlur FocusEvent
 
@@ -86,6 +92,7 @@ type State output =
   , id :: String
   , label :: String
   , hint :: Maybe PlainHTML
+  , noMatchView :: Maybe (String -> PlainHTML)
   , openDropdown :: Maybe String
   }
 
@@ -95,7 +102,6 @@ type Component output m =
 component
   :: forall output m
    . Ord output
-  => Show output
   => MonadAff m
   => MonadStore Store.Action Store.Store m
   => Component output m
@@ -116,7 +122,7 @@ initialState
   -> State output
 initialState
   visited
-  { context, input: { fieldState, options, id, label, hint } } =
+  { context, input: { fieldState, options, id, label, hint, noMatchView } } =
   setFieldState fieldState
     { fieldState
     , visited
@@ -126,6 +132,7 @@ initialState
     , label
     , hint
     , openDropdown: context
+    , noMatchView
     }
 
 setFieldState
@@ -156,28 +163,46 @@ setFieldState fieldState state = case fieldState of
         , filtered = [ s ]
         }
 
+fieldStateToString
+  :: forall a. Ord a => Bimap String a -> FieldState String a -> String
+fieldStateToString options = case _ of
+  Blank -> ""
+  Incomplete v -> v
+  Complete a -> fromMaybe "" $ Bimap.lookupR a options
+
 render
   :: forall output m
    . Ord output
   => MonadAff m
   => State output
   -> ComponentHTML output m
-render { visited, fieldState, id, label, options, filtered, hint } =
+render { visited, fieldState, id, label, options, filtered, hint, noMatchView } =
   HH.slot _select unit Select.component selectInput OnNSelectMsg
   where
-  selectInput = { itemCount: Array.length filtered, render: renderSelect }
+  minCount = maybe 0 (const 1) noMatchView
+  selectInput =
+    { itemCount: max (Array.length filtered) minCount, render: renderSelect }
   renderSelect { isOpen, highlightedIndex } =
     let
       error = guard (visited && not isOpen) *> case fieldState of
         Complete _ -> Nothing
         _ -> Just "Not found."
-      value = case fieldState of
-        Blank -> ""
-        Incomplete v -> v
-        Complete a -> fromMaybe "" $ Bimap.lookupR a options
-      dropdown = HH.keyed (HH.ElemName "ul")
-        (Select.setMenuProps [])
-        (mapWithIndex item filtered)
+      value = fieldStateToString options fieldState
+      dropdown = HH.keyed (HH.ElemName "ul") (Select.setMenuProps [])
+        if null filtered then
+          fromFoldable
+            $ flip map noMatchView \view -> Tuple "no-match" $ HH.li
+                ( Select.setItemProps 0
+                    [ classNames $
+                        [ "p-2" ] <>
+                          if highlightedIndex == 0 then
+                            [ "bg-lightgray", "cursor-pointer" ]
+                          else []
+                    ]
+                )
+                [ bimap absurd absurd $ view value ]
+        else
+          (mapWithIndex item filtered)
       item index v = Tuple v $ HH.li
         ( Select.setItemProps index
             [ classNames $ [ "px-4", "py-2" ] <>
@@ -220,29 +245,39 @@ handleAction
    . MonadEffect m
   => MonadStore Store.Action Store.Store m
   => Ord output
-  => Show output
   => Action output
   -> DSL output m Unit
 handleAction = case _ of
+  -- Always raise an updated msg to start, because we need to notify the parent
+  -- if any fields were validated by initialState
+  OnInit -> do
+    { fieldState } <- H.get
+    H.raise $ Updated fieldState
   OnReceive input -> do
     openDropdown <- H.gets _.openDropdown
-    H.modify_ \s -> initialState s.visited input
+    state <- H.modify \s -> initialState s.visited input
+    when (state.fieldState /= input.input.fieldState) do
+      H.raise $ Updated state.fieldState
     when (openDropdown /= input.context) do
       H.tell _select unit $ case input.context of
         Just dropdown | dropdown == input.input.id -> Select.Open
         _ -> Select.Close
   OnNSelectMsg msg -> case msg of
-    Select.Selected index -> void $ runMaybeT $ do
-      { filtered, options } <- H.lift H.get
-      value <- hoistMaybe $ Array.index filtered index
-      output <- hoistMaybe $ Bimap.lookupL value options
-      H.lift do
-        { fieldState } <- H.modify _
-          { fieldState = Complete output
-          , filtered = [ value ]
-          }
-        H.raise $ Updated fieldState
-        H.tell _select unit $ Select.Close
+    Select.Selected index -> do
+      { filtered, options } <- H.get
+      if null filtered then do
+        value <- H.gets \s -> fieldStateToString s.options s.fieldState
+        H.raise $ NoMatchClicked value
+      else void $ runMaybeT $ do
+        value <- hoistMaybe $ Array.index filtered index
+        output <- hoistMaybe $ Bimap.lookupL value options
+        H.lift do
+          { fieldState } <- H.modify _
+            { fieldState = Complete output
+            , filtered = [ value ]
+            }
+          H.raise $ Updated fieldState
+          H.tell _select unit $ Select.Close
     Select.InputValueChanged value -> do
       { fieldState } <- H.modify $ setFieldState $ Incomplete value
       H.raise $ Updated fieldState

@@ -1,7 +1,10 @@
-module Component.Template.View (contractTemplateCard) where
+module Component.Template.View (render) where
 
 import Prologue hiding (Either(..), div)
 
+import Capability.Toast (class Toast)
+import Component.AddContact (_addContact)
+import Component.AddContact as AddContact
 import Component.ContractSetup (_contractSetup, markdownHintWithTitle)
 import Component.ContractSetup as ContractSetup
 import Component.ContractSetup.Types (ContractFields, ContractParams)
@@ -10,24 +13,24 @@ import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Component.Popper (Placement(..))
-import Component.Template.Types (Action(..), State(..))
+import Component.Template.Types (Action(..), ComponentHTML, State, Wizard(..))
 import Css as Css
 import Data.Array (mapWithIndex)
 import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
 import Data.ContractValue as CV
-import Data.Lens (view)
+import Data.Lens (view, (^.))
 import Data.Map as Map
 import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
+import Data.PABConnectedWallet (_assets)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
-  ( ComponentHTML
-  , HTML
+  ( HTML
   , a
   , button
   , div
@@ -60,18 +63,17 @@ import Marlowe.Extended.Metadata
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
 import Marlowe.Semantics (Assets, adaToken, getAda)
-import Page.Dashboard.Types (ChildSlots)
 import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)
 
-contractTemplateCard
+render
   :: forall m
    . MonadAff m
   => MonadStore Store.Action Store.Store m
-  => Assets
-  -> State
-  -> ComponentHTML Action ChildSlots m
-contractTemplateCard assets state =
+  => Toast m
+  => State
+  -> ComponentHTML m
+render state =
   div
     [ classNames
         [ "h-full"
@@ -85,7 +87,7 @@ contractTemplateCard assets state =
         [ classNames Css.cardHeader ]
         [ text "Contract templates" ]
     , contractTemplateBreadcrumb state
-    , case state of
+    , case state.wizard of
         Start -> contractSelection
         Overview template fields -> contractOverview template fields
         Setup _ input -> HH.slot
@@ -94,13 +96,23 @@ contractTemplateCard assets state =
           ContractSetup.component
           input
           OnContractSetupMsg
-        Review template params -> contractReview assets template params
+        AddContact name _ _ -> HH.slot
+          _addContact
+          unit
+          AddContact.component
+          { initializeNickname: name }
+          OnAddContactMsg
+        Review template params ->
+          let
+            assets = state.wallet ^. _assets
+          in
+            contractReview assets template params
     ]
 
 ------------------------------------------------------------
 contractTemplateBreadcrumb
   :: forall p. State -> HTML p Action
-contractTemplateBreadcrumb contractSetupStage =
+contractTemplateBreadcrumb state =
   div
     [ classNames
         [ "overflow-x-auto"
@@ -113,7 +125,7 @@ contractTemplateBreadcrumb contractSetupStage =
         , "text-xs"
         ]
     ]
-    case contractSetupStage of
+    case state.wizard of
       Start -> [ activeItem "Templates" ]
       Overview template _ ->
         [ previousItem "Templates" OnBack
@@ -126,6 +138,16 @@ contractTemplateBreadcrumb contractSetupStage =
         , previousItem template.metaData.contractName OnBack
         , arrow
         , activeItem "Setup"
+        ]
+      AddContact _ template _ ->
+        [ previousItem "Templates" OnReset
+        , arrow
+        , previousItem template.metaData.contractName
+            $ OnTemplateChosen template
+        , arrow
+        , previousItem "Setup" OnBack
+        , arrow
+        , activeItem "new contact"
         ]
       Review template _ ->
         [ previousItem "Templates" OnReset
@@ -263,7 +285,7 @@ contractReview
   => Assets
   -> ContractTemplate
   -> ContractParams
-  -> ComponentHTML Action ChildSlots m
+  -> ComponentHTML m
 contractReview assets template params =
   let
     hasSufficientFunds = getAda assets >= contractCreationFee
@@ -365,7 +387,7 @@ timeParameter
    . MonadAff m
   => MetaData
   -> Tuple String ContractTimeout
-  -> ComponentHTML Action ChildSlots m
+  -> ComponentHTML m
 timeParameter metaData (key /\ timeout) =
   let
     timeParameterDescriptions = view _timeParameterDescriptions metaData
@@ -380,7 +402,7 @@ valueParameter
    . MonadAff m
   => OMap String ValueParameterInfo
   -> Tuple String ContractValue
-  -> ComponentHTML Action ChildSlots m
+  -> ComponentHTML m
 valueParameter infoMap (key /\ value) =
   let
     info = OMap.lookup key infoMap
@@ -398,7 +420,7 @@ parameter
   => String
   -> String
   -> String
-  -> ComponentHTML Action ChildSlots m
+  -> ComponentHTML m
 parameter label description value =
   li
     [ classNames [ "mb-2" ] ]

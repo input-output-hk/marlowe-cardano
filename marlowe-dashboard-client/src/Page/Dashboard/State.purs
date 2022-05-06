@@ -7,7 +7,7 @@ import Prologue
 
 import API.Lenses (_cicContract)
 import Bridge (toFront)
-import Capability.Marlowe (class ManageMarlowe, initializeContract, redeem)
+import Capability.Marlowe (class ManageMarlowe, redeem)
 import Capability.PAB
   ( class ManagePAB
   , onNewActiveEndpoints
@@ -30,9 +30,7 @@ import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Types as Contacts
-import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
-import Component.Template.State (handleAction, initialState) as Template
-import Component.Template.Types (Action(..), State(..)) as Template
+import Component.Template.Types as Template
 import Control.Alt ((<|>))
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
@@ -41,7 +39,7 @@ import Control.Logger.Structured (StructuredLog, debug, error, info)
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Maybe.Trans (runMaybeT)
-import Control.Monad.Now (class MonadTime, now, timezoneOffset)
+import Control.Monad.Now (class MonadTime, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Control.Parallel (parTraverse_)
@@ -80,7 +78,7 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.Slot (Slot)
 import Data.These (These(..))
-import Data.Time.Duration (Milliseconds(..), Minutes(..))
+import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for, traverse)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
@@ -93,10 +91,9 @@ import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
 import Effect.Class (liftEffect)
 import Env (Env, _applyInputBus, _createBus, _redeemBus, _sources)
 import Errors (globalError)
-import Halogen (modify_, tell)
+import Halogen (modify_)
 import Halogen as H
 import Halogen.Component.Reactive (mkReactiveComponent)
-import Halogen.Extra (mapSubmodule)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Halogen.Store.Select (selectEq)
@@ -134,7 +131,6 @@ import Page.Dashboard.Lenses
   , _menuOpen
   , _roleTokens
   , _selectedContractIndex
-  , _templateState
   , _tipSlot
   , _tzOffset
   , _wallet
@@ -260,7 +256,6 @@ component = connect sliceSelector $ mkReactiveComponent
       , cardOpen: false
       , contractFilter: Running
       , selectedContractIndex: Nothing
-      , templateState: Template.initialState
       , tzOffset: Minutes zero
       }
   , render
@@ -489,11 +484,7 @@ handleAction (ClipboardAction action) = do
   addToast $ successToast "Copied to clipboard"
 
 handleAction (OpenCard card) = do
-  -- We set the card and reset the contact and template card states to their first section
-  -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
-  modify_
-    $ set _card (Just card)
-        <<< set _templateState Template.Start
+  modify_ $ set _card (Just card)
   -- then we set the card to open (and close the mobile menu) in a separate `modify_`, so that the
   -- CSS transition animation works
   modify_
@@ -509,59 +500,36 @@ handleAction (SelectContract marloweParams) = assign
   _selectedContractIndex
   marloweParams
 
-handleAction (TemplateAction templateAction) = do
-  wallet <- use _wallet
-  case templateAction of
-    Template.OpenCreateWalletCard _ -> do
-      modify_ $ set _card (Just $ ContactsCard)
-    {- [UC-CONTRACT-1][0] Start a new marlowe contract
-     The flow of creating a new marlowe contract starts when we submit the
-     Template form. In here we apply the contract parameters to the Marlowe
-     Extended contract to receive a Marlowe Core contract, and we call the
-     PAB endpoint to create and distribute the role tokens. We also create
-     a placeholder so the user can see that that the contract is being created
-    -}
-    Template.OnStartContract template params -> do
-      currentInstant <- now
-      instantiateResponse <- initializeContract currentInstant template params
-        wallet
-      case instantiateResponse of
-        Left error -> do
-          void $ tell _submitButtonSlot "action-pay-and-start" $
-            SubmitResult (Milliseconds 600.0) (Left "Error")
-          globalError "Failed to initialize contract." error
-        Right (newContract /\ awaitContractCreation) -> do
-          handleAction CloseCard
-          void $ tell _submitButtonSlot "action-pay-and-start" $
-            SubmitResult (Milliseconds 600.0) (Right "")
-          addToast $ successToast
-            "The request to initialize this contract has been submitted."
-          -- We reset the template component (TODO: this wont be needed after the SCP-3464 refactor)
-          assign _templateState Template.initialState
-          mMarloweParams <- liftAff awaitContractCreation
-          case mMarloweParams of
-            Left contractError ->
-              globalError "Failed to create contract" contractError
-            Right marloweParams -> do
-              -- If the UI is showing the Starting contract we change the index to
-              -- show the newly Started contract
-              let NewContract newContractUUID _ _ _ _ = newContract
-              mSelectedContract <- use _selectedContractIndex
-              when (mSelectedContract == (Just $ Starting newContractUUID))
-                do
-                  assign _selectedContractIndex
-                    $ Just
-                    $ Started marloweParams
-              addToast $ successToast "Contract created."
-              -- Follow the contract here, because the wallet companion takes
-              -- too long to respond now.
-              ajaxFollow <- followContract wallet marloweParams
-              case ajaxFollow of
-                Left err -> globalError "Can't follow the contract" err
-                Right _ -> do
-                  addToast $ successToast "Contract initialized."
-    _ -> do
-      toTemplate $ Template.handleAction templateAction
+handleAction (OnTemplateMsg (Template.Closed)) = do
+  handleAction CloseCard
+
+handleAction
+  (OnTemplateMsg (Template.ContractStarted newContract awaitContractCreation)) =
+  do
+    handleAction CloseCard
+    wallet <- use _wallet
+    mMarloweParams <- liftAff awaitContractCreation
+    case mMarloweParams of
+      Left contractError ->
+        globalError "Failed to create contract" contractError
+      Right marloweParams -> do
+        -- If the UI is showing the Starting contract we change the index to
+        -- show the newly Started contract
+        let NewContract newContractUUID _ _ _ _ = newContract
+        mSelectedContract <- use _selectedContractIndex
+        when (mSelectedContract == (Just $ Starting newContractUUID))
+          do
+            assign _selectedContractIndex
+              $ Just
+              $ Started marloweParams
+        addToast $ successToast "Contract created."
+        -- Follow the contract here, because the wallet companion takes
+        -- too long to respond now.
+        ajaxFollow <- followContract wallet marloweParams
+        case ajaxFollow of
+          Left err -> globalError "Can't follow the contract" err
+          Right _ -> do
+            addToast $ successToast "Contract initialized."
 
 -- FIXME: SCP-3468
 handleAction (SetContactForRole _ _) = do
@@ -926,10 +894,3 @@ updateTotalFunds walletId = do
     let syncStatus = syncStatusFromNumber sync
     updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
     pure syncStatus
-
-toTemplate
-  :: forall m
-   . Functor m
-  => H.HalogenM Template.State Template.Action ChildSlots Msg m Unit
-  -> HalogenM m Unit
-toTemplate = mapSubmodule _templateState TemplateAction

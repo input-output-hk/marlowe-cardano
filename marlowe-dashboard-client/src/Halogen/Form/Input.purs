@@ -190,9 +190,10 @@ modifyWithFormat f = formatIfNotFocuesd <<< f
 setValue
   :: forall pa error output slots m
    . Eq output
-  => (String -> String)
+  => Boolean
+  -> (String -> String)
   -> DSL pa error output slots m Unit
-setValue f = do
+setValue forceUpdate f = do
   { value: oldValue, result: oldResult } <- H.get
   let newValue = f oldValue
   { value, result } <- H.modify \s ->
@@ -215,7 +216,7 @@ setValue f = do
     oldState = toFieldState oldValue oldResult
     newState = toFieldState value result
 
-  when (newState /= oldState || oldValue /= value) do
+  when (forceUpdate || newState /= oldState || oldValue /= value) do
     H.raise $ Updated newState
 
 render'
@@ -238,18 +239,20 @@ handleAction
   => Action pa error output slots m
   -> DSL pa error output slots m Unit
 handleAction = case _ of
-  OnInit -> setValue identity
+  -- Always raise an updated msg to start, because we need to notify the parent
+  -- if any fields were validated by initialState
+  OnInit -> setValue true identity
   OnReceive { fieldState, render, format, validate } -> do
     H.modify_ $ \s -> s
       { render = render
       , format = format
       , validate = validate
       }
-    setValue $ \oldValue -> case fieldState of
+    setValue false $ \oldValue -> case fieldState of
       FS.Blank -> ""
       FS.Incomplete v -> v
       _ -> oldValue
-  OnUpdate newValue -> setValue $ const newValue
+  OnUpdate newValue -> setValue false $ const newValue
   OnEmit action -> H.raise $ Emit action
   OnFocus -> setFocus true
   OnBlur -> setFocus false
@@ -263,7 +266,7 @@ handleAction = case _ of
           , visited = (s.focused && not focused) || s.visited
           }
       H.raise if focused then Focused else Blurred
-      setValue identity
+      setValue false identity
 
 handleQuery
   :: forall pa error output slots m a

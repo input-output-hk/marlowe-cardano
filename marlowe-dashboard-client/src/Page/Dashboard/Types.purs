@@ -7,11 +7,10 @@ import Clipboard (Action) as Clipboard
 import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.Contacts.Types as Contacts
 import Component.ContractPreview.Nickname as Nickname
-import Component.ContractSetup.Types as ContractSetup
 import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
-import Component.Template.Types (Action, State) as Template
+import Component.Template.Types as Template
 import Component.Tooltip.Types (ReferenceId)
 import Data.Argonaut (Json, JsonDecodeError)
 import Data.ContractNickname (ContractNickname)
@@ -63,7 +62,6 @@ type TransientState =
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
   , contractFilter :: ContractFilter
   , selectedContractIndex :: Maybe ContractStatusId
-  , templateState :: Template.State
   , tzOffset :: Minutes
   }
 
@@ -118,7 +116,7 @@ type ChildSlots =
   , hintSlot :: forall query. H.Slot query Void String
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , expandSlot :: Expand.Slot Void String
-  , contractSetup :: ContractSetup.Slot Unit
+  , template :: Template.Slot Unit
   , contractPage :: ContractPage.Slot Unit
   , confirmActionDialog :: ConfirmContractActionDialog.Slot Unit
   , currentStepActions :: CurrentStepActions.Slot MarloweParams
@@ -127,6 +125,8 @@ type ChildSlots =
 _dashboard = Proxy :: Proxy "dashboard"
 
 _contractNickname = Proxy :: Proxy "contractNickname"
+
+_template = Proxy :: Proxy "template"
 
 data Action
   = DisconnectWallet
@@ -137,7 +137,7 @@ data Action
   | SelectContract (Maybe ContractStatusId)
   | RedeemPayments MarloweParams
   | OnAskContractActionConfirmation MarloweParams NamedAction (Maybe ChosenNum)
-  | TemplateAction Template.Action
+  | OnTemplateMsg Template.Msg
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action
   | OnContactsMsg Contacts.Msg

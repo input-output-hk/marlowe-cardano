@@ -7,7 +7,7 @@ import Halogen.Form.Input (FieldState)
 import Type.Proxy (Proxy(..))
 
 type Input =
-  {
+  { initializeNickname :: String
   }
 
 data Msg

@@ -2,6 +2,7 @@ module Component.AddContact (component, _addContact) where
 
 import Prologue
 
+import Capability.Toast (class Toast, addToast)
 import Component.AddContact.Types
   ( AddContactFields
   , Component
@@ -19,6 +20,7 @@ import Data.Address (Address)
 import Data.Address as A
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AB
+import Data.AddressBook as AddressBook
 import Data.Bifunctor (lmap)
 import Data.Either (either)
 import Data.Lens (Setter', set)
@@ -30,6 +32,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
+import Halogen.Form.FieldState as FS
 import Halogen.Form.Injective (blank, project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
@@ -37,9 +40,10 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Store as Store
+import Toast.Types (successToast)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
@@ -74,6 +78,7 @@ component
   :: forall m
    . MonadAff m
   => MonadStore Store.Action Store.Store m
+  => Toast m
   => Component m
 component = connect (selectEq _.addressBook) $ H.mkComponent
   { initialState
@@ -86,9 +91,10 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
   }
 
 initialState :: Connected AddressBook Input -> State
-initialState { context } =
+initialState { context, input: { initializeNickname } } =
   { addressBook: context
-  , fields: blank
+  , fields: (blank :: AddContactFields)
+      { nickname = FS.Incomplete initializeNickname }
   , result: Nothing
   }
 
@@ -104,7 +110,12 @@ adaptInput optic = case _ of
   Input.Emit a -> a
 
 handleAction
-  :: forall m. MonadEffect m => Action -> DSL m Unit
+  :: forall m
+   . MonadEffect m
+  => MonadStore Store.Action Store.Store m
+  => Toast m
+  => Action
+  -> DSL m Unit
 handleAction = case _ of
   OnInit -> H.tell _nickname unit $ Input.Focus
   OnReceive input -> H.modify_ _ { addressBook = input.context }
@@ -113,7 +124,11 @@ handleAction = case _ of
     H.modify_ _ { result = project newFields }
   OnFormSubmit event -> H.liftEffect $ preventDefault event
   OnBack -> H.raise BackClicked
-  OnSave contact -> H.raise $ SaveClicked contact
+  OnSave contact -> do
+    updateStore $ Store.ModifyAddressBook
+      (AddressBook.insert contact.nickname contact.address)
+    addToast $ successToast "Contact added"
+    H.raise $ SaveClicked contact
 
 render
   :: forall m

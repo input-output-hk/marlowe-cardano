@@ -20,7 +20,6 @@ import Component.Contacts.Types
   )
 import Component.Contacts.View (contactsCard)
 import Control.Monad.Reader (class MonadAsk)
-import Data.AddressBook as AddressBook
 import Data.Lens (assign)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
@@ -28,7 +27,7 @@ import Halogen as H
 import Halogen.Component.Reactive (fromHandleAction, mkReactiveComponent)
 import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (connect)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Store as Store
 import Toast.Types (successToast)
@@ -66,12 +65,8 @@ handleAction CloseContactsCard = H.raise Closed
 handleAction (SetCardSection cardSection) = do
   assign _cardSection cardSection
 
--- TODO SCP-3468 Restore add contact from contract form
-handleAction (OnAddContactMsg (AddContact.SaveClicked { nickname, address })) =
-  do
-    updateStore $ Store.ModifyAddressBook (AddressBook.insert nickname address)
-    addToast $ successToast "Contact added"
-    H.raise Closed
+handleAction (OnAddContactMsg (AddContact.SaveClicked _)) =
+  H.raise Closed
 
 handleAction (OnAddContactMsg AddContact.BackClicked) = do
   assign _cardSection Home
