@@ -13,6 +13,7 @@ import Component.CurrentStepActions.Types (Msg(..), _currentStepActions)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
+import Control.Alternative (guard)
 import DOM.HTML.Indexed (HTMLli)
 import Data.Compactable (compact)
 import Data.ContractNickname (ContractNickname)
@@ -36,7 +37,7 @@ import Halogen.HTML.Properties (IProp, title)
 import Halogen.HTML.Properties.ARIA (role)
 import Halogen.Store.Monad (class MonadStore)
 import Images (contractIcon)
-import Marlowe.Execution.State (currentStep)
+import Marlowe.Execution.State (currentStep, isClosed)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics (_rolesCurrency)
 import Page.Contract.Lenses (_marloweParams, _metadata)
@@ -93,7 +94,7 @@ contractPreviewCard currentTime { executionState, namedActions, nickname } =
           ]
       , stepPanelChildren
       , stepActions
-      , mRefresh: Just $ a
+      , mRefresh: guard (not $ isClosed executionState) $> a
           [ classNames [ "flex", "items-center" ]
           , onClick_
               $ RestartFollower executionState.followerAppId marloweParams

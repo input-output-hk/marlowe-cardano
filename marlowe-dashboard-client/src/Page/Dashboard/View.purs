@@ -49,6 +49,7 @@ import Data.PABConnectedWallet
   , _walletNickname
   )
 import Data.String (take)
+import Data.UUID.Argonaut as UUID
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff (Error, Fiber)
@@ -88,7 +89,7 @@ import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
-import Marlowe.Semantics (PubKey, adaToken, getAda)
+import Marlowe.Semantics (PubKey, _rolesCurrency, adaToken, getAda)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
@@ -174,17 +175,23 @@ dashboardScreen state =
     mSelectedContractIndex = state ^. _selectedContractIndex
     mSelectedContractStringId = do
       contractIndex <- mSelectedContractIndex
-      CN.toString <$> case contractIndex of
-        Starting reqId -> do
+      pure case contractIndex of
+        Starting reqId ->
           let
             newContracts = state ^. _newContracts
             mContract = Map.lookup reqId newContracts
-          getContractNickname <$> mContract
-        Started marloweParams -> do
+          in
+            case getContractNickname <$> mContract of
+              Just nickname -> CN.toString nickname
+              Nothing -> UUID.toString reqId
+        Started marloweParams ->
           let
             contracts = state ^. _contracts
             mContract = Map.lookup marloweParams contracts
-          _.nickname =<< mContract
+          in
+            case _.nickname =<< mContract of
+              Just nickname -> CN.toString nickname
+              Nothing -> marloweParams ^. _rolesCurrency
   in
     appTemplate cardOpen (dashboardHeader (WN.toString walletNickname) menuOpen)
       $ div
