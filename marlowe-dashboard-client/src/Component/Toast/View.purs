@@ -3,11 +3,12 @@ module Component.Toast.View (renderToast) where
 import Prologue hiding (div)
 
 import Component.Icons (Icon(..), icon, icon_)
-import Component.Toast.Lenses (_expanded, _toastMessage)
-import Component.Toast.Types (Action(..), State, ToastMessage)
+import Component.Toast.Types (Action(..), State, ToastEntry, ToastMessage)
 import Css as Css
 import Data.Lens (preview)
+import Data.List (List(..), (:))
 import Data.Maybe (fromMaybe)
+import Data.Tuple.Nested ((/\))
 import Halogen (RefLabel(..))
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, a, div, div_, span, text)
@@ -19,20 +20,29 @@ renderToast
   :: forall p
    . State
   -> HTML p Action
-renderToast state = doRender (preview _toastMessage state)
-  (fromMaybe false $ preview _expanded state)
-  where
-  doRender Nothing _ = div_ []
+renderToast state = case state.toasts of
+  Nil -> div_ []
+  (firstEntry : _) ->
+    if ((Just $ fst firstEntry) == state.expanded) then
+      renderExpanded firstEntry
+    else
+      renderCollapsed firstEntry
 
-  doRender (Just toast) true = renderExpanded toast
+-- FIXME: redo
+-- doRender (preview _toastMessage state)
+--   (fromMaybe false $ preview _expanded state)
+--   where
+--   doRender Nothing _ = div_ []
 
-  doRender (Just toast) false = renderCollapsed toast
+--   doRender (Just toast) true = renderExpanded toast
+
+--   doRender (Just toast) false = renderCollapsed toast
 
 renderExpanded
   :: forall p
-   . ToastMessage
+   . ToastEntry
   -> HTML p Action
-renderExpanded toast =
+renderExpanded (toastIndex /\ toast) =
   div
     [ classNames $ Css.cardOverlay true ]
     [ div
@@ -43,7 +53,7 @@ renderExpanded toast =
         ]
         [ a
             [ classNames [ "absolute", "top-4", "right-4", toast.textColor ]
-            , onClick_ CloseToast
+            , onClick_ $ CloseToast toastIndex
             ]
             [ icon_ Close ]
         , div
@@ -70,9 +80,9 @@ renderExpanded toast =
 
 renderCollapsed
   :: forall p
-   . ToastMessage
+   . ToastEntry
   -> HTML p Action
-renderCollapsed toast =
+renderCollapsed (toastIndex /\ toast) =
   let
     readMore = case toast.longDescription of
       Nothing -> div_ []
@@ -81,7 +91,7 @@ renderCollapsed toast =
           [ classNames [ "ml-4", "font-semibold", "underline", "flex-shrink-0" ]
           ]
           [ a
-              [ onClick_ ExpandToast ]
+              [ onClick_ $ ExpandToast toastIndex ]
               [ text "Read more" ]
           ]
   in

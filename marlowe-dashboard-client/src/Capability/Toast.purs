@@ -14,6 +14,7 @@ import Effect.Class (class MonadEffect)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (updateStore)
 import Store (Action(..))
+import Store.Toast (ToastAction(..))
 
 -- This class allows any component to trigger a toast notification
 class Monad m <= Toast m where
@@ -22,7 +23,7 @@ class Monad m <= Toast m where
 -- There is nothing pertinent to do inside the AppM, but we need to provide this instance to
 -- satisfy the compiler
 instance MonadEffect m => Toast (AppM m) where
-  addToast = updateStore <<< ShowToast
+  addToast = updateStore <<< Toast <<< Show
 
 instance Toast m => Toast (HalogenM state action slots msg m) where
   addToast = lift <<< addToast

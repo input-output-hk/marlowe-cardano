@@ -2,7 +2,8 @@ module Component.Toast.Types
   ( Action(..)
   , State
   , ToastMessage
-  , ToastState
+  , ToastEntry
+  , ToastIndex(..)
   , errorToast
   , explainableErrorToast
   , infoToast
@@ -11,9 +12,10 @@ module Component.Toast.Types
 
 import Prologue
 
-import Analytics (class IsEvent, Event)
-import Analytics as A
 import Component.Icons (Icon(..))
+import Data.List (List)
+import Data.Map (Map)
+import Data.Tuple.Nested (type (/\))
 import Errors.Explain (class Explain, explainString)
 import Halogen (SubscriptionId)
 import Web.ARIA (ARIARole(..))
@@ -29,31 +31,25 @@ type ToastMessage =
   , role :: ARIARole
   }
 
+-- Because we can show multiple Toast at the same time we use
+-- an index to identify the different messages.
+newtype ToastIndex = ToastIndex Int
+
+derive newtype instance Eq ToastIndex
+derive newtype instance Ord ToastIndex
+
+type ToastEntry = ToastIndex /\ ToastMessage
+
 data Action
-  = Receive (Maybe ToastMessage)
-  | ExpandToast
-  | CloseToast
-  | ToastTimeout
-
-defaultEvent :: String -> Event
-defaultEvent s = A.defaultEvent $ "Toast." <> s
-
-instance actionIsEvent :: IsEvent Action where
-  toEvent (Receive _) = Just $ defaultEvent "Receive"
-  toEvent ExpandToast = Just $ defaultEvent "ExpandToast"
-  toEvent CloseToast = Just $ defaultEvent "CloseToast"
-  toEvent ToastTimeout = Just $ defaultEvent "ToastTimeout"
-
--- TODO: For now the state and actions can only represent a single toast. If you open a new toast
---       it will replace the current one. We could later on extend this to have multiple messages
-type ToastState =
-  { message :: ToastMessage
-  , expanded :: Boolean
-  }
+  = Receive (List ToastEntry)
+  | ExpandToast ToastIndex
+  | CloseToast ToastIndex
+  | ToastTimeout ToastIndex
 
 type State =
-  { mToast :: Maybe ToastState
-  , timeoutSubscription :: Maybe SubscriptionId
+  { toasts :: List ToastEntry
+  , expanded :: Maybe ToastIndex
+  , timeoutSubscriptions :: Map ToastIndex SubscriptionId
   }
 
 successToast :: String -> ToastMessage
@@ -64,7 +60,7 @@ successToast shortDescription =
   , iconColor: "text-lightgreen"
   , textColor: "text-white"
   , bgColor: "bg-black"
-  , timeout: 2500.0
+  , timeout: 25000.0
   , role: Status
   }
 
@@ -89,7 +85,7 @@ errorToast shortDescription longDescription =
   , iconColor: "text-white"
   , textColor: "text-white"
   , bgColor: "bg-red"
-  , timeout: 5000.0
+  , timeout: 50000.0
   , role: Alert
   }
 
