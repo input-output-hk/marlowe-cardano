@@ -55,12 +55,11 @@ component =
 deriveState :: ToastStore -> State
 deriveState store =
   { toasts: getToasts store
-  , expanded: Nothing
   , timeoutSubscriptions: Map.empty
   }
 
 toastTimeoutSubscription :: ToastEntry -> HS.Emitter Action
-toastTimeoutSubscription (index /\ toast) =
+toastTimeoutSubscription { index, message: toast } =
   HS.makeEmitter \push -> do
     traceM { msg: "TOAST: Subscribed", index }
 
@@ -89,48 +88,37 @@ handleAction (Receive receivedToasts) = do
     newToasts = List.difference receivedToasts currentToasts
 
   -- Subscribe for a timer event for each new toast
-  newSubs <- for newToasts \entry@(toastIndex /\ _) -> do
+  newSubs <- for newToasts \entry -> do
     subsId <- subscribe $ toastTimeoutSubscription entry
-    pure $ toastIndex /\ subsId
+    pure $ entry.index /\ subsId
   traceM { msg: "TOAST: new subs", newSubs }
 
   H.modify_ $
-    -- We could use insertBy to preserve order, but ideally the new toast
-    -- should have bigger index than the previous ones, so the append order should
-    -- fix that for us.
-    set _toasts (currentToasts <> newToasts)
+    set _toasts receivedToasts
       <<< over _timeoutSubscriptions (Map.union $ Map.fromFoldable newSubs)
 
 handleAction (ExpandToast index) = do
   -- If there is an active subscription to close the toast, cancel it
+  -- and remove it from the map
   mSubscription <- peruse (_timeoutSubscriptions <<< ix index)
   for_ mSubscription unsubscribe
   H.modify_ $
-    set _expanded (Just index)
-      -- If we had a subscription, remove it
-      <<< over _timeoutSubscriptions (Map.delete index)
+    over _timeoutSubscriptions (Map.delete index)
+  -- Update the global state (which will call Receive)
+  updateStore $ Store.Toast $ Store.Expand index
 
 handleAction (CloseToast index) = do
   traceM { msg: "TOAST: close toast", index }
 
   -- If there is an active subscription to close the toast, cancel it
+  -- and remove it from the map
   mSubscription <- peruse (_timeoutSubscriptions <<< ix index)
   for_ mSubscription unsubscribe
-
-  -- Remove the toast from the local state
   H.modify_ $
-    -- If we are closing the expanded toast message, then remove the expand attribute
-    over _expanded
-      ( case _ of
-          Just expandedIndex | expandedIndex == index -> Nothing
-          other -> other
-      )
-      -- If we had a subscription, remove it
-      <<< over _timeoutSubscriptions (Map.delete index)
-      -- Remvoe the toast from the list
-      <<< over _toasts (List.filter $ not <<< eq index <<< fst)
+    over _timeoutSubscriptions (Map.delete index)
 
-  -- Remove the toast from the global store (This will cause a Receive that shouldn't do anything)
+  -- Remove the toast from the global store (This will cause a Receive that updates
+  -- the local state)
   updateStore $ Store.Toast $ Store.Clear index
 
 handleAction (ToastTimeout index) = do

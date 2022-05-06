@@ -23,7 +23,7 @@ renderToast
 renderToast state = case state.toasts of
   Nil -> div_ []
   (firstEntry : _) ->
-    if ((Just $ fst firstEntry) == state.expanded) then
+    if (firstEntry.expanded) then
       renderExpanded firstEntry
     else
       renderCollapsed firstEntry
@@ -42,7 +42,7 @@ renderExpanded
   :: forall p
    . ToastEntry
   -> HTML p Action
-renderExpanded (toastIndex /\ toast) =
+renderExpanded { index: toastIndex, message: toast } =
   div
     [ classNames $ Css.cardOverlay true ]
     [ div
@@ -82,7 +82,7 @@ renderCollapsed
   :: forall p
    . ToastEntry
   -> HTML p Action
-renderCollapsed (toastIndex /\ toast) =
+renderCollapsed { index: toastIndex, message: toast } =
   let
     readMore = case toast.longDescription of
       Nothing -> div_ []

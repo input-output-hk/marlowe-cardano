@@ -15,7 +15,6 @@ import Prologue
 import Component.Icons (Icon(..))
 import Data.List (List)
 import Data.Map (Map)
-import Data.Tuple.Nested (type (/\))
 import Errors.Explain (class Explain, explainString)
 import Halogen (SubscriptionId)
 import Web.ARIA (ARIARole(..))
@@ -35,10 +34,15 @@ type ToastMessage =
 -- an index to identify the different messages.
 newtype ToastIndex = ToastIndex Int
 
+derive newtype instance Semiring ToastIndex
 derive newtype instance Eq ToastIndex
 derive newtype instance Ord ToastIndex
 
-type ToastEntry = ToastIndex /\ ToastMessage
+type ToastEntry =
+  { index :: ToastIndex
+  , message :: ToastMessage
+  , expanded :: Boolean
+  }
 
 data Action
   = Receive (List ToastEntry)
@@ -48,7 +52,6 @@ data Action
 
 type State =
   { toasts :: List ToastEntry
-  , expanded :: Maybe ToastIndex
   , timeoutSubscriptions :: Map ToastIndex SubscriptionId
   }
 
