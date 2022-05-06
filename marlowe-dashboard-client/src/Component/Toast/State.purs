@@ -7,6 +7,7 @@ import Component.Toast.Types
   ( Action(..)
   , State
   , ToastEntry
+  , ToastIndex(..)
   , ToastMessage
   , indexRef
   )
@@ -15,6 +16,7 @@ import Data.Foldable (for_)
 import Data.Lens (assign, modifying, over, set, use)
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
+import Data.List (List)
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -42,9 +44,11 @@ import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
+import Record as Record
 import Store as Store
 import Store.Toast (ToastStore, getToasts)
 import Store.Toast as Store
+import Type.Prelude (Proxy(..))
 
 component
   :: forall query input msg m
@@ -67,7 +71,8 @@ deriveState store =
   , timeoutSubscriptions: Map.empty
   }
 
-toastTimeoutSubscription :: ToastEntry -> HS.Emitter Action
+toastTimeoutSubscription
+  :: { index :: ToastIndex, message :: ToastMessage } -> HS.Emitter Action
 toastTimeoutSubscription { index, message: toast } =
   HS.makeEmitter \push -> do
     traceM { msg: "TOAST: Subscribed", index }
@@ -94,7 +99,10 @@ handleAction (Receive receivedToasts) = do
   traceM { msg: "TOAST: receive", receivedToasts }
   currentToasts <- use _toasts
   let
-    newToasts = List.difference receivedToasts currentToasts
+    -- We remove the field so that a toast expansion doesn't result in creating a new timer
+    removeExpanded xs = Record.delete (Proxy :: Proxy "expanded") <$> xs
+    newToasts = List.difference (removeExpanded receivedToasts)
+      (removeExpanded currentToasts)
 
   -- Subscribe for a timer event for each new toast
   newSubs <- for newToasts \entry -> do
