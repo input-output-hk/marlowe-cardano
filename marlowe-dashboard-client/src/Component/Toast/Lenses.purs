@@ -17,7 +17,7 @@ _toasts = prop (Proxy :: _ "toasts")
 -- _toastMessage :: Traversal' State ToastMessage
 -- _toastMessage = _mToast <<< _Just <<< prop (Proxy :: _ "message")
 
-_expanded :: Lens' State (Maybe ToastIndex)
+_expanded :: Lens' ToastEntry Boolean
 _expanded = prop (Proxy :: _ "expanded")
 
 _timeoutSubscriptions :: Lens' State (Map ToastIndex SubscriptionId)

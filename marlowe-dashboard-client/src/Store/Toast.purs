@@ -8,10 +8,11 @@ module Store.Toast
 
 import Prologue
 
+import Component.Toast.Lenses (_expanded, _toasts)
 import Component.Toast.Types (ToastEntry, ToastIndex(..), ToastMessage)
+import Data.Lens (filtered, over, set, traversed)
 import Data.List (List)
 import Data.List as List
-import Data.Tuple.Nested ((/\))
 
 newtype ToastStore = ToastStore
   { toasts :: List ToastEntry
@@ -30,26 +31,35 @@ getToasts :: ToastStore -> List ToastEntry
 getToasts (ToastStore { toasts }) = toasts
 
 compareEntry :: ToastEntry -> ToastEntry -> Ordering
-compareEntry (indexA /\ _) (indexB /\ _) = compare indexA indexB
+compareEntry { index: indexA } { index: indexB } = compare indexA indexB
 
 data ToastAction
   = Show ToastMessage
   | Clear ToastIndex
+  | Expand ToastIndex
 
 reduce :: ToastStore -> ToastAction -> ToastStore
 reduce (ToastStore { toasts, lastIndex }) = case _ of
-  Show msg ->
+  Show message ->
     let
-      ToastIndex lastIndex' = lastIndex
-      newIndex = ToastIndex $ lastIndex' + 1
+      newIndex = lastIndex + one
+      toastEntry = { index: newIndex, message, expanded: false }
     in
       ToastStore
         { lastIndex: newIndex
-        , toasts: List.insertBy compareEntry (newIndex /\ msg) toasts
+        , toasts: List.insertBy compareEntry toastEntry toasts
 
         }
   Clear index ->
     ToastStore
-      { toasts: List.filter (not <<< eq index <<< fst) toasts
+      { toasts: List.filter (not <<< eq index <<< _.index) toasts
+      , lastIndex
+      }
+  Expand index ->
+    ToastStore
+      { toasts: set
+          (traversed <<< filtered (eq index <<< _.index) <<< _expanded)
+          true
+          toasts
       , lastIndex
       }
