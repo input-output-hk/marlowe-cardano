@@ -29,6 +29,7 @@ data Msg
   = BackClicked
   | ReviewClicked ContractParams
   | FieldsUpdated ContractFields
+  | NewContactRequested String
 
 derive instance Generic Msg _
 instance Show Msg where

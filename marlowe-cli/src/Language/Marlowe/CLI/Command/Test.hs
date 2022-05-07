@@ -65,14 +65,12 @@ _scriptsCommand =
 scriptsOptions :: O.Parser TestCommand
 scriptsOptions =
   ScriptTests
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"  <> O.metavar "INTEGER"                               <> O.help "Network magic, or omit for mainnet."                    )
-    <*> O.strOption                            (O.long "socket-path"    <> O.metavar "SOCKET_FILE"                           <> O.help "Location of the cardano-node socket file."              )
-    <*> O.option O.auto                        (O.long "slot-length"    <> O.metavar "INTEGER"      <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
-    <*> O.option O.auto                        (O.long "slot-offset"    <> O.metavar "INTEGER"      <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
-    <*> O.strOption                            (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"                          <> O.help "The file containing the signing key for the faucet."    )
-    <*> O.option parseAddressAny               (O.long "faucet-address" <> O.metavar "ADDRESS"                               <> O.help "The address of the faucet."                             )
-    <*> O.option parseAddressAny               (O.long "burn-address"   <> O.metavar "ADDRESS"                               <> O.help "Burn address for discarding used tokens."               )
-    <*> (O.some . O.strArgument)               (                           O.metavar "TEST_FILE"                             <> O.help "JSON file containing a test case."                      )
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"  <> O.metavar "INTEGER"      <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.strOption                            (O.long "socket-path"    <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file."              )
+    <*> O.strOption                            (O.long "faucet-key"     <> O.metavar "SIGNING_FILE" <> O.help "The file containing the signing key for the faucet."    )
+    <*> O.option parseAddressAny               (O.long "faucet-address" <> O.metavar "ADDRESS"      <> O.help "The address of the faucet."                             )
+    <*> O.option parseAddressAny               (O.long "burn-address"   <> O.metavar "ADDRESS"      <> O.help "Burn address for discarding used tokens."               )
+    <*> (O.some . O.strArgument)               (                           O.metavar "TEST_FILE"    <> O.help "JSON file containing a test case."                      )
 
 
 -- | Parser for the "contracts" command.

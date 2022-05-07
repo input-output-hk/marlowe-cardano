@@ -83,14 +83,12 @@ data MarloweTests a =
     -- | Test contracts on-chain.
     ScriptTests
     {
-      network        :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath     :: FilePath         -- ^ The path to the node socket.
-    , slotLength     :: Integer          -- ^ The slot length, in milliseconds.
-    , slotZeroOffset :: Integer          -- ^ The effective POSIX time of slot zero, in milliseconds.
-    , faucetFile     :: FilePath         -- ^ The file containing the faucet's signing key.
-    , faucetAddress  :: AddressAny       -- ^ The faucet address.
-    , burnAddress    :: AddressAny       -- ^ The address to which to send unneeded native tokens.
-    , tests          :: [a]              -- ^ Input for the tests.
+      network       :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath    :: FilePath         -- ^ The path to the node socket.
+    , faucetFile    :: FilePath         -- ^ The file containing the faucet's signing key.
+    , faucetAddress :: AddressAny       -- ^ The faucet address.
+    , burnAddress   :: AddressAny       -- ^ The address to which to send unneeded native tokens.
+    , tests         :: [a]              -- ^ Input for the tests.
     }
     -- | Test contracts using the Marlowe PAB.
   | PabTests

@@ -45,6 +45,7 @@ import Language.Marlowe.Scripts (smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData (..), MarloweParams (..))
 import Ledger (ciTxOutDatum, ciTxOutValue, toTxOut)
 import Ledger.Scripts (validatorHash)
+import Ledger.TimeSlot (SlotConfig)
 import Ledger.Tx.CardanoAPI (fromCardanoAddress, fromCardanoTxId, fromCardanoValue)
 import Ledger.Typed.Scripts (validatorAddress, validatorScript)
 import Plutus.ChainIndex (Page (..))
@@ -169,11 +170,12 @@ queryPayout runApi MarloweParams{..} spent outputFile =
 -- | Query the contract history for a Marlowe application script.
 queryHistory :: MonadError CliError m
              => MonadIO m
-             => (forall b. ClientM b -> m b)  -- ^ The chain-index API runner.
+             => SlotConfig                    -- ^ The slot configuration.
+             -> (forall b. ClientM b -> m b)  -- ^ The chain-index API runner.
              -> MarloweParams                 -- ^ The Marlowe parameters.
              -> Maybe FilePath                -- ^ The output path for the history, if any.
              -> m ()                          -- ^ Action to query the history.
-queryHistory runApi params@MarloweParams{..} outputFile =
+queryHistory slotConfig runApi params@MarloweParams{..} outputFile =
   do
     let
       address = validatorAddress $ smallUntypedValidator params
@@ -187,7 +189,7 @@ queryHistory runApi params@MarloweParams{..} outputFile =
           payTxs <- query payCredential
           pure . nub $ appTxs <> payTxs
     maybeWriteJson outputFile
-      $ histories params address txs
+      $ histories slotConfig params address txs
 
 
 -- | Query the transactions at addresses.

@@ -43,7 +43,6 @@ import qualified Data.Aeson as A (Value)
 import qualified Data.Map.Strict as M (Map)
 
 
-
 -- | A point on the chain.
 data SavedPoint a =
   SavedPoint
@@ -107,10 +106,10 @@ data MarloweOut =
     -- | Output to the Marlowe payout script.
   | PayoutOut
     {
-      moTxIn    :: TxIn        -- ^ The transaction input being produced.
-    , moAddress :: Address     -- ^ The address receiving the output.
-    , moValue   :: Value       -- ^ The value output.
-    , moPayout  :: TokenName   -- ^ The role token for the payout.
+      moTxIn    :: TxIn       -- ^ The transaction input being produced.
+    , moAddress :: Address    -- ^ The address receiving the output.
+    , moValue   :: Value      -- ^ The value output.
+    , moPayout  :: TokenName  -- ^ The role token for the payout.
     }
     deriving (Eq, Generic, FromJSON, Show, ToJSON)
 

@@ -4,8 +4,9 @@ import Prologue
 
 import Control.Monad.Reader (ReaderT(..))
 import Data.Argonaut (JsonDecodeError(..), decodeJson)
+import Data.Argonaut as JSON
 import Data.Argonaut.Decode (class DecodeJson)
-import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
+import Data.Argonaut.Decode.Aeson (Decoder, (</$\>), (</*\>))
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<))
@@ -49,7 +50,7 @@ data ActionInputId
   = DepositInputId AccountId Party Token BigInt
   | ChoiceInputId ChoiceId
   | NotifyInputId
-  | MoveToTimeId
+  | MoveToTimeId MoveToTimeType
 
 derive instance eqActionInputId :: Eq ActionInputId
 
@@ -74,7 +75,8 @@ instance encodeJsonActionInputId :: EncodeJson ActionInputId where
       , contents: encodeJson choiceId
       }
   encodeJson NotifyInputId = encodeJson { tag: "NotifyInputId" }
-  encodeJson MoveToTimeId = encodeJson { tag: "MoveToTimeId" }
+  encodeJson (MoveToTimeId moveType) = encodeJson
+    { tag: "MoveToTimeId", contents: encodeJson moveType }
 
 instance decodeJsonActionInputId :: DecodeJson ActionInputId where
   decodeJson =
@@ -87,8 +89,38 @@ instance decodeJsonActionInputId :: DecodeJson ActionInputId where
               )
           , "ChoiceInputId" /\ D.content (ChoiceInputId <$> D.value)
           , "NotifyInputId" /\ pure NotifyInputId
-          , "MoveToTimeId" /\ pure MoveToTimeId
+          , "MoveToTimeId" /\ D.content (MoveToTimeId <$> D.value)
           ]
+
+-- These are the types of move to time actions available in the Simulator
+data MoveToTimeType
+  = NextTime
+  -- ^ Next possible emulated time (aka next minute)
+  | NextTimeout
+  -- ^ Next meaningfull time (when the next timeout occurs)
+  | ExpirationTime -- <- Final expiration of the contract
+
+instance Show MoveToTimeType where
+  show = case _ of
+    NextTime -> "NextTime"
+    NextTimeout -> "NextTimeout"
+    ExpirationTime -> "ExpirationTime"
+
+derive instance Eq MoveToTimeType
+
+derive instance Ord MoveToTimeType
+
+instance EncodeJson MoveToTimeType where
+  encodeJson a = JSON.fromString $ show a
+
+instance DecodeJson MoveToTimeType where
+  decodeJson value = do
+    stringValue <- decodeJson value
+    case stringValue of
+      "NextTime" -> Right NextTime
+      "NextTimeout" -> Right NextTimeout
+      "ExpirationTime" -> Right ExpirationTime
+      _ -> Left (TypeMismatch "MoveToTimeType")
 
 -- | On the front end we need Actions however we also need to keep track of the current
 -- | choice that has been set for Choices
@@ -96,7 +128,7 @@ data ActionInput
   = DepositInput AccountId Party Token BigInt
   | ChoiceInput ChoiceId (Array Bound) ChosenNum
   | NotifyInput
-  | MoveToTime Instant
+  | MoveToTime MoveToTimeType Instant
 
 derive instance eqActionInput :: Eq ActionInput
 
@@ -128,48 +160,64 @@ instance encodeJsonActionInput :: EncodeJson ActionInput where
           ]
       }
   encodeJson NotifyInput = encodeJson { tag: "NotifyInput" }
-  encodeJson (MoveToTime time) =
+  encodeJson (MoveToTime moveType time) =
     encodeJson
       { tag: "MoveToTime"
-      , contents: encodeJson $ round $ unwrap $ unInstant time
+      , contents: encodeJson
+          [ encodeJson moveType
+          , encodeJson $ round $ unwrap $ unInstant time
+          ]
       }
+
+instantDecoder :: Decoder Instant
+instantDecoder =
+  ReaderT \json -> do
+    numberValue <- decodeJson json
+    note (TypeMismatch "Instant") $ instant (Milliseconds numberValue)
 
 instance decodeJsonActionInput :: DecodeJson ActionInput where
   decodeJson =
     D.decode $ D.sumType "ActionInputId"
       $ Map.fromFoldable
           [ "DepositInput" /\ D.content
-              ( D.tuple $ DepositInput </$\> D.value </*\> D.value </*\> D.value
+              ( D.tuple $ DepositInput </$\> D.value </*\> D.value
+                  </*\> D.value
                   </*\> D.value
               )
           , "ChoiceInput" /\ D.content
-              (D.tuple $ ChoiceInput </$\> D.value </*\> D.value </*\> D.value)
+              ( D.tuple $ ChoiceInput </$\> D.value </*\> D.value </*\>
+                  D.value
+              )
           , "NotifyInput" /\ pure NotifyInput
           , "MoveToTime" /\ D.content
-              ( ReaderT \json -> do
-                  numberValue <- decodeJson json
-                  let
-                    mResult = MoveToTime <$> instant (Milliseconds numberValue)
-                  note (TypeMismatch "Instant") mResult
+              ( D.tuple $ MoveToTime </$\> D.value </*\> instantDecoder
               )
           ]
 
--- TODO: Probably rename to PartiesActions or similar
-newtype Parties = Parties (Map Party (Map ActionInputId ActionInput))
+newtype PartiesAction = PartiesAction
+  (Map Party (Map ActionInputId ActionInput))
 
-derive instance newtypeParties :: Newtype Parties _
+derive instance newtypeParties :: Newtype PartiesAction _
 
-instance semigroupParties :: Semigroup Parties where
-  append (Parties a) (Parties b) = Parties $ Map.unionWith (const identity) a b
+instance semigroupParties :: Semigroup PartiesAction where
+  append (PartiesAction a) (PartiesAction b) = PartiesAction $ Map.unionWith
+    Map.union
+    a
+    b
 
-instance monoidParties :: Monoid Parties where
-  mempty = Parties $ Map.empty
+instance monoidParties :: Monoid PartiesAction where
+  mempty = PartiesAction $ Map.empty
 
-instance encodeJsonParties :: EncodeJson Parties where
+instance encodeJsonParties :: EncodeJson PartiesAction where
   encodeJson = E.encode $ unwrap >$< E.dictionary E.value E.value
 
-instance decodeJsonParties :: DecodeJson Parties where
-  decodeJson = D.decode $ Parties <$> D.dictionary D.value D.value
+instance decodeJsonParties :: DecodeJson PartiesAction where
+  decodeJson = D.decode $ PartiesAction <$> D.dictionary D.value D.value
+
+moveToTimePartyAction :: MoveToTimeType -> Instant -> PartiesAction
+moveToTimePartyAction moveType time = PartiesAction
+  $ Map.singleton otherActionsParty
+  $ Map.singleton (MoveToTimeId moveType) (MoveToTime moveType time)
 
 -- We have a special person for notifications
 otherActionsParty :: Party
@@ -226,7 +274,7 @@ instance decodeJsonLogEntry :: DecodeJson LogEntry where
           ]
 
 type ExecutionStateRecord =
-  { possibleActions :: Parties
+  { possibleActions :: PartiesAction
   , pendingInputs :: Array Input
   , transactionError :: Maybe TransactionError
   , transactionWarnings :: Array TransactionWarning

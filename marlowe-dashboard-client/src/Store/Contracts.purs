@@ -7,6 +7,7 @@ module Store.Contracts
   , getContractNickname
   , getContractNicknames
   , getFollowerContract
+  , getMarloweParamsForFollower
   , getNewContract
   , isFollowerContract
   , mkContractStore
@@ -70,6 +71,7 @@ newtype ContractStore = ContractStore ContractStoreFields
 
 data Action
   = FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
+  | FollowerAppClosed PlutusAppId
   | ContractCreated NewContract
   | ContractHistoryUpdated Instant PlutusAppId MetaData ContractHistory
   | ContractNicknameUpdated ContractStatusId ContractNickname
@@ -103,6 +105,8 @@ reduce :: ContractStore -> Action -> ContractStore
 reduce store@(ContractStore s) = case _ of
   FollowerAppsActivated followers ->
     followerAppsActivated followers store
+  FollowerAppClosed appId ->
+    followerAppClosed appId store
   ContractCreated startingContractInfo ->
     contractCreated startingContractInfo store
   ContractHistoryUpdated currentTime followerId metadata history ->
@@ -168,6 +172,9 @@ followerAppsActivated
   :: Set (Tuple MarloweParams PlutusAppId) -> ContractStore -> ContractStore
 followerAppsActivated apps = over _contractIndex \index ->
   foldr (uncurry Bimap.insert) index apps
+
+followerAppClosed :: PlutusAppId -> ContractStore -> ContractStore
+followerAppClosed appId = over _contractIndex $ Bimap.deleteR appId
 
 contractCreated :: NewContract -> ContractStore -> ContractStore
 contractCreated newContract@(NewContract reqId _ _ _ _) =
@@ -302,6 +309,11 @@ followerContractExists marloweParams = view
 isFollowerContract :: PlutusAppId -> ContractStore -> Boolean
 isFollowerContract instanceId = view
   (_contractIndex <<< to (Bimap.memberR instanceId))
+
+getMarloweParamsForFollower
+  :: PlutusAppId -> ContractStore -> Maybe MarloweParams
+getMarloweParamsForFollower instanceId = view
+  (_contractIndex <<< to (Bimap.lookupR instanceId))
 
 getFollowerContract :: MarloweParams -> ContractStore -> Maybe PlutusAppId
 getFollowerContract marloweParams = view

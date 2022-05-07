@@ -33,6 +33,7 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.Set.Ordered.OSet as OSet
 import Data.Tuple.Nested (type (/\), (/\))
+import Humanize (humanizeValue)
 import Marlowe.Extended as EM
 import Marlowe.Extended.Metadata
   ( MetadataHintInfo
@@ -67,7 +68,7 @@ import Marlowe.Semantics as S
 import Marlowe.Time (unixEpoch)
 import Monaco (TextEdit)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
-import Pretty (showPrettyMoney, showPrettyParty, showPrettyToken)
+import Pretty (showPrettyParty)
 import StaticAnalysis.Reachability (initializePrefixMap, stepPrefixMap)
 import StaticAnalysis.Types (ContractPath, ContractPathStep(..), PrefixMap)
 import Text.Pretty (hasArgs, pretty)
@@ -146,13 +147,12 @@ instance showWarningDetail :: Show WarningDetail where
   show (PayBeforeDeposit account) = "The contract makes a payment from account "
     <> showPrettyParty account
     <> " before a deposit has been made"
-  show (PartialPayment accountId tokenId availableAmount demandedAmount) =
-    "The contract makes a payment of " <> showPrettyMoney demandedAmount <> " "
-      <> showPrettyToken tokenId
+  show (PartialPayment accountId token availableAmount demandedAmount) =
+    "The contract makes a payment of " <> humanizeValue token demandedAmount
       <> " from account "
       <> showPrettyParty accountId
       <> " but the account only has "
-      <> showPrettyMoney availableAmount
+      <> humanizeValue token availableAmount
 
 derive instance genericWarningDetail :: Generic WarningDetail _
 
@@ -734,6 +734,7 @@ lintValue env t@(Term (DivValue a b) pos) = do
     (ConstantSimp _ _ v1 /\ ConstantSimp _ _ v2) ->
       let
         evaluated = evalValue
+          -- TODO: SCP-3887 unify time construct
           (makeEnvironment (POSIXTime unixEpoch) (POSIXTime unixEpoch))
           emptyState
           (S.DivValue (S.Constant v1) (S.Constant v2))

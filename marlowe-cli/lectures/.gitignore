@@ -1,0 +1,13 @@
+0?-*.md
+0?-*.html
+*.pptx
+.ipynb_checkpoints/
+marlowe-cardano/
+my-wallet.*
+*.skey
+*.vkey
+*.address
+*.instance
+*.params
+*.json
+*.restore

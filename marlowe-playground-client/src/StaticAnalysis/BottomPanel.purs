@@ -32,6 +32,7 @@ import Halogen.HTML
   )
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes, enabled)
+import Humanize (humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
@@ -45,7 +46,6 @@ import Marlowe.Template (TemplateContent(..))
 import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
 import Page.Simulation.View (TemplateParameterActionsGen, templateParameters)
-import Pretty (showPrettyToken)
 import Servant.PureScript (printAjaxError)
 import StaticAnalysis.Types
   ( AnalysisExecutionState(..)
@@ -368,9 +368,7 @@ displayInput (IDeposit owner party tok money) =
   , text " - Party "
   , b_ [ text $ show party ]
   , text " deposits "
-  , b_ [ text $ show money ]
-  , text " units of "
-  , b_ [ text $ showPrettyToken tok ]
+  , b_ [ text $ humanizeValue tok money ]
   , text " into account of "
   , b_ [ text (show owner) ]
   , text "."

@@ -2,7 +2,6 @@ module Page.Dashboard.Lenses where
 
 import Prologue
 
-import Component.Template.Types (State) as Template
 import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatusId)
 import Data.DateTime.Instant (Instant)
@@ -68,9 +67,6 @@ _currentTime =
 
 _tzOffset :: Lens' State Minutes
 _tzOffset = _transient <<< prop (Proxy :: _ "tzOffset")
-
-_templateState :: Lens' State Template.State
-_templateState = _transient <<< prop (Proxy :: _ "templateState")
 
 _nickname :: Lens' ContractState (Maybe ContractNickname)
 _nickname = prop (Proxy :: _ "nickname")

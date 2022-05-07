@@ -41,7 +41,6 @@ data Action
   | StartSimulation
   | DownloadAsJson
   | MoveTime Instant
-  | SetTime Instant
   | AddInput Input (Array Bound)
   | SetChoice ChoiceId ChosenNum
   | ResetSimulator
@@ -67,7 +66,6 @@ instance isEventAction :: IsEvent Action where
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent DownloadAsJson = Just $ defaultEvent "DownloadAsJson"
   toEvent (MoveTime _) = Just $ defaultEvent "MoveTime"
-  toEvent (SetTime _) = Just $ defaultEvent "SetTime"
   toEvent (AddInput _ _) = Just $ defaultEvent "AddInput"
   toEvent (SetChoice _ _) = Just $ defaultEvent "SetChoice"
   toEvent ResetSimulator = Just $ defaultEvent "ResetSimulator"

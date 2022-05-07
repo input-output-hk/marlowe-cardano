@@ -115,7 +115,7 @@ mkEnv sources sinks = do
     , redeemBus
     , sinks
     , sources
-    , marloweAppTimeoutBlocks: 3
+    , marloweAppTimeoutBlocks: 10
     , pabAvar
     , redeemAvarMap
     }

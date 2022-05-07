@@ -94,6 +94,7 @@ data Action
   | SlotChanged Slot
   -- Contract
   | FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
+  | FollowerAppClosed PlutusAppId
   | ContractCreated NewContract
   | ContractHistoryUpdated PlutusAppId MetaData ContractHistory
   | ContractNicknameUpdated ContractStatusId ContractNickname
@@ -135,6 +136,8 @@ reduce store = case _ of
   -- Contract
   FollowerAppsActivated followers ->
     updateContractStore $ Contracts.FollowerAppsActivated followers
+  FollowerAppClosed appId ->
+    updateContractStore $ Contracts.FollowerAppClosed appId
   ContractCreated startingContractInfo ->
     updateContractStore $ Contracts.ContractCreated startingContractInfo
   ContractHistoryUpdated followerId metadata history ->

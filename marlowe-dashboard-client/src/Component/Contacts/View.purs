@@ -5,6 +5,7 @@ module Component.Contacts.View
 
 import Prelude hiding (div)
 
+import Capability.Toast (class Toast)
 import Clipboard (Action(..)) as Clipboard
 import Component.AddContact (_addContact)
 import Component.AddContact (component) as AddContact
@@ -52,6 +53,7 @@ contactsCard
   :: forall m
    . MonadAff m
   => MonadStore Store.Action Store.Store m
+  => Toast m
   => State
   -> ComponentHTML m
 contactsCard state =
@@ -80,7 +82,12 @@ contactsCard state =
             ViewWallet nickname address ->
               contactDetailsCard wallet nickname address
             NewWallet _ ->
-              [ slot _addContact unit AddContact.component {} OnAddContactMsg
+              [ slot
+                  _addContact
+                  unit
+                  AddContact.component
+                  { initializeNickname: "" }
+                  OnAddContactMsg
               ]
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action

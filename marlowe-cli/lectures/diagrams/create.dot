@@ -1,0 +1,51 @@
+digraph Create {
+
+rankdir=LR
+
+node [shape=record]
+
+
+Tx0_Creator [label="Contract Creator|X ₳"]
+
+
+Tx1 [shape=oval label="Creation Tx"]
+
+Tx0_Creator -> Tx1
+
+
+Tx1_0 [label="Contract Creator|X − 2 (n + 1) − 0.2 ₳"]
+
+Tx1 -> Tx1_0 [label="#0"]
+
+
+Tx1_1 [label="Marlowe Application|2 ₳|{Balance|History|Variables}"]
+
+Tx1 -> Tx1_1 [label="#1"]
+
+
+Tx1_2 [label="First Role|2 ₳ + role token"]
+
+Tx1 -> Tx1_2 [label="#2"]
+
+
+Tx1_3 [label="Second Role|2 ₳ + role token"]
+
+Tx1 -> Tx1_3 [label="#3"]
+
+
+Tx1_Ditto [shape=none label= ". . ."]
+
+Tx1 -> Tx1_Ditto
+
+
+Tx1_N [label="nth Role|2 ₳ + role token"]
+
+Tx1 -> Tx1_N [label="# n+1"]
+
+
+Tx1_Fee [label="Fee\n0.2 ₳"]
+
+Tx1 -> Tx1_Fee
+
+
+}

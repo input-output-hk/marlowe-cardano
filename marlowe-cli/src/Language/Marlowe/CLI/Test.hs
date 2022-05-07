@@ -29,14 +29,13 @@ import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
 import Language.Marlowe.CLI.Test.PAB (pabTest)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
 import Language.Marlowe.CLI.Test.Types (MarloweTests (..), PabAccess (..))
+import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliError (..))
-import Ledger.TimeSlot (SlotConfig (..))
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Socket (withSocketsDo)
 import Network.WebSockets (runClient)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (pabClient)
-import Plutus.V1.Ledger.Api (POSIXTime (..))
 import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
 
 
@@ -56,7 +55,7 @@ runTests ScriptTests{..} =
         , localNodeNetworkId       = network'
         , localNodeSocketPath      = socketPath
         }
-      slotConfig = SlotConfig slotLength (POSIXTime slotZeroOffset)
+    slotConfig <- querySlotConfig connection
     tests' <- mapM decodeFileStrict tests
     mapM_ (scriptTest network' connection slotConfig) tests'
 runTests PabTests{..} =

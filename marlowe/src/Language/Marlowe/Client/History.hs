@@ -56,7 +56,7 @@ import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, Typ
                                  smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
 import Ledger (ChainIndexTxOut (..), ciTxOutAddress, toTxOut)
-import Ledger.TimeSlot (slotRangeToPOSIXTimeRange)
+import Ledger.TimeSlot (SlotConfig, slotRangeToPOSIXTimeRange)
 import Ledger.Tx.CardanoAPI (SomeCardanoApiTx (SomeTx))
 import Ledger.Typed.Scripts (DatumType, validatorAddress)
 import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
@@ -82,7 +82,6 @@ import qualified Data.ByteString as BS (drop)
 import qualified Data.Map.Strict as M (Map, keys, lookup, toList)
 import qualified Data.Set as S (toList)
 import Data.Traversable (for)
-import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import qualified PlutusTx.IsData.Class
 
 
@@ -150,9 +149,10 @@ data RolePayout =
 
 -- | Retrieve the history of a role-based Marlowe contract.
 marloweHistory :: AsContractError e
-               => MarloweParams                   -- ^ The Marlowe validator parameters.
+               => SlotConfig                      -- ^ The slot configuration.
+               -> MarloweParams                   -- ^ The Marlowe validator parameters.
                -> Contract w s e (Maybe History)  -- ^ The original contract and the sequence of redemptions, if any.
-marloweHistory params =
+marloweHistory slotConfig params =
   do
     let address = validatorAddress $ smallUntypedValidator params
     logInfo $ "[DEBUG:marloweHistory] address = " <> show address
@@ -170,18 +170,19 @@ marloweHistory params =
 -}
     -- TODO: Extract all PKHs from the contract, and query these addresses, too.
     pure
-      . history params address
+      . history slotConfig params address
       . nub
       $ addressTxns <> roleTxns {- <> pkhTxns -}
 
 
 -- | Retrieve the history of a role-based Marlowe contract.
-history :: MarloweParams   -- ^ The Marlowe validator parameters.
+history :: SlotConfig      -- ^ The slot configuration.
+        -> MarloweParams   -- ^ The Marlowe validator parameters.
         -> Address         -- ^ The Marlowe validator address.
         -> [ChainIndexTx]  -- ^ The transactions at the Marlowe validator and role validator addresses.
         -> Maybe History   -- ^ The original contract and the sequence of redemptions, if any.
-history params address citxs =
-  case histories params address citxs of
+history slotConfig params address citxs =
+  case histories slotConfig params address citxs of
     -- If role tokens are minted by the "create" endpoint, then there should only ever be on contract at the address.
     [history'] -> Just history'
     -- Either there is no contract yet, or role tokens have been reused for multiple contracts.
@@ -189,25 +190,27 @@ history params address citxs =
 
 
 -- | Retrieve the histories of a role-based Marlowe contract.
-histories :: MarloweParams   -- ^ The Marlowe validator parameters.
+histories :: SlotConfig      -- ^ The slot configuration.
+          -> MarloweParams   -- ^ The Marlowe validator parameters.
           -> Address         -- ^ The Marlowe validator address.
           -> [ChainIndexTx]  -- ^ The transactions at the Marlowe validator and role validator addresses.
           -> [History]       -- ^ The original contracts and the sequence of redemptions.
-histories params address citxs =
+histories slotConfig params address citxs =
   [
     Created (tyTxOutRefRef creation) (toMarloweState creation)
-      $ historyFrom address citxs creation
+      $ historyFrom slotConfig address citxs creation
   |
     creation <- creationTxOut params address `mapMaybe` citxs
   ]
 
 
 -- | Construct the sequence of redemptions following from a particular Marlowe transactions.
-historyFrom :: Address             -- ^ The Marlowe validator address.
+historyFrom :: SlotConfig          -- ^ The slot configuration.
+            -> Address             -- ^ The Marlowe validator address.
             -> [ChainIndexTx]      -- ^ The transactions at the Marlowe validator and role validator addresses.
             -> MarloweTxOutRef     -- ^ The Marlowe transaction to start from.
             -> Maybe History       -- ^ The sequence of subsequent redemptions.
-historyFrom address citxs consumed =
+historyFrom slotConfig address citxs consumed =
   let
     consumed' = tyTxOutRefRef consumed
     anyInputsConsumed citx =
@@ -220,14 +223,14 @@ historyFrom address citxs consumed =
     case filter anyInputsConsumed citxs of
       -- Only one transaction can consume the output of the previous step.
       [citx] -> -- Find the redeemer
-                case lookup consumed' $ txInputs citx of
+                case lookup consumed' $ txInputs slotConfig citx of
                   -- The output of the previous step was consumed with a redeemer.
                   Just inputs -> -- Determine whether there is output to the script.
                                  case filterOutputs address citx of
                                    [mo] -> -- There was datum UTxO to the script, so the contract continues.
                                            Just
                                              . InputApplied inputs (tyTxOutRefRef mo) (toMarloweState mo)
-                                             $ historyFrom address citxs mo
+                                             $ historyFrom slotConfig address citxs mo
                                    _    -> -- There was no datum UTxO to the script, so the contract is now closed.
                                            Just
                                              . Closed inputs
@@ -256,15 +259,16 @@ marloweUtxoStatesAt validator =
 -- | Retrieve the Marlowe history from a transaction.
 marloweHistoryFrom :: AsContractError e
                    => SmallTypedValidator       -- ^ The Marlowe validator.
+                   -> SlotConfig                -- ^ The slot configuration.
                    -> ChainIndexTx              -- ^ The transaction.
                    -> Contract w s e [History]  -- ^ Action for finding the history for the transaction.
-marloweHistoryFrom validator citx =
+marloweHistoryFrom validator slotConfig citx =
   do
     let
       valAddress = validatorAddress validator
       toHistory (txOutRef, (citxOut, citx')) =
         let
-          inputs = txInputs citx'
+          inputs = txInputs slotConfig citx'
           toAddress = valAddress == (citxOut ^. ciTxOutAddress)
           extractDatum (ScriptChainIndexTxOut _ _ (Right dat) _) = fromBuiltinData $ getDatum dat
           extractDatum _                                         = Nothing
@@ -411,9 +415,10 @@ txDatums citx =
 
 
 -- | Extract Marlowe input from a transaction.
-txInputs :: ChainIndexTx                    -- ^ The transaction.
+txInputs :: SlotConfig                      -- ^ The slot configuration.
+         -> ChainIndexTx                    -- ^ The transaction.
          -> [(TxOutRef, TransactionInput)]  -- ^ The inputs that have Marlowe inputs.
-txInputs citx =
+txInputs slotConfig citx =
   case slotRangeToPOSIXTimeRange slotConfig $ citx ^. citxValidRange of
     Interval (LowerBound (Finite l) True) (UpperBound (Finite h) False) ->
       let
@@ -423,8 +428,7 @@ txInputs citx =
           $ secondM (fmap (TransactionInput slots) . fromBuiltinData . getRedeemer)
           <$> txRedeemers citx
     _ -> []  -- TODO: Should this instead throw an error in an error monad?
-  where
-    slotConfig = unsafeGetSlotConfig
+
 
 -- | Extract transaction inputs with redeemers.
 txRedeemers :: ChainIndexTx            -- ^ The transaction.

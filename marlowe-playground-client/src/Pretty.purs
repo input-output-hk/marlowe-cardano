@@ -12,17 +12,7 @@ import Data.String.CodeUnits (fromCharArray, toCharArray)
 import Halogen.HTML (HTML, abbr, text)
 import Halogen.HTML.Properties (title)
 import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
-import Marlowe.Semantics (Party(..), Payee(..), Token(..))
-
-renderPrettyToken :: forall p i. Token -> HTML p i
-renderPrettyToken (Token "" "") = text "ADA"
-
-renderPrettyToken (Token cur tok) = abbr [ title cur ] [ text tok ]
-
-showPrettyToken :: Token -> String
-showPrettyToken (Token "" "") = "ADA"
-
-showPrettyToken (Token cur tok) = "\"" <> cur <> " " <> tok <> "\""
+import Marlowe.Semantics (Party(..), Payee(..))
 
 renderPrettyParty :: forall p i. MetaData -> Party -> HTML p i
 renderPrettyParty _ (PK pkh) =
@@ -43,17 +33,12 @@ showPrettyParty (PK pkh) = "PubKey " <> pkh
 
 showPrettyParty (Role role) = show role
 
--- TODO I think this used to add commas? confirm this and add this back if
--- needed.
-showPrettyMoney :: BigInt -> String
-showPrettyMoney = BigInt.toString
-
 renderPrettyPayee :: forall p i. MetaData -> Payee -> Array (HTML p i)
 renderPrettyPayee metadata (Account owner2) =
   [ text "account of ", renderPrettyParty metadata owner2 ]
 
 renderPrettyPayee metadata (Party dest) =
-  [ text "party ", renderPrettyParty metadata dest ]
+  [ renderPrettyParty metadata dest, text " wallet" ]
 
 showBigIntAsCurrency :: BigInt -> Int -> String
 showBigIntAsCurrency number numDecimals = fromCharArray numberStr

@@ -81,11 +81,12 @@ deriveState { context, input } =
   let
     { action, executionState, chosenNum } = input
     { currentTime } = context
-    { contract } = executionState
+    { mNextTimeout } = executionState
     contractInput = toInput action chosenNum
   in
     { transactionFeeQuote: transactionFee
-    , txInput: mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
+    , txInput:
+        mkTx currentTime mNextTimeout $ Unfoldable.fromMaybe contractInput
     }
 
 handleAction

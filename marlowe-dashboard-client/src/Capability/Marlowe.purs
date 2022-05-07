@@ -2,6 +2,7 @@ module Capability.Marlowe
   ( ApplyInputError(..)
   , CreateError(..)
   , RedeemError(..)
+  , InstantiateContractError
   , applyTransactionInput
   , class ManageMarlowe
   , initializeContract
@@ -15,10 +16,6 @@ import Capability.PAB (stopContract)
 import Capability.PlutusApps.MarloweApp (applyInputs, createContract, redeem) as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Component.ContractSetup.Types (ContractParams)
-import Component.Template.State
-  ( InstantiateContractErrorRow
-  , instantiateExtendedContract
-  )
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Logger.Structured (error, info, info', warning')
 import Control.Monad.Error.Class (catchError, throwError)
@@ -31,7 +28,11 @@ import Control.Monad.UUID (class MonadUUID)
 import Control.Parallel (parOneOf)
 import Data.Argonaut (encodeJson)
 import Data.Bifunctor (lmap)
-import Data.DateTime.Instant (Instant)
+import Data.ContractTimeout as CT
+import Data.ContractValue (_value)
+import Data.DateTime.Instant (Instant, instant)
+import Data.Either (note')
+import Data.Filterable (filterMap)
 import Data.Lens (view)
 import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet (PABConnectedWallet, _address, _marloweAppId)
@@ -56,10 +57,13 @@ import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (subscribeOnce)
 import Language.Marlowe.Client (MarloweError(..))
 import Marlowe.Execution.State (removePendingTransaction, setPendingTransaction)
-import Marlowe.Extended.Metadata (ContractTemplate)
+import Marlowe.Extended (resolveRelativeTimes, toCore)
+import Marlowe.Extended.Metadata (ContractTemplate, _extendedContract)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Server (Api) as MarloweApp
 import Marlowe.Semantics (MarloweParams, TransactionInput)
+import Marlowe.Semantics as Semantic
+import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Plutus.Contract.Error as P
 import Plutus.PAB.Webserver (Api) as PAB
 import Servant.PureScript (class MonadAjax)
@@ -69,6 +73,25 @@ import Text.Pretty (text)
 import Type.Proxy (Proxy(..))
 import Type.Row (type (+))
 import Types (AjaxResponse, JsonAjaxErrorRow)
+
+data InstantiateContractError =
+  InstantiateContractError Instant ContractTemplate ContractParams
+
+instance Explain InstantiateContractError where
+  explain _ = text
+    "We couldn't create an instance of the contract with the provided parameters"
+
+instance Debuggable InstantiateContractError where
+  debuggable (InstantiateContractError currentTime template params) =
+    encodeJson
+      { errorType: "Contract instantiation"
+      , currentTime: show currentTime
+      , template
+      , params
+      }
+
+type InstantiateContractErrorRow r =
+  (instantiateContractError :: InstantiateContractError | r)
 
 type InitializeContractError = Variant
   (JsonAjaxErrorRow + InstantiateContractErrorRow + ())
@@ -338,3 +361,28 @@ instance Explain CreateError where
 instance Debuggable CreateError where
   debuggable (CreateError error) = encodeJson error
   debuggable CreateTimeout = encodeJson "CreateTimeout"
+
+instantiateExtendedContract
+  :: Instant
+  -> ContractTemplate
+  -> ContractParams
+  -> Either InstantiateContractError Semantic.Contract
+instantiateExtendedContract now template params =
+  let
+    extendedContract = view (_extendedContract) template
+
+    { timeouts, values } = params
+
+    timeContent = filterMap (instant <<< CT.toDuration) timeouts
+
+    valueContent = view _value <$> values
+
+    templateContent = TemplateContent { timeContent, valueContent }
+
+    filledContract = fillTemplate templateContent extendedContract
+
+    absoluteFilledContract = resolveRelativeTimes now filledContract
+  in
+    note'
+      (\_ -> InstantiateContractError now template params)
+      $ toCore absoluteFilledContract

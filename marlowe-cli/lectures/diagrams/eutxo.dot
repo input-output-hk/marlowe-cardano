@@ -1,0 +1,40 @@
+digraph Eutxo {
+
+
+rankdir=LR
+
+node [shape=record]
+
+
+ScriptInput [label="Plutus eUTxO|some ₳ (at least min-ADA)\nand maybe some tokens|a datum"]
+
+Collateral [label="ADA-Only UTxO|enough ₳ to cover the\n collateral requirement"]
+
+TokenInput [label="Non-Plutus UTxO|some ₳ (at least min-ADA)\nand maybe some tokens"]
+
+
+Transaction [shape=oval label="Transaction"]
+
+Collateral -> Transaction [style=dashed label="collateral"]
+
+TokenInput -> Transaction
+
+ScriptInput -> Transaction [label="includes redeemer"]
+
+
+ScriptOutput [label="Plutus eUTxO|some ₳ (at least min-ADA)\nand maybe some tokens|a datum hash"]
+
+Transaction -> ScriptOutput
+
+
+Fee [label="Fee paid in ₳,\nbased on transaction size\nand script execution costs"]
+
+Transaction -> Fee
+
+
+TokenOutput [label="Non-Plutus UTxO|some ₳ (at least min-ADA)\nand maybe some tokens"]
+
+Transaction -> TokenOutput
+
+
+}

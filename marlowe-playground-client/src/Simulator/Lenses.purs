@@ -2,37 +2,25 @@ module Simulator.Lenses where
 
 import Prologue
 
-import Data.Lens
-  ( Lens'
-  , Optic'
-  , Prism'
-  , Traversal'
-  , _Just
-  , lens
-  , preview
-  , prism
-  , set
-  )
-import Data.Lens.At (at)
+import Data.Lens (Lens', Optic', Prism', Traversal', _Just, prism)
 import Data.Lens.Index (ix)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.NonEmptyList (_Head)
 import Data.Lens.Record (prop)
 import Data.List.Types (NonEmptyList)
 import Data.Map (Map)
-import Data.Map as Map
 import Data.Profunctor.Choice (class Choice)
 import Data.Profunctor.Strong (class Strong)
 import Marlowe.Holes (Contract, Term)
 import Marlowe.Semantics (Party)
 import Simulator.Types
   ( ActionInput
-  , ActionInputId(..)
+  , ActionInputId
   , ExecutionState(..)
   , ExecutionStateRecord
   , InitialConditionsRecord
   , MarloweState
-  , Parties
+  , PartiesAction
   , otherActionsParty
   )
 import Type.Proxy (Proxy(..))
@@ -40,26 +28,11 @@ import Type.Proxy (Proxy(..))
 --------------------------------------------------------------------------
 -- ActionInput and ActionInputId Lenses
 --
-_actionInput :: Party -> ActionInputId -> Traversal' Parties ActionInput
+_actionInput :: Party -> ActionInputId -> Traversal' PartiesAction ActionInput
 _actionInput party id = _Newtype <<< ix party <<< ix id
 
-_otherActions :: Traversal' Parties (Map ActionInputId ActionInput)
+_otherActions :: Traversal' PartiesAction (Map ActionInputId ActionInput)
 _otherActions = _Newtype <<< ix otherActionsParty
-
-_moveToAction :: Lens' Parties (Maybe ActionInput)
-_moveToAction = lens get' set'
-  where
-  get' = preview (_actionInput otherActionsParty MoveToTimeId)
-
-  set' p ma =
-    let
-      m = case preview _otherActions p, ma of
-        Nothing, Nothing -> Nothing
-        Just m', Nothing -> Just $ Map.delete MoveToTimeId m'
-        Nothing, Just a -> Just $ Map.singleton MoveToTimeId a
-        Just m', Just a -> Just $ Map.insert MoveToTimeId a m'
-    in
-      set (_Newtype <<< at otherActionsParty) m p
 
 --------------------------------------------------------------------------
 -- ExecutionStateRecord Lenses
@@ -174,7 +147,7 @@ _currentPossibleActions
   :: forall s p
    . Strong p
   => Choice p
-  => Optic' p { marloweState :: NonEmptyList MarloweState | s } Parties
+  => Optic' p { marloweState :: NonEmptyList MarloweState | s } PartiesAction
 _currentPossibleActions = _currentMarloweState
   <<< _executionState
   <<< _SimulationRunning

@@ -2,10 +2,12 @@
 
 The `marlowe-cli` tool provides several utilities for serialising Marlowe contracts to validators, datums, and redeemers. It also computes hashes and addresses. It can be used in conjunction with [`cardano-cli`](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md) to submit Marlowe transactions to the Cardano blockchain.
 
+See the [Marlowe Debugging Cookbook](../marlowe/debugging-cookbook.md) for troubleshooting information, or the [Marlowe CLI Pioneers Lectures](lectures/ReadMe.md).
+
 
 ## High-Level Workflow
 
-In the high-level workflowe for `marlowe-cli`, the user creates a contract from a template, using Marlowe Playground, programmatically, or by hand.
+In the high-level workflow for `marlowe-cli`, the user creates a contract from a template, using Marlowe Playground, programmatically, or by hand.
 The user provides input at each step of contract execution.  The tool manages the contract state transitions and handles the construction and submission of transactions.
 
 A [slide presentation](doc/marlowe-overview-tutorial.pdf) describes the high-level workflow for `marlowe-cli` in detail.

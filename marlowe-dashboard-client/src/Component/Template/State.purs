@@ -1,32 +1,37 @@
-module Component.Template.State
-  ( InstantiateContractError(..)
-  , InstantiateContractErrorRow
-  , dummyState
-  , handleAction
-  , initialState
-  , instantiateExtendedContract
-  ) where
+module Component.Template.State (component) where
 
 import Prologue
 
-import Component.ContractSetup.Types (ContractFields, ContractParams)
+import Capability.Marlowe (class ManageMarlowe, initializeContract)
+import Capability.Toast (class Toast, addToast)
+import Component.ContractSetup.Types (ContractFields)
 import Component.ContractSetup.Types as CS
-import Component.Template.Types (Action(..), State(..))
-import Data.Argonaut (encodeJson)
+import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
+import Component.Template.Types
+  ( Action(..)
+  , ChildSlots
+  , Component
+  , Input
+  , Msg(..)
+  , State
+  , Wizard(..)
+  )
+import Component.Template.View (render)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
+import Control.Monad.Now (class MonadTime, now)
 import Data.ContractTimeout as CT
-import Data.ContractValue (_value)
-import Data.DateTime.Instant (Instant, instant, unInstant)
-import Data.Either (hush, note')
-import Data.Filterable (filterMap)
+import Data.DateTime.Instant (unInstant)
+import Data.Either (hush)
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Lens (view)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Set as Set
+import Data.Time.Duration (Milliseconds(..))
+import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
-import Errors.Debuggable (class Debuggable)
-import Errors.Explain (class Explain)
+import Errors (globalError)
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral
@@ -35,32 +40,40 @@ import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Halogen (HalogenM)
 import Halogen as H
 import Halogen.Form.Injective (blank, inject)
-import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
-import Marlowe.Extended.Metadata
-  ( ContractTemplate
-  , NumberFormat(..)
-  , _extendedContract
-  )
+import Halogen.Store.Monad (class MonadStore)
+import Marlowe.Extended (ContractType(..))
+import Marlowe.Extended.Metadata (ContractTemplate, NumberFormat(..))
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics (Contract) as Semantic
 import Marlowe.Semantics (Party(..))
 import Marlowe.Template
   ( TemplateContent(..)
-  , fillTemplate
   , getPlaceholderIds
   , initializeTemplateContent
   )
-import Page.Dashboard.Types (ChildSlots, Msg)
-import Text.Pretty (text)
+import Store as Store
+import Toast.Types (successToast)
 
--- see note [dummyState] in MainFrame.State
-dummyState :: State
-dummyState = initialState
+component
+  :: forall m
+   . MonadAff m
+  => MonadTime m
+  => ManageMarlowe m
+  => MonadLogger StructuredLog m
+  => Toast m
+  => MonadStore Store.Action Store.Store m
+  => Component m
+component = H.mkComponent
+  { initialState
+  , render
+  , eval: H.mkEval H.defaultEval
+      { handleAction = handleAction
+      }
+  }
 
-initialState :: State
-initialState = Start
+initialState :: Input -> State
+initialState wallet = { wallet, wizard: Start }
 
-setup :: ContractTemplate -> Maybe ContractFields -> State
+setup :: ContractTemplate -> Maybe ContractFields -> Wizard
 setup { metaData, extendedContract } mFields = Setup
   { metaData, extendedContract }
   { templateRoles: getParties extendedContract # Set.mapMaybe case _ of
@@ -93,79 +106,75 @@ setup { metaData, extendedContract } mFields = Setup
 handleAction
   :: forall m
    . MonadAff m
+  => MonadTime m
+  => ManageMarlowe m
+  => MonadLogger StructuredLog m
+  => Toast m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
 handleAction OnReset = do
-  H.put Start
+  H.modify_ _ { wizard = Start }
 
 handleAction (OnTemplateChosen template) = do
-  H.put $ Overview template Nothing
+  H.modify_ _ { wizard = Overview template Nothing }
 
-handleAction (OnSetup template fields) = H.put $ setup template fields
+handleAction (OnSetup template fields) = do
+  H.modify_ _ { wizard = setup template fields }
 
 handleAction (OpenCreateWalletCard _) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
 
-handleAction (OnStartContract _ _) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
+handleAction (OnStartContract template params) = do
+  {- [UC-CONTRACT-1][0] Start a new marlowe contract
+   The flow of creating a new marlowe contract starts when we submit the
+   Template form. In here we apply the contract parameters to the Marlowe
+   Extended contract to receive a Marlowe Core contract, and we call the
+   PAB endpoint to create and distribute the role tokens. We also create
+   a placeholder so the user can see that that the contract is being created
+  -}
+  wallet <- H.gets _.wallet
+  currentInstant <- now
+  instantiateResponse <-
+    initializeContract currentInstant template params wallet
+  case instantiateResponse of
+    Left error -> do
+      H.tell _submitButtonSlot "action-pay-and-start"
+        $ SubmitResult (Milliseconds 600.0) (Left "Error")
+      globalError "Failed to initialize contract." error
+    Right (newContract /\ awaitContractCreation) -> do
+      H.tell _submitButtonSlot "action-pay-and-start"
+        $ SubmitResult (Milliseconds 600.0) (Right "")
+      addToast $ successToast
+        "The request to initialize this contract has been submitted."
+      H.raise $ ContractStarted newContract awaitContractCreation
 
-handleAction OnBack = H.modify_ case _ of
-  Start -> Start
-  Overview _ _ -> Start
-  Setup template { fields } -> Overview template (Just fields)
-  Review template params -> setup template (Just $ inject params)
+handleAction OnBack = H.modify_ \s -> s
+  { wizard = case s.wizard of
+      Start -> Start
+      Overview _ _ -> Start
+      Setup template { fields } -> Overview template (Just fields)
+      AddContact _ template input -> Setup template input
+      Review template params -> setup template (Just $ inject params)
+  }
 
 handleAction (OnContractSetupMsg CS.BackClicked) = handleAction OnBack
 
 handleAction (OnContractSetupMsg (CS.ReviewClicked params)) =
-  H.get >>= case _ of
-    Setup template _ -> H.put $ Review template params
+  H.gets _.wizard >>= case _ of
+    Setup template _ -> H.modify_ _ { wizard = Review template params }
     _ -> pure unit
 
 handleAction (OnContractSetupMsg (CS.FieldsUpdated fields)) =
-  H.modify_ case _ of
-    Setup template input -> Setup template input { fields = fields }
-    s -> s
+  H.gets _.wizard >>= case _ of
+    Setup template input -> H.modify_ _
+      { wizard = Setup template input { fields = fields } }
+    _ -> pure unit
 
-data InstantiateContractError =
-  InstantiateContractError Instant ContractTemplate ContractParams
+handleAction (OnContractSetupMsg (CS.NewContactRequested name)) = do
+  { wizard } <- H.get
+  case wizard of
+    Setup template input ->
+      H.modify_ _ { wizard = AddContact name template input }
+    _ -> pure unit
 
-instance Explain InstantiateContractError where
-  explain _ = text
-    "We couldn't create an instance of the contract with the provided parameters"
-
-instance Debuggable InstantiateContractError where
-  debuggable (InstantiateContractError currentTime template params) =
-    encodeJson
-      { errorType: "Contract instantiation"
-      , currentTime: show currentTime
-      , template
-      , params
-      }
-
-type InstantiateContractErrorRow r =
-  (instantiateContractError :: InstantiateContractError | r)
-
-instantiateExtendedContract
-  :: Instant
-  -> ContractTemplate
-  -> ContractParams
-  -> Either InstantiateContractError Semantic.Contract
-
-instantiateExtendedContract now template params =
-  let
-    extendedContract = view (_extendedContract) template
-
-    { timeouts, values } = params
-
-    timeContent = filterMap (instant <<< CT.toDuration) timeouts
-
-    valueContent = view _value <$> values
-
-    templateContent = TemplateContent { timeContent, valueContent }
-
-    filledContract = fillTemplate templateContent extendedContract
-
-    absoluteFilledContract = resolveRelativeTimes now filledContract
-  in
-    note'
-      (\_ -> InstantiateContractError now template params)
-      $ toCore absoluteFilledContract
+handleAction (OnAddContactMsg _) =
+  handleAction OnBack

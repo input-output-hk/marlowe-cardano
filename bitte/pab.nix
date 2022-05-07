@@ -115,10 +115,11 @@ writeShellScriptBin "entrypoint" ''
 
   wait-for-socket "$NOMAD_ALLOC_DIR/node.sock"
 
-  ${pab-init-cmd}/bin/pab-init-cmd
+  # not needed with --memory
+  # ${pab-init-cmd}/bin/pab-init-cmd
 
   # Ugly ugly hack to kill the PAB at midnight UTC
-  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet --verbose &
+  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet --memory &
   sleep $(($(date -f - +%s- <<< $'tomorrow 00:00\nnow')0))&
   wait -n
   exit 1

@@ -74,6 +74,7 @@ transfer amount from to timeout timeoutContinuation continuation =
 extendedContract :: Contract
 extendedContract =
   deposit (guaranteedAmount (fromInt 3)) guarantor investor
+    -- TODO: SCP-3887 unify time construct
     (TimeValue $ POSIXTime $ unsafeInstantFromInt 300)
     Close
     $ transfer principal investor issuer

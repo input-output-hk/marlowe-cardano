@@ -12,14 +12,7 @@ import Component.Icons as Icon
 import Component.Popper (Placement(..))
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
-import Data.Array
-  ( concatMap
-  , intercalate
-  , length
-  , mapWithIndex
-  , reverse
-  , sortWith
-  )
+import Data.Array (concatMap, intercalate, length, mapWithIndex, sortWith)
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
@@ -47,7 +40,6 @@ import Halogen.Classes
   , flex
   , flexCol
   , flexGrow
-  , flexShrink0
   , fontBold
   , fullHeight
   , fullWidth
@@ -61,20 +53,16 @@ import Halogen.Classes
   , minH0
   , noMargins
   , overflowHidden
-  , overflowScroll
   , paddingX
   , plusBtn
   , smallBtn
   , smallSpaceBottom
   , spaceBottom
-  , spaceLeft
   , spaceRight
   , spanText
-  , spanTextBreakWord
   , textSecondaryColor
   , textXs
   , uppercase
-  , w30p
   )
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
@@ -111,6 +99,7 @@ import Humanize
   ( formatPOSIXTime
   , humanizeInterval
   , humanizeOffset
+  , humanizeValue
   , localToUtc
   , utcToLocal
   )
@@ -147,13 +136,7 @@ import Page.Simulation.BottomPanel (panelContents)
 import Page.Simulation.Lenses (_bottomPanelState)
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
-import Pretty
-  ( renderPrettyParty
-  , renderPrettyPayee
-  , renderPrettyToken
-  , showPrettyChoice
-  , showPrettyMoney
-  )
+import Pretty (renderPrettyParty, renderPrettyPayee, showPrettyChoice)
 import Simulator.Lenses
   ( _SimulationRunning
   , _currentContract
@@ -173,6 +156,7 @@ import Simulator.Types
   , ExecutionState(..)
   , InitialConditionsRecord
   , LogEntry(..)
+  , MoveToTimeType(..)
   , otherActionsParty
   )
 import Text.Markdown.TrimmedInline (markdownToHTML)
@@ -196,7 +180,15 @@ render metadata state =
                 state
             ]
         ]
-    , aside [ classes [ flexShrink0, spaceLeft, overflowScroll, w30p ] ]
+    , aside
+        [ classNames
+            [ "flex-shrink-0"
+            , "ml-medium"
+            , "w-30p"
+            , "flex"
+            , "flex-col"
+            ]
+        ]
         (sidebar metadata state)
     ]
   where
@@ -568,6 +560,7 @@ simulationStateWidget state =
     currentTime = state ^.
       ( _currentMarloweState <<< _executionState <<< _SimulationRunning
           <<< _time
+          -- TODO: SCP-3887 unify time construct
           <<< to POSIXTime
           -- TODO SCP-3833 Add type safety to timezone conversions
           <<< to (formatPOSIXTime tzOffset)
@@ -823,19 +816,21 @@ inputItem _ _ NotifyInput =
         [ text "+" ]
     ]
 
-inputItem _ state (MoveToTime time) =
+inputItem _ state (MoveToTime moveType time) =
   div
     [ classes [ aHorizontal, ClassName "flex-nowrap" ] ]
     ( [ div [ classes [ ClassName "action" ] ]
-          [ p [ class_ (ClassName "time-input") ]
-              [ spanTextBreakWord "Move current time to"
-              , marloweInstantInput "move-to-instant"
-                  [ "mx-2", "flex-grow", "flex-shrink-0", "flex", "gap-2" ]
-                  SetTime
-                  time
-                  state.tzOffset
+          [ p_
+              [ text "Move current time to "
+              , span [ id ref, classNames [ "font-bold", "underline-dotted" ] ]
+                  [ text $ case moveType of
+                      NextTime -> "next minute"
+                      NextTimeout -> "next timeout"
+                      ExpirationTime -> "expiration time"
+                  ]
               ]
           , p [ class_ (ClassName "choice-error") ] error
+          , tooltip fullTime (RefId ref) Bottom
           ]
       ]
         <> addButton
@@ -844,6 +839,13 @@ inputItem _ state (MoveToTime time) =
   currentTime = fromMaybe unixEpoch $ state ^?
     _currentMarloweState <<< _executionState <<< _SimulationRunning <<< _time
 
+  ref = "move-to-" <> show moveType
+  fullTime =
+    formatPOSIXTime
+      state.tzOffset
+      (POSIXTime time)
+      # \(dateStr /\ timeStr) ->
+          intercalate " " [ dateStr, timeStr, humanizeOffset state.tzOffset ]
   isForward = currentTime < time
 
   addButton =
@@ -936,13 +938,12 @@ renderDeposit
 renderDeposit metadata accountOwner party tok money =
   span [ classes [ ClassName "break-word-span" ] ]
     [ text "Deposit "
-    , strong_ [ text (showPrettyMoney money) ]
-    , text " units of "
-    , strong_ [ renderPrettyToken tok ]
-    , text " into account of "
-    , strong_ [ renderPrettyParty metadata accountOwner ]
-    , text " as "
+    , strong_ [ text (humanizeValue tok money) ]
+    , text " from "
     , strong_ [ renderPrettyParty metadata party ]
+    , text " wallet, into "
+    , strong_ [ renderPrettyParty metadata accountOwner ]
+    , text " account"
     ]
 
 ------------------------------------------------------------
@@ -962,9 +963,11 @@ logWidget metadata state =
         )
   where
   logEntries = state ^.
-    ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning
+    ( _marloweState
+        <<< _Head
+        <<< _executionState
+        <<< _SimulationRunning
         <<< _log
-        <<< to reverse
     )
   inputLines = join $ logToLines state.tzOffset metadata `mapWithIndex`
     logEntries
@@ -1050,14 +1053,12 @@ inputToLine
   stepNumber
   (IDeposit accountOwner party token money) =
   [ span_
-      [ text "Deposit "
-      , strong_ [ text (showPrettyMoney money) ]
-      , text " units of "
-      , strong_ [ renderPrettyToken token ]
-      , text " into account of "
+      [ strong_ [ renderPrettyParty metadata party ]
+      , text " deposited "
+      , strong_ [ text (humanizeValue token money) ]
+      , text " from his/her wallet into "
       , strong_ [ renderPrettyParty metadata accountOwner ]
-      , text " as "
-      , strong_ [ renderPrettyParty metadata party ]
+      , text " account "
       ]
   , logTime stepNumber tzOffset timeInterval
   ]
@@ -1069,9 +1070,8 @@ inputToLine
   stepNumber
   (IChoice (ChoiceId choiceName choiceOwner) chosenNum) =
   [ span_
-      [ text "Participant "
-      , strong_ [ renderPrettyParty metadata choiceOwner ]
-      , text " chooses the value "
+      [ strong_ [ renderPrettyParty metadata choiceOwner ]
+      , text " choosed the value "
       , strong_
           [ text
               (showPrettyChoice (getChoiceFormat metadata choiceName) chosenNum)
@@ -1150,13 +1150,11 @@ paymentToLine
   money =
   [ span_
       [ text "The contract pays "
-      , strong_ [ text (showPrettyMoney money) ]
-      , text " units of "
-      , strong_ [ renderPrettyToken token ]
-      , text " to "
-      , strong_ $ renderPrettyPayee metadata payee
+      , strong_ [ text (humanizeValue token money) ]
       , text " from "
       , strong_ $ renderPrettyPayee metadata (Account accountId)
+      , text " to "
+      , strong_ $ renderPrettyPayee metadata payee
       ]
   , logTime stepNumber tzOffset timeInterval
   ]
@@ -1182,9 +1180,14 @@ cardWidget name body =
       [ classes [ noMargins, textSecondaryColor, bold, uppercase, textXs ] ]
       [ text name ]
   in
-    div [ classes [ ClassName "simulation-card-widget" ] ]
-      [ div [ class_ (ClassName "simulation-card-widget-header") ] [ title' ]
-      , div [ class_ (ClassName "simulation-card-widget-body") ] [ body ]
+    div
+      [ classNames
+          [ "simulation-card-widget", "overflow-hidden", "flex", "flex-col" ]
+      ]
+      [ div [ classNames [ "simulation-card-widget-header" ] ]
+          [ title' ]
+      , div [ classNames [ "simulation-card-widget-body", "overflow-scroll" ] ]
+          [ body ]
       ]
 
 markdownHintWithTitle :: String -> String -> PlainHTML

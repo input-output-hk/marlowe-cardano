@@ -21,7 +21,7 @@ import Component.ContractPreview.View
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.Popper (Placement(..))
-import Component.Template.View (contractTemplateCard)
+import Component.Template.State as Template
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
 import Control.Logger.Capability (class MonadLogger)
@@ -49,6 +49,7 @@ import Data.PABConnectedWallet
   , _walletNickname
   )
 import Data.String (take)
+import Data.UUID.Argonaut as UUID
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff (Error, Fiber)
@@ -56,8 +57,8 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
+import Halogen (RefLabel(..))
 import Halogen.Css (applyWhen, classNames)
-import Halogen.Extra (renderSubmodule)
 import Halogen.HTML
   ( HTML
   , a
@@ -82,13 +83,13 @@ import Halogen.HTML
 import Halogen.HTML as HH
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (href, id, src, title)
+import Halogen.HTML.Properties (href, id, ref, src, title)
 import Halogen.HTML.Properties.ARIA (labelledBy, role)
 import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
-import Marlowe.Semantics (PubKey, adaToken, getAda)
+import Marlowe.Semantics (PubKey, _rolesCurrency, adaToken, getAda)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
@@ -102,7 +103,6 @@ import Page.Dashboard.Lenses
   , _newContracts
   , _runningContracts
   , _selectedContractIndex
-  , _templateState
   , _wallet
   , _walletCompanionStatus
   )
@@ -113,6 +113,7 @@ import Page.Dashboard.Types
   , ContractFilter(..)
   , State
   , WalletCompanionStatus(..)
+  , _template
   )
 import Store as Store
 
@@ -174,17 +175,23 @@ dashboardScreen state =
     mSelectedContractIndex = state ^. _selectedContractIndex
     mSelectedContractStringId = do
       contractIndex <- mSelectedContractIndex
-      CN.toString <$> case contractIndex of
-        Starting reqId -> do
+      pure case contractIndex of
+        Starting reqId ->
           let
             newContracts = state ^. _newContracts
             mContract = Map.lookup reqId newContracts
-          getContractNickname <$> mContract
-        Started marloweParams -> do
+          in
+            case getContractNickname <$> mContract of
+              Just nickname -> CN.toString nickname
+              Nothing -> UUID.toString reqId
+        Started marloweParams ->
           let
             contracts = state ^. _contracts
             mContract = Map.lookup marloweParams contracts
-          _.nickname =<< mContract
+          in
+            case _.nickname =<< mContract of
+              Just nickname -> CN.toString nickname
+              Nothing -> marloweParams ^. _rolesCurrency
   in
     appTemplate cardOpen (dashboardHeader (WN.toString walletNickname) menuOpen)
       $ div
@@ -231,46 +238,47 @@ dashboardCard
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
-dashboardCard state = case view _card state of
-  Just card ->
-    let
-      wallet = state ^. _wallet
-      cardOpen = state ^. _cardOpen
-      assets = wallet ^. _assets
-    in
-      div
-        [ classNames $ Css.sidebarCardOverlay cardOpen ]
-        [ div
-            [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
-            $
-              [ a
-                  [ classNames [ "absolute", "top-4", "right-4" ]
-                  , onClick_ CloseCard
-                  ]
-                  [ icon_ Icon.Close ]
-              , case card of
-                  TutorialsCard -> tutorialsCard
-                  CurrentWalletCard -> currentWalletCard wallet
-                  ContactsCard -> HH.slot
-                    _contacts
+dashboardCard state =
+  let
+    wallet = state ^. _wallet
+    cardOpen = state ^. _cardOpen
+    templateInput = wallet
+  in
+    div
+      [ ref $ RefLabel "card", classNames $ Css.sidebarCardOverlay cardOpen ]
+      [ div
+          [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
+          $
+            [ a
+                [ classNames [ "absolute", "top-4", "right-4" ]
+                , onClick_ CloseCard
+                ]
+                [ icon_ Icon.Close ]
+            , case state ^. _card of
+                Just TutorialsCard -> tutorialsCard
+                Just CurrentWalletCard -> currentWalletCard wallet
+                Just ContactsCard -> HH.slot
+                  _contacts
+                  unit
+                  Contacts.component
+                  wallet
+                  OnContactsMsg
+                Just ContractTemplateCard -> slot
+                  _template
+                  unit
+                  Template.component
+                  templateInput
+                  OnTemplateMsg
+                Just (ContractActionConfirmationCard input) ->
+                  slot
+                    _confirmActionDialog
                     unit
-                    Contacts.component
-                    wallet
-                    OnContactsMsg
-                  ContractTemplateCard -> renderSubmodule _templateState
-                    TemplateAction
-                    (contractTemplateCard assets)
-                    state
-                  ContractActionConfirmationCard input ->
-                    slot
-                      _confirmActionDialog
-                      unit
-                      ConfirmContractActionDialog.component
-                      input
-                      (\DialogClosed -> CloseCard)
-              ]
-        ]
-  Nothing -> div_ []
+                    ConfirmContractActionDialog.component
+                    input
+                    (\DialogClosed -> CloseCard)
+                Nothing -> HH.text ""
+            ]
+      ]
 
 ------------------------------------------------------------
 appTemplateHeader
