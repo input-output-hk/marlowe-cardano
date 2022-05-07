@@ -109,6 +109,7 @@ data UtilCommand =
     {
       network     :: Maybe NetworkId  -- ^ The network ID, if any.
     , socketPath  :: FilePath         -- ^ The path to the node socket.
+    , includeAll  :: Bool             -- ^ Whether to include non-Marlowe transactions.
     , cbor        :: Bool             -- ^ Whether to output CBOR instead of JSON.
     , continue    :: Bool             -- ^ Whether to continue watching when the tip of the chain is reached.
     , restartFile :: Maybe FilePath   -- ^ File for restoring and saving current point on the chain.
@@ -177,6 +178,7 @@ runUtilCommand command =
                             slottingFile
       Watch{..}        -> watchMarlowe
                             connection
+                            includeAll
                             cbor
                             continue
                             restartFile
@@ -344,7 +346,8 @@ watchOptions =
   Watch
     <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."                              )
     <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file."                        )
+    <*> O.switch                               (O.long "all"                                      <> O.help "Whether to also output non-Marlowe transactions."                 )
     <*> O.switch                               (O.long "cbor"                                     <> O.help "Whether to output CBOR instead of JSON."                          )
     <*> O.switch                               (O.long "continue"                                 <> O.help "Whether to continue when the current tip of the chain is reached.")
     <*> (O.optional . O.strOption)             (O.long "restart"       <> O.metavar "POINT_FILE"  <> O.help "File for restoring and saving current point on the chain."        )
-    <*> (O.optional . O.strOption)             (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "File in which to store JSON records of Marlowe transactions."     )
+    <*> (O.optional . O.strOption)             (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "File in which to store records of Marlowe transactions."          )
