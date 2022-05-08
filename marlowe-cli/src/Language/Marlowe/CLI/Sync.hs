@@ -36,6 +36,10 @@ module Language.Marlowe.CLI.Sync (
 -- * Points
 , savePoint
 , loadPoint
+-- * Queries
+, isMarloweTransaction
+, isMarloweIn
+, isMarloweOut
 ) where
 
 
@@ -408,6 +412,13 @@ convertSlots slotConfig (TxValidityLowerBound _ (SlotNo s0), TxValidityUpperBoun
       Interval (LowerBound (Finite t0) _) (UpperBound (Finite t1) _) -> Just (t0, t1)
       _                                                              -> Nothing
 convertSlots _ _ = Nothing
+
+
+-- | Does an event contain Marlowe content.
+isMarloweTransaction :: MarloweEvent  -- ^ The blockchain event.
+                     -> Bool          -- ^ Whether the event is a transaction with Marlowe inputs or outputs.
+isMarloweTransaction Transaction{..} = any isMarloweIn meIns || any isMarloweOut meOuts
+isMarloweTransaction _               = False
 
 
 -- | Does a transaction input contain Marlowe information?
