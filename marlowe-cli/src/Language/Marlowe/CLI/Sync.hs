@@ -352,7 +352,7 @@ watchMarloweWithPrinter connection includeAll continue pointFile printer =
     let
       roller rollbackPoint rollbackTip = printer Rollback{..}
       continuer = pure $ not continue
-      blocker = const . const $ pure ()
+      blocker meBlock _ = printer NewBlock{..}
       saver block =
         do
           state' <- readIORef stateRef
