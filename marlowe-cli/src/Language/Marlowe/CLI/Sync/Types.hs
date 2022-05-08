@@ -143,6 +143,11 @@ data MarloweEvent =
     , meTxId    :: TxId         -- ^ The ID of the Marlowe transaction.
     , meAnomaly :: String       -- ^ A description of the anomaly.
     }
+  | -- | A Block.
+    NewBlock
+    {
+      meBlock   :: BlockHeader  -- ^ The block header for the Marlowe transaction.
+    }
     -- | A rollback.
   | Rollback
     {
