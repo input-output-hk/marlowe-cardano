@@ -24,14 +24,14 @@ be one of the contract participants or another account in the contract.
 Warnings will be generated if the value ``v`` is negative, or if there
 is not enough in the account to make the payment in full (even if there
 are positive balances of other tokens in the account). In the latter
-case a partial payment (of all the money available) is made. The
+case, a partial payment (of all the money available) is made. The
 continuation contract is the one given in the contract: ``cont``.
 
 Close
 -----
 
 A contract ``Close`` provides for the contract to be closed (or
-terminated). The only action that is performs is to provide refunds to
+terminated). The only action that it performs is to provide refunds to
 the owners of accounts that contain a positive balance. This is
 performed one account per step, but all accounts will be refunded in a
 single transaction.
@@ -46,7 +46,10 @@ Values, observations and actions
 current slot number”, [1]_ “the current balance of some token in an
 account”, and any choices that have already been made; we call these
 *volatile* values. Values can also be combined using addition,
-subtraction and negation, and can be conditional on an observation.
+subtraction, negation, multiplication, and division, and can be conditional
+on an observation. Even though they are supported by Marlowe, the use
+of multiplication and division may render the process of static analysis
+intractable.
 
 **Observations** are Boolean values derived by comparing values, and can
 be combined using the standard Boolean operators. It is also possible to
@@ -68,12 +71,12 @@ Oracles
 -------
 
 Oracles are being developed for the Cardano blockchain in general, and
-will be available for use within Marlowe on Cardano. In the meantime we
+will be available for use within Marlowe on Cardano. In the meantime, we
 have introduced an *oracle prototype*, which is implemented in the
 Marlowe Playground.
 
-We model Oracles as choices that made by a participant with a specific
-Oracle role, "kraken".
+We model Oracles as choices that are made by a participant with a specific
+Oracle role: ``"kraken"``.
 
 If a role in a contract is ``"kraken"``, and that role makes a choice
 such as ``"dir-adausd"`` then, in the Playground simulation, this choice
@@ -87,10 +90,10 @@ return the value of the USD/ADA conversion rate.
 
 Note, that we support only whole numbers as choice inputs. How then do
 we use current ADA/USD price, which might be $0.098924? We simply multiply the
-price by 10\ :sup:`8`, so the price would appear as 9892400. You can
-``DivValue`` the value after doing your calculations.
+price by 10\ :sup:`8`, so the price would appear as 9892400. You can use
+``DivValue`` with the resulting value after doing your calculations.
 
-For example, you’d like to buy USDT for 12 ADA, using Oracle price.
+For example, you'd like to buy USDT for 12 ADA, using Oracle price.
 
 Get the price:
 
@@ -161,13 +164,12 @@ An assert contract ``Assert obs cont`` does not have any effect on the
 state of the contract, it immediately continues as ``cont``, but it
 issues a warning when the observation ``obs`` is false. It can be used
 to ensure that a property holds in any given point of the contract,
-since static analysis will fail if any execution causes an assert to be
-false.
+since static analysis will fail if any execution causes a warning.
 
 .. [1]
    The presentation here is a simplification of the concrete
    implementation, in which transactions are associated with a slot
-   interval during which it is valid to add them to the blockchain.The
+   interval during which it is valid to add them to the blockchain. The
    reason for this is that in general it is difficult to predict the
    precise slot in which a transaction will be accepted for inclusion on
    the blockchain; it is therefore more robust to specify an interval in

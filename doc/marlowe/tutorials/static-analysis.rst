@@ -40,10 +40,10 @@ and in pure Marlowe
 
 The contract first requires a deposit from Alice of ``1`` Lovelace, and
 then asks Bob to make a choice (called ``bool``) of ``0`` or ``1``. The
-contract then pays this choice *plus one* to Bob from Alice’s account.
+contract then pays this choice *plus one* to Bob from Alice's account.
 
 So, we can see that while the contract works OK when Bob chooses ``0``,
-there won’t be enough in the contract to pay him if he chooses ``1``.
+there won't be enough in the contract to pay him if he chooses ``1``.
 Our analysis, which is built into the SIMULATION tab in the Marlowe
 Playground, can diagnose this:
 

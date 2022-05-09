@@ -29,17 +29,25 @@ its source code here: https://github.com/input-output-hk/plutus/blob/master/marl
 It is based on the principle that for each Haskell *type* there is a corresponding TypeScript type, and
 corresponding to each *constructor* there is a constant definition.
 
-.. image:: images/JavaScriptImport.png
-   :alt: JavaScript import
+.. code:: typescript
 
-   
+   import {
+      PK, Role, Account, Party, ada, AvailableMoney, Constant, ConstantParam,
+      NegValue, AddValue, SubValue, MulValue, DivValue, ChoiceValue, TimeIntervalStart,
+      TimeIntervalEnd, UseValue, Cond, AndObs, OrObs, NotObs, ChoseSomething,
+      ValueGE, ValueGT, ValueLT, ValueLE, ValueEQ, TrueObs, FalseObs, Deposit,
+      Choice, Notify, Close, Pay, If, When, Let, Assert, SomeNumber, AccountId,
+      ChoiceId, Token, ValueId, Value, EValue, Observation, Bound, Action, Payee,
+      Case, Timeout, ETimeout, TimeParam, Contract
+   } from 'marlowe-js';
+
 The JavaScript/TypeScript library provides constant definitions for
 Marlowe constructs that have no arguments, as is the case of
-``SlotIntervalEnd``:
+``TimeIntervalStart``:
 
 .. code:: typescript
 
-   const SlotIntervalStart: Value
+   const TimeIntervalStart: Value
 
 or the ``Close`` contract:
 
@@ -84,7 +92,7 @@ described in the next section.
 
 
 In principle you could write JavaScript code that
-produces the Marlowe’s JSON representation directly, but you should not
+produces the Marlowe's JSON representation directly, but you should not
 have to worry about JSON at all when using the JS library.
 
 When you use the JS Marlowe library, and your use of the functions and
@@ -161,7 +169,7 @@ The ``EValue`` type and boolean overloading
 In Haskell, constant boolean observations are represented by ``TrueObs``
 and ``FalseObs``, and constant integer values are represented by
 ``Constant`` followed by an ``Integer``. In JavaScript and TypeScript
-you can also use these constructors, but you don’t have to, because the
+you can also use these constructors, but you don't have to, because the
 Observation type is overloaded to also accept the native JavaScript
 booleans, and functions that in Haskell take a ``Value``, in JavaScript
 they take an ``EValue`` instead, and ``EValue`` is defined as follows:
@@ -179,10 +187,10 @@ and the function declaration. We can start by deleting everything that
 is not grayed-out, and start writing inside the curly brackets of the
 provided function definition.
 
-Let’s say we want to write a contract so that Alice can exchange 1000
+Let's say we want to write a contract so that Alice can exchange 1000
 Ada with Bob for $100.
 
-First let’s calculate the amounts we want to work with of each unit, we
+First let's calculate the amounts we want to work with of each unit, we
 can define some numerical constants using const:
 
 .. code:: typescript
@@ -197,8 +205,8 @@ The amount in the contract must be written in Lovelace, which is
 1,000 Ada for 1,000,000. The amount of dollars is 100 in our example.
 
 The API already provides a constructor for the currency ADA, and there
-isn’t currently a currency symbol in Cardano for dollars, but let us
-imagine there is, and let’s define it as follows:
+isn't currently a currency symbol in Cardano for dollars, but let us
+imagine there is, and let's define it as follows:
 
 .. code:: typescript
 
@@ -209,7 +217,7 @@ symbol, which is a hash and must be written in base16 (hexadecimal
 representation of a byte string). And the string ``"dollar"`` would
 correspond to the token name.
 
-Let’s now define an object type to hold the information about the
+Let's now define an object type to hold the information about the
 parties and what they want to exchange for convenience:
 
 .. code:: typescript
@@ -238,22 +246,21 @@ party wants to exchange in the amount field:
       amount: amountOfDollars
    }
 
-Now we are ready to start writing our contract. First let’s define the
+Now we are ready to start writing our contract. First let's define the
 deposits. We take the information from the party that must do the
-deposit, the slot number until which we’ll wait for the deposit to be
+deposit, the timeout until which we'll wait for the deposit to be
 made, and the continuation contract that will be enforced if the deposit
 is successful.
 
 .. code:: typescript
 
-   const makeDeposit = function(src : SwapParty, timeout : SomeNumber,
-                                continuation : Contract) : Contract
-   {
-      return When([Case(Deposit(src.party, src.party, src.currency, src.amount),
-                        continuation)],
-                  timeout,
-                  Close);
-   }
+    function makeDeposit(src: SwapParty, timeout: ETimeout,
+                         timeoutContinuation: Contract, continuation: Contract): Contract {
+        return When([Case(Deposit(src.party, src.party, src.currency, src.amount),
+                          continuation)],
+                    timeout,
+                    timeoutContinuation);
+    }
 
 We only need a ``When`` construct with a single ``Case`` that represents
 a ``Deposit`` of the ``src`` party into their own account, this way if
@@ -266,12 +273,11 @@ contract that will be enforced after the payment.
 
 .. code:: typescript
 
-   const makePayment = function(src : SwapParty, dest : SwapParty,
-                                continuation : Contract) : Contract
-   {
-      return Pay(src.party, Party(dest.party), src.currency, src.amount,
-                 continuation);
-   }
+    const makePayment = function (src: SwapParty, dest: SwapParty,
+                                  continuation: Contract): Contract {
+        return Pay(src.party, Party(dest.party), src.currency, src.amount,
+                   continuation);
+    }
 
 For this, we just need to use the ``Pay`` construct to pay from the
 account where the source party made the deposit to the destination
@@ -281,24 +287,25 @@ Finally we can combine all the pieces:
 
 .. code:: typescript
 
-   const contract : Contract = makeDeposit(alice, 10n,
-                                  makeDeposit(bob, 20n,
-                                      makePayment(alice, bob,
-                                          makePayment(bob, alice,
-                                              Close))));
+    const contract: Contract = makeDeposit(alice, 1700000000n, Close,
+                                 makeDeposit(bob, 1700003600n, Close,
+                                     makePayment(alice, bob,
+                                         makePayment(bob, alice,
+                                             Close))))
 
-   return contract;
+    return contract;
+
 
 The contract has four steps:
 
-1. Alice can deposit until slot 10
+1. Alice can deposit until POSIX time 1700000000 (2023-11-14 22:13:20 GMT).
 
-2. Bob can deposit until slot 20 (otherwise Alice gets a refund and the
-   contract is aborted)
+2. Bob can deposit until POSIX time 1700003600 (2023-11-14 23:13:20 GMT),
+   one hour later, otherwise Alice gets a refund and the contract is aborted.
 
-3. Then we pay Alice’s deposit to Bob
+3. Then we pay Alice's deposit to Bob.
 
-4. We pay Bob’s deposit to Alice.
+4. We pay Bob's deposit to Alice.
 
 And that is it. You can find the full source code for a templated version of the swap smart
 contract in the examples in the Marlowe Playground, which we look at

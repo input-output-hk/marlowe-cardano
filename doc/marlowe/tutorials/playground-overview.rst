@@ -241,7 +241,7 @@ Simulating Marlowe contracts and templates
 ------------------------------------------
 
 However a contract is written, when it is sent to simulation this is the
-view seen first. Here we’re looking at the *Zero coupon bond* example.
+view seen first. Here we're looking at the *Zero coupon bond* example.
 
 .. image:: images/simulation-tab.png
    :alt: The Simulation pane
@@ -257,7 +257,7 @@ The code shown here presents the complete contract that is being
 simulated. Once the simulation has begun, whatever of the contract remains to be
 simulated is highlighted. The footer gives data about the simulation.
 
-For our example let’s fill in the parameters like this, and retain slot 0 as the starting point.
+For our example let's fill in the parameters like this, and retain slot 0 as the starting point.
 
 .. image:: images/completed-params.png
    :alt: Parameters added.
@@ -301,7 +301,7 @@ we see that the contract has completed.
 
 The log on the right hand side of the screen now gives a complete list of the actions undertaken 
 by the participants and by the contract itself. One final note: we chose not to advance the slot at any time: this is consistent with the
-contract design; on the other hand we didn’t see any *timeout* actions happening. Why not try 
+contract design; on the other hand we didn't see any *timeout* actions happening. Why not try 
 this yourself? 
 
 Oracle simulation

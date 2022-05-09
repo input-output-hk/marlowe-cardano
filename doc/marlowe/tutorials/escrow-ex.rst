@@ -51,7 +51,7 @@ choice, rather than ``alice``, like this:
                              (If (aliceChosen `ValueEQ` bobChosen)
                                 agreement
                                 arbitrate) ],
-           Case bobChoice
+            Case bobChoice
                  (When [ Case aliceChoice
                              (If (aliceChosen `ValueEQ` bobChosen)
                                  agreement
@@ -60,7 +60,7 @@ choice, rather than ``alice``, like this:
 
 In this contract, either Alice or Bob can make the first choice; the
 other then makes a choice. If they agree, then that is done; if not,
-Carol arbitrates. In the remainder of the tutorial we’ll revert to the
+Carol arbitrates. In the remainder of the tutorial we'll revert to the
 simpler version where ``alice`` chooses first.
 
    **Exercise**
@@ -99,26 +99,27 @@ contract.
                              (If (aliceChosen `ValueEQ` bobChosen)
                                 agreement
                                 arbitrate) ]
-                       60            -- ADDED
+                       1700007200    -- ADDED
                        arbitrate)    -- ADDED
            ]
-           40           -- ADDED
+           1700003600   -- ADDED
            Close        -- ADDED
 
 The outermost ``When`` calls for the first choice to be made by Alice:
-if Alice has not made a choice by slot ``40``, the contract is closed
-and all the funds in the contract are refunded.
+if Alice has not made a choice by POSIX time ``1700003600`` (2023-11-14 23:13:20 GMT),
+the contract is closed and all the funds in the contract are refunded.
 
 ``Close`` is typically the last step in every “path” through a Marlowe
 contract, and its effect is to refund the money in the contract to the
 participants; we will describe this in more detail when we look at
 :ref:`Marlowe step by step <marlowe-step-by-step>`
-in a later tutorial. In this particular case, refund will happen at slot
-number ``40``.
+in a later tutorial. In this particular case, refund will happen at
+POSIX time ``1700003600`` (2023-11-14 23:13:20 GMT).
 
-Looking at the inner constructs, if Alice’s choice has been made, then
-we wait for one from Bob. If that is not forthcoming by slot ``60``,
-then Carol is called upon to arbitrate. [2]_
+Looking at the inner constructs, if Alice's choice has been made, then
+we wait for one from Bob. If that is not forthcoming by POSIX time
+``1700007200`` (2023-11-15 00:13:20 GMT), then Carol is called upon 
+to arbitrate. [2]_
 
 Adding commitments
 ------------------
@@ -134,13 +135,13 @@ contract.
                              (If (aliceChosen `ValueEQ` bobChosen)
                                 agreement
                                 arbitrate) ]
-                       60
+                       1700007200
                        arbitrate)
            ]
-           40
+           1700003600
            Close)
        ]
-       10                                      -- ADDED
+       1700000000                              -- ADDED
        Close                                   -- ADDED
 
 A deposit of ``price`` is requested from ``"alice"``: if it is given,
@@ -148,10 +149,10 @@ then it is held in an account, also called ``"alice"``. Accounts like
 this exist for the life of the contract only; each account belongs to a
 single contract.
 
-There is a timeout at slot number ``10`` on making the deposit; if that
-is reached without a deposit being made, the contract is closed and all
-the money already in the contract is refunded. In this case, that is
-simply the end of the contract.
+There is a timeout at POSIX time ``1700000000`` (2023-11-14 22:13:20 GMT)
+on making the deposit; if that is reached without a deposit being made,
+the contract is closed and all the money already in the contract
+is refunded. In this case, that is simply the end of the contract.
 
 Definitions
 -----------
@@ -169,10 +170,11 @@ Haskell <embedded-marlowe>`.
 
    Comment on the choice of timeout values, and look at alternatives.
 
-   For example, what would happen if the timeout of ``40`` on the
-   ``When`` were to be replaced by ``60``, and vice versa? Would it be
-   sensible to have the same timeout, of ``100`` say, on each ``When``?
-   If not, why not?
+   For example, what would happen if the timeout of ``1700003600``
+   (2023-11-14 23:13:20 GMT) on the ``When`` were to be replaced by
+   ``1700007200`` (2023-11-15 00:13:20 GMT), and vice versa? Would it be
+   sensible to have the same timeout, of ``1700010800``
+   (2023-11-15 01:13:20 GMT) say, on each ``When``? If not, why not?
 
 This example has shown many of the ingredients of the Marlowe contract
 language; in the next tutorial we will present the language in full.
@@ -182,8 +184,8 @@ Notes
 
 -  While the names of Alice, Bob and so on are “hard wired” into the contract here,
    we will see later on that these can be represented by *roles* in an account, such as *buyer* and *seller*. 
-   These roles can then be associated with specific *participants* when a contract is run; we discuss this 
-   further in the next section.
+   These roles can then be associated with specific *participants* when a contract is run;
+   we discuss this further in the next section.
 
 
 Background

@@ -50,15 +50,24 @@ A ``Party`` to a contract is represented as used above, either a public key or a
 
 .. code:: haskell
 
-   data Party = PubKey ByteString
-              | Role   ByteString
+   data Party = PubKey PubKeyHash
+              | Role   TokenName
 
 In order to progress a Marlowe contract, a party must provide an
 evidence. For ``PubKey`` party that would be a valid signature of a
-transaction signed by a private key of the public key, similarly to Bitcoin’s
-``Pay to Public Key Hash`` mechanism. For a ``Role`` party the evidence
-is spending a *role token* within the same transaction, usually to the
-same owner.
+transaction signed by a private key of the public key, similarly to Bitcoin's
+``Pay to Public Key Hash`` mechanism.
+
+.. code:: haskell
+
+   newtype PubKeyHash = PubKeyHash { getPubKeyHash :: ByteString }
+
+For a ``Role`` party the evidence is spending a *role token* within the
+same transaction, usually to the same owner.
+
+.. code:: haskell
+
+   newtype TokenName = TokenName { unTokenName :: ByteString }
 
 ``Role`` parties will look like ``Role "alice"``, ``Role "bob"``
 and so on. However, Haskell allows us to present and read in these
@@ -72,9 +81,10 @@ which is a pair of a *currency symbol* and a *token name*, both given by a ``Byt
 
 .. code:: haskell
 
-   data Token = Token ByteString ByteString
+   newtype CurrencySymbol = CurrencySymbol { unCurrencySymbol :: ByteString }
+   data Token = Token CurrencySymbol TokenName
 
-Cardano’s Ada token is
+Cardano's Ada token is
 
 .. code:: haskell
 
@@ -82,10 +92,11 @@ Cardano’s Ada token is
 
 But you are free to create your own currencies and tokens using the native token facility of Cardano.
 You can think
-of an Account as used above, a map from ``Token`` to ``Integer`` and so all the accounts in a contracts can be modelled like this:
+of an ``Account`` as used above, a map from ``Token`` to ``Integer`` and so all the accounts in a contracts can be modelled like this:
 
 .. code:: haskell
 
+   type AccountId = Party
    type Accounts = Map (AccountId, Token) Integer
 
 Tokens of a currency can represent roles in a contract, e.g ``"buyer"`` and
@@ -94,13 +105,15 @@ to as used above, the Performer/Vendor/Artist/Consultant". This way we can decou
 the notion of ownership of a contract role, and make it tradable. So you
 can sell your loan or buy a share of a role in some contract.
 
-Slot numbers and amounts of money are treated in a similar way; with the
+Timeouts and amounts of money are treated in a similar way; with the
 same show/overload approach as used above, they will appear in contracts as numbers:
 
 .. code:: haskell
 
-   data Slot    = Slot Integer
-   type Timeout = Slot
+   newtype POSIXTime = POSIXTime { getPOSIXTime :: Integer }
+   type Timeout = POSIXTime
+
+The number represents the number of seconds after the midnight of the 1st of January of 1970 (UTC).
 
 Note that ``"alice"`` is the owner here in the sense that she will be
 refunded any money in the account when the contract terminates.
@@ -113,7 +126,7 @@ of the accounts of the contract, and this is reflected in the definition
 
 .. code:: haskell
 
-   data Payee = Account Party
+   data Payee = Account AccountId
               | Party Party
 
 Choices – of integers – are identified by ``ChoiceId`` which combines a
@@ -121,7 +134,7 @@ name for the choice with the ``Party`` who had made the choice:
 
 .. code:: haskell
 
-   type ChoiceName = Text
+   type ChoiceName = ByteString
    data ChoiceId   = ChoiceId ChoiceName Party
    type ChosenNum  = Integer
 
@@ -129,7 +142,7 @@ Values defined using ``Let`` are identified by text strings. [2]_
 
 .. code:: haskell
 
-   data ValueId    = ValueId Text
+   data ValueId    = ValueId ByteString
 
 Values, observations and actions
 --------------------------------
@@ -149,8 +162,8 @@ cases. First, looking at ``Value`` we have
               | MulValue Value Value
               | DivValue Value Value
               | ChoiceValue ChoiceId
-              | SlotIntervalStart
-              | SlotIntervalEnd
+              | TimeIntervalStart
+              | TimeIntervalEnd
               | UseValue ValueId
               | Cond Observation Value Value
 
@@ -163,7 +176,7 @@ pretty much self explanatory, but for completeness we have
 
 -  Arithmetic constants and operators.
 
--  The start and end of the current *slot interval*; see below for
+-  The start and end of the current *time interval*; see below for
    further discussion of this.
 
 -  ``Cond`` represents if-expressions, that is - first argument to
@@ -200,7 +213,7 @@ Cases and actions are given by these types:
 
    data Case = Case Action Contract
 
-   data Action = Deposit Party Party Token Value
+   data Action = Deposit AccountId Party Token Value
                | Choice ChoiceId [Bound]
                | Notify Observation
 
@@ -237,7 +250,7 @@ type with these parameter values:
 
    ConstantParam "string"
 
-which can be used in forming more complex values just in the same way as constants. Similarly the ``Slot`` type is
+which can be used in forming more complex values just in the same way as constants. Similarly the ``Timeout`` type is
 extended with these values:
 
 .. code:: haskell
@@ -284,7 +297,7 @@ where the types are defined like this:
    deriving (Eq,Ord,Show,Read)
 
    data TransactionInput = TransactionInput
-         { txInterval :: SlotInterval
+         { txInterval :: TimeInterval
          , txInputs   :: [Input] }
       deriving (Eq,Ord,Show,Read)
 
@@ -292,7 +305,7 @@ The notation used here adds field names to the arguments of the
 constructors, giving selectors for the data (as used above), as well as making clearer
 the purpose of each field.
 
-The ``TransactionInput`` type has two components: the ``SlotInterval``
+The ``TransactionInput`` type has two components: the ``TimeInterval``
 in which it can validly be added to the blockchain, and an ordered
 sequence of ``Input`` values to be processed in that transaction.
 
@@ -302,37 +315,32 @@ sequence of ``Payments`` produced by the transaction. The first
 component contains a list of any warnings produced by processing the
 transaction.
 
-Slot ranges
------------
+Time intervals
+--------------
 
 This is part of the architecture of Cardano/Plutus, which acknowledges
-that it is not possible to predict precisely in which slot a particular
-transaction will be processed. Transactions are therefore given a *slot
+that it is not possible to predict precisely in which instant a particular
+transaction will be processed. Transactions are therefore given a *time
 interval* in which they are expected to be processed, and this carries
 over to Marlowe: each step of a Marlowe contract is processed in the
-context of a range of slots.
+context of a time interval.
 
 .. code:: haskell
 
-   data Slot         = Slot Integer
-   data SlotInterval = SlotInterval Slot Slot
-
-   ivFrom, ivTo :: SlotInterval -> Slot
-   ivFrom (SlotInterval from _) = from
-   ivTo   (SlotInterval _ to)   = to
+   type TimeInterval = (POSIXTime, POSIXTime)
 
 How does this affect the processing of a Marlowe contract? Each step is
-processed relative to a slot interval, and the current slot value needs
+processed relative to a time interval, and the current time value needs
 to lie within that interval.
 
 The endpoints of the interval are accessible as the values
-``SlotIntervalStart`` and ``SlotIntervalEnd`` (as used above), and these
+``TimeIntervalStart`` and ``TimeIntervalEnd`` (as used above), and these
 can be used in observations. Timeouts need to be processed *unambiguously*,
-so that *all values in the slot interval* have to either have exceeded
+so that *all values in the time interval* have to either have exceeded
 the timeout for it to take effect, or fall before the timeout, for normal
 execution to take effect. In other words, the timeout value needs to
-either be less or equal than ``SlotIntervalStart`` (in order for the
-timeout to take effect) or be strictly greater than ``SlotIntervalEnd``
+either be less or equal than ``TimeIntervalStart`` (in order for the
+timeout to take effect) or be strictly greater than ``TimeIntervalEnd``
 (for normal execution to take place).
 
 Notes
@@ -344,10 +352,6 @@ infrastructure in which it is run.
 -  It is assumed that cryptographic functions and operations are
    provided by a layer external to Marlowe, and so they need not be
    modelled explicitly.
-
--  We assume that time is “coarse grained” and measured by block or slot
-   number, so that, in particular, timeouts are delimited using
-   block/slot numbers.
 
 -  Making a deposit is not something that a contract can perform;
    rather, it can request that a deposit is made, but that then has to
