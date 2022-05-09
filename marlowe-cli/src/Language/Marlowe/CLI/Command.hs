@@ -24,7 +24,8 @@ module Language.Marlowe.CLI.Command (
 ) where
 
 
-import Control.Monad.Except (MonadError, MonadIO, runExceptT)
+import Cardano.Api (NetworkId)
+import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Foldable (asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
 import Language.Marlowe.CLI.Command.Input (InputCommand, parseInputCommand, runInputCommand)
@@ -36,6 +37,7 @@ import Language.Marlowe.CLI.Command.Template (TemplateCommand, parseTemplateComm
 import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTestCommand)
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
+import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
 import Language.Marlowe.CLI.Types (CliError (..))
 import System.Exit (exitFailure)
 import System.IO (BufferMode (LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
@@ -74,7 +76,9 @@ runCLI version =
   do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
-    command <- O.execParser $ parseCommand version
+    networkId <- liftIO getNetworkMagic
+    socketPath <- liftIO getNodeSocketPath
+    command <- O.execParser $ parseCommand networkId socketPath version
     result <- runExceptT $ runCommand command
     case result of
       Right ()      -> return ()
@@ -101,9 +105,11 @@ runCommand (UtilCommand        command) = runUtilCommand        command
 
 
 -- | Command parseCommand for the tool version.
-parseCommand :: String                -- ^ The tool version.
+parseCommand :: NetworkId             -- ^ The default network ID.
+             -> FilePath              -- ^ The default node socket path.
+             -> String                -- ^ The tool version.
              -> O.ParserInfo Command  -- ^ The command parseCommand.
-parseCommand version =
+parseCommand networkId socketPath version =
   O.info
     (
           O.helper
@@ -113,20 +119,20 @@ parseCommand version =
             O.hsubparser
               (
                    O.commandGroup "High-level commands:"
-                <> O.command "run"         (O.info (RunCommand      <$> parseRunCommand     ) $ O.progDesc "Run a contract."                   )
-                <> O.command "pab"         (O.info (PabCommand      <$> parsePabCommand     ) $ O.progDesc "Run a contract via the PAB."       )
-                <> O.command "template"    (O.info (TemplateCommand <$> parseTemplateCommand) $ O.progDesc "Create a contract from a template.")
-                <> O.command "test"        (O.info (TestCommand     <$> parseTestCommand    ) $ O.progDesc "Test contracts."                   )
+                <> O.command "run"         (O.info (RunCommand      <$> parseRunCommand networkId socketPath ) $ O.progDesc "Run a contract."                   )
+                <> O.command "pab"         (O.info (PabCommand      <$> parsePabCommand                      ) $ O.progDesc "Run a contract via the PAB."       )
+                <> O.command "template"    (O.info (TemplateCommand <$> parseTemplateCommand                 ) $ O.progDesc "Create a contract from a template.")
+                <> O.command "test"        (O.info (TestCommand     <$> parseTestCommand networkId socketPath) $ O.progDesc "Test contracts."                   )
               )
           , O.hsubparser
               (
                    O.commandGroup "Low-level commands:"
-                <> O.command "contract"    (O.info (ContractCommand    <$> parseContractCommand   ) $ O.progDesc "Export contract address, validator, datum, or redeemer.")
-                <> O.command "input"       (O.info (InputCommand       <$> parseInputCommand      ) $ O.progDesc "Create inputs to a contract."                           )
-                <> O.command "role"        (O.info (RoleCommand        <$> parseRoleCommand       ) $ O.progDesc "Export role address, validator, datum, or redeemer."    )
-                <> O.command "query"       (O.info (QueryCommand       <$> parseQueryCommand      ) $ O.progDesc "Blockchain queries for Marlowe."                        )
-                <> O.command "transaction" (O.info (TransactionCommand <$> parseTransactionCommand) $ O.progDesc "Create and submit transactions."                        )
-                <> O.command "util"        (O.info (UtilCommand        <$> parseUtilCommand       ) $ O.progDesc "Miscellaneous utilities."                               )
+                <> O.command "contract"    (O.info (ContractCommand    <$> parseContractCommand networkId              ) $ O.progDesc "Export contract address, validator, datum, or redeemer.")
+                <> O.command "input"       (O.info (InputCommand       <$> parseInputCommand                           ) $ O.progDesc "Create inputs to a contract."                           )
+                <> O.command "role"        (O.info (RoleCommand        <$> parseRoleCommand networkId                  ) $ O.progDesc "Export role address, validator, datum, or redeemer."    )
+                <> O.command "query"       (O.info (QueryCommand       <$> parseQueryCommand                           ) $ O.progDesc "Blockchain queries for Marlowe."                        )
+                <> O.command "transaction" (O.info (TransactionCommand <$> parseTransactionCommand networkId socketPath) $ O.progDesc "Create and submit transactions."                        )
+                <> O.command "util"        (O.info (UtilCommand        <$> parseUtilCommand networkId socketPath       ) $ O.progDesc "Miscellaneous utilities."                               )
               )
           ]
     )

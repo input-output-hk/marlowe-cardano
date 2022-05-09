@@ -23,6 +23,9 @@ module Language.Marlowe.CLI.IO (
 , maybeWriteTextEnvelope
 , maybeWriteJson
 , readMaybeMetadata
+-- * Environment
+, getNetworkMagic
+, getNodeSocketPath
 -- * Lifting
 , liftCli
 , liftCliMaybe
@@ -30,19 +33,23 @@ module Language.Marlowe.CLI.IO (
 ) where
 
 
-import Cardano.Api (AlonzoEra, AsType (..), FromSomeType (..), HasTextEnvelope, ScriptDataJsonSchema (..),
-                    TxMetadataInEra (..), TxMetadataJsonSchema (..), TxMetadataSupportedInEra (..), metadataFromJson,
-                    readFileTextEnvelopeAnyOf, scriptDataFromJson, serialiseToTextEnvelope, writeFileTextEnvelope)
+import Cardano.Api (AlonzoEra, AsType (..), FromSomeType (..), HasTextEnvelope, NetworkId (..), NetworkMagic (..),
+                    ScriptDataJsonSchema (..), TxMetadataInEra (..), TxMetadataJsonSchema (..),
+                    TxMetadataSupportedInEra (..), metadataFromJson, readFileTextEnvelopeAnyOf, scriptDataFromJson,
+                    serialiseToTextEnvelope, writeFileTextEnvelope)
 import Cardano.Api.Shelley (toPlutusData)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
+import Data.Maybe (fromMaybe)
 import Data.Yaml (decodeFileEither)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey)
 import Plutus.V1.Ledger.Api (BuiltinData)
 import PlutusTx (dataToBuiltinData)
+import System.Environment (lookupEnv)
+import Text.Read (readMaybe)
 
 import qualified Data.ByteString.Lazy as LBS (writeFile)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (putStrLn)
@@ -159,3 +166,25 @@ readMaybeMetadata file =
       (pure TxMetadataNone)
       (fmap (TxMetadataInEra TxMetadataInAlonzoEra) . liftCli . metadataFromJson TxMetadataJsonNoSchema)
       metadata
+
+
+-- | Read the CARDANO_TESTNET_MAGIC environment variable for the default network magic.
+getNetworkMagic :: IO NetworkId
+getNetworkMagic =
+  do
+    magic <- (readMaybe =<<) <$> lookupEnv "CARDANO_TESTNET_MAGIC"
+    pure
+      . Testnet
+      . NetworkMagic
+      $ fromMaybe 1567 magic
+
+
+-- | Read the CARDANO_NODE_SOCKET_PATH environment variable for the default node socket path.
+getNodeSocketPath :: IO FilePath
+getNodeSocketPath =
+  do
+    path <- lookupEnv "CARDANO_NODE_SOCKET_PATH"
+    pure
+      $ case path of
+          Just path'@(_ : _) -> path'
+          _                  -> "node.socket"
