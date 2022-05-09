@@ -109,6 +109,9 @@ module.exports = {
     new webpack.EnvironmentPlugin({
       NODE_ENV: process.env.NODE_ENV,
       MARLOWE_POLLING_INTERVAL: 5000,
+      SENTRY_DSN:
+        "https://12e6a97363464bdb98ebbf0c277f347e@o1239254.ingest.sentry.io/6390474",
+      SENTRY_TRACES_SAMPLE_RATE: 1.0,
     }),
   ],
 };

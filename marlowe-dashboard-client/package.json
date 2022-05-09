@@ -23,6 +23,8 @@
     "xhr2": "^0.2.1"
   },
   "devDependencies": {
+    "@sentry/browser": "^6.19.7",
+    "@sentry/tracing": "^6.19.7",
     "@tailwindcss/forms": "^0.3.2",
     "@testing-library/dom": "^8.11.3",
     "@testing-library/user-event": "^14.0.0-beta.11",
