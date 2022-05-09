@@ -8,9 +8,9 @@ module Store.Toast
 
 import Prologue
 
-import Component.Toast.Lenses (_expanded, _toasts)
+import Component.Toast.Lenses (_expanded)
 import Component.Toast.Types (ToastEntry, ToastIndex(..), ToastMessage)
-import Data.Lens (filtered, over, set, traversed)
+import Data.Lens (filtered, over, traversed)
 import Data.List (List)
 import Data.List as List
 
@@ -36,7 +36,7 @@ compareEntry { index: indexA } { index: indexB } = compare indexA indexB
 data ToastAction
   = Show ToastMessage
   | Clear ToastIndex
-  | Expand ToastIndex
+  | ToggleExpanded ToastIndex
 
 reduce :: ToastStore -> ToastAction -> ToastStore
 reduce (ToastStore { toasts, lastIndex }) = case _ of
@@ -55,11 +55,11 @@ reduce (ToastStore { toasts, lastIndex }) = case _ of
       { toasts: List.filter (not <<< eq index <<< _.index) toasts
       , lastIndex
       }
-  Expand index ->
+  ToggleExpanded index ->
     ToastStore
-      { toasts: set
+      { toasts: over
           (traversed <<< filtered (eq index <<< _.index) <<< _expanded)
-          true
+          not
           toasts
       , lastIndex
       }

@@ -2,39 +2,29 @@ module Component.Toast.State (component) where
 
 import Prologue
 
-import Component.Toast.Lenses (_expanded, _timeoutSubscriptions, _toasts)
+import Component.Toast.Lenses (_timeoutSubscriptions, _toasts)
 import Component.Toast.Types
   ( Action(..)
   , State
-  , ToastEntry
-  , ToastIndex(..)
+  , ToastIndex
   , ToastMessage
   , indexRef
   )
 import Component.Toast.View (render)
+import Control.Bind (bindFlipped)
 import Data.Foldable (for_)
-import Data.Lens (assign, modifying, over, set, use)
+import Data.Lens (over, set, use)
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
-import Data.List (List)
 import Data.List as List
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
-import Data.Time.Duration (Milliseconds(..))
-import Data.Traversable (for, traverse)
+import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
-import Debug (traceM)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Effect.Class (liftEffect)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
-import Halogen
-  ( HalogenM
-  , RefLabel(..)
-  , getHTMLElementRef
-  , subscribe
-  , unsubscribe
-  )
+import Halogen (HalogenM, subscribe, unsubscribe)
 import Halogen as H
 import Halogen.Animation
   ( animateAndWaitUntilFinish
@@ -45,10 +35,16 @@ import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Record as Record
-import Store as Store
+import Store (Action(..), Store) as Store
+import Store.Toast (ToastAction(..)) as Store
 import Store.Toast (ToastStore, getToasts)
-import Store.Toast as Store
 import Type.Prelude (Proxy(..))
+import Web.DOM (Element)
+import Web.DOM.NonElementParentNode (getElementById)
+import Web.HTML (HTMLElement, window)
+import Web.HTML.HTMLDocument (toNonElementParentNode)
+import Web.HTML.HTMLElement as HTMLElement
+import Web.HTML.Window (document)
 
 component
   :: forall query input msg m
@@ -75,16 +71,11 @@ toastTimeoutSubscription
   :: { index :: ToastIndex, message :: ToastMessage } -> HS.Emitter Action
 toastTimeoutSubscription { index, message: toast } =
   HS.makeEmitter \push -> do
-    traceM { msg: "TOAST: Subscribed", index }
-
     cancelled <- Ref.new false
-    Aff.launchAff_ do
-      Aff.delay $ Milliseconds toast.timeout
-      traceM { msg: "TOAST: Timer is up", index }
+    for_ toast.timeout \timeout -> Aff.launchAff_ do
+      Aff.delay timeout
 
       unlessM (liftEffect $ Ref.read cancelled) do
-        traceM { msg: "TOAST: Toast timeout", index }
-
         liftEffect $ push $ AnimateCloseToast index
     pure do
       Ref.write true cancelled
@@ -96,7 +87,6 @@ handleAction
   => Action
   -> HalogenM State Action slots msg m Unit
 handleAction (Receive receivedToasts) = do
-  traceM { msg: "TOAST: receive", receivedToasts }
   currentToasts <- use _toasts
   let
     -- We remove the field so that a toast expansion doesn't result in creating a new timer
@@ -108,7 +98,6 @@ handleAction (Receive receivedToasts) = do
   newSubs <- for newToasts \entry -> do
     subsId <- subscribe $ toastTimeoutSubscription entry
     pure $ entry.index /\ subsId
-  traceM { msg: "TOAST: new subs", newSubs }
 
   H.modify_ $
     set _toasts receivedToasts
@@ -117,11 +106,12 @@ handleAction (Receive receivedToasts) = do
   -- We make the animation from the handler instead of the css directly so that if
   -- the elment Animate
   for_ newToasts \entry -> do
-    mElement <- getHTMLElementRef
-      (RefLabel $ indexRef "toast-message" entry.index)
+    mElement <- getElementById' (indexRef "toast-message" entry.index)
     for_ mElement \elem -> liftAff $ animateAndWaitUntilFinish "from-below" elem
 
-handleAction (ExpandToast index) = do
+handleAction (ToggleExpanded index) = do
+  -- When we expand or collapse a toast we take a manual action that we
+  -- are "reading/taking care" of the message. So:
   -- If there is an active subscription to close the toast, cancel it
   -- and remove it from the map
   mSubscription <- peruse (_timeoutSubscriptions <<< ix index)
@@ -129,10 +119,9 @@ handleAction (ExpandToast index) = do
   H.modify_ $
     over _timeoutSubscriptions (Map.delete index)
   -- Update the global state (which will call Receive)
-  updateStore $ Store.Toast $ Store.Expand index
+  updateStore $ Store.Toast $ Store.ToggleExpanded index
 
 handleAction (CloseToast index) = do
-  traceM { msg: "TOAST: close toast", index }
 
   -- If there is an active subscription to close the toast, cancel it
   -- and remove it from the map
@@ -146,16 +135,19 @@ handleAction (CloseToast index) = do
   updateStore $ Store.Toast $ Store.Clear index
 
 handleAction (AnimateCloseToast index) = do
-  mElement <- getHTMLElementRef (RefLabel $ indexRef "toast-message" index)
-  traceM
-    { msg: "TOAST: Animate close toast"
-    , index
-    , mElement
-    , ref: (indexRef "toast-message" index)
-    }
-  case mElement of
-    Nothing -> traceM $ "Toast not found " <> indexRef "toast-message" index
-    Just elm -> void $ subscribe $ animateAndWaitUntilFinishSubscription
-      "to-right"
-      (CloseToast index)
-      elm
+  mElement <- getElementById' (indexRef "toast-message" index)
+
+  for_ mElement \elm -> void $ subscribe $ animateAndWaitUntilFinishSubscription
+    "to-right"
+    (CloseToast index)
+    elm
+
+getElementById' :: forall m. MonadEffect m => String -> m (Maybe HTMLElement)
+getElementById' idStr = liftEffect do
+  doc <- document =<< window
+
+  let
+    toHTMLElement :: Maybe Element -> Maybe HTMLElement
+    toHTMLElement = bindFlipped HTMLElement.fromElement
+
+  toHTMLElement <$> (getElementById idStr $ toNonElementParentNode doc)

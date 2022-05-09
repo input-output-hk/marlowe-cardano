@@ -16,6 +16,7 @@ import Prologue
 import Component.Icons (Icon(..))
 import Data.List (List)
 import Data.Map (Map)
+import Data.Time.Duration (Milliseconds(..))
 import Errors.Explain (class Explain, explainString)
 import Halogen (SubscriptionId)
 import Web.ARIA (ARIARole(..))
@@ -27,7 +28,7 @@ type ToastMessage =
   , iconColor :: String
   , textColor :: String
   , bgColor :: String
-  , timeout :: Number
+  , timeout :: Maybe Milliseconds
   , role :: ARIARole
   }
 
@@ -50,7 +51,7 @@ type ToastEntry =
 
 data Action
   = Receive (List ToastEntry)
-  | ExpandToast ToastIndex
+  | ToggleExpanded ToastIndex
   | CloseToast ToastIndex
   | AnimateCloseToast ToastIndex
 
@@ -67,7 +68,7 @@ successToast shortDescription =
   , iconColor: "text-lightgreen"
   , textColor: "text-white"
   , bgColor: "bg-black"
-  , timeout: 2500000.0
+  , timeout: Just $ Milliseconds 5000.0
   , role: Status
   }
 
@@ -79,7 +80,7 @@ infoToast shortDescription =
   , iconColor: "text-lightpurple"
   , textColor: "text-white"
   , bgColor: "bg-black"
-  , timeout: 2500.0
+  , timeout: Just $ Milliseconds 5000.0
   , role: Status
   }
 
@@ -92,7 +93,7 @@ errorToast shortDescription longDescription =
   , iconColor: "text-white"
   , textColor: "text-white"
   , bgColor: "bg-red"
-  , timeout: 5000000.0
+  , timeout: Nothing
   , role: Alert
   }
 
