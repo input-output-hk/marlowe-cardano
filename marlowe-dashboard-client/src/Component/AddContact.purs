@@ -15,6 +15,7 @@ import Component.AddContact.Types
 import Component.Button.Types as Button
 import Component.Button.View (button)
 import Component.Form (renderTextInput)
+import Component.Toast.Types (successToast)
 import Css as Css
 import Data.Address (Address)
 import Data.Address as A
@@ -43,7 +44,6 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Store as Store
-import Toast.Types (successToast)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
