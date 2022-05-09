@@ -12,9 +12,16 @@ Template [label=<<font face="monospace">marlowe-cli template</font><br/><i>Creat
 UserSelect -> Template
 
 
+Playground [label=<<i>Design and download a contract<br/>using Marlowe Playground</i>>]
+
+UserSelect -> Playground
+
+
 Initialize [label=<<font face="monospace">marlowe-cli run initialize</font><br/><i>Bundle the information needed to start the contract.</i>>]
 
 Template -> Initialize
+
+Playground -> Initialize
 
 
 Payments [shape=oval label="Payments."]
