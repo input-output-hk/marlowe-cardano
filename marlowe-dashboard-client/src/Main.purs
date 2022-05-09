@@ -5,6 +5,8 @@ module Main
 import Prologue
 
 import AppM (runAppM)
+import Breadcrumb (Breadcrumb(..), BreadcrumbData(..), addBreadcrumb)
+import Breadcrumb as Breadcrumb
 import Bridge (toFront)
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
@@ -24,6 +26,7 @@ import Data.Argonaut
   , Json
   , JsonDecodeError
   , decodeJson
+  , encodeJson
   , fromString
   , printJsonDecodeError
   , (.:)
@@ -77,6 +80,7 @@ import Store (_wallet, mkStore)
 import Store as Store
 import Store.Contracts (getContractNicknames)
 import Store.Wallet (_connectedWallet)
+import WebSocket.Support (FromSocket(..))
 import WebSocket.Support as WS
 
 newtype MainArgs = MainArgs
@@ -177,6 +181,23 @@ main args = do
       (WS.URI "/pab/ws")
       (liftEffect <<< HS.notify pabWebsocketIn.listener)
       wsManager
+
+    liftEffect $ void $ HS.subscribe pabWebsocketIn.emitter case _ of
+      ReceiveMessage (Left err) ->
+        addBreadcrumb $ Breadcrumb
+          { category: Just "ws"
+          , message: Just $ printJsonDecodeError err
+          , level: Just Breadcrumb.Error
+          , data: Nothing
+          }
+      ReceiveMessage (Right a) ->
+        addBreadcrumb $ Breadcrumb
+          { category: Just "ws"
+          , message: Nothing
+          , level: Just Breadcrumb.Info
+          , data: Just $ DefaultBreadcrumb $ Just $ encodeJson a
+          }
+      _ -> pure unit
 
 mkWalletFundsEmitter
   :: forall m
