@@ -13,9 +13,10 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   integration: [new BrowserTracing()],
   tracesSampleRate: process.env.SENTRY_TRACES_SAMPLE_RATE,
+  debug: process.env.NODE_ENV === "development",
+  environment: process.env.NODE_ENV,
+  release: process.env.SENTRY_RELEASE,
 });
-
-myUndefinedFunction();
 
 require("./output/Main").main({
   webpackDevelMode: process.env.NODE_ENV === "development",
