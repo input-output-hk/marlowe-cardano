@@ -216,7 +216,7 @@ To ensure that the user provides valid remaining ``Contract`` and
 ``State``, the Marlowe validator script will compare the evaluated
 contract and state with those provided by the user, and will reject a
 transaction if those do not match. To ensure that the remaining
-contract’s data script has the same ``Contract`` and ``State`` as was
+contract's data script has the same ``Contract`` and ``State`` as was
 passed with the redeemer script, we check that data script hash is the
 same as that of the redeemer script.
 

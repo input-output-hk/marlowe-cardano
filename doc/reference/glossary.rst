@@ -85,11 +85,11 @@ Glossary
       asset types natively.
 
     off-chain code
-      The part of a contract application’s code which runs off the chain,
+      The part of a contract application's code which runs off the chain,
       usually as a contract application.
 
     on-chain code
-      The part of a contract application’s code which runs on the chain
+      The part of a contract application's code which runs on the chain
       (i.e. as scripts).
 
     PAB client API
@@ -99,7 +99,7 @@ Glossary
 
     PAB client
       A program which interacts with a contract application instance via
-      the PAB’s client API. Examples of PAB clients include:
+      the PAB's client API. Examples of PAB clients include:
 
       1. Wallet frontends such as Daedalus.
 
