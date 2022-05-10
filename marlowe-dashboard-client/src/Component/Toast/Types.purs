@@ -17,13 +17,16 @@ import Component.Icons (Icon(..))
 import Data.List (List)
 import Data.Map (Map)
 import Data.Time.Duration (Milliseconds(..))
-import Errors.Explain (class Explain, explainString)
+import Errors.Explain (class Explain, explain)
 import Halogen (SubscriptionId)
+import Text.Pretty (Doc(..), newline)
 import Web.ARIA (ARIARole(..))
 
 type ToastMessage =
   { shortDescription :: String
-  , longDescription :: Maybe String
+  -- TODO SCP-3962 use dodo-printer instead of Text.Pretty
+  -- for this.
+  , longDescription :: Maybe Doc
   , icon :: Icon
   , iconColor :: String
   , textColor :: String
@@ -84,10 +87,11 @@ infoToast shortDescription =
   , role: Status
   }
 
-errorToast :: String -> Maybe String -> ToastMessage
+errorToast :: String -> Maybe Doc -> ToastMessage
 errorToast shortDescription longDescription =
   { shortDescription
-  , longDescription: map (\m -> m <> " " <> contactSupportMessage)
+  , longDescription: map
+      (\m -> m <> Newline 0 <> Newline 0 <> Text contactSupportMessage)
       longDescription
   , icon: ErrorOutline
   , iconColor: "text-white"
@@ -100,7 +104,7 @@ errorToast shortDescription longDescription =
 explainableErrorToast :: forall a. Explain a => String -> a -> ToastMessage
 explainableErrorToast shortDescription error = errorToast shortDescription
   $ Just
-  $ explainString error
+  $ Text (shortDescription <> ":") <> newline <> newline <> explain error
 
 contactSupportMessage :: String
 contactSupportMessage = "Please contact support if the problem persists."

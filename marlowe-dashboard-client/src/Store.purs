@@ -17,7 +17,7 @@ import Data.PABConnectedWallet (_assets)
 import Data.Set (Set)
 import Data.Slot (Slot)
 import Data.Wallet (WalletDetails)
-import Errors.Explain (explainString)
+import Errors.Explain (explain)
 import Language.Marlowe.Client (ContractHistory, MarloweError, UnspentPayouts)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
@@ -130,7 +130,7 @@ reduce store = case _ of
       $ Toast
       $ Toast.Show
       $ errorToast "Error updating contract state with new time"
-      $ Just (explainString error)
+      $ Just (explain error)
     Right contracts -> store
       { currentTime = currentTime
       , contracts = contracts
