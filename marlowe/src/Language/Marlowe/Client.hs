@@ -916,13 +916,14 @@ applyInputs :: AsMarloweError e
     -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
+    -- Wait until a block is produced, so we have an accurate current time and slot.
+    void $ waitNSlots 1
+    nowSlot <- currentSlot
+    nowTime <- currentTime
     -- TODO: Move to debug log.
-    do
-      nowSlot <- currentSlot
-      logInfo $ "[DEBUG:applyInputs] current slot = " <> show nowSlot
-      logInfo $ "[DEBUG:applyInputs] time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
-      nowTime <- currentTime
-      logInfo $ "[DEBUG:applyInputs] current time = " <> show nowTime
+    logInfo $ "[DEBUG:applyInputs] current slot = " <> show nowSlot
+    logInfo $ "[DEBUG:applyInputs] time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
+    logInfo $ "[DEBUG:applyInputs] current time = " <> show nowTime
     logInfo $ "[DEBUG:applyInputs] inputs = " <> show inputs
     logInfo $ "[DEBUG:applyInputs] params = " <> show params
     logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
@@ -936,6 +937,15 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
                 pure (ceiling' time, floor' $ time + defaultTxValidationRange)
     -- TODO: Move to debug log.
     logInfo $ "[DEBUG:applyInputs] timeRange = " <> show timeRange
+    let POSIXTime delta = fst timeRange - nowTime
+    logInfo $ "[DEBUG:applyInputs] delta = " <> show delta
+    -- Guard against early submission, but only for three minutes.
+    when (delta < 180_000)
+      . void $ awaitTime $ fst timeRange
+    nowSlot' <- currentSlot
+    logInfo $ "[DEBUG:applyInputs] current slot at submission = " <> show nowSlot'
+    nowTime' <- currentTime
+    logInfo $ "[DEBUG:applyInputs] current time at submission = " <> show nowTime'
     mkStep params typedValidator timeRange inputs
 
 marloweParams :: CurrencySymbol -> MarloweParams

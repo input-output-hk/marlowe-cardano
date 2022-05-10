@@ -346,7 +346,7 @@ mkInterval currentTime mNextTimeout =
     -- There are no timeouts in the remaining contract. i.e. the contract is
     -- not an executable contract.
     Nothing -> TimeInterval
-      (POSIXTime currentTimeAdjustedForSlotDelay)
+      (POSIXTime currentTime)
       (POSIXTime currentTimeAdjustedForBlockConfirmation)
     Just nextTO
       -- FIXME SCP-2875 Change hardcoded time in mkInterval
@@ -362,7 +362,7 @@ mkInterval currentTime mNextTimeout =
       -- There is a timeout approaching. The valid interval for the transaction
       -- is any time between now and the next timeout.
       | otherwise ->
-          TimeInterval (POSIXTime currentTimeAdjustedForSlotDelay)
+          TimeInterval (POSIXTime currentTime)
             $ fromMaybe (POSIXTime nextTO)
             $ POSIXTime.adjust (Seconds (-1.0)) (POSIXTime nextTO)
   where
@@ -375,17 +375,6 @@ mkInterval currentTime mNextTimeout =
     $ unsafePartial
     $ fromJust
     $ POSIXTime.adjust (Days one) (POSIXTime currentTime)
-  -- TODO move this to configuration and possibly process server-side instead.
-  -- This delay is to account for the fact that when converting the current
-  -- POSIX time to slots, we are likely going to get a slot value that is
-  -- higher than the node's current slot, which is updated every time a new
-  -- block is added, and lags behind the real time. This delay will vary from
-  -- network to network, and thus this delay should be configured and not
-  -- hard-coded.
-  currentTimeAdjustedForSlotDelay = unwrap
-    $ unsafePartial
-    $ fromJust
-    $ POSIXTime.adjust (Minutes (-2.0)) (POSIXTime currentTime)
 
 getAllPayments :: State -> List Payment
 getAllPayments { history } = concat $ fromFoldable $ map
