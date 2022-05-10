@@ -115,8 +115,7 @@ writeShellScriptBin "entrypoint" ''
 
   wait-for-socket "$NOMAD_ALLOC_DIR/node.sock"
 
-  # not needed with --memory
-  # ${pab-init-cmd}/bin/pab-init-cmd
+  ${pab-init-cmd}/bin/pab-init-cmd
 
   # Ugly ugly hack to kill the PAB at midnight UTC
   ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet --memory &
