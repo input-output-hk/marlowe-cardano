@@ -7,13 +7,15 @@ import Component.Toast.Types (Action(..), State, ToastEntry, indexRef)
 import Data.List (List(..))
 import Data.List as List
 import Data.Maybe (fromMaybe)
+import Data.String.Extra (repeat)
 import Data.Tuple.Nested ((/\))
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, div, div_, span, text)
+import Halogen.HTML (HTML, a, br_, div, div_, pre_, span, span_, text)
 import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (id)
 import Halogen.HTML.Properties.ARIA (describedBy, labelledBy, role)
+import Text.Pretty (Doc(..))
 
 render
   :: forall p
@@ -131,6 +133,11 @@ renderExpandedToast { index, message: toast } =
         ]
     shortMessageId = indexRef "toast-short-message" index
     longMessageId = indexRef "toast-long-message" index
+    renderDoc = case _ of
+      Empty -> [ span_ [] ]
+      Text str -> [ span_ [ text str ] ]
+      Newline n -> [ br_, (pre_ [ text $ repeat n " " ]) ]
+      Cat a b -> renderDoc a <> renderDoc b
 
     header = div
       [ classNames
@@ -168,8 +175,7 @@ renderExpandedToast { index, message: toast } =
     body = div
       [ classNames [ "px-5", "pb-6", "pt-3", "md:pb-8", "bg-white" ]
       ]
-      [ text $ fromMaybe "" toast.longDescription
-      ]
+      (renderDoc $ fromMaybe Empty toast.longDescription)
   in
     div
       [ classNames
