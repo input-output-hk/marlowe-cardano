@@ -27,7 +27,7 @@ import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe)
 import Data.Newtype (unwrap)
-import Data.Time.Duration (Days(..), Minutes(..), Seconds(..))
+import Data.Time.Duration (Days(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
