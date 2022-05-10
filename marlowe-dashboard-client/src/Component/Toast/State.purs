@@ -6,24 +6,26 @@ import Component.Toast.Lenses (_timeoutSubscriptions, _toasts)
 import Component.Toast.Types
   ( Action(..)
   , State
+  , ToastEntry
   , ToastIndex
   , ToastMessage
   , indexRef
   )
 import Component.Toast.View (render)
 import Control.Bind (bindFlipped)
+import Control.Plus (empty)
 import Data.Foldable (for_)
 import Data.Lens (over, set, use)
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
+import Data.List (List)
 import Data.List as List
 import Data.Map as Map
+import Data.Maybe (maybe)
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
-import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Effect.Ref as Ref
 import Halogen (HalogenM, subscribe, unsubscribe)
 import Halogen as H
 import Halogen.Animation
@@ -34,10 +36,11 @@ import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
+import Halogen.Subscription.Extra (delayEmitter)
 import Record as Record
 import Store (Action(..), Store) as Store
 import Store.Toast (ToastAction(..)) as Store
-import Store.Toast (ToastStore, getToasts)
+import Store.Toast (getToasts)
 import Type.Prelude (Proxy(..))
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
@@ -52,33 +55,25 @@ component
   => MonadStore Store.Action Store.Store m
   => H.Component query input msg m
 component =
-  connect (selectEq _.toast) $ H.mkComponent
+  connect (selectEq (getToasts <<< _.toast)) $ H.mkComponent
     { initialState: deriveState <<< _.context
     , render
     , eval: H.mkEval H.defaultEval
         { handleAction = handleAction
-        , receive = Just <<< Receive <<< getToasts <<< _.context
+        , receive = Just <<< Receive <<< _.context
         }
     }
 
-deriveState :: ToastStore -> State
-deriveState store =
-  { toasts: getToasts store
+deriveState :: List ToastEntry -> State
+deriveState toasts =
+  { toasts
   , timeoutSubscriptions: Map.empty
   }
 
-toastTimeoutSubscription
-  :: { index :: ToastIndex, message :: ToastMessage } -> HS.Emitter Action
-toastTimeoutSubscription { index, message: toast } =
-  HS.makeEmitter \push -> do
-    cancelled <- Ref.new false
-    for_ toast.timeout \timeout -> Aff.launchAff_ do
-      Aff.delay timeout
-
-      unlessM (liftEffect $ Ref.read cancelled) do
-        liftEffect $ push $ AnimateCloseToast index
-    pure do
-      Ref.write true cancelled
+toastTimeoutEmitter :: ToastIndex -> ToastMessage -> HS.Emitter Action
+toastTimeoutEmitter index toast = AnimateCloseToast index <$ maybe empty
+  delayEmitter
+  toast.timeout
 
 handleAction
   :: forall m slots msg
@@ -96,7 +91,7 @@ handleAction (Receive receivedToasts) = do
 
   -- Subscribe for a timer event for each new toast
   newSubs <- for newToasts \entry -> do
-    subsId <- subscribe $ toastTimeoutSubscription entry
+    subsId <- subscribe $ toastTimeoutEmitter entry.index entry.message
     pure $ entry.index /\ subsId
 
   H.modify_ $
