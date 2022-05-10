@@ -583,8 +583,8 @@ metadataView handlers metadataHints metadata = div_
           _timeParameterDescriptions
           _timeParameters
           render
-          "Slot parameter"
-          "slot parameter"
+          "Time parameter"
+          "time parameter"
   , div [ classes [ ClassName "sortable-metadata-form" ] ] do
       let
         actions =
