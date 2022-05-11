@@ -83,25 +83,25 @@ data MarloweTests a =
     -- | Test contracts on-chain.
     ScriptTests
     {
-      network       :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath    :: FilePath         -- ^ The path to the node socket.
-    , faucetFile    :: FilePath         -- ^ The file containing the faucet's signing key.
-    , faucetAddress :: AddressAny       -- ^ The faucet address.
-    , burnAddress   :: AddressAny       -- ^ The address to which to send unneeded native tokens.
-    , tests         :: [a]              -- ^ Input for the tests.
+      network       :: NetworkId   -- ^ The network ID, if any.
+    , socketPath    :: FilePath    -- ^ The path to the node socket.
+    , faucetFile    :: FilePath    -- ^ The file containing the faucet's signing key.
+    , faucetAddress :: AddressAny  -- ^ The faucet address.
+    , burnAddress   :: AddressAny  -- ^ The address to which to send unneeded native tokens.
+    , tests         :: [a]         -- ^ Input for the tests.
     }
     -- | Test contracts using the Marlowe PAB.
   | PabTests
     {
-      network       :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath    :: FilePath         -- ^ The path to the node socket.
-    , walletUrl     :: BaseUrl          -- ^ The URL for Cardano Wallet.
-    , pabUrl        :: BaseUrl          -- ^ The URL for the Marlowe PAB.
-    , faucetFile    :: FilePath         -- ^ The file containing the faucet's signing key.
-    , faucetAddress :: AddressAny       -- ^ The faucet address.
-    , burnAddress   :: AddressAny       -- ^ The address to which to send unneeded native tokens.
-    , passphrase    :: String           -- ^ The passphrase for the Marlowe PAB.
-    , tests         :: [a]              -- ^ Input for the tests.
+      network       :: NetworkId  -- ^ The network ID, if any.
+    , socketPath    :: FilePath   -- ^ The path to the node socket.
+    , walletUrl     :: BaseUrl    -- ^ The URL for Cardano Wallet.
+    , pabUrl        :: BaseUrl    -- ^ The URL for the Marlowe PAB.
+    , faucetFile    :: FilePath   -- ^ The file containing the faucet's signing key.
+    , faucetAddress :: AddressAny -- ^ The faucet address.
+    , burnAddress   :: AddressAny -- ^ The address to which to send unneeded native tokens.
+    , passphrase    :: String     -- ^ The passphrase for the Marlowe PAB.
+    , tests         :: [a]        -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
 

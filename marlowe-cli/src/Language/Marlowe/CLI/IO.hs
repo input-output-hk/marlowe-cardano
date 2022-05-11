@@ -43,7 +43,6 @@ import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
-import Data.Maybe (fromMaybe)
 import Data.Yaml (decodeFileEither)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey)
 import Plutus.V1.Ledger.Api (BuiltinData)
@@ -169,22 +168,19 @@ readMaybeMetadata file =
 
 
 -- | Read the CARDANO_TESTNET_MAGIC environment variable for the default network magic.
-getNetworkMagic :: IO NetworkId
+getNetworkMagic :: IO (Maybe NetworkId)
 getNetworkMagic =
-  do
-    magic <- (readMaybe =<<) <$> lookupEnv "CARDANO_TESTNET_MAGIC"
-    pure
-      . Testnet
-      . NetworkMagic
-      $ fromMaybe 1567 magic
+  fmap (Testnet . NetworkMagic)
+    . (readMaybe =<<)
+    <$> lookupEnv "CARDANO_TESTNET_MAGIC"
 
 
 -- | Read the CARDANO_NODE_SOCKET_PATH environment variable for the default node socket path.
-getNodeSocketPath :: IO FilePath
+getNodeSocketPath :: IO (Maybe FilePath)
 getNodeSocketPath =
   do
     path <- lookupEnv "CARDANO_NODE_SOCKET_PATH"
     pure
-      $ case path of
-          Just path'@(_ : _) -> path'
-          _                  -> "node.socket"
+      $ if path == Just ""
+          then Nothing
+          else path

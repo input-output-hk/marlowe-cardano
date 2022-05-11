@@ -41,7 +41,7 @@ data ContractCommand =
     -- | Export comprehensive Marlowe contract and transaction information.
     Export
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
+      network       :: NetworkId                    -- ^ The network ID, if any.
     , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
     , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
@@ -53,14 +53,14 @@ data ContractCommand =
     -- | Export the address for a Marlowe contract.
   | ExportAddress
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
+      network       :: NetworkId                    -- ^ The network ID, if any.
     , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
     , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     }
     -- | Export the validator for a Marlowe contract.
   | ExportValidator
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
+      network       :: NetworkId                    -- ^ The network ID, if any.
     , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
     , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     , outputFile    :: Maybe FilePath               -- ^ The output JSON file for the validator information.
@@ -86,9 +86,9 @@ data ContractCommand =
 
 -- | Run an export-related command.
 runContractCommand :: MonadError CliError m
-                 => MonadIO m
-                 => ContractCommand  -- ^ The command.
-                 -> m ()           -- ^ Action for running the command.
+                   => MonadIO m
+                   => ContractCommand  -- ^ The command.
+                   -> m ()             -- ^ Action for running the command.
 runContractCommand command =
   do
     costModel <-
@@ -97,7 +97,7 @@ runContractCommand command =
         pure
         defaultCostModelParams
     let
-      network' = fromMaybe Mainnet $ network command
+      network' = network command
       marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
       stake'         = fromMaybe NoStakeAddress $ stake command
     case command of
@@ -124,7 +124,8 @@ runContractCommand command =
 
 
 -- | Parser for export-related commands.
-parseContractCommand :: NetworkId -> O.Parser ContractCommand
+parseContractCommand :: O.Mod O.OptionFields NetworkId
+                     -> O.Parser ContractCommand
 parseContractCommand network =
   O.hsubparser
     $ O.commandGroup "Low-level commands for exporting Marlowe contract information:"
@@ -136,7 +137,8 @@ parseContractCommand network =
 
 
 -- | Parser for the "marlowe" command.
-exportMarloweCommand :: NetworkId -> O.Mod O.CommandFields ContractCommand
+exportMarloweCommand :: O.Mod O.OptionFields NetworkId
+                     -> O.Mod O.CommandFields ContractCommand
 exportMarloweCommand network =
   O.command "marlowe"
     $ O.info (exportMarloweOptions network)
@@ -144,21 +146,23 @@ exportMarloweCommand network =
 
 
 -- | Parser for the "marlowe" options.
-exportMarloweOptions :: NetworkId -> O.Parser ContractCommand
+exportMarloweOptions :: O.Mod O.OptionFields NetworkId
+                     -> O.Parser ContractCommand
 exportMarloweOptions network =
   Export
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.value network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                            <> O.help "Stake address, if any."                                                            )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                    <> O.help "The currency symbol for roles, if any."                                            )
-    <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"                      <> O.help "JSON input file for the contract."                                                 )
-    <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"                         <> O.help "JSON input file for the contract state."                                           )
-    <*> (O.many . O.strOption)                             (O.long "input-file"     <> O.metavar "INPUT_FILE"                         <> O.help "JSON input file for redeemer inputs."                                              )
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                        <> O.help "JSON output file for contract."                                                    )
-    <*> O.switch                                           (O.long "print-stats"                                                      <> O.help "Print statistics."                                                                 )
+    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
+    <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"              <> O.help "JSON input file for the contract."                                                 )
+    <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"                 <> O.help "JSON input file for the contract state."                                           )
+    <*> (O.many . O.strOption)                             (O.long "input-file"     <> O.metavar "INPUT_FILE"                 <> O.help "JSON input file for redeemer inputs."                                              )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for contract."                                                    )
+    <*> O.switch                                           (O.long "print-stats"                                              <> O.help "Print statistics."                                                                 )
 
 
 -- | Parser for the "address" command.
-exportAddressCommand :: NetworkId -> O.Mod O.CommandFields ContractCommand
+exportAddressCommand :: O.Mod O.OptionFields NetworkId
+                     -> O.Mod O.CommandFields ContractCommand
 exportAddressCommand network =
   O.command "address"
     . O.info (exportAddressOptions network)
@@ -166,16 +170,18 @@ exportAddressCommand network =
 
 
 -- | Parser for the "address" options.
-exportAddressOptions :: NetworkId -> O.Parser ContractCommand
+exportAddressOptions :: O.Mod O.OptionFields NetworkId
+                     -> O.Parser ContractCommand
 exportAddressOptions network =
   ExportAddress
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.value network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                            <> O.help "Stake address, if any."                                                            )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                    <> O.help "The currency symbol for roles, if any."                                            )
+    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
 
 
 -- | Parser for the "validator" command.
-exportValidatorCommand :: NetworkId -> O.Mod O.CommandFields ContractCommand
+exportValidatorCommand :: O.Mod O.OptionFields NetworkId
+                       -> O.Mod O.CommandFields ContractCommand
 exportValidatorCommand network =
   O.command "validator"
     . O.info (exportValidatorOptions network)
@@ -183,15 +189,16 @@ exportValidatorCommand network =
 
 
 -- | Parser for the "validator" options.
-exportValidatorOptions :: NetworkId -> O.Parser ContractCommand
+exportValidatorOptions :: O.Mod O.OptionFields NetworkId
+                       -> O.Parser ContractCommand
 exportValidatorOptions network =
   ExportValidator
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.value network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                            <> O.help "Stake address, if any."                                                            )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                    <> O.help "The currency symbol for roles, if any."                                            )
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                        <> O.help "JSON output file for validator."                                                   )
-    <*> O.switch                                           (O.long "print-hash"                                                       <> O.help "Print validator hash."                                                             )
-    <*> O.switch                                           (O.long "print-stats"                                                      <> O.help "Print statistics."                                                                 )
+    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for validator."                                                   )
+    <*> O.switch                                           (O.long "print-hash"                                               <> O.help "Print validator hash."                                                             )
+    <*> O.switch                                           (O.long "print-stats"                                              <> O.help "Print statistics."                                                                 )
 
 
 -- | Parser for the "datum" command.

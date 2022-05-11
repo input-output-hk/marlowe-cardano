@@ -76,8 +76,8 @@ runCLI version =
   do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
-    networkId <- liftIO getNetworkMagic
-    socketPath <- liftIO getNodeSocketPath
+    networkId <- maybe mempty O.value <$> liftIO getNetworkMagic
+    socketPath <- maybe mempty O.value <$> liftIO getNodeSocketPath
     command <- O.execParser $ parseCommand networkId socketPath version
     result <- runExceptT $ runCommand command
     case result of
@@ -105,10 +105,10 @@ runCommand (UtilCommand        command) = runUtilCommand        command
 
 
 -- | Command parseCommand for the tool version.
-parseCommand :: NetworkId             -- ^ The default network ID.
-             -> FilePath              -- ^ The default node socket path.
-             -> String                -- ^ The tool version.
-             -> O.ParserInfo Command  -- ^ The command parseCommand.
+parseCommand :: O.Mod O.OptionFields NetworkId  -- ^ The default network ID.
+             -> O.Mod O.OptionFields FilePath   -- ^ The default node socket path.
+             -> String                          -- ^ The tool version.
+             -> O.ParserInfo Command            -- ^ The command parseCommand.
 parseCommand networkId socketPath version =
   O.info
     (
