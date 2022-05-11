@@ -10,16 +10,16 @@ ARGS:
               If no tests are provided runner is going to execute the whole suite.
 OPTIONS:
   -m, --testnet-magic <CARDANO_TESTNET_MAGIC>
-          Falls back to the $CARDANO_TESTNET_MAGIC env variable.
+          Falls back to the CARDANO_TESTNET_MAGIC env variable.
           Default is 1567.
   -s, --node-socket-path
-          Falls back to the $CARDANO_NODE_SOCKET_PATH env variable.
+          Falls back to the CARDANO_NODE_SOCKET_PATH env variable.
           We fallback to \`./node.socket\` when as a least resort.
   -t, --treasury
           Directory which should be used as a store for test suite treasury account.
           We expect two files there: \`payment.skey\`, \`payment.vkey\`
           If given directory is empty this runner will create them.
-          We fallback to $TREASURY env variable and to \`./\` at the end.
+          We fallback to TREASURY env variable and to \`./\` at the end.
   -A, --faucet-addr-file
           File containing the faucet address
   -S, --faucet-skey-file
