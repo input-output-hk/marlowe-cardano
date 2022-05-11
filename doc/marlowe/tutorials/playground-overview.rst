@@ -248,16 +248,16 @@ view seen first. Here we're looking at the *Zero coupon bond* example.
 
 Before a simulation can be started you need to supply some information.
 
-- The *slot number* at which to start the simulation.
-- Any *value parameters*: in this case the amount loaned and the (added) amount of interest to be paid.
-- Any *slot parameters*: here we give the time by which the lender has to deposit the amount, and
+- The simulated *initial time* at which to start the simulation.
+- Any *timeout parameters*: here we give the time by which the lender has to deposit the amount, and
   the time by which the borrower needs to repay that amount with interest.
+- Any *value parameters*: in this case the amount loaned and the (added) amount of interest to be paid.
 
 The code shown here presents the complete contract that is being
 simulated. Once the simulation has begun, whatever of the contract remains to be
 simulated is highlighted. The footer gives data about the simulation.
 
-For our example let's fill in the parameters like this, and retain slot 0 as the starting point.
+For our example let's fill in the parameters like this.
 
 .. image:: images/completed-params.png
    :alt: Parameters added.
@@ -270,9 +270,11 @@ of it has yet been executed.
 .. image:: images/available-actions.png
    :alt: The actions available
 
-In this case there are two potential actions: the *Lender* can make a deposit of 10,000 Ada,
-or the slot (time) can advance to ``10`` at which the wait for a deposit
-times out. Two other generic actions can be taken too
+In this case, there are 4 potential actions: the *Lender* can make a deposit of 10,000 Ada,
+or the time can advance to the next minute, the next timeout (in this case the *Loan
+deadline* timeout that we just set, at which the wait for a deposit
+times out), or directly to the expiration time of the contract.
+Two other generic actions can be taken too
 
 -  **Undo** will undo the last action made in the simulator. This means
    that we can explore a contract interactively, making some moves,
@@ -300,14 +302,14 @@ we see that the contract has completed.
    :alt: Simulation step 3
 
 The log on the right hand side of the screen now gives a complete list of the actions undertaken 
-by the participants and by the contract itself. One final note: we chose not to advance the slot at any time: this is consistent with the
-contract design; on the other hand we didn't see any *timeout* actions happening. Why not try 
-this yourself? 
+by the participants and by the contract itself. One final note: we chose not to advance the time
+at any point: this is consistent with the contract design; on the other hand we didn't see
+any *timeout* actions happening. Why not try this yourself? 
 
 Oracle simulation
 -----------------
 
-As we noted earlier in the section on `??? <#_oracles>`_, the
+As we noted earlier in the section on :ref:`marlowe-step-by-step`, the
 Playground provides oracle values to simulations for the role
 ``"kraken"``. When the simulation reaches the point of simulating this
 construct
@@ -360,13 +362,14 @@ Clicking the **Analyse for warnings** button results in the current
 contract *in the current state* being analysed. The result is either to
 say that the contract passed all the tests, or to explain how it fails,
 and giving the sequence of transactions that lead to the error. As an
-exercise try this with the ``Escrow`` contract, changing the initial
+exercise, try this with the ``Escrow`` contract, changing the initial
 deposit from Alice to something smaller than 450 lovelace. More details
 are given in the section on
 :ref:`static analysis <static-analysis>` below.
 
 The **Analyse reachability** button will check whether any parts of a
-contract will never be executed, however participants interact with it.
+contract will never be executed, however participants interact with
+the contract.
 
 The **Analyse for refunds on Close** will check whether it is possible for
 any of the ``Close`` constructs to refund funds, or whether at every ``Close`` all
