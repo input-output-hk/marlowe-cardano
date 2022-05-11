@@ -76,6 +76,7 @@ let
           marlowe-cli.components.library.ghcOptions = [ "-j1" ];
           marlowe-dashboard-server.components.library.ghcOptions = [ "-j1" ];
           marlowe-playground-server.components.library.ghcOptions = [ "-j1" ];
+          threepenny-gui.components.library.ghcOptions = [ "-j1" ];
         };
       })
       ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) {
