@@ -61,6 +61,21 @@ let
         tests: False
     '';
     modules = [
+      ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin) {
+        packages = {
+          # This workaround is for an error that started showing up when building with macOS 12:
+          #   `cannot dlopen until fork() handlers have completed`
+          # This error often goes away if the build is restarted on hydra, but some
+          # packages consistently fail.
+          # Using `-fexternal-interpreter` may also be an option, but using it
+          # for all packages brought up some other issues.
+          blockfrost-api.components.library.ghcOptions = [ "-j1" ];
+          plutus-contract.components.library.ghcOptions = [ "-j1" ];
+          cardano-wallet-core.components.library.ghcOptions = [ "-j2" ]; # Using `-j1` here caused a timeout error on hydra mac mini builder
+          plutus-pab.components.library.ghcOptions = [ "-j1" ];
+          marlowe-cli.components.library.ghcOptions = [ "-j1" ];
+        };
+      })
       ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) {
         packages = {
           # Things that need plutus-tx-plugin
