@@ -74,6 +74,8 @@ let
           cardano-wallet-core.components.library.ghcOptions = [ "-j2" ]; # Using `-j1` here caused a timeout error on hydra mac mini builder
           plutus-pab.components.library.ghcOptions = [ "-j1" ];
           marlowe-cli.components.library.ghcOptions = [ "-j1" ];
+          marlowe-dashboard-server.components.library.ghcOptions = [ "-j1" ];
+          marlowe-playground-server.components.library.ghcOptions = [ "-j1" ];
         };
       })
       ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) {
