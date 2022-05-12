@@ -9,11 +9,6 @@ const isDevelopment = process.env.NODE_ENV === "development";
 
 const devtool = isDevelopment ? "eval-source-map" : false;
 
-const commitHash = require("child_process")
-  .execSync("git rev-parse --short HEAD")
-  .toString()
-  .trim();
-
 module.exports = {
   devtool,
   mode: isDevelopment ? "development" : "production",
@@ -118,7 +113,7 @@ module.exports = {
       SENTRY_DSN:
         "https://12e6a97363464bdb98ebbf0c277f347e@o1239254.ingest.sentry.io/6390474",
       SENTRY_TRACES_SAMPLE_RATE: isDevelopment ? 1.0 : 0.2,
-      SENTRY_RELEASE: commitHash,
+      SENTRY_RELEASE: process.env.SENTRY_RELEASE,
     }),
     new webpack.DefinePlugin({
       __SENTRY_DEBUG__: process.env.SENTRY_DEBUG === "true",
