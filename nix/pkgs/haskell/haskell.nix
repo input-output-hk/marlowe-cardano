@@ -121,6 +121,7 @@ let
       ({ pkgs, config, ... }: {
         packages = {
           cardano-config.components.library.build-tools = [ pkgs.buildPackages.buildPackages.gitReallyMinimal ];
+          marlowe-cli.components.exes. marlowe-cli.build-tools = [ pkgs.buildPackages.buildPackages.gitReallyMinimal ];
 
           # See https://github.com/input-output-hk/plutus/issues/1213 and
           # https://github.com/input-output-hk/plutus/pull/2865.
