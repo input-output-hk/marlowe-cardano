@@ -132,7 +132,7 @@ fi
 if [[ -n "$FUND" ]]; then
   # Fund the faucet with 5k tADA.
   marlowe-cli util faucet --testnet-magic "$TESTNET_MAGIC"          \
-                          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                          --socket-path "$NODE_SOCKET_PATH" \
                           --out-file /dev/null                      \
                           --submit 600                              \
                           --lovelace 5000000000                     \
