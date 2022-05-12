@@ -156,13 +156,13 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
 
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
-    Trace.waitNSlots 2
+    Trace.waitNSlots 4
 
     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk alicePk ada 75_000_000])
-    Trace.waitNSlots 2
+    Trace.waitNSlots 4
 
     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk bobPk ada 90_000_000])
-    void $ Trace.waitNSlots 2
+    void $ Trace.waitNSlots 4
 
     Trace.callEndpoint @"close" aliceHdl reqId
     Trace.callEndpoint @"close" bobHdl reqId
@@ -205,11 +205,11 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
 
     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
                                                  [ClientMerkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
-    Trace.waitNSlots 2
+    Trace.waitNSlots 4
 
     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
                                                [ClientMerkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
-    void $ Trace.waitNSlots 2
+    void $ Trace.waitNSlots 4
 
     Trace.callEndpoint @"close" aliceHdl reqId
     Trace.callEndpoint @"close" bobHdl reqId
@@ -313,13 +313,13 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
             -- get contract's history and start following our contract
             Trace.callEndpoint @"follow" bobFollowHdl pms
-            Trace.waitNSlots 2
+            Trace.waitNSlots 4
 
             Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [ClientInput INotify])
 
-            Trace.waitNSlots 2
+            Trace.waitNSlots 4
             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)
-            Trace.waitNSlots 2
+            Trace.waitNSlots 4
             Trace.callEndpoint @"redeem" aliceHdl (reqId, pms, "alice", alicePkh)
             void $ Trace.waitNSlots 5
     where
