@@ -589,8 +589,7 @@ handleAction (CompanionAppStateUpdated companionAppState) = do
     ajaxFollow <- followContract wallet marloweParams
     case ajaxFollow of
       Left err -> globalError "Can't follow the contract" err
-      Right _ -> do
-        addToast $ successToast "Contract initialized."
+      _ -> pure unit
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   {- [UC-CONTRACT-1][3] Start a contract -}

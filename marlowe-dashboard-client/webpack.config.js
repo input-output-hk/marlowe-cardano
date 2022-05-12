@@ -113,7 +113,7 @@ module.exports = {
       SENTRY_DSN:
         "https://12e6a97363464bdb98ebbf0c277f347e@o1239254.ingest.sentry.io/6390474",
       SENTRY_TRACES_SAMPLE_RATE: isDevelopment ? 1.0 : 0.2,
-      SENTRY_RELEASE: process.env.SENTRY_RELEASE,
+      SENTRY_RELEASE: process.env.SENTRY_RELEASE || "unknown",
     }),
     new webpack.DefinePlugin({
       __SENTRY_DEBUG__: process.env.SENTRY_DEBUG === "true",
