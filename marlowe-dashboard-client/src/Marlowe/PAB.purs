@@ -1,7 +1,8 @@
 module Marlowe.PAB
   ( PlutusAppId(..)
   , contractCreationFee
-  , transactionFee
+  , createFee
+  , applyInputsFee
   ) where
 
 import Prologue
@@ -20,13 +21,16 @@ import Data.UUID.Argonaut (UUID)
 import Data.UUID.Argonaut as UUID
 import Servant.PureScript (class ToPathSegment)
 
--- In the Marlowe PAB, transactions have a fixed cost of 10 lovelace; in the real node, transaction
--- fees will vary, but this will serve as an approximation for now.
-transactionFee :: BigInt
-transactionFee = fromInt 10
+-- Accurate to within 0.05 ADA
+createFee :: BigInt
+createFee = fromInt 200000
+
+-- Accurate to within 0.1 ADA
+applyInputsFee :: BigInt
+applyInputsFee = fromInt 1_300_000
 
 contractCreationFee :: BigInt
-contractCreationFee = transactionFee
+contractCreationFee = createFee
 
 {-
 A `PlutusAppId` is used to identify an instance of a Plutus "contract" in the PAB. In the PAB code it is

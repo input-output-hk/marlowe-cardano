@@ -46,7 +46,7 @@ import Halogen.Store.Monad (class MonadStore, getStore)
 import Halogen.Store.Select (selectEq)
 import Marlowe.Execution.State (mkTx)
 import Marlowe.Execution.Types (NamedAction(..))
-import Marlowe.PAB (transactionFee)
+import Marlowe.PAB (applyInputsFee)
 import Marlowe.Semantics (ChosenNum)
 import Marlowe.Semantics as Semantic
 import Store as Store
@@ -84,7 +84,7 @@ deriveState { context, input } =
     { mNextTimeout } = executionState
     contractInput = toInput action chosenNum
   in
-    { transactionFeeQuote: transactionFee
+    { transactionFeeQuote: applyInputsFee
     , txInput:
         mkTx currentTime mNextTimeout $ Unfoldable.fromMaybe contractInput
     }

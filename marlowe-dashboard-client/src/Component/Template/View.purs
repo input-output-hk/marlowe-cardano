@@ -16,6 +16,7 @@ import Component.Popper (Placement(..))
 import Component.Template.Types (Action(..), ComponentHTML, State, Wizard(..))
 import Css as Css
 import Data.Array (mapWithIndex)
+import Data.BigInt.Argonaut (fromInt)
 import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
@@ -26,6 +27,7 @@ import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (_assets)
+import Data.String (joinWith)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
@@ -39,11 +41,13 @@ import Halogen.HTML
   , h3
   , h4_
   , li
+  , li_
   , p
   , p_
   , span
   , span_
   , text
+  , ul
   , ul_
   )
 import Halogen.HTML as HH
@@ -288,7 +292,12 @@ contractReview
   -> ComponentHTML m
 contractReview assets template params =
   let
-    hasSufficientFunds = getAda assets >= contractCreationFee
+    minAda = fromInt 2_000_000
+    roleCount = Map.size params.roles
+    roleFees = fromInt roleCount * minAda
+    totalFees = minAda + roleFees + contractCreationFee
+
+    hasSufficientFunds = getAda assets >= totalFees
 
     metaData = view _metaData template
 
@@ -342,7 +351,7 @@ contractReview assets template params =
                   , "rounded-t"
                   ]
               ]
-              [ span_ [ text "Demo wallet balance:" ]
+              [ span_ [ text "Your balance:" ]
               , span_ [ text $ humanizeValue adaToken $ getAda assets ]
               ]
           , div [ classNames [ "px-5", "pb-6", "md:pb-8" ] ]
@@ -353,7 +362,48 @@ contractReview assets template params =
                   [ classNames
                       [ "mb-4", "text-purple", "font-semibold", "text-2xl" ]
                   ]
-                  [ text $ humanizeValue adaToken contractCreationFee ]
+                  [ text $ humanizeValue adaToken totalFees ]
+              , ul
+                  [ classNames [ "list-disc", "list-inside", "mb-4", "text-sm" ]
+                  ]
+                  [ li_
+                      [ text $ "Transaction fee: " <> humanizeValue
+                          adaToken
+                          contractCreationFee
+                      , hint
+                          []
+                          "fees"
+                          Auto
+                          ( markdownHintWithTitle "Transaction fee"
+                              "This amount is an estimate only. Real fees may be slightly different."
+                          )
+                      ]
+                  , li_
+                      [ text $ "Deposit: " <> humanizeValue adaToken minAda
+                      , hint
+                          []
+                          "deposit"
+                          Auto
+                          ( markdownHintWithTitle "deposit"
+                              "This amount will be refunded when the contract closes."
+                          )
+                      ]
+                  , li_
+                      [ text $ "Total paid to participants: "
+                          <> humanizeValue adaToken roleFees
+                      , hint
+                          []
+                          "role-fees"
+                          Auto
+                          ( markdownHintWithTitle "Paid to participants" $
+                              joinWith " "
+                                [ "Each participant in the contract is paid"
+                                , humanizeValue adaToken minAda
+                                , "to distribute the role tokens."
+                                ]
+                          )
+                      ]
+                  ]
               , div
                   [ classNames [ "flex", "items-baseline" ] ]
                   [ a
