@@ -1,59 +1,66 @@
-module Toast.Types
+module Component.Toast.Types
   ( Action(..)
   , State
+  , ToastEntry
+  , ToastIndex(..)
   , ToastMessage
-  , ToastState
   , errorToast
   , explainableErrorToast
+  , indexRef
   , infoToast
   , successToast
   ) where
 
 import Prologue
 
-import Analytics (class IsEvent, Event)
-import Analytics as A
 import Component.Icons (Icon(..))
-import Errors.Explain (class Explain, explainString)
+import Data.List (List)
+import Data.Map (Map)
+import Data.Time.Duration (Milliseconds(..))
+import Errors.Explain (class Explain, explain)
 import Halogen (SubscriptionId)
+import Text.Pretty (Doc(..), newline)
 import Web.ARIA (ARIARole(..))
 
 type ToastMessage =
   { shortDescription :: String
-  , longDescription :: Maybe String
+  -- TODO SCP-3962 use dodo-printer instead of Text.Pretty
+  -- for this.
+  , longDescription :: Maybe Doc
   , icon :: Icon
   , iconColor :: String
   , textColor :: String
   , bgColor :: String
-  , timeout :: Number
+  , timeout :: Maybe Milliseconds
   , role :: ARIARole
   }
 
-data Action
-  = Receive (Maybe ToastMessage)
-  | ExpandToast
-  | CloseToast
-  | ToastTimeout
+-- Because we can show multiple Toast at the same time we use
+-- an index to identify the different messages.
+newtype ToastIndex = ToastIndex Int
 
-defaultEvent :: String -> Event
-defaultEvent s = A.defaultEvent $ "Toast." <> s
+derive newtype instance Semiring ToastIndex
+derive newtype instance Eq ToastIndex
+derive newtype instance Ord ToastIndex
 
-instance actionIsEvent :: IsEvent Action where
-  toEvent (Receive _) = Just $ defaultEvent "Receive"
-  toEvent ExpandToast = Just $ defaultEvent "ExpandToast"
-  toEvent CloseToast = Just $ defaultEvent "CloseToast"
-  toEvent ToastTimeout = Just $ defaultEvent "ToastTimeout"
+indexRef :: String -> ToastIndex -> String
+indexRef pre (ToastIndex n) = pre <> "-" <> show n
 
--- TODO: For now the state and actions can only represent a single toast. If you open a new toast
---       it will replace the current one. We could later on extend this to have multiple messages
-type ToastState =
-  { message :: ToastMessage
+type ToastEntry =
+  { index :: ToastIndex
+  , message :: ToastMessage
   , expanded :: Boolean
   }
 
+data Action
+  = Receive (List ToastEntry)
+  | ToggleExpanded ToastIndex
+  | CloseToast ToastIndex
+  | AnimateCloseToast ToastIndex
+
 type State =
-  { mToast :: Maybe ToastState
-  , timeoutSubscription :: Maybe SubscriptionId
+  { toasts :: List ToastEntry
+  , timeoutSubscriptions :: Map ToastIndex SubscriptionId
   }
 
 successToast :: String -> ToastMessage
@@ -64,7 +71,7 @@ successToast shortDescription =
   , iconColor: "text-lightgreen"
   , textColor: "text-white"
   , bgColor: "bg-black"
-  , timeout: 2500.0
+  , timeout: Just $ Milliseconds 5000.0
   , role: Status
   }
 
@@ -76,27 +83,28 @@ infoToast shortDescription =
   , iconColor: "text-lightpurple"
   , textColor: "text-white"
   , bgColor: "bg-black"
-  , timeout: 2500.0
+  , timeout: Just $ Milliseconds 5000.0
   , role: Status
   }
 
-errorToast :: String -> Maybe String -> ToastMessage
+errorToast :: String -> Maybe Doc -> ToastMessage
 errorToast shortDescription longDescription =
   { shortDescription
-  , longDescription: map (\m -> m <> " " <> contactSupportMessage)
+  , longDescription: map
+      (\m -> m <> Newline 0 <> Newline 0 <> Text contactSupportMessage)
       longDescription
   , icon: ErrorOutline
   , iconColor: "text-white"
   , textColor: "text-white"
   , bgColor: "bg-red"
-  , timeout: 5000.0
+  , timeout: Nothing
   , role: Alert
   }
 
 explainableErrorToast :: forall a. Explain a => String -> a -> ToastMessage
 explainableErrorToast shortDescription error = errorToast shortDescription
   $ Just
-  $ explainString error
+  $ Text (shortDescription <> ":") <> newline <> newline <> explain error
 
 contactSupportMessage :: String
 contactSupportMessage = "Please contact support if the problem persists."

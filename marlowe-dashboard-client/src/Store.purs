@@ -2,6 +2,7 @@ module Store where
 
 import Prologue
 
+import Component.Toast.Types (errorToast)
 import Data.AddressBook (AddressBook)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatusId)
@@ -16,7 +17,7 @@ import Data.PABConnectedWallet (_assets)
 import Data.Set (Set)
 import Data.Slot (Slot)
 import Data.Wallet (WalletDetails)
-import Errors.Explain (explainString)
+import Errors.Explain (explain)
 import Language.Marlowe.Client (ContractHistory, MarloweError, UnspentPayouts)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
@@ -34,9 +35,10 @@ import Store.RoleTokens
   , roleTokenLoaded
   , updateMyRoleTokens
   )
+import Store.Toast (ToastAction, ToastStore, emptyToastStore)
+import Store.Toast as Toast
 import Store.Wallet (WalletAction, WalletStore, _connectedWallet)
 import Store.Wallet as Wallet
-import Toast.Types (ToastMessage, errorToast)
 import Type.Proxy (Proxy(..))
 import Types (JsonAjaxError)
 
@@ -51,7 +53,7 @@ type Store =
   -- overcome a limitation of nselect that prevents it from closing the
   -- dropdown on blur.
   , openDropdown :: Maybe String
-  , toast :: Maybe ToastMessage
+  , toast :: ToastStore
   -- | The slot of the current tip of the Cardano Node. Note that this
   -- | generally lags behind the true "current slot" - i.e. the slot that a
   -- | block produced this instant would have. This refers instead to the slot
@@ -84,7 +86,7 @@ mkStore currentTime addressBook contractNicknames wallet =
   , roleTokens: mkRoleTokenStore
   -- # System wide components
   , openDropdown: Nothing
-  , toast: Nothing
+  , toast: emptyToastStore
   , tipSlot: bottom
   }
 
@@ -112,8 +114,7 @@ data Action
   | NewPayoutsReceived MarloweParams UnspentPayouts
   -- System wide components
   | Disconnect
-  | ShowToast ToastMessage
-  | ClearToast
+  | Toast ToastAction
   | DropdownOpened String
   | DropdownClosed
 
@@ -126,9 +127,10 @@ reduce store = case _ of
     store { tipSlot = store.tipSlot <> slot }
   Tick currentTime -> case tick currentTime store.contracts of
     Left error -> reduce store
-      $ ShowToast
+      $ Toast
+      $ Toast.Show
       $ errorToast "Error updating contract state with new time"
-      $ Just (explainString error)
+      $ Just (explain error)
     Right contracts -> store
       { currentTime = currentTime
       , contracts = contracts
@@ -178,8 +180,7 @@ reduce store = case _ of
             _ -> store.roleTokens
     }
   -- Toast
-  ShowToast msg -> store { toast = Just msg }
-  ClearToast -> store { toast = Nothing }
+  Toast action -> store { toast = Toast.reduce store.toast action }
   -- Dropdown
   DropdownOpened dropdown -> store { openDropdown = Just dropdown }
   DropdownClosed -> store { openDropdown = Nothing }

@@ -4,6 +4,7 @@ import Prologue
 
 import Data.Foldable (for_, traverse_)
 import Data.Map as Map
+import Data.Time.Duration (class Duration, fromDuration)
 import Data.Traversable (traverse)
 import Effect.Aff
   ( Aff
@@ -17,7 +18,7 @@ import Effect.Aff
 import Effect.Aff as Aff
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
-import Halogen.Subscription (Emitter, SubscribeIO, Subscription)
+import Halogen.Subscription (Emitter, SubscribeIO, Subscription, makeEmitter)
 import Halogen.Subscription as HS
 
 -- Connect an emitter to an existing SubscribeIO.
@@ -108,3 +109,11 @@ subscribeOnce emitter =
       resolve (Right a)
     Ref.write (Just subscription) refSubscription
     pure $ Aff.effectCanceler unsubscribe
+
+delayEmitter :: forall d. Duration d => d -> Emitter Unit
+delayEmitter d = makeEmitter \push -> do
+  fiber <- launchAff do
+    Aff.delay $ fromDuration d
+    liftEffect $ push unit
+  pure $ launchAff_ do
+    Aff.killFiber (error "killed") fiber

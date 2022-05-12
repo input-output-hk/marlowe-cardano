@@ -31,6 +31,7 @@ import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Types as Contacts
 import Component.Template.Types as Template
+import Component.Toast.Types (infoToast, successToast)
 import Control.Alt ((<|>))
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
@@ -173,7 +174,6 @@ import Store.RoleTokens (Payout, RoleTokenStore, getEligiblePayouts)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (infoToast, successToast)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 import WebSocket.Support as WS
