@@ -6,6 +6,7 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Auth (AuthStatus)
 import Component.Blockly.Types as Blockly
 import Component.ConfirmUnsavedNavigation.Types as ConfirmUnsavedNavigation
+import Component.CurrencyInput.Types as CurrencyInput
 import Component.DateTimeLocalInput.Types as DateTimeLocalInput
 import Component.Demos.Types as Demos
 import Component.MetadataTab.Types (MetadataAction)
@@ -17,7 +18,6 @@ import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson)
 import Data.Argonaut.Core (jsonNull)
 import Data.Argonaut.Decode ((.:), (.:?))
 import Data.Argonaut.Decode.Decoders (decodeJObject)
-import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens', has, lens, set, view, (^.))
 import Data.Lens.Record (prop)
@@ -151,9 +151,8 @@ type ChildSlots =
   , metadata :: forall query. H.Slot query MetadataAction Unit
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
-  , currencyInput :: forall query. H.Slot query BigInt String
-  , dateTimeInput ::
-      forall query. H.Slot query DateTimeLocalInput.Message String
+  , currencyInput :: CurrencyInput.Slot String
+  , dateTimeInput :: DateTimeLocalInput.Slot String
   )
 
 _haskellEditorSlot :: Proxy "haskellEditorSlot"

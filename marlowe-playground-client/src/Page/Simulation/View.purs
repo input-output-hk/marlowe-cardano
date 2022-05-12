@@ -4,9 +4,10 @@ import Prologue hiding (div)
 
 import Component.BottomPanel.Types as BottomPanelTypes
 import Component.BottomPanel.View as BottomPanel
-import Component.CurrencyInput (currencyInput)
-import Component.DateTimeLocalInput.State as DateTimeLocalInput
-import Component.DateTimeLocalInput.Types (Message(..))
+import Component.CurrencyInput.State (component) as CurrencyInput
+import Component.CurrencyInput.Types (Message(..)) as CurrencyInput
+import Component.DateTimeLocalInput.State (component) as DateTimeLocalInput
+import Component.DateTimeLocalInput.Types (Message(..)) as DateTimeLocalInput
 import Component.Hint.State (hint)
 import Component.Icons as Icon
 import Component.Popper (Placement(..))
@@ -882,9 +883,9 @@ marloweCurrencyInput ref classList f currencyLabel numDecimals value =
   slot
     _currencyInputSlot
     ref
-    currencyInput
+    CurrencyInput.component
     { classList, value, prefix: currencyLabel, numDecimals }
-    f
+    (\(CurrencyInput.ValueChanged n) -> f n)
 
 -- This component builds on top of the DateTimeLocal component to work
 -- with Instant and to do the UTC convertion. Value in and out are expressed
@@ -909,9 +910,10 @@ marloweInstantInput ref classList f current tzOffset =
             Instant.toDateTime current
         , trimSeconds: true
         }
-        ( \(ValueChanged dt) -> f $ Instant.fromDateTime $ localToUtc
-            tzOffset
-            dt
+        ( \(DateTimeLocalInput.ValueChanged dt) -> f $ Instant.fromDateTime $
+            localToUtc
+              tzOffset
+              dt
         )
     , text $ humanizeOffset tzOffset
     ]
