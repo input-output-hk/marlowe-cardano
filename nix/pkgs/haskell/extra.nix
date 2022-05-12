@@ -56,7 +56,18 @@ let
       packages.haskell-language-server.patches = lib.mkIf stdenv.isDarwin [ ../../patches/haskell-language-server-dynamic.patch ];
       # See https://github.com/haskell/haskell-language-server/pull/1382#issuecomment-780472005
       packages.ghcide.flags.ghc-patched-unboxed-bytecode = true;
-    }];
+    }
+      ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin) {
+        packages = {
+          # This workaround is for an error that started showing up when building with macOS 12:
+          #   `cannot dlopen until fork() handlers have completed`
+          # This error often goes away if the build is restarted on hydra, but some
+          # packages consistently fail.
+          # Using `-fexternal-interpreter` may also be an option, but using it
+          # for all packages brought up some other issues.
+          ghcide.components.library.ghcOptions = [ "-j1" ];
+        };
+      })];
   };
 
   updateShaFile = project: shaFile: writeShellScript "updateShaFile" ''
