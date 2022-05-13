@@ -18,13 +18,13 @@ module Store.Contracts
 import Prologue
 
 import Control.Alt ((<|>))
-import Control.Apply (lift2)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatus(..), ContractStatusId)
 import Data.DateTime.Instant (Instant)
 import Data.Either (either)
+import Data.Filterable (filter)
 import Data.Foldable (find, foldr)
 import Data.Lens
   ( Lens'
@@ -50,14 +50,14 @@ import Data.LocalContractNicknames
 import Data.LocalContractNicknames as LocalContractNicknames
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (maybe)
+import Data.Maybe (maybe, maybe')
 import Data.NewContract (NewContract(..), _newContractError)
 import Data.NewContract as NC
 import Data.Set (Set)
 import Data.Tuple (uncurry)
 import Data.UUID.Argonaut (UUID, emptyUUID)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
-import Marlowe.Client (getMarloweParams)
+import Marlowe.Client (_chHistory, getMarloweParams)
 import Marlowe.Client as Client
 import Marlowe.Execution.State (restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
@@ -197,17 +197,23 @@ historyUpdated currentTime followerId metadata history store =
       newContractById marloweParams store <|> newContractByMatch store
     updateIndexes = over _contractIndex $ Bimap.insert marloweParams
       followerId
-    updateSyncedContracts = traverseOf _startedContracts
-      $
-        lift2
-          (Map.insert marloweParams)
-          ( Execution.restoreState
-              followerId
-              currentTime
-              metadata
-              history
-          )
-          <<< pure
+    stateForContract = _startedContracts <<< at marloweParams
+    updateSyncedContracts = over stateForContract applyHistory
+    -- This function actually applies the history to the execution state.
+    -- Because restoreState sets the pending transaction to Nothing, we only
+    -- want to run it if the history (i.e. the array of transaction inputs) has
+    -- changed since the last update. So, we A) lookup the current execution
+    -- state, B) check that the history has not changed (e.g. this can happen
+    -- when we receive payout updates from the follower). If the history hasn't
+    -- changed, we simply call `timeoutState` with the current time. Otherwise,
+    -- we recreate it with `restoreState`.
+    applyHistory currentState = either (const currentState) Just
+      $ maybe'
+          (\_ -> Execution.restoreState followerId currentTime metadata history)
+          (timeoutState currentTime)
+      $ filter historyUnchanged currentState
+    historyUnchanged s =
+      map (view _chHistory) s.contractHistory == Just (history ^. _chHistory)
     mNickname = getContractNickname marloweParams store
       <|> NC.getContractNickname <$> mNewContract
     updateNicknames = maybe
@@ -215,13 +221,10 @@ historyUpdated currentTime followerId metadata history store =
       (modifyContractNicknames <<< insertContractNickname marloweParams)
       mNickname
   in
-    either
-      (const store)
-      ( maybe identity (removeNewContract marloweParams) mNewContract
-          <<< updateNicknames
-          <<< updateIndexes
-      )
-      (updateSyncedContracts store)
+    maybe identity (removeNewContract marloweParams) mNewContract
+      $ updateNicknames
+      $ updateIndexes
+      $ updateSyncedContracts store
   where
   newContractById marloweParams (ContractStore s) =
     flip Map.lookup s.newContracts
