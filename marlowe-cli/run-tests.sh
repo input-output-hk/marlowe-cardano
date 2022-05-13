@@ -99,20 +99,22 @@ then
   FAUCET_SKEY_FILE="$TREASURY_DIR/payment.skey"
 
   if [[ -e $FAUCET_SKEY_FILE ]]; then
-    echo "No --faucet-skey-file given but there's already a file at the treasury location $FAUCET_SKEY_FILE. Aborting because we don't want to overwrite your files with cardano-cli address key-gen"
+    echo "No --faucet-skey-file given but there's already a file at the treasury location $FAUCET_SKEY_FILE. Aborting because we don't want to overwrite your files with 'cardano-cli address key-gen'"
     exit 1
   fi
 
   FAUCET_VKEY_FILE="$TREASURY_DIR/payment.vkey"
+  FAUCET_ADDR_FILE="$TREASURY_DIR/faucet.address"
 
-  echo "CREATE"
+  echo "Creating $FAUCET_SKEY_FILE, $FAUCET_VKEY_FILE and $FAUCET_ADDR_FILE"
+
   cardano-cli address key-gen --signing-key-file "$FAUCET_SKEY_FILE"      \
                               --verification-key-file "$FAUCET_VKEY_FILE"
 
   # We only need to generate this if we created the wallet keys just now.
   FAUCET_ADDR=$(cardano-cli address build --testnet-magic "$TESTNET_MAGIC" --payment-verification-key-file "$FAUCET_VKEY_FILE")
   # and let's write it to a file for the next time for the -a|--faucet-addr-file switch
-  echo "$FAUCET_ADDR" > "$TREASURY_DIR/faucet.address"
+  echo "$FAUCET_ADDR" > "$FAUCET_ADDR_FILE"
 fi
 
 if [[ -n "$FUND" ]]; then
@@ -129,8 +131,7 @@ fi
 BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
 
 # The PAB passphrase must match the `--passphrase` argument of `marlowe-pab`.
-# PAB_PASSPHRASE=fixme-allow-pass-per-wallet
-PAB_PASSPHRASE="pab1234567890"  # FIXME
+PAB_PASSPHRASE=fixme-allow-pass-per-wallet
 
 if [[ -z "$BUILD" ]];then
   EXEC="marlowe-cli"
