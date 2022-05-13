@@ -83,6 +83,7 @@ mkInitialState
 mkInitialState followerAppId marloweParams metadata contract =
   { semanticState: emptyState
   , contract
+  , contractHistory: Nothing
   , initialContract: contract
   , metadata
   , marloweParams
@@ -112,6 +113,7 @@ restoreState followerAppId currentTime metadata history = do
       , metadata
       , marloweParams
       , history: mempty
+      , contractHistory: Just history
       , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
       , mNextTimeout: nextTimeout marloweContract
