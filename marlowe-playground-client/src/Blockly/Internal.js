@@ -2,6 +2,7 @@
 "use strict";
 
 const JSONbig = require("json-bigint")({ useNativeBigInt: true });
+const { registerDateTimeField } = require("src/Blockly/DateTimeField.js");
 
 exports.createBlocklyInstance_ = () => {
   return require("blockly");
@@ -15,6 +16,7 @@ exports.debugBlockly = (name) => (state) => () => {
 };
 
 exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => () => {
+  console.log("Blockly createWorkspace");
   /* Disable comments */
   try {
     blockly.ContextMenuRegistry.registry.unregister("blockComment");
@@ -39,7 +41,12 @@ exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => () => {
     blockly.Extensions.register("number_validator", function () {});
   } catch (err) {}
   blockly.Extensions.unregister("number_validator");
+  try {
+    blockly.Extensions.register("dynamic_timeout_type", function () {});
+  } catch (err) {}
+  blockly.Extensions.unregister("dynamic_timeout_type");
 
+  // FIXME: Check if still needed (almost sure it doenst)
   /* Timeout extension (advanced validation for the timeout field) */
   blockly.Extensions.register("timeout_validator", function () {
     var thisBlock = this;
@@ -116,6 +123,97 @@ exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => () => {
           field.setValidator(numberValidator);
         }
       });
+    });
+  });
+
+  const FieldDateTime = registerDateTimeField(blockly);
+
+  // This extension takes care of changing the `timeout field` depending on the value of
+  // `timeout_type`. When `timeout_type` is a constant, then we show a datetime picker
+  // if it is a parameter we show a text field.
+  blockly.Extensions.register("dynamic_timeout_type", function () {
+    const timeoutTypeField = this.getField("timeout_type");
+    // The timeoutField is mutable as we change it depending of the value of
+    // the timeout type.
+    let timeoutField = this.getField("timeout");
+    // The field Row is what groups a line in the block. In the case of a when block
+    // this is ["After" label, timeoutTypeField, timeoutField]
+    const row = timeoutField.getParentInput();
+
+    // We store in this mutable data the values of the timeout field indexed by the different
+    // timeout types. We initialize this as undefined as there is no blockly event to get the initial
+    // loaded data, so we mark this information to be gathered on a different way.
+    let fieldValues = undefined; // { time :: String | undefined, time_param :: String };
+
+    // The onChange function lets you know about Blockly events of the entire workspace, visual
+    // changes, data changes, etc.
+    const thisBlock = this;
+    this.setOnChange(function (event) {
+      // we only care about events for this block.
+      if (event.blockId != this.id) return;
+
+      timeoutField = thisBlock.getField("timeout");
+
+      // This function sets the Timeout Field of the correct type
+      const updateTimeoutField = function (type) {
+        if (type == "time") {
+          row.removeField("timeout");
+          row.appendField(new FieldDateTime(fieldValues["time"]), "timeout");
+        } else if (type == "time_param") {
+          row.removeField("timeout");
+          row.appendField(
+            new blockly.FieldTextInput(fieldValues["time_param"]),
+            "timeout"
+          );
+        }
+      };
+
+      // For the first event we receive, we set the fieldValues to whatever is stored in
+      // the timeoutField.
+      if (typeof fieldValues === "undefined") {
+        const type = timeoutTypeField.getValue();
+        const val = timeoutField.getValue();
+
+        fieldValues = {
+          // If the timeout type was set to constant, then set the value here and a sensible
+          // default for time_param
+          time: type == "time" ? val : undefined,
+          // If the timeout type was set to a time parameter, then set the value here and
+          // use undefined for `time`. That will result than on the first switch to a Constant, the
+          // current time will be used.
+          time_param: type == "time_param" ? val : "time_param",
+        };
+        // FIXME: DELETE console.log
+        // console.log("Setting initial fieldValues: ", {
+        //   inputs: { type, val },
+        //   fieldValues,
+        // });
+        // Set the timeout field to the correct type
+        updateTimeoutField(type);
+      }
+
+      if (event.element == "field" && event.name == "timeout") {
+        // FIXME: Delete
+        // console.log(
+        //   `Changing fieldValues[${timeoutTypeField.getValue()}]: before: ${
+        //     fieldValues[timeoutTypeField.getValue()]
+        //   } after: ${event.newValue}`
+        // );
+        //
+        // If the timeout field changes, update the fieldValues "local store"
+        fieldValues[timeoutTypeField.getValue()] = event.newValue;
+      } else if (event.element == "field" && event.name == "timeout_type") {
+        // FIXME: Delete
+
+        // console.log("Change timeout type", {
+        //   event,
+        //   fieldValues,
+        //   timeOutField: timeoutField.getValue(),
+        // });
+        ///
+        // If the timeout_type field changes, then update the timeout field
+        updateTimeoutField(event.newValue);
+      }
     });
   });
 

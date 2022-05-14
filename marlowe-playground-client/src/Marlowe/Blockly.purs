@@ -42,6 +42,7 @@ import Blockly.Types
   , NewBlockFunction
   , Workspace
   )
+import Component.DateTimeLocalInput.State as DateTimeLocalInput
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.Error.Extra (toMonadThrow)
 import Control.Monad.Except (class MonadError, throwError)
@@ -52,6 +53,7 @@ import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.DateTime.Instant as Instant
 import Data.Either (note')
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
 import Data.Enum.Generic
@@ -70,6 +72,7 @@ import Data.Maybe (maybe)
 import Data.Ord.Generic (genericCompare)
 import Data.Show.Generic (genericShow)
 import Data.TraversableWithIndex (forWithIndex)
+import Debug (spy)
 import Effect (Effect)
 import Foreign.Object as Object
 import Marlowe.Holes
@@ -89,7 +92,7 @@ import Marlowe.Holes
   , Value(..)
   , ValueId(..)
   )
-import Plutus.V1.Ledger.Time (POSIXTime)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Plutus.V1.Ledger.Time as POSIXTime
 import Prologue
   ( class Bounded
@@ -756,11 +759,12 @@ toDefinition blockType@(ContractType WhenContractType) =
             , Dropdown
                 { name: "timeout_type"
                 , options:
-                    [ Pair "timeout POSIX" "time"
-                    , Pair "timeout parameter" "time_param"
+                    [ Pair "constant timeout" "time"
+                    , Pair "parameterized timeout" "time_param"
                     ]
                 }
-            , Input { name: "timeout", text: "0", spellcheck: false }
+            , Input { name: "timeout", text: "param", spellcheck: false }
+            -- FIXME: Add timeZone information
             , DummyLeft
             , DummyLeft
             , Statement
@@ -768,11 +772,13 @@ toDefinition blockType@(ContractType WhenContractType) =
                 , check: show BaseContractType
                 , align: AlignRight
                 }
+
             ]
         , colour: blockColour blockType
         , previousStatement: Just (show BaseContractType)
         , inputsInline: Just false
-        , extensions: [ "timeout_validator" ]
+        , extensions: [ "timeout_validator", "dynamic_timeout_type" ]
+
         }
         defaultBlockDefinition
 
@@ -1487,11 +1493,11 @@ fieldAsPOSIXTime
   -> BDom.Block
   -> m POSIXTime
 fieldAsPOSIXTime attr block = do
-  bigIntVal <- fieldAsBigInt attr block
-  case POSIXTime.fromBigInt bigIntVal of
+  strVal <- fieldAsString attr block
+  case DateTimeLocalInput.parseInput strVal of
     Nothing -> throwError $ ErrorInChild block attr $
-      InvalidFieldCast (BigInt.toString bigIntVal) "POSIXTime"
-    Just time -> pure time
+      InvalidFieldCast strVal "POSIXTime"
+    Just time -> pure $ POSIXTime $ Instant.fromDateTime time
 
 fieldAsBigInt
   :: forall m
@@ -1941,7 +1947,9 @@ instance toBlocklyContract :: ToBlockly Contract where
       )
     setField block "timeout"
       ( case timeout of
-          Term (TimeValue time) _ -> BigInt.toString $ POSIXTime.toBigInt time
+          Term (TimeValue (POSIXTime time)) _ ->
+            DateTimeLocalInput.showNormalizedDateTime (Instant.toDateTime time)
+              false
           Term (TimeParam paramName) _ -> paramName
           _ -> "0"
       )
