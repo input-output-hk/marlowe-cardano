@@ -53,7 +53,9 @@ render metadata state =
         [ classes [ paddingX, minH0, overflowHidden, fullHeight ]
         ]
         [ slot _blocklySlot unit
-            ( Blockly.blocklyComponent MB.rootBlockName MB.blockDefinitions
+            ( Blockly.blocklyComponent
+                MB.rootBlockName
+                MB.blockDefinitions
                 MB.toolbox
             )
             unit

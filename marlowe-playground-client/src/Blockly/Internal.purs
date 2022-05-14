@@ -314,6 +314,8 @@ data Arg
   | Variable { name :: String, variable :: String }
   -- Dates don't work in Blockly, see: https://developers.google.com/blockly/guides/create-custom-blocks/fields/built-in-fields/date
   | Date { name :: String, date :: String }
+  -- Custom made field (look for DateTimeField.js)
+  | DateTime { name :: String, date :: Maybe String }
   | Label { text :: Maybe String, class :: Maybe String }
   | Image { src :: String, width :: Number, height :: Number, alt :: String }
   | Value { name :: String, check :: String, align :: AlignDirection }
@@ -351,6 +353,9 @@ instance writeForeignArg :: WriteForeign Arg where
     "field_variable"
     fields
   writeImpl (Date fields) = JSON.write $ Record.insert type_ "field_date" fields
+  writeImpl (DateTime fields) = JSON.write $ Record.insert type_
+    "field_datetime"
+    fields
   writeImpl (Label fields) = JSON.write $ Record.insert type_ "field_label"
     fields
   writeImpl (Image fields) = JSON.write $ Record.insert type_ "field_image"

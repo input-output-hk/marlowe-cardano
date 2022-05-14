@@ -14,6 +14,7 @@ import Data.Either (hush, note)
 import Data.Lens (assign, modifying, over, set, use, view)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
+import Debug (traceM)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Examples.Marlowe.Contracts (example) as ME
@@ -154,7 +155,8 @@ processBlocklyCode = do
         Blockly.GetBlockRepresentation
       except $ MB.blockToContract block
   case eContract of
-    Left e ->
+    Left e -> do
+      traceM { msg: "Contract failed", e }
       modify_
         ( set _errorMessage (Just $ unexpected e)
             <<< set _marloweCode Nothing

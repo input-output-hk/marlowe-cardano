@@ -13,6 +13,7 @@ import Marlowe.Holes.TemplateTest as HolesTemplateTest
 import Marlowe.Holes.TimeoutTest as HolesTimeoutTest
 import Marlowe.LintTests as LintTests
 import Marlowe.ParserTests as ParserTests
+import Test.Component.DateTimeLocalInputTest as DateTimeLocalInputTest
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
@@ -29,3 +30,4 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
   HolesSemanticTest.all
   HolesTemplateTest.all
   HolesTimeoutTest.all
+  DateTimeLocalInputTest.all

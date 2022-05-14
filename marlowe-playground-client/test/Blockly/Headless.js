@@ -1,5 +1,6 @@
 /*eslint-env node*/
 "use strict";
+const { registerDateTimeField } = require("src/Blockly/DateTimeField.js");
 
 exports.createBlocklyInstance_ = function () {
   return require("blockly/blockly-node");
@@ -19,6 +20,17 @@ exports.initializeWorkspace_ = function (blockly, workspace) {
   try {
     blockly.Extensions.register("number_validator", function () {});
   } catch (err) {}
+  // FIXME
+  try {
+    registerDateTimeField(blockly);
+  } catch (err) {}
+  // const FieldDateTime = function () {}
+  // FieldDateTime.
+  // blockly.fieldRegistry.register('field_datetime', FieldDateTime);
+  try {
+    blockly.Extensions.register("dynamic_timeout_type", function () {});
+  } catch (err) {}
+
   var xmlText =
     '<xml id="workspaceBlocks" style="display:none"><block type="BaseContractType" x="13" y="187" id="root_contract"></block></xml>';
   var workspaceBlocks = blockly.Xml.textToDom(xmlText);
