@@ -8,25 +8,31 @@ ARGS:
   <TEST_NAME> Test to execute. Test name is a part of yaml file from \`marlowe-cli/test\` dir
               without \`test-\` prefix and \`.yaml\` suffix. Tests are executed in order.
               If no tests are provided runner is going to execute the whole suite.
+
 OPTIONS:
-  -m, --testnet-magic <CARDANO_TESTNET_MAGIC>
-          Falls back to the $CARDANO_TESTNET_MAGIC env variable.
+  -m, --testnet-magic NATURAL
+          Falls back to the CARDANO_TESTNET_MAGIC env variable.
           Default is 1567.
-  -s, --node-socket-path
-          Falls back to the $CARDANO_NODE_SOCKET_PATH env variable.
+  -S, --node-socket-path FILE
+          Falls back to the CARDANO_NODE_SOCKET_PATH env variable.
           We fallback to \`./node.socket\` when as a least resort.
-  -t, --treasury
-          Directory which should be used as a store for test suite treasury account.
-          We expect two files there: \`payment.skey\`, \`payment.vkey\`
-          If given directory is empty this runner will create them.
-          We fallback to $TREASURY env variable and to \`./\` at the end.
+  -t, --treasury DIR
+          In the event that faucet keys need to be created, they will be made
+          in this directory. We fallback to the TREASURY env variable and to
+          \`./\` at the end.
+  -a, --faucet-addr-file FILE
+          File containing the faucet address
+  -s, --faucet-skey-file FILE
+          File containing the faucet SKEY. If this file doesn't exist, new
+          wallet keys will be created as payment.skey and payment.vkey files in
+          the TREASURY dir.
   -f, --fund
           Whether to fund the testing treasury.
   -b, --build
           Execute test suite by using \`cabal run exe:marlowe-cli\`
-  -w, --wallet-url
+  -w, --wallet-url URL
           URL to the cardano-wallet. Default is \`http://localhost:8090\`
-  -p, --pab-url
+  -p, --pab-url URL
           URL to the marlowe-pab server. Default is \`http://localhost:9080\`
   -v, --verbose
   -h, --help
@@ -36,14 +42,16 @@ set -e
 
 BUILD=
 VERBOSE=
-NODE_SOCKET_PATH=$CARDANO_NODE_SOCKET_PATH
-TESTNET_MAGIC=$CARDANO_TESTNET_MAGIC
-WALLET_URL=
-PAB_URL=
+NODE_SOCKET_PATH="${CARDANO_NODE_SOCKET_PATH:-./node.socket}"
+TESTNET_MAGIC="${CARDANO_TESTNET_MAGIC:-1567}"
+WALLET_URL="http://localhost:8090"
+PAB_URL="http://localhost:9080"
 FUND=
-TREASURY_DIR=$TREASURY
+TREASURY_DIR="${TREASURY:-./}"
+FAUCET_ADDR=
+FAUCET_SKEY_FILE=
 
-PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-tests" -o "m:s:bvt:fh" --long "testnet-magic:,node-socket-path:,build,verbose,treasury:,fund,wallet-url:,pab-url:,help" -- "$@")
+PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-tests.sh" -o "m:S:t:a:s:fbW:P:vh" --long "testnet-magic:,node-socket-path:,treasury:,faucet-addr-file:,faucet-skey-file:,fund,build,wallet-url:,pab-url:,verbose,help" -- "$@")
 VALID_ARGUMENTS=$?
 if [ "$VALID_ARGUMENTS" != "0" ]; then
   echo "$USAGE"
@@ -53,42 +61,24 @@ eval set -- "$PARSED_ARGUMENTS"
 while :
 do
     case "$1" in
-      -s | --node-socket-path)          NODE_SOCKET_PATH="$2";  shift 2 ;;
-      -f | --fund)                      FUND=1;                 shift   ;;
-      -n | --testnet-magic)             TESTNET_MAGIC="$2";     shift 2 ;;
-      -w | --wallet-url)                WALLET_URL="$2";        shift 2 ;;
-      -p | --pab-url)                   PAB_URL="$2";           shift 2 ;;
-      -t | --treasury)                  TREASURY_DIR="$2";      shift 2 ;;
-      -b | --build)                     BUILD=1;                shift   ;;
-      -v | --verbose)                   VERBOSE=1;              shift   ;;
-      -h | --help)                      echo "$USAGE";          exit  0 ;;
+      -m | --testnet-magic)             TESTNET_MAGIC="$2";       shift 2 ;;
+      -S | --node-socket-path)          NODE_SOCKET_PATH="$2";    shift 2 ;;
+      -t | --treasury)                  TREASURY_DIR="$2";        shift 2 ;;
+      -a | --faucet-addr-file)          FAUCET_ADDR=$(cat "$2");  shift 2 ;;
+      -s | --faucet-skey-file)          FAUCET_SKEY_FILE="$2";    shift 2 ;;
+      -f | --fund)                      FUND=1;                   shift   ;;
+      -b | --build)                     BUILD=1;                  shift   ;;
+      -w | --wallet-url)                WALLET_URL="$2";          shift 2 ;;
+      -p | --pab-url)                   PAB_URL="$2";             shift 2 ;;
+      -v | --verbose)                   VERBOSE=1;                shift   ;;
+      -h | --help)                      echo "$USAGE";            exit  0 ;;
       --) shift; break ;;
       *) echo "Unrecognized option: $1" 1>&2; echo "$USAGE"; exit 1;;
     esac
 done
 
-if [[ -z "$TESTNET_MAGIC" ]]; then
-  TESTNET_MAGIC=1567
-fi
-
-if [[ -z "$NODE_SOCKET_PATH" ]]; then
-  NODE_SOCKET_PATH="./node.socket"
-fi
-
-if [[ -z $TREASURY_DIR ]]; then
-  TREASURY_DIR="./"
-fi
-
-if [[ -z $WALLET_URL ]]; then
-  WALLET_URL="http://localhost:8090"
-fi
-
-if [[ -z $PAB_URL ]]; then
-  PAB_URL="http://localhost:9080"
-fi
-
 if [[ "${#@}" -eq 0 ]]; then
-  TEST_CASES=(companion-notifications-for-two-contracts wait refund wallet-failure simple escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption)
+  TEST_CASES=(wait refund simple follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption companion-notifications-for-two-contracts wallet-failure escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada)
 else
   TEST_CASES=("$@")
 fi
@@ -103,26 +93,38 @@ do
   fi
 done
 
-FAUCET_SKEY="$TREASURY_DIR"/payment.skey
-FAUCET_VKEY="$TREASURY_DIR"/payment.vkey
-
 # Create the payment signing and verification keys if they do not already exist.
-if [[ ! -e "$FAUCET_SKEY" ]]
+if [[ ! -e "$FAUCET_SKEY_FILE" ]]
 then
-  echo "CREATE"
-  cardano-cli address key-gen --signing-key-file "$FAUCET_SKEY"      \
-                              --verification-key-file "$FAUCET_VKEY"
+  FAUCET_SKEY_FILE="$TREASURY_DIR/payment.skey"
+
+  if [[ -e $FAUCET_SKEY_FILE ]]; then
+    echo "No --faucet-skey-file given but there's already a file at the treasury location $FAUCET_SKEY_FILE. Aborting because we don't want to overwrite your files with 'cardano-cli address key-gen'"
+    exit 1
+  fi
+
+  FAUCET_VKEY_FILE="$TREASURY_DIR/payment.vkey"
+  FAUCET_ADDR_FILE="$TREASURY_DIR/faucet.address"
+
+  echo "Creating $FAUCET_SKEY_FILE, $FAUCET_VKEY_FILE and $FAUCET_ADDR_FILE"
+
+  cardano-cli address key-gen --signing-key-file "$FAUCET_SKEY_FILE"      \
+                              --verification-key-file "$FAUCET_VKEY_FILE"
+
+  # We only need to generate this if we created the wallet keys just now.
+  FAUCET_ADDR=$(cardano-cli address build --testnet-magic "$TESTNET_MAGIC" --payment-verification-key-file "$FAUCET_VKEY_FILE")
+  # and let's write it to a file for the next time for the -a|--faucet-addr-file switch
+  echo "$FAUCET_ADDR" > "$FAUCET_ADDR_FILE"
 fi
-FAUCET_ADDRESS=$(cardano-cli address build --testnet-magic "$TESTNET_MAGIC" --payment-verification-key-file "$FAUCET_VKEY")
 
 if [[ -n "$FUND" ]]; then
   # Fund the faucet with 5k tADA.
-  marlowe-cli util faucet --testnet-magic "$TESTNET_MAGIC"                   \
-                          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+  marlowe-cli util faucet --testnet-magic "$TESTNET_MAGIC"          \
+                          --socket-path "$NODE_SOCKET_PATH" \
                           --out-file /dev/null                      \
                           --submit 600                              \
                           --lovelace 5000000000                     \
-                          "$FAUCET_ADDRESS"                         \
+                          "$FAUCET_ADDR"                            \
   > /dev/null
 fi
 
@@ -142,8 +144,8 @@ runTest() {
         --socket-path "$NODE_SOCKET_PATH"         \
         --wallet-url "$WALLET_URL"                \
         --pab-url "$PAB_URL"                      \
-        --faucet-key "$FAUCET_SKEY"               \
-        --faucet-address "$FAUCET_ADDRESS"        \
+        --faucet-key "$FAUCET_SKEY_FILE"               \
+        --faucet-address "$FAUCET_ADDR"           \
         --burn-address "$BURN_ADDRESS"            \
         --passphrase "$PAB_PASSPHRASE"            \
          "$1"
