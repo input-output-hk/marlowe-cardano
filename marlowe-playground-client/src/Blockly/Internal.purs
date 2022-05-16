@@ -63,8 +63,9 @@ import Blockly.Types
 import Data.Argonaut.Core (Json)
 import Data.Array (catMaybes)
 import Data.Array as Array
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Number (infinity)
+import Data.Time.Duration (Minutes(..))
 import Data.Traversable (class Foldable, traverse_)
 import Effect (Effect)
 import Effect.Exception (throw)
@@ -72,6 +73,7 @@ import Foreign (Foreign)
 import Halogen.HTML (AttrName(..), ElemName(..), Node)
 import Halogen.HTML.Elements (element)
 import Halogen.HTML.Properties (IProp, attr)
+import Humanize (humanizeOffset)
 import Record as Record
 import Simple.JSON (class WriteForeign)
 import Simple.JSON as JSON
@@ -134,8 +136,16 @@ derive newtype instance monoidXML :: Monoid XML
 
 derive newtype instance eqXML :: Eq XML
 
+-- Information required to show the DateTime picker info in
+-- blockly
+type TzInfo =
+  { tzOffset :: Number
+  , offsetString :: String
+
+  }
+
 foreign import createWorkspace
-  :: Blockly -> String -> WorkspaceConfig -> Effect Workspace
+  :: Blockly -> String -> WorkspaceConfig -> TzInfo -> Effect Workspace
 
 foreign import resize :: Blockly -> Workspace -> Effect Unit
 
@@ -208,14 +218,21 @@ foreign import createBlocklyInstance_ :: Effect Blockly
 -- TODO: Now that ActusBlockly is removed we should pass two Elements instead
 -- of two ElementIds.
 createBlocklyInstance
-  :: String -> ElementId -> ElementId -> Toolbox -> Effect BlocklyState
+  :: String
+  -> ElementId
+  -> ElementId
+  -> Toolbox
+  -> Minutes
+  -> Effect BlocklyState
 createBlocklyInstance
   rootBlockName
   (ElementId workspaceElementId)
   (ElementId blocksElementId)
-  toolbox = do
+  toolbox
+  tzOffset = do
   blockly <- createBlocklyInstance_
   workspace <- createWorkspace blockly workspaceElementId config
+    { tzOffset: unwrap tzOffset, offsetString: humanizeOffset tzOffset }
   debugBlockly workspaceElementId
     { blockly, workspace, rootBlockName, blocksElementId }
   pure { blockly, workspace, rootBlockName, blocksElementId }

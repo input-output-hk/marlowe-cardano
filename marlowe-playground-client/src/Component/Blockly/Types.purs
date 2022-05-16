@@ -9,9 +9,14 @@ import Blockly.Types as BT
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.List (List)
+import Data.Time.Duration (Minutes)
 import Halogen (RefLabel(..), SubscriptionId)
 import Marlowe.Linter (Warning)
 import Type.Proxy (Proxy(..))
+
+type Input =
+  { tzOffset :: Minutes
+  }
 
 type State =
   { blocklyState :: Maybe BT.BlocklyState
@@ -22,6 +27,7 @@ type State =
   -- we only need to fire the BlocklyReady once in the lifetime of this component, so we
   -- store a flag to avoid firing it multiple times.
   , blocklyReadyFired :: Boolean
+  , tzOffset :: Minutes
   }
 
 _blocklyState :: Lens' State (Maybe BT.BlocklyState)
@@ -36,13 +42,14 @@ _blocklyEventSubscription = prop (Proxy :: _ "blocklyEventSubscription")
 _blocklyReadyFired :: Lens' State Boolean
 _blocklyReadyFired = prop (Proxy :: _ "blocklyReadyFired")
 
-emptyState :: State
-emptyState =
+initialState :: Input -> State
+initialState { tzOffset } =
   { blocklyState: Nothing
   , errorMessage: Nothing
   , blocklyEventSubscription: Nothing
   , eventsWhileDragging: Nothing
   , blocklyReadyFired: false
+  , tzOffset
   }
 
 data Query a
@@ -56,7 +63,7 @@ data Query a
 
 data Action
   = Inject String (Array BlockDefinition) Toolbox
-  | SetData Unit
+  | SetData Input
   | BlocklyEvent BT.BlocklyEvent
   | ResizeWorkspace
   | Finalize
