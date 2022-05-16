@@ -190,7 +190,7 @@ americanCallOptionExercisedTest =
           Nothing
           (tok, Constant 30)
           (ada, Constant 10_000_000)
-          (read "2022-03-01 09:00:00.000000 UTC")
+          (read "2022-03-31 17:00:00.000000 UTC")
           (read "2022-03-31 17:30:00.000000 UTC")
       Just contract = toCore $
         deposit
@@ -200,10 +200,15 @@ americanCallOptionExercisedTest =
           (toTimeout $ read "2022-03-01 08:00:00.000000 UTC")
           Close
           americanCall
+
+      t0 = toPOSIX "2022-03-01 07:30:00.000000 UTC"
+      t1 = toPOSIX "2022-03-15 07:30:00.000000 UTC"
+      t2 = toPOSIX "2022-03-15 08:00:00.000000 UTC"
+
       txIn =
-        [ C.TransactionInput (0, 0)     [C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30]
-        , C.TransactionInput (99, 99)   [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 1]
-        , C.TransactionInput (101, 101) [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000]
+        [ C.TransactionInput (t0, t0) [C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30]
+        , C.TransactionInput (t1, t1) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 1]
+        , C.TransactionInput (t2, t2) [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
