@@ -28,6 +28,7 @@ import Blockly.Types
 import Blockly.Types as BT
 import Component.Blockly.Types
   ( Action(..)
+  , Input
   , Message(..)
   , Query(..)
   , State
@@ -36,11 +37,12 @@ import Component.Blockly.Types
   , _blocklyState
   , _errorMessage
   , blocklyRef
-  , emptyState
+  , initialState
   )
 import Component.Blockly.View (render)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.State (gets)
 import Data.Either (either, note)
 import Data.Foldable (foldl, oneOf)
 import Data.Lens (Lens', assign, set, use, view)
@@ -83,10 +85,10 @@ blocklyComponent
   => String
   -> Array BlockDefinition
   -> Toolbox
-  -> Component Query Unit Message m
+  -> Component Query Input Message m
 blocklyComponent rootBlockName blockDefinitions toolbox =
   mkComponent
-    { initialState: const emptyState
+    { initialState
     , render
     , eval:
         H.mkEval
@@ -196,12 +198,14 @@ handleAction
 handleAction (Inject rootBlockName blockDefinitions toolbox) = do
   mElement <- (pure <<< map HTMLElement.toElement) =<< getHTMLElementRef
     blocklyRef
+  tzOffset <- gets _.tzOffset
   blocklyState <-
     liftEffect do
       state <- Blockly.createBlocklyInstance rootBlockName
         (ElementId "blocklyWorkspace")
         (ElementId "workspaceBlocks")
         toolbox
+        tzOffset
       Blockly.addBlockTypes state.blockly blockDefinitions
       Blockly.initializeWorkspace state
       pure state

@@ -58,7 +58,7 @@ render metadata state =
                 MB.blockDefinitions
                 MB.toolbox
             )
-            unit
+            { tzOffset: state.tzOffset }
             HandleBlocklyMessage
         , workspaceBlocks
         ]

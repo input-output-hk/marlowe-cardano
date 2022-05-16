@@ -1,8 +1,42 @@
+// This function is analogue to Component.DateTimeLocalInput.State (parseInput)
+// It parses the valueStr using the same Regexp and tries to create a Date
+// object assuming that the date is in UTC. Functions utcToLocal/localToUtc
+// should be used to adjust the offset.
+function parseInput(valueStr) {
+  const timeRegex = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(:(\d{2}))?/;
+  const found = timeRegex.exec(valueStr);
+  if (found) {
+    const date = new Date(`${found[0]}Z`);
+    return {
+      matchStr: found[0],
+      unixTime: date.getTime(), // ms from epoch
+    };
+  }
+  return null;
+}
+
+function localToUtc(tzOffset, unixTimeLocal) {
+  return unixTimeLocal + tzOffset * 60 * 1000;
+}
+
+function utcToLocal(tzOffset, unixTimeUtc) {
+  return localToUtc(-tzOffset, unixTimeUtc);
+}
+
+function showNormalizedDateTime(unixTime, trimSeconds) {
+  const timeRegex = trimSeconds
+    ? /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/
+    : /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(:(\d{2}))?/;
+  const fullStr = new Date(unixTime).toISOString();
+  const found = timeRegex.exec(fullStr);
+  if (found) return found[0];
+  throw "showNormalizedDateTime can normalize a datetime string"; // This should not happen.
+}
+
 // Register a custom DateTime Field to blockly:
 // Used as base:
 // * https://developers.google.com/blockly/guides/create-custom-blocks/fields/customizing-fields/creating
 // * https://github.com/google/blockly-samples/blob/master/plugins/field-date/src/field_date.js
-
 export function registerDateTimeField(Blockly) {
   // If the field is already registered, return it.
   const RegisteredFieldDateTime = Blockly.registry
@@ -11,12 +45,25 @@ export function registerDateTimeField(Blockly) {
 
   if (RegisteredFieldDateTime) return RegisteredFieldDateTime;
 
-  const FieldDateTime = function (value = undefined, validator = undefined) {
+  const FieldDateTime = function (
+    tzOffset,
+    value = undefined,
+    validator = undefined
+  ) {
+    console.log("FieldDateTime", tzOffset, value, validator);
+    // debugger;
+    if (typeof tzOffset != "number") {
+      throw new Error(
+        "FieldDateTime must be constructed with a numeric timezone offset"
+      );
+    }
+    this.tzOffset = tzOffset;
+
     // The default value for this field is the current date
     value = this.doClassValidation_(value);
-
+    console.log("validation", value);
     FieldDateTime.prototype.DEFAULT_VALUE = this.doClassValidation_(
-      new Date().toISOString()
+      new Date().getTime()
     );
 
     FieldDateTime.superClass_.constructor.call(this, value, validator);
@@ -34,14 +81,13 @@ export function registerDateTimeField(Blockly) {
   FieldDateTime.prototype.CURSOR = "text";
 
   FieldDateTime.prototype.doClassValidation_ = function (newValue = undefined) {
-    if (!newValue) {
-      return null;
-    }
-    // This regex is the same used in Component.DateTimeLocalInput.State (parseInput)
-    const timeRegex = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(:(\d{2}))?/;
-    const found = timeRegex.exec(newValue);
-    if (found) {
-      return found[0];
+    if (typeof newValue == "number" || typeof newValue == "bigint") {
+      return newValue;
+    } else if (typeof newValue == "string") {
+      const parsedInt = parseInt(newValue, 10);
+      if (parsedInt + "" == newValue) {
+        return parsedInt;
+      }
     }
 
     return null;
@@ -55,7 +101,10 @@ export function registerDateTimeField(Blockly) {
     // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/datetime-local
     this.picker_ = document.createElement("input");
     this.picker_.type = "datetime-local";
-    this.picker_.value = this.getValue();
+    this.picker_.value = showNormalizedDateTime(
+      utcToLocal(this.tzOffset, this.getValue()),
+      true
+    );
 
     // In order to show an HTML element in Blockly we need to wrap
     // it on an Svg foreignObject
@@ -90,7 +139,12 @@ export function registerDateTimeField(Blockly) {
       "input",
       this,
       function () {
-        thisField.setValue(thisField.picker_.value);
+        const parsedValue = parseInput(thisField.picker_.value);
+        if (parsedValue) {
+          thisField.setValue(
+            localToUtc(thisField.tzOffset, parsedValue.unixTime)
+          );
+        }
       }
     );
   };

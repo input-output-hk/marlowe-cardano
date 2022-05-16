@@ -764,7 +764,6 @@ toDefinition blockType@(ContractType WhenContractType) =
                     ]
                 }
             , Input { name: "timeout", text: "param", spellcheck: false }
-            -- FIXME: Add timeZone information
             , DummyLeft
             , DummyLeft
             , Statement
@@ -1493,11 +1492,11 @@ fieldAsPOSIXTime
   -> BDom.Block
   -> m POSIXTime
 fieldAsPOSIXTime attr block = do
-  strVal <- fieldAsString attr block
-  case DateTimeLocalInput.parseInput strVal of
+  bigIntVal <- fieldAsBigInt attr block
+  case POSIXTime.fromBigInt bigIntVal of
     Nothing -> throwError $ ErrorInChild block attr $
-      InvalidFieldCast strVal "POSIXTime"
-    Just time -> pure $ POSIXTime $ Instant.fromDateTime time
+      InvalidFieldCast (BigInt.toString bigIntVal) "POSIXTime"
+    Just time -> pure time
 
 fieldAsBigInt
   :: forall m
@@ -1947,9 +1946,8 @@ instance toBlocklyContract :: ToBlockly Contract where
       )
     setField block "timeout"
       ( case timeout of
-          Term (TimeValue (POSIXTime time)) _ ->
-            DateTimeLocalInput.showNormalizedDateTime (Instant.toDateTime time)
-              false
+          Term (TimeValue time) _ ->
+            BigInt.toString $ POSIXTime.toBigInt time
           Term (TimeParam paramName) _ -> paramName
           _ -> "0"
       )
