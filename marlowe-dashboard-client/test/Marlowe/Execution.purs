@@ -295,6 +295,7 @@ restoreLoanState { currentTime, startTime } loanParams chHistory = do
       (PlutusAppId UUID.emptyUUID)
       currentTime
       Loan.metaData
+      Nothing
       contractHistory
   case mState of
     Left err -> throwError $ error $ "Can't restore state: " <> explainString
