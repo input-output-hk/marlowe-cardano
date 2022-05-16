@@ -77,6 +77,7 @@ import Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts as Typed
 import qualified Ledger.Typed.Tx as Typed
 import qualified Ledger.Value as Val
+import Numeric.Natural (Natural)
 import Plutus.ChainIndex (ChainIndexTx (..), Page, PageQuery, _ValidTx, citxOutputs, nextPageQuery, pageItems)
 import Plutus.ChainIndex.Api (paget)
 import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractError)
@@ -286,11 +287,11 @@ retryTillJust (MaxRetries maxRetries) action = go 0
             res     -> pure res
 
 -- | Our retries defaults
-pollingInterval :: Ledger.DiffMilliSeconds
-pollingInterval = 1000
+pollingInterval :: Natural
+pollingInterval = 2
 
 maxRetries :: MaxRetries
-maxRetries = MaxRetries 30
+maxRetries = MaxRetries 4
 
 newtype DebugTraceStr = DebugTraceStr String
 
@@ -305,7 +306,7 @@ retryRequestTillJust (DebugTraceStr name) maxRetries query = do
   retryTillJust maxRetries $ \cnt@(RetryCounter cntVal) -> do
     when (cntVal > 0) $ do
       debug (name <> ":retryRequestTillJust") $ "Still waiting for desired change - iteration: " <> show cntVal
-      void $ waitNMilliSeconds pollingInterval
+      void $ waitNSlots pollingInterval
     query cnt
 
 retryRequestTillJust' :: AsContractError err => DebugTraceStr -> Contract st sc err (Maybe a) -> Contract st sc err (Maybe a)
@@ -326,7 +327,7 @@ retryTillResponseDiffers (DebugTraceStr name) maxRetries known query = do
   retryTillDiffers maxRetries known $ \cnt@(RetryCounter cntVal) -> do
     when (cntVal > 0) $ do
       debug (name <> ":retryTillResponseDiffers") $ "Still waiting for desired change - iteration: " <> show cntVal
-      void $ waitNMilliSeconds pollingInterval
+      void $ waitNSlots pollingInterval
     query cnt
 
 retryTillResponseDiffers' :: Eq a => AsContractError err => DebugTraceStr -> a -> Contract st sc err a -> Contract st sc err (Maybe a)
@@ -995,7 +996,9 @@ marloweCompanionContract = checkExistingRoleTokens
         checkpointLoop (fmap Right <$> checkForUpdates) ownAddress
     checkForUpdates ownAddress = do
         txns <- NonEmpty.toList <$> awaitUtxoProduced' (DebugTraceStr "marloweCompanionContract:txns") ownAddress
+        logInfo $ "[DEBUG:checkForUpdates] txns = " <> show txns
         let txOuts = txns >>= view (citxOutputs . _ValidTx)
+        logInfo $ "[DEBUG:checkForUpdates] txOuts = " <> show txOuts
         forM_ txOuts notifyOnNewContractRoles
         pure ownAddress
 
@@ -1006,9 +1009,12 @@ notifyOnNewContractRoles txout = do
     -- a role token symbol. Basically, any non-ADA symbols is a prospect to
     -- to be a role token, but it could also be an NFT for example.
     let curSymbols = filterRoles txout
+    logInfo $ "[DEBUG:notifyOnNewContractRoles] curSymbols = " <> show curSymbols
     forM_ curSymbols $ \cs -> do
+        logInfo $ "[DEBUG:notifyOnNewContractRoles] cs = " <> show cs
         -- Check if there is a Marlowe contract on chain that uses this currency
         contract <- findMarloweContractsOnChainByRoleCurrency cs
+        logInfo $ "[DEBUG:notifyOnNewContractRoles] contract = " <> show contract
         case contract of
             Just (params, md) -> do
                 logInfo $ "WalletCompanion found currency symbol " <> show cs <> " with on-chain state " <> show (params, md) <> "."
