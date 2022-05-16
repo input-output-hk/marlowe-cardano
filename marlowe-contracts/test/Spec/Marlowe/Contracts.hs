@@ -295,14 +295,18 @@ futureNoChange =
           w2Pk
           (Constant 80_000_000) -- 80 ADA
           (Constant 8_000_000) -- 8 ADA
-          (read "2022-03-19 08:00:00.000000 UTC")
+          (read "2022-03-31 08:00:00.000000 UTC")
           [] -- no margin calls
-          (read "2022-03-19 09:00:00.000000 UTC")
+          (read "2023-03-31 08:00:00.000000 UTC")
+
+      t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
+      t1 = toPOSIX "2023-03-31 07:30:00.000000 UTC"
+
       txIn =
-        [ C.TransactionInput (0, 0)
+        [ C.TransactionInput (t0, t0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
             , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
-        , C.TransactionInput (99, 99)
+        , C.TransactionInput (t1, t1)
             [ C.NormalInput $ C.IChoice dirRate 125_000_000
             , C.NormalInput $ C.IChoice invRate 80_000_000 ]
         ]
@@ -327,14 +331,18 @@ futureNoMarginCall =
           w2Pk
           (Constant 80_000_000) -- 80 ADA
           (Constant 8_000_000) -- 8 ADA
-          (read "2022-03-19 08:00:00.000000 UTC")
+          (read "2022-03-31 08:00:00.000000 UTC")
           [] -- no margin calls
-          (read "2022-03-19 09:00:00.000000 UTC")
+          (read "2023-03-31 08:00:00.000000 UTC")
+
+      t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
+      t1 = toPOSIX "2023-03-31 07:30:00.000000 UTC"
+
       txIn =
-        [ C.TransactionInput (0, 0)
+        [ C.TransactionInput (t0, t0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
             , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
-        , C.TransactionInput (99, 99)
+        , C.TransactionInput (t1, t1)
             [ C.NormalInput $ C.IChoice dirRate 133_333_333
             , C.NormalInput $ C.IChoice invRate 75_000_000 ]
         ]
@@ -356,19 +364,25 @@ futureWithMarinCall =
           w2Pk
           (Constant 80_000_000) -- 80 ADA
           (Constant 8_000_000) -- 8 ADA
-          (read "2022-03-19 08:00:00.000000 UTC")
-          [read "2022-03-19 08:30:00.000000 UTC"] -- margin call
-          (read "2022-03-19 09:00:00.000000 UTC")
+          (read "2022-03-31 08:00:00.000000 UTC")
+          [read "2022-09-30 08:30:00.000000 UTC"] -- margin call
+          (read "2023-03-31 09:00:00.000000 UTC")
+
+      t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
+      t1 = toPOSIX "2022-09-30 07:00:00.000000 UTC"
+      t2 = toPOSIX "2022-09-30 07:30:00.000000 UTC"
+      t3 = toPOSIX "2023-03-31 07:30:00.000000 UTC"
+
       txIn =
-        [ C.TransactionInput (0, 0)
+        [ C.TransactionInput (t0, t0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
             , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
-        , C.TransactionInput (40, 40)
+        , C.TransactionInput (t1, t1)
             [ C.NormalInput $ C.IChoice dirRate 200_000_000
             , C.NormalInput $ C.IChoice invRate 50_000_000 ]
-        , C.TransactionInput (42, 42)
+        , C.TransactionInput (t2, t2)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 60_000_000 ]
-        , C.TransactionInput (99, 99)
+        , C.TransactionInput (t3, t3)
             [ C.NormalInput $ C.IChoice dirRate 133_333_333
             , C.NormalInput $ C.IChoice invRate 75_000_000 ]
         ]
