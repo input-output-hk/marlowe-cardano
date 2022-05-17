@@ -14,9 +14,9 @@ let
   scriptsFeeFactor = 1.0; # Factor by which to multiply the size-dependent scripts fee in lovelace
 
   pabYamlIn = writeText "pab.yaml.in" (builtins.toJSON {
-    dbConfig = {
-      dbConfigFile = "@PAB_STATE_DIR@/pab.db";
-      dbConfigPoolSize = 20;
+    contractStoreConfig = {
+      tag = "UseFSStore";
+      contents = "@PAB_STATE_DIR@/contract-store";
     };
 
     pabWebserverConfig = {
@@ -82,6 +82,8 @@ let
 
   dbFile = "$PAB_STATE_DIR/pab.db";
 
+  fsStore = "$PAB_STATE_DIR/contract-store";
+
   # Note: The db is dropped as a workaround for a problem with
   # eventful which crashes PAB. Currently data persistence is not
   # relevant, but the problem *will* occur again when the DB removal
@@ -94,6 +96,8 @@ let
 
     echo "[pab-init-cmd]: Creating new DB '${dbFile}'" >&2
     ${pabExe} --config=pab.yaml migrate
+
+    mkdir ${fsStore}
   '';
 in
 writeShellScriptBin "entrypoint" ''
@@ -118,7 +122,7 @@ writeShellScriptBin "entrypoint" ''
   ${pab-init-cmd}/bin/pab-init-cmd
 
   # Ugly ugly hack to kill the PAB at midnight UTC
-  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet --memory &
+  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet &
   sleep $(($(date -f - +%s- <<< $'tomorrow 00:00\nnow')0))&
   wait -n
   exit 1

@@ -1,3 +1,4 @@
+# TODO unify with bitte/pab.nix
 { dbConfigFile
 , baseUrl
 , walletUrl
@@ -6,10 +7,20 @@
 , network
 , protocol-parameters
 }: {
-  dbConfig = {
-    inherit dbConfigFile;
-    dbConfigPoolSize = 20;
+  contractStoreConfig = {
+    tag = "UseInMemoryStore";
   };
+  # contractStoreConfig = {
+  #   tag = "UseFSStore";
+  #   contents = fsStorePath
+  # };
+  # contractStoreConfig = {
+  #   tag = "UseSqliteStore";
+  #   contents = {
+  #     sqliteConfigFile = dbConfigFile;
+  #     sqliteConfigPoolSize = 20;
+  #   };
+  # };
   pabWebserverConfig = {
     inherit baseUrl;
     permissiveCorsPolicy = false;

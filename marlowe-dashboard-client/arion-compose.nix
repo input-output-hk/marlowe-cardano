@@ -156,9 +156,10 @@ let
             exit "$$1"
           }
           trap 'die $$?' EXIT
-          if ! stat ${pab-params.dbConfigFile} 2> /dev/null; then
-            ${marlowe-pab}/bin/marlowe-pab migrate --config /config/pab.yaml
-          fi
+          # Uncomment if using SQLite
+          # if ! stat ${pab-params.dbConfigFile} 2> /dev/null; then
+          #   ${marlowe-pab}/bin/marlowe-pab migrate --config /config/pab.yaml
+          # fi
           # TODO this would be nicer implemented as a healthcheck, but I
           # couldn't get that to work.
           until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${socket-path} 2> /dev/null; do :; done

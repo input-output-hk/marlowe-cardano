@@ -7,9 +7,12 @@ let
   cfg = config.services.pab;
 
   pabConfig = {
-    dbConfig = {
-      dbConfigFile = cfg.dbFile;
-      dbConfigPoolSize = 20;
+    contractStoreConfig = {
+      tag = "UseSqliteStore";
+      contents = {
+        sqliteConfigFile = cfg.dbFile;
+        sqliteConfigPoolSize = 20;
+      };
     };
 
     pabWebserverConfig = {

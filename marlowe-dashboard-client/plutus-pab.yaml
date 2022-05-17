@@ -3,9 +3,8 @@
 # most cases we use the default settings - the main thing to watch out for is
 # that the `scSlotZeroTime` here coincides with the frontend code's assumptions
 # about the time of slot 0 (in `web-common-marlowe/src/Marlowe/Slot.purs`).
-dbConfig:
-    dbConfigFile: pab-core.db
-    dbConfigPoolSize: 20
+contractStoreConfig:
+  tag: "UseInMemoryStore"
 
 pabWebserverConfig:
   baseUrl: http://localhost:9080
