@@ -80,9 +80,9 @@ ptPabOperations:
 
   - tag: AwaitFollow
     poInstance: Follower
-    poResponsePatterns:
-      - exact: null
-      - parts:
+    poResponses:
+      - equals: null
+      - matches:
           chUnspentPayouts: []
 
   - tag: CallApplyInputs
@@ -108,8 +108,9 @@ ptPabOperations:
 
   - tag: AwaitFollow
     poInstance: Follower
-    poResponsePatterns:
-      - parts:
+    poResponses:
+      - retry: true
+        matches:
           chHistory:
             - tx_inputs:
                 - input_from_party:
@@ -148,8 +149,9 @@ ptPabOperations:
 
   - tag: AwaitFollow
     poInstance: Follower
-    poResponsePatterns:
-      - parts:
+    poResponses:
+      - retry: true
+        matches:
           chUnspentPayouts: []
 
   - tag: CallApplyInputs
@@ -165,8 +167,9 @@ ptPabOperations:
 
   - tag: AwaitFollow
     poInstance: Follower
-    poResponsePatterns:
-      - parts:
+    poResponses:
+      - retry: true
+        matches:
           chHistory:
             - tx_inputs:
                 - input_from_party:
