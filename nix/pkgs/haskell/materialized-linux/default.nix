@@ -1662,7 +1662,6 @@
           "http-client".components.library.planned = lib.mkOverride 900 true;
           "async".components.library.planned = lib.mkOverride 900 true;
           "marlowe-contracts".components.tests."marlowe-contracts-test".planned = lib.mkOverride 900 true;
-          "marlowe".components.tests."marlowe-test-long-running".planned = lib.mkOverride 900 true;
           "http-media".components.library.planned = lib.mkOverride 900 true;
           "ghc-boot".components.library.planned = lib.mkOverride 900 true;
           "word8".components.library.planned = lib.mkOverride 900 true;
