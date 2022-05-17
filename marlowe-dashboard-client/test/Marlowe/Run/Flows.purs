@@ -434,7 +434,7 @@ applyDeposit
   payoutRole
   amount = do
   info "Apply input"
-  intervalMin <- now
+  intervalMin <- adjustInstant (Minutes (-2.0)) startTime
   intervalMax <- adjustInstant (Seconds (-1.0))
     =<< adjustInstant (Minutes 10.0) startTime
   reqId <- getLastUUID

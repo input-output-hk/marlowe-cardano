@@ -83,6 +83,7 @@ mkInitialState
 mkInitialState followerAppId marloweParams metadata contract =
   { semanticState: emptyState
   , contract
+  , contractHistory: Nothing
   , initialContract: contract
   , metadata
   , marloweParams
@@ -97,10 +98,9 @@ restoreState
   :: PlutusAppId
   -> Instant
   -> MetaData
-  -> Maybe TransactionInput
   -> ContractHistory
   -> Either TransactionError State
-restoreState followerAppId currentTime metadata mPendingTransaction history = do
+restoreState followerAppId currentTime metadata history = do
   let
     MarloweData { marloweContract, marloweState } = getInitialData history
     marloweParams = getMarloweParams history
@@ -113,7 +113,8 @@ restoreState followerAppId currentTime metadata mPendingTransaction history = do
       , metadata
       , marloweParams
       , history: mempty
-      , mPendingTransaction
+      , contractHistory: Just history
+      , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
       , mNextTimeout: nextTimeout marloweContract
       , followerAppId
@@ -265,7 +266,11 @@ timeoutState currentTime state =
       continuation.state
       continuation.contract
   in
-    state { mPendingTimeouts = _, mNextTimeout = _ }
+    state
+      { mPendingTransaction = Nothing
+      , mPendingTimeouts = _
+      , mNextTimeout = _
+      }
       <$> (_.mPendingTimeouts <$> advancedTimeouts)
       <*> (_.mNextTimeout <$> advancedTimeouts)
 

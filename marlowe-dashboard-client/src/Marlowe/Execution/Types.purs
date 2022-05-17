@@ -16,6 +16,7 @@ import Data.Generic.Rep (class Generic)
 import Data.List (List)
 import Data.Map (Map)
 import Data.Show.Generic (genericShow)
+import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
@@ -50,6 +51,8 @@ type State =
   , metadata :: MetaData
   , marloweParams :: MarloweParams
   , history :: Array PastState
+  -- The last ContractHistory reported by the follower
+  , contractHistory :: Maybe ContractHistory
   -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
   -- can advance the contract. This enables us to show immediate feedback to the user while we wait.
   , mPendingTransaction :: Maybe TransactionInput
