@@ -16,6 +16,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
@@ -36,7 +37,8 @@ module Language.Marlowe.CLI.Test.Types (
 , WalletInfo(..)
 , AppInstanceInfo(..)
 , FollowerInstanceInfo(..)
-, PatternJSON(..)
+, PabResponseComparison(..)
+, PabResponse(..)
 , CompanionInstanceInfo(..)
 -- * Lenses
 , psFaucetKey
@@ -47,7 +49,9 @@ module Language.Marlowe.CLI.Test.Types (
 , psAppInstances
 , psFollowerInstances
 , psCompanionInstances
-, patternJSON
+, prComparison
+, prRetry
+, comparisonJSON
 ) where
 
 
@@ -76,6 +80,8 @@ import Control.Lens.Combinators (Lens')
 import Control.Lens.Lens (lens)
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.Map.Strict as M (Map)
+import Data.Maybe (fromMaybe)
+import Options.Applicative (optional)
 
 
 -- | Configuration for a set of Marlowe tests.
@@ -146,29 +152,47 @@ data ScriptOperation =
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
-data PatternJSON
-  = Exact A.Value
-  | Parts A.Value
+data PabResponseComparison
+  = Equals A.Value
+  | Matches A.Value
   deriving stock (Eq, Generic, Show)
 
-instance FromJSON PatternJSON where
-  parseJSON (A.Object v) =
-    Parts <$> v .: "parts"
-    <|> Exact  <$> v .: "exact"
-  parseJSON _ = fail
-    "JSONPattern should be a singleton object where key = [ parts | exact ]"
-
-instance ToJSON PatternJSON where
-  toJSON (Parts json) = object $ pure $ "parts" .= json
-  toJSON (Exact json) = object $ pure $ "exact" .= json
-
-patternJSON :: Lens' PatternJSON A.Value
-patternJSON = lens get set
+comparisonJSON :: Lens' PabResponseComparison A.Value
+comparisonJSON = lens get set
   where
-    get(Parts json) = json
-    get(Exact json) = json
-    set (Parts _) json = Parts json
-    set (Exact _) json = Exact json
+    get(Matches json) = json
+    get(Equals json)  = json
+    set (Matches _) json = Matches json
+    set (Equals _) json  = Equals json
+
+instance ToJSON PabResponseComparison where
+  toJSON (Equals json)  = object $ pure $ "equals" .= json
+  toJSON (Matches json) = object $ pure $ "matches" .= json
+
+data PabResponse = PabResponse
+  { _prComparison :: PabResponseComparison
+  , _prRetry      :: Bool
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance ToJSON PabResponse where
+  toJSON PabResponse { _prComparison, _prRetry } = object
+    [ toComparisonField _prComparison
+    , "retry" .= toJSON _prRetry
+    ]
+    where
+      toComparisonField (Equals json)  = "equals" .= json
+      toComparisonField (Matches json) = "matches" .= json
+
+instance FromJSON PabResponse where
+  parseJSON (A.Object v) = do
+    comparison <- (Equals <$> v .: "equals") <|> (Matches <$> v .: "matches")
+    retry <- optional (v .: "retry")
+    pure $ PabResponse comparison (fromMaybe False retry)
+
+  parseJSON _ = fail
+    "JSONPattern should be a an object: { [ equals | matches ] : json, retry : boolean }"
+
 
 -- | On- and off-chain test operations for Marlowe contracts, via the Marlowe PAB.
 data PabOperation =
@@ -293,8 +317,8 @@ data PabOperation =
     }
   | AwaitFollow
     {
-      poInstance         :: InstanceNickname
-    , poResponsePatterns :: [PatternJSON]
+      poInstance  :: InstanceNickname
+    , poResponses :: [ PabResponse ]
     }
   | ActivateCompanion
     {
@@ -302,8 +326,8 @@ data PabOperation =
     , poInstance :: InstanceNickname
     }
   | AwaitCompanion
-    { poInstance        :: InstanceNickname
-    , poResponsePattern :: Maybe PatternJSON
+    { poInstance  :: InstanceNickname
+    , poResponses :: [ PabResponse ]
     }
     -- | Print the contents of a wallet.
   | PrintWallet
@@ -441,3 +465,4 @@ data PabState =
     deriving (Show)
 
 makeLenses ''PabState
+makeLenses ''PabResponse
