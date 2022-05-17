@@ -1,6 +1,5 @@
-dbConfig:
-  dbConfigFile: marlowe-pab-private-testnet.db
-  dbConfigPoolSize: 20
+contractStoreConfig:
+  tag: "UseInMemoryStore"
 
 pabWebserverConfig:
   baseUrl: http://localhost:9080
