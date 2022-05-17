@@ -100,9 +100,9 @@ exports.createWorkspace =
       // this is ["After" label, timeoutTypeField, timeoutField]
       const row = timeoutField.getParentInput();
       const safeRemoveField = function (fieldName) {
-        try {
+        if (row.fieldRow.findIndex((field) => field.name === fieldName) > -1) {
           row.removeField(fieldName);
-        } catch (e) {}
+        }
       };
       // We store in this mutable data the values of the timeout field indexed by the different
       // timeout types. We initialize this as undefined as there is no blockly event to get the initial
@@ -114,7 +114,7 @@ exports.createWorkspace =
       const thisBlock = this;
       this.setOnChange(function (event) {
         // we only care about events for this block.
-        if (event.blockId != this.id) return;
+        if (event.blockId != thisBlock.id) return;
 
         timeoutField = thisBlock.getField("timeout");
 
@@ -122,18 +122,12 @@ exports.createWorkspace =
         const updateTimeoutField = function (type) {
           if (type == "time") {
             safeRemoveField("timeout");
-            safeRemoveField("offset");
             row.appendField(
-              new FieldDateTime(tzInfo.tzOffset, fieldValues["time"]),
+              new FieldDateTime(fieldValues["time"], undefined, tzInfo),
               "timeout"
-            );
-            row.appendField(
-              new blockly.FieldLabel(tzInfo.offsetString),
-              "offset"
             );
           } else if (type == "time_param") {
             safeRemoveField("timeout");
-            safeRemoveField("offset");
             row.appendField(
               new blockly.FieldTextInput(fieldValues["time_param"]),
               "timeout"

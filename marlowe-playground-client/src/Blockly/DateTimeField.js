@@ -46,16 +46,18 @@ export function registerDateTimeField(Blockly) {
   if (RegisteredFieldDateTime) return RegisteredFieldDateTime;
 
   const FieldDateTime = function (
-    tzOffset,
     value = undefined,
-    validator = undefined
+    validator = undefined,
+    tzInfo = undefined
   ) {
-    if (typeof tzOffset != "number") {
-      throw new Error(
-        "FieldDateTime must be constructed with a numeric timezone offset"
-      );
+    if (typeof tzInfo === "undefined") {
+      tzInfo = {
+        tzOffset: 0,
+        offsetString: "",
+      };
     }
-    this.tzOffset = tzOffset;
+    this.tzOffset = tzInfo.tzOffset;
+    this.offsetString = tzInfo.offsetString;
 
     // The default value for this field is the current date
     value = this.doClassValidation_(value);
@@ -93,8 +95,6 @@ export function registerDateTimeField(Blockly) {
 
   // The initView is a place in which we can modify how the element shows itself
   FieldDateTime.prototype.initView = function () {
-    // Bounding box
-    this.createBorderRect_();
     // The picker element is a native HTML DOM input
     // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/datetime-local
     this.picker_ = document.createElement("input");
@@ -114,16 +114,46 @@ export function registerDateTimeField(Blockly) {
     this.foreignObject = foreignObject;
     // We add the foreignObject to the fields `g` element.
     this.fieldGroup_.appendChild(foreignObject);
+
+    this.offsetLabel = Blockly.utils.dom.createSvgElement(
+      Blockly.utils.Svg.TEXT,
+      {
+        class: "blocklyText",
+      },
+      this.fieldGroup_
+    );
+    this.offsetLabel.textContent = this.offsetString;
+    this.offsetLabel.style.fill = "white";
   };
 
   // In order for the input to be displayed, we need to react
   // to size changes and update the foreignObject dimensions
   // accordingly
   FieldDateTime.prototype.updateSize_ = function () {
-    this.size_.width = this.picker_.offsetWidth;
-    this.size_.height = this.picker_.offsetHeight;
-    this.foreignObject.setAttribute("width", this.picker_.offsetWidth);
-    this.foreignObject.setAttribute("height", this.picker_.offsetHeight);
+    const constants = this.getConstants();
+    let totalWidth = 0;
+    const padding = 10;
+    const pickerW = this.picker_.offsetWidth;
+    const pickerH = this.picker_.offsetHeight;
+    this.size_.height = pickerH;
+
+    this.foreignObject.setAttribute("width", pickerW);
+    this.foreignObject.setAttribute("height", pickerH);
+    totalWidth += pickerW + padding;
+    this.offsetLabel.setAttribute("x", pickerW + padding);
+
+    var halfHeight = pickerH / 2;
+
+    this.offsetLabel.setAttribute(
+      "y",
+      halfHeight -
+        constants.FIELD_TEXT_HEIGHT / 2 +
+        constants.FIELD_TEXT_BASELINE
+    );
+    const offsetLabelWidth = this.offsetLabel.getBBox().width;
+
+    totalWidth += offsetLabelWidth + padding;
+    this.size_.width = totalWidth;
   };
 
   FieldDateTime.prototype.bindEvents_ = function () {
