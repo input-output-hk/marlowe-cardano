@@ -324,12 +324,12 @@ ptPabOperations:
   #   * We invoke the final redeeming so the payouts should be empty after that
   - tag: AwaitFollow
     poInstance: Borrower
-    poResponsePatterns:
-      - exact: null
-      - parts:
+    poResponses:
+      - equals: null
+      - matches:
           chHistory: []
           chUnspentPayouts: []
-      - parts:
+      - matches:
           chHistory:
             [
               {
@@ -360,7 +360,7 @@ ptPabOperations:
                   },
               },
             ]
-      - parts:
+      - matches:
           chHistory:
             [
               {
@@ -376,7 +376,7 @@ ptPabOperations:
               },
             ]
           chUnspentPayouts: []
-      - parts:
+      - matches:
           chHistory:
             [
               {
@@ -418,7 +418,7 @@ ptPabOperations:
                   },
               },
             ]
-      - parts:
+      - matches:
           chHistory:
             [
               {
@@ -448,12 +448,12 @@ ptPabOperations:
 
   - tag: AwaitFollow
     poInstance: Lender
-    poResponsePatterns:
-      - exact: null
-      - parts:
+    poResponses:
+      - equals: null
+      - matches:
           chHistory: []
           chUnspentPayouts: []
-      - parts:
+      - matches:
           chHistory:
             [
               {
@@ -484,7 +484,7 @@ ptPabOperations:
                   },
               },
             ]
-      - parts:
+      - matches:
           chHistory:
             [
               {
@@ -500,7 +500,7 @@ ptPabOperations:
               },
             ]
           chUnspentPayouts: []
-      - parts:
+      - matches:
           chHistory:
             [
               {
@@ -542,7 +542,7 @@ ptPabOperations:
                   },
               },
             ]
-      - parts:
+      - matches:
           chHistory:
             [
               {

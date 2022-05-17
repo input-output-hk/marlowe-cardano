@@ -123,9 +123,9 @@ ptPabOperations:
 
   - tag: AwaitFollow
     poInstance: Follower
-    poResponsePatterns:
-      - exact: null
-      - parts:
+    poResponses:
+      - equals: null
+      - matches:
           chHistory:
             - tx_inputs:
                 - input_from_party:
@@ -147,7 +147,7 @@ ptPabOperations:
                       [[{ "unTokenName": "" }, 8000000]],
                     ],
                   ]
-      - parts:
+      - matches:
           chHistory:
             - tx_inputs:
                 - input_from_party:
@@ -158,25 +158,12 @@ ptPabOperations:
                     token_name: ""
                   into_account:
                     role_token: PAB
-                - input_notify:
+            - tx_inputs:
+                - input_notify
+          # We are not able to match values directly
+          # because the order in payouts set is not determined.
           chUnspentPayouts:
             - rolePayoutName:
                 unTokenName: "PAB"
-              rolePayoutValue:
-                getValue:
-                  [
-                    [
-                      { "unCurrencySymbol": "" },
-                      [[{ "unTokenName": "" }, 8000000]],
-                    ],
-                  ]
             - rolePayoutName:
                 unTokenName: "PAB"
-              rolePayoutValue:
-                getValue:
-                  [
-                    [
-                      { "unCurrencySymbol": "" },
-                      [[{ "unTokenName": "" }, 3000000]],
-                    ],
-                  ]

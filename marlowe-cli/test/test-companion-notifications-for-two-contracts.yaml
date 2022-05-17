@@ -18,8 +18,8 @@ ptPabOperations:
 
   - tag: AwaitCompanion
     poInstance: Receiver
-    poResponsePattern:
-      parts: []
+    poResponses:
+      - matches: []
 
   - tag: ActivateApp
     poOwner: Sender
@@ -51,28 +51,28 @@ ptPabOperations:
   # Single contract for a receiver
   - tag: AwaitCompanion
     poInstance: Receiver
-    poResponsePattern:
-      parts:
-        - - {}
-          - marloweContract:
-              when:
-                - case:
-                    party:
-                      role_token: Sender
-                    deposits: 8000000
-                    into_account:
-                      role_token: Receiver
-                    of_token:
-                      currency_symbol: ""
-                      token_name: ""
-                  then: close
-              timeout: 1929587625000
-              timeout_continuation: close
-            marloweState:
-              accounts:
-                [[[{}, { "currency_symbol": "", "token_name": "" }], 2000000]]
-              boundValues: []
-              choices: []
+    poResponses:
+      - matches:
+          - - {}
+            - marloweContract:
+                when:
+                  - case:
+                      party:
+                        role_token: Sender
+                      deposits: 8000000
+                      into_account:
+                        role_token: Receiver
+                      of_token:
+                        currency_symbol: ""
+                        token_name: ""
+                    then: close
+                timeout: 1929587625000
+                timeout_continuation: close
+              marloweState:
+                accounts:
+                  [[[{}, { "currency_symbol": "", "token_name": "" }], 2000000]]
+                boundValues: []
+                choices: []
 
   - tag: ActivateApp
     poOwner: Sender
@@ -118,12 +118,12 @@ ptPabOperations:
   # We should have two running contracts
   - tag: AwaitCompanion
     poInstance: Receiver
-    poResponsePattern:
-      parts:
-        - - {}
-          - marloweContract: {}
-        - - {}
-          - marloweContract: {}
+    poResponses:
+      - matches:
+          - - {}
+            - marloweContract: {}
+          - - {}
+            - marloweContract: {}
 
   - tag: CallCreate
     poInstance: Sender-3
@@ -151,14 +151,14 @@ ptPabOperations:
   # Now we should have three running contracts
   - tag: AwaitCompanion
     poInstance: Receiver
-    poResponsePattern:
-      parts:
-        - - {}
-          - marloweContract: {}
-        - - {}
-          - marloweContract: {}
-        - - {}
-          - marloweContract: {}
+    poResponses:
+      - matches:
+          - - {}
+            - marloweContract: {}
+          - - {}
+            - marloweContract: {}
+          - - {}
+            - marloweContract: {}
 
   - tag: ReturnFunds
     poOwner: Sender
