@@ -266,11 +266,7 @@ timeoutState currentTime state =
       continuation.state
       continuation.contract
   in
-    state
-      { mPendingTransaction = Nothing
-      , mPendingTimeouts = _
-      , mNextTimeout = _
-      }
+    state { mPendingTimeouts = _, mNextTimeout = _ }
       <$> (_.mPendingTimeouts <$> advancedTimeouts)
       <*> (_.mNextTimeout <$> advancedTimeouts)
 
