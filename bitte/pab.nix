@@ -94,8 +94,9 @@ let
     echo "[pab-init-cmd]: Dropping PAB database file '${dbFile}'" >&2
     rm -rf "${dbFile}"
 
-    echo "[pab-init-cmd]: Creating new DB '${dbFile}'" >&2
-    ${pabExe} --config=pab.yaml migrate
+    # Uncomment when using SQLite
+    # echo "[pab-init-cmd]: Creating new DB '${dbFile}'" >&2
+    # ${pabExe} --config=pab.yaml migrate
 
     mkdir ${fsStore}
   '';
