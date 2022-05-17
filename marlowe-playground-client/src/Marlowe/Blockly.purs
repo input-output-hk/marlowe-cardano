@@ -42,7 +42,6 @@ import Blockly.Types
   , NewBlockFunction
   , Workspace
   )
-import Component.DateTimeLocalInput.State as DateTimeLocalInput
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.Error.Extra (toMonadThrow)
 import Control.Monad.Except (class MonadError, throwError)
@@ -53,7 +52,6 @@ import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
-import Data.DateTime.Instant as Instant
 import Data.Either (note')
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
 import Data.Enum.Generic
@@ -72,7 +70,6 @@ import Data.Maybe (maybe)
 import Data.Ord.Generic (genericCompare)
 import Data.Show.Generic (genericShow)
 import Data.TraversableWithIndex (forWithIndex)
-import Debug (spy)
 import Effect (Effect)
 import Foreign.Object as Object
 import Marlowe.Holes
@@ -92,7 +89,7 @@ import Marlowe.Holes
   , Value(..)
   , ValueId(..)
   )
-import Plutus.V1.Ledger.Time (POSIXTime(..))
+import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Time as POSIXTime
 import Prologue
   ( class Bounded
@@ -776,7 +773,7 @@ toDefinition blockType@(ContractType WhenContractType) =
         , colour: blockColour blockType
         , previousStatement: Just (show BaseContractType)
         , inputsInline: Just false
-        , extensions: [ "timeout_validator", "dynamic_timeout_type" ]
+        , extensions: [ "dynamic_timeout_type" ]
 
         }
         defaultBlockDefinition

@@ -30,10 +30,6 @@ exports.createWorkspace =
     /* Register extensions */
     /* Silently clean if already registered */
     try {
-      blockly.Extensions.register("timeout_validator", function () {});
-    } catch (err) {}
-    blockly.Extensions.unregister("timeout_validator");
-    try {
       blockly.Extensions.register("hash_validator", function () {});
     } catch (err) {}
     blockly.Extensions.unregister("hash_validator");
@@ -45,42 +41,6 @@ exports.createWorkspace =
       blockly.Extensions.register("dynamic_timeout_type", function () {});
     } catch (err) {}
     blockly.Extensions.unregister("dynamic_timeout_type");
-
-    // FIXME: Check if still needed (almost sure it doenst)
-    /* Timeout extension (advanced validation for the timeout field) */
-    blockly.Extensions.register("timeout_validator", function () {
-      var thisBlock = this;
-
-      /* Validator for timeout */
-      var timeoutValidator = function (input) {
-        if (thisBlock.getFieldValue("timeout_type") == "slot") {
-          var cleanedInput = input.replace(new RegExp("[,]+", "g"), "").trim();
-          if (new RegExp("^(-[0-9])?[0-9]*$", "g").test(cleanedInput)) {
-            return BigInt(cleanedInput).toString();
-          } else {
-            return null;
-          }
-        } else {
-          return input;
-        }
-      };
-
-      thisBlock.getField("timeout").setValidator(timeoutValidator);
-
-      /* This sets the timeout to zero when switching to slot in the dropdown */
-      this.setOnChange(function (event) {
-        if (
-          event.blockId == thisBlock.id &&
-          event.name == "timeout_type" &&
-          event.element == "field" &&
-          event.oldValue != event.newValue
-        ) {
-          if (timeoutValidator(thisBlock.getFieldValue("timeout")) === null) {
-            thisBlock.setFieldValue("0", "timeout");
-          }
-        }
-      });
-    });
 
     /* Hash extension (advanced validation for the hash fields) */
     blockly.Extensions.register("hash_validator", function () {
@@ -151,7 +111,6 @@ exports.createWorkspace =
 
       // The onChange function lets you know about Blockly events of the entire workspace, visual
       // changes, data changes, etc.
-      console.log("tzInfo", tzInfo);
       const thisBlock = this;
       this.setOnChange(function (event) {
         // we only care about events for this block.
@@ -197,34 +156,14 @@ exports.createWorkspace =
             // current time will be used.
             time_param: type == "time_param" ? val : "time_param",
           };
-          // FIXME: DELETE console.log
-          // console.log("Setting initial fieldValues: ", {
-          //   inputs: { type, val },
-          //   fieldValues,
-          // });
           // Set the timeout field to the correct type
           updateTimeoutField(type);
         }
 
         if (event.element == "field" && event.name == "timeout") {
-          // FIXME: Delete
-          // console.log(
-          //   `Changing fieldValues[${timeoutTypeField.getValue()}]: before: ${
-          //     fieldValues[timeoutTypeField.getValue()]
-          //   } after: ${event.newValue}`
-          // );
-          //
           // If the timeout field changes, update the fieldValues "local store"
           fieldValues[timeoutTypeField.getValue()] = event.newValue;
         } else if (event.element == "field" && event.name == "timeout_type") {
-          // FIXME: Delete
-
-          // console.log("Change timeout type", {
-          //   event,
-          //   fieldValues,
-          //   timeOutField: timeoutField.getValue(),
-          // });
-          ///
           // If the timeout_type field changes, then update the timeout field
           updateTimeoutField(event.newValue);
         }
