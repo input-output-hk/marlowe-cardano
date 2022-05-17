@@ -50,8 +50,6 @@ export function registerDateTimeField(Blockly) {
     value = undefined,
     validator = undefined
   ) {
-    console.log("FieldDateTime", tzOffset, value, validator);
-    // debugger;
     if (typeof tzOffset != "number") {
       throw new Error(
         "FieldDateTime must be constructed with a numeric timezone offset"
@@ -61,7 +59,7 @@ export function registerDateTimeField(Blockly) {
 
     // The default value for this field is the current date
     value = this.doClassValidation_(value);
-    console.log("validation", value);
+
     FieldDateTime.prototype.DEFAULT_VALUE = this.doClassValidation_(
       new Date().getTime()
     );

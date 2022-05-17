@@ -65,7 +65,7 @@ import Data.Array (catMaybes)
 import Data.Array as Array
 import Data.Newtype (class Newtype, unwrap)
 import Data.Number (infinity)
-import Data.Time.Duration (Minutes(..))
+import Data.Time.Duration (Minutes)
 import Data.Traversable (class Foldable, traverse_)
 import Effect (Effect)
 import Effect.Exception (throw)
