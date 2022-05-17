@@ -1,5 +1,5 @@
 # TODO unify with bitte/pab.nix
-{ dbConfigFile
+{ contractStoreConfig ? { tag = "UseInMemoryStore"; }
 , baseUrl
 , walletUrl
 , chainIndexUrl
@@ -7,9 +7,7 @@
 , network
 , protocol-parameters
 }: {
-  contractStoreConfig = {
-    tag = "UseInMemoryStore";
-  };
+  inherit contractStoreConfig;
   # contractStoreConfig = {
   #   tag = "UseFSStore";
   #   contents = fsStorePath

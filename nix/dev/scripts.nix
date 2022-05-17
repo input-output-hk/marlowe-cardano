@@ -31,10 +31,8 @@ let
       port = 9083;
     };
     pab = {
-      database-path = "db/pab.db";
       port = 9080;
       config-params = {
-        dbConfigFile = pab.database-path + "/marlowe-pab.db";
         baseUrl = "http://localhost:${toString pab.port}";
         walletUrl = "http://localhost:${toString wallet.port}";
         chainIndexUrl = "http://localhost:${toString chain-index.port}";
@@ -98,10 +96,6 @@ let
 
   start-marlowe-pab = writeShellScriptBinInRepoRoot "start-marlowe-pab" ''
     echo "socket path = ${devNetworkConfig.node.socket-path}"
-    mkdir -p ${devNetworkConfig.pab.database-path}
-
-    [ ! -f ${devNetworkConfig.pab.config-params.dbConfigFile}/marlowe-pab.db ] && \
-      ${marlowe-pab-exe} migrate --config ${devNetworkConfig.pab.config-file}
 
     echo "Waiting for cardano-node socket connection"
     until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${devNetworkConfig.node.socket-path} 2> /dev/null; do :; done

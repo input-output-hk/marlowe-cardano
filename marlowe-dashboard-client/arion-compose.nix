@@ -16,8 +16,12 @@ let
   run-port = "8080";
   socket-path = "/ipc/node.socket";
   network-id = toString network.magic;
+  pab-contracts-path = "/data/contracts";
   pab-params = {
-    dbConfigFile = "/data/pab.db";
+    contractStoreConfig = {
+      tag = "UseFSStore";
+      contents = pab-contracts-path;
+    };
     baseUrl = "http://0.0.0.0:${pab-port}";
     walletUrl = "http://wallet:${wallet-port}";
     chainIndexUrl = "http://chain-index:${chain-index-port}";
@@ -29,8 +33,6 @@ let
     wallet-port = wallet-port-int;
     chain-index-port = chain-index-port-int;
     chain-index-host = "chain-index";
-
-
   };
   nodeConfigArgs = {
     config = network.nodeConfig;
@@ -156,12 +158,7 @@ let
             exit "$$1"
           }
           trap 'die $$?' EXIT
-          # Uncomment if using SQLite
-          # if ! stat ${pab-params.dbConfigFile} 2> /dev/null; then
-          #   ${marlowe-pab}/bin/marlowe-pab migrate --config /config/pab.yaml
-          # fi
-          # TODO this would be nicer implemented as a healthcheck, but I
-          # couldn't get that to work.
+          ${pkgs.coreutils}/bin/mkdir -p ${pab-contracts-path}
           until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${socket-path} 2> /dev/null; do :; done
           CARDANO_NODE_SOCKET_PATH=${socket-path} ${cardano-cli}/bin/cardano-cli query \
             protocol-parameters \
@@ -170,7 +167,6 @@ let
           ${marlowe-pab}/bin/marlowe-pab webserver \
             --config /config/pab.yaml \
             --passphrase fixme-allow-pass-per-wallet \
-            --memory
         ''
       ];
     };
