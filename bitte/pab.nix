@@ -98,7 +98,7 @@ let
     # echo "[pab-init-cmd]: Creating new DB '${dbFile}'" >&2
     # ${pabExe} --config=pab.yaml migrate
 
-    mkdir ${fsStore}
+    mkdir -p ${fsStore}
   '';
 in
 writeShellScriptBin "entrypoint" ''
