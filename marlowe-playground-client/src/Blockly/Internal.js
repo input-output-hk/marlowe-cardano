@@ -132,6 +132,20 @@ exports.createWorkspace =
               new blockly.FieldTextInput(fieldValues["time_param"]),
               "timeout"
             );
+            // For some reason Blockly doens't automatically fire this event
+            // indicating that the timeout field has changed. Not firing the
+            // event results in a bug where if you attach a new When block,
+            // change to time_param and convert to marlowe, the old time value
+            // is presented.
+            blockly.Events.fire(
+              new blockly.Events.Change(
+                thisBlock, // block that changed
+                "field", // type of element that changed
+                "timeout", // name of the element that changed
+                fieldValues["time"], // old value
+                fieldValues["time_param"] // new value
+              )
+            );
           }
         };
 
