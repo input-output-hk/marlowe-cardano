@@ -55,9 +55,9 @@ import qualified Data.Text as T
 import Data.UUID (UUID)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, RolePayout (..), foldlHistory, marloweHistory,
-                                        marloweHistoryFrom, marloweUtxoStatesAt, toMarloweState, toRolePayout,
-                                        txRoleData)
+import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, RolePayout (..), foldlHistory, foldrHistory,
+                                        historyFrom, marloweHistory, marloweHistoryFrom, marloweUtxoStatesAt,
+                                        toMarloweState, toRolePayout, txRoleData)
 import Language.Marlowe.Scripts
 import Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics as Marlowe
@@ -78,6 +78,7 @@ import Ledger.Tx (txId)
 import qualified Ledger.Tx as Tx
 import Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts as Typed
+import Ledger.Typed.Tx (TypedScriptTxOutRef (tyTxOutRefRef))
 import qualified Ledger.Typed.Tx as Typed
 import qualified Ledger.Value as Val
 import Numeric.Natural (Natural)
@@ -395,7 +396,11 @@ type FollowerPromise a = Promise FollowerContractNotification MarloweFollowSchem
 -- doesn't prevent that (we filter just on the payout script).
 type FollowerContractState = (Maybe History, Payouts)
 
-data FollowerContractUpdate = PayoutChange | HistoryChange
+data FollowerContractUpdate = PayoutChange ChainIndexTx | HistoryChange ChainIndexTx
+
+contractUpdateTransaction :: FollowerContractUpdate -> ChainIndexTx
+contractUpdateTransaction (PayoutChange tx)  = tx
+contractUpdateTransaction (HistoryChange tx) = tx
 
 -- Follower puts a single `null` to the websocket automatically.
 -- You can expect another `null` (so two `null`s) if you start the follower
@@ -412,14 +417,14 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       fetchOnChainState :: FollowerM FollowerContractState
       fetchOnChainState = (,) <$> marloweHistory unsafeGetSlotConfig params <*> payoutsAtCurrency (rolesCurrency params)
 
-      awaitNewState :: FollowerContractState -> FollowerM FollowerContractState
+      awaitNewState :: FollowerContractState -> FollowerM (FollowerContractUpdate, FollowerContractState)
       awaitNewState (prevHistory, prevPayouts) = do
 
         let
           -- In both cases we bring back one of the transactions which have woken us up.
           -- We do this only to perform the logging.
           waitForContractChange :: FollowerPromise ChainIndexTx
-          waitForContractChange = case prevHistory >>= continuationUtxo of
+          waitForContractChange = case prevHistory >>= marloweUtxo of
             Nothing   -> NonEmpty.head <$> (utxoIsProduced' trace $ validatorAddress $ mkMarloweTypedValidator params)
             Just utxo -> utxoIsSpent' trace utxo
             where
@@ -446,7 +451,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
           (mappend "Contract change detected through txId " <<< show <<< _citxTxId)
           changeNotification
 
-        fetchOnChainState
+        (either PayoutChange HistoryChange changeNotification,) <$> fetchOnChainState
 
       -- Push a possible state update to the stream
       notify :: FollowerContractState -> FollowerM ()
@@ -485,14 +490,35 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
         rec $ LastResult currOnChainState
 
       follow (LastResult prevState) = do
-        newState <- awaitNewState prevState
+        (update, newState@(newHistory, newPayouts)) <- awaitNewState prevState
         if newState /= prevState
           then do
             notify newState
             rec $ LastResult newState
           else do
-            debug' $ "Unable to detect new state. prevState = " <> printState prevState
-            rec $ LastResult prevState
+            onChainMarloweRef <- getOnChainState $ mkMarloweTypedValidator params
+            let
+              newState' = fromMaybe newState $ case onChainMarloweRef of
+                Just _ -> Nothing
+                -- It seems that contract was closed and we can try to extract
+                -- the rest of the history from the update tx which have at hand.
+                -- This *can't* be done in the `marloweHistory` because
+                -- we lack necessary indexes to extract the closing transaction.
+                Nothing -> do
+                  history <- newHistory
+                  mUtxo <- marloweUtxo history
+                  let
+                    tx = contractUpdateTransaction update
+
+                  rest <- historyFrom
+                    unsafeGetSlotConfig
+                    (validatorAddress $ mkMarloweTypedValidator params)
+                    [tx]
+                    mUtxo
+                  pure (Just (append history rest), newPayouts)
+            when (newState' /= prevState) $ do
+              debug' $ "No state change detected: prevState = " <> printState prevState
+            rec $ LastResult newState'
 
     checkpointLoop follow UnknownOnChainState
   where
@@ -508,7 +534,13 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       where
         step _ next = next
 
-    continuationUtxo = last >>> \case
+    append h tail = foldrHistory step tail h
+      where
+        step (Created tx d _) acc        = Created tx d (Just acc)
+        step (InputApplied i tx d _) acc = InputApplied i tx d (Just acc)
+        step c _                         = c
+
+    marloweUtxo = last >>> \case
       Created { historyTxOutRef }      -> Just historyTxOutRef
       InputApplied { historyTxOutRef } -> Just historyTxOutRef
       _                                -> Nothing

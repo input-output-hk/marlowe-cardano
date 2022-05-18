@@ -19,6 +19,7 @@ module Language.Marlowe.Client.History (
 , RolePayout(..)
 -- * Helpers
 , foldlHistory
+, foldrHistory
 -- * Contract History
 , marloweHistory
 , marloweHistoryFrom
@@ -120,14 +121,20 @@ data History =
     deriving anyclass (ToJSON, FromJSON)
 
 
+nextEntry :: History -> Maybe History
+nextEntry Created { historyNext=n }     = n
+nextEntry InputApplied { historyNext=n} = n
+nextEntry Closed {}                     = Nothing
+
 foldlHistory :: forall a. (a -> History -> a) -> a -> History -> a
-foldlHistory f acc entry = case next entry of
+foldlHistory f acc entry = case nextEntry entry of
   Just n  -> foldlHistory f (f acc entry) n
   Nothing -> f acc entry
-  where
-    next Created { historyNext=n }     = n
-    next InputApplied { historyNext=n} = n
-    next Closed {}                     = Nothing
+
+foldrHistory :: forall a. (History -> a -> a) -> a -> History -> a
+foldrHistory f zero entry = case nextEntry entry of
+  Just n  -> f n (foldrHistory f zero n)
+  Nothing -> f entry zero
 
 
 -- | A transaction-output reference specific to Marlowe role payout.
@@ -198,7 +205,7 @@ histories :: SlotConfig      -- ^ The slot configuration.
 histories slotConfig params address citxs =
   [
     Created (tyTxOutRefRef creation) (toMarloweState creation)
-      $ historyFrom slotConfig address citxs creation
+      $ historyFrom slotConfig address citxs (tyTxOutRefRef creation)
   |
     creation <- creationTxOut params address `mapMaybe` citxs
   ]
@@ -208,29 +215,28 @@ histories slotConfig params address citxs =
 historyFrom :: SlotConfig          -- ^ The slot configuration.
             -> Address             -- ^ The Marlowe validator address.
             -> [ChainIndexTx]      -- ^ The transactions at the Marlowe validator and role validator addresses.
-            -> MarloweTxOutRef     -- ^ The Marlowe transaction to start from.
+            -> TxOutRef            -- ^ The Marlowe transaction to start from.
             -> Maybe History       -- ^ The sequence of subsequent redemptions.
 historyFrom slotConfig address citxs consumed =
   let
-    consumed' = tyTxOutRefRef consumed
     anyInputsConsumed citx =
       let
         inputs = S.toList $ citx ^. citxInputs
       in
-        any (\txIn -> consumed' == txInRef txIn) inputs
+        any (\txIn -> consumed == txInRef txIn) inputs
   in
     -- The next redemption must consume the input.
     case filter anyInputsConsumed citxs of
       -- Only one transaction can consume the output of the previous step.
       [citx] -> -- Find the redeemer
-                case lookup consumed' $ txInputs slotConfig citx of
+                case lookup consumed $ txInputs slotConfig citx of
                   -- The output of the previous step was consumed with a redeemer.
                   Just inputs -> -- Determine whether there is output to the script.
                                  case filterOutputs address citx of
                                    [mo] -> -- There was datum UTxO to the script, so the contract continues.
                                            Just
                                              . InputApplied inputs (tyTxOutRefRef mo) (toMarloweState mo)
-                                             $ historyFrom slotConfig address citxs mo
+                                             $ historyFrom slotConfig address citxs (tyTxOutRefRef mo)
                                    _    -> -- There was no datum UTxO to the script, so the contract is now closed.
                                            Just
                                              . Closed inputs
