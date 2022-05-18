@@ -40,15 +40,17 @@ FAUCET_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ve
 
 # Create the payment signing and verification keys if they do not already exist.
 # sed 
-sed -n -e '/CreateWallet/{s/^.*Created wallet identified as \(.*\) for role "\(.*\)"\.$/\1/ ; p}' setup-wallets.log > wallet.ids
+# sed -n -e '/CreateWallet/{s/^.*Created wallet identified as \(.*\) for role "\(.*\)"\.$/\1/ ; p}' setup-wallets.log > wallet.ids
 
 test_run=0
+error_count=0
 pids=()
 function run() {
   for wid in $(cat wallet.ids)
   do
-    test_file="test-$wid.yaml"
-    log_file="test-$wid.log"
+    test_run=$((test_run + 1))
+    test_file="test-$wid-$test_run.yaml"
+    log_file="test-$wid-$test_run.log"
     # NOTE: The line below is replacing any instances of WALLET_ID with $wid
     sed -e "s/WALLET_ID/$wid/" template.yaml > "$test_file"
     # NOTE: below is a way to replace more than 1 variable
@@ -65,41 +67,20 @@ function run() {
                               --burn-address "$BURN_ADDRESS"            \
                               --passphrase "$PAB_PASSPHRASE"            \
                               "$test_file"                              \
-                              >& "$log_file"                             &
-    pids+=($!)
-    echo "TEST RUN: $test_run"
+                              >& "$log_file"                             
+    if [ $? -ne 0 ]; then
+      error_count=$((error_count + 1))
+      echo "ERROR COUNTS: $error_count"
+    else
+      pids+=($!)
+      echo "TEST RUN: $test_run"
+    fi
   done
 }
 
-for ((n=1; n <= 100; n++))
+for ((n=1; n <= 10; n++))
 do
-  test_run="$n"
   run
 done
-
-echo "finished enqueuing runs"
-failures=0
-
-echo "set failures variable to $failures"
-
-for pid in ${pids[*]}; do
-  echo "inside loop for pid $pid"
-  wait $pid
-  echo "finished waiting for $pid"
-  ec=$?
-  echo "exit code: $ec"
-  if [ "$ec" -eq "1" ]
-  then
-    failures=$((failures+1))
-  fi
-done
-echo "finished failure count"
-if [ "$failures" -ne "0" ]
-then
-  echo "Failed contract runs: $failures"
-  exit 1
-fi
-
-wait
 
 echo "There were $(grep FAIL *.log | wc -l) failures in the log files."

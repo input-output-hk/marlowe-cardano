@@ -7,7 +7,7 @@ ptPabOperations:
 
 - tag: UseWallet
   poOwner: PAB
-  poWalletId: 84125b338f99c286bcf298b335107ebc45b6c975
+  poWalletId: 1be5e31c263be38bc7c26c6cea34cf9857acbbcd
   poPassphrase: fixme-allow-pass-per-wallet
 
 - tag: Comment

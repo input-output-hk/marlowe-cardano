@@ -1,0 +1,9 @@
+{
+  "Producers": [
+    {
+      "addr": "relays.pioneers.testnet.marlowe-finance.io",
+      "port": 3001,
+      "valency": 1
+    }
+  ]
+}

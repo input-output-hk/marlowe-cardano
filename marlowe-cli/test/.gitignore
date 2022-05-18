@@ -2,3 +2,4 @@
 *.protocol
 *.log
 tx-*.*
+test-*-[0-9]+.yaml

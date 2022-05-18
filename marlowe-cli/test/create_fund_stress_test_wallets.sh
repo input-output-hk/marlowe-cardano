@@ -12,7 +12,7 @@ fi
 # Select network.
 if [[ -z "$MAGIC" ]]
 then
-  MAGIC=1567
+  MAGIC=1566
 fi
 echo "MAGIC=$MAGIC"
 
@@ -57,4 +57,6 @@ marlowe-cli test contracts --testnet-magic "$MAGIC"                  \
                            --passphrase "$PAB_PASSPHRASE"            \
                            setup-wallets.yaml                        \
 | tee setup-wallets.log
+
+sed -n -e '/CreateWallet/{s/^.*Created wallet identified as \(.*\) for role "\(.*\)"\.$/\1/ ; p}' setup-wallets.log > wallet.ids
 
