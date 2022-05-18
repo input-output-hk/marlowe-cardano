@@ -52,6 +52,7 @@ render state = case state.toasts of
             , "flex-col"
             , "items-center"
             , "z-50"
+            , "pointer-events-none"
             ]
         ]
         renderedToasts
@@ -89,6 +90,7 @@ renderCollapsedToast { index, message: toast } =
           , "sm:max-w-sm"
           , "flex"
           , "justify-between"
+          , "pointer-events-auto"
           , toast.bgColor
           , toast.textColor
           ]
@@ -190,6 +192,7 @@ renderExpandedToast { index, message: toast } =
           , "sm:max-w-sm"
           , "flex"
           , "flex-col"
+          , "pointer-events-auto"
           ]
       , id $ indexRef "toast-message" index
       ]
