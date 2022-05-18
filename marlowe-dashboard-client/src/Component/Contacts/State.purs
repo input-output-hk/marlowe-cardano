@@ -65,7 +65,8 @@ handleAction CloseContactsCard = H.raise Closed
 handleAction (SetCardSection cardSection) = do
   assign _cardSection cardSection
 
-handleAction (OnAddContactMsg (AddContact.SaveClicked _)) =
+handleAction (OnAddContactMsg (AddContact.SaveClicked _)) = do
+  assign _cardSection Home
   H.raise Closed
 
 handleAction (OnAddContactMsg AddContact.BackClicked) = do

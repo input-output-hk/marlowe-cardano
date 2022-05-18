@@ -471,7 +471,7 @@ handleAction
   => Action
   -> HalogenM m Unit
 handleAction (OnContactsMsg Contacts.Closed) =
-  assign _card Nothing
+  handleAction CloseCard
 
 {- [UC-WALLET-3][0] Disconnect a wallet -}
 handleAction DisconnectWallet = do

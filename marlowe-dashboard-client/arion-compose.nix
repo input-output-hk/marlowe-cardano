@@ -166,7 +166,7 @@ let
             --out-file ./testnet.protocol
           ${marlowe-pab}/bin/marlowe-pab webserver \
             --config /config/pab.yaml \
-            --passphrase fixme-allow-pass-per-wallet \
+            --passphrase fixme-allow-pass-per-wallet
         ''
       ];
     };
