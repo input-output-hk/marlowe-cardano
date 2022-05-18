@@ -13,19 +13,14 @@ OPTIONS:
   -m, --testnet-magic NATURAL
           Falls back to the CARDANO_TESTNET_MAGIC env variable.
           Default is 1567.
-  -S, --node-socket-path FILE
+  -s, --node-socket-path FILE
           Falls back to the CARDANO_NODE_SOCKET_PATH env variable.
           We fallback to \`./node.socket\` when as a least resort.
-  -t, --treasury DIR
-          In the event that faucet keys need to be created, they will be made
-          in this directory. We fallback to the TREASURY env variable and to
-          \`./\` at the end.
-  -a, --faucet-addr-file FILE
-          File containing the faucet address
-  -s, --faucet-skey-file FILE
-          File containing the faucet SKEY. If this file doesn't exist, new
-          wallet keys will be created as payment.skey and payment.vkey files in
-          the TREASURY dir.
+  --faucet-vkey-file FILE
+          File containing the verification key.
+  --faucet-skey-file FILE
+          File containing the faucet siging key . If this both files are missing
+          then new pair of keys will be generated and written down.
   -f, --fund
           Whether to fund the testing treasury.
   -b, --build
@@ -47,11 +42,10 @@ TESTNET_MAGIC="${CARDANO_TESTNET_MAGIC:-1567}"
 WALLET_URL="http://localhost:8090"
 PAB_URL="http://localhost:9080"
 FUND=
-TREASURY_DIR="${TREASURY:-./}"
-FAUCET_ADDR=
 FAUCET_SKEY_FILE=
+FAUCET_VKEY_FILE=
 
-PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-tests.sh" -o "m:S:t:a:s:fbW:P:vh" --long "testnet-magic:,node-socket-path:,treasury:,faucet-addr-file:,faucet-skey-file:,fund,build,wallet-url:,pab-url:,verbose,help" -- "$@")
+PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-tests.sh" -o "m:s:fbw:p:vh" --long "testnet-magic:,node-socket-path:,faucet-vkey-file:,faucet-skey-file:,fund,build,wallet-url:,pab-url:,verbose,help" -- "$@")
 VALID_ARGUMENTS=$?
 if [ "$VALID_ARGUMENTS" != "0" ]; then
   echo "$USAGE"
@@ -62,10 +56,9 @@ while :
 do
     case "$1" in
       -m | --testnet-magic)             TESTNET_MAGIC="$2";       shift 2 ;;
-      -S | --node-socket-path)          NODE_SOCKET_PATH="$2";    shift 2 ;;
-      -t | --treasury)                  TREASURY_DIR="$2";        shift 2 ;;
-      -a | --faucet-addr-file)          FAUCET_ADDR=$(cat "$2");  shift 2 ;;
-      -s | --faucet-skey-file)          FAUCET_SKEY_FILE="$2";    shift 2 ;;
+      -s | --node-socket-path)          NODE_SOCKET_PATH="$2";    shift 2 ;;
+           --faucet-vkey-file)          FAUCET_VKEY_FILE="$2";    shift 2 ;;
+           --faucet-skey-file)          FAUCET_SKEY_FILE="$2";    shift 2 ;;
       -f | --fund)                      FUND=1;                   shift   ;;
       -b | --build)                     BUILD=1;                  shift   ;;
       -w | --wallet-url)                WALLET_URL="$2";          shift 2 ;;
@@ -93,29 +86,29 @@ do
   fi
 done
 
+if [[ -z "$FAUCET_SKEY_FILE" ]]; then
+  echo "Missing --faucet-skey-file"
+  echo "$USAGE"
+  exit 1
+fi
+
+if [[ -z "$FAUCET_VKEY_FILE" ]]; then
+  echo "Missing --faucet-vkey-file"
+  echo "$USAGE"
+  exit 1
+fi
+
 # Create the payment signing and verification keys if they do not already exist.
-if [[ ! -e "$FAUCET_SKEY_FILE" ]]
+if [[ ! -e "$FAUCET_SKEY_FILE" && ! -e "$FAUCET_VKEY_FILE" ]]
 then
-  FAUCET_SKEY_FILE="$TREASURY_DIR/payment.skey"
-
-  if [[ -e $FAUCET_SKEY_FILE ]]; then
-    echo "No --faucet-skey-file given but there's already a file at the treasury location $FAUCET_SKEY_FILE. Aborting because we don't want to overwrite your files with 'cardano-cli address key-gen'"
-    exit 1
-  fi
-
-  FAUCET_VKEY_FILE="$TREASURY_DIR/payment.vkey"
-  FAUCET_ADDR_FILE="$TREASURY_DIR/faucet.address"
-
-  echo "Creating $FAUCET_SKEY_FILE, $FAUCET_VKEY_FILE and $FAUCET_ADDR_FILE"
-
   cardano-cli address key-gen --signing-key-file "$FAUCET_SKEY_FILE"      \
                               --verification-key-file "$FAUCET_VKEY_FILE"
-
-  # We only need to generate this if we created the wallet keys just now.
-  FAUCET_ADDR=$(cardano-cli address build --testnet-magic "$TESTNET_MAGIC" --payment-verification-key-file "$FAUCET_VKEY_FILE")
-  # and let's write it to a file for the next time for the -a|--faucet-addr-file switch
-  echo "$FAUCET_ADDR" > "$FAUCET_ADDR_FILE"
+elif [[ ! -e "$FAUCET_SKEY_FILE" || ! -e "$FAUCET_VKEY_FILE" ]]; then
+  echo "You should provide both faucet key files or drop both of them if you want to recreate them."
+  exit 1
 fi
+
+FAUCET_ADDR=$(cardano-cli address build --testnet-magic "$TESTNET_MAGIC" --payment-verification-key-file "$FAUCET_VKEY_FILE")
 
 if [[ -n "$FUND" ]]; then
   # Fund the faucet with 5k tADA.
