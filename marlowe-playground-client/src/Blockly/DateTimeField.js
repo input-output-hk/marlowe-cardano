@@ -95,10 +95,29 @@ export function registerDateTimeField(Blockly) {
 
   // The initView is a place in which we can modify how the element shows itself
   FieldDateTime.prototype.initView = function () {
+    const constants = this.getConstants();
     // The picker element is a native HTML DOM input
     // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/datetime-local
     this.picker_ = document.createElement("input");
     this.picker_.type = "datetime-local";
+
+    // We add these styles to avoid the picker element from growing
+    // when the screen resize
+    this.picker_.style.height = `${constants.FIELD_TEXT_HEIGHT}px`;
+    this.picker_.style.position = "absolute";
+    this.picker_.style.fontSize = `${constants.FIELD_TEXT_FONTSIZE}px`;
+    this.picker_.style.boxSizing = "content-box";
+
+    // This hardcoded number was reached by experimentation, if not set
+    // the picker will occupy more space than needed. An alternative
+    // solution would be to create a canvas node with a 2D context,
+    // create a text element with the expected number of characters
+    // and calculating the size of that. This is easier.
+    this.picker_.style.width = "120px";
+
+    // We convert the UTC unix time to a local diff from epoch
+    // and convert that to the normalized representation that the
+    // datetime-local object needs (e.g: "2022-03-18T21:42")
     this.picker_.value = showNormalizedDateTime(
       utcToLocal(this.tzOffset, this.getValue()),
       true
@@ -115,6 +134,8 @@ export function registerDateTimeField(Blockly) {
     // We add the foreignObject to the fields `g` element.
     this.fieldGroup_.appendChild(foreignObject);
 
+    // This element is a textual representation of the local offset
+    // (e.g: "GMT+2")
     this.offsetLabel = Blockly.utils.dom.createSvgElement(
       Blockly.utils.Svg.TEXT,
       {
@@ -124,19 +145,18 @@ export function registerDateTimeField(Blockly) {
     );
     this.offsetLabel.textContent = this.offsetString;
     this.offsetLabel.style.fill = "white";
+    this.offsetLabel.style.fontSize = `${constants.FIELD_TEXT_FONTSIZE}pt`;
   };
 
-  // In order for the input to be displayed, we need to react
-  // to size changes and update the foreignObject dimensions
-  // accordingly
   FieldDateTime.prototype.updateSize_ = function () {
     const constants = this.getConstants();
     let totalWidth = 0;
-    const padding = 10;
+    const padding = 4;
     const pickerW = this.picker_.offsetWidth;
-    const pickerH = this.picker_.offsetHeight;
-    this.size_.height = pickerH;
+    const pickerH = constants.FIELD_TEXT_HEIGHT + padding;
 
+    // In order for the input to be displayed, we need to set
+    // the foreignObject size to have its children dimensions
     this.foreignObject.setAttribute("width", pickerW);
     this.foreignObject.setAttribute("height", pickerH);
     totalWidth += pickerW + padding;
@@ -153,7 +173,9 @@ export function registerDateTimeField(Blockly) {
     const offsetLabelWidth = this.offsetLabel.getBBox().width;
 
     totalWidth += offsetLabelWidth + padding;
+
     this.size_.width = totalWidth;
+    this.size_.height = pickerH;
   };
 
   FieldDateTime.prototype.bindEvents_ = function () {
