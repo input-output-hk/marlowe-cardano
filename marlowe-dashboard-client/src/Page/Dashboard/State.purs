@@ -33,6 +33,7 @@ import Component.Contacts.Types as Contacts
 import Component.Template.Types as Template
 import Component.Toast.Types (infoToast, successToast)
 import Control.Alt ((<|>))
+import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
@@ -101,7 +102,6 @@ import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
-import Halogen.Subscription.Extra (compactEmitter)
 import Language.Marlowe.Client
   ( EndpointResponse(..)
   , MarloweEndpointResult(..)
@@ -749,7 +749,7 @@ subscribeToSources
   => MonadLogger StructuredLog m
   => HalogenM m Unit
 subscribeToSources =
-  void <<< H.subscribe <<< compactEmitter =<< H.lift actionsFromSources
+  void <<< H.subscribe =<< H.lift actionsFromSources
 
 actionsFromSources
   :: forall m
@@ -757,7 +757,7 @@ actionsFromSources
   => MonadUnliftAff m
   => MonadStore Store.Action Store.Store m
   => MonadLogger StructuredLog m
-  => m (Emitter (Maybe Action))
+  => m (Emitter Action)
 actionsFromSources = do
   { pabWebsocket, walletFunds } <- asks $ view _sources
   u <- askUnliftAff
@@ -778,36 +778,46 @@ actionsFromSources = do
           WS.ReceiveMessage (Right msg) ->
             debug "↓ Recv websocket message" msg
           _ -> pure unit
-        let mWallet = store ^? Store._wallet <<< _connectedWallet
-        let contractStore = store ^. Store._contracts
-        liftEffect $ for_ mWallet \w ->
-          subscriber $ actionFromWebsocket contractStore w websocketMsg
+        liftEffect do
+          let mWallet = store ^? Store._wallet <<< _connectedWallet
+          for_ mWallet \wallet -> do
+            let contractStore = store ^. Store._contracts
+            traverse_ subscriber $ actionFromWebsocket
+              store.tipSlot
+              contractStore
+              wallet
+              websocketMsg
       pure $ HS.unsubscribe canceller
-  let walletUpdates = Just <<< UpdateWalletFunds <$> walletFunds
+  let walletUpdates = UpdateWalletFunds <$> walletFunds
   -- Alt instance for Emitters "zips" them together. So the resulting Emitter
   -- is the union of events fired from the constituent emitters.
   pure $ websocketActions <|> walletUpdates
 
 actionFromWebsocket
-  :: ContractStore
+  :: Slot
+  -> ContractStore
   -> PABConnectedWallet
   -> FromSocket CombinedWSStreamToClient
   -> Maybe Action
-actionFromWebsocket contractStore wallet = case _ of
+actionFromWebsocket tipSlot contractStore wallet = case _ of
   WS.ReceiveMessage (Left jsonDecodeError) ->
     Just $ notificationParseFailed "websocket message" jsonNull jsonDecodeError
-  WS.ReceiveMessage (Right stream) -> actionFromStream contractStore wallet
-    stream
+  WS.ReceiveMessage (Right stream) ->
+    actionFromStream tipSlot contractStore wallet
+      stream
   _ -> Nothing
 
 actionFromStream
-  :: ContractStore
+  :: Slot
+  -> ContractStore
   -> PABConnectedWallet
   -> PAB.CombinedWSStreamToClient
   -> Maybe Action
-actionFromStream contractStore wallet = case _ of
-  SlotChange (Plutus.Slot { getSlot }) ->
-    SlotChanged <$> (toEnum =<< BigInt.toInt (unwrap getSlot))
+actionFromStream tipSlot contractStore wallet = case _ of
+  SlotChange (Plutus.Slot { getSlot }) -> do
+    slot <- toEnum =<< BigInt.toInt (unwrap getSlot)
+    guard $ slot > tipSlot
+    pure $ SlotChanged slot
   -- TODO handle with lite wallet support
   -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
   --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB

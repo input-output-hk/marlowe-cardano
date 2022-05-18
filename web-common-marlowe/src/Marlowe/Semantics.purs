@@ -1460,8 +1460,6 @@ boundFrom (Bound from _) = from
 boundTo :: Bound -> BigInt
 boundTo (Bound _ to) = to
 
--- Note: We use guards here because currently nested ifs break purty formatting
---       We need to upgrade purty and purescript to fix
 fixInterval :: TimeInterval -> State -> IntervalResult
 fixInterval interval@(TimeInterval from to) (State state)
   | (not <<< validInterval) interval = IntervalError (InvalidInterval interval)
