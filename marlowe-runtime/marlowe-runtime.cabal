@@ -1,0 +1,51 @@
+cabal-version: 2.2
+name: marlowe-runtime
+version: 0.0.0.0
+license: Apache-2.0
+license-files:
+  LICENSE
+  NOTICE
+build-type: Simple
+stability: experimental
+category: Language
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: marlowe-runtime
+
+flag defer-plugin-errors
+    description:
+        Defer errors from the plugin, useful for things like Haddock that can't handle it.
+    default: False
+    manual: True
+
+common lang
+  default-language: Haskell2010
+  default-extensions: ExplicitForAll ScopedTypeVariables
+                      DeriveGeneric StandaloneDeriving DeriveLift
+                      DeriveFunctor DeriveFoldable
+                      DeriveTraversable
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+  if flag(defer-plugin-errors)
+    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
+library
+  import: lang
+  hs-source-dirs: src
+  exposed-modules:
+    Language.Marlowe.Runtime.Chain,
+    Language.Marlowe.Runtime.Chain.Types,
+    Language.Marlowe.Runtime.History.Types,
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , cardano-api
+    , marlowe
+    , aeson
+    , monoidal-containers
+    , containers
+    , time

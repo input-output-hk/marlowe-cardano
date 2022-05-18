@@ -856,6 +856,7 @@
         cardano-config = ./.plan.nix/cardano-config.nix;
         lobemo-backend-graylog = ./.plan.nix/lobemo-backend-graylog.nix;
         marlowe-dashboard-server = ./.plan.nix/marlowe-dashboard-server.nix;
+        marlowe-runtime = ./.plan.nix/marlowe-runtime.nix;
         ouroboros-network-testing = ./.plan.nix/ouroboros-network-testing.nix;
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         trace-forward = ./.plan.nix/trace-forward.nix;
@@ -1047,6 +1048,9 @@
             };
           "lobemo-backend-graylog" = { flags = {}; };
           "marlowe-dashboard-server" = { flags = {}; };
+          "marlowe-runtime" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "ouroboros-network-testing" = { flags = {}; };
           "marlowe-contracts" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -1763,6 +1767,7 @@
           "microstache".components.library.planned = lib.mkOverride 900 true;
           "trace-dispatcher".components.exes."trace-dispatcher-examples".planned = lib.mkOverride 900 true;
           "text".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.library.planned = lib.mkOverride 900 true;
           "lobemo-backend-graylog".components.library.planned = lib.mkOverride 900 true;
           "partial-order".components.library.planned = lib.mkOverride 900 true;
           "formatting".components.library.planned = lib.mkOverride 900 true;
