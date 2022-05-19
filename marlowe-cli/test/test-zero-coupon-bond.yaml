@@ -99,29 +99,16 @@ ptPabOperations:
   - tag: AwaitCreate
     poInstance: LenderApp
 
-  - tag: ActivateFollower
-    poAppInstance: LenderApp
-    poInstance: Lender
-    poOwner: Lender
-
-  - tag: CallFollow
-    poInstance: Lender
-
   - tag: ActivateApp
     poOwner: Borrower
     poInstance: BorrowerApp
 
+  - tag: Comment
+    poComment: The borrower needs to follow this contract in order to interact with it.
+
   - tag: Follow
     poInstance: BorrowerApp
     poOtherInstance: LenderApp
-
-  - tag: ActivateFollower
-    poAppInstance: BorrowerApp
-    poInstance: Borrower
-    poOwner: Borrower
-
-  - tag: CallFollow
-    poInstance: Borrower
 
   - tag: Comment
     poComment: The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
@@ -146,7 +133,39 @@ ptPabOperations:
       - LenderApp
 
   - tag: Comment
-    poComment: The borrower needs to follow this contract in order to interact with it.
+    poComment: Both follower apps should report existing but an empty state from the chain.
+
+  - tag: ActivateFollower
+    poAppInstance: LenderApp
+    poInstance: Lender
+    poOwner: Lender
+
+  - tag: CallFollow
+    poInstance: Lender
+
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponses:
+      - equals: null
+      - matches:
+          chHistory: []
+          chUnspentPayouts: []
+
+  - tag: ActivateFollower
+    poAppInstance: BorrowerApp
+    poInstance: Borrower
+    poOwner: Borrower
+
+  - tag: CallFollow
+    poInstance: Borrower
+
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponses:
+      - equals: null
+      - matches:
+          chHistory: []
+          chUnspentPayouts: []
 
   - tag: Comment
     poComment: The lender deposits the 50 ADA loan amount.
@@ -192,6 +211,81 @@ ptPabOperations:
       - BorrowerApp
 
   - tag: Comment
+    poComment: "Followers should report the payout which is available for Borrower"
+
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+              },
+            ]
+          chUnspentPayouts:
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Borrower" },
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 50000000]],
+                        ],
+                      ],
+                  },
+              },
+            ]
+
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+              },
+            ]
+          chUnspentPayouts:
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Borrower" },
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 50000000]],
+                        ],
+                      ],
+                  },
+              },
+            ]
+
+  - tag: Comment
     poComment: Now the borrower redeems the 50 ADA from the payout script.
 
   - tag: CallRedeem
@@ -222,6 +316,51 @@ ptPabOperations:
     poMaximumFees: 1000000
     poInstances:
       - BorrowerApp
+
+  - tag: Comment
+    poComment: Both followers should notice that the Borrower payout has just been spent.
+
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+              },
+            ]
+          chUnspentPayouts: []
+
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+              },
+            ]
+          chUnspentPayouts: []
 
   - tag: Comment
     poComment: The borrower pays back the 53 ADA of loan plus interest.
@@ -267,6 +406,91 @@ ptPabOperations:
       - BorrowerApp
 
   - tag: Comment
+    poComment: Both followers should notify that we have a payout back to the Lender.
+
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            {
+              "historyNext": null,
+              "historyTxOutRef":
+                {
+                  "txOutRefId":
+                    {
+                      "getTxId": "9dd20db621790c2c1b48fe3bf55091f0cefd0e32ab4e7baf2a063dc016da4c23",
+                    },
+                  "txOutRefIdx": 0,
+                },
+              "tag": "Created",
+            }
+          chUnspentPayouts:
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Lender" },
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 53000000]],
+                        ],
+                      ],
+                  },
+              },
+            ]
+
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+              },
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Borrower" },
+                      "into_account": { "role_token": "Borrower" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 53000000,
+                    },
+                  ],
+              },
+            ]
+          chUnspentPayouts:
+            [
+              {
+                "rolePayoutName": { "unTokenName": "Lender" },
+                "rolePayoutValue":
+                  {
+                    "getValue":
+                      [
+                        [
+                          { "unCurrencySymbol": "" },
+                          [[{ "unTokenName": "" }, 53000000]],
+                        ],
+                      ],
+                  },
+              },
+            ]
+
+  - tag: Comment
     poComment: The lender redeems the 53 ADA.
 
   - tag: CallRedeem
@@ -299,6 +523,73 @@ ptPabOperations:
       - BorrowerApp
 
   - tag: Comment
+    poComment: Followers should spot that the last payout has been redeemed.
+
+  - tag: AwaitFollow
+    poInstance: Lender
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+              },
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Borrower" },
+                      "into_account": { "role_token": "Borrower" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 53000000,
+                    },
+                  ],
+              },
+            ]
+          chUnspentPayouts: []
+
+  - tag: AwaitFollow
+    poInstance: Borrower
+    poResponses:
+      - retry: true
+        matches:
+          chHistory:
+            [
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Lender" },
+                      "into_account": { "role_token": "Lender" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 50000000,
+                    },
+                  ],
+              },
+              {
+                "tx_inputs":
+                  [
+                    {
+                      "input_from_party": { "role_token": "Borrower" },
+                      "into_account": { "role_token": "Borrower" },
+                      "of_token": { "currency_symbol": "", "token_name": "" },
+                      "that_deposits": 53000000,
+                    },
+                  ],
+              },
+            ]
+          chUnspentPayouts: []
+
+  - tag: Comment
     poComment: Return unused funds.
 
   - tag: ReturnFunds
@@ -310,265 +601,6 @@ ptPabOperations:
     poOwner: Borrower
     poInstances:
       - BorrowerApp
-
-  # Both followers should tell us the same story:
-  #   * We have "initial `null`" which is not our application response
-  #     (we can have "our" `null` when follower would be started before
-  #     the actual app)
-  #   * We create the contract (empty payouts, empty history)
-  #   * Borrower deposits money which generates a single payout to the Lender
-  #     and a single entry in history
-  #   * Next we redeem so the payouts becomming empty
-  #   * Lender deposits money back with interests so we should have two inputs
-  #     in history and a new payout
-  #   * We invoke the final redeeming so the payouts should be empty after that
-  - tag: AwaitFollow
-    poInstance: Borrower
-    poResponses:
-      - equals: null
-      - matches:
-          chHistory: []
-          chUnspentPayouts: []
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts:
-            [
-              {
-                "rolePayoutName": { "unTokenName": "Borrower" },
-                "rolePayoutValue":
-                  {
-                    "getValue":
-                      [
-                        [
-                          { "unCurrencySymbol": "" },
-                          [[{ "unTokenName": "" }, 50000000]],
-                        ],
-                      ],
-                  },
-              },
-            ]
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts: []
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Borrower" },
-                      "into_account": { "role_token": "Borrower" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 53000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts:
-            [
-              {
-                "rolePayoutName": { "unTokenName": "Lender" },
-                "rolePayoutValue":
-                  {
-                    "getValue":
-                      [
-                        [
-                          { "unCurrencySymbol": "" },
-                          [[{ "unTokenName": "" }, 53000000]],
-                        ],
-                      ],
-                  },
-              },
-            ]
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Borrower" },
-                      "into_account": { "role_token": "Borrower" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 53000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts: []
-
-  - tag: AwaitFollow
-    poInstance: Lender
-    poResponses:
-      - equals: null
-      - matches:
-          chHistory: []
-          chUnspentPayouts: []
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts:
-            [
-              {
-                "rolePayoutName": { "unTokenName": "Borrower" },
-                "rolePayoutValue":
-                  {
-                    "getValue":
-                      [
-                        [
-                          { "unCurrencySymbol": "" },
-                          [[{ "unTokenName": "" }, 50000000]],
-                        ],
-                      ],
-                  },
-              },
-            ]
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts: []
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Borrower" },
-                      "into_account": { "role_token": "Borrower" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 53000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts:
-            [
-              {
-                "rolePayoutName": { "unTokenName": "Lender" },
-                "rolePayoutValue":
-                  {
-                    "getValue":
-                      [
-                        [
-                          { "unCurrencySymbol": "" },
-                          [[{ "unTokenName": "" }, 53000000]],
-                        ],
-                      ],
-                  },
-              },
-            ]
-      - matches:
-          chHistory:
-            [
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Lender" },
-                      "into_account": { "role_token": "Lender" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 50000000,
-                    },
-                  ],
-              },
-              {
-                "tx_inputs":
-                  [
-                    {
-                      "input_from_party": { "role_token": "Borrower" },
-                      "into_account": { "role_token": "Borrower" },
-                      "of_token": { "currency_symbol": "", "token_name": "" },
-                      "that_deposits": 53000000,
-                    },
-                  ],
-              },
-            ]
-          chUnspentPayouts: []
 
   - tag: Comment
     poComment: Stop the Marlowe application.
