@@ -73,7 +73,7 @@ let
     };
 
     developmentOptions = {
-      pabRollbackHistory = null;
+      pabRollbackHistory = 100;
       pabResumeFrom = {
         tag = "PointAtGenesis";
       };
