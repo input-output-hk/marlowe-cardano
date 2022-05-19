@@ -37,7 +37,7 @@ import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Structured (StructuredLog, debug, error, info)
+import Control.Logger.Structured (StructuredLog, error, info)
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Maybe.Trans (runMaybeT)
@@ -775,8 +775,6 @@ actionsFromSources = do
         unliftAff u case websocketMsg of
           WS.ReceiveMessage (Left err) ->
             error "✘ Failed to parse websocket message" err
-          WS.ReceiveMessage (Right msg) ->
-            debug "↓ Recv websocket message" msg
           _ -> pure unit
         liftEffect do
           let mWallet = store ^? Store._wallet <<< _connectedWallet
