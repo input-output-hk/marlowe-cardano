@@ -52,7 +52,7 @@ signingProcessConfig:
 metadataServerConfig:
   mdBaseUrl: http://localhost:9085
 developmentOptions:
-  pabRollbackHistory: null
+  pabRollbackHistory: 100
   pabResumeFrom:
     tag: PointAtGenesis
 EOI
