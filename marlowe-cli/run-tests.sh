@@ -137,7 +137,7 @@ runTest() {
         --socket-path "$NODE_SOCKET_PATH"         \
         --wallet-url "$WALLET_URL"                \
         --pab-url "$PAB_URL"                      \
-        --faucet-key "$FAUCET_SKEY_FILE"               \
+        --faucet-key "$FAUCET_SKEY_FILE"          \
         --faucet-address "$FAUCET_ADDR"           \
         --burn-address "$BURN_ADDRESS"            \
         --passphrase "$PAB_PASSPHRASE"            \
