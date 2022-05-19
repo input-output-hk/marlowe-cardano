@@ -5,18 +5,86 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Language.Marlowe.Runtime.Chain where
 
-import Cardano.Api (Block (..), BlockInMode (..), CardanoMode, ChainPoint, ChainSyncClient (..), ChainTip,
-                    EraInMode (..), GenesisParameters (..), SlotNo (..), Tx, TxBody (..), TxBodyContent (..), TxIn (..),
-                    TxIx (..), TxMetadataInEra (..), TxMetadataJsonSchema (..), TxMintValue (..), TxOut (..),
-                    TxOutDatum (..), TxValidityLowerBound (..), TxValidityUpperBound (..), ValueNestedBundle (..),
-                    ValueNestedRep (..), getTxBody, getTxId, metadataToJson, txOutValueToValue, valueToNestedRep)
+import Cardano.Api (Block (..), BlockHeader (BlockHeader), BlockInMode (..), CardanoMode, ChainPoint,
+                    ChainSyncClient (..), ChainTip, EraInMode (..), GenesisParameters (..),
+                    LocalChainSyncClient (LocalChainSyncClient), LocalNodeClientProtocols (..), LocalNodeConnectInfo,
+                    QueryInEra (..), QueryInMode (..), QueryInShelleyBasedEra (..), ShelleyBasedEra (..), SlotNo (..),
+                    Tx, TxBody (..), TxBodyContent (..), TxIn (..), TxIx (..), TxMetadataInEra (..),
+                    TxMetadataJsonSchema (..), TxMintValue (..), TxOut (..), TxOutDatum (..), TxValidityLowerBound (..),
+                    TxValidityUpperBound (..), ValueNestedBundle (..), ValueNestedRep (..), connectToLocalNode,
+                    getTxBody, getTxId, metadataToJson, queryNodeLocalState, txOutValueToValue, valueToNestedRep)
 import Cardano.Api.ChainSync.Client (ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Foldable (for_)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Time (addUTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
-import Language.Marlowe.Runtime.Chain.Types (MarloweChainEvent (..), MarloweChainSyncClient, MarloweTx (MarloweTx),
-                                             MarloweTxOut (MarloweTxOut),
-                                             MarloweValidityInterval (MarloweValidityInterval))
+import Language.Marlowe.Runtime.Chain.Types (MarloweChainEvent (..), MarloweChainSyncClient, MarloweTx (..),
+                                             MarloweTxOut (..), MarloweValidityInterval (MarloweValidityInterval))
+
+runMarloweChainSyncClient
+  :: MonadIO m
+  => LocalNodeConnectInfo CardanoMode
+  -> (GenesisParameters -> [ChainPoint] -> MarloweChainSyncClient IO ())
+  -> [ChainPoint]
+  -> m (Either String ())
+runMarloweChainSyncClient connectionInfo getClient startingPoints = do
+  mGenesisParams <- liftIO $ queryNodeLocalState connectionInfo Nothing
+    $ QueryInEra AlonzoEraInCardanoMode
+    $ QueryInShelleyBasedEra  ShelleyBasedEraAlonzo QueryGenesisParameters
+  case mGenesisParams of
+    Left err -> pure $ Left $ show err
+    Right (Left err) -> pure $ Left $ show err
+    Right (Right genesisParams) -> do
+      let
+        client = getClient genesisParams startingPoints
+        protocols = LocalNodeClientProtocols
+          { localChainSyncClient = LocalChainSyncClient client
+          , localTxSubmissionClient = Nothing
+          , localStateQueryClient = Nothing
+          }
+      liftIO $ pure <$> connectToLocalNode connectionInfo protocols
+
+stdOutMarloweChainSyncClient :: GenesisParameters -> [ChainPoint] -> MarloweChainSyncClient IO ()
+stdOutMarloweChainSyncClient genesisParams startingPoints = marloweChainSyncClient
+  genesisParams
+  startingPoints
+  onStart
+  (pure True)
+  onEvent
+  (putStrLn "Done")
+  where
+    onStart startedAt tip = do
+      putStrLn "Start"
+      putStrLn $ "  Following chain from: " <> show startedAt
+      putStrLn $ "  Current tip: " <> show tip
+    onEvent (MarloweRollForward (BlockHeader slot _ block) [] tip) = do
+      putStrLn $ "Roll forward SlotNo: " <> show slot <> " BlockNo: " <> show block <>  " Tip: " <> show tip
+    onEvent (MarloweRollForward (BlockHeader slot blockHash block) txs tip) = do
+      putStrLn "Roll forward"
+      putStrLn $ "  SlotNo: " <> show slot
+      putStrLn $ "  BlockHash: " <> show blockHash
+      putStrLn $ "  BlockNo: " <> show block
+      putStrLn $ "  Tip: " <> show tip
+      for_ (zip [0..] txs) \(i :: Integer, MarloweTx{..}) -> do
+        putStrLn $ "  Transaction[" <> show i <> "]: "
+        putStrLn $ "    Id: " <> show marloweTx_id
+        putStrLn $ "    Policies: " <> show marloweTx_policies
+        putStrLn $ "    Interval: " <> show marloweTx_interval
+        putStrLn $ "    Metadata: " <> show marloweTx_metadata
+        putStrLn $ "    Inputs: " <> show marloweTx_inputs
+        for_ (zip [0..] marloweTx_outputs) \(j :: Integer, MarloweTxOut{..}) -> do
+          putStrLn $ "    Output[" <> show j <> "]: "
+          putStrLn $ "      TxIn: " <> show marloweTxOut_txIn
+          putStrLn $ "      Address: " <> show marloweTxOut_address
+          putStrLn $ "      Value: " <> show marloweTxOut_value
+          putStrLn $ "      Datum: " <> show marloweTxOut_datum
+    onEvent (MarloweRollBackward point tip) = do
+      putStrLn "Roll backward"
+      putStrLn $ "  ToPoint: " <> show point
+      putStrLn $ "  Tip: " <> show tip
+
+
 
 marloweChainSyncClient
   :: forall m a
@@ -27,15 +95,9 @@ marloweChainSyncClient
   -> m Bool -- ^ onIdle callback. Allows the caller to terminate the client by returning True.
   -> (forall env. MarloweChainEvent env -> m ()) -- ^ onEvent callback. Receives the new block and the tip
   -> m a -- ^ onDone callback. Allows the caller to yeild a result for the client.
-  -> m (MarloweChainSyncClient m a)
-marloweChainSyncClient genesisParams startingPoints onStart onIdle onEvent onDone = do
-  pure $ mkChainSyncClient
-    startingPoints
-    onStart
-    onIdle
-    onRollForward
-    onRollBackward
-    onDone
+  -> MarloweChainSyncClient m a
+marloweChainSyncClient genesisParams startingPoints onStart onIdle onEvent =
+  mkChainSyncClient startingPoints onStart onIdle onRollForward onRollBackward
   where
     onRollForward (BlockInMode block AlonzoEraInCardanoMode ) = onRollForward' block
     onRollForward (BlockInMode block MaryEraInCardanoMode   ) = onRollForward' block
