@@ -133,7 +133,7 @@ foldlHistory f acc entry = case nextEntry entry of
 
 foldrHistory :: forall a. (History -> a -> a) -> a -> History -> a
 foldrHistory f zero entry = case nextEntry entry of
-  Just n  -> f n (foldrHistory f zero n)
+  Just n  -> f entry (foldrHistory f zero n)
   Nothing -> f entry zero
 
 

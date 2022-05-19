@@ -397,6 +397,7 @@ type FollowerPromise a = Promise FollowerContractNotification MarloweFollowSchem
 type FollowerContractState = (Maybe History, Payouts)
 
 data FollowerContractUpdate = PayoutChange ChainIndexTx | HistoryChange ChainIndexTx
+  deriving (Show, Eq)
 
 contractUpdateTransaction :: FollowerContractUpdate -> ChainIndexTx
 contractUpdateTransaction (PayoutChange tx)  = tx
@@ -411,6 +412,12 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
     debug' $ "call parameters: " <> show params <> "."
 
     let
+      printHistory = show <<< foldrHistory step []
+        where
+          step Created {}      acc = "Created" : acc
+          step InputApplied {} acc = "InputApplied " : acc
+          step Closed {}       acc = "Closed " : acc
+
       printState (Just history, payouts) = "{ inputs = Just" <> show (foldInputs history) <> ", " <> "payouts = " <> show payouts <> "}"
       printState (Nothing, payouts) = "{ inputs = Nothing," <> "payouts = " <> show payouts <> "}"
 
@@ -457,6 +464,8 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       notify :: FollowerContractState -> FollowerM ()
       notify st@(Just history, payouts) = do
         debug' $ "notifying new state = " <> printState st
+        debug' $ "history = " <> show history
+        debug' $ "history entries = " <> printHistory history
         debug' $ "status = " <> show (status history)
         case history of
           Created {historyData} -> do
@@ -493,12 +502,18 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
         (update, newState@(newHistory, newPayouts)) <- awaitNewState prevState
         if newState /= prevState
           then do
+            debug' $ "New state change detected: newState = " <> printState newState
             notify newState
             rec $ LastResult newState
           else do
+            debug'
+              $ "No state change detected by history module: "
+              <> "prevState =" <> printState prevState <> "; "
+              <> "update = " <> show update <> "; "
+              <> "history = " <> maybe "[]" printHistory newHistory <> "; "
             onChainMarloweRef <- getOnChainState $ mkMarloweTypedValidator params
             let
-              newState' = fromMaybe newState $ case onChainMarloweRef of
+              closingEntry = case onChainMarloweRef of
                 Just _ -> Nothing
                 -- It seems that contract was closed and we can try to extract
                 -- the rest of the history from the update tx which have at hand.
@@ -509,15 +524,21 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
                   mUtxo <- marloweUtxo history
                   let
                     tx = contractUpdateTransaction update
-
-                  rest <- historyFrom
+                  historyFrom
                     unsafeGetSlotConfig
                     (validatorAddress $ mkMarloweTypedValidator params)
                     [tx]
                     mUtxo
-                  pure (Just (append history rest), newPayouts)
-            when (newState' /= prevState) $ do
-              debug' $ "No state change detected: prevState = " <> printState prevState
+
+              newHistory' = do
+                history <- newHistory
+                entry <- closingEntry
+                pure $ append history entry
+
+              newState' = (newHistory', newPayouts)
+
+            when (newState' == prevState) $ do
+              debug' $ "No state change detected by follower as well: closingEntry = " <> show closingEntry
             rec $ LastResult newState'
 
     checkpointLoop follow UnknownOnChainState
