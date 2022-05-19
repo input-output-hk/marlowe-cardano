@@ -41,6 +41,7 @@ import Store.Contracts (ContractStore)
 import Store.RoleTokens (RoleTokenStore)
 import Text.Pretty (text)
 import Type.Proxy (Proxy(..))
+import Types (JsonAjaxError)
 
 type ContractState =
   { executionState :: Execution.State
@@ -129,7 +130,7 @@ _contractNickname = Proxy :: Proxy "contractNickname"
 _template = Proxy :: Proxy "template"
 
 data Action
-  = DisconnectWallet
+  = DisconnectWallet (Maybe JsonAjaxError)
   | ToggleMenu
   | OpenCard Card
   | CloseCard
@@ -161,7 +162,7 @@ data Action
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent DisconnectWallet = Just $ defaultEvent "DisconnectWallet"
+  toEvent (DisconnectWallet _) = Just $ defaultEvent "DisconnectWallet"
   toEvent ToggleMenu = Just $ defaultEvent "ToggleMenu"
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"
   toEvent (SetContractFilter _) = Just $ defaultEvent "FilterContracts"

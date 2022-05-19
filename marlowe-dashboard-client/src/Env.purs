@@ -24,13 +24,14 @@ import Plutus.PAB.Webserver.Types
   )
 import Store.RoleTokens (Payout)
 import Type.Proxy (Proxy(..))
+import Types (JsonAjaxError)
 import WebSocket.Support (FromSocket)
 
 type WalletFunds = { sync :: SyncStatus, assets :: Assets }
 
 type Sources =
   { pabWebsocket :: Emitter (FromSocket CombinedWSStreamToClient)
-  , walletFunds :: Emitter WalletFunds
+  , walletFunds :: Emitter (Either JsonAjaxError WalletFunds)
   }
 
 type Sinks =

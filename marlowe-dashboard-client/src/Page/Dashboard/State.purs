@@ -1,12 +1,8 @@
-module Page.Dashboard.State
-  ( component
-  , updateTotalFunds
-  ) where
+module Page.Dashboard.State (component) where
 
 import Prologue
 
 import API.Lenses (_cicContract)
-import Bridge (toFront)
 import Capability.Marlowe (class ManageMarlowe, redeem)
 import Capability.PAB
   ( class ManagePAB
@@ -26,7 +22,6 @@ import Capability.PlutusApps.FollowerApp
   )
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
-import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Types as Contacts
@@ -54,7 +49,7 @@ import Data.BigInt as BigInt
 import Data.BigInt.Argonaut (BigInt)
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
-import Data.Either (hush)
+import Data.Either (either)
 import Data.Enum (fromEnum, toEnum)
 import Data.Filterable (filter)
 import Data.Foldable (foldMap, for_, traverse_)
@@ -81,12 +76,10 @@ import Data.Set as Set
 import Data.Slot (Slot)
 import Data.These (These(..))
 import Data.Time.Duration (Minutes(..))
-import Data.Traversable (for, traverse)
+import Data.Traversable (traverse)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.UserNamedActions (userNamedActions)
-import Data.Wallet (SyncStatus, syncStatusFromNumber)
-import Data.WalletId (WalletId)
 import Effect.Aff (Error, Fiber, launchAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
@@ -114,7 +107,6 @@ import Marlowe.Run.Server
   ( getApiContractsV1ByCurrencysymbolRoletokensByTokenname
   )
 import Marlowe.Run.Server as MarloweRun
-import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics
   ( Assets
   , MarloweData
@@ -474,8 +466,9 @@ handleAction (OnContactsMsg Contacts.Closed) =
   handleAction CloseCard
 
 {- [UC-WALLET-3][0] Disconnect a wallet -}
-handleAction DisconnectWallet = do
+handleAction (DisconnectWallet mErr) = do
   wallet <- use _wallet
+  traverse_ (error "Failed to load wallet details, disconnecting.") mErr
   updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet
 
 handleAction ToggleMenu = modifying _menuOpen not
@@ -786,7 +779,9 @@ actionsFromSources = do
               wallet
               websocketMsg
       pure $ HS.unsubscribe canceller
-  let walletUpdates = UpdateWalletFunds <$> walletFunds
+  let
+    walletUpdates = either (const DisconnectWallet) UpdateWalletFunds <$>
+      walletFunds
   -- Alt instance for Emitters "zips" them together. So the resulting Emitter
   -- is the union of events fired from the constituent emitters.
   pure $ websocketActions <|> walletUpdates
@@ -894,18 +889,3 @@ notificationParseFailed whatFailed originalValue parsingError =
     , originalValue
     , parsingError
     }
-
-updateTotalFunds
-  :: forall m
-   . MonadAff m
-  => ManageWallet m
-  => MonadStore Store.Action Store.Store m
-  => WalletId
-  -> m (Maybe SyncStatus)
-updateTotalFunds walletId = do
-  response <- getWalletTotalFunds walletId
-  hush <$> for response \(GetTotalFundsResponse { assets, sync }) -> do
-    updateStore $ Store.Wallet $ Wallet.OnAssetsChanged $ toFront assets
-    let syncStatus = syncStatusFromNumber sync
-    updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
-    pure syncStatus

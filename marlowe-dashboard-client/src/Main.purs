@@ -11,9 +11,8 @@ import Bridge (toFront)
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect (Logger)
-import Control.Logger.Effect.Class as Logger
 import Control.Logger.Effect.Console (structuredLogger) as Console
-import Control.Logger.Structured (StructuredLog(..))
+import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (runMaybeT)
@@ -27,7 +26,6 @@ import Data.Argonaut
   , JsonDecodeError
   , decodeJson
   , encodeJson
-  , fromString
   , printJsonDecodeError
   , (.:)
   )
@@ -63,8 +61,7 @@ import Halogen.Store.Select (selectEmitter, selectEq)
 import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra
-  ( compactEmitter
-  , connectEmitter_
+  ( connectEmitter_
   , reactimate
   , switchMapEmitter
   )
@@ -75,11 +72,11 @@ import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Marlowe.Semantics (Assets(..))
-import Servant.PureScript (printAjaxError)
 import Store (_wallet, mkStore)
 import Store as Store
 import Store.Contracts (getContractNicknames)
 import Store.Wallet (_connectedWallet)
+import Types (JsonAjaxError)
 import WebSocket.Support (FromSocket(..))
 import WebSocket.Support as WS
 
@@ -205,7 +202,7 @@ mkWalletFundsEmitter
   => Logger StructuredLog
   -> Milliseconds
   -> Emitter Store.Store
-  -> m (Emitter WalletFunds)
+  -> m (Emitter (Either JsonAjaxError WalletFunds))
 mkWalletFundsEmitter logger pollingInterval storeE = do
   pollE <- makeClock pollingInterval
   let
@@ -223,30 +220,18 @@ mkWalletFundsEmitter logger pollingInterval storeE = do
 
     -- | React to poll events by dispatching a request to the wallet backend.
     -- | The resulting `Emitter` Fires every time we receive a response.
-    walletFundsE :: Emitter (Maybe WalletFunds)
+    walletFundsE :: Emitter (Either JsonAjaxError WalletFunds)
     walletFundsE = walletPollE # reactimate case _ of
       -- We need to fire an "empty" assets here, otherwise it will remember the
       -- previous value fired downstream and use that again the next time
       -- a wallet is activated until the next poll resolves.
-      Nothing -> pure $ Just { assets: Assets Map.empty, sync: OutOfSync }
+      Nothing -> pure $ Right { assets: Assets Map.empty, sync: OutOfSync }
       Just walletId -> do
         result <- MarloweRun.getApiWalletV1ByWalletidTotalfunds walletId
-        case result of
-          Left e -> do
-            Logger.error
-              ( StructuredLog
-                  { msg: "Failed to poll total funds"
-                  , payload: Just $ fromString $ printAjaxError e
-                  }
-              )
-              logger
-            pure Nothing
-          Right (GetTotalFundsResponse { assets, sync }) ->
-            pure $ Just
-              { assets: toFront assets, sync: syncStatusFromNumber sync }
+        pure $ result <#> \(GetTotalFundsResponse { assets, sync }) ->
+          { assets: toFront assets, sync: syncStatusFromNumber sync }
 
-  -- Discard any `Nothing` results from `walletFundsE`
-  pure $ compactEmitter walletFundsE
+  pure walletFundsE
 
 -------------------------------------------------------------------------------
 -- Local Storage integeration
