@@ -59,6 +59,12 @@ package cardano-wallet-launcher
 package cardano-wallet-core-integration
   optimization: False
 
+-- Latest published version is incompatible
+source-repository-package
+  type: git
+  location: https://github.com/haskell-distributed/distributed-process
+  tag: cacb9d9ad84a5bdc6c6e6d4e8c7ff1835c89dce9
+
 -- A lot of marlowe dependencies have to be syncronized with the dependencies of
 -- plutus-apps. If you update plutus-apps, please make sure that all dependencies
 -- of plutus-apps are also updated

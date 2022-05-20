@@ -19,4 +19,5 @@
   "https://github.com/input-output-hk/hedgehog-extras"."edf6945007177a638fbeb8802397f3a6f4e47c14" = "0wc7qzkc7j4ns2rz562h6qrx2f8xyq7yjcb7zidnj7f6j0pcd0i9";
   "https://github.com/input-output-hk/optparse-applicative"."7497a29cb998721a9068d5725d49461f2bba0e7a" = "1gvsrg925vynwgqwplgjmp53vj953qyh3wbdf34pw21c8r47w35r";
   "https://github.com/paluh/plutus-apps"."5bcc67b3b2eb219a54b90c24920a72c9266190a2" = "1yc8zwviqlvvizgi4ckpy5jdk2w21qjyijhgpfzrizz84ci2igzd";
+  "https://github.com/haskell-distributed/distributed-process"."cacb9d9ad84a5bdc6c6e6d4e8c7ff1835c89dce9" = "084v11p876nv5nz78ap5729wc6r6jjkr7zxsy05nh8x0wah9yxgi";
 }
