@@ -412,7 +412,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
     debug' $ "call parameters: " <> show params <> "."
 
     let
-      printHistory = show <<< foldrHistory step []
+      printHistory = show <<< (foldrHistory step [] :: History -> [String])
         where
           step Created {}      acc = "Created" : acc
           step InputApplied {} acc = "InputApplied " : acc
