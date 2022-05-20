@@ -275,7 +275,7 @@ debugMsg fnName msg = "[DEBUG:" <> fnName <> "] " <> msg
 
 -- TODO: Move to debug log.
 debug :: forall st sc err. String -> String -> Contract st sc err ()
-debug fnName msg = logInfo $ debugMsg fnName msg
+debug fnName msg = logDebug $ debugMsg fnName msg
 
 -- | During first pass the counter equals to 0 - first pass is not a retry
 newtype RetryCounter = RetryCounter Int
@@ -597,7 +597,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
     catchError reqId endpointName handler = catching _MarloweError
         (void $ mapError (review _MarloweError) handler)
         (\err -> do
-            logWarn @String (show err)
+            logWarn $ "Error " <> show err
             tell $ Just $ EndpointException reqId endpointName err
             marlowePlutusContract)
     -- [UC-CONTRACT-1][1] Start a new marlowe contract
@@ -729,11 +729,11 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
             Nothing ->
                 waitForTimeoutOrTransition typedValidator untilTime >>= \case
                     Left _ -> do
-                        logInfo @String $ "Contract Timeout for party " <> show party
+                        logInfo $ "Contract Timeout for party " <> show party
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
                     Right (Transition Closed{}) -> do
-                        logInfo @String $ "Contract Ended for party " <> show party
+                        logInfo $ "Contract Ended for party " <> show party
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
                     Right (Transition InputApplied{historyData}) -> continueWith historyData
@@ -758,21 +758,21 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         let action = getAction timeRange party marloweData
         case action of
             PayDeposit acc p token amount -> do
-                logInfo @String $ "PayDeposit " <> show amount <> " at within time " <> show timeRange
+                logInfo $ "PayDeposit " <> show amount <> " at within time " <> show timeRange
                 let payDeposit = do
                         marloweData <- mkStep params typedValidator timeRange [ClientInput $ IDeposit acc p token amount]
                         continueWith marloweData
                 catching _MarloweError payDeposit $ \err -> do
-                    logWarn @String $ "Error " <> show err
+                    logWarn $ "Error " <> show err
                     logInfo @String $ "Retry PayDeposit in 2 seconds"
                     _ <- awaitTime (time + 2_000)
                     continueWith marloweData
             WaitForTimeout timeout -> do
-                logInfo @String $ "WaitForTimeout " <> show timeout
+                logInfo $ "WaitForTimeout " <> show timeout
                 _ <- awaitTime timeout
                 continueWith marloweData
             WaitOtherActionUntil timeout -> do
-                logInfo @String $ "WaitOtherActionUntil " <> show timeout
+                logInfo $ "WaitOtherActionUntil " <> show timeout
                 waitForTimeoutOrTransition typedValidator timeout >>= \case
                     Left _ -> do
                         logInfo @String $ "Contract Timeout"
@@ -792,7 +792,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                         marlowePlutusContract
 
                 catching _MarloweError closeContract $ \err -> do
-                    logWarn @String $ "Error " <> show err
+                    logWarn $ "Error " <> show err
                     logInfo @String $ "Retry CloseContract in 2 seconds"
                     _ <- awaitTime (time + 2000)
                     continueWith marloweData
@@ -822,14 +822,14 @@ setupMarloweParams owners roles = mapError (review _MarloweError) $
         let tokens = (, 1) <$> Set.toList roles
         txOutRef@(Ledger.TxOutRef h i) <- getUnspentOutput
         -- TODO: Move to debug log.
-        logInfo $ "[DEBUG:setupMarloweParams] txOutRef = " <> show txOutRef
+        debug "setupMarloweParams" $ "txOutRef = " <> show txOutRef
         txOut <-
           maybe
             (throwing _ContractError . Contract.OtherContractError . T.pack $ show txOutRef <> " was not found on the chain index. Please verify that plutus-chain-index is 100% synced.")
             pure
             =<< txOutFromRef txOutRef
         -- TODO: Move to debug log.
-        logInfo $ "[DEBUG:setupMarloweParams] txOut = " <> show txOut
+        debug "setupMarloweParams" $ "txOut = " <> show txOut
         let utxo = Map.singleton txOutRef txOut
         let theCurrency = Currency.OneShotCurrency
                 { curRefTransactionOutput = (h, i)
@@ -954,12 +954,12 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
     nowSlot <- currentSlot
     nowTime <- currentTime
     -- TODO: Move to debug log.
-    logInfo $ "[DEBUG:applyInputs] current slot = " <> show nowSlot
-    logInfo $ "[DEBUG:applyInputs] time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
-    logInfo $ "[DEBUG:applyInputs] current time = " <> show nowTime
-    logInfo $ "[DEBUG:applyInputs] inputs = " <> show inputs
-    logInfo $ "[DEBUG:applyInputs] params = " <> show params
-    logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
+    debug "applyInputs" $ "current slot = " <> show nowSlot
+    debug "applyInputs" $ "time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
+    debug "applyInputs" $ "current time = " <> show nowTime
+    debug "applyInputs" $ "inputs = " <> show inputs
+    debug "applyInputs" $ "params = " <> show params
+    debug "applyInputs" $ "timeInterval = " <> show timeInterval
     let resolution = scSlotLength unsafeGetSlotConfig
     let floor'   (POSIXTime i) = POSIXTime $ resolution * (i `div` resolution)
     let ceiling' (POSIXTime i) = POSIXTime $ resolution * ((i + resolution - 1) `div` resolution)
@@ -969,16 +969,16 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
                 time <- currentTime
                 pure (ceiling' time, floor' $ time + defaultTxValidationRange)
     -- TODO: Move to debug log.
-    logInfo $ "[DEBUG:applyInputs] timeRange = " <> show timeRange
+    debug "applyInputs" $ "timeRange = " <> show timeRange
     let POSIXTime delta = fst timeRange - nowTime
-    logInfo $ "[DEBUG:applyInputs] delta = " <> show delta
+    debug "applyInputs" $ "delta = " <> show delta
     -- Guard against early submission, but only for three minutes.
     when (delta < 180_000)
       . void $ awaitTime $ fst timeRange
     nowSlot' <- currentSlot
-    logInfo $ "[DEBUG:applyInputs] current slot at submission = " <> show nowSlot'
+    debug "applyInputs" $ "current slot at submission = " <> show nowSlot'
     nowTime' <- currentTime
-    logInfo $ "[DEBUG:applyInputs] current time at submission = " <> show nowTime'
+    debug "applyInputs" $ "current time at submission = " <> show nowTime'
     mkStep params typedValidator timeRange inputs
 
 marloweParams :: CurrencySymbol -> MarloweParams
@@ -1028,9 +1028,9 @@ marloweCompanionContract = checkExistingRoleTokens
         checkpointLoop (fmap Right <$> checkForUpdates) ownAddress
     checkForUpdates ownAddress = do
         txns <- NonEmpty.toList <$> awaitUtxoProduced' (CallStackTrace ["checkForUpdates", "marloweCompanionContract"]) ownAddress
-        logInfo $ "[DEBUG:checkForUpdates] txns = " <> show txns
+        debug "checkForUpdates" $ "txns = " <> show txns
         let txOuts = txns >>= view (citxOutputs . _ValidTx)
-        logInfo $ "[DEBUG:checkForUpdates] txOuts = " <> show txOuts
+        debug "checkForUpdates" $ "txOuts = " <> show txOuts
         forM_ txOuts notifyOnNewContractRoles
         pure ownAddress
 
@@ -1041,12 +1041,12 @@ notifyOnNewContractRoles txout = do
     -- a role token symbol. Basically, any non-ADA symbols is a prospect to
     -- to be a role token, but it could also be an NFT for example.
     let curSymbols = filterRoles txout
-    logInfo $ "[DEBUG:notifyOnNewContractRoles] curSymbols = " <> show curSymbols
+    debug "notifyOnNewContractRoles" $ "curSymbols = " <> show curSymbols
     forM_ curSymbols $ \cs -> do
-        logInfo $ "[DEBUG:notifyOnNewContractRoles] cs = " <> show cs
+        debug "notifyOnNewContractRoles" $ "cs = " <> show cs
         -- Check if there is a Marlowe contract on chain that uses this currency
         contract <- findMarloweContractsOnChainByRoleCurrency cs
-        logInfo $ "[DEBUG:notifyOnNewContractRoles] contract = " <> show contract
+        debug "notifyOnNewContractRoles" $ "contract = " <> show contract
         case contract of
             Just (params, md) -> do
                 logInfo $ "WalletCompanion found currency symbol " <> show cs <> " with on-chain state " <> show (params, md) <> "."
@@ -1116,7 +1116,7 @@ mkStep ::
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
 mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
-    logInfo $ "[DEBUG:mkStep] clientInputs = " <> show clientInputs
+    debug "mkStep" $ "clientInputs = " <> show clientInputs
     let
       times =
         Interval.Interval
@@ -1133,17 +1133,17 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
         Just (OnChainState{ocsTxOutRef}, utxo) -> do
             let currentState = toMarloweState ocsTxOutRef
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] currentState = " <> show currentState
+            debug "mkStep" $ "currentState = " <> show currentState
             let marloweTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef
 
             (allConstraints, marloweData) <- evaluateTxContstraints currentState times marloweTxOutRef
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] allConstraints = " <> show allConstraints
-            logInfo $ "[DEBUG:mkStep] marloweData = " <> show marloweData
+            debug "mkStep" $ "allConstraints = " <> show allConstraints
+            debug "mkStep" $ "marloweData = " <> show marloweData
 
             pk <- Contract.ownPaymentPubKeyHash
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] pk = " <> show pk
+            debug "mkStep" $ "pk = " <> show pk
             let lookups1 = Constraints.typedValidatorLookups typedValidator
                     <> Constraints.unspentOutputs utxo
             let lookups:: ScriptLookups TypedMarloweValidator
@@ -1157,23 +1157,23 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                         , unBalancedTxValidityTimeRange = times
                         }
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] utx' = " <> show utx'
+            debug "mkStep" $ "utx' = " <> show utx'
             btx <- balanceTx $ Constraints.adjustUnbalancedTx utx'
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] btx = " <> show btx
+            debug "mkStep" $ "btx = " <> show btx
             stx <- submitBalancedTx btx
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] stx = " <> show stx
+            debug "mkStep" $ "stx = " <> show stx
             let txId = Tx.getCardanoTxId stx
             confirmed <- awaitTxConfirmed' (CallStackTrace ["mkStep"]) (MaxRetries 3) txId
             if confirmed
               then do
                 -- TODO: Move to debug log.
-                logInfo $ "[DEBUG:mkStep] confirmed txId = " <> show txId
+                debug "mkStep" $ "confirmed txId = " <> show txId
                 pure marloweData
               else do
                 -- TODO: Introduce custom error value
-                logInfo $ "[DEBUG:mkStep] tx confirmation failed txId = " <> show txId
+                debug "mkStep" $ "tx confirmation failed txId = " <> show txId
                 throwError $ OtherContractError $ Contract.OtherContractError "mkStep failed to confirm the transaction"
   where
     evaluateTxContstraints :: MarloweData
