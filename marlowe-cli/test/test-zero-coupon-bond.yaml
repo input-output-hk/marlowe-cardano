@@ -1,18 +1,3 @@
-    ../../plutus-apps/plutus-example
-    ../../plutus-apps/freer-extras
-    ../../plutus-apps/playground-common
-    ../../plutus-apps/plutus-chain-index
-    ../../plutus-apps/plutus-chain-index-core
-    ../../plutus-apps/plutus-contract
-    ../../plutus-apps/plutus-ledger
-    ../../plutus-apps/plutus-ledger-constraints
-    ../../plutus-apps/plutus-pab
-    ../../plutus-apps/plutus-pab-executables
-    ../../plutus-apps/playground-common
-    ../../plutus-apps/plutus-playground-server
-    ../../plutus-apps/plutus-use-cases
-    ../../plutus-apps/quickcheck-dynamic
-    ../../plutus-apps/web-ghc
 ptTestName: Zero-Coupon Bond
 
 ptPabOperations:
