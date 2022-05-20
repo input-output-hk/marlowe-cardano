@@ -1,0 +1,177 @@
+ptTestName: Test companion app notifies about new contract
+
+ptPabOperations:
+  - tag: CreateWallet
+    poOwner: Sender
+
+  - tag: CreateWallet
+    poOwner: Receiver
+
+  - tag: FundWallet
+    poOwner: Sender
+    poValue:
+      lovelace: 80000000
+
+  - tag: ActivateCompanion
+    poOwner: Receiver
+    poInstance: Receiver
+
+  - tag: AwaitCompanion
+    poInstance: Receiver
+    poResponses:
+      - matches: []
+
+  - tag: ActivateApp
+    poOwner: Sender
+    poInstance: Sender-1
+
+  - tag: CallCreate
+    poInstance: Sender-1
+    poOwners:
+      - Receiver
+      - Sender
+    poContract:
+      when:
+        - case:
+            party:
+              role_token: Sender
+            deposits: 8000000
+            into_account:
+              role_token: Receiver
+            of_token:
+              currency_symbol: ""
+              token_name: ""
+          then: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+  - tag: AwaitCreate
+    poInstance: Sender-1
+
+  # Single contract for a receiver
+  - tag: AwaitCompanion
+    poInstance: Receiver
+    poResponses:
+      - matches:
+          - - {}
+            - marloweContract:
+                when:
+                  - case:
+                      party:
+                        role_token: Sender
+                      deposits: 8000000
+                      into_account:
+                        role_token: Receiver
+                      of_token:
+                        currency_symbol: ""
+                        token_name: ""
+                    then: close
+                timeout: 1929587625000
+                timeout_continuation: close
+              marloweState:
+                accounts:
+                  [[[{}, { "currency_symbol": "", "token_name": "" }], 2000000]]
+                boundValues: []
+                choices: []
+
+  - tag: ActivateApp
+    poOwner: Sender
+    poInstance: Sender-2
+
+  - tag: CallCreate
+    poInstance: Sender-2
+    poOwners:
+      - Receiver
+      - Sender
+    poContract:
+      when:
+        - case:
+            party:
+              role_token: Sender
+            deposits: 8000000
+            into_account:
+              role_token: Receiver
+            of_token:
+              currency_symbol: ""
+              token_name: ""
+          then:
+            pay: 8000000
+            token:
+              currency_symbol: ""
+              token_name: ""
+            from_account:
+              role_token: Receiver
+            to:
+              party:
+                role_token: Receiver
+            then: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+  - tag: AwaitCreate
+    poInstance: Sender-2
+
+  - tag: ActivateApp
+    poOwner: Sender
+    poInstance: Sender-3
+
+  # We should have two running contracts
+  - tag: AwaitCompanion
+    poInstance: Receiver
+    poResponses:
+      - matches:
+          - - {}
+            - marloweContract: {}
+          - - {}
+            - marloweContract: {}
+
+  - tag: CallCreate
+    poInstance: Sender-3
+    poOwners:
+      - Receiver
+      - Sender
+    poContract:
+      when:
+        - case:
+            party:
+              role_token: Sender
+            deposits: 8000000
+            into_account:
+              role_token: Receiver
+            of_token:
+              currency_symbol: ""
+              token_name: ""
+          then: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+  - tag: AwaitCreate
+    poInstance: Sender-3
+
+  # Now we should have three running contracts
+  - tag: AwaitCompanion
+    poInstance: Receiver
+    poResponses:
+      - matches:
+          - - {}
+            - marloweContract: {}
+          - - {}
+            - marloweContract: {}
+          - - {}
+            - marloweContract: {}
+
+  - tag: ReturnFunds
+    poOwner: Sender
+    poInstances:
+      - Sender-1
+      - Sender-2
+      - Sender-3
+
+  - tag: Stop
+    poInstance: Sender-1
+
+  - tag: Stop
+    poInstance: Sender-2
+
+  - tag: Stop
+    poInstance: Sender-3
