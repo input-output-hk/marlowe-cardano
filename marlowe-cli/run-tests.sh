@@ -71,7 +71,7 @@ do
 done
 
 if [[ "${#@}" -eq 0 ]]; then
-  TEST_CASES=(wait refund simple follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption companion-notifications-for-two-contracts wallet-failure escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada history-for-closing-without-payouts)
+  TEST_CASES=(wait refund simple follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption companion-notifications wallet-failure escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada history-for-closing-without-payouts)
 else
   TEST_CASES=("$@")
 fi
