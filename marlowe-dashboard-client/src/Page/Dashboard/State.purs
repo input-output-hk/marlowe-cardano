@@ -28,7 +28,6 @@ import Component.Contacts.Types as Contacts
 import Component.Template.Types as Template
 import Component.Toast.Types (infoToast, successToast)
 import Control.Alt ((<|>))
-import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
@@ -54,6 +53,7 @@ import Data.Enum (fromEnum, toEnum)
 import Data.Filterable (filter)
 import Data.Foldable (foldMap, for_, traverse_)
 import Data.FoldableWithIndex (forWithIndex_)
+import Data.Int as Int
 import Data.Lens (_Just, assign, modifying, set, to, use, view, (^.), (^?))
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames, getContractNickname)
@@ -73,7 +73,7 @@ import Data.PABConnectedWallet
   )
 import Data.Set (Set)
 import Data.Set as Set
-import Data.Slot (Slot)
+import Data.Slot (Slot, fromPlutusSlot)
 import Data.These (These(..))
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (traverse)
@@ -122,6 +122,7 @@ import Page.Dashboard.Lenses
   , _contractFilter
   , _contractStore
   , _contracts
+  , _currentSlot
   , _menuOpen
   , _roleTokens
   , _selectedContractIndex
@@ -150,7 +151,6 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , InstanceStatusToClient(..)
   ) as PAB
-import Plutus.V1.Ledger.Slot as Plutus
 import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts
@@ -265,9 +265,10 @@ component = connect sliceSelector $ mkReactiveComponent
   }
   where
   sliceSelector =
-    selectEq \{ currentTime, tipSlot, contracts, roleTokens } ->
+    selectEq \{ currentTime, tipSlot, currentSlot, contracts, roleTokens } ->
       { currentTime
       , tipSlot
+      , currentSlot
       , contracts
       , roleTokens
       }
@@ -314,7 +315,7 @@ handleInput _ oldState = do
   let oldContracts = maybe Map.empty (view _contracts) oldState
   let oldPayouts = oldState ^. _Just <<< _roleTokens <<< to getEligiblePayouts
   let oldAssets = oldState ^. _Just <<< _wallet <<< _assets
-  let oldTipSlot = oldState ^. _Just <<< _tipSlot
+  let oldTipSlot = maybe bottom (view _tipSlot) oldState
   handlePayoutChanges oldPayouts
   handleContractChanges oldContracts
   handleAssetsChanges oldAssets
@@ -443,10 +444,13 @@ handleTipSlotChanges
   => Slot
   -> HalogenM m Unit
 handleTipSlotChanges oldTipSlot = do
-  currentTipSlot <- use _tipSlot
-  when (currentTipSlot > oldTipSlot) do
+  currentTipSlot <- fromEnum <$> use _tipSlot
+  currentSlot <- fromEnum <$> use _currentSlot
+  let
+    percentage = Int.toNumber currentSlot / Int.toNumber currentTipSlot * 100.0
+  when (currentTipSlot > fromEnum oldTipSlot) do
     info "⛓️ Chain extended" $ encodeJson
-      { newTipSlot: fromEnum currentTipSlot }
+      { tipSlot: currentTipSlot, currentSlot: currentSlot, percentage }
 
 handleAction
   :: forall m
@@ -774,7 +778,6 @@ actionsFromSources = do
           for_ mWallet \wallet -> do
             let contractStore = store ^. Store._contracts
             traverse_ subscriber $ actionFromWebsocket
-              store.tipSlot
               contractStore
               wallet
               websocketMsg
@@ -787,35 +790,27 @@ actionsFromSources = do
   pure $ websocketActions <|> walletUpdates
 
 actionFromWebsocket
-  :: Slot
-  -> ContractStore
+  :: ContractStore
   -> PABConnectedWallet
   -> FromSocket CombinedWSStreamToClient
   -> Maybe Action
-actionFromWebsocket tipSlot contractStore wallet = case _ of
+actionFromWebsocket contractStore wallet = case _ of
   WS.ReceiveMessage (Left jsonDecodeError) ->
     Just $ notificationParseFailed "websocket message" jsonNull jsonDecodeError
   WS.ReceiveMessage (Right stream) ->
-    actionFromStream tipSlot contractStore wallet
+    actionFromStream contractStore wallet
       stream
   _ -> Nothing
 
 actionFromStream
-  :: Slot
-  -> ContractStore
+  :: ContractStore
   -> PABConnectedWallet
   -> PAB.CombinedWSStreamToClient
   -> Maybe Action
-actionFromStream tipSlot contractStore wallet = case _ of
-  SlotChange (Plutus.Slot { getSlot }) -> do
-    slot <- toEnum =<< BigInt.toInt (unwrap getSlot)
-    guard $ slot > tipSlot
-    pure $ SlotChanged slot
-  -- TODO handle with lite wallet support
-  -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
-  --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
-  --       so that it only triggers this call once synced or ignore the message altogether and find
-  --       a different approach.
+actionFromStream contractStore wallet = case _ of
+  SlotChange { current, tip } -> do
+    pure $ SlotChanged
+      { current: fromPlutusSlot current, tip: fromPlutusSlot tip }
   -- TODO: If we receive a second status update for the same contract / plutus app, while
   -- the previous update is still being handled, then strange things could happen. This
   -- does not seem very likely. Still, it might be worth considering guarding against this

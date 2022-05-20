@@ -59,6 +59,7 @@ type Store =
   -- | block produced this instant would have. This refers instead to the slot
   -- | of the last block produced by the node.
   , tipSlot :: Slot
+  , currentSlot :: Slot
   }
 
 type StoreLens a = Lens' Store a
@@ -88,12 +89,13 @@ mkStore currentTime addressBook contractNicknames wallet =
   , openDropdown: Nothing
   , toast: emptyToastStore
   , tipSlot: bottom
+  , currentSlot: bottom
   }
 
 data Action
   -- Time
   = Tick Instant
-  | SlotChanged Slot
+  | SlotChanged { current :: Slot, tip :: Slot }
   -- Contract
   | FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
   | FollowerAppClosed PlutusAppId
@@ -121,10 +123,8 @@ data Action
 reduce :: Store -> Action -> Store
 reduce store = case _ of
   -- Time
-  SlotChanged slot ->
-    -- Take the max of the current tip slot and the slot in the message
-    -- (prevents rollbacks from updating the store).
-    store { tipSlot = store.tipSlot <> slot }
+  SlotChanged { current, tip } ->
+    store { tipSlot = tip, currentSlot = current }
   Tick currentTime -> case tick currentTime store.contracts of
     Left error -> reduce store
       $ Toast
