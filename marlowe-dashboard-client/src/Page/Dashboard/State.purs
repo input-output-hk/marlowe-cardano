@@ -31,7 +31,7 @@ import Control.Alt ((<|>))
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Structured (StructuredLog, error, info)
+import Control.Logger.Structured (StructuredLog, debug, error, info, info')
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Maybe.Trans (runMaybeT)
@@ -42,6 +42,7 @@ import Control.Parallel (parTraverse_)
 import Data.Align (align)
 import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
+import Data.Array (intercalate)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt as BigInt
@@ -53,7 +54,6 @@ import Data.Enum (fromEnum, toEnum)
 import Data.Filterable (filter)
 import Data.Foldable (foldMap, for_, traverse_)
 import Data.FoldableWithIndex (forWithIndex_)
-import Data.Int as Int
 import Data.Lens (_Just, assign, modifying, set, to, use, view, (^.), (^?))
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames, getContractNickname)
@@ -73,7 +73,8 @@ import Data.PABConnectedWallet
   )
 import Data.Set (Set)
 import Data.Set as Set
-import Data.Slot (Slot, fromPlutusSlot)
+import Data.Slot (Slot, fromPlutusSlot, zeroSlot)
+import Data.Slot as Slot
 import Data.These (These(..))
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (traverse)
@@ -315,7 +316,7 @@ handleInput _ oldState = do
   let oldContracts = maybe Map.empty (view _contracts) oldState
   let oldPayouts = oldState ^. _Just <<< _roleTokens <<< to getEligiblePayouts
   let oldAssets = oldState ^. _Just <<< _wallet <<< _assets
-  let oldTipSlot = maybe bottom (view _tipSlot) oldState
+  let oldTipSlot = maybe zeroSlot (view _tipSlot) oldState
   handlePayoutChanges oldPayouts
   handleContractChanges oldContracts
   handleAssetsChanges oldAssets
@@ -444,13 +445,17 @@ handleTipSlotChanges
   => Slot
   -> HalogenM m Unit
 handleTipSlotChanges oldTipSlot = do
-  currentTipSlot <- fromEnum <$> use _tipSlot
-  currentSlot <- fromEnum <$> use _currentSlot
-  let
-    percentage = Int.toNumber currentSlot / Int.toNumber currentTipSlot * 100.0
-  when (currentTipSlot > fromEnum oldTipSlot) do
-    info "⛓️ Chain extended" $ encodeJson
-      { tipSlot: currentTipSlot, currentSlot: currentSlot, percentage }
+  currentTipSlot <- use _tipSlot
+  currentSlot <- use _currentSlot
+  when (currentTipSlot > oldTipSlot) do
+    info' $ intercalate " "
+      [ "⛓️ Chain extended, Node tip slot:"
+      , Slot.format currentTipSlot
+      , ", PAB current slot:"
+      , Slot.format currentSlot
+      , ", Sync status"
+      , Slot.asFormattedPercentage currentSlot currentTipSlot
+      ]
 
 handleAction
   :: forall m
