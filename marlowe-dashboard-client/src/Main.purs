@@ -10,9 +10,7 @@ import Breadcrumb as Breadcrumb
 import Bridge (toFront)
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
-import Control.Logger.Effect (Logger)
 import Control.Logger.Effect.Console (structuredLogger) as Console
-import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (runMaybeT)
@@ -146,7 +144,7 @@ main args = do
     -- logger = case webpackBuildMode of
     -- Production -> mempty
     -- Development -> Console.structuredLogger
-    walletFunds <- mkWalletFundsEmitter logger pollingInterval storeIO.emitter
+    walletFunds <- mkWalletFundsEmitter pollingInterval storeIO.emitter
     pabWebsocketOut <- liftEffect HS.create
     void
       $ forkAff
@@ -199,11 +197,10 @@ main args = do
 mkWalletFundsEmitter
   :: forall m
    . MonadTime m
-  => Logger StructuredLog
-  -> Milliseconds
+  => Milliseconds
   -> Emitter Store.Store
   -> m (Emitter (Either JsonAjaxError WalletFunds))
-mkWalletFundsEmitter logger pollingInterval storeE = do
+mkWalletFundsEmitter pollingInterval storeE = do
   pollE <- makeClock pollingInterval
   let
     -- | Fires every time the wallet ID changes in the store
