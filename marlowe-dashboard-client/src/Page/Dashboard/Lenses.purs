@@ -57,6 +57,10 @@ _tipSlot :: Lens' State Slot
 _tipSlot =
   _input <<< prop (Proxy :: _ "context") <<< prop (Proxy :: _ "tipSlot")
 
+_currentSlot :: Lens' State Slot
+_currentSlot =
+  _input <<< prop (Proxy :: _ "context") <<< prop (Proxy :: _ "currentSlot")
+
 _roleTokens :: Lens' State RoleTokenStore
 _roleTokens =
   _input <<< prop (Proxy :: _ "context") <<< prop (Proxy :: _ "roleTokens")

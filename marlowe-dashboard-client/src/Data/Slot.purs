@@ -1,9 +1,11 @@
 module Data.Slot
   ( Slot
+  , fromPlutusSlot
   ) where
 
 import Prologue
 
+import Data.BigInt.Argonaut as BigInt
 import Data.Enum
   ( class BoundedEnum
   , class Enum
@@ -11,7 +13,10 @@ import Data.Enum
   , fromEnum
   , toEnum
   )
+import Data.Int as Int
+import Plutus.V1.Ledger.Slot as Plutus
 
+-- FIXME: This is loosing precision, consider using a BigInt
 newtype Slot = Slot Int
 
 derive newtype instance Show Slot
@@ -32,12 +37,6 @@ instance BoundedEnum Slot where
     | i < 0 || i >= top = Nothing
     | otherwise = Just $ Slot i
 
--- There are a few valid semigroup instances that we could choose. We choose
--- max-based semantics because it is the most convenient and frequently useful
--- choice whendealing with time series data and absolute times. It allows the
--- semigroup instance to select the most recent occurrance of an event.
-instance Semigroup Slot where
-  append = max
-
-instance Monoid Slot where
-  mempty = bottom
+fromPlutusSlot :: Plutus.Slot -> Slot
+fromPlutusSlot (Plutus.Slot { getSlot }) = Slot $ Int.floor $ BigInt.toNumber
+  getSlot
