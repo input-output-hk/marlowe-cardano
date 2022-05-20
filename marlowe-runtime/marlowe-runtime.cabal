@@ -43,9 +43,13 @@ library
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , binary
+    , bytestring
     , cardano-api
     , marlowe
     , aeson
     , monoidal-containers
     , containers
     , time
+    , unlift
+    , transformers-base
