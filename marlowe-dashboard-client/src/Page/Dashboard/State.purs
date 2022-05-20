@@ -780,7 +780,7 @@ actionsFromSources = do
               websocketMsg
       pure $ HS.unsubscribe canceller
   let
-    walletUpdates = either (const DisconnectWallet) UpdateWalletFunds <$>
+    walletUpdates = either (DisconnectWallet <<< Just) UpdateWalletFunds <$>
       walletFunds
   -- Alt instance for Emitters "zips" them together. So the resulting Emitter
   -- is the union of events fired from the constituent emitters.
