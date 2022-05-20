@@ -108,6 +108,8 @@ writeShellScriptBin "entrypoint" ''
 
   export SYSTEM_CERTIFICATE_PATH=${cacert}/etc/ssl/certs/ca-bundle.crt
 
+  # Always start fresh
+  rm -fR "$PAB_STATE_DIR"
   mkdir -p "$PAB_STATE_DIR"
 
   sed -e "s|@PAB_STATE_DIR@|$PAB_STATE_DIR|g" \
@@ -122,9 +124,9 @@ writeShellScriptBin "entrypoint" ''
 
   ${pab-init-cmd}/bin/pab-init-cmd
 
-  # Ugly ugly hack to kill the PAB at midnight UTC
+  # Ugly ugly hack to kill the PAB every hour
   ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet &
-  sleep $(($(date -f - +%s- <<< $'tomorrow 00:00\nnow')0))&
+  sleep 3600&
   wait -n
   exit 1
 ''
