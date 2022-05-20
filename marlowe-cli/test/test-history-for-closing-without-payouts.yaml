@@ -1,4 +1,4 @@
-ptTestName: Closing without payouts
+ptTestName: History notification for close without payouts
 
 ptPabOperations:
   - tag: Comment
