@@ -15,7 +15,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (_assets)
 import Data.Set (Set)
-import Data.Slot (Slot)
+import Data.Slot (Slot, zeroSlot)
 import Data.Wallet (WalletDetails)
 import Errors.Explain (explain)
 import Language.Marlowe.Client (ContractHistory, MarloweError, UnspentPayouts)
@@ -88,8 +88,8 @@ mkStore currentTime addressBook contractNicknames wallet =
   -- # System wide components
   , openDropdown: Nothing
   , toast: emptyToastStore
-  , tipSlot: bottom
-  , currentSlot: bottom
+  , tipSlot: zeroSlot
+  , currentSlot: zeroSlot
   }
 
 data Action
