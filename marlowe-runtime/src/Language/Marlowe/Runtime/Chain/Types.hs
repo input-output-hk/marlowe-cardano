@@ -9,15 +9,13 @@
 
 module Language.Marlowe.Runtime.Chain.Types where
 
-import Cardano.Api (Address, AsType (..), BlockInMode, ByronAddr, CardanoMode, ChainPoint, ChainSyncClient, ChainTip,
-                    HasTypeProxy (proxyToAsType), PolicyId, ScriptData, SerialiseAsCBOR (..), SerialiseAsRawBytes (..),
-                    ShelleyAddr, TxId, TxIx (..), Value, serialiseToJSON)
+import Cardano.Api (AddressAny, AsType (..), BlockInMode, CardanoMode, ChainPoint, ChainSyncClient, ChainTip, PolicyId,
+                    ScriptData, SerialiseAsCBOR (..), SerialiseAsRawBytes (..), TxId, TxIx (..), Value, serialiseToJSON)
 import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary (..), Word64)
 import Data.ByteString.Short (ShortByteString)
 import Data.Data (Typeable)
-import Data.Proxy (Proxy (Proxy))
 import Data.Time (Day (..), NominalDiffTime, UTCTime (..), diffTimeToPicoseconds, nominalDiffTimeToSeconds,
                   picosecondsToDiffTime, secondsToNominalDiffTime)
 import GHC.Generics (Generic)
@@ -25,7 +23,7 @@ import GHC.Generics (Generic)
 type MarloweChainSyncClient = ChainSyncClient (BlockInMode CardanoMode) ChainPoint ChainTip
 
 data MarloweChainEvent
-  = MarloweRollForward MarloweBlockHeader MarloweTxs MarloweChainTip
+  = MarloweRollForward MarloweBlockHeader [MarloweTx] MarloweChainTip
   | MarloweRollBackward MarloweChainPoint MarloweChainTip
   deriving (Generic, Typeable, Show, Eq)
 
@@ -97,24 +95,17 @@ instance Binary MarlowePolicyId where
       Just a  -> pure a
     pure $ MarlowePolicyId tid
 
-data MarloweTxs
-  = MarloweTxsByron [MarloweTx ByronAddr]
-  | MarloweTxsShelley [MarloweTx ShelleyAddr]
-  deriving (Generic, Typeable, Show, Eq)
-
-instance Binary MarloweTxs
-
-data MarloweTx addr = MarloweTx
+data MarloweTx = MarloweTx
   { marloweTx_id       :: MarloweTxId
   , marloweTx_policies :: [MarlowePolicyId]
   , marloweTx_interval :: Maybe MarloweValidityInterval
   , marloweTx_metadata :: Maybe Aeson.Value
   , marloweTx_inputs   :: [MarloweTxIn]
-  , marloweTx_outputs  :: [MarloweTxOut addr]
+  , marloweTx_outputs  :: [MarloweTxOut]
   }
   deriving (Generic, Typeable, Show, Eq)
 
-instance (HasTypeProxy addr, SerialiseAsRawBytes (Address addr)) => Binary (MarloweTx addr) where
+instance Binary MarloweTx where
   put (MarloweTx tid policies interval metadata inputs outputs) = do
     put tid
     put policies
@@ -134,28 +125,36 @@ instance (HasTypeProxy addr, SerialiseAsRawBytes (Address addr)) => Binary (Marl
     outputs <- get
     pure $ MarloweTx tid policies interval metadata inputs outputs
 
-data MarloweTxOut addr = MarloweTxOut
+newtype MarloweAddress = MarloweAddress AddressAny
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary MarloweAddress where
+  put (MarloweAddress address) = put $ serialiseToRawBytes address
+  get = do
+    bytes <- get
+    case deserialiseFromRawBytes AsAddressAny bytes of
+      Nothing      -> fail "invalid address bytes"
+      Just address -> pure $ MarloweAddress address
+
+data MarloweTxOut = MarloweTxOut
   { marloweTxOut_txIn    :: MarloweTxIn
-  , marloweTxOut_address :: Address addr
+  , marloweTxOut_address :: MarloweAddress
   , marloweTxOut_value   :: Value
   , marloweTxOut_datum   :: Maybe ScriptData
   }
   deriving (Generic, Typeable, Show, Eq)
 
-instance (HasTypeProxy addr, SerialiseAsRawBytes (Address addr)) => Binary (MarloweTxOut addr) where
+instance Binary MarloweTxOut where
   put (MarloweTxOut txIn address value datum) = do
     put txIn
-    put $ serialiseToRawBytes address
+    put address
     put $ serialiseToJSON value
     put $ serialiseToCBOR <$> datum
   get = do
     txIn <- get
-    addressBytes <- get
+    address <- get
     valueBytes <- get
     datumBytes <- get
-    address <- case deserialiseFromRawBytes (AsAddress $ proxyToAsType $ Proxy @addr) addressBytes of
-      Nothing -> fail "invalid address"
-      Just a  -> pure a
     value <- case Aeson.eitherDecode valueBytes of
       Left err -> fail err
       Right a  -> pure a

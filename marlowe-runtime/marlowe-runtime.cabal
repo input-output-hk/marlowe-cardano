@@ -52,6 +52,7 @@ library
     , containers
     , time
     , unlift
+    , text
     , transformers-base
 
 executable synctest
@@ -99,3 +100,4 @@ executable distributed
     , cardano-config
     , distributed-process
     , network-transport-tcp
+    , time

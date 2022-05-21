@@ -6,31 +6,29 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Language.Marlowe.Runtime.Chain where
 
-import Cardano.Api (Address, AddressInEra (..), Block (..), BlockHeader (..), BlockInMode (..), BlockNo (..),
-                    CardanoMode, ChainPoint (..), ChainSyncClient (..), ChainTip (..), CtxTx, EraInMode (..),
-                    GenesisParameters (..), LocalChainSyncClient (..), LocalNodeClientProtocols (..),
-                    LocalNodeConnectInfo, QueryInEra (..), QueryInMode (..), QueryInShelleyBasedEra (..),
-                    ShelleyBasedEra (..), SlotNo (..), Tx, TxBody (..), TxBodyContent (..), TxId, TxIn (..), TxIx (..),
-                    TxMetadataInEra (..), TxMetadataJsonSchema (..), TxMintValue (..), TxOut (..), TxOutDatum (..),
-                    TxValidityLowerBound (..), TxValidityUpperBound (..), ValueNestedBundle (..), ValueNestedRep (..),
-                    connectToLocalNode, getTxBody, getTxId, metadataToJson, queryNodeLocalState, txOutValueToValue,
-                    valueToNestedRep)
+import Cardano.Api (AddressInEra (..), Block (..), BlockHeader (..), BlockInMode (..), BlockNo (..), CardanoMode,
+                    ChainPoint (..), ChainSyncClient (..), ChainTip (..), EraInMode (..), GenesisParameters (..),
+                    LocalChainSyncClient (..), LocalNodeClientProtocols (..), LocalNodeConnectInfo, QueryInEra (..),
+                    QueryInMode (..), QueryInShelleyBasedEra (..), ShelleyBasedEra (..), SlotNo (..), Tx, TxBody (..),
+                    TxBodyContent (..), TxIn (..), TxIx (..), TxMetadataInEra (..), TxMetadataJsonSchema (..),
+                    TxMintValue (..), TxOut (..), TxOutDatum (..), TxValidityLowerBound (..), TxValidityUpperBound (..),
+                    ValueNestedBundle (..), ValueNestedRep (..), connectToLocalNode, getTxBody, getTxId, metadataToJson,
+                    queryNodeLocalState, toAddressAny, txOutValueToValue, valueToNestedRep)
 import Cardano.Api.ChainSync.Client (ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
-import Cardano.Api.Shelley (AddressTypeInEra (ByronAddressInAnyEra, ShelleyAddressInEra), Hash (..))
+import Cardano.Api.Shelley (Hash (..))
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Foldable (for_)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Time (addUTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash (..), MarloweBlockNo (..),
-                                             MarloweChainEvent (..),
+import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (MarloweAddress), MarloweBlockHeader (..),
+                                             MarloweBlockHeaderHash (..), MarloweBlockNo (..), MarloweChainEvent (..),
                                              MarloweChainPoint (MarloweChainPoint, MarloweChainPointAtGenesis),
                                              MarloweChainSyncClient,
                                              MarloweChainTip (MarloweChainTip, MarloweChainTipAtGenesis),
                                              MarlowePolicyId (..), MarloweSlotNo (..), MarloweTx (..), MarloweTxId (..),
-                                             MarloweTxIn (..), MarloweTxOut (..), MarloweTxs (..),
-                                             MarloweValidityInterval (..))
+                                             MarloweTxIn (..), MarloweTxOut (..), MarloweValidityInterval (..))
 import Unlift (MonadUnlift, Unlift (runUnlift), askUnlift)
-import Unsafe.Coerce (unsafeCoerce)
 
 runMarloweChainSyncClient
   :: MonadIO m
@@ -70,25 +68,25 @@ stdOutMarloweChainSyncClient startingPoints genesisParams = marloweChainSyncClie
       putStrLn "Start"
       putStrLn $ "  Following chain from: " <> show startedAt
       putStrLn $ "  Current tip: " <> show tip
-    onEvent (MarloweRollForward (MarloweBlockHeader slot blockHash block) _ tip) = do
+    onEvent (MarloweRollForward (MarloweBlockHeader slot blockHash block) txs tip) = do
       putStrLn "Roll forward"
       putStrLn $ "  SlotNo: " <> show slot
       putStrLn $ "  BlockHash: " <> show blockHash
       putStrLn $ "  BlockNo: " <> show block
       putStrLn $ "  Tip: " <> show tip
-      -- for_ (zip [0..] txs) \(i :: Integer, MarloweTx{..}) -> do
-      --   putStrLn $ "  Transaction[" <> show i <> "]: "
-      --   putStrLn $ "    Id: " <> show marloweTx_id
-      --   putStrLn $ "    Policies: " <> show marloweTx_policies
-      --   putStrLn $ "    Interval: " <> show marloweTx_interval
-      --   putStrLn $ "    Metadata: " <> show marloweTx_metadata
-      --   putStrLn $ "    Inputs: " <> show marloweTx_inputs
-      --   for_ (zip [0..] marloweTx_outputs) \(j :: Integer, MarloweTxOut{..}) -> do
-      --     putStrLn $ "    Output[" <> show j <> "]: "
-      --     putStrLn $ "      TxIn: " <> show marloweTxOut_txIn
-      --     putStrLn $ "      Address: " <> show marloweTxOut_address
-      --     putStrLn $ "      Value: " <> show marloweTxOut_value
-      --     putStrLn $ "      Datum: " <> show marloweTxOut_datum
+      for_ (zip [0..] txs) \(i :: Integer, MarloweTx{..}) -> do
+        putStrLn $ "  Transaction[" <> show i <> "]: "
+        putStrLn $ "    Id: " <> show marloweTx_id
+        putStrLn $ "    Policies: " <> show marloweTx_policies
+        putStrLn $ "    Interval: " <> show marloweTx_interval
+        putStrLn $ "    Metadata: " <> show marloweTx_metadata
+        putStrLn $ "    Inputs: " <> show marloweTx_inputs
+        for_ (zip [0..] marloweTx_outputs) \(j :: Integer, MarloweTxOut{..}) -> do
+          putStrLn $ "    Output[" <> show j <> "]: "
+          putStrLn $ "      TxIn: " <> show marloweTxOut_txIn
+          putStrLn $ "      Address: " <> show marloweTxOut_address
+          putStrLn $ "      Value: " <> show marloweTxOut_value
+          putStrLn $ "      Datum: " <> show marloweTxOut_datum
     onEvent (MarloweRollBackward point tip) = do
       putStrLn "Roll backward"
       putStrLn $ "  ToPoint: " <> show point
@@ -126,17 +124,8 @@ extractChainTip (ChainTip (SlotNo slot) (HeaderHash hash) (BlockNo block)) =
   MarloweChainTip (MarloweSlotNo slot) (MarloweBlockHeaderHash hash) (MarloweBlockNo block)
 
 handleRollForward :: GenesisParameters -> BlockInMode CardanoMode -> MarloweChainTip  -> MarloweChainEvent
-handleRollForward genesisParams b = case b of
-  BlockInMode (Block header txs) AlonzoEraInCardanoMode  ->
-    MarloweRollForward (extractHeader header) (MarloweTxsShelley $ extractMarloweTx (ShelleyAddressInEra ShelleyBasedEraAlonzo) <$> txs)
-  BlockInMode (Block header txs) MaryEraInCardanoMode    ->
-    MarloweRollForward (extractHeader header) (MarloweTxsShelley $ extractMarloweTx (ShelleyAddressInEra ShelleyBasedEraMary ) <$> txs)
-  BlockInMode (Block header txs) AllegraEraInCardanoMode ->
-    MarloweRollForward (extractHeader header) (MarloweTxsShelley $ extractMarloweTx (ShelleyAddressInEra ShelleyBasedEraAllegra) <$> txs)
-  BlockInMode (Block header txs) ShelleyEraInCardanoMode ->
-    MarloweRollForward (extractHeader header) (MarloweTxsShelley $ extractMarloweTx (ShelleyAddressInEra ShelleyBasedEraShelley)  <$> txs)
-  BlockInMode (Block header txs) ByronEraInCardanoMode   ->
-    MarloweRollForward (extractHeader header) (MarloweTxsByron $ extractMarloweTx ByronAddressInAnyEra <$> txs)
+handleRollForward genesisParams (BlockInMode (Block header txs) _) =
+  MarloweRollForward (extractHeader header) (extractMarloweTx <$> txs)
   where
     extractHeader (BlockHeader (SlotNo slot) (HeaderHash hash) (BlockNo block)) =
       MarloweBlockHeader
@@ -144,8 +133,8 @@ handleRollForward genesisParams b = case b of
         (MarloweBlockHeaderHash hash)
         (MarloweBlockNo block)
 
-    extractMarloweTx :: forall addr era. AddressTypeInEra addr era -> Tx era -> MarloweTx addr
-    extractMarloweTx addrType tx =
+    extractMarloweTx :: forall era. Tx era -> MarloweTx
+    extractMarloweTx tx =
       let
         txBody@(TxBody TxBodyContent {..}) = getTxBody tx
         txId = getTxId txBody
@@ -156,7 +145,7 @@ handleRollForward genesisParams b = case b of
           (extractInterval txValidityRange)
           (extractMetadata txMetadata)
           (extractTxIn . fst <$> txIns)
-          (uncurry (extractMarloweTxOut addrType txId) <$> zip [0..] txOuts)
+          (uncurry (extractMarloweTxOut txId) <$> zip [0..] txOuts)
 
     extractTxIn (TxIn tid ix) = MarloweTxIn (MarloweTxId tid) ix
 
@@ -187,17 +176,10 @@ handleRollForward genesisParams b = case b of
     extractMetadata (TxMetadataInEra _ metadata) = Just $ metadataToJson TxMetadataJsonNoSchema  metadata
     extractMetadata _                            = Nothing
 
-    extractMarloweTxOut
-      :: forall addr era
-       . AddressTypeInEra addr era
-      -> TxId
-      -> Word
-      -> TxOut CtxTx era
-      -> MarloweTxOut addr
-    extractMarloweTxOut _ txId ix (TxOut (AddressInEra _ address) value datum) =
+    extractMarloweTxOut txId ix (TxOut (AddressInEra _ address) value datum) =
       MarloweTxOut
         (MarloweTxIn (MarloweTxId txId) (TxIx ix))
-        (unsafeCoerce address :: Address addr) -- We know that addr' ~ addr here, but try convincing the stupid compiler...
+        (MarloweAddress $ toAddressAny address)
         (txOutValueToValue value)
         case datum of
           TxOutDatum _ datum' -> Just datum'
