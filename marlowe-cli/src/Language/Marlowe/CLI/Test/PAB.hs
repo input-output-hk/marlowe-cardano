@@ -49,9 +49,9 @@ import Cardano.Wallet.Primitive.Types (WalletName (..))
 import Cardano.Wallet.Primitive.Types.TokenPolicy (TokenName (UnsafeTokenName), TokenPolicyId (UnsafeTokenPolicyId))
 import Cardano.Wallet.Primitive.Types.TokenQuantity (TokenQuantity (TokenQuantity))
 import Cardano.Wallet.Shelley.Compatibility (fromCardanoAddress)
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (forkFinally, forkIO, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
-import Control.Exception (SomeException, catch, displayException)
+import Control.Exception (BlockedIndefinitelyOnMVar, Exception (fromException), SomeException, catch, displayException)
 import Control.Lens (use, (%=), (^.))
 import Control.Monad (unless, void, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
@@ -108,6 +108,7 @@ import qualified Data.Quantity as W (Quantity (..))
 import qualified Data.Text as T (pack, unpack)
 import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
 import qualified Data.Vector as V (all, zip)
+import Network.HTTP.Client (HttpException)
 import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
 
@@ -831,10 +832,19 @@ runContract PabAccess{..} contract walletId =
                                       go connection
             ContractFinished _   -> pure ()
             _                    -> go connection
+
+      notifyErr (Right res) = pure res
+      notifyErr (Left ex) = case fromException ex of
+        Just (ex' :: HttpException) ->
+          when verbose $ liftIO . putStrLn $ "[runContract] Websocket read out failed: " <> displayException ex'
+        Nothing                   ->
+          when verbose $ liftIO . putStrLn $ "[runContract] PAB communication thread failure: " <> displayException ex
+
     void
       . liftIO
-      . forkIO
-      $ runWs instanceId go
+      . forkFinally
+        (runWs instanceId go)
+      $ notifyErr
     pure (instanceId, instanceChan)
 
 
