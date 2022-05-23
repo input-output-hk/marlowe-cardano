@@ -102,6 +102,7 @@ type Slice =
   , currentTime :: Instant
   , roleTokens :: RoleTokenStore
   , tipSlot :: Slot.Slot
+  , currentSlot :: Slot.Slot
   }
 
 data Msg
@@ -156,7 +157,7 @@ data Action
   | MarloweAppClosed (Maybe Json)
   | FollowerAppClosed (Maybe Json) MarloweParams
   | WalletCompanionAppClosed (Maybe Json)
-  | SlotChanged Slot.Slot
+  | SlotChanged { current :: Slot.Slot, tip :: Slot.Slot }
   | NicknameUpdated ContractStatusId ContractNickname
   | RestartFollower PlutusAppId MarloweParams
 

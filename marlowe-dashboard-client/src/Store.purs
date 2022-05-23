@@ -15,7 +15,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (_assets)
 import Data.Set (Set)
-import Data.Slot (Slot)
+import Data.Slot (Slot, zeroSlot)
 import Data.Wallet (WalletDetails)
 import Errors.Explain (explain)
 import Language.Marlowe.Client (ContractHistory, MarloweError, UnspentPayouts)
@@ -59,6 +59,7 @@ type Store =
   -- | block produced this instant would have. This refers instead to the slot
   -- | of the last block produced by the node.
   , tipSlot :: Slot
+  , currentSlot :: Slot
   }
 
 type StoreLens a = Lens' Store a
@@ -87,13 +88,14 @@ mkStore currentTime addressBook contractNicknames wallet =
   -- # System wide components
   , openDropdown: Nothing
   , toast: emptyToastStore
-  , tipSlot: bottom
+  , tipSlot: zeroSlot
+  , currentSlot: zeroSlot
   }
 
 data Action
   -- Time
   = Tick Instant
-  | SlotChanged Slot
+  | SlotChanged { current :: Slot, tip :: Slot }
   -- Contract
   | FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
   | FollowerAppClosed PlutusAppId
@@ -121,10 +123,8 @@ data Action
 reduce :: Store -> Action -> Store
 reduce store = case _ of
   -- Time
-  SlotChanged slot ->
-    -- Take the max of the current tip slot and the slot in the message
-    -- (prevents rollbacks from updating the store).
-    store { tipSlot = store.tipSlot <> slot }
+  SlotChanged { current, tip } ->
+    store { tipSlot = tip, currentSlot = current }
   Tick currentTime -> case tick currentTime store.contracts of
     Left error -> reduce store
       $ Toast
