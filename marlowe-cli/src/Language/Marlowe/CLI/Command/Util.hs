@@ -250,7 +250,7 @@ faucetCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath
 faucetCommand network socket =
   O.command "faucet"
     $ O.info (faucetOptions network socket)
-    $ O.progDesc "Fund an address from a faucet."
+    $ O.progDesc "Fund an address from a faucet. Note that the faucet is only funded on the private developer testnet for Marlowe, and that this command will not supply funds on public networks."
 
 
 -- | Parser for the "faucet" options.
