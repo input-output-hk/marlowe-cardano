@@ -86,8 +86,7 @@ import Plutus.ChainIndex (ChainIndexTx (..), Page, PageQuery, _ValidTx, citxOutp
 import Plutus.ChainIndex.Api (paget)
 import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractError)
 import qualified Plutus.Contract as Contract (ContractError (..))
-import Plutus.Contract.Request (txoRefsAt, txsFromTxIds)
-import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
+import Plutus.Contract.Request (getSlotConfig, txoRefsAt, txsFromTxIds)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
 import Plutus.V1.Ledger.Api (toBuiltin)
@@ -410,6 +409,7 @@ marloweFollowContract :: FollowerM ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
     debug' $ "call parameters: " <> show params <> "."
+    slotConfig <- getSlotConfig
 
     let
       printHistory = show <<< (foldrHistory step [] :: History -> [String])
@@ -422,7 +422,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       printState (Nothing, payouts) = "{ inputs = Nothing," <> "payouts = " <> show payouts <> "}"
 
       fetchOnChainState :: FollowerM FollowerContractState
-      fetchOnChainState = (,) <$> marloweHistory unsafeGetSlotConfig params <*> payoutsAtCurrency (rolesCurrency params)
+      fetchOnChainState = (,) <$> marloweHistory slotConfig params <*> payoutsAtCurrency (rolesCurrency params)
 
       awaitNewState :: FollowerContractState -> FollowerM (FollowerContractUpdate, FollowerContractState)
       awaitNewState (prevHistory, prevPayouts) = do
@@ -525,7 +525,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
                   let
                     tx = contractUpdateTransaction update
                   historyFrom
-                    unsafeGetSlotConfig
+                    slotConfig
                     (validatorAddress $ mkMarloweTypedValidator params)
                     [tx]
                     mUtxo
@@ -657,7 +657,8 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
         let
           debug'' = debug' "create"
-        debug'' $ "slotConfig = " <> show unsafeGetSlotConfig
+        slotConfig <- getSlotConfig
+        debug'' $ "slotConfig = " <> show slotConfig
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]
         ownPubKey <- unPaymentPubKeyHash <$> Contract.ownPaymentPubKeyHash
@@ -1002,18 +1003,19 @@ applyInputs :: AsMarloweError e
     -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
+    let debug' = debug "applyInputs"
     -- Wait until a block is produced, so we have an accurate current time and slot.
     void $ waitNSlots 1
     nowSlot <- currentSlot
     nowTime <- currentTime
-    -- TODO: Move to debug log.
-    debug "applyInputs" $ "current slot = " <> show nowSlot
-    debug "applyInputs" $ "time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
-    debug "applyInputs" $ "current time = " <> show nowTime
-    debug "applyInputs" $ "inputs = " <> show inputs
-    debug "applyInputs" $ "params = " <> show params
-    debug "applyInputs" $ "timeInterval = " <> show timeInterval
-    let resolution = scSlotLength unsafeGetSlotConfig
+    slotConfig <- getSlotConfig
+    debug' $ "current slot = " <> show nowSlot
+    debug' $ "time range for slot = " <> show (slotToPOSIXTimeRange slotConfig nowSlot)
+    debug' $ "current time = " <> show nowTime
+    debug' $ "inputs = " <> show inputs
+    debug' $ "params = " <> show params
+    debug' $ "timeInterval = " <> show timeInterval
+    let resolution = scSlotLength slotConfig
     let floor'   (POSIXTime i) = POSIXTime $ resolution * (i `div` resolution)
     let ceiling' (POSIXTime i) = POSIXTime $ resolution * ((i + resolution - 1) `div` resolution)
     timeRange <- case timeInterval of
@@ -1021,17 +1023,16 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
             Nothing -> do
                 time <- currentTime
                 pure (ceiling' time, floor' $ time + defaultTxValidationRange)
-    -- TODO: Move to debug log.
-    debug "applyInputs" $ "timeRange = " <> show timeRange
+    debug' $ "timeRange = " <> show timeRange
     let POSIXTime delta = fst timeRange - nowTime
-    debug "applyInputs" $ "delta = " <> show delta
+    debug' $ "delta = " <> show delta
     -- Guard against early submission, but only for three minutes.
     when (delta < 180_000)
       . void $ awaitTime $ fst timeRange
     nowSlot' <- currentSlot
-    debug "applyInputs" $ "current slot at submission = " <> show nowSlot'
+    debug' $ "current slot at submission = " <> show nowSlot'
     nowTime' <- currentTime
-    debug "applyInputs" $ "current time at submission = " <> show nowTime'
+    debug' $ "current time at submission = " <> show nowTime'
     mkStep params typedValidator timeRange inputs
 
 marloweParams :: CurrencySymbol -> MarloweParams
@@ -1170,6 +1171,7 @@ mkStep ::
     -> Contract w MarloweSchema MarloweError MarloweData
 mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
     debug "mkStep" $ "clientInputs = " <> show clientInputs
+    slotConfig <- getSlotConfig
     let
       times =
         Interval.Interval
@@ -1177,7 +1179,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
           (Interval.UpperBound (Interval.Finite maxTime) False)
       range' =
         posixTimeRangeToContainedSlotRange
-          unsafeGetSlotConfig
+          slotConfig
           times
     maybeState <- retryRequestTillJust' (CallStackTrace ["mkStep"]) $ do
       getOnChainStateTxOuts typedValidator
@@ -1327,6 +1329,7 @@ waitForTransition typedValidator = do
       debug' = debug "Language.Marlowe.Client.waitForTransition"
     debug' $ "Marlowe validator address which we query" <> show addr
     currentState <- getOnChainState typedValidator
+    slotConfig <- getSlotConfig
     case currentState of
             Nothing -> do
                 debug' "Current state on chain is empty so waiting..."
@@ -1336,7 +1339,7 @@ waitForTransition typedValidator = do
                 pure $ promiseBind (utxoIsProduced' (CallStackTrace ["waitForTransition"]) addr) $ \txns -> do
                     -- See NOTE: Chain index / cardano-node query consistency
                     -- void $ retryTillResponseDiffers' (CallStackTrace ["waitForTransition->Nothing"]) mempty (utxosAt addr)
-                    produced <- concatMapM (marloweHistoryFrom typedValidator unsafeGetSlotConfig) $ NonEmpty.toList txns
+                    produced <- concatMapM (marloweHistoryFrom typedValidator slotConfig) $ NonEmpty.toList txns
                     case produced of
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
                         [history] -> pure $ Transition history
@@ -1345,7 +1348,7 @@ waitForTransition typedValidator = do
                 debug' $ "wait till utxo is spent = " <> show tyTxOutRefRef
                 pure $ promiseBind (utxoIsSpent' (CallStackTrace ["waitForTransition"]) tyTxOutRefRef) $ \txn -> do
                     -- void $ retryTillResponseDiffers' (CallStackTrace ["waitForTimeoutOrTransition->Just"]) currentState $ getOnChainState typedValidator
-                    spent <- marloweHistoryFrom typedValidator unsafeGetSlotConfig txn
+                    spent <- marloweHistoryFrom typedValidator slotConfig txn
                     case spent of
                         [history] -> pure $ Transition history
                         _         -> throwing_ _UnableToExtractTransition
