@@ -65,8 +65,10 @@ Instead, if instead letting a timeout on a `When` statement by applying empty in
 *   Not too long: `timeInterval[1] < nextNextTimeout`.
 
 Remember . ..
-*   The `nodeTime` typically lags behind `clockTime` by a few seconds to even more than a minute, depending upon the testnet.
-*   The `blockTime` can be seconds or minutes after the `nodeTime` when the transaction is submitted.
+*   Node time lags clock time: `nodeTime <= clockTime`.
+    *   The `nodeTime` typically lags behind `clockTime` by a few seconds to even more than a minute, depending upon the testnet.
+*   Confirmation delay: `blockTime at confirmation > clockTime at submission`.
+    *   The `blockTime` can be seconds or minutes after the `nodeTime` when the transaction is submitted.
 
 
 ## Transactions

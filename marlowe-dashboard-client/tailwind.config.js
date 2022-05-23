@@ -82,6 +82,7 @@ module.exports = {
       animation: {
         "from-below": "from-below 250ms ease-out 1",
         "to-bottom": "to-bottom 250ms ease-out 1",
+        "to-right": "to-right 350ms ease-out 1",
         grow: "grow 1s ease-in-out infinite",
       },
       transitionProperty: {
@@ -101,6 +102,10 @@ module.exports = {
         "to-bottom": {
           "0%": { transform: "translateY(0px)", opacity: 1 },
           "100%": { transform: "translateY(20px)", opacity: 0 },
+        },
+        "to-right": {
+          "0%": { transform: "translateX(0px)", opacity: 1 },
+          "100%": { transform: "translateX(40px)", opacity: 0 },
         },
         grow: {
           "0%, 100%": { transform: "scale(1)" },
@@ -169,6 +174,9 @@ module.exports = {
         button: "120px",
         "90pc": "90%",
         sm: "375px",
+        md: "640px",
+        lg: "768px",
+        xl: "1440px",
         hint: "270px",
       },
     },
@@ -238,8 +246,8 @@ module.exports = {
     fontWeight: true,
     height: true,
     lineHeight: true,
-    listStylePosition: false,
-    listStyleType: false,
+    listStylePosition: true,
+    listStyleType: true,
     maxHeight: true,
     maxWidth: true,
     minHeight: false,

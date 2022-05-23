@@ -47,6 +47,7 @@ library
     Marlowe.Contracts
     Marlowe.Contracts.Common
     Marlowe.Contracts.Escrow
+    Marlowe.Contracts.Forward
     Marlowe.Contracts.Futures
     Marlowe.Contracts.Options
     Marlowe.Contracts.StructuredProducts
@@ -55,6 +56,7 @@ library
     Marlowe.Contracts.ZeroCouponBond
     Marlowe.Contracts.UTC.Common
     Marlowe.Contracts.UTC.CouponBond
+    Marlowe.Contracts.UTC.Forward
     Marlowe.Contracts.UTC.Futures
     Marlowe.Contracts.UTC.Options
     Marlowe.Contracts.UTC.StructuredProducts

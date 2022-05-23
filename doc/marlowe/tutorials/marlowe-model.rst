@@ -20,25 +20,39 @@ Contracts
 Contracts in Marlowe run on a blockchain, but need to interact with the
 off-chain world. The *parties* to the contract, whom we also call the
 *participants*, can engage in various *actions*: they can be asked to
-*deposit money*, or to *make a choice* between various alternatives. A
-*notification* of an external value (also called an *oracle* value),
-such as the current price of a particular commodity, is the other
-possible form of input. [1]_
+*deposit money*, or to *make a choice* between various alternatives.
+*Notification* is another form of input that is used to tell the contract
+that a certain condition has been met, anybody can do this, and it is
+only necessary because once a contract becomes dormant (quiescent), it
+cannot "wake up" on its own, it can only respond to inputs. [1]_
 
-Running a contract will also produce external *effects*, by making
+Running a contract may also produce external *effects*, by making
 payments to parties in the contract.
 
-Participants and roles
-~~~~~~~~~~~~~~~~~~~~~~
+Participants, roles, and public key
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We should separate the notions of *participants* and *roles* in a
-Marlowe contract. The roles in a contract are fixed and immutable, and
-could be named ``party``, ``counterparty`` etc. On the other hand, the
-participants that are bound to the contract roles can change during the
-execution of the particular *contract instance*. This allows roles in
-running contracts to be *traded* between participants, through a
-mechanism of *tokenisation*. This will be available in the on-chain
+We should separate the notions of *participant*, *role*, and *public keys*
+in a Marlowe contract. A participant (or party) in the contract can be
+represented by either a ``role`` or a ``public key`` (public keys
+will eventually be replaced by
+`addresses <https://docs.cardano.org/core-concepts/cardano-addresses>`_).
+
+*Roles* are represented by tokens and they are distributed to addresses
+at the time a contract is deployed to the blockchain. After that,
+whoever has the token representing a role is able to carry out the actions
+assigned to that role, and receive the payments that are issued to that role.
+
+This allows roles in running contracts to be *traded* between participants,
+through a mechanism of *tokenisation*. This will be available in the on-chain
 implementation of Marlowe but the simulation in the Marlowe Playground simply presents contract roles.
+
+*Public key* parties, are represented by the hash
+of a *public key* (or eventually an `addresses <https://docs.cardano.org/core-concepts/cardano-addresses>`_).
+Using public keys to represent parties is simpler because it doesn't require handling
+tokens, but they cannot be traded, because once you know the private key for a given public key
+you cannot prove you have forgotten it.
+
 
 Accounts
 ~~~~~~~~
@@ -48,8 +62,7 @@ that participate in the contract implicitly own an account with their
 name. All assets stored in the contract must be in the account of one of
 the parties; this way, when the contract is closed, all assets that
 remain in the contract belong to someone, and so can be refunded to their respective owners. 
-These
-accounts are *local*: they only exist for the duration of the execution of the
+These accounts are *local*: they only exist for the duration of the execution of the
 contract, and during that time they are only accessible from within the contract.
 
 Steps and states
@@ -62,7 +75,8 @@ what to do next. For example, the contract ``Pay a p t v cont`` says
 the account ``a``, and then follow the contract ``cont``\ ”. We call
 ``cont`` the *continuation* of the contract.
 
-In executing a contract we need to keep track of the *current contract*:
+In executing a contract, we need to keep track of the *current contract*
+(that is, the remaining part of the contract):
 after making a step in the example above, the current contract is the
 continuation, ``cont``. We also have to keep track of some other
 information, such as how much is held in each account: we call this
@@ -84,10 +98,7 @@ outputs* (UTxO) to the inputs of a new transaction. At most one block
 can be generated in each *slot*, which are 1 second long.
 
 The mechanisms by which these blocks are generated, and by whom, are not
-relevant here, but contracts will be expressed in terms of *slot
-numbers*, counting from the starting (“genesis”) block of the
-blockchain. Currently, we use slot numbers in the Marlowe Playground simulation, but
-on chain we will use time, adopting the Posix time standard.
+relevant here, but contracts will be expressed in terms of POSIX time.
 
 UTxO, wallets and the Marlowe Run app
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -99,14 +110,17 @@ transactions, which can be seen as spending the value in the inputs.
 Users typically keep track of their private keys, and the values
 attached to them, in a cryptographically-secure *wallet*.
 
+Alternatively, UTxOs can be protected by a script, and that is essentially
+what a contract is, a script that protects an UTxO, and it can propagate
+itself throughout a chain of transactions.
+
 To interact with a contract running on the blockchain, users will need to use the
-Marlowe Run client application. This, in turn, will interact with users’ wallets to 
+Marlowe Run client application. This, in turn, will interact with users' wallets to 
 authenticate transactions that spend crypto-assets, since
-deposits are made from users’ wallets, and payments received by them.
+deposits are made from users' wallets, and payments received by them.
 Note, however, that these are definitely *off-chain* actions that need
 to be initiated by code running off chain, typically this will be in the Marlowe Run application: 
-they cannot be
-made to happen by the contract running on chain itself.
+they cannot be made to happen by the contract running on chain itself.
 
 Omniscient simulation
 ~~~~~~~~~~~~~~~~~~~~~
@@ -117,8 +131,9 @@ for any role, and thus can observe the execution from the perspective of
 all the users simultaneously. This contrasts with the experience of running a contract in
 Marlowe Run, in which each participant sees the
 contract from their own point of view. In particular, participants are only able to interact with
-a running contract that is waiting for input from them; if that’s not the case, then they will see that 
-the contract execution is waiting from someone else’s participation.
+a running contract that is waiting for input from them;
+if that's not the case, then they will see that 
+the contract execution is waiting from someone else's participation.
 
 
 Values and tokens
@@ -129,7 +144,7 @@ exclusively used Ada. This makes a lot of sense, as Ada is the
 fundamental currency supported by Cardano. 
 
 Marlowe offers a more general concept of *value*, though, supporting
-custom, *native* tokens, which can be fungible, non-fungible, or indeed mixed.  [3]_ What *is* a
+custom, `native tokens <https://docs.cardano.org/native-tokens/learn>`_, which can be fungible, non-fungible, or indeed mixed.  [3]_ What *is* a
 ``Value`` in Marlowe?
 
 .. code:: haskell
@@ -168,7 +183,7 @@ Executing a Marlowe contract
 ----------------------------
 
 Executing a Marlowe contract on Cardano blockchain means constraining
-user-generated transactions according to the contract’s logic. If, at a particular point of execution, a
+user-generated transactions according to the contract's logic. If, at a particular point of execution, a
 contract expects a deposit of 100 Ada from Alice, only such a
 transaction will succeed, anything else will be rejected.
 
@@ -191,14 +206,14 @@ contracts look like, and how they are evaluated step by step.
 
 We have shown, [4]_ that the behaviour of a Marlowe is independent of
 how inputs are collected into transactions, and so when we simulate the
-action of a contract we don’t need to group inputs into transactions
+action of a contract we don't need to group inputs into transactions
 explicitly. For concreteness we can think of each transaction having at
 most one input. While the semantics of a contract is independent of how
 inputs are grouped into transactions, the *costs of execution* may be
 lower if multiple inputs can be grouped into a single transaction.
 
 In the *omniscient* simulation available in the Marlowe playground we can safely 
-abstract away from transaction grouping, since the grouping does not affect the contract’s behaviour.
+abstract away from transaction grouping, since the grouping does not affect the contract's behaviour.
 
 .. container:: formalpara-title
 

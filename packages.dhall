@@ -195,7 +195,7 @@ in  upstream
         , "web-uievents"
         ]
         "https://github.com/input-output-hk/purescript-web-common"
-        "v3.2.0"
+        "v3.2.1"
   with halogen-nselect =
       mkPackage
         [ "aff"

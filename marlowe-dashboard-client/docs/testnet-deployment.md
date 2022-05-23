@@ -15,9 +15,8 @@ nix-build marlowe-cardano/default.nix -A marlowe-pab -o build-pab
 
 # Create the PAB configuration.
 cat > marlowe-pab.yaml << EOI
-dbConfig:
-  dbConfigFile: marlowe-pab.db
-  dbConfigPoolSize: 20
+contractStoreConfig:
+  tag: "UseInMemoryStore"
 pabWebserverConfig:
   baseUrl: http://localhost:9080
   staticDir: marlowe-cardano/marlowe-dashboard-client/dist
@@ -53,7 +52,7 @@ signingProcessConfig:
 metadataServerConfig:
   mdBaseUrl: http://localhost:9085
 developmentOptions:
-  pabRollbackHistory: null
+  pabRollbackHistory: 100
   pabResumeFrom:
     tag: PointAtGenesis
 EOI

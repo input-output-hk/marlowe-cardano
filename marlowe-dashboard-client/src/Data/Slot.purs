@@ -1,43 +1,62 @@
 module Data.Slot
   ( Slot
+  , asFormattedPercentage
+  , asPercentage
+  , format
+  , fromPlutusSlot
+  , zeroSlot
   ) where
 
 import Prologue
 
-import Data.Enum
-  ( class BoundedEnum
-  , class Enum
-  , Cardinality(..)
-  , fromEnum
-  , toEnum
-  )
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
+import Data.Formatter.Number (Formatter(..), format) as Number
+import Plutus.V1.Ledger.Slot as Plutus
 
-newtype Slot = Slot Int
+newtype Slot = Slot BigInt
 
-derive newtype instance Show Slot
 derive instance Eq Slot
 derive instance Ord Slot
-instance Bounded Slot where
-  bottom = Slot 0
-  top = Slot $ top - 1
+instance Show Slot where
+  show slot = "(Slot " <> format slot <> ")"
 
-instance Enum Slot where
-  pred = toEnum <<< (_ - 1) <<< fromEnum
-  succ = toEnum <<< (_ + 1) <<< fromEnum
+zeroSlot :: Slot
+zeroSlot = Slot zero
 
-instance BoundedEnum Slot where
-  cardinality = Cardinality top
-  fromEnum (Slot i) = i
-  toEnum i
-    | i < 0 || i >= top = Nothing
-    | otherwise = Just $ Slot i
+-- Gives a string representation that is human readable (using a comma every thousand)
+format :: Slot -> String
+format (Slot slot) = Number.format slotFormatter $ BigInt.toNumber slot
+  where
+  slotFormatter =
+    Number.Formatter
+      { sign: false
+      , before: 0
+      , comma: true
+      , after: 0
+      , abbreviations: false
+      }
 
--- There are a few valid semigroup instances that we could choose. We choose
--- max-based semantics because it is the most convenient and frequently useful
--- choice whendealing with time series data and absolute times. It allows the
--- semigroup instance to select the most recent occurrance of an event.
-instance Semigroup Slot where
-  append = max
+asPercentage :: Slot -> Slot -> Number
+asPercentage (Slot min) (Slot max) = BigInt.toNumber min / BigInt.toNumber max *
+  100.0
 
-instance Monoid Slot where
-  mempty = bottom
+asFormattedPercentage :: Slot -> Slot -> String
+asFormattedPercentage min max =
+  let
+    percentage = asPercentage min max
+  in
+    Number.format percentageFormatter percentage <> "%"
+
+fromPlutusSlot :: Plutus.Slot -> Slot
+fromPlutusSlot (Plutus.Slot { getSlot }) = Slot getSlot
+
+percentageFormatter :: Number.Formatter
+percentageFormatter =
+  Number.Formatter
+    { sign: false
+    , before: 0
+    , comma: true
+    , after: 2
+    , abbreviations: false
+    }

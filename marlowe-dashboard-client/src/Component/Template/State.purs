@@ -17,6 +17,7 @@ import Component.Template.Types
   , Wizard(..)
   )
 import Component.Template.View (render)
+import Component.Toast.Types (successToast)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Now (class MonadTime, now)
@@ -51,7 +52,6 @@ import Marlowe.Template
   , initializeTemplateContent
   )
 import Store as Store
-import Toast.Types (successToast)
 
 component
   :: forall m

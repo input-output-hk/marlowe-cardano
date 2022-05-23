@@ -13,6 +13,7 @@
 
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
@@ -56,7 +57,7 @@ import Control.Monad (unless, void, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
 import Control.Monad.Extra (untilJustM, whenJust)
 import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift, put)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value (Null, Object, String))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object, String), (.=))
 import Data.Aeson.OneLine (renderValue)
 import Data.Aeson.Types (parseEither)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -68,10 +69,11 @@ import Language.Marlowe.CLI.Export (buildAddress, buildRoleAddress)
 import Language.Marlowe.CLI.IO (liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.PAB (receiveStatus)
 import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), CompanionInstanceInfo (..), FollowerInstanceInfo (..),
-                                        InstanceNickname, PabAccess (..), PabOperation (..), PabState (..),
-                                        PabTest (..), PatternJSON (Exact, Parts), RoleName, WalletInfo (..),
-                                        patternJSON, psAppInstances, psBurnAddress, psCompanionInstances,
-                                        psFaucetAddress, psFaucetKey, psFollowerInstances, psPassphrase, psWallets)
+                                        InstanceNickname, PabAccess (..), PabOperation (..), PabResponse,
+                                        PabResponseComparison (Equals, Matches), PabState (..), PabTest (..), RoleName,
+                                        WalletInfo (..), comparisonJSON, prComparison, prRetry, psAppInstances,
+                                        psBurnAddress, psCompanionInstances, psFaucetAddress, psFaucetKey,
+                                        psFollowerInstances, psPassphrase, psWallets)
 import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
@@ -95,10 +97,11 @@ import qualified Cardano.Wallet.Api.Types as W (ApiWallet (id, state))
 import qualified Cardano.Wallet.Primitive.Types as W (WalletId (..))
 import qualified Cardano.Wallet.Primitive.Types.Hash as W (Hash (Hash))
 import qualified Cardano.Wallet.Primitive.Types.TokenMap as W (AssetId (AssetId), toFlatList)
-import qualified Data.Aeson as A (Value (..))
+import Control.Arrow ((<<<))
+import qualified Data.Aeson as A (Value (..), object)
 import qualified Data.ByteArray as BA (pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
-import Data.Foldable (for_)
+import Data.Foldable (traverse_)
 import qualified Data.HashMap.Strict as H (foldrWithKey, lookup)
 import qualified Data.Map.Strict as M (adjust, insert, lookup)
 import qualified Data.Quantity as W (Quantity (..))
@@ -144,6 +147,45 @@ pabTest access faucetKey faucetAddress burnAddress passphrase PabTest{..} =
           >> throwError (e :: CliError)
     liftIO $ putStrLn "***** PASSED *****"
 
+
+interpretPoResponses :: (MonadIO m, MonadError CliError m) => PabOperation -> Chan A.Value -> m ()
+interpretPoResponses po channel = case po of
+  AwaitFollow {..}    -> run poResponses
+  AwaitCompanion {..} -> run poResponses
+  _                   -> pure ()
+  where
+    run = traverse_ $ \poResponse -> do
+      interpretPoResponse poResponse channel >>= \case
+        Left (expected, resp) -> do
+          let
+            diffJSON = A.object
+              [ "expected" .= expected
+              , "received" .= resp
+              ]
+          throwCliPoError po $ T.unpack $ "Given response does not match expected pattern." <> renderValue diffJSON
+        Right _ -> pure ()
+
+    interpretPoResponse :: MonadIO m => PabResponse -> Chan Value -> m (Either (Value, Value) Value)
+    interpretPoResponse poResponse chan = do
+        let
+          match resp = case poResponse ^. prComparison of
+            Matches json -> resp `matchesJSONPattern` JSONPattern json
+            Equals json  -> resp == json
+
+        (matched, resp) <- untilJustM $ do
+          resp <- liftIO $ readChan chan
+          if match resp
+            then pure $ Just (True, resp)
+            else if poResponse ^. prRetry
+              then pure Nothing
+              else pure $ Just (False, resp)
+        if matched
+          then pure $ Right resp
+          else do
+            let
+              -- It is just easier to work with (debug and format it) a JSON value.
+              expected = poResponse ^. (prComparison <<< comparisonJSON)
+            pure $ Left (expected, resp)
 
 -- | Execute a test operation.
 interpret :: MonadError CliError m
@@ -395,26 +437,8 @@ interpret _ po@AwaitCompanion{..} =
   do
     CompanionInstanceInfo{..} <- findCompanionInstance poInstance
     logPoMsg PoShow po "Fetching companion messages."
-    -- Skip all preceeding `null`s
-    companionState <- untilJustM $ do
-      res <- liftIO $ readChan cmpChannel
-      if res == Null
-        then do
-          logPoMsg PoShow po "Skipping `null` response."
-          pure Nothing
-        else pure $ Just res
-
-    case poResponsePattern of
-      Just pt -> if matchJSON pt companionState
-        then logPoMsg PoShow po "await confirmed."
-        else throwError $ CliError $ printPoMsg PoName po $ T.unpack $
-          "Given response does not match expected pattern. Expected: "
-          <> renderValue (pt ^. patternJSON)
-          <> ". Received: "
-          <> renderValue companionState
-          <> "."
-      Nothing ->
-        logPoMsg PoShow po "await confirmed."
+    interpretPoResponses po cmpChannel
+    logPoMsg PoShow po "await confirmed."
 
 interpret access po@ActivateFollower{..} =
   do
@@ -446,20 +470,10 @@ interpret _ po@AwaitFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
     logPoMsg PoShow po "Fetching follower messages."
-    let
-      extractPatternJSON (Parts json) = json
-      extractPatternJSON (Exact json) = json
 
-    for_ poResponsePatterns $ \pt -> do
-      contractHistoryJSON <- liftIO $ readChan fiChannel
-      if matchJSON pt contractHistoryJSON
-        then logPoMsg PoShow po "Follow confirmed."
-        else throwError $ CliError $ printPoMsg PoName po $ T.unpack $
-          "Given response does not match expected pattern. Expected: "
-          <> renderValue (extractPatternJSON pt)
-          <> ". Received: "
-          <> renderValue contractHistoryJSON
-          <> "."
+    interpretPoResponses po fiChannel
+
+    logPoMsg PoShow po "Follow confirmed."
 
 interpret PabAccess{..} po@PrintPABInstanceState{..} =
   do
@@ -843,17 +857,17 @@ call PabAccess{..} instanceId endpoint arguments =
       . callInstanceEndpoint endpoint
       $ toJSON arguments
 
-matchJSON :: PatternJSON -> A.Value -> Bool
-matchJSON (Exact expected) given = expected == given
--- ^ Pattern match on the the array prefixes and subsets of fields.
-matchJSON (Parts expected) given = case (expected, given) of
+newtype JSONPattern = JSONPattern A.Value
+
+matchesJSONPattern :: A.Value -> JSONPattern -> Bool
+matchesJSONPattern given (JSONPattern expected) = case (expected, given) of
   (A.Array eItems, A.Array gItems) ->
-    length gItems == length eItems && (V.all (\(ev, gv) -> matchJSON (Parts ev) gv) . V.zip eItems $ gItems)
+    length gItems == length eItems && (V.all (\(ev, gv) -> gv `matchesJSONPattern` JSONPattern ev) . V.zip eItems $ gItems)
   (A.Object eProps, A.Object gProps) ->
     let
       step key ev acc = (&&) acc $ fromMaybe False $ do
         gv <- H.lookup key gProps
-        pure $ matchJSON (Parts ev) gv
+        pure $ gv `matchesJSONPattern` JSONPattern ev
     in
       H.foldrWithKey step True eProps
   (A.String ev, A.String gv) -> ev == gv
@@ -914,3 +928,8 @@ printPoMsg format po = printTraceMsg (printPo format po)
 
 logPoMsg :: MonadIO m => PoFormat -> PabOperation -> String -> m ()
 logPoMsg frmt po = logTraceMsg (printPo frmt po)
+
+throwCliPoError :: MonadError CliError m => PabOperation -> String -> m a
+throwCliPoError po msg = throwError
+    $ CliError
+    $ printPoMsg PoName po msg

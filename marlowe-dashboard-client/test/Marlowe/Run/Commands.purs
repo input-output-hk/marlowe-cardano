@@ -669,9 +669,13 @@ sendSlotChange
   => MonadEffect m
   => Int
   -> m Unit
-sendSlotChange slot = sendWebsocketMessage ("Slot change" <> show slot)
-  $ SlotChange
-  $ Slot { getSlot: BigInt.fromInt slot }
+sendSlotChange slot =
+  let
+    slot' = Slot { getSlot: BigInt.fromInt slot }
+  in
+    sendWebsocketMessage ("Slot change" <> show slot)
+      $ SlotChange
+      $ { current: slot', tip: slot' }
 
 sendContractFinished
   :: forall m

@@ -6,220 +6,211 @@ rankdir=LR
 node [shape=record]
 
 
-Tx0MediatorAda [label="Christopher Marlowe\n(the mediator)|1971.7 ADA"]
-
-
-Tx1 [shape=oval label="Tx 1"]
-
-Tx0MediatorAda -> Tx1
-
-
-Tx1_1 [label="Marlowe Script|3 ADA|{State|{F.B. has 0 ADA|T.M. has 0 ADA|C.M. has 3 ADA}}"]
-
-Tx1 -> Tx1_1 [label="#1"]
-
-
 subgraph cluster_0m {
 
 peripheries=0
 
-Tx1_0 [label="Christopher\nMarlowe|1962.5 ADA"]
-
-Tx0MediatorToken [label="Christopher Marlowe\n(the mediator)|2 ADA + 1 CM"]
-
-}
-
-Tx1 -> Tx1_0 [label="#0"]
-
-
-
-subgraph cluster_0s {
-
-peripheries=0
+Tx0MediatorAda [label="Christopher Marlowe\n(the mediator)|1971.7 ADA"]
 
 Tx0SellerAda [label="Francis Beaumont\n(the seller)|3003.6 ADA"]
 
-Tx0SellerToken [label="Francis Beaumont\n(the seller)|2 ADA + 1 FB"]
-
-}
-
-Tx1 -> Tx0SellerToken [label="#2"]
-
-
-subgraph cluster_0b {
-
-peripheries=0
-
 Tx0BuyerAda [label="Thomas Middleton\n(the buyer)|2954.4 ADA"]
-Tx0BuyerToken [label="Thomas Middleton\n(the buyer)|2 ADA + 1 TM"]
 
 }
 
-Tx1 -> Tx0BuyerToken [label="#3"]
+
+Tx1 [shape=oval label="Tx 1" color=black fontcolor=black]
+
+Tx0MediatorAda -> Tx1 [color=black fontcolor=black]
 
 
-Tx1_Fee [label="Fee\n0.2 ADA"]
+Tx1_1 [label="Marlowe Script|3 ADA|{State|{F.B. has 0 ADA|T.M. has 0 ADA|C.M. has 3 ADA}}" color=black fontcolor=black]
 
-Tx1 -> Tx1_Fee
+Tx1 -> Tx1_1 [label="#1" color=black fontcolor=black]
 
 
-Tx2 [shape=oval label="Tx 2"]
+Tx1_0 [label="Christopher\nMarlowe|1962.5 ADA" color=black fontcolor=black]
 
-Tx1_1 -> Tx2 [label="Deposit"]
+Tx1 -> Tx1_0 [label="#0" color=black fontcolor=black]
 
-Tx0BuyerAda -> Tx2
 
-Tx0BuyerToken -> Tx2
+Tx0MediatorToken [label="Christopher\nMarlowe|2 ADA + 1 CM" color=black fontcolor=black]
+
+Tx1 -> Tx0MediatorToken [label="#4" color=black fontcolor=black]
+
+
+Tx0SellerToken [label="Francis\nBeaumont|2 ADA + 1 FB" color=black fontcolor=black]
+
+Tx1 -> Tx0SellerToken [label="#2" color=black fontcolor=black]
+
+
+Tx0BuyerToken [label="Thomas\nMiddleton|2 ADA + 1 TM" color=black fontcolor=black]
+
+Tx1 -> Tx0BuyerToken [label="#3" color=black fontcolor=black]
+
+
+Tx1_Fee [label="Fee\n0.2 ADA" color=black fontcolor=black]
+
+Tx1 -> Tx1_Fee [color=black fontcolor=black]
+
+
+Tx2 [shape=oval label="Tx 2" color=black fontcolor=black]
+
+Tx1_1 -> Tx2 [label="Deposit" color=black fontcolor=black]
+
+Tx0BuyerAda -> Tx2 [color=black fontcolor=black]
+
+Tx0BuyerToken -> Tx2 [color=black fontcolor=black]
 
 
 subgraph cluster_2 {
 
 peripheries=0
 
-Tx2_0 [label="Thomas\nMiddleton|2696.0 ADA"]
+Tx2_0 [label="Thomas\nMiddleton|2696.0 ADA" color=black fontcolor=black]
 
-Tx2_2 [label="Thomas\nMidddleton|3 ADA + 1 TM"]
+Tx2_2 [label="Thomas\nMidddleton|3 ADA + 1 TM" color=black fontcolor=black]
 
 }
 
-Tx2 -> Tx2_0 [label="#0"]
+Tx2 -> Tx2_0 [label="#0" color=black fontcolor=black]
 
-Tx2 -> Tx2_2 [label="#2"]
-
-
-Tx2_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 256 ADA|T.M. has 0 ADA|C.M. has 3 ADA}}"]
-
-Tx2 -> Tx2_1 [label="#1"]
+Tx2 -> Tx2_2 [label="#2" color=black fontcolor=black]
 
 
-Tx2_Fee [label="Fee\n1.3 ADA"]
+Tx2_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 256 ADA|T.M. has 0 ADA|C.M. has 3 ADA}}" color=black fontcolor=black]
 
-Tx2 -> Tx2_Fee
-
-
-Tx3 [shape=oval label="Tx 3"]
-
-Tx2_1 -> Tx3 [label="Report problem"]
-
-Tx2_0 -> Tx3
-
-Tx2_2 -> Tx3
+Tx2 -> Tx2_1 [label="#1" color=black fontcolor=black]
 
 
-Tx3_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}"]
+Tx2_Fee [label="Fee\n1.3 ADA" color=black fontcolor=black]
 
-Tx3 -> Tx3_1 [label="#1"]
-
-
-Tx3_Fee [label="Fee\n1.4 ADA"]
-
-Tx3 -> Tx3_Fee
+Tx2 -> Tx2_Fee [color=black fontcolor=black]
 
 
-Tx4 [shape=oval label="Tx 4"]
+Tx3 [shape=oval label="Tx 3" color=black fontcolor=black]
 
-Tx3_1 -> Tx4 [label="Dispute problem"]
+Tx2_1 -> Tx3 [label="Report problem" color=black fontcolor=black]
 
-Tx0SellerAda -> Tx4
+Tx2_0 -> Tx3 [color=black fontcolor=black]
 
-Tx0SellerToken -> Tx4
+Tx2_2 -> Tx3 [color=black fontcolor=black]
+
+
+Tx3_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}" color=black fontcolor=black]
+
+Tx3 -> Tx3_1 [label="#1" color=black fontcolor=black]
+
+
+Tx3_Fee [label="Fee\n1.4 ADA" color=black fontcolor=black]
+
+Tx3 -> Tx3_Fee [color=black fontcolor=black]
+
+
+Tx4 [shape=oval label="Tx 4" color=black fontcolor=black]
+
+Tx3_1 -> Tx4 [label="Dispute problem" color=black fontcolor=black]
+
+Tx0SellerAda -> Tx4 [color=black fontcolor=black]
+
+Tx0SellerToken -> Tx4 [color=black fontcolor=black]
 
 
 subgraph cluster_4 {
 
 peripheries=0
 
-Tx4_0 [label="Francis\nBeaumont|3001.3 ADA"]
+Tx4_0 [label="Francis\nBeaumont|3001.3 ADA" color=black fontcolor=black]
 
-Tx4_2 [label="Francis\nBeaumont|3 ADA + 1 FB"]
+Tx4_2 [label="Francis\nBeaumont|3 ADA + 1 FB" color=black fontcolor=black]
 
 }
 
-Tx4 -> Tx4_0 [label="#0"]
+Tx4 -> Tx4_0 [label="#0" color=black fontcolor=black]
 
-Tx4 -> Tx4_2 [label="#2"]
-
-
-Tx4_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}"]
-
-Tx4 -> Tx4_1 [label="#1"]
+Tx4 -> Tx4_2 [label="#2" color=black fontcolor=black]
 
 
-Tx4_Fee [label="Fee\n1.3 ADA"]
+Tx4_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}" color=black fontcolor=black]
 
-Tx4 -> Tx4_Fee
+Tx4 -> Tx4_1 [label="#1" color=black fontcolor=black]
 
 
-Tx5 [shape=oval label="Tx 5"]
+Tx4_Fee [label="Fee\n1.3 ADA" color=black fontcolor=black]
 
-Tx4_1 -> Tx5 [label="Dismiss claim"]
+Tx4 -> Tx4_Fee [color=black fontcolor=black]
 
-Tx1_0 -> Tx5
 
-Tx0MediatorToken -> Tx5
+Tx5 [shape=oval label="Tx 5" color=black fontcolor=black]
+
+Tx4_1 -> Tx5 [label="Dismiss claim" color=black fontcolor=black]
+
+Tx1_0 -> Tx5 [color=black fontcolor=black]
+
+Tx0MediatorToken -> Tx5 [color=black fontcolor=black]
 
 
 subgraph cluster_5 {
 
 peripheries=0
 
-Tx5_0 [label="Christopher\nMarlowe|1960.1 ADA"]
+Tx5_0 [label="Christopher\nMarlowe|1960.1 ADA" color=black fontcolor=black]
 
-Tx5_3 [label="Christopher\nMarlowe|3 ADA + 1 CM"]
+Tx5_3 [label="Christopher\nMarlowe|3 ADA + 1 CM" color=black fontcolor=black]
 
 }
 
-Tx5 -> Tx5_0 [label="#0"]
+Tx5 -> Tx5_0 [label="#0" color=black fontcolor=black]
 
-Tx5 -> Tx5_3 [label="#3"]
+Tx5 -> Tx5_3 [label="#3" color=black fontcolor=black]
 
 
 subgraph cluster_5p {
 
 peripheries=0
 
-Tx5_1 [label="Payout Script|3 ADA|{Payout|C.M. has 3 ADA}"]
+Tx5_1 [label="Payout Script|3 ADA|{Payout|C.M. has 3 ADA}" color=black fontcolor=black]
 
-Tx5_2 [label="Payout Script|256 ADA|{Payout|F.B. has 256 ADA}"]
+Tx5_2 [label="Payout Script|256 ADA|{Payout|F.B. has 256 ADA}" color=black fontcolor=black]
 
 }
 
-Tx5 -> Tx5_1 [label="#1"]
+Tx5 -> Tx5_1 [label="#1" color=black fontcolor=black]
 
-Tx5 -> Tx5_2 [label="#2"]
-
-
-Tx5_Fee [label="Fee\n1.4 ADA"]
-
-Tx5 -> Tx5_Fee
+Tx5 -> Tx5_2 [label="#2" color=black fontcolor=black]
 
 
-Tx6 [shape=oval label="Tx 6"]
+Tx5_Fee [label="Fee\n1.4 ADA" color=black fontcolor=black]
 
-Tx4_0 -> Tx6
-
-Tx4_2 -> Tx6
-
-Tx5_2 -> Tx6
+Tx5 -> Tx5_Fee [color=black fontcolor=black]
 
 
-Tx6_Fee [label="Fee\n0.5 ADA"]
+Tx6 [shape=oval label="Tx 6" color=black fontcolor=black]
 
-Tx6 -> Tx6_Fee
+Tx4_0 -> Tx6 [color=black fontcolor=black]
 
+Tx4_2 -> Tx6 [color=black fontcolor=black]
 
-Tx7 [shape=oval label="Tx 7"]
-
-Tx5_0 -> Tx7
-
-Tx5_3 -> Tx7
-
-Tx5_1 -> Tx7
+Tx5_2 -> Tx6 [color=black fontcolor=black]
 
 
-Tx7_Fee [label="Fee\n0.5 ADA"]
+Tx6_Fee [label="Fee\n0.5 ADA" color=black fontcolor=black]
 
-Tx7 -> Tx7_Fee
+Tx6 -> Tx6_Fee [color=black fontcolor=black]
+
+
+Tx7 [shape=oval label="Tx 7" color=black fontcolor=black]
+
+Tx5_0 -> Tx7 [color=black fontcolor=black]
+
+Tx5_3 -> Tx7 [color=black fontcolor=black]
+
+Tx5_1 -> Tx7 [color=black fontcolor=black]
+
+
+Tx7_Fee [label="Fee\n0.5 ADA" color=black fontcolor=black]
+
+Tx7 -> Tx7_Fee [color=black fontcolor=black]
 
 
 subgraph cluster_x {
@@ -230,9 +221,9 @@ peripheries=0
 
   peripheries=0
 
-  Tx3_0 [label="Thomas\nMiddleton|2694.6 ADA"]
+  Tx3_0 [label="Thomas\nMiddleton|2694.6 ADA" color=black fontcolor=black]
 
-  Tx3_2 [label="Thomas\nMiddleton|3 ADA + 1 TM"]
+  Tx3_2 [label="Thomas\nMiddleton|3 ADA + 1 TM" color=black fontcolor=black]
 
   }
 
@@ -240,11 +231,11 @@ peripheries=0
 
   peripheries=0
 
-  Tx6_0 [label="Francis\nBeaumont|3000.9 ADA"]
+  Tx6_0 [label="Francis\nBeaumont|3000.9 ADA" color=black fontcolor=black]
 
-  Tx6_1 [label="Francis\nBeaumont|256 ADA"]
+  Tx6_1 [label="Francis\nBeaumont|256 ADA" color=black fontcolor=black]
 
-  Tx6_2 [label="Francis\nBeaumont|3 ADA + 1 FB"]
+  Tx6_2 [label="Francis\nBeaumont|3 ADA + 1 FB" color=black fontcolor=black]
 
   }
 
@@ -252,34 +243,34 @@ peripheries=0
 
   peripheries=0
 
-  Tx7_0 [label="Christopher\nMarlowe|1959.7 ADA"]
+  Tx7_0 [label="Christopher\nMarlowe|1959.7 ADA" color=black fontcolor=black]
 
-  Tx7_1 [label="Christopher\nMarlowe|3 ADA"]
+  Tx7_1 [label="Christopher\nMarlowe|3 ADA" color=black fontcolor=black]
 
-  Tx7_2 [label="Christopher\nMarlowe|3 ADA + 1 CM"]
+  Tx7_2 [label="Christopher\nMarlowe|3 ADA + 1 CM" color=black fontcolor=black]
 
   }
 
 }
 
 
-Tx3 -> Tx3_0 [label="#0"]
+Tx3 -> Tx3_0 [label="#0" color=black fontcolor=black]
 
-Tx3 -> Tx3_2 [label="#2"]
-
-
-Tx6 -> Tx6_0 [label="#0"]
-
-Tx6 -> Tx6_1 [label="#1"]
-
-Tx6 -> Tx6_2 [label="#2"]
+Tx3 -> Tx3_2 [label="#2" color=black fontcolor=black]
 
 
-Tx7 -> Tx7_0 [label="#0"]
+Tx6 -> Tx6_0 [label="#0" color=black fontcolor=black]
 
-Tx7 -> Tx7_1 [label="#1"]
+Tx6 -> Tx6_1 [label="#1" color=black fontcolor=black]
 
-Tx7 -> Tx7_2 [label="#2"]
+Tx6 -> Tx6_2 [label="#2" color=black fontcolor=black]
+
+
+Tx7 -> Tx7_0 [label="#0" color=black fontcolor=black]
+
+Tx7 -> Tx7_1 [label="#1" color=black fontcolor=black]
+
+Tx7 -> Tx7_2 [label="#2" color=black fontcolor=black]
 
 
 }

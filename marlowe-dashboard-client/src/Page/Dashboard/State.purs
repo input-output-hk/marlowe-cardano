@@ -1,12 +1,8 @@
-module Page.Dashboard.State
-  ( component
-  , updateTotalFunds
-  ) where
+module Page.Dashboard.State (component) where
 
 import Prologue
 
 import API.Lenses (_cicContract)
-import Bridge (toFront)
 import Capability.Marlowe (class ManageMarlowe, redeem)
 import Capability.PAB
   ( class ManagePAB
@@ -26,16 +22,16 @@ import Capability.PlutusApps.FollowerApp
   )
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
-import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Types as Contacts
 import Component.Template.Types as Template
+import Component.Toast.Types (infoToast, successToast)
 import Control.Alt ((<|>))
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Structured (StructuredLog, debug, error, info)
+import Control.Logger.Structured (StructuredLog, error, info, info')
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Maybe.Trans (runMaybeT)
@@ -46,14 +42,14 @@ import Control.Parallel (parTraverse_)
 import Data.Align (align)
 import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
+import Data.Array (intercalate)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt as BigInt
 import Data.BigInt.Argonaut (BigInt)
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
-import Data.Either (hush)
-import Data.Enum (fromEnum, toEnum)
+import Data.Either (either)
 import Data.Filterable (filter)
 import Data.Foldable (foldMap, for_, traverse_)
 import Data.FoldableWithIndex (forWithIndex_)
@@ -76,15 +72,14 @@ import Data.PABConnectedWallet
   )
 import Data.Set (Set)
 import Data.Set as Set
-import Data.Slot (Slot)
+import Data.Slot (Slot, fromPlutusSlot, zeroSlot)
+import Data.Slot as Slot
 import Data.These (These(..))
 import Data.Time.Duration (Minutes(..))
-import Data.Traversable (for, traverse)
+import Data.Traversable (traverse)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.UserNamedActions (userNamedActions)
-import Data.Wallet (SyncStatus, syncStatusFromNumber)
-import Data.WalletId (WalletId)
 import Effect.Aff (Error, Fiber, launchAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
@@ -100,7 +95,6 @@ import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
-import Halogen.Subscription.Extra (compactEmitter)
 import Language.Marlowe.Client
   ( EndpointResponse(..)
   , MarloweEndpointResult(..)
@@ -113,7 +107,6 @@ import Marlowe.Run.Server
   ( getApiContractsV1ByCurrencysymbolRoletokensByTokenname
   )
 import Marlowe.Run.Server as MarloweRun
-import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics
   ( Assets
   , MarloweData
@@ -129,6 +122,7 @@ import Page.Dashboard.Lenses
   , _contractFilter
   , _contractStore
   , _contracts
+  , _currentSlot
   , _menuOpen
   , _roleTokens
   , _selectedContractIndex
@@ -157,7 +151,6 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , InstanceStatusToClient(..)
   ) as PAB
-import Plutus.V1.Ledger.Slot as Plutus
 import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts
@@ -173,7 +166,6 @@ import Store.RoleTokens (Payout, RoleTokenStore, getEligiblePayouts)
 import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (infoToast, successToast)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 import WebSocket.Support as WS
@@ -273,9 +265,10 @@ component = connect sliceSelector $ mkReactiveComponent
   }
   where
   sliceSelector =
-    selectEq \{ currentTime, tipSlot, contracts, roleTokens } ->
+    selectEq \{ currentTime, tipSlot, currentSlot, contracts, roleTokens } ->
       { currentTime
       , tipSlot
+      , currentSlot
       , contracts
       , roleTokens
       }
@@ -322,7 +315,7 @@ handleInput _ oldState = do
   let oldContracts = maybe Map.empty (view _contracts) oldState
   let oldPayouts = oldState ^. _Just <<< _roleTokens <<< to getEligiblePayouts
   let oldAssets = oldState ^. _Just <<< _wallet <<< _assets
-  let oldTipSlot = oldState ^. _Just <<< _tipSlot
+  let oldTipSlot = maybe zeroSlot (view _tipSlot) oldState
   handlePayoutChanges oldPayouts
   handleContractChanges oldContracts
   handleAssetsChanges oldAssets
@@ -452,9 +445,16 @@ handleTipSlotChanges
   -> HalogenM m Unit
 handleTipSlotChanges oldTipSlot = do
   currentTipSlot <- use _tipSlot
+  currentSlot <- use _currentSlot
   when (currentTipSlot > oldTipSlot) do
-    info "⛓️ Chain extended" $ encodeJson
-      { newTipSlot: fromEnum currentTipSlot }
+    info' $ intercalate " "
+      [ "⛓️ Chain extended, Node tip slot:"
+      , Slot.format currentTipSlot
+      , ", PAB current slot:"
+      , Slot.format currentSlot
+      , ", Sync status"
+      , Slot.asFormattedPercentage currentSlot currentTipSlot
+      ]
 
 handleAction
   :: forall m
@@ -471,11 +471,12 @@ handleAction
   => Action
   -> HalogenM m Unit
 handleAction (OnContactsMsg Contacts.Closed) =
-  assign _card Nothing
+  handleAction CloseCard
 
 {- [UC-WALLET-3][0] Disconnect a wallet -}
-handleAction DisconnectWallet = do
+handleAction (DisconnectWallet mErr) = do
   wallet <- use _wallet
+  traverse_ (error "Failed to load wallet details, disconnecting.") mErr
   updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet
 
 handleAction ToggleMenu = modifying _menuOpen not
@@ -589,8 +590,7 @@ handleAction (CompanionAppStateUpdated companionAppState) = do
     ajaxFollow <- followContract wallet marloweParams
     case ajaxFollow of
       Left err -> globalError "Can't follow the contract" err
-      Right _ -> do
-        addToast $ successToast "Contract initialized."
+      _ -> pure unit
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   {- [UC-CONTRACT-1][3] Start a contract -}
@@ -750,7 +750,7 @@ subscribeToSources
   => MonadLogger StructuredLog m
   => HalogenM m Unit
 subscribeToSources =
-  void <<< H.subscribe <<< compactEmitter =<< H.lift actionsFromSources
+  void <<< H.subscribe =<< H.lift actionsFromSources
 
 actionsFromSources
   :: forall m
@@ -758,7 +758,7 @@ actionsFromSources
   => MonadUnliftAff m
   => MonadStore Store.Action Store.Store m
   => MonadLogger StructuredLog m
-  => m (Emitter (Maybe Action))
+  => m (Emitter Action)
 actionsFromSources = do
   { pabWebsocket, walletFunds } <- asks $ view _sources
   u <- askUnliftAff
@@ -776,15 +776,19 @@ actionsFromSources = do
         unliftAff u case websocketMsg of
           WS.ReceiveMessage (Left err) ->
             error "✘ Failed to parse websocket message" err
-          WS.ReceiveMessage (Right msg) ->
-            debug "↓ Recv websocket message" msg
           _ -> pure unit
-        let mWallet = store ^? Store._wallet <<< _connectedWallet
-        let contractStore = store ^. Store._contracts
-        liftEffect $ for_ mWallet \w ->
-          subscriber $ actionFromWebsocket contractStore w websocketMsg
+        liftEffect do
+          let mWallet = store ^? Store._wallet <<< _connectedWallet
+          for_ mWallet \wallet -> do
+            let contractStore = store ^. Store._contracts
+            traverse_ subscriber $ actionFromWebsocket
+              contractStore
+              wallet
+              websocketMsg
       pure $ HS.unsubscribe canceller
-  let walletUpdates = Just <<< UpdateWalletFunds <$> walletFunds
+  let
+    walletUpdates = either (DisconnectWallet <<< Just) UpdateWalletFunds <$>
+      walletFunds
   -- Alt instance for Emitters "zips" them together. So the resulting Emitter
   -- is the union of events fired from the constituent emitters.
   pure $ websocketActions <|> walletUpdates
@@ -797,8 +801,9 @@ actionFromWebsocket
 actionFromWebsocket contractStore wallet = case _ of
   WS.ReceiveMessage (Left jsonDecodeError) ->
     Just $ notificationParseFailed "websocket message" jsonNull jsonDecodeError
-  WS.ReceiveMessage (Right stream) -> actionFromStream contractStore wallet
-    stream
+  WS.ReceiveMessage (Right stream) ->
+    actionFromStream contractStore wallet
+      stream
   _ -> Nothing
 
 actionFromStream
@@ -807,13 +812,9 @@ actionFromStream
   -> PAB.CombinedWSStreamToClient
   -> Maybe Action
 actionFromStream contractStore wallet = case _ of
-  SlotChange (Plutus.Slot { getSlot }) ->
-    SlotChanged <$> (toEnum =<< BigInt.toInt (unwrap getSlot))
-  -- TODO handle with lite wallet support
-  -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
-  --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
-  --       so that it only triggers this call once synced or ignore the message altogether and find
-  --       a different approach.
+  SlotChange { current, tip } -> do
+    pure $ SlotChanged
+      { current: fromPlutusSlot current, tip: fromPlutusSlot tip }
   -- TODO: If we receive a second status update for the same contract / plutus app, while
   -- the previous update is still being handled, then strange things could happen. This
   -- does not seem very likely. Still, it might be worth considering guarding against this
@@ -887,18 +888,3 @@ notificationParseFailed whatFailed originalValue parsingError =
     , originalValue
     , parsingError
     }
-
-updateTotalFunds
-  :: forall m
-   . MonadAff m
-  => ManageWallet m
-  => MonadStore Store.Action Store.Store m
-  => WalletId
-  -> m (Maybe SyncStatus)
-updateTotalFunds walletId = do
-  response <- getWalletTotalFunds walletId
-  hush <$> for response \(GetTotalFundsResponse { assets, sync }) -> do
-    updateStore $ Store.Wallet $ Wallet.OnAssetsChanged $ toFront assets
-    let syncStatus = syncStatusFromNumber sync
-    updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
-    pure syncStatus

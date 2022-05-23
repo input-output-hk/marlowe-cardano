@@ -135,7 +135,7 @@ Test cases:
 
 -  Alice authorizes payment
 
--  Alice doesn’t authorize
+-  Alice doesn't authorize
 
 Contract 4. Pay unless explicit rejection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -182,11 +182,11 @@ Marlowe code:
 
 Test cases:
 
--  Bob can collect even if Alice doesn’t give an instruction.
+-  Bob can collect even if Alice doesn't give an instruction.
 
 -  Alice can cancel payment
 
--  Bob can’t claim payment before block 40 or approval from alice.
+-  Bob can't claim payment before block 40 or approval from alice.
 
 Contract 5. Simple Escrow
 ~~~~~~~~~~~~~~~~~~~~~~~~~

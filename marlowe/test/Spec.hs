@@ -4,11 +4,17 @@ module Main(main) where
 import qualified Spec.Marlowe.AutoExecute
 import qualified Spec.Marlowe.Marlowe
 
+import Data.Default (def)
+import Plutus.Contract.Unsafe (setSlotConfig)
+
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
 main :: IO ()
-main = defaultMain tests
+main =
+  do
+    setSlotConfig def
+    defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Marlowe"

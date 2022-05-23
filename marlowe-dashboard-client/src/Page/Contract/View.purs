@@ -61,7 +61,7 @@ import Humanize (formatDate, formatTime, humanizeOffset, humanizeValue)
 import Marlowe.Execution.Lenses (_semanticState)
 import Marlowe.Execution.State (expandBalances, isClosed)
 import Marlowe.Execution.Types (NamedAction(..))
-import Marlowe.PAB (transactionFee)
+import Marlowe.PAB (applyInputsFee)
 import Marlowe.Semantics
   ( ChoiceId(..)
   , Party(..)
@@ -504,7 +504,7 @@ renderPartyPastActions
             [ text "Total fees:"
             ]
         , span [ classNames [ "flex-grow", "text-right" ] ]
-            [ text $ humanizeValue adaToken transactionFee ]
+            [ text $ humanizeValue adaToken applyInputsFee ]
         ]
 
     renderActionsBody =

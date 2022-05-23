@@ -103,6 +103,7 @@ import Test.Network.HTTP
 import Test.Spec (Spec, before, it)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
+import Types (JsonAjaxError)
 import WebSocket.Support (FromSocket)
 
 -- Layers of infrastructure involved here:
@@ -417,7 +418,7 @@ type Coenv =
   { pabWebsocketOut :: Queue CombinedWSStreamToServer
   , httpRequests :: Queue RequestBox
   , pabWebsocketIn :: Listener (FromSocket CombinedWSStreamToClient)
-  , walletFunds :: Listener WalletFunds
+  , walletFunds :: Listener (Either JsonAjaxError WalletFunds)
   , dispose :: Effect Unit
   , wallets :: Ref (Bimap WalletNickname TestWallet)
   , testLogMessages :: Queue (LogMessage String)
@@ -435,7 +436,8 @@ sendWalletFunds walletName = do
   wallet <- getWallet walletName
   walletFunds <- asks _.walletFunds
   liftEffect
-    $ HS.notify walletFunds { sync: Synchronized, assets: wallet.assets }
+    $ HS.notify walletFunds
+    $ Right { sync: Synchronized, assets: wallet.assets }
 
 fundWallet
   :: forall m
@@ -469,7 +471,7 @@ fundWallet walletName currencySymbol tokenName amount notify = do
     newWallet = wallet { assets = assets }
   setWallet walletName newWallet
   when notify do
-    liftEffect $ HS.notify walletFunds { sync: Synchronized, assets }
+    liftEffect $ HS.notify walletFunds $ Right { sync: Synchronized, assets }
 
 getWallet
   :: forall m

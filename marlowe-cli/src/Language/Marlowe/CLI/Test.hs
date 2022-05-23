@@ -21,10 +21,9 @@ module Language.Marlowe.CLI.Test (
 ) where
 
 
-import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..), NetworkId (..))
+import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Bifunctor (first)
-import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
 import Language.Marlowe.CLI.Test.PAB (pabTest)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
@@ -47,7 +46,7 @@ runTests :: MonadError CliError m
 runTests ScriptTests{..} =
   do
     let
-      network' = fromMaybe Mainnet network
+      network' = network
       connection =
         LocalNodeConnectInfo
         {
@@ -62,7 +61,7 @@ runTests PabTests{..} =
   do
     manager <- liftIO $ newManager defaultManagerSettings
     let
-      network' = fromMaybe Mainnet network
+      network' = network
       localConnection =
         LocalNodeConnectInfo
         {

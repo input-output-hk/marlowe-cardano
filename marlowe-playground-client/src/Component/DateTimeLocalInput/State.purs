@@ -1,5 +1,7 @@
 module Component.DateTimeLocalInput.State
   ( component
+  , parseInput
+  , showNormalizedDateTime
   ) where
 
 import Prologue
@@ -23,7 +25,7 @@ import Data.Enum (fromEnum, toEnum)
 import Data.Foldable (for_)
 import Data.Int as Int
 import Data.Maybe (fromMaybe)
-import Data.String (length, take)
+import Data.String (length)
 import Data.String.Regex (match, regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.Time (Time(..))
@@ -58,15 +60,15 @@ handleAction (ChangeValue newValue) = do
   let
     mParsed = parseInput newValue
   for_ mParsed \parsedValue -> do
-    -- H.modify_ (_ { value = parsedValue })
     H.raise $ ValueChanged parsedValue
 
 parseInput :: String -> Maybe DateTime
 parseInput value = do
   dateTimeRegex <- mDateTimeRegex
   found <- match dateTimeRegex value
+
   case compact $ toArray found of
-    [ _, year, month, day, hour, minute, second ] -> buildOutput
+    [ _, year, month, day, hour, minute, _, second ] -> buildOutput
       year
       month
       day
@@ -79,7 +81,7 @@ parseInput value = do
       day
       hour
       minute
-      ":00"
+      "00"
     _ -> Nothing
   where
   mDateTimeRegex = hush $ regex
@@ -94,10 +96,7 @@ parseInput value = do
       date <- exactDate year' month' day'
       hour' <- toEnum =<< Int.fromString hour
       minute' <- toEnum =<< Int.fromString minute
-      -- The first character in the second array is ":" because
-      -- of how the regexp grouping works. If the matching is empty we
-      -- use 0 seconds
-      second' <- toEnum $ fromMaybe 0 $ Int.fromString $ take 1 second
+      second' <- toEnum $ fromMaybe 0 $ Int.fromString second
       -- The DateTime local does not handle milliseconds.
       ms' <- toEnum 0
       let

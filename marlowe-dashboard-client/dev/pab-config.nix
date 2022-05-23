@@ -1,4 +1,5 @@
-{ dbConfigFile
+# TODO unify with bitte/pab.nix
+{ contractStoreConfig ? { tag = "UseInMemoryStore"; }
 , baseUrl
 , walletUrl
 , chainIndexUrl
@@ -6,10 +7,18 @@
 , network
 , protocol-parameters
 }: {
-  dbConfig = {
-    inherit dbConfigFile;
-    dbConfigPoolSize = 20;
-  };
+  inherit contractStoreConfig;
+  # contractStoreConfig = {
+  #   tag = "UseFSStore";
+  #   contents = fsStorePath
+  # };
+  # contractStoreConfig = {
+  #   tag = "UseSqliteStore";
+  #   contents = {
+  #     sqliteConfigFile = dbConfigFile;
+  #     sqliteConfigPoolSize = 20;
+  #   };
+  # };
   pabWebserverConfig = {
     inherit baseUrl;
     permissiveCorsPolicy = false;
@@ -56,7 +65,7 @@
     mdBaseUrl = "http://fixme";
   };
   developmentOptions = {
-    pabRollbackHistory = null;
+    pabRollbackHistory = 100;
     pabResumeFrom = {
       tag = "PointAtGenesis";
     };

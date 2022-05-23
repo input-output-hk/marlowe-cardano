@@ -40,7 +40,9 @@ import Control.Monad.Error.Lens (catching, handling, throwing, throwing_)
 import Control.Monad.Extra (concatMapM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import Data.Default (Default (def))
+import Data.Foldable (for_)
 import Data.Functor (($>))
+import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
@@ -72,12 +74,14 @@ import qualified Ledger.Constraints as Constraints
 import qualified Ledger.Interval as Interval
 import Ledger.Scripts (datumHash, unitRedeemer)
 import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange, scSlotLength, slotToPOSIXTimeRange)
+import Ledger.Tx (txId)
 import qualified Ledger.Tx as Tx
 import Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts as Typed
 import qualified Ledger.Typed.Tx as Typed
 import qualified Ledger.Value as Val
-import Plutus.ChainIndex (ChainIndexTx (..), Page, PageQuery, _ValidTx, citxOutputs, nextPageQuery, pageItems)
+import Numeric.Natural (Natural)
+import Plutus.ChainIndex (ChainIndexTx (..), Page, PageQuery, _ValidTx, citxOutputs, citxTxId, nextPageQuery, pageItems)
 import Plutus.ChainIndex.Api (paget)
 import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractError)
 import qualified Plutus.Contract as Contract (ContractError (..))
@@ -90,6 +94,7 @@ import PlutusPrelude (foldMapM, (<|>))
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
+import PlutusTx.Traversable (for)
 
 
 
@@ -119,6 +124,7 @@ type MarloweSchema =
         .\/ Endpoint "auto" AutoEndpointSchema
         .\/ Endpoint "redeem" RedeemEndpointSchema
         .\/ Endpoint "close" CloseEndpointSchema
+
 
 data MarloweEndpointResult =
     CreateResponse MarloweParams
@@ -269,7 +275,7 @@ debugMsg fnName msg = "[DEBUG:" <> fnName <> "] " <> msg
 
 -- TODO: Move to debug log.
 debug :: forall st sc err. String -> String -> Contract st sc err ()
-debug fnName msg = logInfo $ debugMsg fnName msg
+debug fnName msg = logDebug $ debugMsg fnName msg
 
 -- | During first pass the counter equals to 0 - first pass is not a retry
 newtype RetryCounter = RetryCounter Int
@@ -286,13 +292,25 @@ retryTillJust (MaxRetries maxRetries) action = go 0
             res     -> pure res
 
 -- | Our retries defaults
-pollingInterval :: Ledger.DiffMilliSeconds
-pollingInterval = 1000
+pollingInterval :: Natural
+pollingInterval = 2
 
 maxRetries :: MaxRetries
-maxRetries = MaxRetries 30
+maxRetries = MaxRetries 4
 
-newtype DebugTraceStr = DebugTraceStr String
+newtype CallStackTrace = CallStackTrace [String]
+  deriving newtype (Semigroup, Monoid)
+
+pushFnName :: String -> CallStackTrace -> CallStackTrace
+pushFnName fn (CallStackTrace st) = CallStackTrace (fn : st)
+
+printCallStackTrace :: CallStackTrace -> String
+printCallStackTrace (CallStackTrace trace) = show $ intercalate ":" trace
+
+debugTrace :: CallStackTrace -> String -> Contract st sc err ()
+debugTrace trace =
+  debug (printCallStackTrace trace)
+
 
 -- | The same as above but specializd to the PAB Contract monad with
 -- | constant delay between retries.
@@ -300,16 +318,16 @@ newtype DebugTraceStr = DebugTraceStr String
 -- | Used to do polling of the PAB because we have to
 -- | wait till chain index catches up with
 -- | the recent responses from the cardano-node (PAB STM)
-retryRequestTillJust :: AsContractError err => DebugTraceStr -> MaxRetries -> (RetryCounter -> Contract st sc err (Maybe a)) -> Contract st sc err (Maybe a)
-retryRequestTillJust (DebugTraceStr name) maxRetries query = do
+retryRequestTillJust :: AsContractError err => CallStackTrace -> MaxRetries -> (RetryCounter -> Contract st sc err (Maybe a)) -> Contract st sc err (Maybe a)
+retryRequestTillJust trace maxRetries query = do
   retryTillJust maxRetries $ \cnt@(RetryCounter cntVal) -> do
     when (cntVal > 0) $ do
-      debug (name <> ":retryRequestTillJust") $ "Still waiting for desired change - iteration: " <> show cntVal
-      void $ waitNMilliSeconds pollingInterval
+      debugTrace (pushFnName "retryRequestTillJust" trace) $ "Still waiting for desired change - iteration: " <> show cntVal
+      void $ waitNSlots pollingInterval
     query cnt
 
-retryRequestTillJust' :: AsContractError err => DebugTraceStr -> Contract st sc err (Maybe a) -> Contract st sc err (Maybe a)
-retryRequestTillJust' name action = retryRequestTillJust name maxRetries (const action)
+retryRequestTillJust' :: AsContractError err => CallStackTrace -> Contract st sc err (Maybe a) -> Contract st sc err (Maybe a)
+retryRequestTillJust' trace action = retryRequestTillJust trace maxRetries (const action)
 
 retryTillDiffers :: Monad m => Eq a => MaxRetries -> a -> (RetryCounter -> m a) -> m (Maybe a)
 retryTillDiffers maxRetries known action = do
@@ -321,29 +339,46 @@ retryTillDiffers maxRetries known action = do
 
 -- | The same as above but specializd to the PAB Contract monad with
 -- | constant delay between retries.
-retryTillResponseDiffers :: Eq a => AsContractError err => DebugTraceStr -> MaxRetries -> a -> (RetryCounter -> Contract st sc err a) -> Contract st sc err (Maybe a)
-retryTillResponseDiffers (DebugTraceStr name) maxRetries known query = do
+retryTillResponseDiffers :: Eq a => AsContractError err => CallStackTrace -> MaxRetries -> a -> (RetryCounter -> Contract st sc err a) -> Contract st sc err (Maybe a)
+retryTillResponseDiffers trace maxRetries known query = do
   retryTillDiffers maxRetries known $ \cnt@(RetryCounter cntVal) -> do
     when (cntVal > 0) $ do
-      debug (name <> ":retryTillResponseDiffers") $ "Still waiting for desired change - iteration: " <> show cntVal
-      void $ waitNMilliSeconds pollingInterval
+      debugTrace (pushFnName "retryTillResponseDiffers" trace) $ "Still waiting for desired change - iteration: " <> show cntVal
+      void $ waitNSlots pollingInterval
     query cnt
 
-retryTillResponseDiffers' :: Eq a => AsContractError err => DebugTraceStr -> a -> Contract st sc err a -> Contract st sc err (Maybe a)
-retryTillResponseDiffers' name a query = retryTillResponseDiffers name maxRetries a (const query)
+retryTillResponseDiffers' :: Eq a => AsContractError err => CallStackTrace -> a -> Contract st sc err a -> Contract st sc err (Maybe a)
+retryTillResponseDiffers' trace a query = retryTillResponseDiffers trace maxRetries a (const query)
 
 -- | Queries which perform some extra polling to possibly sync the chain index
-awaitTxConfirmed' :: AsContractError e => DebugTraceStr -> Ledger.TxId -> Contract w s e ()
-awaitTxConfirmed' (DebugTraceStr name) txId = do
+awaitTxConfirmed' :: AsContractError e => CallStackTrace -> MaxRetries -> Ledger.TxId -> Contract w s e Bool
+awaitTxConfirmed' trace maxRetries txId = do
   awaitTxConfirmed txId
-  void $ retryRequestTillJust' (DebugTraceStr $ name <> ":awaitTxConfirmed'")  $ listToMaybe <$> txsFromTxIds [txId]
+  fmap isJust $ retryRequestTillJust (pushFnName "awaitTxConfirmed'" trace)  maxRetries $ const (listToMaybe <$> txsFromTxIds [txId])
 
-awaitUtxoProduced' :: AsContractError e => DebugTraceStr -> Address -> Contract w s e (NonEmpty ChainIndexTx)
-awaitUtxoProduced' (DebugTraceStr name) addr = do
+awaitUtxoProduced' :: AsContractError e => CallStackTrace -> Address -> Contract w s e (NonEmpty ChainIndexTx)
+awaitUtxoProduced' trace addr = do
   prev <- utxosAt addr
   txns <- awaitUtxoProduced addr
-  void $ retryTillResponseDiffers' (DebugTraceStr $ name <> ":awaitUtxoProduced'") prev (utxosAt addr)
+  void $ retryTillResponseDiffers' (pushFnName "awaitUtxoProduced'" trace) prev (utxosAt addr)
   pure txns
+
+utxoIsProduced' :: AsContractError e => CallStackTrace -> Address -> Promise w s e (NonEmpty ChainIndexTx)
+utxoIsProduced' trace addr = do
+  promiseBind (utxoIsProduced addr) $ \txns -> do
+    void $ retryRequestTillJust' (pushFnName "utxoIsProduced'" trace)  $ do
+      for_ (NonEmpty.toList txns) $ \tx -> do
+        listToMaybe <$> txsFromTxIds [ tx ^. citxTxId ]
+      pure $ Just txns
+    -- FIXME: We should just throw here and report inconsistency problem
+    --        when the previous check returns `Nothing`.
+    pure txns
+
+utxoIsSpent' :: AsContractError e => CallStackTrace -> TxOutRef -> Promise w s e ChainIndexTx
+utxoIsSpent' trace utxo = promiseBind (utxoIsSpent utxo) $ \tx -> do
+  void $ retryRequestTillJust' (pushFnName "utxoIsSpent'" trace)  $ listToMaybe <$> txsFromTxIds [ tx ^. citxTxId ]
+  pure tx
+
 
 -- | Trivial data type (a bit more redable than `Maybe`) which helps fully embed contract into `checkpointLoop`
 data QueryResult a
@@ -377,51 +412,41 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       fetchOnChainState :: FollowerM FollowerContractState
       fetchOnChainState = (,) <$> marloweHistory unsafeGetSlotConfig params <*> payoutsAtCurrency (rolesCurrency params)
 
-      awaitNewState :: FollowerContractState -> FollowerM (Maybe FollowerContractState)
-      awaitNewState prevState@(prevHistory, prevPayouts) = do
+      awaitNewState :: FollowerContractState -> FollowerM FollowerContractState
+      awaitNewState (prevHistory, prevPayouts) = do
+
         let
           -- In both cases we bring back one of the transactions which have woken us up.
           -- We do this only to perform the logging.
           waitForContractChange :: FollowerPromise ChainIndexTx
           waitForContractChange = case prevHistory >>= continuationUtxo of
-            Nothing   -> NonEmpty.head <$> (utxoIsProduced $ validatorAddress $ mkMarloweTypedValidator params)
-            Just utxo -> utxoIsSpent utxo
+            Nothing   -> NonEmpty.head <$> (utxoIsProduced' trace $ validatorAddress $ mkMarloweTypedValidator params)
+            Just utxo -> utxoIsSpent' trace utxo
+            where
+              trace = CallStackTrace ["waitForContractChange", "awaitNewState", "marloweFollowContract"]
 
           waitForPayoutChange :: FollowerPromise ChainIndexTx
           waitForPayoutChange =
             let
               payoutScriptAddress = scriptHashAddress $ mkRolePayoutValidatorHash $ rolesCurrency params
               UnspentPayouts payouts = fromPayouts prevPayouts
-              waitTillPayoutIsSpent = fmap (utxoIsSpent <<< rolePayoutTxOutRef) payouts
-              waitTillPayoutIsProduced = NonEmpty.head <$> utxoIsProduced payoutScriptAddress
+              trace = CallStackTrace ["waitForPayoutChange", "awaitNewState", "marloweFollowContract"]
+
+              waitTillPayoutIsSpent = fmap (utxoIsSpent' trace <<< rolePayoutTxOutRef) payouts
+              waitTillPayoutIsProduced = NonEmpty.head <$> utxoIsProduced' trace payoutScriptAddress
             in
               raceList $ waitTillPayoutIsProduced : waitTillPayoutIsSpent
 
         -- We are here notified that there should be a new state on the chain...
         changeNotification <- awaitPromise
           (selectEither waitForPayoutChange waitForContractChange)
+
         debug' $ either
           (mappend "Payout change detected through txId =" <<< show <<< _citxTxId)
           (mappend "Contract change detected through txId " <<< show <<< _citxTxId)
           changeNotification
 
-        let
-          updateType = either (const PayoutChange) (const HistoryChange) changeNotification
-
-        -- ...so let's actually fetch it by enforcing chain index to
-        -- catch up with just received notification but...
-        retryRequestTillJust' (DebugTraceStr "follow:awaitNewState:maybeNewState") $ do
-          newState <- fetchOnChainState
-          case (updateType, prevState, newState) of
-            -- History update notification means that we should have state on the chain
-            -- so let's `retry`
-            (HistoryChange, _, (Nothing, _)) -> pure Nothing
-            (HistoryChange, (prevHistory, _), (newHistory, _)) -> pure $ do
-              guard (prevHistory /= newHistory)
-              Just newState
-            (PayoutChange, (_, prevPayouts), (_, newPayouts)) -> pure $ do
-              guard (prevPayouts /= newPayouts)
-              Just newState
+        fetchOnChainState
 
       -- Push a possible state update to the stream
       notify :: FollowerContractState -> FollowerM ()
@@ -449,7 +474,8 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       --  * we try to use only previous state pieces when constrcuting async requests
       --  * we wait for the changes on the chain
       --  * we ask (up to `maxRetries * pollingInterval`) the chain index for the update
-      --    till it actually provides the new state
+      --    till it actually provides the new state by using local versions of queries
+      --    which perform active "sync check polling"
       --  * we loop back (by returning `Right`) with the new state.
       follow :: QueryResult FollowerContractState -> FollowerM (Either () (QueryResult FollowerContractState))
       follow UnknownOnChainState = do
@@ -459,11 +485,12 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
         rec $ LastResult currOnChainState
 
       follow (LastResult prevState) = do
-        awaitNewState prevState >>= \case
-          Just newState -> do
+        newState <- awaitNewState prevState
+        if newState /= prevState
+          then do
             notify newState
             rec $ LastResult newState
-          Nothing -> do
+          else do
             debug' $ "Unable to detect new state. prevState = " <> printState prevState
             rec $ LastResult prevState
 
@@ -570,7 +597,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
     catchError reqId endpointName handler = catching _MarloweError
         (void $ mapError (review _MarloweError) handler)
         (\err -> do
-            logWarn @String (show err)
+            logWarn $ "Error " <> show err
             tell $ Just $ EndpointException reqId endpointName err
             marlowePlutusContract)
     -- [UC-CONTRACT-1][1] Start a new marlowe contract
@@ -610,11 +637,17 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         stx <- submitBalancedTx btx
         debug'' $ "stx = " <> show stx
         let txId = Tx.getCardanoTxId stx
-        awaitTxConfirmed' (DebugTraceStr "marlowePlutusContract:create") txId
         debug'' $ "txId = " <> show txId
-        debug'' $ "MarloweApp contract creation confirmed for parameters " <> show params <> "."
-        tell $ Just $ EndpointSuccess reqId $ CreateResponse params
-        marlowePlutusContract
+        confirmed <- awaitTxConfirmed' (CallStackTrace ["create", "marlowePlutusContract"]) (MaxRetries 3) txId
+        if confirmed
+          then do
+            debug'' $ "MarloweApp contract creation confirmed for parameters " <> show params <> "."
+            tell $ Just $ EndpointSuccess reqId $ CreateResponse params
+            marlowePlutusContract
+          else do
+            debug'' $ "MarloweApp contract creation failed for parameters " <> show params <> "."
+            -- TODO: Introduce custom error value
+            throwError $ OtherContractError $ Contract.OtherContractError "MarloweApp contract creation failed"
     apply = endpoint @"apply-inputs" $ \(reqId, params, timeInterval, inputs) -> catchError reqId "apply-inputs" $ do
         let
           debug'' = debug' "apply-inputs"
@@ -696,11 +729,11 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
             Nothing ->
                 waitForTimeoutOrTransition typedValidator untilTime >>= \case
                     Left _ -> do
-                        logInfo @String $ "Contract Timeout for party " <> show party
+                        logInfo $ "Contract Timeout for party " <> show party
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
                     Right (Transition Closed{}) -> do
-                        logInfo @String $ "Contract Ended for party " <> show party
+                        logInfo $ "Contract Ended for party " <> show party
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
                     Right (Transition InputApplied{historyData}) -> continueWith historyData
@@ -725,21 +758,21 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         let action = getAction timeRange party marloweData
         case action of
             PayDeposit acc p token amount -> do
-                logInfo @String $ "PayDeposit " <> show amount <> " at within time " <> show timeRange
+                logInfo $ "PayDeposit " <> show amount <> " at within time " <> show timeRange
                 let payDeposit = do
                         marloweData <- mkStep params typedValidator timeRange [ClientInput $ IDeposit acc p token amount]
                         continueWith marloweData
                 catching _MarloweError payDeposit $ \err -> do
-                    logWarn @String $ "Error " <> show err
+                    logWarn $ "Error " <> show err
                     logInfo @String $ "Retry PayDeposit in 2 seconds"
                     _ <- awaitTime (time + 2_000)
                     continueWith marloweData
             WaitForTimeout timeout -> do
-                logInfo @String $ "WaitForTimeout " <> show timeout
+                logInfo $ "WaitForTimeout " <> show timeout
                 _ <- awaitTime timeout
                 continueWith marloweData
             WaitOtherActionUntil timeout -> do
-                logInfo @String $ "WaitOtherActionUntil " <> show timeout
+                logInfo $ "WaitOtherActionUntil " <> show timeout
                 waitForTimeoutOrTransition typedValidator timeout >>= \case
                     Left _ -> do
                         logInfo @String $ "Contract Timeout"
@@ -759,7 +792,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                         marlowePlutusContract
 
                 catching _MarloweError closeContract $ \err -> do
-                    logWarn @String $ "Error " <> show err
+                    logWarn $ "Error " <> show err
                     logInfo @String $ "Retry CloseContract in 2 seconds"
                     _ <- awaitTime (time + 2000)
                     continueWith marloweData
@@ -789,14 +822,14 @@ setupMarloweParams owners roles = mapError (review _MarloweError) $
         let tokens = (, 1) <$> Set.toList roles
         txOutRef@(Ledger.TxOutRef h i) <- getUnspentOutput
         -- TODO: Move to debug log.
-        logInfo $ "[DEBUG:setupMarloweParams] txOutRef = " <> show txOutRef
+        debug "setupMarloweParams" $ "txOutRef = " <> show txOutRef
         txOut <-
           maybe
             (throwing _ContractError . Contract.OtherContractError . T.pack $ show txOutRef <> " was not found on the chain index. Please verify that plutus-chain-index is 100% synced.")
             pure
             =<< txOutFromRef txOutRef
         -- TODO: Move to debug log.
-        logInfo $ "[DEBUG:setupMarloweParams] txOut = " <> show txOut
+        debug "setupMarloweParams" $ "txOut = " <> show txOut
         let utxo = Map.singleton txOutRef txOut
         let theCurrency = Currency.OneShotCurrency
                 { curRefTransactionOutput = (h, i)
@@ -916,16 +949,17 @@ applyInputs :: AsMarloweError e
     -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
+    -- Wait until a block is produced, so we have an accurate current time and slot.
+    void $ waitNSlots 1
+    nowSlot <- currentSlot
+    nowTime <- currentTime
     -- TODO: Move to debug log.
-    do
-      nowSlot <- currentSlot
-      logInfo $ "[DEBUG:applyInputs] current slot = " <> show nowSlot
-      logInfo $ "[DEBUG:applyInputs] time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
-      nowTime <- currentTime
-      logInfo $ "[DEBUG:applyInputs] current time = " <> show nowTime
-    logInfo $ "[DEBUG:applyInputs] inputs = " <> show inputs
-    logInfo $ "[DEBUG:applyInputs] params = " <> show params
-    logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
+    debug "applyInputs" $ "current slot = " <> show nowSlot
+    debug "applyInputs" $ "time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
+    debug "applyInputs" $ "current time = " <> show nowTime
+    debug "applyInputs" $ "inputs = " <> show inputs
+    debug "applyInputs" $ "params = " <> show params
+    debug "applyInputs" $ "timeInterval = " <> show timeInterval
     let resolution = scSlotLength unsafeGetSlotConfig
     let floor'   (POSIXTime i) = POSIXTime $ resolution * (i `div` resolution)
     let ceiling' (POSIXTime i) = POSIXTime $ resolution * ((i + resolution - 1) `div` resolution)
@@ -935,7 +969,16 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
                 time <- currentTime
                 pure (ceiling' time, floor' $ time + defaultTxValidationRange)
     -- TODO: Move to debug log.
-    logInfo $ "[DEBUG:applyInputs] timeRange = " <> show timeRange
+    debug "applyInputs" $ "timeRange = " <> show timeRange
+    let POSIXTime delta = fst timeRange - nowTime
+    debug "applyInputs" $ "delta = " <> show delta
+    -- Guard against early submission, but only for three minutes.
+    when (delta < 180_000)
+      . void $ awaitTime $ fst timeRange
+    nowSlot' <- currentSlot
+    debug "applyInputs" $ "current slot at submission = " <> show nowSlot'
+    nowTime' <- currentTime
+    debug "applyInputs" $ "current time at submission = " <> show nowTime'
     mkStep params typedValidator timeRange inputs
 
 marloweParams :: CurrencySymbol -> MarloweParams
@@ -984,8 +1027,10 @@ marloweCompanionContract = checkExistingRoleTokens
         -- currently not doing that.
         checkpointLoop (fmap Right <$> checkForUpdates) ownAddress
     checkForUpdates ownAddress = do
-        txns <- NonEmpty.toList <$> awaitUtxoProduced' (DebugTraceStr "marloweCompanionContract:txns") ownAddress
+        txns <- NonEmpty.toList <$> awaitUtxoProduced' (CallStackTrace ["checkForUpdates", "marloweCompanionContract"]) ownAddress
+        debug "checkForUpdates" $ "txns = " <> show txns
         let txOuts = txns >>= view (citxOutputs . _ValidTx)
+        debug "checkForUpdates" $ "txOuts = " <> show txOuts
         forM_ txOuts notifyOnNewContractRoles
         pure ownAddress
 
@@ -996,9 +1041,12 @@ notifyOnNewContractRoles txout = do
     -- a role token symbol. Basically, any non-ADA symbols is a prospect to
     -- to be a role token, but it could also be an NFT for example.
     let curSymbols = filterRoles txout
+    debug "notifyOnNewContractRoles" $ "curSymbols = " <> show curSymbols
     forM_ curSymbols $ \cs -> do
+        debug "notifyOnNewContractRoles" $ "cs = " <> show cs
         -- Check if there is a Marlowe contract on chain that uses this currency
         contract <- findMarloweContractsOnChainByRoleCurrency cs
+        debug "notifyOnNewContractRoles" $ "contract = " <> show contract
         case contract of
             Just (params, md) -> do
                 logInfo $ "WalletCompanion found currency symbol " <> show cs <> " with on-chain state " <> show (params, md) <> "."
@@ -1068,7 +1116,7 @@ mkStep ::
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
 mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
-    logInfo $ "[DEBUG:mkStep] clientInputs = " <> show clientInputs
+    debug "mkStep" $ "clientInputs = " <> show clientInputs
     let
       times =
         Interval.Interval
@@ -1078,24 +1126,24 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
         posixTimeRangeToContainedSlotRange
           unsafeGetSlotConfig
           times
-    maybeState <- retryRequestTillJust' (DebugTraceStr "mkStep:maybeState") $ do
+    maybeState <- retryRequestTillJust' (CallStackTrace ["mkStep"]) $ do
       getOnChainStateTxOuts typedValidator
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
         Just (OnChainState{ocsTxOutRef}, utxo) -> do
             let currentState = toMarloweState ocsTxOutRef
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] currentState = " <> show currentState
+            debug "mkStep" $ "currentState = " <> show currentState
             let marloweTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef
 
             (allConstraints, marloweData) <- evaluateTxContstraints currentState times marloweTxOutRef
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] allConstraints = " <> show allConstraints
-            logInfo $ "[DEBUG:mkStep] marloweData = " <> show marloweData
+            debug "mkStep" $ "allConstraints = " <> show allConstraints
+            debug "mkStep" $ "marloweData = " <> show marloweData
 
             pk <- Contract.ownPaymentPubKeyHash
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] pk = " <> show pk
+            debug "mkStep" $ "pk = " <> show pk
             let lookups1 = Constraints.typedValidatorLookups typedValidator
                     <> Constraints.unspentOutputs utxo
             let lookups:: ScriptLookups TypedMarloweValidator
@@ -1109,19 +1157,24 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                         , unBalancedTxValidityTimeRange = times
                         }
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] utx' = " <> show utx'
+            debug "mkStep" $ "utx' = " <> show utx'
             btx <- balanceTx $ Constraints.adjustUnbalancedTx utx'
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] btx = " <> show btx
+            debug "mkStep" $ "btx = " <> show btx
             stx <- submitBalancedTx btx
             -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] stx = " <> show stx
+            debug "mkStep" $ "stx = " <> show stx
             let txId = Tx.getCardanoTxId stx
-            awaitTxConfirmed' (DebugTraceStr "mkStep") txId
-
-            -- TODO: Move to debug log.
-            logInfo $ "[DEBUG:mkStep] txId = " <> show txId
-            pure marloweData
+            confirmed <- awaitTxConfirmed' (CallStackTrace ["mkStep"]) (MaxRetries 3) txId
+            if confirmed
+              then do
+                -- TODO: Move to debug log.
+                debug "mkStep" $ "confirmed txId = " <> show txId
+                pure marloweData
+              else do
+                -- TODO: Introduce custom error value
+                debug "mkStep" $ "tx confirmation failed txId = " <> show txId
+                throwError $ OtherContractError $ Contract.OtherContractError "mkStep failed to confirm the transaction"
   where
     evaluateTxContstraints :: MarloweData
         -> Ledger.POSIXTimeRange
@@ -1227,9 +1280,9 @@ waitForTransition typedValidator = do
                 -- There is no on-chain state, so we wait for an output to appear
                 -- at the address. Any output that appears needs to be checked
                 -- with scChooser'
-                pure $ promiseBind (utxoIsProduced addr) $ \txns -> do
+                pure $ promiseBind (utxoIsProduced' (CallStackTrace ["waitForTransition"]) addr) $ \txns -> do
                     -- See NOTE: Chain index / cardano-node query consistency
-                    void $ retryTillResponseDiffers' (DebugTraceStr "waitForTransition:Nothing") mempty (utxosAt addr)
+                    -- void $ retryTillResponseDiffers' (CallStackTrace ["waitForTransition->Nothing"]) mempty (utxosAt addr)
                     produced <- concatMapM (marloweHistoryFrom typedValidator unsafeGetSlotConfig) $ NonEmpty.toList txns
                     case produced of
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
@@ -1237,8 +1290,8 @@ waitForTransition typedValidator = do
                         _         -> throwing_ _AmbiguousOnChainState
             Just OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}} -> do
                 debug' $ "wait till utxo is spent = " <> show tyTxOutRefRef
-                pure $ promiseBind (utxoIsSpent tyTxOutRefRef) $ \txn -> do
-                    void $ retryTillResponseDiffers' (DebugTraceStr "waitForTimeoutOrTransition:Just") currentState $ getOnChainState typedValidator
+                pure $ promiseBind (utxoIsSpent' (CallStackTrace ["waitForTransition"]) tyTxOutRefRef) $ \txn -> do
+                    -- void $ retryTillResponseDiffers' (CallStackTrace ["waitForTimeoutOrTransition->Just"]) currentState $ getOnChainState typedValidator
                     spent <- marloweHistoryFrom typedValidator unsafeGetSlotConfig txn
                     case spent of
                         [history] -> pure $ Transition history

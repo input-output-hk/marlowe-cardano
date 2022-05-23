@@ -14,9 +14,9 @@ let
   scriptsFeeFactor = 1.0; # Factor by which to multiply the size-dependent scripts fee in lovelace
 
   pabYamlIn = writeText "pab.yaml.in" (builtins.toJSON {
-    dbConfig = {
-      dbConfigFile = "@PAB_STATE_DIR@/pab.db";
-      dbConfigPoolSize = 20;
+    contractStoreConfig = {
+      tag = "UseFSStore";
+      contents = "@PAB_STATE_DIR@/contract-store";
     };
 
     pabWebserverConfig = {
@@ -73,7 +73,7 @@ let
     };
 
     developmentOptions = {
-      pabRollbackHistory = null;
+      pabRollbackHistory = 100;
       pabResumeFrom = {
         tag = "PointAtGenesis";
       };
@@ -81,6 +81,8 @@ let
   });
 
   dbFile = "$PAB_STATE_DIR/pab.db";
+
+  fsStore = "$PAB_STATE_DIR/contract-store";
 
   # Note: The db is dropped as a workaround for a problem with
   # eventful which crashes PAB. Currently data persistence is not
@@ -92,8 +94,11 @@ let
     echo "[pab-init-cmd]: Dropping PAB database file '${dbFile}'" >&2
     rm -rf "${dbFile}"
 
-    echo "[pab-init-cmd]: Creating new DB '${dbFile}'" >&2
-    ${pabExe} --config=pab.yaml migrate
+    # Uncomment when using SQLite
+    # echo "[pab-init-cmd]: Creating new DB '${dbFile}'" >&2
+    # ${pabExe} --config=pab.yaml migrate
+
+    mkdir -p ${fsStore}
   '';
 in
 writeShellScriptBin "entrypoint" ''
@@ -103,6 +108,8 @@ writeShellScriptBin "entrypoint" ''
 
   export SYSTEM_CERTIFICATE_PATH=${cacert}/etc/ssl/certs/ca-bundle.crt
 
+  # Always start fresh
+  rm -fR "$PAB_STATE_DIR"
   mkdir -p "$PAB_STATE_DIR"
 
   sed -e "s|@PAB_STATE_DIR@|$PAB_STATE_DIR|g" \
@@ -115,12 +122,11 @@ writeShellScriptBin "entrypoint" ''
 
   wait-for-socket "$NOMAD_ALLOC_DIR/node.sock"
 
-  # not needed with --memory
-  # ${pab-init-cmd}/bin/pab-init-cmd
+  ${pab-init-cmd}/bin/pab-init-cmd
 
-  # Ugly ugly hack to kill the PAB at midnight UTC
-  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet --memory &
-  sleep $(($(date -f - +%s- <<< $'tomorrow 00:00\nnow')0))&
+  # Ugly ugly hack to kill the PAB every hour
+  ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet &
+  sleep 3600&
   wait -n
   exit 1
 ''

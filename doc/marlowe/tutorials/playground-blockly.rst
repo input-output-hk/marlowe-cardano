@@ -15,13 +15,13 @@ To start building a Blockly project in the Marlowe Playground, which you
 can find out more about in the section about
 :ref:`playground overview <playground-overview>`. On the home screen
 
-.. image:: images/blocklyNew0.png
+.. image:: images/blocklyNew00.png
    :alt: Playground landing page
 
-select **Start in Blockly**. You’ll
+select **Start in Blockly**. You'll
 now see a screen like this:
 
-.. image:: images/blocklyNew1.png
+.. image:: images/blocklyNew01.png
    :alt: Blockly window
 
 Contracts are assembled by adding components to the holes in the blocks.
@@ -30,10 +30,10 @@ with a ``Contract``: you can see that it filled with a ``Close`` here.
 
 Blocks are selected by clicking on them: the currently selected blocks are outlined in yellow, as here:
 
-.. image:: images/blocklyNew1-5.png
+.. image:: images/blocklyNew02.png
    :alt: Selected blocks in the Blockly window
 
-Once a block or blocks are selected you can move them directly; cut, copy and delete them using your operating system’s
+Once a block or blocks are selected you can move them directly; cut, copy and delete them using your operating system's
 usual short cuts; and access other operations by right-clicking on them.
 
 Suppose that you remove the ``Close`` block and you want to build another contract. The block templates
@@ -41,13 +41,13 @@ for contracts are found by clicking on
 **Contracts** in the menu on the left hand side. Doing this shows all
 the different blocks that build contracts, as shown here:
 
-.. image:: images/blocklyNew2.png
+.. image:: images/blocklyNew03.png
    :alt: Contracts in Blockly
 
 We can select one and drag it into the editing area, which has a dotted
 background, like this:
 
-.. image:: images/blocklyNew3.png
+.. image:: images/blocklyNew04.png
    :alt: A contract block: When
 
 Looking at the menu on the left hand side, you can see two new entries below the original: these tell you what kind
@@ -56,32 +56,32 @@ of block you need to fit into each of the holes in the currently selected block 
 In the example here you can see that the upper hole requires a *case* block while the lower one needs to be filled
 by another *contract*.
 
-Let’s fit the contract into the top-level hole, so that we’re constructing a
+Let's fit the contract into the top-level hole, so that we're constructing a
 contract with a ``When`` as its main construct.
 
-.. image:: images/blocklyNew4.png
+.. image:: images/blocklyNew05.png
    :alt: Fitting in a contract block
 
 We can then repeat this process, adding contracts and other types of
 components – all of which are shown in the menu on the left-hand side –
 to build a complete contract, that is a contract that contains no holes.
 
-Let’s fill in the timeout information and add a ``Close`` contract to be
+Let's fill in the timeout information and add a ``Close`` contract to be
 performed in the case of timeout:
 
-.. image:: images/blocklyNew5.png
+.. image:: images/blocklyNew06.png
    :alt: Adding timeout information
 
 What action should we choose now? Again we see all the possible actions
 by selecting **case** or **Actions** in the menu:
 
-.. image:: images/blocklyNew6.png
+.. image:: images/blocklyNew07.png
    :alt: The Action menu
 
 If we select a ``Deposit`` action we have a number of different types of
 holes to fill.
 
-.. image:: images/blocklyNew7.png
+.. image:: images/blocklyNew08.png
    :alt: Making a Deposit
 
 Here we have to choose
@@ -100,14 +100,14 @@ Here we have to choose
 In filling in some of these we have also to fill in a text field, or a
 number, as shown in the final result here.
 
-.. image:: images/blocklyNew8.png
+.. image:: images/blocklyNew09.png
    :alt: Completing a Deposit contract
 
 Finally, we have to decide what the *continutation* contract is: what
-does the contract do next? That’s another contract. Here it is completed
+does the contract do next? That's another contract. Here it is completed
 as a payment:
 
-.. image:: images/blocklyNew9.png
+.. image:: images/blocklyNew10.png
    :alt: The complete contract
 
 Exercises
@@ -125,7 +125,7 @@ Editing Blockly
 Blockly contracts can be manipulated and edited using visual gestures
 and keyboard short cuts.
 
-.. image:: images/blocklyNew10.png
+.. image:: images/blocklyNew11.png
    :alt: Right-click menu
 
 -  Blocks can be **dragged** from holes, as well as being inserted.

@@ -9,6 +9,7 @@ import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
 import Component.Icons (icon)
 import Component.Icons as Icon
+import Component.Toast.State as Toast
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill)
@@ -39,7 +40,6 @@ import Servant.PureScript (class MonadAjax)
 import Store (_wallet)
 import Store as Store
 import Store.Wallet (_connectedWallet)
-import Toast.State as Toast
 
 render
   :: forall m

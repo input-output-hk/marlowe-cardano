@@ -28,7 +28,6 @@ import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSl
                     Lovelace (..), NetworkId (..), SlotNo, TxMetadataInEra (TxMetadataNone), TxMintValue (TxMintNone),
                     lovelaceToValue)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
-import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseOutputQuery, parseSlotNo,
                                            parseTokenName)
@@ -45,46 +44,46 @@ data UtilCommand =
     -- | Clean UTxOs at an address.
     Clean
     {
-      network         :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath      :: FilePath         -- ^ The path to the node socket.
-    , signingKeyFiles :: [FilePath]       -- ^ The files containing the required signing keys.
-    , lovelace        :: Lovelace         -- ^ The lovelace to send with each bundle of tokens.
-    , change          :: AddressAny       -- ^ The change address.
-    , bodyFile        :: FilePath         -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
+      network         :: NetworkId   -- ^ The network ID, if any.
+    , socketPath      :: FilePath    -- ^ The path to the node socket.
+    , signingKeyFiles :: [FilePath]  -- ^ The files containing the required signing keys.
+    , lovelace        :: Lovelace    -- ^ The lovelace to send with each bundle of tokens.
+    , change          :: AddressAny  -- ^ The change address.
+    , bodyFile        :: FilePath    -- ^ The output file for the transaction body.
+    , submitTimeout   :: Maybe Int   -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
     -- | Mint tokens.
   | Mint
     {
-      network        :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath     :: FilePath         -- ^ The path to the node socket.
-    , signingKeyFile :: FilePath         -- ^ The files containing the required signing keys.
-    , metadataFile   :: Maybe FilePath   -- ^ The CIP-25 metadata for the minting, with keys for each token name.
-    , count          :: Integer          -- ^ The number of each token to mint.
-    , expires        :: Maybe SlotNo     -- ^ The slot number after which minting is no longer possible.
-    , lovelace       :: Lovelace         -- ^ The lovelace to send with each token.
-    , change         :: AddressAny       -- ^ The change address.
-    , bodyFile       :: FilePath         -- ^ The output file for the transaction body.
-    , submitTimeout  :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
-    , tokenNames     :: [TokenName]      -- ^ The token names.
+      network        :: NetworkId       -- ^ The network ID, if any.
+    , socketPath     :: FilePath        -- ^ The path to the node socket.
+    , signingKeyFile :: FilePath        -- ^ The files containing the required signing keys.
+    , metadataFile   :: Maybe FilePath  -- ^ The CIP-25 metadata for the minting, with keys for each token name.
+    , count          :: Integer         -- ^ The number of each token to mint.
+    , expires        :: Maybe SlotNo    -- ^ The slot number after which minting is no longer possible.
+    , lovelace       :: Lovelace        -- ^ The lovelace to send with each token.
+    , change         :: AddressAny      -- ^ The change address.
+    , bodyFile       :: FilePath        -- ^ The output file for the transaction body.
+    , submitTimeout  :: Maybe Int       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , tokenNames     :: [TokenName]     -- ^ The token names.
     }
     -- | Fund an address from a faucet.
   | Faucet
     {
-      network       :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath    :: FilePath         -- ^ The path to the node socket.
-    , lovelace      :: Lovelace         -- ^ The lovelace to send to the address.
-    , bodyFile      :: FilePath         -- ^ The output file for the transaction body.
-    , submitTimeout :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
-    , addresses     :: [AddressAny]     -- ^ The addresses.
+      network       :: NetworkId     -- ^ The network ID, if any.
+    , socketPath    :: FilePath      -- ^ The path to the node socket.
+    , lovelace      :: Lovelace      -- ^ The lovelace to send to the address.
+    , bodyFile      :: FilePath      -- ^ The output file for the transaction body.
+    , submitTimeout :: Maybe Int     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , addresses     :: [AddressAny]  -- ^ The addresses.
     }
     -- | Select UTxO by asset.
   | Output
     {
-      network    :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath :: FilePath         -- ^ The path to the node socket.
-    , query      :: OutputQuery      -- ^ Filter the query results.
-    , address    :: AddressAny       -- ^ The addresses.
+      network    :: NetworkId    -- ^ The network ID, if any.
+    , socketPath :: FilePath     -- ^ The path to the node socket.
+    , query      :: OutputQuery  -- ^ Filter the query results.
+    , address    :: AddressAny   -- ^ The addresses.
     }
     -- | Decode Bech32.
   | DecodeBech32
@@ -100,15 +99,16 @@ data UtilCommand =
     -- | Extract slot configuation.
   | Slotting
     {
-      network      :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath   :: FilePath         -- ^ The path to the node socket.
-    , slottingFile :: Maybe FilePath   -- ^ The output file for the slot configuration.
+      network      :: NetworkId       -- ^ The network ID, if any.
+    , socketPath   :: FilePath        -- ^ The path to the node socket.
+    , slottingFile :: Maybe FilePath  -- ^ The output file for the slot configuration.
     }
     -- | Watch Marlowe transactions.
   | Watch
     {
-      network     :: Maybe NetworkId  -- ^ The network ID, if any.
+      network     :: NetworkId        -- ^ The network ID, if any.
     , socketPath  :: FilePath         -- ^ The path to the node socket.
+    , includeAll  :: Bool             -- ^ Whether to include non-Marlowe transactions.
     , cbor        :: Bool             -- ^ Whether to output CBOR instead of JSON.
     , continue    :: Bool             -- ^ Whether to continue watching when the tip of the chain is reached.
     , restartFile :: Maybe FilePath   -- ^ File for restoring and saving current point on the chain.
@@ -124,7 +124,7 @@ runUtilCommand :: MonadError CliError m
 runUtilCommand command =
   do
     let
-      network' = fromMaybe Mainnet $ network command
+      network' = network command
       connection =
         LocalNodeConnectInfo
         {
@@ -177,6 +177,7 @@ runUtilCommand command =
                             slottingFile
       Watch{..}        -> watchMarlowe
                             connection
+                            includeAll
                             cbor
                             continue
                             restartFile
@@ -184,102 +185,102 @@ runUtilCommand command =
 
 
 -- | Parser for miscellaneous commands.
-parseUtilCommand :: O.Parser UtilCommand
-parseUtilCommand =
+parseUtilCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+parseUtilCommand network socket =
   O.hsubparser
     $ O.commandGroup "Miscellaneous low-level commands:"
-    <> cleanCommand
+    <> cleanCommand network socket
     <> decodeBechCommand
     <> encodeBechCommand
-    <> faucetCommand
-    <> mintCommand
-    <> selectCommand
-    <> slottingCommand
-    <> watchCommand
+    <> faucetCommand network socket
+    <> mintCommand network socket
+    <> selectCommand network socket
+    <> slottingCommand network socket
+    <> watchCommand network socket
 
 
 -- | Parser for the "clean" command.
-cleanCommand :: O.Mod O.CommandFields UtilCommand
-cleanCommand =
+cleanCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+cleanCommand network socket =
   O.command "clean"
-    $ O.info cleanOptions
+    $ O.info (cleanOptions network socket)
     $ O.progDesc "Reorganize the UTxOs at an address, separating tokens."
 
 
 -- | Parser for the "clean" options.
-cleanOptions :: O.Parser UtilCommand
-cleanOptions =
+cleanOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+cleanOptions network socket =
   Clean
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"                        <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."                    )
-    <*> O.strOption                            (O.long "socket-path"                          <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."              )
-    <*> (O.some . O.strOption)                 (O.long "required-signer"                      <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                )
-    <*> (O.option $ Lovelace <$> O.auto)       (O.long "lovelace"        <> O.value 2_000_000 <> O.metavar "LOVELACE"      <> O.help "The lovelace to send with each bundle of tokens."       )
-    <*> O.option parseAddressAny               (O.long "change-address"                       <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
-    <*> O.strOption                            (O.long "out-file"                             <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
-    <*> (O.optional . O.option O.auto)         (O.long "submit"                               <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
+    <$> O.option parseNetworkId           (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                       (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> (O.some . O.strOption)            (O.long "required-signer"                      <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key."                                                                         )
+    <*> (O.option $ Lovelace <$> O.auto)  (O.long "lovelace"        <> O.value 2_000_000 <> O.metavar "LOVELACE"     <> O.help "The lovelace to send with each bundle of tokens."                                                                )
+    <*> O.option parseAddressAny          (O.long "change-address"                       <> O.metavar "ADDRESS"      <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.strOption                       (O.long "out-file"                             <> O.metavar "FILE"         <> O.help "Output file for transaction body."                                                                               )
+    <*> (O.optional . O.option O.auto)    (O.long "submit"                               <> O.metavar "SECONDS"      <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
 
 
 -- | Parser for the "mint" command.
-mintCommand :: O.Mod O.CommandFields UtilCommand
-mintCommand =
+mintCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+mintCommand network socket =
   O.command "mint"
-    $ O.info mintOptions
+    $ O.info (mintOptions network socket)
     $ O.progDesc "Mint native tokens."
 
 
 -- | Parser for the "mint" options.
-mintOptions :: O.Parser UtilCommand
-mintOptions =
+mintOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+mintOptions network socket =
   Mint
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"                         <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."                        )
-    <*> O.strOption                            (O.long "socket-path"                           <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."                  )
-    <*> O.strOption                            (O.long "required-signer"                       <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                    )
-    <*> (O.optional . O.strOption)             (O.long "metadata-file"                         <> O.metavar "JSON_FILE"     <> O.help "The CIP-25 metadata, with keys for each token name."        )
-    <*> O.option O.auto                        (O.long "count"           <> O.value 1          <> O.metavar "INTEGER"       <> O.help "The number of each token to mint."                          )
-    <*> (O.optional . O.option parseSlotNo)    (O.long "expires"                               <> O.metavar "SLOT_NO"       <> O.help "The slot number after which miniting is no longer possible.")
-    <*> (O.option $ Lovelace <$> O.auto)       (O.long "lovelace"        <> O.value 10_000_000 <> O.metavar "LOVELACE"      <> O.help "The lovelace to send with each bundle of tokens."           )
-    <*> O.option parseAddressAny               (O.long "change-address"                        <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                   )
-    <*> O.strOption                            (O.long "out-file"                              <> O.metavar "FILE"          <> O.help "Output file for transaction body."                          )
-    <*> (O.optional . O.option O.auto)         (O.long "submit"                                <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."    )
-    <*> O.some (O.argument parseTokenName      $                                                  O.metavar "TOKEN_NAME"    <> O.help "The name of the token."                                     )
+    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network            <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                          (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> socket             <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.strOption                          (O.long "required-signer" <> O.metavar "SIGNING_FILE"                       <> O.help "File containing a required signing key."                                                                         )
+    <*> (O.optional . O.strOption)           (O.long "metadata-file"   <> O.metavar "JSON_FILE"                          <> O.help "The CIP-25 metadata, with keys for each token name."                                                             )
+    <*> O.option O.auto                      (O.long "count"           <> O.metavar "INTEGER"      <> O.value 1          <> O.help "The number of each token to mint."                                                                               )
+    <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                     )
+    <*> (O.option $ Lovelace <$> O.auto)     (O.long "lovelace"        <> O.metavar "LOVELACE"     <> O.value 10_000_000 <> O.help "The lovelace to send with each bundle of tokens."                                                                )
+    <*> O.option parseAddressAny             (O.long "change-address"  <> O.metavar "ADDRESS"                            <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.strOption                          (O.long "out-file"        <> O.metavar "FILE"                               <> O.help "Output file for transaction body."                                                                               )
+    <*> (O.optional . O.option O.auto)       (O.long "submit"          <> O.metavar "SECONDS"                            <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> O.some (O.argument parseTokenName    $                            O.metavar "TOKEN_NAME"                         <> O.help "The name of the token."                                                                                          )
 
 
 -- | Parser for the "faucet" command.
-faucetCommand :: O.Mod O.CommandFields UtilCommand
-faucetCommand =
+faucetCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+faucetCommand network socket =
   O.command "faucet"
-    $ O.info faucetOptions
-    $ O.progDesc "Fund an address from a faucet."
+    $ O.info (faucetOptions network socket)
+    $ O.progDesc "Fund an address from a faucet. Note that the faucet is only funded on the private developer testnet for Marlowe, and that this command will not supply funds on public networks."
 
 
 -- | Parser for the "faucet" options.
-faucetOptions :: O.Parser UtilCommand
-faucetOptions =
+faucetOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+faucetOptions network socket =
   Faucet
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"                          <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."                        )
-    <*> O.strOption                            (O.long "socket-path"                            <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."                  )
-    <*> (O.option $ Lovelace <$> O.auto)       (O.long "lovelace"      <> O.value 1_000_000_000 <> O.metavar "LOVELACE"      <> O.help "The lovelace to send to each address."                      )
-    <*> O.strOption                            (O.long "out-file"                               <> O.metavar "FILE"          <> O.help "Output file for transaction body."                          )
-    <*> (O.optional . O.option O.auto)         (O.long "submit"                                 <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."    )
-    <*> O.some (O.argument parseAddressAny     $                                                   O.metavar "ADDRESS"       <> O.help "The addresses to receive the funds."                        )
+    <$> O.option parseNetworkId            (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                        (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> (O.option $ Lovelace <$> O.auto)   (O.long "lovelace"      <> O.metavar "LOVELACE"    <> O.value 1_000_000_000 <> O.help "The lovelace to send to each address."                                                                           )
+    <*> O.strOption                        (O.long "out-file"      <> O.metavar "FILE"                                 <> O.help "Output file for transaction body."                                                                               )
+    <*> (O.optional . O.option O.auto)     (O.long "submit"        <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> O.some (O.argument parseAddressAny $                          O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                             )
 
 
 -- | Parser for the "select" command.
-selectCommand :: O.Mod O.CommandFields UtilCommand
-selectCommand =
+selectCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+selectCommand network socket =
   O.command "select"
-    $ O.info selectOptions
+    $ O.info (selectOptions network socket)
     $ O.progDesc "Select UTxO by asset."
 
 
 -- | Parser for the "select" options.
-selectOptions :: O.Parser UtilCommand
-selectOptions =
+selectOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+selectOptions network socket =
   Output
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."       )
-    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file." )
+    <$> O.option parseNetworkId    (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                               )
+    <*> O.strOption                (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value." )
     <*> parseOutputQuery
-    <*> O.argument parseAddressAny             (                          O.metavar "ADDRESS"     <> O.help "The address."                              )
+    <*> O.argument parseAddressAny (                          O.metavar "ADDRESS"                <> O.help "The address."                                                                                                     )
 
 
 -- | Parser for the "decode-bech32" command.
@@ -314,37 +315,38 @@ encodeBechOptions =
 
 
 -- | Parser for the "slotting" command.
-slottingCommand :: O.Mod O.CommandFields UtilCommand
-slottingCommand =
+slottingCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+slottingCommand network socket =
   O.command "slotting"
-    $ O.info slottingOptions
+    $ O.info (slottingOptions network socket)
     $ O.progDesc "Find the slot-to-time relationship for the current epoch."
 
 
 -- | Parser for the "slotting" options.
-slottingOptions :: O.Parser UtilCommand
-slottingOptions =
+slottingOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+slottingOptions network socket =
   Slotting
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."      )
-    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file.")
-    <*> (O.optional .O.strOption             ) (O.long "out-file"      <> O.metavar "FILE"        <> O.help "Output file for slot configuration."      )
+    <$> O.option parseNetworkId   (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption               (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> (O.optional .O.strOption) (O.long "out-file"      <> O.metavar "FILE"                   <> O.help "Output file for slot configuration."                                                                             )
 
 
 -- | Parser for the "watch" command.
-watchCommand :: O.Mod O.CommandFields UtilCommand
-watchCommand =
+watchCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+watchCommand network socket =
   O.command "watch"
-    $ O.info watchOptions
+    $ O.info (watchOptions network socket)
     $ O.progDesc "Watch Marlowe transactions on a Cardano node."
 
 
 -- | Parser for the "watch" options.
-watchOptions :: O.Parser UtilCommand
-watchOptions =
+watchOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+watchOptions network socket =
   Watch
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."                              )
-    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file."                        )
-    <*> O.switch                               (O.long "cbor"                                     <> O.help "Whether to output CBOR instead of JSON."                          )
-    <*> O.switch                               (O.long "continue"                                 <> O.help "Whether to continue when the current tip of the chain is reached.")
-    <*> (O.optional . O.strOption)             (O.long "restart"       <> O.metavar "POINT_FILE"  <> O.help "File for restoring and saving current point on the chain."        )
-    <*> (O.optional . O.strOption)             (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "File in which to store JSON records of Marlowe transactions."     )
+    <$> O.option parseNetworkId    (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.switch                   (O.long "all"                                                 <> O.help "Whether to also output non-Marlowe transactions."                                                                )
+    <*> O.switch                   (O.long "cbor"                                                <> O.help "Whether to output CBOR instead of JSON."                                                                         )
+    <*> O.switch                   (O.long "continue"                                            <> O.help "Whether to continue when the current tip of the chain is reached."                                               )
+    <*> (O.optional . O.strOption) (O.long "restart"       <> O.metavar "POINT_FILE"             <> O.help "File for restoring and saving current point on the chain."                                                       )
+    <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "OUTPUT_FILE"            <> O.help "File in which to store records of Marlowe transactions."                                                         )

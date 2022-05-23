@@ -36,6 +36,10 @@ module Language.Marlowe.CLI.Sync (
 -- * Points
 , savePoint
 , loadPoint
+-- * Queries
+, isMarloweTransaction
+, isMarloweIn
+, isMarloweOut
 ) where
 
 
@@ -279,12 +283,13 @@ processChain' blockHandler txHandler (Block header txs) tip =
 watchMarlowe :: MonadError CliError m
              => MonadIO m
              => LocalNodeConnectInfo CardanoMode  -- ^ The local node connection.
+             -> Bool                              -- ^ Include non-Marlowe transactions.
              -> Bool                              -- ^ Whether to output CBOR instead of JSON.
              -> Bool                              -- ^ Whether to continue processing when the tip is reached.
              -> Maybe FilePath                    -- ^ The file to restore the chain point from and save it to.
              -> Maybe FilePath                    -- ^ The output file.
              -> m ()                              -- ^ Action for watching for potential Marlowe transactions.
-watchMarlowe connection cbor continue pointFile outputFile =
+watchMarlowe connection includeAll cbor continue pointFile outputFile =
   do
     hOut <- liftIO $ maybe (pure stdout) (`openFile` WriteMode) outputFile
     liftIO $ hSetBuffering hOut LineBuffering
@@ -295,7 +300,7 @@ watchMarlowe connection cbor continue pointFile outputFile =
                liftIO . BS.hPutStr hOut $ toStrictByteString encodeListLenIndef
                pure $ printCBOR hOut
         else pure $ printJSON hOut
-    watchMarloweWithPrinter connection continue pointFile printer
+    watchMarloweWithPrinter connection includeAll continue pointFile printer
     when cbor
       . liftIO . BS.hPutStr hOut $ toStrictByteString encodeBreak
     when (isJust outputFile)
@@ -333,11 +338,12 @@ printCBOR hOut =
 watchMarloweWithPrinter :: MonadError CliError m
                         => MonadIO m
                         => LocalNodeConnectInfo CardanoMode  -- ^ The local node connection.
+                        -> Bool                              -- ^ Include non-Marlowe transactions.
                         -> Bool                              -- ^ Whether to continue processing when the tip is reached.
                         -> Maybe FilePath                    -- ^ The file to restore the chain point from and save it to.
                         -> MarlowePrinter                    -- ^ The printer for Marlowe events.
                         -> m ()                              -- ^ Action for watching for potential Marlowe transactions.
-watchMarloweWithPrinter connection continue pointFile printer =
+watchMarloweWithPrinter connection includeAll continue pointFile printer =
   do
     -- FIXME: This query should be specific to the era of each block.
     slotConfig <- querySlotConfig connection
@@ -346,33 +352,35 @@ watchMarloweWithPrinter connection continue pointFile printer =
     let
       roller rollbackPoint rollbackTip = printer Rollback{..}
       continuer = pure $ not continue
-      blocker = const . const $ pure ()
+      blocker meBlock _ = printer NewBlock{..}
       saver block =
         do
           state' <- readIORef stateRef
           savePoint state' pointFile block
     watchChain connection start saver (Just roller) continuer blocker
-      $ mapM_ . extractMarlowe stateRef printer slotConfig
+      $ mapM_ . extractMarlowe stateRef printer slotConfig includeAll
 
 
 -- | Extract potential Marlowe transactions from a block.
 extractMarlowe :: IORef ()                 -- ^ State information (unused).
                -> (MarloweEvent -> IO ())  -- ^ The outputter for Marlowe events.
                -> SlotConfig               -- ^ The slot configuration.
+               -> Bool                     -- ^ Include non-Marlowe transactions.
                -> BlockHeader              -- ^ The block's header.
                -> Tx era                   -- ^ The transaction.
                -> IO ()                    -- ^ Action to output potential Marlowe transactions.
-extractMarlowe _ printer slotConfig meBlock tx =
+extractMarlowe _ printer slotConfig includeAll meBlock tx =
   mapM_ printer
-    $ classifyMarlowe slotConfig meBlock tx
+    $ classifyMarlowe slotConfig includeAll meBlock tx
 
 
 -- | Classify a transaction's Marlowe content.
 classifyMarlowe :: SlotConfig      -- ^ The slot configuration.
+                -> Bool            -- ^ Include non-Marlowe transactions.
                 -> BlockHeader     -- ^ The block's header.
                 -> Tx era          -- ^ The transaction.
                 -> [MarloweEvent]  -- ^ Any Marlowe events in the transaction.
-classifyMarlowe slotConfig meBlock tx =
+classifyMarlowe slotConfig includeAll meBlock tx =
   let
     txBody@(TxBody TxBodyContent{..}) = getTxBody tx
     meTxId = getTxId txBody
@@ -382,7 +390,7 @@ classifyMarlowe slotConfig meBlock tx =
     meInterval = convertSlots slotConfig txValidityRange
     event =
       case classifyOutputs meTxId txOuts of
-        Right meOuts -> if any isMarloweIn meIns || any isMarloweOut meOuts
+        Right meOuts -> if includeAll || any isMarloweIn meIns || any isMarloweOut meOuts
                           then [Transaction{..}]
                           else mempty
         Left e       -> let meAnomaly = show e in [Anomaly{..}]
@@ -404,6 +412,13 @@ convertSlots slotConfig (TxValidityLowerBound _ (SlotNo s0), TxValidityUpperBoun
       Interval (LowerBound (Finite t0) _) (UpperBound (Finite t1) _) -> Just (t0, t1)
       _                                                              -> Nothing
 convertSlots _ _ = Nothing
+
+
+-- | Does an event contain Marlowe content.
+isMarloweTransaction :: MarloweEvent  -- ^ The blockchain event.
+                     -> Bool          -- ^ Whether the event is a transaction with Marlowe inputs or outputs.
+isMarloweTransaction Transaction{..} = any isMarloweIn meIns || any isMarloweOut meOuts
+isMarloweTransaction _               = False
 
 
 -- | Does a transaction input contain Marlowe information?

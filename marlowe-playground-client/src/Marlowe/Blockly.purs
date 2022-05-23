@@ -756,11 +756,11 @@ toDefinition blockType@(ContractType WhenContractType) =
             , Dropdown
                 { name: "timeout_type"
                 , options:
-                    [ Pair "timeout POSIX" "time"
-                    , Pair "timeout parameter" "time_param"
+                    [ Pair "constant timeout" "time"
+                    , Pair "parameterized timeout" "time_param"
                     ]
                 }
-            , Input { name: "timeout", text: "0", spellcheck: false }
+            , Input { name: "timeout", text: "param", spellcheck: false }
             , DummyLeft
             , DummyLeft
             , Statement
@@ -768,11 +768,13 @@ toDefinition blockType@(ContractType WhenContractType) =
                 , check: show BaseContractType
                 , align: AlignRight
                 }
+
             ]
         , colour: blockColour blockType
         , previousStatement: Just (show BaseContractType)
         , inputsInline: Just false
-        , extensions: [ "timeout_validator" ]
+        , extensions: [ "dynamic_timeout_type" ]
+
         }
         defaultBlockDefinition
 
@@ -1941,7 +1943,8 @@ instance toBlocklyContract :: ToBlockly Contract where
       )
     setField block "timeout"
       ( case timeout of
-          Term (TimeValue time) _ -> BigInt.toString $ POSIXTime.toBigInt time
+          Term (TimeValue time) _ ->
+            BigInt.toString $ POSIXTime.toBigInt time
           Term (TimeParam paramName) _ -> paramName
           _ -> "0"
       )

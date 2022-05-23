@@ -19,6 +19,7 @@ import Component.Contacts.Types
   , State
   )
 import Component.Contacts.View (contactsCard)
+import Component.Toast.Types (successToast)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Lens (assign)
 import Effect.Aff.Class (class MonadAff)
@@ -30,7 +31,6 @@ import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Store as Store
-import Toast.Types (successToast)
 
 type HalogenM = H.HalogenM State Action ChildSlots Msg
 
@@ -65,7 +65,8 @@ handleAction CloseContactsCard = H.raise Closed
 handleAction (SetCardSection cardSection) = do
   assign _cardSection cardSection
 
-handleAction (OnAddContactMsg (AddContact.SaveClicked _)) =
+handleAction (OnAddContactMsg (AddContact.SaveClicked _)) = do
+  assign _cardSection Home
   H.raise Closed
 
 handleAction (OnAddContactMsg AddContact.BackClicked) = do
