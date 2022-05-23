@@ -4,7 +4,7 @@
 }:
 let
   inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli marlowe-pab plutus-chain-index cardano-wallet dev-scripts;
-  inherit (dev-scripts) start-cardano-node start-wallet start-chain-index start-marlowe-pab start-dashboard-server;
+  inherit (dev-scripts) start-marlowe-run start-cardano-node start-wallet start-chain-index start-marlowe-pab start-dashboard-server;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
@@ -16,7 +16,7 @@ let
     mkdir -p "''${XDG_RUNTIME_DIR}"
   '';
 
-  start-marlowe-run = writeShellScriptBinInRepoRoot "start-marlowe-run" ''
+  start-marlowe-run-with-arion = writeShellScriptBinInRepoRoot "start-marlowe-run-with-arion" ''
     cd marlowe-dashboard-client
     ${pkgs.arion}/bin/arion --nix-arg --system --nix-arg x86_64-linux "$@" up --force-recreate
   '';
@@ -92,6 +92,7 @@ let
     z3
     zlib
     nodePackages.prettier
+    tmux
   ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
   # local build inputs ( -> ./nix/pkgs/default.nix )
@@ -103,6 +104,8 @@ let
     start-chain-index
     start-marlowe-pab
     start-dashboard-server
+    start-marlowe-run
+    start-marlowe-run-with-arion
     cardano-repo-tool
     cardano-wallet
     fixPngOptimization
@@ -128,7 +131,6 @@ let
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
-    start-marlowe-run
     marlowe-cli
     cardano-cli
   ] ++ easyPS.buildInputs);
