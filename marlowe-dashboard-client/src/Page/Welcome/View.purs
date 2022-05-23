@@ -244,7 +244,7 @@ getStartedHelpCard =
       ]
       [ iframe
           [ classNames Css.embeddedVideo
-          , src "https://www.youtube.com/embed/PJLtKJJMH0U"
+          , src "https://www.youtube.com/embed/-yBDz_MeWXw"
           , title "Get started video"
           ]
       ]
