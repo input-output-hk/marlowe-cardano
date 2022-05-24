@@ -26,7 +26,7 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Ledger.Address (PaymentPubKeyHash)
 import Ledger.Constraints.OffChain (UnbalancedTx)
-import Ledger.TimeSlot (SlotConversionError)
+import Ledger.TimeSlot (SlotConfig, SlotConversionError)
 import Ledger.Tx (CardanoTx, ChainIndexTxOut)
 import Plutus.ChainIndex.Api (IsUtxoResponse, TxosResponse, UtxosResponse)
 import Plutus.ChainIndex.Tx (ChainIndexTx)
@@ -417,6 +417,7 @@ data PABReq
   | AwaitTxOutStatusChangeReq TxOutRef
   | CurrentSlotReq
   | CurrentTimeReq
+  | GetSlotConfigReq
   | OwnContractInstanceIdReq
   | OwnPaymentPublicKeyHashReq
   | ChainIndexQueryReq ChainIndexQuery
@@ -443,6 +444,8 @@ instance EncodeJson PABReq where
       E.value
     CurrentSlotReq -> encodeJson { tag: "CurrentSlotReq", contents: jsonNull }
     CurrentTimeReq -> encodeJson { tag: "CurrentTimeReq", contents: jsonNull }
+    GetSlotConfigReq -> encodeJson
+      { tag: "GetSlotConfigReq", contents: jsonNull }
     OwnContractInstanceIdReq -> encodeJson
       { tag: "OwnContractInstanceIdReq", contents: jsonNull }
     OwnPaymentPublicKeyHashReq -> encodeJson
@@ -471,6 +474,7 @@ instance DecodeJson PABReq where
             (AwaitTxOutStatusChangeReq <$> D.value)
         , "CurrentSlotReq" /\ pure CurrentSlotReq
         , "CurrentTimeReq" /\ pure CurrentTimeReq
+        , "GetSlotConfigReq" /\ pure GetSlotConfigReq
         , "OwnContractInstanceIdReq" /\ pure OwnContractInstanceIdReq
         , "OwnPaymentPublicKeyHashReq" /\ pure OwnPaymentPublicKeyHashReq
         , "ChainIndexQueryReq" /\ D.content (ChainIndexQueryReq <$> D.value)
@@ -524,6 +528,11 @@ _CurrentSlotReq = prism' (const CurrentSlotReq) case _ of
 _CurrentTimeReq :: Prism' PABReq Unit
 _CurrentTimeReq = prism' (const CurrentTimeReq) case _ of
   CurrentTimeReq -> Just unit
+  _ -> Nothing
+
+_GetSlotConfigReq :: Prism' PABReq Unit
+_GetSlotConfigReq = prism' (const GetSlotConfigReq) case _ of
+  GetSlotConfigReq -> Just unit
   _ -> Nothing
 
 _OwnContractInstanceIdReq :: Prism' PABReq Unit
@@ -580,6 +589,7 @@ data PABResp
   | AwaitTxOutStatusChangeResp TxOutRef (RollbackState TxOutState)
   | CurrentSlotResp Slot
   | CurrentTimeResp POSIXTime
+  | GetSlotConfigResp SlotConfig
   | OwnContractInstanceIdResp ContractInstanceId
   | OwnPaymentPublicKeyHashResp PaymentPubKeyHash
   | ChainIndexQueryResp ChainIndexResponse
@@ -610,6 +620,7 @@ instance EncodeJson PABResp where
       (E.tuple (E.value >/\< E.value))
     CurrentSlotResp a -> E.encodeTagged "CurrentSlotResp" a E.value
     CurrentTimeResp a -> E.encodeTagged "CurrentTimeResp" a E.value
+    GetSlotConfigResp a -> E.encodeTagged "GetSlotConfigResp" a E.value
     OwnContractInstanceIdResp a -> E.encodeTagged "OwnContractInstanceIdResp" a
       E.value
     OwnPaymentPublicKeyHashResp a -> E.encodeTagged
@@ -642,6 +653,7 @@ instance DecodeJson PABResp where
             (D.tuple $ AwaitTxOutStatusChangeResp </$\> D.value </*\> D.value)
         , "CurrentSlotResp" /\ D.content (CurrentSlotResp <$> D.value)
         , "CurrentTimeResp" /\ D.content (CurrentTimeResp <$> D.value)
+        , "GetSlotConfigResp" /\ D.content (GetSlotConfigResp <$> D.value)
         , "OwnContractInstanceIdResp" /\ D.content
             (OwnContractInstanceIdResp <$> D.value)
         , "OwnPaymentPublicKeyHashResp" /\ D.content
@@ -706,6 +718,11 @@ _CurrentSlotResp = prism' CurrentSlotResp case _ of
 _CurrentTimeResp :: Prism' PABResp POSIXTime
 _CurrentTimeResp = prism' CurrentTimeResp case _ of
   (CurrentTimeResp a) -> Just a
+  _ -> Nothing
+
+_GetSlotConfigResp :: Prism' PABResp SlotConfig
+_GetSlotConfigResp = prism' GetSlotConfigResp case _ of
+  (GetSlotConfigResp a) -> Just a
   _ -> Nothing
 
 _OwnContractInstanceIdResp :: Prism' PABResp ContractInstanceId
