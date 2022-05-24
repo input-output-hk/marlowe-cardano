@@ -1,61 +1,139 @@
+{-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE EmptyDataDeriving          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE StrictData                 #-}
 module Language.Marlowe.Runtime.History.Types where
 
-import Data.Binary (Binary)
-import Data.Map (Map)
-import Data.Text (Text)
+import Cardano.Api (AsType (AsHash, AsScriptData, AsScriptHash), Hash, ScriptData, ScriptHash, Value, serialiseToJSON)
+import qualified Data.Aeson as Aeson
+import Data.Binary (Binary (..))
 import GHC.Generics (Generic)
 import Language.Marlowe (Contract)
-import Language.Marlowe.Runtime.Chain.Types (MarloweAddress, MarloweTxIn)
+import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (..), MarloweChainPoint, MarlowePolicyId, TxOutRef,
+                                             getFromRawBytes, putToRawBytes)
+import Language.Marlowe.Semantics (MarloweData)
 import Type.Reflection (Typeable)
 
+data Event = Event
+  { contractId   :: ContractId
+  , historyEvent :: HistoryEvent
+  , chainPoint   :: MarloweChainPoint
+  }
+  deriving (Generic, Typeable, Show, Eq)
+
 data HistoryEvent
-  = Create (HistoryChainEvent CreateContractError CreateContract ContractCreated)
-  | Deposit (HistoryChainEvent DepositError Deposit Deposited)
-  | Choice (HistoryChainEvent ChoiceError Choose Chosen)
+  = ContractCreated
+      { datum :: Datum
+      , txOut :: TxOutRef
+      }
+  | AssetsDeposited
+      { datum        :: Datum
+      , txOut        :: TxOutRef
+      , continuation :: Maybe ContractContinuation
+      , intoAccount  :: Account
+      , fromParty    :: Participant
+      , assets       :: Assets
+      }
+  | ChoiceMade
+      { datum        :: Datum
+      , txOut        :: TxOutRef
+      , continuation :: Maybe ContractContinuation
+      , choice       :: Choice
+      , selection    :: ChoiceSelection
+      }
   | Closed
+      { txOut      :: TxOutRef
+      }
   deriving (Generic, Typeable, Show, Eq)
 
-data HistoryChainEvent err request fulfilled
-  = Accepted request
-  | Confirmed fulfilled
-  | Rejected request err
-  deriving (Generic, Typeable, Show, Eq)
+instance Binary HistoryEvent
 
-data CreateContractError deriving (Show, Eq)
-data DepositError deriving (Show, Eq)
-data ChoiceError deriving (Show, Eq)
-
-data CreateContract = CreateContract
-  { contractCreation_contract :: Contract
-  , contractCreation_roles    :: Map RoleName MarloweAddress
+data Choice = Choice
+  { name        :: String
+  , participant :: Participant
   }
   deriving (Generic, Typeable, Show, Eq)
 
-data ContractCreated = ContractCreated
-  { contractCreated_datum :: MarloweDatum
-  , contractCreated_txOut :: MarloweTxIn
+instance Binary Choice
+
+newtype ChoiceSelection = ChoiceSelection Integer
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary ChoiceSelection
+
+newtype Datum = Datum MarloweData
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary Datum where
+  put (Datum datum) = put $ serialiseToJSON  datum
+  get = do
+    bytes <- get
+    Datum <$> case Aeson.eitherDecode bytes of
+      Left err -> fail err
+      Right a  -> pure a
+
+data Participant
+  = WalletParticipant MarloweAddress
+  | RoleParticipant String
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary Participant
+
+data Account
+  = AddressAccount MarloweAddress
+  | RoleAccount String
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary Account
+
+data ContractContinuation = ContractContinuation
+  { continuationHash :: ContinuationHash
+  , continuation     :: Contract
   }
   deriving (Generic, Typeable, Show, Eq)
 
-newtype RoleName = RoleName Text
-  deriving (Generic, Typeable, Show, Eq, Binary)
+instance Binary ContractContinuation where
+  put ContractContinuation{..} = do
+    put continuationHash
+    put $ serialiseToJSON continuation
+  get = do
+    continuationHash <- get
+    continuationBytes <- get
+    continuation <- case Aeson.eitherDecode continuationBytes of
+      Left err -> fail err
+      Right a  -> pure a
+    pure ContractContinuation{..}
 
-data MarloweDatum = MarloweDatum
-  { marloweDatum_state    :: MarloweState
-  , marloweDatum_contract :: Contract
+data ContractId = ContractId
+  { currencySymbol :: MarlowePolicyId
+  , validatorHash  :: ValidatorHash
   }
   deriving (Generic, Typeable, Show, Eq)
 
-data MarloweState = MarloweState
-  { marloweState_accounts :: MarloweState
-  , marloweState_contract :: Contract
-  }
+instance Binary ContractId
+
+newtype ContinuationHash = ContinuationHash (Hash ScriptData)
   deriving (Generic, Typeable, Show, Eq)
 
-data Deposit deriving (Show, Eq)
-data Deposited deriving (Show, Eq)
-data Choose deriving (Show, Eq)
-data Chosen deriving (Show, Eq)
+instance Binary ContinuationHash where
+  put (ContinuationHash hash) = putToRawBytes hash
+  get = ContinuationHash <$> getFromRawBytes (AsHash AsScriptData)
+
+newtype Assets = Assets Value
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary Assets  where
+  put (Assets value) = put $ serialiseToJSON value
+  get = do
+    bytes <- get
+    Assets <$> case Aeson.eitherDecode bytes of
+      Left err -> fail err
+      Right a  -> pure a
+
+newtype ValidatorHash = ValidatorHash ScriptHash
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary ValidatorHash where
+  put (ValidatorHash hash) = putToRawBytes hash
+  get = ValidatorHash <$> getFromRawBytes AsScriptHash

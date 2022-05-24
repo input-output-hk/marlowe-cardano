@@ -13,7 +13,7 @@ import Cardano.Api (AddressAny, AsType (..), BlockInMode, CardanoMode, ChainPoin
                     ScriptData, SerialiseAsCBOR (..), SerialiseAsRawBytes (..), TxId, TxIx (..), Value, serialiseToJSON)
 import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
-import Data.Binary (Binary (..), Word64)
+import Data.Binary (Binary (..), Get, Put, Word64)
 import Data.ByteString.Short (ShortByteString)
 import Data.Data (Typeable)
 import Data.Time (Day (..), NominalDiffTime, UTCTime (..), diffTimeToPicoseconds, nominalDiffTimeToSeconds,
@@ -60,40 +60,37 @@ instance Binary MarloweChainPoint
 data MarloweTxIn = MarloweTxIn MarloweTxId TxIx
   deriving (Typeable, Show, Eq, Ord)
 
+type TxOutRef = MarloweTxIn
+
 instance Binary MarloweTxIn where
   put (MarloweTxIn tid (TxIx ix)) = do
     put tid
     put ix
-  get = do
-    tid <- get
-    ix <- get
-    pure $ MarloweTxIn tid $ TxIx ix
+  get = MarloweTxIn <$> get <*> (TxIx <$> get)
 
 newtype MarloweTxId = MarloweTxId TxId
   deriving (Typeable, Show, Eq, Ord)
 
 instance Binary MarloweTxId where
-  put (MarloweTxId tid) = do
-    put $ serialiseToRawBytes tid
-  get = do
-    tidBytes <- get
-    tid <- case deserialiseFromRawBytes AsTxId tidBytes of
-      Nothing -> fail "Idvalid txId bytes"
-      Just a  -> pure a
-    pure $ MarloweTxId tid
+  put (MarloweTxId tid) = putToRawBytes tid
+  get = MarloweTxId <$> getFromRawBytes AsTxId
 
 newtype MarlowePolicyId = MarlowePolicyId PolicyId
   deriving (Typeable, Show, Eq, Ord)
 
 instance Binary MarlowePolicyId where
-  put (MarlowePolicyId tid) = do
-    put $ serialiseToRawBytes tid
-  get = do
-    tidBytes <- get
-    tid <- case deserialiseFromRawBytes AsPolicyId tidBytes of
-      Nothing -> fail "Idvalid policyId bytes"
-      Just a  -> pure a
-    pure $ MarlowePolicyId tid
+  put (MarlowePolicyId pid) = putToRawBytes pid
+  get = MarlowePolicyId <$> getFromRawBytes AsPolicyId
+
+putToRawBytes :: SerialiseAsRawBytes b => b -> Put
+putToRawBytes = put . serialiseToRawBytes
+
+getFromRawBytes :: SerialiseAsRawBytes b => AsType b -> Get b
+getFromRawBytes asType = do
+  bytes <- get
+  case deserialiseFromRawBytes asType bytes of
+    Nothing -> fail "Invalid byte sequence"
+    Just a  -> pure a
 
 data MarloweTx = MarloweTx
   { marloweTx_id       :: MarloweTxId
@@ -129,12 +126,8 @@ newtype MarloweAddress = MarloweAddress AddressAny
   deriving (Generic, Typeable, Show, Eq)
 
 instance Binary MarloweAddress where
-  put (MarloweAddress address) = put $ serialiseToRawBytes address
-  get = do
-    bytes <- get
-    case deserialiseFromRawBytes AsAddressAny bytes of
-      Nothing      -> fail "invalid address bytes"
-      Just address -> pure $ MarloweAddress address
+  put (MarloweAddress address) = putToRawBytes address
+  get = MarloweAddress <$> getFromRawBytes AsAddressAny
 
 data MarloweTxOut = MarloweTxOut
   { marloweTxOut_txIn    :: MarloweTxIn
