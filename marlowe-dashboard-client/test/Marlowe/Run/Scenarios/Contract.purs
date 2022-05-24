@@ -10,6 +10,7 @@ import Control.Monad.UUID (class MonadUUID, generateUUID)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook(..))
 import Data.Array.NonEmpty as AN
+import Data.BigInt.Argonaut as BigInt
 import Data.Bimap as Bimap
 import Data.Map (Map)
 import Data.MnemonicPhrase (MnemonicPhrase)
@@ -44,6 +45,7 @@ import Test.Halogen (class MonadHalogenTest)
 import Test.Marlowe.Run
   ( Coenv
   , defaultTestParameters
+  , fundWallet
   , getWallet
   , marloweRunTestWith
   )
@@ -497,6 +499,8 @@ loanContractTest
 loanContractTest title action = marloweRunTestWith title setupWallets do
   lenderNickname <- makeTestWalletNickname "Lender"
   borrowerNickname <- makeTestWalletNickname "Borrower"
+  fundWallet borrowerNickname "" "" (BigInt.fromInt 1000000000) true
+  fundWallet lenderNickname "" "" (BigInt.fromInt 1000000000) true
   action lenderNickname borrowerNickname
   where
   setupWallets = do
