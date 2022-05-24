@@ -31,11 +31,13 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
+import Data.WalletId (WalletId)
 import Effect.Aff (Aff, Error, forkAff, joinFiber)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Env (Env, _applyInputBus, _createBus, _redeemBus)
 import Language.Marlowe.Client (MarloweError)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Run.Server as Marlowe
 import Marlowe.Semantics
   ( Contract
   , MarloweParams
@@ -50,19 +52,22 @@ import Types (AjaxResponse)
 
 class MarloweApp m where
   createContract
-    :: PlutusAppId
+    :: WalletId
+    -> PlutusAppId
     -> Map TokenName Address
     -> Contract
     -> m (AjaxResponse (UUID /\ Aff (Either MarloweError MarloweParams)))
   applyInputs
-    :: PlutusAppId
+    :: WalletId
+    -> PlutusAppId
     -> MarloweParams
     -> TransactionInput
     -> m (AjaxResponse (Aff (Either MarloweError Unit)))
   -- TODO auto
   -- TODO close
   redeem
-    :: PlutusAppId
+    :: WalletId
+    -> PlutusAppId
     -> Payout
     -> Address
     -> m (AjaxResponse (Aff (Either MarloweError Unit)))
@@ -72,11 +77,12 @@ instance
   , MonadAff m
   , MonadRec m
   , MonadAjax PAB.Api m
+  , MonadAjax Marlowe.Api m
   , MonadUUID m
   ) =>
   MarloweApp (AppM m) where
-  createContract marloweAppId roles contract =
-    invokeMarloweAppEndpoint _createBus marloweAppId "create"
+  createContract walletId marloweAppId roles contract =
+    invokeMarloweAppEndpoint walletId _createBus marloweAppId "create"
       [ encodeJson
           $ Map.fromFoldable
           $ map (lmap { unTokenName: _ })
@@ -84,19 +90,21 @@ instance
       , encodeJson contract
       ]
 
-  applyInputs marloweAppId marloweParams input = do
+  applyInputs walletId marloweAppId marloweParams input = do
     let
       TransactionInput { interval, inputs } = input
       TimeInterval invalidBefore invalidHereafter = interval
       endpoint = "apply-inputs-nonmerkleized"
-    map snd <$> invokeMarloweAppEndpoint _applyInputBus marloweAppId endpoint
+    map snd <$> invokeMarloweAppEndpoint walletId _applyInputBus marloweAppId
+      endpoint
       [ encodeJson marloweParams
       , encodeJson $ invalidBefore /\ invalidHereafter
       , encodeJson inputs
       ]
 
-  redeem marloweAppId { marloweParams, tokenName } address =
-    map snd <$> invokeMarloweAppEndpoint _redeemBus marloweAppId "redeem"
+  redeem walletId marloweAppId { marloweParams, tokenName } address =
+    map snd <$> invokeMarloweAppEndpoint walletId _redeemBus marloweAppId
+      "redeem"
       [ encodeJson marloweParams
       , encodeJson { unTokenName: tokenName }
       , encodeJson address
@@ -107,14 +115,16 @@ invokeMarloweAppEndpoint
    . MonadUUID m
   => MonadAff m
   => MonadRec m
+  => MonadAjax Marlowe.Api m
   => MonadAjax PAB.Api m
   => MonadBracket Error f m
-  => Lens' Env (EventBus UUID a)
+  => WalletId
+  -> Lens' Env (EventBus UUID a)
   -> PlutusAppId
   -> String
   -> Array Json
   -> AppM m (AjaxResponse (Tuple UUID (Aff a)))
-invokeMarloweAppEndpoint busLens marloweAppId endpoint payload =
+invokeMarloweAppEndpoint walletId busLens marloweAppId endpoint payload =
   runExceptT do
     reqId <- lift generateUUID
     bus <- asks $ view busLens
@@ -123,6 +133,6 @@ invokeMarloweAppEndpoint busLens marloweAppId endpoint payload =
     -- can even subscribe to the event bus.
     responseFiber <-
       liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
-    ExceptT $ PAB.invokeEndpoint marloweAppId endpoint $ encodeJson reqId :
-      payload
+    ExceptT $ PAB.invokeEndpoint walletId marloweAppId endpoint
+      $ encodeJson reqId : payload
     pure $ Tuple reqId $ joinFiber responseFiber

@@ -10,7 +10,6 @@ import Data.Bimap as Bimap
 import Data.Map as Map
 import Data.WalletNickname as WN
 import Language.Marlowe.Client (ContractHistory(..))
-import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Marlowe.Semantics (Contract(..))
 import Marlowe.Time (unixEpoch)
 import MarloweContract (MarloweContract(..))
@@ -87,7 +86,7 @@ createAndRestoreWallet = marloweRunTest "Create and Restore Wallet" do
     statusElement `shouldHaveText` "Synchronized"
 
   -- Act
-  dropWallet walletInfo
+  dropWallet walletNickname
   _ <- restoreWallet walletNickname []
 
   -- Assert
@@ -99,7 +98,7 @@ createAndRestoreWallet = marloweRunTest "Create and Restore Wallet" do
     balanceElement `shouldHaveText` "₳ 1,000"
     statusElement `shouldHaveText` "Synchronized"
 
-  dropWallet walletInfo
+  dropWallet walletNickname
 
 multipleCompanionUpdates :: Spec Unit
 multipleCompanionUpdates =
@@ -107,7 +106,7 @@ multipleCompanionUpdates =
     -- Arrange
     walletNickname <- makeTestWalletNickname "Wallet1"
     mnemonic <- newMnemonicPhrase
-    walletInfo@(WalletInfo { walletId }) <- newWalletInfo
+    walletInfo <- newWalletInfo
     let emptyMarloweData = marloweData Close $ semanticState [] [] [] unixEpoch
     contract1 <- Tuple <$> newMarloweParams <@> emptyMarloweData
     contract2 <- Tuple <$> newMarloweParams <@> emptyMarloweData
@@ -117,7 +116,7 @@ multipleCompanionUpdates =
 
     -- Act
     _ <- createWallet walletNickname mnemonic walletInfo
-    dropWallet walletInfo
+    dropWallet walletNickname
     appIds <- restoreWallet walletNickname
       [ ContractHistory
           { chAddress: Address
@@ -137,9 +136,9 @@ multipleCompanionUpdates =
     sendWalletCompanionUpdate appIds.walletCompanionId [ contract1, contract2 ]
     sendWalletCompanionUpdate appIds.walletCompanionId
       [ contract1, contract2, contract3 ]
-    handlePostActivate walletId MarloweFollower followerId2
+    handlePostActivate walletNickname MarloweFollower followerId2
     recvInstanceSubscribe followerId2
-    handlePostActivate walletId MarloweFollower followerId3
+    handlePostActivate walletNickname MarloweFollower followerId3
     recvInstanceSubscribe followerId3
 
     --Assert
@@ -171,13 +170,13 @@ enterDashboardMarloweAppHung =
           walletCompanionId
           $ walletCompantionState Map.empty
       instances = [ marloweAppInstance, walletCompanionInstance ]
-    handleGetContractInstances walletId instances
+    handleGetContractInstances walletNickname instances
 
     -- Assert
     handlePutContractInstanceStop marloweAppId
     sendContractFinished marloweAppId
     marloweAppId2 <- generateUUID
-    handlePostActivate walletId MarloweApp marloweAppId2
+    handlePostActivate walletNickname MarloweApp marloweAppId2
     recvInstanceSubscribe walletCompanionId
     sendNewActiveEndpoints walletCompanionId companionEndpoints
     recvInstanceSubscribe marloweAppId2

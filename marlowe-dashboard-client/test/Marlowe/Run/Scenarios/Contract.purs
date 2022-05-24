@@ -138,6 +138,7 @@ loanContractTimeout = loanContractTest
     pure unit
 
     applyClose
+      lenderWallet
       lenderApps.marloweAppId
       followerId
       marloweParams
@@ -207,6 +208,7 @@ loanContract = loanContractTest
     pure unit
 
     applyDeposit
+      lenderWallet
       lenderApps.marloweAppId
       followerId
       marloweParams
@@ -263,6 +265,7 @@ loanToSelf = loanContractTest
     pure unit
 
     applyDeposit
+      lenderWallet
       lenderApps.marloweAppId
       followerId
       marloweParams
@@ -275,6 +278,7 @@ loanToSelf = loanContractTest
     redeemReqId <- getNextUUID
 
     handlePostRedeem
+      lenderWallet.nickname
       lenderApps.marloweAppId
       redeemReqId
       marloweParams
@@ -299,11 +303,11 @@ startContractCompanionBeforeMarloweApp = loanContractTest
       ]
     assertStartingContractShown
     followerId <- generateUUID
-    handlePostActivate lenderWallet.walletId MarloweFollower followerId
+    handlePostActivate lenderWallet.nickname MarloweFollower followerId
     assertStartingContractShown
     recvInstanceSubscribe followerId
     sendNewActiveEndpoints followerId followerEndpoints
-    handlePostFollow followerId marloweParams
+    handlePostFollow lenderWallet.nickname followerId marloweParams
     assertStartingContractShown
     sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
     assertStartingContractShown
@@ -329,7 +333,7 @@ startContractMarloweAppHangs = loanContractTest
     handlePutContractInstanceStop lenderApps.marloweAppId
     sendContractFinished lenderApps.marloweAppId
     marloweAppId2 <- generateUUID
-    handlePostActivate lenderWallet.walletId MarloweApp marloweAppId2
+    handlePostActivate lenderWallet.nickname MarloweApp marloweAppId2
     recvInstanceSubscribe marloweAppId2
     sendNewActiveEndpoints marloweAppId2 marloweAppEndpoints
 
@@ -337,11 +341,11 @@ startContractMarloweAppHangs = loanContractTest
       [ Tuple marloweParams $ marloweData contract contractState
       ]
     followerId <- generateUUID
-    handlePostActivate lenderWallet.walletId MarloweFollower followerId
+    handlePostActivate lenderWallet.nickname MarloweFollower followerId
     assertStartingContractShown
     recvInstanceSubscribe followerId
     sendNewActiveEndpoints followerId followerEndpoints
-    handlePostFollow followerId marloweParams
+    handlePostFollow lenderWallet.nickname followerId marloweParams
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
@@ -369,11 +373,11 @@ startContractMarloweAppBeforeCompanion = loanContractTest
       ]
     assertStartingContractShown
     followerId <- generateUUID
-    handlePostActivate lenderWallet.walletId MarloweFollower followerId
+    handlePostActivate lenderWallet.nickname MarloweFollower followerId
     assertStartingContractShown
     recvInstanceSubscribe followerId
     sendNewActiveEndpoints followerId followerEndpoints
-    handlePostFollow followerId marloweParams
+    handlePostFollow lenderWallet.nickname followerId marloweParams
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []

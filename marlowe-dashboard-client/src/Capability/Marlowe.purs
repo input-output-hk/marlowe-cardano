@@ -35,7 +35,12 @@ import Data.Either (note')
 import Data.Filterable (filterMap)
 import Data.Lens (view)
 import Data.NewContract (NewContract(..))
-import Data.PABConnectedWallet (PABConnectedWallet, _address, _marloweAppId)
+import Data.PABConnectedWallet
+  ( PABConnectedWallet
+  , _address
+  , _marloweAppId
+  , _walletId
+  )
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Data.Variant.Generic (class Constructors, mkConstructors')
@@ -61,6 +66,7 @@ import Marlowe.Extended (resolveRelativeTimes, toCore)
 import Marlowe.Extended.Metadata (ContractTemplate, _extendedContract)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Server (Api) as MarloweApp
+import Marlowe.Run.Server as Marlowe
 import Marlowe.Semantics (MarloweParams, TransactionInput)
 import Marlowe.Semantics as Semantic
 import Marlowe.Template (TemplateContent(..), fillTemplate)
@@ -130,6 +136,7 @@ awaitAndHandleResult
   :: forall f m e a
    . MonadUnliftAff m
   => MonadBracket Error f m
+  => MonadAjax Marlowe.Api m
   => MonadAjax PAB.Api m
   => MonadRec m
   => PlutusAppId
@@ -192,6 +199,7 @@ instance
         { instantiateContractError, jsonAjaxError } = initializeContractError
         { nickname, roles } = params
         marloweAppId = view _marloweAppId wallet
+        walletId = view _walletId wallet
       -- To initialize a Marlowe Contract we first need to make an instance
       -- of a Core.Marlowe contract. We do this by replazing template parameters
       -- from the Extended.Marlowe template and then calling toCore. This can
@@ -203,7 +211,7 @@ instance
       -- that we can use to block and wait for the response
       reqId /\ awaitContractCreation <-
         withExceptT jsonAjaxError $ ExceptT $
-          MarloweApp.createContract marloweAppId roles contract
+          MarloweApp.createContract walletId marloweAppId roles contract
 
       -- We save in the store the request of a created contract with
       -- the information relevant to show a placeholder of a starting contract.
@@ -236,8 +244,10 @@ instance
     u <- askUnliftAff
     runExceptT do
       let marloweAppId = view _marloweAppId wallet
+      let walletId = view _walletId wallet
       awaitResult <- ExceptT
-        $ MarloweApp.applyInputs marloweAppId marloweParams transactionInput
+        $ MarloweApp.applyInputs walletId marloweAppId marloweParams
+            transactionInput
       updateStore
         $ Store.ModifySyncedContract marloweParams
         $ setPendingTransaction transactionInput
@@ -277,9 +287,10 @@ instance
       info "Redeeming payout" $ encodeJson payout
       runExceptT do
         let marloweAppId = view _marloweAppId wallet
+        let walletId = view _walletId wallet
         let address = view _address wallet
         awaitResult <- catchError
-          (ExceptT $ MarloweApp.redeem marloweAppId payout address)
+          (ExceptT $ MarloweApp.redeem walletId marloweAppId payout address)
           \err -> AVarMap.take payout redeemAvarMap *> throwError err
         lift $ awaitAndHandleResult
           marloweAppId

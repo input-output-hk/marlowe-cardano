@@ -5,6 +5,7 @@ module Test.Data.Marlowe where
 
 import Prologue
 
+import Bridge (toBack)
 import Control.Monad.Error.Class
   ( class MonadError
   , class MonadThrow
@@ -62,6 +63,7 @@ import Language.Marlowe.Client
   , UnspentPayouts
   )
 import Marlowe.Run.Contract.V1.Types (RoleToken(..))
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CreatePostData(..)
   , RestorePostData(..)
@@ -71,6 +73,7 @@ import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Marlowe.Semantics
   ( AccountId
   , Action(..)
+  , Assets
   , Case(..)
   , ChoiceId
   , Contract(..)
@@ -134,6 +137,10 @@ createWalletRequest getCreateWalletName = CreatePostData
 createWalletResponse :: MnemonicPhrase -> WalletInfo -> Wallet.CreateResponse
 createWalletResponse = map (map Wallet.CreateResponse)
   { mnemonic: _, walletInfo: _ }
+
+getTotalFundsResponse :: Assets -> Number -> GetTotalFundsResponse
+getTotalFundsResponse assets sync = GetTotalFundsResponse
+  { assets: toBack assets, sync }
 
 -------------------------------------------------------------------------------
 -- Endpoints
