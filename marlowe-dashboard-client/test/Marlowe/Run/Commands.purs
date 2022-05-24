@@ -29,7 +29,6 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.UUID.Argonaut (UUID)
 import Data.UUID.Argonaut as UUID
 import Data.Undefinable (toUndefinable)
-import Data.WalletId (WalletId)
 import Data.WalletId as WI
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff (Error, delay, error)
@@ -54,6 +53,7 @@ import Plutus.PAB.Webserver.Types
   , InstanceStatusToClient(..)
   )
 import Plutus.V1.Ledger.Slot (Slot(..))
+import Servant.PureScript (toPathSegment)
 import Test.Assertions (shouldEqualJson)
 import Test.Data.Marlowe
   ( applyInputsContent
@@ -68,6 +68,7 @@ import Test.Data.Marlowe
   , createWalletResponse
   , followEndpoint
   , followerMessage
+  , getTotalFundsResponse
   , redeemContent
   , redeemEndpoint
   , restoreRequest
@@ -421,13 +422,20 @@ handlePostRestoreWallet walletName mnemonic walletInfo =
 handleGetContractInstances
   :: forall m
    . MonadLogger String m
+  => MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
   => MonadMockHTTP m
-  => WalletId
+  => WalletNickname
   -> Array (ContractInstanceClientState MarloweContract)
   -> m Unit
-handleGetContractInstances walletId = handleHTTPRequest GET uri <<< pure
+handleGetContractInstances walletName instances = do
+  { walletId } <- getWallet walletName
+  handleGetTotalFunds walletName
+  handleHTTPRequest GET (uri walletId) $ pure instances
   where
-  uri = "/pab/api/contract/instances/wallet/" <> WI.toString walletId <> "?"
+  uri walletId =
+    "/pab/api/contract/instances/wallet/" <> WI.toString walletId <> "?"
 
 handlePutContractInstanceStop
   :: forall m
@@ -443,74 +451,98 @@ handlePutContractInstanceStop instanceId =
 handlePostCreate
   :: forall m
    . MonadLogger String m
+  => MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
   => MonadMockHTTP m
-  => UUID
+  => WalletNickname
+  -> UUID
   -> UUID
   -> Map String Address
   -> Contract
   -> m Unit
-handlePostCreate marloweAppId reqId roles contract = do
-  handlePostEndpoint marloweAppId createEndpoint ado
+handlePostCreate walletName marloweAppId reqId roles contract = do
+  handlePostEndpoint walletName marloweAppId createEndpoint ado
     expectJsonContent $ createContent reqId roles contract
     in jsonEmptyArray
 
 handlePostApplyInputs
   :: forall m
    . MonadLogger String m
+  => MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
   => MonadMockHTTP m
-  => UUID
+  => WalletNickname
+  -> UUID
   -> UUID
   -> MarloweParams
   -> TransactionInput
   -> m Unit
-handlePostApplyInputs marloweAppId reqId params input = do
-  handlePostEndpoint marloweAppId applyInputsEndpoint ado
+handlePostApplyInputs walletName marloweAppId reqId params input = do
+  handlePostEndpoint walletName marloweAppId applyInputsEndpoint ado
     expectJsonContent $ applyInputsContent reqId params input
     in jsonEmptyArray
 
 handlePostRedeem
   :: forall m
    . MonadLogger String m
+  => MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
   => MonadMockHTTP m
-  => UUID
+  => WalletNickname
+  -> UUID
   -> UUID
   -> MarloweParams
   -> TokenName
   -> Address
   -> m Unit
-handlePostRedeem marloweAppId reqId params tokenName address = do
-  handlePostEndpoint marloweAppId redeemEndpoint ado
+handlePostRedeem walletName marloweAppId reqId params tokenName address = do
+  handlePostEndpoint walletName marloweAppId redeemEndpoint ado
     expectJsonContent $ redeemContent reqId params tokenName address
     in jsonEmptyArray
 
 handlePostFollow
   :: forall m
    . MonadLogger String m
+  => MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
   => MonadMockHTTP m
-  => UUID
+  => WalletNickname
+  -> UUID
   -> MarloweParams
   -> m Unit
-handlePostFollow followerAppId params = do
-  handlePostEndpoint followerAppId followEndpoint ado
+handlePostFollow walletName followerAppId params = do
+  handlePostEndpoint walletName followerAppId followEndpoint ado
     expectJsonContent params
     in jsonEmptyArray
 
 handlePostEndpoint
   :: forall a m
    . EncodeJson a
+  => MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
   => MonadMockHTTP m
   => MonadLogger String m
-  => UUID
+  => WalletNickname
+  -> UUID
   -> String
   -> RequestMatcher a
   -> m Unit
-handlePostEndpoint instanceId endpoint =
-  handleHTTPRequest POST $ joinWith "/"
-    [ "/pab/api/contract/instance"
-    , UUID.toString instanceId
-    , "endpoint"
-    , endpoint
-    ]
+handlePostEndpoint walletName instanceId endpoint matcher = do
+  handleGetTotalFunds walletName
+  handleHTTPRequest POST
+    ( joinWith "/"
+        [ "/pab/api/contract/instance"
+        , UUID.toString instanceId
+        , "endpoint"
+        , endpoint
+        ]
+    )
+    matcher
 
 handlePostActivate
   :: forall m
@@ -519,14 +551,40 @@ handlePostActivate
   => MonadLogger String m
   => MonadAff m
   => MonadAsk Coenv m
-  => WalletId
+  => WalletNickname
   -> MarloweContract
   -> UUID
   -> m Unit
-handlePostActivate walletId contractType instanceId =
+handlePostActivate walletName contractType instanceId = do
+  { walletId } <- getWallet walletName
+  handleGetTotalFunds walletName
   handleHTTPRequest POST "/pab/api/contract/activate" ado
     expectJsonContent $ contractActivationArgs walletId contractType
     in PlutusAppId instanceId
+
+handleGetTotalFunds
+  :: forall m
+   . MonadLogger String m
+  => MonadError Error m
+  => MonadEffect m
+  => MonadAsk Coenv m
+  => MonadMockHTTP m
+  => WalletNickname
+  -> m Unit
+handleGetTotalFunds walletName = do
+  { assets, walletId } <- getWallet walletName
+  handleHTTPRequest GET (uri walletId)
+    $ pure
+    $ getTotalFundsResponse assets 1.0
+  where
+  uri walletId = joinWith "/"
+    [ ""
+    , "api"
+    , "wallet"
+    , "v1"
+    , toPathSegment walletId
+    , "total-funds"
+    ]
 
 handleGetRoleToken
   :: forall m

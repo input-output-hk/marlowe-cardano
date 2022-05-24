@@ -39,6 +39,7 @@ import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Run.Server as Marlowe
 import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
 import Plutus.PAB.Webserver (Api) as PAB
@@ -93,6 +94,7 @@ instance
   , MonadError Error m
   , MonadBracket Error f m
   , MonadAjax PAB.Api m
+  , MonadAjax Marlowe.Api m
   ) =>
   FollowerApp (AppM m) where
   followContract wallet marloweParams =
@@ -128,7 +130,7 @@ instance
             -- Tell it to follow the Marlowe contract via its MarloweParams
             withExceptT FollowContractError
               $ ExceptT
-              $ PAB.invokeEndpoint followAppId "follow" marloweParams
+              $ PAB.invokeEndpoint walletId followAppId "follow" marloweParams
             pure followAppId
     where
     lockFollowerActivation = do
