@@ -28,6 +28,7 @@
       url = "github:actusfrf/actus-tests";
       flake = false;
     };
+    cicero.url = "github:input-output-hk/cicero";
     cardano-repo-tool = {
       url = "github:input-output-hk/cardano-repo-tool";
       flake = false;
@@ -83,7 +84,7 @@
     };
   };
 
-  outputs = { self, flake-utils, ... }@inputs:
+  outputs = { self, flake-utils, nixpkgs, cicero, ... }@inputs:
     (flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         topLevel = import ./. {
@@ -93,5 +94,13 @@
       in
       {
         packages = topLevel.bitte-packages;
-      }));
+      })) // {
+      ciceroActions = cicero.lib.callActionsWithExtraArgs
+        rec {
+          lib = (import (nixpkgs + "/lib"));
+          inherit (cicero.lib) std;
+          actionLib = import (cicero + "/action-lib.nix") { inherit std lib; };
+          nixpkgsRev = nixpkgs.rev;
+        } ./ci/cicero-actions;
+    };
 }

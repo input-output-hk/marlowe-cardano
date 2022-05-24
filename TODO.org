@@ -1,0 +1,13 @@
+- Github status lights
+- Upload key to vault
+- State for node
+- wait for sync (in wait-for-socket)
+- chain index sync?
+- Reorganize flake so it's not just bitte
+- Logs in result fact
+- Test evaluation of cicero actions
+- Persistent volumes on infra cluster
+- healthcheck for node services
+- Run socat security reasoning by node/ops team
+- Healthcheck for node-socat (just, is it accepting connnections?)
+- Automate deployment of private testnet services
