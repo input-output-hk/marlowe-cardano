@@ -358,10 +358,7 @@ awaitTxConfirmed' trace maxRetries txId = do
 
 awaitUtxoProduced' :: AsContractError e => CallStackTrace -> Address -> Contract w s e (NonEmpty ChainIndexTx)
 awaitUtxoProduced' trace addr = do
-  prev <- utxosAt addr
-  txns <- awaitUtxoProduced addr
-  void $ retryTillResponseDiffers' (pushFnName "awaitUtxoProduced'" trace) prev (utxosAt addr)
-  pure txns
+  awaitPromise (utxoIsProduced' trace addr)
 
 utxoIsProduced' :: AsContractError e => CallStackTrace -> Address -> Promise w s e (NonEmpty ChainIndexTx)
 utxoIsProduced' trace addr = do
@@ -537,8 +534,9 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
 
               newState' = (newHistory', newPayouts)
 
-            when (newState' == prevState) $ do
-              debug' $ "No state change detected by follower as well: closingEntry = " <> show closingEntry
+            if newState' == prevState
+              then debug' $ "No state change detected by follower as well: closingEntry = " <> show closingEntry
+              else debug' $ "State change detected by follower: closingEntry = " <> show closingEntry
             rec $ LastResult newState'
 
     checkpointLoop follow UnknownOnChainState
@@ -705,7 +703,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
     apply = endpoint @"apply-inputs" $ \(reqId, params, timeInterval, inputs) -> catchError reqId "apply-inputs" $ do
         let
           debug'' = debug' "apply-inputs"
-        debug'' $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
+        debug'' $ "MarloweApp contract input-application accepted for inputs " <> show inputs <> "."
         let typedValidator = mkMarloweTypedValidator params
         _ <- applyInputs params typedValidator timeInterval inputs
         tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
