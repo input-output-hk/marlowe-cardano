@@ -17,11 +17,13 @@ module Language.Marlowe.Client.History (
 , RolePayoutTxOut
 , RolePayoutTxOutRef
 , RolePayout(..)
+, IncludePkhTxns(..)
 -- * Helpers
 , foldlHistory
 , foldrHistory
 -- * Contract History
 , marloweHistory
+, marloweHistory'
 , marloweHistoryFrom
 , marloweUtxoStatesAt
 , marloweStatesFrom
@@ -64,14 +66,14 @@ import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
 import qualified Ledger.Value (TokenName, Value)
 import Plutus.ChainIndex.Tx (ChainIndexTx, ChainIndexTxOutputs (..), citxCardanoTx, citxData, citxInputs, citxOutputs,
                              citxScripts, citxTxId, citxValidRange)
-import Plutus.Contract (Contract)
+import Plutus.Contract (Contract, ownPaymentPubKeyHash)
 import Plutus.Contract.Error (AsContractError)
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Contract.Request (txsAt, utxosTxOutTxAt, utxosTxOutTxFromTx)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V1.Ledger.Api (Address (..), CurrencySymbol (..), Datum (..), Extended (..), Interval (..),
-                             LowerBound (..), Redeemer (..), TxId (..), TxOut (..), TxOutRef (..), UpperBound (..),
-                             dataToBuiltinData, fromBuiltinData, toBuiltin)
+import Plutus.V1.Ledger.Api (Address (..), Credential (PubKeyCredential), CurrencySymbol (..), Datum (..),
+                             Extended (..), Interval (..), LowerBound (..), Redeemer (..), TxId (..), TxOut (..),
+                             TxOutRef (..), UpperBound (..), dataToBuiltinData, fromBuiltinData, toBuiltin)
 import Plutus.V1.Ledger.Scripts (ScriptHash (..))
 import Plutus.V1.Ledger.Tx (txInRef)
 
@@ -83,6 +85,7 @@ import qualified Data.ByteString as BS (drop)
 import qualified Data.Map.Strict as M (Map, keys, lookup, toList)
 import qualified Data.Set as S (toList)
 import Data.Traversable (for)
+import Ledger.Address (PaymentPubKeyHash (unPaymentPubKeyHash))
 import qualified PlutusTx.IsData.Class
 
 
@@ -153,13 +156,15 @@ data RolePayout =
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON, FromJSON)
 
+newtype IncludePkhTxns = IncludePkhTxns Bool
 
 -- | Retrieve the history of a role-based Marlowe contract.
 marloweHistory :: AsContractError e
                => SlotConfig                      -- ^ The slot configuration.
                -> MarloweParams                   -- ^ The Marlowe validator parameters.
+               -> IncludePkhTxns
                -> Contract w s e (Maybe History)  -- ^ The original contract and the sequence of redemptions, if any.
-marloweHistory slotConfig params =
+marloweHistory slotConfig params (IncludePkhTxns includePkhTxns) =
   do
     let address = validatorAddress $ smallUntypedValidator params
     logInfo $ "[DEBUG:marloweHistory] address = " <> show address
@@ -169,18 +174,21 @@ marloweHistory slotConfig params =
     -- When a contract closes, there may be a UTxO at the role address.
     roleTxns <- txsAt . scriptHashAddress $ rolePayoutValidatorHash params
     logInfo $ "[DEBUG:marloweHistory] length roleTxns = " <> show (length roleTxns)
-{-
-    FIXME: Commented out in order to stress the PAB/CI lesss, just as a workaround for PAB queries freezing.
+
     -- When a contract closes, there may be a UTxO at the owner's public key hash address.
-    pkhTxns <- txsAt . flip Address Nothing . PubKeyCredential . unPaymentPubKeyHash =<< ownPaymentPubKeyHash
+    -- We use this heavy query only on demand.
+    pkhTxns <- if includePkhTxns
+      then txsAt . flip Address Nothing . PubKeyCredential . unPaymentPubKeyHash =<< ownPaymentPubKeyHash
+      else pure []
     logInfo $ "[DEBUG:marloweHistory] length pkhTxns = " <> show (length pkhTxns)
--}
     -- TODO: Extract all PKHs from the contract, and query these addresses, too.
     pure
       . history slotConfig params address
       . nub
-      $ addressTxns <> roleTxns {- <> pkhTxns -}
+      $ addressTxns <> roleTxns <> pkhTxns
 
+marloweHistory' :: AsContractError e => SlotConfig -> MarloweParams -> Contract w s e (Maybe History)
+marloweHistory' slotConfig params = marloweHistory slotConfig params (IncludePkhTxns False)
 
 -- | Retrieve the history of a role-based Marlowe contract.
 history :: SlotConfig      -- ^ The slot configuration.
