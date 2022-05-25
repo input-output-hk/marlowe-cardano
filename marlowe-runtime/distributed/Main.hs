@@ -6,56 +6,53 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE TypeApplications          #-}
 module Main where
 
 import Cardano.Api
-import Control.Distributed.Process (DiedReason (DiedNormal), MonitorRef, Process, ProcessId,
-                                    ProcessInfo (ProcessInfo, infoRegisteredNames), ProcessMonitorNotification (..),
-                                    die, expect, getProcessInfo, getSelfPid, liftIO, link, match, matchIf, monitor,
-                                    nsend, receiveWait, register, reregister, say, send, spawnLocal)
+import Cardano.Api.Shelley (Hash (HeaderHash))
+import Control.Distributed.Process (DiedReason (DiedNormal), Process, ProcessId,
+                                    ProcessInfo (ProcessInfo, infoRegisteredNames), RemoteTable, die, expect,
+                                    getProcessInfo, getSelfPid, liftIO, link, match, nsend, receiveWait, reregister,
+                                    say, send, spawnLocal)
+import Control.Distributed.Process.Closure (mkClosure, remotable)
+import Control.Distributed.Process.Extras.Time (Delay (..), TimeInterval, minutes)
 import Control.Distributed.Process.Internal.Primitives (SayMessage (..))
 import Control.Distributed.Process.Internal.Types (Process (Process, unProcess))
 import Control.Distributed.Process.Node (initRemoteTable, newLocalNode, runProcess)
+import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), ChildStopPolicy (..), ChildType (..),
+                                               RegisteredName (..), RestartPolicy (..), ShutdownMode (..), restartOne)
+import qualified Control.Distributed.Process.Supervisor as Supervisor
 import Control.Monad (forever, when)
 import Data.Binary (Binary (..))
 import Data.Functor (void)
 import Data.Maybe (fromMaybe)
 import Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFormat)
-import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain (marloweChainSyncClient, runMarloweChainSyncClient)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweChainEvent (..), MarloweChainPoint (..),
-                                             MarloweChainTip (..), MarloweSlotNo (..))
+import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash (MarloweBlockHeaderHash),
+                                             MarloweChainEvent (..), MarloweChainPoint (..), MarloweChainTip (..),
+                                             MarloweSlotNo (..))
 import Network.Transport.TCP (TCPAddr (..), createTransport, defaultTCPParameters)
 
-main :: IO ()
-main = do
-  Right transport <- createTransport Unaddressable defaultTCPParameters
-  node <- newLocalNode transport initRemoteTable
-  let
-    connectionInfo = LocalNodeConnectInfo
-      { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-      , localNodeNetworkId = Testnet $ NetworkMagic 1566
-      , localNodeSocketPath = "/var/lib/containers/storage/volumes/marlowe-dashboard-client_cardano-ipc/_data/node.socket"
-      }
-  void $ runProcess node $ app connectionInfo
+appLogger :: Process ()
+appLogger = forever do
+  SayMessage{..} <- expect
+  getProcessInfo sayProcess >>= mapM_ \ProcessInfo{..} -> do
+    let
+      label = case infoRegisteredNames of
+        name : _ -> name
+        _        -> show sayProcess
+    let timestamp = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) sayTime
+    liftIO $ putStrLn $ "[" <> label <> "] [" <> timestamp <> "] " <> sayMessage
 
-app :: LocalNodeConnectInfo CardanoMode -> Process ()
-app connectionInfo = do
-  self <- getSelfPid
-  Right syncClientProcess <- chainSyncClient connectionInfo [] self
-  _ <- spawnLocalLink $ supervisor "app"
-    [ ("chain-sync:client", syncClientProcess, False)
-    , ("chain-sync:logger", chainSyncLogger, False)
-    , ("logger", appLogger, True)
-    ]
-  forever $ receiveWait
-    [ match \(msg :: ChainSyncMsg) -> do
-        nsend "chain-sync:logger" msg
-        nsend "history:digest" msg
-    ]
+spawnLocalLink :: Process () -> Process ProcessId
+spawnLocalLink cp = do
+  child <- spawnLocal cp
+  link child
+  pure child
 
 data ChainSyncMsg
   = ChainSyncStart MarloweChainPoint MarloweChainTip
@@ -65,15 +62,20 @@ data ChainSyncMsg
 
 instance Binary ChainSyncMsg
 
-chainSyncClient
-  :: LocalNodeConnectInfo CardanoMode
-  -> [ChainPoint]
-  -> ProcessId
-  -> Process (Either String (Process ()))
-chainSyncClient connectionInfo startingPoints parent = do
-  runMarloweChainSyncClient connectionInfo \genesisParams -> Process do
+chainSyncClient :: ([MarloweChainPoint], ProcessId) -> Process ()
+chainSyncClient (startingPoints, parent) = do
+  let
+    connectionInfo = LocalNodeConnectInfo
+      { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+      , localNodeNetworkId = Testnet $ NetworkMagic 1566
+      , localNodeSocketPath = "/var/lib/containers/storage/volumes/marlowe-dashboard-client_cardano-ipc/_data/node.socket"
+      }
+    toChainPoint MarloweChainPointAtGenesis = ChainPointAtGenesis
+    toChainPoint (MarloweChainPoint (MarloweSlotNo slot) (MarloweBlockHeaderHash hash)) =
+      ChainPoint (SlotNo slot) (HeaderHash hash)
+  either fail id =<< runMarloweChainSyncClient connectionInfo \genesisParams -> Process do
     marloweChainSyncClient
-      startingPoints
+      (toChainPoint <$> startingPoints)
       genesisParams
       (fmap (unProcess . send parent) . ChainSyncStart . fromMaybe MarloweChainPointAtGenesis)
       (pure False)
@@ -83,8 +85,8 @@ chainSyncClient connectionInfo startingPoints parent = do
 blockLoggingFrequency :: Integer
 blockLoggingFrequency = 4000
 
-chainSyncLogger :: Process ()
-chainSyncLogger = syncing (0 :: Integer) (10000 :: Integer)
+chainSyncLogger :: () -> Process ()
+chainSyncLogger _ = syncing (0 :: Integer) (10000 :: Integer)
   where
     syncing blocksSinceLastLog deathCounter = do
       when (deathCounter == 0) $ die DiedNormal -- die for fun
@@ -132,50 +134,32 @@ chainSyncLogger = syncing (0 :: Integer) (10000 :: Integer)
     getPointNo MarloweChainPointAtGenesis              = 0
     getPointNo (MarloweChainPoint (MarloweSlotNo n) _) = n
 
-appLogger :: Process ()
-appLogger = forever do
-  SayMessage{..} <- expect
-  getProcessInfo sayProcess >>= mapM_ \ProcessInfo{..} -> do
-    let
-      label = case infoRegisteredNames of
-        name : _ -> name
-        _        -> show sayProcess
-    let timestamp = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) sayTime
-    liftIO $ putStrLn $ "[" <> timestamp <> "] [" <> label <> "] " <> sayMessage
+remotable ['chainSyncLogger, 'chainSyncClient]
 
-supervisor :: String -> [(String, Process (), Bool)] -> Process ()
-supervisor selfName children = do
-  register (selfName <> ":supervisor") =<< getSelfPid
-  childRefs <- forM children \(name, process, replace) -> do
-    (pid, ref) <- spawnLocalSupervised process
-    if replace then
-      reregister name pid
-    else
-      register name pid
-    pure (name, ref, process)
-  loop childRefs
-    where
-      loop childRefs = receiveWait $ flip fmap childRefs \(name, childRef, process) -> matchIf
-        (\(ProcessMonitorNotification ref _ _) -> ref == childRef)
-        (\(ProcessMonitorNotification _ _ reason) -> do
-            say $ "Child process " <> name <> " terminated, restarting"
-            say $ "Message was " <> show reason
-            (pid, ref) <- spawnLocalSupervised process
-            register name pid
-            loop $ fmap (\(n, r, p) -> if n == name then (n, ref, process) else (n, r, p)) childRefs
-        )
+remoteTable :: RemoteTable
+remoteTable = Main.__remoteTable initRemoteTable
 
-spawnLocalSupervised :: Process () -> Process (ProcessId, MonitorRef)
-spawnLocalSupervised cp = do
-  parent <- getSelfPid
-  child <- spawnLocal do
-    _ <- link parent
-    cp
-  monitorRef <- monitor child
-  pure (child, monitorRef)
+app :: Process ()
+app = do
+  self <- getSelfPid
+  supervisor <- Supervisor.start restartOne ParallelShutdown
+    [ worker "chain-sync.client" Intrinsic Nothing (StopTimeout (Delay $ minutes 1)) $ RunClosure $ $(mkClosure 'chainSyncClient) ([] :: [MarloweChainPoint], self)
+    , worker "chain-sync.logger" Intrinsic Nothing StopImmediately $ RunClosure $ $(mkClosure 'chainSyncLogger) ()
+    ]
+  link supervisor
+  reregister "logger" =<< spawnLocalLink appLogger
+  forever $ receiveWait
+    [ match \(msg :: ChainSyncMsg) -> do
+        nsend "chain-sync.logger" msg
+        nsend "history.digest" msg
+    ]
 
-spawnLocalLink :: Process () -> Process ProcessId
-spawnLocalLink cp = do
-  child <- spawnLocal cp
-  link child
-  pure child
+worker :: String -> RestartPolicy -> Maybe TimeInterval -> ChildStopPolicy -> ChildStart -> ChildSpec
+worker name restartPolicy restartDelay stopPolicy start =
+  ChildSpec name Worker restartPolicy restartDelay stopPolicy start $ Just $ LocalName name
+
+main :: IO ()
+main = do
+  Right transport <- createTransport Unaddressable defaultTCPParameters
+  node <- newLocalNode transport remoteTable
+  void $ runProcess node app

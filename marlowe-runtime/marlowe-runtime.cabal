@@ -99,6 +99,7 @@ executable distributed
     , cardano-api
     , cardano-config
     , distributed-process
+    , distributed-process-extras
     , distributed-process-supervisor
     , network-transport-tcp
     , time
