@@ -814,7 +814,11 @@ runContract PabAccess{..} contract walletId =
             caID     = contract
           , caWallet = Just $ Wallet Nothing walletId
           }
+
     let
+      logMsg msg = when verbose $ logTraceMsg
+        ("runContract:" <> show contract <> ":" <> show (unContractInstanceId instanceId))
+        msg
       go :: Connection -> ExceptT CliError IO ()
       go connection =
         do
@@ -823,8 +827,7 @@ runContract PabAccess{..} contract walletId =
             repr other                  = show other
 
           status <- receiveStatus connection
-          when verbose
-            $ liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> repr status <> "."
+          logMsg $ "Received " <> repr status <> "."
           case status of
             NewObservableState s -> do
                                       state <- liftCli $ parseEither parseJSON s
@@ -836,9 +839,9 @@ runContract PabAccess{..} contract walletId =
       notifyErr (Right res) = pure res
       notifyErr (Left ex) = case fromException ex of
         Just (ex' :: HttpException) ->
-          when verbose $ liftIO . putStrLn $ "[runContract] Websocket read out failed: " <> displayException ex'
+          logMsg $ "Websocket read out failed: " <> displayException ex'
         Nothing                   ->
-          when verbose $ liftIO . putStrLn $ "[runContract] PAB communication thread failure: " <> displayException ex
+          logMsg $ "PAB communication thread failure: " <> displayException ex
 
     void
       . liftIO

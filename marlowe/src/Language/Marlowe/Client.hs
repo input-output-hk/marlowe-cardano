@@ -364,11 +364,10 @@ utxoIsProduced' :: AsContractError e => CallStackTrace -> Address -> Promise w s
 utxoIsProduced' trace addr = do
   promiseBind (utxoIsProduced addr) $ \txns -> do
     void $ retryRequestTillJust' (pushFnName "utxoIsProduced'" trace)  $ do
-      for_ (NonEmpty.toList txns) $ \tx -> do
-        listToMaybe <$> txsFromTxIds [ tx ^. citxTxId ]
-      pure $ Just txns
-    -- FIXME: We should just throw here and report inconsistency problem
-    --        when the previous check returns `Nothing`.
+      ctx <- txsFromTxIds $ map (view citxTxId) (NonEmpty.toList txns)
+      pure $ if length ctx == length txns
+        then Just txns
+        else Nothing
     pure txns
 
 utxoIsSpent' :: AsContractError e => CallStackTrace -> TxOutRef -> Promise w s e ChainIndexTx
