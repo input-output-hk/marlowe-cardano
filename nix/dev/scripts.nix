@@ -74,6 +74,10 @@ let
   '';
 
   start-wallet = writeShellScriptBinInRepoRoot "start-cardano-wallet" ''
+    echo "Waiting for cardano-node socket connection"
+    until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${devNetworkConfig.node.socket-path} 2> /dev/null; do :; done
+    echo "Connection ready"
+
     mkdir -p ${devNetworkConfig.wallet.database-path}
 
     cardano-wallet serve \
@@ -117,6 +121,11 @@ let
   '';
 
   start-dashboard-server = writeShellScriptBinInRepoRoot "start-dashboard-server" ''
+    echo "Waiting for cardano-node socket connection"
+    until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${devNetworkConfig.node.socket-path} 2> /dev/null; do :; done
+    echo "Connection ready"
+
+
     ${marlowe-dashboard-exe} webserver \
       --config ${devNetworkConfig.dashboard-server.config-file} \
       --port ${toString devNetworkConfig.dashboard-server.port} \
