@@ -135,7 +135,7 @@ let
 
   start-marlowe-run = writeShellScriptBinInRepoRoot "start-marlowe-run" ''
     #!/bin/bash
-    tmux -T 256,mouse,focus,title\
+    ${pkgs.tmux}/bin/tmux -T 256,mouse,focus,title\
       set -g mouse on \; \
       set -g pane-border-status top \; \
       set -g pane-border-format "#{pane_index} #T" \; \

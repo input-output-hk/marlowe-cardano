@@ -13,7 +13,7 @@ The [marlowe-pab](https://github.com/input-output-hk/marlowe-cardano/tree/master
 
 **Note 1**: _The current version of the application is an alpha release and it is targeted for developers to provide the necesary feedback to shape the final product. We encourage developers to try this on a testnet and [submit issues](https://github.com/input-output-hk/marlowe-cardano/issues/new/choose) to this repository._
 
-**Note 2**: _The workflow described here relies heavily on Nix. This means you should either be working inside a nix-shell environment or use tools such as [lorri](https://github.com/target/lorri) or [nix-direnv](https://github.com/nix-community/nix-direnv) or similar to provide a suitable environment. Make sure you have configured the [nix binary cache](https://github.com/input-output-hk/marlowe-cardano#how-to-set-up-the-iohk-binary-caches) to avoid unnecesary builds. If you are using Mac and you run into a segmentation fault running nix-shell, you can try running it as `GC_DONT_GC=1 nix-shell` as this [issue suggest](https://github.com/NixOS/nix/issues/4246)._
+**Note 2**: _The workflow described here relies heavily on Nix. **Make sure you have configured the [nix binary cache](https://github.com/input-output-hk/marlowe-cardano#how-to-set-up-the-iohk-binary-caches)** to avoid unnecesary builds. If you are using Mac and you run into a segmentation fault running `nix-shell`, you can try running it as `GC_DONT_GC=1 nix-shell` as this [issue suggest](https://github.com/NixOS/nix/issues/4246). You can also try alternatives to `nix-shell` (that still relies on Nix) that has faster reloads when modifying the nix environment like [lorri](https://github.com/target/lorri) or [nix-direnv](https://github.com/nix-community/nix-direnv)._
 
 ## Getting started
 
@@ -76,13 +76,13 @@ We build the PureScript code using `spago`. You can invoke the following command
 [nix-shell] $ spago build -w
 ```
 
-There is a convenience script that treats Warnings as Errors and omits the warnings in the `./generated` folder.
+There is a convenience script that treats Warnings as Errors and omits the warnings in the `./generated` folder. This script can be run anywhere in the repository.
 
 ```bash
 [nix-shell] $ marlowe-run-spago
 ```
 
-If you use VSCode with the [vscode-ide-plugin](https://github.com/nwolverson/vscode-ide-purescript) the language server is provided by nix and the project is built whenever you modify the code (so no need to run spago manually). In order to have the language server on PATH, VSCode should be launched from inside `nix-shell`.
+If you use VSCode with the [vscode-ide-plugin](https://github.com/nwolverson/vscode-ide-purescript) the language server is provided by nix and the project is built whenever you modify the code (so no need to run spago manually). In order to have the language server on PATH, VSCode should be launched from inside `nix-shell` (using the `code` command).
 
 **NOTE**: _The ide plugin works with a single PureScript project in the root, so VSCode should be launched from the marlowe-dashboard-client folder. You can use workspaces in order to have multiple roots at the same time._
 
