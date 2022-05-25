@@ -10,6 +10,7 @@ module Marlowe.Contracts.UTC.Options
   , coveredCall
   -- ** Partially collateralized
   , callSpread
+  , cliquetOption
   -- ** Not collateralized
   , barrierOption
   , strangle
@@ -33,6 +34,7 @@ option ::
   -> (Token, Value) -- ^ Strike
   -> UTCTime        -- ^ Expiry
   -> UTCTime        -- ^ Settlement date
+  -> Contract       -- ^ Continuation
   -> Contract       -- ^ Option Contract
 option exerciseType optionType buyer seller priceFeed asset strike expiry settlement =
   C.option exerciseType optionType buyer seller priceFeed asset strike (toTimeout expiry) (toTimeout settlement)
@@ -95,6 +97,20 @@ strangle ::
   -> Contract       -- ^ Straddle Contract
 strangle buyer seller priceFeed currency underlying ratio strike1 strike2 maturity settlement =
   C.strangle buyer seller priceFeed currency underlying ratio strike1 strike2 (toTimeout maturity) (toTimeout settlement)
+
+cliquetOption ::
+     C.OptionType     -- ^ Type of Option
+  -> Party          -- ^ Issuer
+  -> Party          -- ^ Counter-party
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Ratio
+  -> [UTCTime]      -- ^ Expiries
+  -> Integer        -- ^ Settlement delay
+  -> Contract       -- ^ Cliquet Option Contract
+cliquetOption optionType issuer counterparty priceFeed currency underlying ratio expiries =
+  C.cliquetOption optionType issuer counterparty priceFeed currency underlying ratio (map toTimeout expiries)
 
 barrierOption ::
      C.ExerciseType -- ^ Exercise Type

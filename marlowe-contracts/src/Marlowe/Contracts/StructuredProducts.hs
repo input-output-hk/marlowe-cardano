@@ -104,6 +104,7 @@ reverseConvertible investor fixing maturity settlement priceFeed currency underl
         (currency, strike)
         maturity
         settlement
+        Close
 
 -- |Similar to `reverseConvertible` constructed from a Bond in combination with a Down-And-In Put barrier option
 barrierReverseConvertible ::
