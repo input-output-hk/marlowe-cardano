@@ -809,6 +809,7 @@
         plutus-tx = ./.plan.nix/plutus-tx.nix;
         cardano-ledger-byron = ./.plan.nix/cardano-ledger-byron.nix;
         cardano-data = ./.plan.nix/cardano-data.nix;
+        distributed-process-client-server = ./.plan.nix/distributed-process-client-server.nix;
         freer-extras = ./.plan.nix/freer-extras.nix;
         measures = ./.plan.nix/measures.nix;
         cardano-prelude = ./.plan.nix/cardano-prelude.nix;
@@ -867,8 +868,10 @@
         marlowe-cli = ./.plan.nix/marlowe-cli.nix;
         cardano-config = ./.plan.nix/cardano-config.nix;
         lobemo-backend-graylog = ./.plan.nix/lobemo-backend-graylog.nix;
+        distributed-process-supervisor = ./.plan.nix/distributed-process-supervisor.nix;
         marlowe-dashboard-server = ./.plan.nix/marlowe-dashboard-server.nix;
         marlowe-runtime = ./.plan.nix/marlowe-runtime.nix;
+        distributed-process-extras = ./.plan.nix/distributed-process-extras.nix;
         ouroboros-network-testing = ./.plan.nix/ouroboros-network-testing.nix;
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         trace-forward = ./.plan.nix/trace-forward.nix;
@@ -900,6 +903,7 @@
         cardano-crypto = ./.plan.nix/cardano-crypto.nix;
         web-ghc = ./.plan.nix/web-ghc.nix;
         lobemo-backend-aggregation = ./.plan.nix/lobemo-backend-aggregation.nix;
+        distributed-process-async = ./.plan.nix/distributed-process-async.nix;
         cardano-slotting = ./.plan.nix/cardano-slotting.nix;
         io-classes = ./.plan.nix/io-classes.nix;
         typed-protocols = ./.plan.nix/typed-protocols.nix;
@@ -945,6 +949,7 @@
             flags = { "test-normal-form" = lib.mkOverride 900 false; };
             };
           "cardano-data" = { flags = {}; };
+          "distributed-process-client-server" = { flags = {}; };
           "freer-extras" = { flags = {}; };
           "measures" = {
             flags = { "development" = lib.mkOverride 900 false; };
@@ -1065,9 +1070,13 @@
             flags = { "systemd" = lib.mkOverride 900 true; };
             };
           "lobemo-backend-graylog" = { flags = {}; };
+          "distributed-process-supervisor" = { flags = {}; };
           "marlowe-dashboard-server" = { flags = {}; };
           "marlowe-runtime" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
+          "distributed-process-extras" = {
+            flags = { "old-locale" = lib.mkOverride 900 false; };
             };
           "ouroboros-network-testing" = { flags = {}; };
           "marlowe-contracts" = {
@@ -1135,6 +1144,7 @@
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "lobemo-backend-aggregation" = { flags = {}; };
+          "distributed-process-async" = { flags = {}; };
           "cardano-slotting" = {
             flags = { "development" = lib.mkOverride 900 false; };
             };
@@ -1502,6 +1512,7 @@
           "th-expand-syns".components.library.planned = lib.mkOverride 900 true;
           "strict-list".components.library.planned = lib.mkOverride 900 true;
           "servant-multipart".components.library.planned = lib.mkOverride 900 true;
+          "distributed-process-extras".components.library.planned = lib.mkOverride 900 true;
           "plutus-playground-server".components.library.planned = lib.mkOverride 900 true;
           "plutus-pab-executables".components.exes."sync-client".planned = lib.mkOverride 900 true;
           "unix-time".components.library.planned = lib.mkOverride 900 true;
@@ -1595,6 +1606,7 @@
           "optparse-applicative-fork".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-cardano".components.exes."db-analyser".planned = lib.mkOverride 900 true;
           "servant-docs".components.library.planned = lib.mkOverride 900 true;
+          "distributed-process-async".components.library.planned = lib.mkOverride 900 true;
           "beam-sqlite".components.library.planned = lib.mkOverride 900 true;
           "th-utilities".components.library.planned = lib.mkOverride 900 true;
           "typed-protocols".components.library.planned = lib.mkOverride 900 true;
@@ -1774,6 +1786,7 @@
           "ouroboros-network-framework".components.exes."demo-connection-manager".planned = lib.mkOverride 900 true;
           "sqlite-simple".components.library.planned = lib.mkOverride 900 true;
           "constraints-extras".components.library.planned = lib.mkOverride 900 true;
+          "distributed-process-client-server".components.library.planned = lib.mkOverride 900 true;
           "monad-logger".components.library.planned = lib.mkOverride 900 true;
           "OneTuple".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-network".components.exes."demo-chain-sync".planned = lib.mkOverride 900 true;
@@ -1825,6 +1838,7 @@
           "ekg-forward".components.exes."demo-forwarder".planned = lib.mkOverride 900 true;
           "dns".components.library.planned = lib.mkOverride 900 true;
           "optparse-generic".components.library.planned = lib.mkOverride 900 true;
+          "distributed-process-supervisor".components.library.planned = lib.mkOverride 900 true;
           "plutus-core".components.exes."plc".planned = lib.mkOverride 900 true;
           "monad-control".components.library.planned = lib.mkOverride 900 true;
           "base-deriving-via".components.library.planned = lib.mkOverride 900 true;

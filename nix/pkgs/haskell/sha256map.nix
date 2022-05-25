@@ -20,4 +20,8 @@
   "https://github.com/input-output-hk/optparse-applicative"."7497a29cb998721a9068d5725d49461f2bba0e7a" = "1gvsrg925vynwgqwplgjmp53vj953qyh3wbdf34pw21c8r47w35r";
   "https://github.com/paluh/plutus-apps"."5bcc67b3b2eb219a54b90c24920a72c9266190a2" = "1yc8zwviqlvvizgi4ckpy5jdk2w21qjyijhgpfzrizz84ci2igzd";
   "https://github.com/haskell-distributed/distributed-process"."cacb9d9ad84a5bdc6c6e6d4e8c7ff1835c89dce9" = "084v11p876nv5nz78ap5729wc6r6jjkr7zxsy05nh8x0wah9yxgi";
+  "https://github.com/jhbertra/distributed-process-extras"."6a3ade122c32d185cd8a59e7a03c5e603fccda73" = "1lw9b0iv4npk0lkd3ra60cjs48fcaiglyg9sfah56rhygc93zaxk";
+  "https://github.com/jhbertra/distributed-process-async"."6002e6a7fd6c6968c6273fd65294a100d8e725b1" = "0icp8p5kbrbg7hl5s44bl7psfz09bjgs1mamr8lbnl5dwf46h1dq";
+  "https://github.com/jhbertra/distributed-process-client-server"."5ff63adb7175b6f2ceb946b127f21c16400bda72" = "0ya2q3yhi455m29iciydqmy1f45964hi7c6rssx4df2kx61nsscj";
+  "https://github.com/jhbertra/distributed-process-supervisor"."a5c24b66fcfc1755e154d07125e82198373a8a24" = "1r9k6nbymnwwwz0qx1ifarg9w85i7wh9nj1kdvmg71sc0nqw1g96";
 }
