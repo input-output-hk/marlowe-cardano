@@ -86,22 +86,26 @@ executable banana
 
 executable distributed
   import: lang
+  ghc-options: -threaded
   hs-source-dirs: distributed
   main-is: Main.hs
   other-modules:
     ChainSync
     ChainSync.Client
     ChainSync.Logger
+    ChainSync.Store
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
     , binary
+    , containers
     , marlowe-runtime
     , cardano-api
     , cardano-config
     , distributed-process
+    , distributed-process-client-server
     , distributed-process-extras
     , distributed-process-supervisor
     , network-transport-tcp
