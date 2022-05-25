@@ -38,6 +38,7 @@ import Control.Lens
 import Control.Monad (forM_, guard, void, when)
 import Control.Monad.Error.Lens (catching, handling, throwing, throwing_)
 import Control.Monad.Extra (concatMapM)
+import Control.Monad.Writer hiding (tell)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import Data.Default (Default (def))
 import Data.Foldable (for_)
@@ -55,9 +56,10 @@ import qualified Data.Text as T
 import Data.UUID (UUID)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, RolePayout (..), foldlHistory, foldrHistory,
-                                        historyFrom, marloweHistory, marloweHistoryFrom, marloweUtxoStatesAt,
-                                        toMarloweState, toRolePayout, txRoleData)
+import Language.Marlowe.Client.History (History (..), IncludePkhTxns (IncludePkhTxns), MarloweTxOutRef, RolePayout (..),
+                                        foldlHistory, foldrHistory, historyFrom, marloweHistory, marloweHistory',
+                                        marloweHistoryFrom, marloweUtxoStatesAt, toMarloweState, toRolePayout,
+                                        txRoleData)
 import Language.Marlowe.Scripts
 import Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics as Marlowe
@@ -199,9 +201,6 @@ instance Semigroup ContractHistory where
 -- with the first `tell` we have a valid initial ContractHistory
 type FollowerContractNotification = Maybe ContractHistory
 
-newtype OnChainState = OnChainState {ocsTxOutRef :: MarloweTxOutRef}
-    deriving stock (Generic, Eq)
-
 newtype Transition = Transition History     -- ^ The state machine instance transitioned to a new state
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -222,8 +221,9 @@ newtype Payouts = Payouts [(RolePayout, Redeemed)]
     deriving anyclass (FromJSON, ToJSON)
     deriving newtype (Semigroup, Monoid)
 
--- We expose unordered payouts set so we can compute this state
--- from the chain easily and we can avoid traversing the full history.
+-- We expose *unordered* (please interpret this list as such) payouts set
+-- so we can compute this state from the chain easily and we can
+-- avoid traversing the full history.
 newtype UnspentPayouts = UnspentPayouts [RolePayout]
     deriving stock (Show, Eq, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -377,7 +377,7 @@ utxoIsSpent' trace utxo = promiseBind (utxoIsSpent utxo) $ \tx -> do
   pure tx
 
 
--- | Trivial data type (a bit more redable than `Maybe`) which helps fully embed contract into `checkpointLoop`
+-- | Trivial data type which helps fully embed contract into the `checkpointLoop`
 data QueryResult a
   = UnknownOnChainState
   | LastResult a
@@ -419,7 +419,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       printState (Nothing, payouts) = "{ inputs = Nothing," <> "payouts = " <> show payouts <> "}"
 
       fetchOnChainState :: FollowerM FollowerContractState
-      fetchOnChainState = (,) <$> marloweHistory slotConfig params <*> payoutsAtCurrency (rolesCurrency params)
+      fetchOnChainState = (,) <$> marloweHistory' slotConfig params <*> payoutsAtCurrency (rolesCurrency params)
 
       awaitNewState :: FollowerContractState -> FollowerM (FollowerContractUpdate, FollowerContractState)
       awaitNewState (prevHistory, prevPayouts) = do
@@ -491,7 +491,21 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
       follow :: QueryResult FollowerContractState -> FollowerM (Either () (QueryResult FollowerContractState))
       follow UnknownOnChainState = do
         debug' "Staring follower loop..."
-        currOnChainState <- fetchOnChainState
+
+        possibleOnChainState@(history, payouts) <- fetchOnChainState
+        marloweTxOutRef <- getMarloweTxOutRef $ mkMarloweTypedValidator params
+
+        -- As a last resort query also `pkhTxns` when contract exists but
+        -- was already closed.
+        currOnChainState <- case (marloweTxOutRef, history) of
+          (Just _, _) -> pure possibleOnChainState
+          (Nothing, Just Closed {}) -> pure possibleOnChainState
+          (Nothing, _) -> do
+            history' <- marloweHistory slotConfig params (IncludePkhTxns True)
+            unless (maybe True isClosed history') $
+              debug' "Follower was not able to reconstruct the full history even though the pkhTxns were included"
+            pure (history', payouts)
+
         notify currOnChainState
         rec $ LastResult currOnChainState
 
@@ -508,12 +522,12 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
               <> "prevState =" <> printState prevState <> "; "
               <> "update = " <> show update <> "; "
               <> "history = " <> maybe "[]" printHistory newHistory <> "; "
-            onChainMarloweRef <- getOnChainState $ mkMarloweTypedValidator params
+            onChainMarloweRef <- getMarloweTxOutRef $ mkMarloweTypedValidator params
             let
               closingEntry = case onChainMarloweRef of
                 Just _ -> Nothing
                 -- It seems that contract was closed and we can try to extract
-                -- the rest of the history from the update tx which have at hand.
+                -- the rest of the history from the last update tx which we have at hand.
                 -- This *can't* be done in the `marloweHistory` because
                 -- we lack necessary indexes to extract the closing transaction.
                 Nothing -> do
@@ -776,8 +790,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                     tell $ Just $ EndpointSuccess reqId AutoResponse
                     marlowePlutusContract
 
-        maybeState <- getOnChainState typedValidator
-        case maybeState of
+        getMarloweTxOutRef typedValidator >>= \case
             Nothing ->
                 waitForTimeoutOrTransition typedValidator untilTime >>= \case
                     Left _ -> do
@@ -790,8 +803,8 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                         marlowePlutusContract
                     Right (Transition InputApplied{historyData}) -> continueWith historyData
                     Right (Transition Created{historyData}) -> continueWith historyData
-            Just OnChainState{ocsTxOutRef=st} -> do
-                let marloweData = toMarloweState st
+            Just marloweTxOutRef -> do
+                let marloweData = toMarloweState marloweTxOutRef
                 continueWith marloweData
     -- The MarloweApp contract is closed implicitly by not returning
     -- itself (marlowePlutusContract) as a continuation
@@ -1130,36 +1143,35 @@ findMarloweContractsOnChainByRoleCurrency
 findMarloweContractsOnChainByRoleCurrency curSym = do
     let params = marloweParams curSym
     let typedValidator = mkMarloweTypedValidator params
-    maybeState <- handling _AmbiguousOnChainState (const $ pure Nothing) $ getOnChainState typedValidator
-    case maybeState of
-        Just OnChainState{ocsTxOutRef} -> do
-            let marloweData = toMarloweState ocsTxOutRef
+    handling _AmbiguousOnChainState (const $ pure Nothing) $ getMarloweTxOutRef typedValidator >>= \case
+        Just marloweTxOutRef -> do
+            let marloweData = toMarloweState marloweTxOutRef
             pure $ Just (params, marloweData)
         Nothing -> pure Nothing
 
 
-getOnChainStateTxOuts ::
+getMarloweTxOuts ::
     SmallTypedValidator
-    -> Contract w schema MarloweError (Maybe (OnChainState, Map Ledger.TxOutRef Tx.ChainIndexTxOut))
-getOnChainStateTxOuts validator = do
+    -> Contract w schema MarloweError (Maybe (MarloweTxOutRef, Map Ledger.TxOutRef Tx.ChainIndexTxOut))
+getMarloweTxOuts validator = do
     (outRefs, utxos) <- mapError (review _MarloweError) $ marloweUtxoStatesAt validator
     case outRefs of
         []       -> do
-          debug "Language.Marlowe.Client.getOnChainState" "No state found on the chain"
+          debug "Language.Marlowe.Client.getMarloweTxOutRef" "No state found on the chain"
           pure Nothing
-        [outRef] -> pure $ Just (OnChainState outRef, utxos)
+        [outRef] -> pure $ Just (outRef, utxos)
         _        -> do
-          debug "Language.Marlowe.Client.getOnChainState" "Multiple Marlowe UTxOs found"
+          debug "Language.Marlowe.Client.getMarloweTxOutRef" "Multiple Marlowe UTxOs found"
           throwing_ _AmbiguousOnChainState
 
 {-| Get the current on-chain state of the state machine instance.
     Return Nothing if there is no state on chain.
     Throws an @SMContractError@ if the number of outputs at the machine address is greater than one.
 -}
-getOnChainState ::
+getMarloweTxOutRef ::
     SmallTypedValidator
-    -> Contract w schema MarloweError (Maybe OnChainState)
-getOnChainState validator = fmap fst <$> getOnChainStateTxOuts validator
+    -> Contract w schema MarloweError (Maybe MarloweTxOutRef)
+getMarloweTxOutRef validator = fmap fst <$> getMarloweTxOuts validator
 
 mkStep ::
     MarloweParams
@@ -1180,16 +1192,16 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
           slotConfig
           times
     maybeState <- retryRequestTillJust' (CallStackTrace ["mkStep"]) $ do
-      getOnChainStateTxOuts typedValidator
+      getMarloweTxOuts typedValidator
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
-        Just (OnChainState{ocsTxOutRef}, utxo) -> do
-            let currentState = toMarloweState ocsTxOutRef
+        Just (marloweTxOutRef, utxo) -> do
+            let currentState = toMarloweState marloweTxOutRef
             -- TODO: Move to debug log.
             debug "mkStep" $ "currentState = " <> show currentState
-            let marloweTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef
+            let tyMarloweTxOutRef = Typed.tyTxOutRefRef marloweTxOutRef
 
-            (allConstraints, marloweData) <- evaluateTxContstraints currentState times marloweTxOutRef
+            (allConstraints, marloweData) <- evaluateTxContstraints currentState times tyMarloweTxOutRef
             -- TODO: Move to debug log.
             debug "mkStep" $ "allConstraints = " <> show allConstraints
             debug "mkStep" $ "marloweData = " <> show marloweData
@@ -1326,9 +1338,8 @@ waitForTransition typedValidator = do
       addr = validatorAddress typedValidator
       debug' = debug "Language.Marlowe.Client.waitForTransition"
     debug' $ "Marlowe validator address which we query" <> show addr
-    currentState <- getOnChainState typedValidator
     slotConfig <- getSlotConfig
-    case currentState of
+    getMarloweTxOutRef typedValidator >>= \case
             Nothing -> do
                 debug' "Current state on chain is empty so waiting..."
                 -- There is no on-chain state, so we wait for an output to appear
@@ -1342,10 +1353,10 @@ waitForTransition typedValidator = do
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
                         [history] -> pure $ Transition history
                         _         -> throwing_ _AmbiguousOnChainState
-            Just OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}} -> do
+            Just Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef} -> do
                 debug' $ "wait till utxo is spent = " <> show tyTxOutRefRef
                 pure $ promiseBind (utxoIsSpent' (CallStackTrace ["waitForTransition"]) tyTxOutRefRef) $ \txn -> do
-                    -- void $ retryTillResponseDiffers' (CallStackTrace ["waitForTimeoutOrTransition->Just"]) currentState $ getOnChainState typedValidator
+                    -- void $ retryTillResponseDiffers' (CallStackTrace ["waitForTimeoutOrTransition->Just"]) currentState $ getMarloweTxOutRef typedValidator
                     spent <- marloweHistoryFrom typedValidator slotConfig txn
                     case spent of
                         [history] -> pure $ Transition history
