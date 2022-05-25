@@ -151,6 +151,7 @@ let
       set -g pane-border-status top \; \
       set -g pane-border-format "#{pane_index} #T" \; \
       new-session "printf '\033]2;Cardano node\033\\' && start-cardano-node" \; \
+      setw remain-on-exit on \; \
       split-window -h "printf '\033]2;PAB\033\\' && start-marlowe-pab" \; \
       split-window -h "printf '\033]2;WBE\033\\' && start-cardano-wallet" \; \
       split-window "printf '\033]2;Chain IX\033\\' && start-chain-index" \; \
