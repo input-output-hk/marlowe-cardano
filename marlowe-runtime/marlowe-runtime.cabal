@@ -89,6 +89,9 @@ executable distributed
   hs-source-dirs: distributed
   main-is: Main.hs
   other-modules:
+    ChainSync
+    ChainSync.Client
+    ChainSync.Logger
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
