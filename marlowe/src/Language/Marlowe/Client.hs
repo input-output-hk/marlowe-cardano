@@ -550,7 +550,9 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
 
             if newState' == prevState
               then debug' $ "No state change detected by follower as well: closingEntry = " <> show closingEntry
-              else debug' $ "State change detected by follower: closingEntry = " <> show closingEntry
+              else do
+                notify newState'
+                debug' $ "State change detected by follower: closingEntry = " <> show closingEntry
             rec $ LastResult newState'
 
     checkpointLoop follow UnknownOnChainState
