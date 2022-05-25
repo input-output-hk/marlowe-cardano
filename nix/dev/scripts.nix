@@ -7,7 +7,6 @@
 , plutus-chain-index
 }:
 let
-  network = pkgs.networks.testnet-dev;
   marlowe-pab-exe = marlowe-pab + "/bin/marlowe-pab";
   marlowe-dashboard-exe = marlowe-dashboard + "/bin/marlowe-dashboard-server";
 
@@ -135,6 +134,18 @@ let
 
   start-marlowe-run = writeShellScriptBinInRepoRoot "start-marlowe-run" ''
     #!/bin/bash
+
+    # The spago dependencies might fail downloading, so we invoke it until it works
+    cd marlowe-dashboard-client
+    counter=5
+    spago install
+    while [[ "$?" -ne 0 && "$counter" -gt 0 ]]; do
+      let "counter-=1";
+      echo "Failed, retrying $counter more times";
+      spago install
+    done
+    cd ..
+
     ${pkgs.tmux}/bin/tmux -T 256,mouse,focus,title\
       set -g mouse on \; \
       set -g pane-border-status top \; \
