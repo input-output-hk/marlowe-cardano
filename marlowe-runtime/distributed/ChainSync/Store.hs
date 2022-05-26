@@ -17,7 +17,6 @@ import Data.Binary (Binary)
 import Data.Data (Typeable)
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
-import Data.List (groupBy)
 import Data.Maybe (maybeToList)
 import Data.Word (Word32)
 import Debug.Trace (traceShowId)

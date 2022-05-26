@@ -15,7 +15,10 @@ import Cardano.Api (AddressInEra (..), Block (..), BlockHeader (..), BlockInMode
                     ValueNestedBundle (..), ValueNestedRep (..), connectToLocalNode, getTxBody, getTxId, metadataToJson,
                     queryNodeLocalState, toAddressAny, txOutValueToValue, valueToNestedRep)
 import Cardano.Api.ChainSync.Client (ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
-import Cardano.Api.Shelley (Hash (..))
+import Cardano.Api.Shelley (Hash (..), Tx (ShelleyTx))
+import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
+import qualified Cardano.Ledger.TxIn as Ledger
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Foldable (for_)
 import qualified Data.Map as Map
@@ -27,7 +30,8 @@ import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (MarloweAddress), Ma
                                              MarloweChainSyncClient,
                                              MarloweChainTip (MarloweChainTip, MarloweChainTipAtGenesis),
                                              MarlowePolicyId (..), MarloweSlotNo (..), MarloweTx (..), MarloweTxId (..),
-                                             MarloweTxIn (..), MarloweTxOut (..), MarloweValidityInterval (..))
+                                             MarloweTxIn (..), MarloweTxOut (..), MarloweValidityInterval (..),
+                                             TxOutRef (TxOutRef))
 import Unlift (MonadUnlift, Unlift (runUnlift), askUnlift)
 
 runMarloweChainSyncClient
@@ -83,7 +87,7 @@ stdOutMarloweChainSyncClient startingPoints genesisParams = marloweChainSyncClie
         putStrLn $ "    Inputs: " <> show marloweTx_inputs
         for_ (zip [0..] marloweTx_outputs) \(j :: Integer, MarloweTxOut{..}) -> do
           putStrLn $ "    Output[" <> show j <> "]: "
-          putStrLn $ "      TxIn: " <> show marloweTxOut_txIn
+          putStrLn $ "      Ref: " <> show marloweTxOut_txOutRef
           putStrLn $ "      Address: " <> show marloweTxOut_address
           putStrLn $ "      Value: " <> show marloweTxOut_value
           putStrLn $ "      Datum: " <> show marloweTxOut_datum
@@ -138,16 +142,25 @@ handleRollForward genesisParams (BlockInMode (Block header txs) _) =
       let
         txBody@(TxBody TxBodyContent {..}) = getTxBody tx
         txId = getTxId txBody
+        txins = case tx of
+          ShelleyTx ShelleyBasedEraAlonzo alonzoTx ->
+            extractAlonzoTxIn alonzoTx txId <$> Set.toList  (Alonzo.inputs $ Alonzo.body alonzoTx)
+          _ -> extractTxIn . fst <$> txIns
       in
         MarloweTx
           (MarloweTxId txId)
           (extractMints txMintValue)
           (extractInterval txValidityRange)
           (extractMetadata txMetadata)
-          (extractTxIn . fst <$> txIns)
+          txins
           (uncurry (extractMarloweTxOut txId) <$> zip [0..] txOuts)
 
-    extractTxIn (TxIn tid ix) = MarloweTxIn (MarloweTxId tid) ix
+    extractTxIn (TxIn tid ix) = MarloweTxIn (MarloweTxId tid) ix Nothing
+
+    extractAlonzoTxIn alonzoTx txid txin@(Ledger.TxIn _ txix) =
+      MarloweTxIn (MarloweTxId txid) (TxIx $ fromIntegral txix) do
+        (Alonzo.Data redeemer, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending txin
+        pure redeemer
 
     extractMints TxMintNone = []
     extractMints (TxMintValue _ value _) =
@@ -178,7 +191,7 @@ handleRollForward genesisParams (BlockInMode (Block header txs) _) =
 
     extractMarloweTxOut txId ix (TxOut (AddressInEra _ address) value datum) =
       MarloweTxOut
-        (MarloweTxIn (MarloweTxId txId) (TxIx ix))
+        (TxOutRef (MarloweTxId txId) (TxIx ix))
         (MarloweAddress $ toAddressAny address)
         (txOutValueToValue value)
         case datum of

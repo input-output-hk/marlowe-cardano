@@ -10,44 +10,75 @@ import qualified Data.Aeson as Aeson
 import Data.Binary (Binary (..))
 import GHC.Generics (Generic)
 import Language.Marlowe (Contract)
-import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (..), MarloweChainPoint, MarlowePolicyId, TxOutRef,
-                                             getFromRawBytes, putToRawBytes)
+import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (..), MarloweBlockHeader, MarloweChainPoint,
+                                             MarlowePolicyId, MarloweTxId, MarloweTxOut, TxOutRef, getFromRawBytes,
+                                             putToRawBytes)
 import Language.Marlowe.Semantics (MarloweData)
 import Type.Reflection (Typeable)
 
 data Event = Event
   { contractId   :: ContractId
-  , historyEvent :: HistoryEvent
   , chainPoint   :: MarloweChainPoint
+  , txId         :: MarloweTxId
+  , historyEvent :: HistoryEvent
   }
   deriving (Generic, Typeable, Show, Eq)
 
+instance Binary Event
+
 data HistoryEvent
-  = ContractCreated
-      { datum :: Datum
-      , txOut :: TxOutRef
+  = ContractWasCreated AppTxOutRef
+  | InputsWereApplied
+      { appTxOut :: Maybe AppTxOutRef
+      , inputs   :: [Input]
       }
-  | AssetsDeposited
-      { datum        :: Datum
-      , txOut        :: TxOutRef
-      , continuation :: Maybe ContractContinuation
-      , intoAccount  :: Account
-      , fromParty    :: Participant
-      , assets       :: Assets
-      }
-  | ChoiceMade
-      { datum        :: Datum
-      , txOut        :: TxOutRef
-      , continuation :: Maybe ContractContinuation
-      , choice       :: Choice
-      , selection    :: ChoiceSelection
-      }
-  | Closed
-      { txOut      :: TxOutRef
+  | RoleWasPaidOut
+      { tokenName   :: String
+      , assets      :: Assets
+      , payoutTxOut :: PayoutTxOutRef
       }
   deriving (Generic, Typeable, Show, Eq)
 
 instance Binary HistoryEvent
+
+data Input
+  = AssetsWereDeposited
+      { continuation :: Maybe ContractContinuation
+      , intoAccount  :: Account
+      , fromParty    :: Participant
+      , assets       :: Assets
+      }
+  | ChoiceWasMade
+      { continuation :: Maybe ContractContinuation
+      , choice       :: Choice
+      , selection    :: ChoiceSelection
+      }
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary Input
+
+data ContractCreationTxOut = ContractCreationTxOut
+  { contractId :: ContractId
+  , datum      :: Datum
+  , txOut      :: MarloweTxOut
+  , header     :: MarloweBlockHeader
+  }
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary ContractCreationTxOut
+
+data AppTxOutRef = AppTxOutRef
+  { txOutRef :: TxOutRef
+  , datum    :: Datum
+  }
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary AppTxOutRef
+
+newtype PayoutTxOutRef = PayoutTxOutRef { unPayoutTxOutRef :: TxOutRef }
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary PayoutTxOutRef
 
 data Choice = Choice
   { name        :: String
@@ -106,8 +137,8 @@ instance Binary ContractContinuation where
     pure ContractContinuation{..}
 
 data ContractId = ContractId
-  { currencySymbol :: MarlowePolicyId
-  , validatorHash  :: ValidatorHash
+  { currencySymbol      :: MarlowePolicyId
+  , payoutValidatorHash :: ValidatorHash
   }
   deriving (Generic, Typeable, Show, Eq)
 

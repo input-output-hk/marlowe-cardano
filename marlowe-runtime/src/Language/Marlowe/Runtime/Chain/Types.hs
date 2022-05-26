@@ -11,6 +11,7 @@ module Language.Marlowe.Runtime.Chain.Types where
 
 import Cardano.Api (AddressAny, AsType (..), BlockInMode, CardanoMode, ChainPoint, ChainSyncClient, ChainTip, PolicyId,
                     ScriptData, SerialiseAsCBOR (..), SerialiseAsRawBytes (..), TxId, TxIx (..), Value, serialiseToJSON)
+import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary (..), Get, Put, Word64)
@@ -19,6 +20,7 @@ import Data.Data (Typeable)
 import Data.Time (Day (..), NominalDiffTime, UTCTime (..), diffTimeToPicoseconds, nominalDiffTimeToSeconds,
                   picosecondsToDiffTime, secondsToNominalDiffTime)
 import GHC.Generics (Generic)
+import Plutus.V1.Ledger.Api (Data)
 
 type MarloweChainSyncClient = ChainSyncClient (BlockInMode CardanoMode) ChainPoint ChainTip
 
@@ -57,25 +59,48 @@ data MarloweChainPoint
 
 instance Binary MarloweChainPoint
 
-data MarloweTxIn = MarloweTxIn MarloweTxId TxIx
+headerPoint :: MarloweBlockHeader -> MarloweChainPoint
+headerPoint (MarloweBlockHeader slot hash _) = MarloweChainPoint slot hash
+
+data MarloweTxIn = MarloweTxIn MarloweTxId TxIx (Maybe Data)
   deriving (Typeable, Show, Eq, Ord)
 
-type TxOutRef = MarloweTxIn
-
 instance Binary MarloweTxIn where
-  put (MarloweTxIn tid (TxIx ix)) = do
+  put (MarloweTxIn tid (TxIx ix) redeemer) = do
     put tid
     put ix
-  get = MarloweTxIn <$> get <*> (TxIx <$> get)
+    put $ serialise <$> redeemer
+  get = do
+    tid <- get
+    ix <- get
+    redeemerBytes <- get
+    redeemer <- case deserialiseOrFail <$> redeemerBytes of
+      Nothing               -> pure Nothing
+      Just (Left err)       -> fail $ show err
+      Just (Right redeemer) -> pure $ Just redeemer
+    pure $ MarloweTxIn tid (TxIx ix) redeemer
+
+data TxOutRef = TxOutRef MarloweTxId TxIx
+  deriving (Typeable, Show, Eq, Ord)
+
+instance Binary TxOutRef where
+  put (TxOutRef tid (TxIx ix)) = do
+    put tid
+    put ix
+  get = TxOutRef <$> get <*> (TxIx <$> get)
 
 newtype MarloweTxId = MarloweTxId TxId
   deriving (Typeable, Show, Eq, Ord)
+
+matchOutputRef :: TxOutRef -> MarloweTxIn -> Bool
+matchOutputRef (TxOutRef outId outIx) (MarloweTxIn inId inIx _) =
+  outId == inId && outIx == inIx
 
 instance Binary MarloweTxId where
   put (MarloweTxId tid) = putToRawBytes tid
   get = MarloweTxId <$> getFromRawBytes AsTxId
 
-newtype MarlowePolicyId = MarlowePolicyId PolicyId
+newtype MarlowePolicyId = MarlowePolicyId { unMarlowePolicyId :: PolicyId }
   deriving (Typeable, Show, Eq, Ord)
 
 instance Binary MarlowePolicyId where
@@ -130,10 +155,10 @@ instance Binary MarloweAddress where
   get = MarloweAddress <$> getFromRawBytes AsAddressAny
 
 data MarloweTxOut = MarloweTxOut
-  { marloweTxOut_txIn    :: MarloweTxIn
-  , marloweTxOut_address :: MarloweAddress
-  , marloweTxOut_value   :: Value
-  , marloweTxOut_datum   :: Maybe ScriptData
+  { marloweTxOut_txOutRef :: TxOutRef
+  , marloweTxOut_address  :: MarloweAddress
+  , marloweTxOut_value    :: Value
+  , marloweTxOut_datum    :: Maybe ScriptData
   }
   deriving (Generic, Typeable, Show, Eq)
 

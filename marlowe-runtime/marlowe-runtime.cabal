@@ -39,6 +39,7 @@ library
   exposed-modules:
     Language.Marlowe.Runtime.Chain,
     Language.Marlowe.Runtime.Chain.Types,
+    Language.Marlowe.Runtime.History,
     Language.Marlowe.Runtime.History.Types,
     Paths_marlowe_runtime
   build-depends:
@@ -46,13 +47,19 @@ library
     , binary
     , bytestring
     , cardano-api
+    , cardano-ledger-alonzo
+    , cardano-ledger-core
     , marlowe
     , aeson
     , monoidal-containers
     , containers
+    , plutus-ledger
+    , plutus-ledger-api
+    , serialise
     , time
     , unlift
     , text
+    , transformers
     , transformers-base
 
 executable synctest
