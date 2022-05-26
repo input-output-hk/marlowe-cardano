@@ -70,7 +70,7 @@ rec {
   dev-scripts = import ./nix/dev/scripts.nix {
     inherit pkgs;
     inherit cardano-cli marlowe-pab cardano-node plutus-chain-index;
-    network = pkgs.networks.testnet-dev;
+    network = pkgs.networks.testnet-pioneers;
     marlowe-dashboard = marlowe-dashboard.marlowe-run-backend-invoker;
 
   };
