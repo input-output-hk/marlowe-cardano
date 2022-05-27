@@ -11,7 +11,7 @@
 module ChainSync.Logger where
 
 import ChainSync.Client (ChainSyncMsg (..))
-import Control.Distributed.Process (Closure, DiedReason (DiedNormal), Process, die, expect, say)
+import Control.Distributed.Process (Closure, Process, expect, say)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Monad (when)
 import Data.Binary (Binary)
@@ -28,10 +28,9 @@ newtype ChainSyncLoggerConfig = ChainSyncLoggerConfig
 instance Binary ChainSyncLoggerConfig
 
 chainSyncLogger :: ChainSyncLoggerConfig -> Process ()
-chainSyncLogger ChainSyncLoggerConfig{..} = syncing 0 (10000 :: Integer)
+chainSyncLogger ChainSyncLoggerConfig{..} = syncing 0
   where
-    syncing blocksSinceLastLog deathCounter = do
-      when (deathCounter == 0) $ die DiedNormal -- die for fun
+    syncing blocksSinceLastLog = do
       msg <- expect
       inSync <- case msg of
         ChainSyncStart point tip -> do
@@ -60,7 +59,7 @@ chainSyncLogger ChainSyncLoggerConfig{..} = syncing 0 (10000 :: Integer)
         then do
           say "In sync, waiting for new blocks"
           synced
-        else syncing ((blocksSinceLastLog + 1) `mod` syncLoggingFrequency) (deathCounter - 1)
+        else syncing ((blocksSinceLastLog + 1) `mod` syncLoggingFrequency)
     synced = do
       msg <- expect
       case msg of
@@ -72,7 +71,7 @@ chainSyncLogger ChainSyncLoggerConfig{..} = syncing 0 (10000 :: Integer)
           if pointNo == tipNo then
             synced
           else
-            syncing 0 10000
+            syncing 0
         ChainSyncEvent (MarloweRollForward (MarloweBlockHeader (MarloweSlotNo slot) _ (MarloweBlockNo block)) _ _) -> do
           say $ "New block produced: slot: " <> show slot <> "; block: " <> show block
           synced
