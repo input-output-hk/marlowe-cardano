@@ -15,6 +15,7 @@ module Marlowe.Contracts.Options
   , cliquetOption
   -- ** Not collateralized
   , barrierOption
+  , chooserOption
   , strangle
   , straddle
   )
@@ -147,6 +148,24 @@ chooseOracle choiceId (_, strike) comparision continuation0 continuation1 =
       (Choice choiceId [Bound 0 100_000_000_000])
       (If (ChoiceValue choiceId `comparision` strike) continuation0 continuation1)
 
+-- |A /Chooser Option/ allows the holder of the option to decide prior to the expiration
+-- if the option is a call or put. Strike and expiration date are the same in either case.
+chooserOption ::
+     Party          -- ^ Buyer
+  -> Party          -- ^ Seller
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Strike price (in currency)
+  -> Value          -- ^ Amount of underlying tokens per contract
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement date
+  -> Contract       -- ^ Chooser Option Contract
+chooserOption buyer seller priceFeed currency underlying strike ratio maturity settlement =
+  let c = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement Close
+      p = option European Put buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement Close
+   in When [ choose (ChoiceId "0:Call, 1:Put" buyer) c p ] maturity Close
+
 -- |A /Covered Call/ is an option strategy constructed by writing a call on a token
 -- and in addition providing the token as cover/collateral as part of the contract
 coveredCall ::
@@ -221,7 +240,7 @@ callSpread buyer seller priceFeed currency underlying strike1 strike2 ratio matu
       s = option European Call seller buyer priceFeed (underlying, ratio) (currency, strike2) maturity settlement Close
    in l `both` s
 
--- A cliquet option consists of a series of consecutive options. The options are executed in sequence, the strike price
+-- |A /Cliquet Option/ consists of a series of consecutive options. The options are executed in sequence, the strike price
 -- of the next option is always the current price of the underlying. The option type can be either Call or Put.
 cliquetOption ::
      OptionType     -- ^ Type of Option
