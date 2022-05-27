@@ -167,6 +167,7 @@ americanCallOptionTest =
           (ada, Constant 10_000_000)
           (read "2022-03-01 09:00:00.000000 UTC")
           (read "2022-03-31 17:30:00.000000 UTC")
+          Close
       txIn =
         [ C.TransactionInput (0, 0) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
    in case C.playTrace 0 contract txIn of
@@ -192,6 +193,7 @@ americanCallOptionExercisedTest =
           (ada, Constant 10_000_000)
           (read "2022-03-31 17:00:00.000000 UTC")
           (read "2022-03-31 17:30:00.000000 UTC")
+          Close
       Just contract = toCore $
         deposit
           w2Pk
@@ -233,6 +235,7 @@ europeanCallOptionTest =
           (ada, Constant 10_000_000)
           (read "2022-03-19 17:30:00.000000 UTC")
           (read "2022-03-20 17:30:00.000000 UTC")
+          Close
       exerciseTime = toPOSIX "2022-03-19 17:31:00.000000 UTC"
       txIn =
         [ C.TransactionInput (exerciseTime, exerciseTime) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
@@ -259,6 +262,7 @@ europeanCallOptionExercisedTest =
           (ada, Constant 10_000_000)
           (read "2022-03-19 17:30:00.000000 UTC")
           (read "2022-03-20 17:30:00.000000 UTC")
+          Close
       Just contract = toCore $
         deposit
           w2Pk

@@ -105,3 +105,4 @@ optionTest =
       (coin, Constant 1)
       (read "2022-03-31 17:30:00.000000 UTC")
       (read "2022-03-31 18:00:00.000000 UTC")
+      Close
