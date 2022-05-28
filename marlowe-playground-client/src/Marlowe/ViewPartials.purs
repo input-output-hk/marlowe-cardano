@@ -99,7 +99,7 @@ displayWarning index (TransactionPartialPay owner payee tok amount expected) =
           (Party dest) -> ("party " <> (show dest))
       ]
   , text " but there is only "
-  , b_ [ text $ BigInt.toString amount ]
+  , b_ [ text $ humanizeValue tok amount ]
   , text "."
   ]
 

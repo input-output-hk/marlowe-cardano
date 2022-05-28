@@ -16,6 +16,7 @@ import Data.Time.Duration (Minutes)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Classes (btn, spaceBottom, spaceRight, spaceTop, spanText)
+import Halogen.Css (classNames)
 import Halogen.HTML
   ( ClassName(..)
   , HTML
@@ -26,21 +27,17 @@ import Halogen.HTML
   , h3
   , li_
   , ol
+  , span
   , span_
   , text
   , ul
   )
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes, enabled)
-import Humanize (humanizeValue)
+import Humanize (humanizeInterval, humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics
-  ( ChoiceId(..)
-  , Input(..)
-  , TimeInterval(..)
-  , TransactionInput(..)
-  )
+import Marlowe.Semantics (ChoiceId(..), Input(..), TransactionInput(..))
 import Marlowe.Symbolic.Types.Response as R
 import Marlowe.Template (TemplateContent(..))
 import Marlowe.ViewPartials (displayWarningList)
@@ -135,8 +132,8 @@ analysisResultPane metadata actionGen state =
                     , b_ [ spanText (BigInt.toString initialSlot) ]
                     ]
                 , li_
-                    [ spanText "Offending transaction list: "
-                    , displayTransactionList transactionList
+                    [ spanText "Offending sequence: "
+                    , displayTransactionList tzOffset transactionList
                     ]
                 ]
             ]
@@ -325,12 +322,12 @@ analysisResultPane metadata actionGen state =
             ]
 
 displayTransactionList
-  :: forall p action. Array TransactionInput -> HTML p action
-displayTransactionList transactionList =
+  :: forall p action. Minutes -> Array TransactionInput -> HTML p action
+displayTransactionList tzOffset transactionList =
   ol [ classes [ ClassName "indented-enum" ] ]
     ( do
         ( TransactionInput
-            { interval: TimeInterval from to
+            { interval
             , inputs: inputList
             }
         ) <-
@@ -338,13 +335,14 @@ displayTransactionList transactionList =
         pure
           ( li_
               [ span_
-                  [ b_ [ text "Transaction" ]
-                  , text " with time interval "
-                  , b_ [ text $ (show from <> " to " <> show to) ]
+                  [ span [ classNames [ "capitalize" ] ]
+                      [ text $ humanizeInterval tzOffset interval ]
+                  , text " a "
+                  , b_ [ text "transaction" ]
                   , if List.null inputList then
-                      text " and no inputs (empty transaction)."
+                      text " with no inputs (empty transaction)."
                     else
-                      text " and inputs:"
+                      text " with the following inputs:"
                   ]
               , if List.null inputList then
                   text ""
@@ -364,7 +362,7 @@ displayInputList inputList =
 
 displayInput :: forall p i. Input -> Array (HTML p i)
 displayInput (IDeposit owner party tok money) =
-  [ b_ [ text "IDeposit" ]
+  [ b_ [ text "Deposit" ]
   , text " - Party "
   , b_ [ text $ show party ]
   , text " deposits "
@@ -375,18 +373,18 @@ displayInput (IDeposit owner party tok money) =
   ]
 
 displayInput (IChoice (ChoiceId choiceId party) chosenNum) =
-  [ b_ [ text "IChoice" ]
+  [ b_ [ text "Choice" ]
   , text " - Party "
   , b_ [ text $ show party ]
   , text " chooses number "
-  , b_ [ text $ show chosenNum ]
+  , b_ [ text $ BigInt.toString chosenNum ]
   , text " for choice "
   , b_ [ text $ show choiceId ]
   , text "."
   ]
 
 displayInput (INotify) =
-  [ b_ [ text "INotify" ]
+  [ b_ [ text "Notify" ]
   , text " - The contract is notified that an observation became "
   , b_ [ text "True" ]
   ]
