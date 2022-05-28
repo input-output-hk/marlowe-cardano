@@ -71,7 +71,7 @@ import Ledger (CurrencySymbol, Datum (..), POSIXTime (..), PaymentPubKeyHash (..
 import qualified Ledger
 import Ledger.Ada (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
 import Ledger.Address (Address, StakePubKeyHash (StakePubKeyHash), pubKeyHashAddress, scriptHashAddress)
-import Ledger.Constraints
+import Ledger.Constraints hiding (ownPaymentPubKeyHash)
 import qualified Ledger.Constraints as Constraints
 import qualified Ledger.Interval as Interval
 import Ledger.Scripts (datumHash, unitRedeemer)
@@ -86,8 +86,14 @@ import qualified Ledger.Value as Val
 import Numeric.Natural (Natural)
 import Plutus.ChainIndex (ChainIndexTx (..), Page, PageQuery, _ValidTx, citxOutputs, citxTxId, nextPageQuery, pageItems)
 import Plutus.ChainIndex.Api (paget)
-import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractError)
-import qualified Plutus.Contract as Contract (ContractError (..))
+import Plutus.Contract (AsCheckpointError, AsContractError, Contract, ContractError, EmptySchema, Endpoint, Promise,
+                        _CheckpointError, _ConstraintResolutionContractError, _ContractError, awaitPromise, awaitTime,
+                        awaitTxConfirmed, awaitUtxoProduced, balanceTx, checkpointLoop, currentSlot, currentTime,
+                        endpoint, isTime, logDebug, logInfo, logWarn, mapError, never, ownPaymentPubKeyHash,
+                        promiseBind, promiseMap, select, selectEither, selectList, submitBalancedTx, submitTxConfirmed,
+                        tell, throwError, txOutFromRef, type (.\/), utxoIsProduced, utxoIsSpent, utxosAt,
+                        utxosTxOutTxAt, waitNSlots)
+import qualified Plutus.Contract as Contract
 import Plutus.Contract.Request (getSlotConfig, txoRefsAt, txsFromTxIds)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
@@ -674,7 +680,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         debug'' $ "slotConfig = " <> show slotConfig
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]
-        ownPubKey <- unPaymentPubKeyHash <$> Contract.ownPaymentPubKeyHash
+        ownPubKey <- unPaymentPubKeyHash <$> ownPaymentPubKeyHash
         debug'' $ "ownPubKey = " <> show ownPubKey
         let roles = extractNonMerkleizedContractRoles contract
         debug'' $ "roles = " <> show roles
@@ -1080,7 +1086,7 @@ marloweCompanionContract = checkExistingRoleTokens
   where
     checkExistingRoleTokens = do
         -- Get the existing unspend outputs of the wallet that activated the companion contract
-        pkh <- Contract.ownPaymentPubKeyHash
+        pkh <- ownPaymentPubKeyHash
         let ownAddress = pubKeyHashAddress pkh Nothing
         -- Filter those outputs for role tokens and notify the WebSocket subscribers
         -- NOTE: CombinedWSStreamToServer has an API to subscribe to WS notifications
@@ -1207,7 +1213,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
             debug "mkStep" $ "allConstraints = " <> show allConstraints
             debug "mkStep" $ "marloweData = " <> show marloweData
 
-            pk <- Contract.ownPaymentPubKeyHash
+            pk <- ownPaymentPubKeyHash
             -- TODO: Move to debug log.
             debug "mkStep" $ "pk = " <> show pk
             let lookups1 = Constraints.typedValidatorLookups typedValidator
