@@ -10,7 +10,9 @@ import Component.DateTimeLocalInput.Types
   ( Action(..)
   , Component
   , DSL
+  , Input
   , Message(..)
+  , State
   )
 import Component.DateTimeLocalInput.View (render)
 import Data.Array (intercalate)
@@ -42,15 +44,17 @@ component = H.mkComponent
       H.mkEval
         ( H.defaultEval
             { handleAction = handleAction
+            , receive = Just <<< Receive
             }
         )
   }
-  where
-  deriveState input =
-    { value: showNormalizedDateTime input.value input.trimSeconds
-    , classList: input.classList
-    , trimSeconds: input.trimSeconds
-    }
+
+deriveState :: Input -> State
+deriveState input =
+  { value: showNormalizedDateTime input.value input.trimSeconds
+  , classList: input.classList
+  , trimSeconds: input.trimSeconds
+  }
 
 handleAction
   :: forall m
@@ -61,6 +65,7 @@ handleAction (ChangeValue newValue) = do
     mParsed = parseInput newValue
   for_ mParsed \parsedValue -> do
     H.raise $ ValueChanged parsedValue
+handleAction (Receive input) = H.put $ deriveState input
 
 parseInput :: String -> Maybe DateTime
 parseInput value = do
