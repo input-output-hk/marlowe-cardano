@@ -2,13 +2,19 @@ module Pretty where
 
 import Prologue
 
+import Contrib.Data.Decimal as D
 import Data.Array (concat, drop, dropWhile, length, replicate, take)
 import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BI
 import Data.BigInt.Argonaut as BigInt
+import Data.Decimal as D
 import Data.Map as Map
 import Data.Maybe (maybe)
+import Data.Numbers.Natural (Natural(..))
+import Data.Numbers.Natural as N
 import Data.String as String
 import Data.String.CodeUnits (fromCharArray, toCharArray)
+import Data.String.Formatting (padEnd)
 import Halogen.HTML (HTML, abbr, text)
 import Halogen.HTML.Properties (title)
 import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
@@ -40,36 +46,14 @@ renderPrettyPayee metadata (Account owner2) =
 renderPrettyPayee metadata (Party dest) =
   [ renderPrettyParty metadata dest, text " wallet" ]
 
-showBigIntAsCurrency :: BigInt -> Int -> String
-showBigIntAsCurrency number numDecimals = fromCharArray numberStr
-  where
-  absValStr = replicate (numDecimals + 1) '0' <> toCharArray
-    (BigInt.toString (if number < zero then -number else number))
-
-  numDigits = length absValStr
-
-  numDigitsBeforeSeparator = numDigits - numDecimals
-
-  prefixStr = if number < zero then [ '-' ] else []
-
-  digitsNoZeros = dropWhile (\x -> x == '0') $ take numDigitsBeforeSeparator
-    absValStr
-
-  digitsBeforeSeparator = if digitsNoZeros == [] then [ '0' ] else digitsNoZeros
-
-  digitsAfterSeparator = take numDecimals $ drop numDigitsBeforeSeparator
-    (concat [ absValStr, replicate numDecimals '0' ])
-
-  numberStr = concat
-    ( [ prefixStr, digitsBeforeSeparator ] <>
-        if digitsAfterSeparator /= [] then [ [ '.' ], digitsAfterSeparator ]
-        else []
-    )
-
 showPrettyChoice :: NumberFormat -> BigInt -> String
-showPrettyChoice DefaultFormat num = showBigIntAsCurrency num 0
+showPrettyChoice DefaultFormat num = BI.toString num
 
-showPrettyChoice (DecimalFormat numDecimals strLabel) num = strLabel <> " " <>
-  showBigIntAsCurrency num numDecimals
+showPrettyChoice (DecimalFormat numDecimals strLabel) num =
+  strLabel <> " " <> case N.fromInt numDecimals of
+    Just (Natural n) ->
+      D.toFixed n (D.fromBigInt num / (D.fromInt 10 `D.pow` D.fromInt n))
+    Nothing ->
+      BI.toString num
 
 showPrettyChoice TimeFormat num = BigInt.toString num
