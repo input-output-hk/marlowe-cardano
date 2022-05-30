@@ -19,7 +19,6 @@ fromInt _ = Nothing
 toInt :: Natural -> Int
 toInt (Natural x) = x
 
--- | Rather use `Type.Symbol.Natural.reflectNatural`
 unsafeNatural :: Int -> Natural
 unsafeNatural = Natural
 

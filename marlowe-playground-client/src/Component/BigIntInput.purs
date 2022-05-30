@@ -27,7 +27,7 @@ import Type.Prelude (Proxy(..))
 
 type Input =
   { classList :: Array String
-  -- ^ Number of decimals
+  -- ^ Optional classes to style the component
   , value :: BigInt
   -- ^ Initial value
   }

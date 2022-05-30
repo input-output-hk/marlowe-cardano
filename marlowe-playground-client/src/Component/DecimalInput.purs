@@ -51,8 +51,6 @@ type State =
   , value :: String
   }
 
-valueP = Proxy :: Proxy "value"
-
 component
   :: forall query m
    . MonadEffect m
