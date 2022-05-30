@@ -2,19 +2,16 @@ module Pretty where
 
 import Prologue
 
-import Contrib.Data.Decimal as D
-import Data.Array (concat, drop, dropWhile, length, replicate, take)
+import Contrib.Data.Decimal (fromBigInt) as D
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BI
 import Data.BigInt.Argonaut as BigInt
-import Data.Decimal as D
+import Data.Decimal (fromInt, pow, toFixed) as D
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.Numbers.Natural (Natural(..))
 import Data.Numbers.Natural as N
 import Data.String as String
-import Data.String.CodeUnits (fromCharArray, toCharArray)
-import Data.String.Formatting (padEnd)
 import Halogen.HTML (HTML, abbr, text)
 import Halogen.HTML.Properties (title)
 import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
