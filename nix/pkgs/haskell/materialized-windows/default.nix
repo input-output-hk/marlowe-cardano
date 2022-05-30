@@ -1073,7 +1073,10 @@
           "distributed-process-supervisor" = { flags = {}; };
           "marlowe-dashboard-server" = { flags = {}; };
           "marlowe-runtime" = {
-            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            flags = {
+              "defer-plugin-errors" = lib.mkOverride 900 false;
+              "dump-splices" = lib.mkOverride 900 false;
+              };
             };
           "distributed-process-extras" = {
             flags = { "old-locale" = lib.mkOverride 900 false; };
