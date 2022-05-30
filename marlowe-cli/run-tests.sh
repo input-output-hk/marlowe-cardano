@@ -149,19 +149,36 @@ if [[ -n "$VERBOSE" ]]; then
   echo "Running test cases in order: ${TEST_CASES[*]}"
 fi
 
-for TEST_CASE in "${TEST_CASES[@]}"
+TEST_RUNS=[]
+TEST_TRACKING_FILE=./cli-test-run.json
+sleep 5
+for n in {1..3}
 do
-  TEST_FILE="./test/test-$TEST_CASE.yaml"
-  if [ -z "$VERBOSE" ]; then
-    echo -n "$TEST_CASE: "
-    if runTest "$TEST_FILE" >& "${TEST_FILE%%.yaml}".log
-    then
-      echo "PASS"
+  TEST_RESULTS="{ \"TEST_RUN\": $n, \"TEST_RUN_RESULTS\": [] }"
+
+  for TEST_CASE in "${TEST_CASES[@]}"
+  do
+    TEST_FILE="./test/test-$TEST_CASE.yaml"
+    TEST_RESULT=''
+    if [ -z "$VERBOSE" ]; then
+      echo -n "$TEST_CASE: "
+      if runTest "$TEST_FILE" >& "${TEST_FILE%%.yaml}".log
+      then
+        TEST_RESULT="PASS"
+        echo $TEST_RESULT
+      else
+        TEST_RESULT="FAIL"
+        echo $TEST_RESULT
+      fi
+      echo "TEST RESULTS: $TEST_RESULTS"
+      TEST_RESULTS=$(echo $TEST_RESULTS | jq -r '.TEST_RUN_RESULTS += [{ "TEST_CASE" : "${TEST_CASE}" , "TEST_STATUS": "${TEST_RESULT}" }]')
+      echo "AFTER TEST RESULTS: $TEST_RESULTS"
     else
-      echo "FAIL"
+      runTest "$TEST_FILE" |& tee "${TEST_FILE%%.yaml}".log
     fi
-  else
-    runTest "$TEST_FILE" |& tee "${TEST_FILE%%.yaml}".log
-  fi
+
+    echo "$TEST_RESULT"
+    echo "$TEST_RESULTS"
+  done
 done
 
