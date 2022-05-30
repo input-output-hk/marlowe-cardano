@@ -31,6 +31,7 @@ import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
+import Data.Array (concat)
 import Data.Array as Array
 import Data.Compactable (compact)
 import Data.ContractNickname as CN
@@ -74,6 +75,7 @@ import Halogen.HTML
   , main
   , nav
   , p
+  , p_
   , slot
   , span
   , span_
@@ -248,36 +250,41 @@ dashboardCard state =
       [ ref $ RefLabel "card", classNames $ Css.sidebarCardOverlay cardOpen ]
       [ div
           [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
-          $
-            [ a
-                [ classNames [ "absolute", "top-4", "right-4" ]
-                , onClick_ CloseCard
-                ]
-                [ icon_ Icon.Close ]
-            , case state ^. _card of
-                Just TutorialsCard -> tutorialsCard
-                Just CurrentWalletCard -> currentWalletCard wallet
-                Just ContactsCard -> HH.slot
-                  _contacts
-                  unit
-                  Contacts.component
-                  wallet
-                  OnContactsMsg
-                Just ContractTemplateCard -> slot
-                  _template
-                  unit
-                  Template.component
-                  templateInput
-                  OnTemplateMsg
-                Just (ContractActionConfirmationCard input) ->
-                  slot
-                    _confirmActionDialog
+          $ concat
+              [ case state ^. _card of
+                  Just WalletNotFoundCard -> []
+                  _ ->
+                    [ a
+                        [ classNames [ "absolute", "top-4", "right-4" ]
+                        , onClick_ CloseCard
+                        ]
+                        [ icon_ Icon.Close ]
+                    ]
+              , pure case state ^. _card of
+                  Just TutorialsCard -> tutorialsCard
+                  Just CurrentWalletCard -> currentWalletCard wallet
+                  Just ContactsCard -> HH.slot
+                    _contacts
                     unit
-                    ConfirmContractActionDialog.component
-                    input
-                    (\DialogClosed -> CloseCard)
-                Nothing -> HH.text ""
-            ]
+                    Contacts.component
+                    wallet
+                    OnContactsMsg
+                  Just ContractTemplateCard -> slot
+                    _template
+                    unit
+                    Template.component
+                    templateInput
+                    OnTemplateMsg
+                  Just (ContractActionConfirmationCard input) ->
+                    slot
+                      _confirmActionDialog
+                      unit
+                      ConfirmContractActionDialog.component
+                      input
+                      (\DialogClosed -> CloseCard)
+                  Just WalletNotFoundCard -> walletNotFoundCard
+                  Nothing -> HH.text ""
+              ]
       ]
 
 ------------------------------------------------------------
@@ -877,4 +884,41 @@ tutorialsCard =
     [ h2
         [ classNames [ "font-semibold", "text-lg", "mb-4" ] ]
         [ text "Tutorials" ]
+    ]
+
+walletNotFoundCard :: forall p. HTML p Action
+walletNotFoundCard =
+  div
+    [ classNames
+        [ "h-full"
+        , "grid"
+        , "grid-rows-auto-1fr-auto"
+        , "divide-y"
+        , "divide-gray"
+        ]
+    ]
+    [ h2
+        [ classNames Css.cardHeader ]
+        [ text "Wallet backend disconnected" ]
+    , div
+        [ classNames
+            [ "p-4", "overflow-y-auto", "overflow-x-hidden", "space-y-4" ]
+        ]
+        [ p_
+            [ text
+                "Connection to the wallet backend has been lost, and your wallet will need to be restored again."
+            ]
+        , p_
+            [ text
+                "For our centralized deployment, for performance purposes, we periodically restart the wallet backend and clear its database of wallets."
+            ]
+        ]
+    , div
+        [ classNames [ "p-4", "flex", "gap-4" ] ]
+        [ button
+            [ classNames $ Css.primaryButton <> [ "flex-1" ]
+            , onClick_ (DisconnectWallet Nothing)
+            ]
+            [ text "Drop wallet" ]
+        ]
     ]
