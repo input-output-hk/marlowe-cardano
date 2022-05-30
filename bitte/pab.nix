@@ -74,9 +74,7 @@ let
 
     developmentOptions = {
       pabRollbackHistory = 100;
-      pabResumeFrom = {
-        tag = "PointAtGenesis";
-      };
+      pabResumeFrom = network.pabResumeFrom;
     };
   });
 

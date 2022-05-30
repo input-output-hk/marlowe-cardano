@@ -5,7 +5,7 @@
 }:
 let
   inherit (pkgs) plutus-chain-index cardano-cli marlowe-pab marlowe-cli networks;
-  network = networks.testnet-dev;
+  network = networks.testnet-pioneers;
   marlowe-run-backend-invoker = pkgs.marlowe-dashboard.marlowe-run-backend-invoker;
   node-port = "3001";
   wallet-port-int = 8090;
