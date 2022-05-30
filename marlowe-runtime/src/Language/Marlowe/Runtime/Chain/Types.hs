@@ -10,7 +10,7 @@
 module Language.Marlowe.Runtime.Chain.Types where
 
 import Cardano.Api (AddressAny, AsType (..), BlockInMode, CardanoMode, ChainPoint, ChainSyncClient, ChainTip, PolicyId,
-                    ScriptData, SerialiseAsCBOR (..), SerialiseAsRawBytes (..), TxId, TxIx (..), Value, serialiseToJSON)
+                    ScriptData, SerialiseAsCBOR (..), SerialiseAsRawBytes (..), TxId, TxIx (..), Value)
 import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
@@ -32,30 +32,30 @@ data MarloweChainEvent
 instance Binary MarloweChainEvent
 
 data MarloweBlockHeader = MarloweBlockHeader MarloweSlotNo MarloweBlockHeaderHash MarloweBlockNo
-  deriving (Generic, Typeable, Show, Eq)
+  deriving (Generic, Typeable, Show, Eq, Ord)
 
 instance Binary MarloweBlockHeader
 
 newtype MarloweSlotNo = MarloweSlotNo Word64
-  deriving (Typeable, Show, Eq, Binary)
+  deriving (Typeable, Show, Eq, Binary, Ord)
 
 newtype MarloweBlockNo = MarloweBlockNo Word64
-  deriving (Typeable, Show, Eq, Binary)
+  deriving (Typeable, Show, Eq, Binary, Ord)
 
 newtype MarloweBlockHeaderHash = MarloweBlockHeaderHash ShortByteString
-  deriving (Typeable, Show, Eq, Binary)
+  deriving (Typeable, Show, Eq, Binary, Ord)
 
 data MarloweChainTip
   = MarloweChainTipAtGenesis
   | MarloweChainTip MarloweSlotNo MarloweBlockHeaderHash MarloweBlockNo
-  deriving (Generic, Typeable, Show, Eq)
+  deriving (Generic, Typeable, Show, Eq, Ord)
 
 instance Binary MarloweChainTip
 
 data MarloweChainPoint
   = MarloweChainPointAtGenesis
   | MarloweChainPoint MarloweSlotNo MarloweBlockHeaderHash
-  deriving (Generic, Typeable, Show, Eq)
+  deriving (Generic, Typeable, Show, Eq, Ord)
 
 instance Binary MarloweChainPoint
 
@@ -166,7 +166,7 @@ instance Binary MarloweTxOut where
   put (MarloweTxOut txIn address value datum) = do
     put txIn
     put address
-    put $ serialiseToJSON value
+    put $ Aeson.encode value
     put $ serialiseToCBOR <$> datum
   get = do
     txIn <- get

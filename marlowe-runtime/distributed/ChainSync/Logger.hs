@@ -17,8 +17,9 @@ import Control.Monad (when)
 import Data.Binary (Binary)
 import Data.Data (Typeable)
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockNo (..), MarloweChainEvent (..),
-                                             MarloweChainPoint (..), MarloweChainTip (..), MarloweSlotNo (..))
+import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash (MarloweBlockHeaderHash),
+                                             MarloweBlockNo (..), MarloweChainEvent (..), MarloweChainPoint (..),
+                                             MarloweChainTip (..), MarloweSlotNo (..))
 
 newtype ChainSyncLoggerConfig = ChainSyncLoggerConfig
   { syncLoggingFrequency :: Integer
@@ -45,12 +46,12 @@ chainSyncLogger ChainSyncLoggerConfig{..} = syncing 0
           say $ "Rolling back to slot: " <> show pointNo
           say $ "New tip: " <> show tipNo
           pure $ tipNo == pointNo
-        ChainSyncEvent (MarloweRollForward (MarloweBlockHeader (MarloweSlotNo slot) _ _) _ tip) -> do
+        ChainSyncEvent (MarloweRollForward (MarloweBlockHeader (MarloweSlotNo slot) (MarloweBlockHeaderHash hash) (MarloweBlockNo block)) _ tip) -> do
           let tipNo = getTipNo tip
           let inSync = tipNo == slot
           let percentage = (100 * slot) `div` tipNo
           when (blocksSinceLastLog == syncLoggingFrequency - 1 || inSync) do
-            say $ "Syncing (" <> show percentage <> "%; current slot: " <> show slot <> "; tip: " <> show tipNo <> ")"
+            say $ "Syncing (" <> show percentage <> "%; current slot: " <> show slot <> "; current block: " <> show block <> "; header hash: " <>  show hash <> "; tip: " <> show tipNo <> ")"
           pure $ slot == tipNo
         ChainSyncDone -> do
           say "Exiting"

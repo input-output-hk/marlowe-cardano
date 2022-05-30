@@ -10,14 +10,16 @@ import Cardano.Api (AddressInEra (..), Block (..), BlockHeader (..), BlockInMode
                     ChainPoint (..), ChainSyncClient (..), ChainTip (..), EraInMode (..), GenesisParameters (..),
                     LocalChainSyncClient (..), LocalNodeClientProtocols (..), LocalNodeConnectInfo, QueryInEra (..),
                     QueryInMode (..), QueryInShelleyBasedEra (..), ShelleyBasedEra (..), SlotNo (..), Tx, TxBody (..),
-                    TxBodyContent (..), TxIn (..), TxIx (..), TxMetadataInEra (..), TxMetadataJsonSchema (..),
-                    TxMintValue (..), TxOut (..), TxOutDatum (..), TxValidityLowerBound (..), TxValidityUpperBound (..),
-                    ValueNestedBundle (..), ValueNestedRep (..), connectToLocalNode, getTxBody, getTxId, metadataToJson,
-                    queryNodeLocalState, toAddressAny, txOutValueToValue, valueToNestedRep)
+                    TxBodyContent (..), TxId (TxId), TxIn (..), TxIx (..), TxMetadataInEra (..),
+                    TxMetadataJsonSchema (..), TxMintValue (..), TxOut (..), TxOutDatum (..), TxValidityLowerBound (..),
+                    TxValidityUpperBound (..), ValueNestedBundle (..), ValueNestedRep (..), connectToLocalNode,
+                    getTxBody, getTxId, metadataToJson, queryNodeLocalState, toAddressAny, txOutValueToValue,
+                    valueToNestedRep)
 import Cardano.Api.ChainSync.Client (ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
 import Cardano.Api.Shelley (Hash (..), Tx (ShelleyTx))
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
+import Cardano.Ledger.SafeHash (extractHash)
 import qualified Cardano.Ledger.TxIn as Ledger
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Foldable (for_)
@@ -144,8 +146,9 @@ handleRollForward genesisParams (BlockInMode (Block header txs) _) =
         txId = getTxId txBody
         txins = case tx of
           ShelleyTx ShelleyBasedEraAlonzo alonzoTx ->
-            extractAlonzoTxIn alonzoTx txId <$> Set.toList  (Alonzo.inputs $ Alonzo.body alonzoTx)
-          _ -> extractTxIn . fst <$> txIns
+            extractAlonzoTxIn alonzoTx <$> Set.toList  (Alonzo.inputs $ Alonzo.body alonzoTx)
+          _ ->
+            extractTxIn . fst <$> txIns
       in
         MarloweTx
           (MarloweTxId txId)
@@ -157,8 +160,8 @@ handleRollForward genesisParams (BlockInMode (Block header txs) _) =
 
     extractTxIn (TxIn tid ix) = MarloweTxIn (MarloweTxId tid) ix Nothing
 
-    extractAlonzoTxIn alonzoTx txid txin@(Ledger.TxIn _ txix) =
-      MarloweTxIn (MarloweTxId txid) (TxIx $ fromIntegral txix) do
+    extractAlonzoTxIn alonzoTx txin@(Ledger.TxIn (Ledger.TxId txid) txix) =
+      MarloweTxIn (MarloweTxId $ TxId $ extractHash txid) (TxIx $ fromIntegral txix) do
         (Alonzo.Data redeemer, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending txin
         pure redeemer
 

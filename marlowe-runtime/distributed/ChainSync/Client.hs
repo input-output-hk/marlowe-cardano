@@ -1,5 +1,7 @@
 {-# LANGUAGE BlockArguments            #-}
 {-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE GADTs                     #-}
@@ -12,7 +14,8 @@ module ChainSync.Client where
 
 import Cardano.Api
 import Cardano.Api.Shelley (Hash (HeaderHash))
-import Control.Distributed.Process (Closure, Process, ProcessId, expect, getSelfPid, nsend, say, send)
+import Control.Distributed.Process (Closure, Process, SendPort, matchChan, newChan, receiveChan, receiveWait, say,
+                                    sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Internal.Types (Process (..))
 import Data.Binary (Binary (..))
@@ -21,8 +24,18 @@ import Data.Typeable (Typeable)
 import Data.Word (Word32, Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain (marloweChainSyncClient, runMarloweChainSyncClient)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeaderHash (..), MarloweChainEvent (..),
-                                             MarloweChainPoint (..), MarloweChainTip (..), MarloweSlotNo (..))
+import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash (..), MarloweBlockNo (..),
+                                             MarloweChainEvent (..), MarloweChainPoint (..), MarloweChainTip (..),
+                                             MarloweSlotNo (..), MarloweTx (..), TxOutRef (..))
+
+data ChainSyncClientDependencies = ChainSyncClientDependencies
+  { config    :: ChainSyncClientConfig
+  , msgChan   :: SendPort ChainSyncMsg
+  , sendQuery :: SendPort ChainSyncQuery
+  }
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary ChainSyncClientDependencies
 
 data ChainSyncClientConfig = ChainSyncClientConfig
   { epochSlots   :: Word64
@@ -41,19 +54,61 @@ data ChainSyncMsg
 
 instance Binary ChainSyncMsg
 
-newtype GetBlocks = GetBlocks ProcessId deriving (Eq, Ord, Show, Generic, Typeable)
+data TxWithBlockHeader = TxWithBlockHeader
+  { blockHeader :: MarloweBlockHeader
+  , tx          :: MarloweTx
+  }
+  deriving (Generic, Typeable, Show, Eq)
+  deriving anyclass Binary
 
-instance Binary GetBlocks
+data SendPortWithRollback a = SendPortWithRollback
+  { onResponse :: SendPort a
+  , onRollback :: SendPort MarloweChainPoint
+  }
+  deriving (Generic, Typeable, Show, Eq, Ord)
+  deriving anyclass Binary
 
-newtype GetIntersectionPoints = GetIntersectionPoints ProcessId deriving (Eq, Ord, Show, Generic, Typeable)
+data ChainSyncQuery
+  = QueryTxThatConsumes TxOutRef (SendPortWithRollback TxWithBlockHeader)
+  | QueryBlockNo MarloweBlockNo  (SendPortWithRollback MarloweBlockHeader)
+  | QueryIntersectionPoints (SendPort [MarloweChainPoint])
+  deriving (Generic, Typeable, Show, Eq)
+  deriving anyclass Binary
 
-instance Binary GetIntersectionPoints
+queryTxThatConsumes
+  :: SendPort ChainSyncQuery
+  -> TxOutRef
+  -> (TxWithBlockHeader -> Process a)
+  -> (MarloweChainPoint -> Process a)
+  -> Process a
+queryTxThatConsumes sendQuery out onResponseCB onRollbackCB = do
+  (onResponse, receiveResponse) <- newChan
+  (onRollback, receiveRollback) <- newChan
+  sendChan sendQuery $ QueryTxThatConsumes out $ SendPortWithRollback{..}
+  receiveWait [matchChan receiveResponse onResponseCB, matchChan receiveRollback onRollbackCB]
 
-chainSyncClient :: (ChainSyncClientConfig, ProcessId) -> Process ()
-chainSyncClient (ChainSyncClientConfig{..}, parent) = do
-  self <- getSelfPid
-  nsend "chain-sync.store" $ GetIntersectionPoints self
-  intersectionPoints <- expect
+queryBlockNo
+  :: SendPort ChainSyncQuery
+  -> MarloweBlockNo
+  -> (MarloweBlockHeader -> Process a)
+  -> (MarloweChainPoint -> Process a)
+  -> Process a
+queryBlockNo sendQuery blockNo onResponseCB onRollbackCB = do
+  (onResponse, receiveResponse) <- newChan
+  (onRollback, receiveRollback) <- newChan
+  sendChan sendQuery $ QueryBlockNo blockNo $ SendPortWithRollback{..}
+  receiveWait [matchChan receiveResponse onResponseCB, matchChan receiveRollback onRollbackCB]
+
+queryIntersectionPoints :: SendPort ChainSyncQuery -> Process [MarloweChainPoint]
+queryIntersectionPoints sendQuery = do
+  (sendPort, receiveResponse) <- newChan
+  sendChan sendQuery $ QueryIntersectionPoints sendPort
+  receiveChan receiveResponse
+
+chainSyncClient :: ChainSyncClientDependencies -> Process ()
+chainSyncClient ChainSyncClientDependencies{..} = do
+  let ChainSyncClientConfig{..} = config
+  intersectionPoints <- queryIntersectionPoints sendQuery
   let
     connectionInfo = LocalNodeConnectInfo
       { localConsensusModeParams = CardanoModeParams $ EpochSlots epochSlots
@@ -71,12 +126,12 @@ chainSyncClient (ChainSyncClientConfig{..}, parent) = do
     marloweChainSyncClient
       (toChainPoint <$> intersectionPoints)
       genesisParams
-      (fmap (unProcess . send parent) . ChainSyncStart . fromMaybe MarloweChainPointAtGenesis)
+      (fmap (unProcess . sendChan msgChan) . ChainSyncStart . fromMaybe MarloweChainPointAtGenesis)
       (pure False)
-      (unProcess . send parent . ChainSyncEvent)
-      (unProcess $ send parent ChainSyncDone)
+      (unProcess . sendChan msgChan . ChainSyncEvent)
+      (unProcess $ sendChan msgChan ChainSyncDone)
 
 remotable ['chainSyncClient]
 
-process :: ChainSyncClientConfig -> ProcessId -> Closure (Process ())
-process = curry $(mkClosure 'chainSyncClient)
+process :: ChainSyncClientDependencies -> Closure (Process ())
+process = $(mkClosure 'chainSyncClient)

@@ -53,6 +53,9 @@ data Input
       , choice       :: Choice
       , selection    :: ChoiceSelection
       }
+  | NotifyWasMade
+      { continuation :: Maybe ContractContinuation
+      }
   deriving (Generic, Typeable, Show, Eq)
 
 instance Binary Input

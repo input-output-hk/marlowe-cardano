@@ -10,28 +10,38 @@
 {-# LANGUAGE TypeApplications           #-}
 module ChainSync where
 
-import ChainSync.Client (ChainSyncClientConfig, ChainSyncMsg)
+import ChainSync.Client (ChainSyncClientConfig, ChainSyncClientDependencies (ChainSyncClientDependencies), ChainSyncMsg,
+                         ChainSyncQuery)
 import qualified ChainSync.Client as Client
 import ChainSync.Logger (ChainSyncLoggerConfig)
 import qualified ChainSync.Logger as Logger
-import ChainSync.Store (ChainSyncStoreConfig)
+import ChainSync.Store (ChainSyncStoreConfig, ChainSyncStoreDependencies (ChainSyncStoreDependencies))
 import qualified ChainSync.Store as Store
-import Control.Distributed.Process (Closure, Process, ProcessId, RemoteTable, getSelfPid, match, receiveWait, send)
+import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, newChan, receiveChan, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras (Routable (sendTo), spawnLinkLocal)
 import Control.Distributed.Process.Extras.Time (Delay (..), TimeInterval, minutes, seconds)
 import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), ChildStopPolicy (..), ChildType (..),
                                                RegisteredName (..), RestartPolicy (..), ShutdownMode (..), restartOne)
 import qualified Control.Distributed.Process.Supervisor as Supervisor
+import Control.Monad (forever)
 import Data.Binary (Binary)
 import Data.Data (Typeable)
-import Data.Foldable (traverse_)
-import qualified Data.Set as Set
 import GHC.Generics (Generic)
 
 worker :: String -> RestartPolicy -> Maybe TimeInterval -> ChildStopPolicy -> ChildStart -> ChildSpec
 worker name restartPolicy restartDelay stopPolicy start =
   ChildSpec name Worker restartPolicy restartDelay stopPolicy start $ Just $ LocalName name
+
+data ChainSyncDependencies = ChainSyncDependencies
+  { config          :: ChainSyncConfig
+  , msgChan         :: SendPort ChainSyncMsg
+  , initRequestChan :: SendPort (SendPort ChainSyncQuery)
+  , sendRequest     :: SendPort ChainSyncQuery
+  }
+  deriving (Generic, Typeable, Show, Eq)
+
+instance Binary ChainSyncDependencies
 
 data ChainSyncConfig = ChainSyncConfig
   { client :: ChainSyncClientConfig
@@ -42,42 +52,25 @@ data ChainSyncConfig = ChainSyncConfig
 
 instance Binary ChainSyncConfig
 
-newtype ChainSyncSubscribe = ChainSyncSubscribe ProcessId
-  deriving (Generic, Typeable, Show, Eq)
-
-instance Binary ChainSyncSubscribe
-
-newtype ChainSyncUnsubscribe = ChainSyncUnsubscribe ProcessId
-  deriving (Generic, Typeable, Show, Eq)
-
-instance Binary ChainSyncUnsubscribe
-
-chainSync :: ChainSyncConfig -> Process ()
-chainSync ChainSyncConfig{..} = do
-  self <- getSelfPid
+chainSync :: ChainSyncDependencies -> Process ()
+chainSync ChainSyncDependencies{..} = do
+  (sendMsg, receiveMsg) <- newChan
+  let ChainSyncConfig{..} =  config
   _ <- spawnLinkLocal $ Supervisor.run restartOne ParallelShutdown
-    [ worker "chain-sync.store" Permanent Nothing StopImmediately $ RunClosure $ Store.process store
-    , worker "chain-sync.client" Intrinsic (Just (seconds 5)) (StopTimeout (Delay $ minutes 1)) $ RunClosure $ Client.process client self
+    [ worker "chain-sync.store" Permanent Nothing StopImmediately $ RunClosure $ Store.process $ ChainSyncStoreDependencies store initRequestChan
+    , worker "chain-sync.client" Intrinsic (Just (seconds 5)) (StopTimeout (Delay $ minutes 1)) $ RunClosure $ Client.process $ ChainSyncClientDependencies client sendMsg sendRequest
     , worker "chain-sync.logger" Permanent Nothing StopImmediately $ RunClosure $ Logger.process logger
     ]
-  go Set.empty
-  where
-    go subscribers = receiveWait
-      [ match \(msg :: ChainSyncMsg) -> do
-          sendTo "chain-sync.logger" msg
-          sendTo "chain-sync.store" msg
-          traverse_ (flip send msg) subscribers
-          go subscribers
-      , match \(ChainSyncSubscribe subscriber) -> do
-          go $ Set.insert subscriber subscribers
-      , match \(ChainSyncUnsubscribe subscriber) -> do
-          go $ Set.delete subscriber subscribers
-      ]
+  forever do
+    msg <- receiveChan receiveMsg
+    sendTo "chain-sync.logger" msg
+    sendTo "chain-sync.store" msg
+    sendChan msgChan msg
 
 remotable ['chainSync]
 
 remoteTable :: RemoteTable -> RemoteTable
 remoteTable = __remoteTable . Logger.__remoteTable . Client.__remoteTable . Store.__remoteTable
 
-process :: ChainSyncConfig -> Closure (Process ())
+process :: ChainSyncDependencies -> Closure (Process ())
 process = $(mkClosure 'chainSync)

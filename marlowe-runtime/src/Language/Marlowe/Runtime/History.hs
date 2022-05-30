@@ -75,24 +75,21 @@ creationToEvent ContractCreationTxOut{..} =
     Event{..}
 
 extractEvents
-  :: MarloweAddress
-  -> ContractId
-  -> AppTxOutRef
-  -> MarloweBlockHeader
-  -> MarloweTx
+  :: MarloweAddress -- ^ Marlowe validator address
+  -> ContractId -- ^ The marlowe params
+  -> AppTxOutRef -- ^ The UTxO from the previous transaction
+  -> MarloweBlockHeader -- ^ The block header for the current tx
+  -> MarloweTx -- ^ The current tx
   -> Either String (Maybe AppTxOutRef, [Event])
-extractEvents applicationValidatorAddress contractId prevUtxo header MarloweTx{..} =
-  case find (matchOutputRef (txOutRef prevUtxo)) marloweTx_inputs of
-    -- This is not the transaction we are looking for
-    Nothing -> Right (Just prevUtxo, [])
-    -- This is the transaction we are looking for (it consumed the previous
-    -- script utxo from the contract).
-    Just consumedInput -> do
-      let nextUtxo = find ((applicationValidatorAddress ==) . marloweTxOut_address) marloweTx_outputs
-      appTxOut <- forM nextUtxo \txOut -> AppTxOutRef (marloweTxOut_txOutRef txOut) <$> extractDatum txOut
-      inputs <- extractInputs consumedInput
-      let historyEvents = [InputsWereApplied{..}]
-      pure (appTxOut, Event contractId (headerPoint header) marloweTx_id <$> historyEvents)
+extractEvents applicationValidatorAddress contractId prevUtxo header MarloweTx{..} = do
+  consumedInput <- case find (matchOutputRef (txOutRef prevUtxo)) marloweTx_inputs of
+    Nothing    -> Left "The next transaction did not contain any extracable events"
+    Just input -> Right input
+  let nextUtxo = find ((applicationValidatorAddress ==) . marloweTxOut_address) marloweTx_outputs
+  appTxOut <- forM nextUtxo \txOut -> AppTxOutRef (marloweTxOut_txOutRef txOut) <$> extractDatum txOut
+  inputs <- extractInputs consumedInput
+  let historyEvents = [InputsWereApplied{..}]
+  pure (appTxOut, Event contractId (headerPoint header) marloweTx_id <$> historyEvents)
 
 
 extractInputs :: MarloweTxIn -> Either String [Input]
@@ -129,11 +126,10 @@ fromSemanticInputContent (Semantics.IChoice (Semantics.ChoiceId name party) num)
   choice <- Choice (unpack $ fromBuiltin name) <$> case party of
     Semantics.Role role -> Right $ RoleParticipant $ toString role
     Semantics.PK _      -> Left "only roles and addresses supported"
-
   let selection = ChoiceSelection num
   pure ChoiceWasMade{..}
-fromSemanticInputContent Semantics.INotify _ =
-  Left "What is this even for?"
+fromSemanticInputContent Semantics.INotify continuation =
+  pure $ NotifyWasMade continuation
 
 -- extractHistoryEvent
 --   :: MarloweAddress -> ContractId -> MarloweTxOut -> Either (TxOutRef, String) (Maybe HistoryEvent)

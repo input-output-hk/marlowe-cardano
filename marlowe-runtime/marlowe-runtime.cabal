@@ -20,6 +20,12 @@ flag defer-plugin-errors
     default: False
     manual: True
 
+flag dump-splices
+    description:
+        Dump TH splices to debug closures
+    default: False
+    manual: True
+
 common lang
   default-language: Haskell2010
   default-extensions: ExplicitForAll ScopedTypeVariables
@@ -32,6 +38,8 @@ common lang
     -Wredundant-constraints -Widentities
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+  if flag(dump-splices)
+    ghc-options: -ddump-splices
 
 library
   import: lang
@@ -101,6 +109,11 @@ executable distributed
     ChainSync.Client
     ChainSync.Logger
     ChainSync.Store
+    Control.Distributed.Protocol
+    History
+    History.Digest
+    History.Digest.Worker
+    History.Logger
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
