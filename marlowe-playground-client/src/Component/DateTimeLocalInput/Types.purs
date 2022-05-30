@@ -5,7 +5,9 @@ import Halogen as H
 
 data Message = ValueChanged DateTime
 
-data Action = ChangeValue String
+data Action
+  = ChangeValue String
+  | Receive Input
 
 type Input =
   { classList :: Array String
