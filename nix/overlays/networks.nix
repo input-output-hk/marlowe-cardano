@@ -16,11 +16,7 @@ in
     testnet-pioneers = mkNetwork environments.marlowe-pioneers // {
       slotZeroTime = 1649949631000;
       slotLengthMillis = 1000;
-      pabResumeFrom = {
-        tag = "Point";
-        pointBlockId = "a822b7859b3d9a322da0f102c1f2e5fdcf93dde0fe91479806f16864312b5aab";
-        pointSlot = { getSlot = 3723235; };
-      };
+      pabResumeFrom = { tag = "PointAtGenesis"; };
       magic = 1567;
     };
     testnet-dev = mkNetwork environments.marlowe-dev // {
