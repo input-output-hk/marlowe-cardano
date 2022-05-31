@@ -6,10 +6,11 @@ module StaticAnalysis.BottomPanel
 
 import Prologue hiding (div)
 
+import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.Lens ((^.))
 import Data.Lens.Iso.Newtype (_Newtype)
-import Data.List (List, null, toUnfoldable)
+import Data.List (List(..), null, toUnfoldable, (:))
 import Data.List as List
 import Data.List.NonEmpty (toList)
 import Data.Time.Duration (Minutes)
@@ -35,6 +36,7 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes, enabled)
 import Humanize (humanizeInterval, humanizeValue)
+import Icons (Icon(..), icon)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics (ChoiceId(..), Input(..), TransactionInput(..))
@@ -47,6 +49,8 @@ import Servant.PureScript (printAjaxError)
 import StaticAnalysis.Types
   ( AnalysisExecutionState(..)
   , AnalysisState
+  , ContractPath
+  , ContractPathStep(..)
   , MultiStageAnalysisData(..)
   , _analysisExecutionState
   , _analysisState
@@ -210,7 +214,11 @@ analysisResultPane metadata actionGen state =
                                 do
                                   contractPath <- toUnfoldable
                                     foundcounterExampleSubcontracts
-                                  pure (li_ [ text (show contractPath) ])
+                                  pure
+                                    ( li_ $ displayContractPath
+                                        (text "Unreachable code")
+                                        contractPath
+                                    )
                             ]
                       )
               )
@@ -238,7 +246,10 @@ analysisResultPane metadata actionGen state =
                     [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
                         contractPath <- toUnfoldable
                           (toList counterExampleSubcontracts)
-                        pure (li_ [ text (show contractPath) ])
+                        pure
+                          ( li_ $ displayContractPath (text "Unreachable code")
+                              contractPath
+                          )
                     ]
               )
           AnalysisFinishedAndPassed ->
@@ -278,7 +289,10 @@ analysisResultPane metadata actionGen state =
                               do
                                 contractPath <- toUnfoldable
                                   foundcounterExampleSubcontracts
-                                pure (li_ [ text (show contractPath) ])
+                                pure
+                                  ( li_ $ displayContractPath (text "Close")
+                                      contractPath
+                                  )
                           ]
                     )
             )
@@ -306,7 +320,8 @@ analysisResultPane metadata actionGen state =
                   [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
                       contractPath <- toUnfoldable
                         (toList counterExampleSubcontracts)
-                      pure (li_ [ text (show contractPath) ])
+                      pure
+                        (li_ $ displayContractPath (text "Close") contractPath)
                   ]
                 <>
                   [ text
@@ -388,3 +403,30 @@ displayInput (INotify) =
   , text " - The contract is notified that an observation became "
   , b_ [ text "True" ]
   ]
+
+displayContractPath :: forall p i. HTML p i -> ContractPath -> Array (HTML p i)
+displayContractPath root list =
+  Array.intersperse
+    (span [ classNames [ "text-darkgray", "mx-1" ] ] [ icon ArrowRight ]) $ go
+    list
+  where
+  go Nil = [ root ]
+  go (head : tail) = Array.cons (displayStep head) (go tail)
+
+  whenCaseToStr = case _ of
+    0 -> "1st"
+    1 -> "2nd"
+    2 -> "3rd"
+    n -> show (n + 1) <> "th"
+
+  boldSpanText txt = span [ classNames [ "bold" ] ] [ text txt ]
+
+  displayStep = case _ of
+    PayContPath -> boldSpanText "Pay"
+    IfTruePath -> span_ [ boldSpanText "If", text " true" ]
+    IfFalsePath -> span_ [ boldSpanText "If", text "false" ]
+    WhenCasePath n -> span_
+      [ boldSpanText "When ", text $ whenCaseToStr n <> " case" ]
+    WhenTimeoutPath -> span_ [ boldSpanText "When ", text "timeout" ]
+    LetPath -> boldSpanText "Let"
+    AssertPath -> boldSpanText "Assert"
