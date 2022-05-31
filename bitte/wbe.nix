@@ -11,7 +11,7 @@ writeShellScriptBin "entrypoint" ''
 
   # Ugly ugly hack to kill the WBE every hour
   cardano-wallet serve --listen-address '*' --port "$NOMAD_PORT_wbe" --node-socket "$NOMAD_ALLOC_DIR/node.sock" --testnet ${network.networkConfig.ByronGenesisFile} --log-level DEBUG&
-  sleep 3600&
+  sleep 10800&
   wait -n
   exit 1
 
