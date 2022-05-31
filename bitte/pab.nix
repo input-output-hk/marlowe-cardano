@@ -126,7 +126,7 @@ writeShellScriptBin "entrypoint" ''
 
   # Ugly ugly hack to kill the PAB every hour
   ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet &
-  sleep 3600&
+  sleep 10800&
   wait -n
   exit 1
 ''
