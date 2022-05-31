@@ -51,10 +51,7 @@ metadataServerConfig:
 developmentOptions:
   pabRollbackHistory: 100
   pabResumeFrom:
-    tag: Point
-    pointBlockId: a8f4a88d4387c24102529d14dd1b15037c0f38a864cbd58c72884948590415a3
-    pointSlot:
-      getSlot: 3290798
+    tag: PointAtGenesis
 
 # Optional timeout (in seconds) for calls to endpoints that are not currently
 # available. If this is not set, calls to unavailable endpoints fail
