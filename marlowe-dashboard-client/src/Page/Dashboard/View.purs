@@ -644,21 +644,23 @@ contractNavigation contractFilter =
                   Right
               ]
           ]
-      , div
-          [ classNames
-              [ "row-start-1", "col-start-1", "lg:row-start-3", "lg:self-end" ]
-          ]
-          [ nav
-              [ classNames navClasses ]
-              [ a
-                  [ classNames $ navItemClasses false
-                  , onClick_ $ OpenCard TutorialsCard
-                  , id "tutorialsButton"
-                  ]
-                  [ icon Icon.Help [ "text-purple" ] ]
-              , tooltip "Tutorials" (RefId "tutorialsButton") Right
-              ]
-          ]
+      -- SCP-3771: Hide empty tutorial section.
+      -- We want to bring it back when tutorials are ready.
+      -- , div
+      --     [ classNames
+      --         [ "row-start-1", "col-start-1", "lg:row-start-3", "lg:self-end" ]
+      --     ]
+      --     [ nav
+      --         [ classNames navClasses ]
+      --         [ a
+      --             [ classNames $ navItemClasses false
+      --             , onClick_ $ OpenCard TutorialsCard
+      --             , id "tutorialsButton"
+      --             ]
+      --             [ icon Icon.Help [ "text-purple" ] ]
+      --         , tooltip "Tutorials" (RefId "tutorialsButton") Right
+      --         ]
+      --     ]
       ]
 
 contractCards
