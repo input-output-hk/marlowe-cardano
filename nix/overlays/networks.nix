@@ -24,8 +24,8 @@ in
       slotLengthMillis = 1000;
       pabResumeFrom = {
         tag = "Point";
-        pointBlockId = "a8f4a88d4387c24102529d14dd1b15037c0f38a864cbd58c72884948590415a3";
-        pointSlot = { getSlot = 3290798; };
+        pointBlockId = "8d10922f8368d5426e1851b118e3f626725167593c04ccd28b0012d490ec8768";
+        pointSlot = { getSlot = 3999983; };
       };
       magic = 1566;
     };
