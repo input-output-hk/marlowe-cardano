@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns              #-}
 {-# LANGUAGE BlockArguments            #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveAnyClass            #-}
@@ -19,7 +20,11 @@ module ChainSync.Database where
 import Control.Arrow ((&&&))
 import Control.Distributed.Process (Closure, Process, SendPort, newChan, receiveChan, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
-import Data.Binary (Binary)
+import Control.Monad (when)
+import Control.Monad.IO.Class (liftIO)
+import Data.Binary (Binary, decodeOrFail, encode)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import Data.Data (Typeable)
 import Data.Foldable (fold)
 import Data.IntMap (IntMap)
@@ -27,10 +32,12 @@ import qualified Data.IntMap as IntMap
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash, MarloweChainPoint (..),
                                              MarloweChainTip (..), MarloweSlotNo (..), MarloweTx (..), MarloweTxId,
                                              MarloweTxIn (MarloweTxIn), TxOutRef (..))
+import System.Directory (doesFileExist, removeFile)
 
 newtype ChainSyncDatabaseDependencies = ChainSyncDatabaseDependencies
   { initStoreChan :: SendPort ChainSyncQueryChan
@@ -72,6 +79,8 @@ data ChainSyncDatabaseState = ChainSyncDatabaseState
   , consumerIndex      :: Map TxOutRef MarloweTxId
   , consumerSlotIndex  :: IntMap (Set TxOutRef)
   }
+  deriving (Generic, Typeable)
+  deriving anyclass (Binary)
 
 rollForward :: ChainSyncQueryChan -> Block -> MarloweChainTip -> Process ()
 rollForward chan block = sendChan chan . RollForward block
@@ -103,14 +112,31 @@ getConsumer sendQuery ref = do
   sendChan sendQuery $ GetConsumer ref sendPort
   receiveChan receiveResponse
 
+file :: FilePath
+file = "./chain-db"
+
+writeFrequency :: NominalDiffTime
+writeFrequency = secondsToNominalDiffTime 5
+
 chainSyncDatabase :: ChainSyncDatabaseDependencies -> Process ()
 chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
   (sendQuery, receiveQuery) <- newChan
   sendChan initStoreChan sendQuery
-  let go state = go =<< handleQuery state =<< receiveChan receiveQuery
-  go initialState
+  let go (lastWrite, state) = go =<< handleQuery lastWrite state =<< receiveChan receiveQuery
+  !initialState <- liftIO do
+    fileExists <- doesFileExist file
+    if fileExists then do
+      bytes <- BS.readFile file
+      pure case decodeOrFail $ LBS.fromStrict bytes of
+        Left _        -> emptyState
+        Right (_,_,a) -> a
+    else do
+      LBS.writeFile file $ encode emptyState
+      pure emptyState
+  lastWrite <- liftIO getCurrentTime
+  go (lastWrite, initialState)
     where
-      initialState = ChainSyncDatabaseState
+      emptyState = ChainSyncDatabaseState
         { blocks = mempty
         , transactions = mempty
         , intersectionPoints = mempty
@@ -118,13 +144,21 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
         , consumerIndex = mempty
         , consumerSlotIndex = mempty
         }
-      handleQuery state@ChainSyncDatabaseState{..} = \case
-        GetIntersectionPoints sendResponse       -> state <$ sendChan sendResponse intersectionPoints
-        RollForward block newTip                 -> handleRollForward newTip state block
-        RollBackwardToGenesis newTip             -> pure initialState { tip = newTip }
+      handleQuery lastWrite state@ChainSyncDatabaseState{..} = \case
+        GetIntersectionPoints sendResponse       -> (lastWrite, state) <$ sendChan sendResponse intersectionPoints
+        RollForward block newTip                 -> handleRollForward newTip lastWrite state block
+        RollBackwardToGenesis newTip             -> saveState emptyState { tip = newTip }
         RollBackward slot hash newTip sendBlocks -> handleRollBackward newTip state sendBlocks slot hash
-        GetTip sendTip                           -> state <$ sendChan sendTip tip
-        GetConsumer txOut sendTx                 -> state <$ sendChan sendTx (lookupConsumer state txOut)
+        GetTip sendTip                           -> (lastWrite, state) <$ sendChan sendTip tip
+        GetConsumer txOut sendTx                 -> (lastWrite, state) <$ sendChan sendTx (lookupConsumer state txOut)
+
+      saveState state = liftIO do
+        fileExists <- doesFileExist file
+        when fileExists do
+          removeFile file
+        LBS.writeFile file $ encode state
+        now <- getCurrentTime
+        pure (now, state)
 
       lookupConsumer ChainSyncDatabaseState{..} txOut = do
         txId <- Map.lookup txOut consumerIndex
@@ -132,6 +166,7 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
 
       handleRollForward
         newTip
+        lastWrite
         ChainSyncDatabaseState{..}
         block@Block{header = header@(MarloweBlockHeader slot hash _), txs} = do
           let
@@ -140,7 +175,13 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
               MarloweTxIn txid txix _ <- marloweTx_inputs
               pure (TxOutRef txid txix, marloweTx_id)
             MarloweSlotNo slotInt = slot
-          pure ChainSyncDatabaseState
+          now <- liftIO getCurrentTime
+          let diff = diffUTCTime now lastWrite
+          let
+            action
+              | diff >= writeFrequency = saveState
+              | otherwise = pure . (lastWrite,)
+          action ChainSyncDatabaseState
             { blocks = Map.insert hash block blocks
             , transactions = Map.union transactions
                 $ Map.fromList
@@ -163,7 +204,7 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
           (consumerSlotIndexAfterRollback, consumerSlotIndexBeforeRollback) =
             IntMap.partitionWithKey (const . (> fromIntegral slotInt)) consumerSlotIndex
         sendChan sendBlocks $ Map.elems afterBlocks
-        pure ChainSyncDatabaseState
+        saveState ChainSyncDatabaseState
           { blocks = beforeBlocks
           , transactions = foldr Map.delete transactions afterTxIds
           , intersectionPoints = [MarloweChainPoint rollbackSlot hash]

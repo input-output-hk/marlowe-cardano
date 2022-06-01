@@ -120,8 +120,10 @@ executable distributed
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , bytestring
     , binary
     , containers
+    , directory
     , marlowe-runtime
     , cardano-api
     , cardano-config
