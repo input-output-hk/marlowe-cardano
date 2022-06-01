@@ -16,8 +16,9 @@
 {-# LANGUAGE TypeApplications          #-}
 module History.Digest.Worker where
 
-import ChainSync.Client (ChainSyncQuery (..), TxWithBlockHeader (..), queryBlockNo, queryTxThatConsumes)
-import Control.Distributed.Process (Closure, Process, SendPort, say, sendChan)
+import ChainSync.Database (TxWithBlockHeader (..))
+import ChainSync.Store (ChainStoreQuery, awaitSecurityParameter, getConsumingTx)
+import Control.Distributed.Process (Closure, Process, SendPort, receiveChan, say, sendChan)
 import Control.Distributed.Process.Closure (remotable)
 import Control.Distributed.Process.Internal.Closure.TH (mkClosure)
 import Data.Binary (Binary, Word64)
@@ -30,17 +31,14 @@ import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlo
 import Language.Marlowe.Runtime.History (extractEvents)
 import Language.Marlowe.Runtime.History.Types (AppTxOutRef (..), ContractCreationTxOut (..), Event (..))
 
-securityParam :: Word64
-securityParam = 2160
-
 data Error
   = ExtractFailed MarloweTxId String
   | DivergentHistory AppTxOutRef AppTxOutRef
 
 data HistoryDigestWorkerDependencies = HistoryDigestWorkerDependencies
-  { creation  :: ContractCreationTxOut
-  , sendEvent :: SendPort Event
-  , sendQuery :: SendPort ChainSyncQuery
+  { creation       :: ContractCreationTxOut
+  , sendEvent      :: SendPort Event
+  , chainStoreChan :: SendPort ChainStoreQuery
   }
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
@@ -75,23 +73,23 @@ digestWorker HistoryDigestWorkerDependencies{..} = do
     work :: NonEmpty AppTxOutRefWithBlockHeader -> Process ()
     work history@(prevUtxo@(AppTxOutRefWithBlockHeader _ appOut) :| prevTxos) = do
       let AppTxOutRef out _ = appOut
-      queryTxThatConsumes sendQuery out handleResponse $ handleRollback history
-        where
-          handleResponse TxWithBlockHeader{..} = do
-            case extractEvents validatorAddress contractId appOut blockHeader tx of
-              Left err -> do
-                say $ "error: " <> err
-                let MarloweBlockHeader _ _ blockNo = blockHeader
-                retire blockNo history
-              Right (mNewAppOut, events) -> do
-                traverse_ (sendChan sendEvent) events
-                case mNewAppOut of
-                  Nothing        -> let MarloweBlockHeader _ _ blockNo = blockHeader in retire blockNo history
-                  Just newAppOut -> work $ AppTxOutRefWithBlockHeader blockHeader newAppOut :| prevUtxo : prevTxos
+      resultChan <- getConsumingTx chainStoreChan out
+      receiveChan resultChan >>= \case
+        Left point -> handleRollback history point
+        Right TxWithBlockHeader{..} -> do
+          case extractEvents validatorAddress contractId appOut blockHeader tx of
+            Left err -> do
+              say $ "error: " <> err
+              retire blockHeader history
+            Right (mNewAppOut, events) -> do
+              traverse_ (sendChan sendEvent) events
+              case mNewAppOut of
+                Nothing        -> retire blockHeader history
+                Just newAppOut -> work $ AppTxOutRefWithBlockHeader blockHeader newAppOut :| prevUtxo : prevTxos
 
-    retire (MarloweBlockNo blockNo) history = do
-      let endOfLifeBlock = MarloweBlockNo $ blockNo + securityParam
-      queryBlockNo sendQuery endOfLifeBlock (const $ pure ()) $ handleRollback history
+    retire blockHeader history = awaitSecurityParameter chainStoreChan blockHeader >>= \case
+      Left point -> handleRollback history point
+      Right _    -> pure ()
 
 remotable ['digestWorker]
 

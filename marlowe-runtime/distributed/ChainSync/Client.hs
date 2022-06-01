@@ -14,8 +14,8 @@ module ChainSync.Client where
 
 import Cardano.Api
 import Cardano.Api.Shelley (Hash (HeaderHash))
-import Control.Distributed.Process (Closure, Process, SendPort, matchChan, newChan, receiveChan, receiveWait, say,
-                                    sendChan)
+import ChainSync.Database (ChainSyncQuery, getIntersectionPoints)
+import Control.Distributed.Process (Closure, Process, SendPort, say, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Internal.Types (Process (..))
 import Data.Binary (Binary (..))
@@ -24,9 +24,8 @@ import Data.Typeable (Typeable)
 import Data.Word (Word32, Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain (marloweChainSyncClient, runMarloweChainSyncClient)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash (..), MarloweBlockNo (..),
-                                             MarloweChainEvent (..), MarloweChainPoint (..), MarloweChainTip (..),
-                                             MarloweSlotNo (..), MarloweTx (..), TxOutRef (..))
+import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeaderHash (..), MarloweChainEvent (..),
+                                             MarloweChainPoint (..), MarloweChainTip (..), MarloweSlotNo (..))
 
 data ChainSyncClientDependencies = ChainSyncClientDependencies
   { config    :: ChainSyncClientConfig
@@ -54,13 +53,6 @@ data ChainSyncMsg
 
 instance Binary ChainSyncMsg
 
-data TxWithBlockHeader = TxWithBlockHeader
-  { blockHeader :: MarloweBlockHeader
-  , tx          :: MarloweTx
-  }
-  deriving (Generic, Typeable, Show, Eq)
-  deriving anyclass Binary
-
 data SendPortWithRollback a = SendPortWithRollback
   { onResponse :: SendPort a
   , onRollback :: SendPort MarloweChainPoint
@@ -68,47 +60,10 @@ data SendPortWithRollback a = SendPortWithRollback
   deriving (Generic, Typeable, Show, Eq, Ord)
   deriving anyclass Binary
 
-data ChainSyncQuery
-  = QueryTxThatConsumes TxOutRef (SendPortWithRollback TxWithBlockHeader)
-  | QueryBlockNo MarloweBlockNo  (SendPortWithRollback MarloweBlockHeader)
-  | QueryIntersectionPoints (SendPort [MarloweChainPoint])
-  deriving (Generic, Typeable, Show, Eq)
-  deriving anyclass Binary
-
-queryTxThatConsumes
-  :: SendPort ChainSyncQuery
-  -> TxOutRef
-  -> (TxWithBlockHeader -> Process a)
-  -> (MarloweChainPoint -> Process a)
-  -> Process a
-queryTxThatConsumes sendQuery out onResponseCB onRollbackCB = do
-  (onResponse, receiveResponse) <- newChan
-  (onRollback, receiveRollback) <- newChan
-  sendChan sendQuery $ QueryTxThatConsumes out $ SendPortWithRollback{..}
-  receiveWait [matchChan receiveResponse onResponseCB, matchChan receiveRollback onRollbackCB]
-
-queryBlockNo
-  :: SendPort ChainSyncQuery
-  -> MarloweBlockNo
-  -> (MarloweBlockHeader -> Process a)
-  -> (MarloweChainPoint -> Process a)
-  -> Process a
-queryBlockNo sendQuery blockNo onResponseCB onRollbackCB = do
-  (onResponse, receiveResponse) <- newChan
-  (onRollback, receiveRollback) <- newChan
-  sendChan sendQuery $ QueryBlockNo blockNo $ SendPortWithRollback{..}
-  receiveWait [matchChan receiveResponse onResponseCB, matchChan receiveRollback onRollbackCB]
-
-queryIntersectionPoints :: SendPort ChainSyncQuery -> Process [MarloweChainPoint]
-queryIntersectionPoints sendQuery = do
-  (sendPort, receiveResponse) <- newChan
-  sendChan sendQuery $ QueryIntersectionPoints sendPort
-  receiveChan receiveResponse
-
 chainSyncClient :: ChainSyncClientDependencies -> Process ()
 chainSyncClient ChainSyncClientDependencies{..} = do
   let ChainSyncClientConfig{..} = config
-  intersectionPoints <- queryIntersectionPoints sendQuery
+  intersectionPoints <- getIntersectionPoints sendQuery
   let
     connectionInfo = LocalNodeConnectInfo
       { localConsensusModeParams = CardanoModeParams $ EpochSlots epochSlots

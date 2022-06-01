@@ -11,174 +11,215 @@
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TemplateHaskell           #-}
+{-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeApplications          #-}
 module ChainSync.Store where
 
-import ChainSync.Client (ChainSyncMsg (..), ChainSyncQuery (..), SendPortWithRollback (..), TxWithBlockHeader (..),
-                         onRollback)
-import Control.Arrow ((&&&))
-import Control.Distributed.Process (Closure, Process, SendPort, match, matchChan, newChan, receiveWait, sendChan)
+import ChainSync.Client (ChainSyncMsg (..))
+import ChainSync.Database (Block (..), ChainSyncQuery (..), TxWithBlockHeader (..), getConsumer, getTip, rollBackward,
+                           rollBackwardToGenesis, rollForward)
+import Control.Distributed.Process (Closure, Process, ProcessId, ProcessMonitorNotification (..), SendPort, getSelfPid,
+                                    match, matchChan, monitor, newChan, receiveChan, receiveWait, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
+import Control.Distributed.Process.Internal.Types (ReceivePort)
 import Control.Distributed.Process.Serializable (Serializable)
-import Control.Monad (foldM)
+import Control.Monad (unless, (<=<))
 import Data.Binary (Binary)
 import Data.Data (Typeable)
 import Data.Foldable (traverse_)
-import Data.Functor (($>))
+import Data.Functor (void)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import qualified Data.IntSet as IntSet
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (maybeToList)
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Word (Word32)
+import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockNo (..), MarloweChainEvent (..),
-                                             MarloweChainPoint (..), MarloweSlotNo (..), MarloweTx (..),
-                                             MarloweTxIn (..), MarloweTxOut (..), TxOutRef (..))
+                                             MarloweChainPoint (..), MarloweChainTip (..), MarloweSlotNo (..),
+                                             MarloweTx (..), MarloweTxIn (..), MarloweTxOut (..), TxOutRef (..))
 
-data ChainSyncStoreConfig = ChainSyncStoreConfig
-  { directory :: FilePath
-  , batchSize :: Word32
-  }
-  deriving stock (Generic, Typeable, Show, Eq)
-  deriving anyclass Binary
+sendSubscriber :: (Serializable e, Serializable a) => Set ProcessId -> Either e a -> Subscriber e a -> Process ()
+sendSubscriber deadProcesses msg Subscriber{..} = unless (Set.member pid deadProcesses) $ sendChan replyChan msg
 
-sendResponse :: Serializable a => SendPortWithRollback a -> a -> Process ()
-sendResponse SendPortWithRollback{..} = sendChan onResponse
+sendResponse :: (Serializable e, Serializable a) => Set ProcessId -> a -> Subscriber e a -> Process ()
+sendResponse deadProcesses = sendSubscriber deadProcesses . Right
 
-sendRollback :: SendPortWithRollback a -> MarloweChainPoint -> Process ()
-sendRollback SendPortWithRollback{..} = sendChan onRollback
+sendError :: (Serializable e, Serializable a) => Set ProcessId -> e -> Subscriber e a -> Process ()
+sendError deadProcesses = sendSubscriber deadProcesses . Left
+
+getConsumingTx
+  :: SendPort ChainStoreQuery
+  -> TxOutRef
+  -> Process (ReceivePort (Either MarloweChainPoint TxWithBlockHeader))
+getConsumingTx queryChan txOutRef = do
+  (replyChan, receiveResponse) <- newChan
+  pid <- getSelfPid
+  sendChan queryChan $ GetConsumingTx txOutRef $ Subscriber pid replyChan
+  pure receiveResponse
+
+awaitSecurityParameter
+  :: SendPort ChainStoreQuery
+  -> MarloweBlockHeader
+  -> Process (Either MarloweChainPoint ())
+awaitSecurityParameter queryChan fromBlock = do
+  (replyChan, receiveResponse) <- newChan
+  pid <- getSelfPid
+  sendChan queryChan $ AwaitSecurityParameter fromBlock $ Subscriber pid replyChan
+  receiveChan receiveResponse
 
 data ChainSyncStoreDependencies = ChainSyncStoreDependencies
-  { config        :: ChainSyncStoreConfig
-  , initQueryChan :: SendPort (SendPort ChainSyncQuery)
+  { dbChan        :: SendPort ChainSyncQuery
+  , initStoreChan :: SendPort (SendPort ChainStoreQuery)
   }
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
 
-data ChainSyncStoreState = ChainSyncStoreState
-  { blockIndexBySlotNo     :: IntMap (MarloweBlockHeader, [MarloweTx])
-  , blockIndexByBlockNo    :: IntMap (MarloweBlockHeader, [MarloweTx])
-  , consumerIndex          :: Map TxOutRef TxWithBlockHeader
-  , pendingConsumerQueries :: Map TxOutRef (Set (SendPortWithRollback TxWithBlockHeader))
-  , pendingBlockQueries    :: IntMap (Set (SendPortWithRollback MarloweBlockHeader))
+data Subscriber e a = Subscriber
+  { pid       :: ProcessId
+  , replyChan :: SendPort (Either e a)
   }
+  deriving (Generic, Typeable, Show, Eq)
+  deriving anyclass Binary
+
+type ConsumerSubscriber = Subscriber MarloweChainPoint TxWithBlockHeader
+type SecurityParamSubscriber = Subscriber MarloweChainPoint ()
+
+data ChainStoreQuery
+  = GetConsumingTx TxOutRef ConsumerSubscriber
+  | AwaitSecurityParameter MarloweBlockHeader SecurityParamSubscriber
+  deriving (Generic, Typeable, Show, Eq)
+  deriving anyclass Binary
+
+data ChainSyncStoreState = ChainSyncStoreState
+  { consumerSubscribers      :: Map TxOutRef (Map ProcessId ConsumerSubscriber)
+  , securityParamSubscribers :: IntMap (Map ProcessId SecurityParamSubscriber)
+  , deadSubscribers          :: Set ProcessId
+  }
+
+securityParameter :: Word64
+securityParameter = 2160
 
 chainSyncStore :: ChainSyncStoreDependencies -> Process ()
 chainSyncStore ChainSyncStoreDependencies{..} = do
   (sendQuery, receiveQuery) <- newChan
+  sendChan initStoreChan sendQuery
   let
-    txInToTxOutRef (MarloweTxIn txId txIx _) = TxOutRef txId txIx
-    getPointNo MarloweChainPointAtGenesis = Nothing
-    getPointNo (MarloweChainPoint slot _) = Just slot
+    initialState = ChainSyncStoreState
+      { consumerSubscribers = mempty
+      , securityParamSubscribers = mempty
+      , deadSubscribers = mempty
+      }
 
-    go state = traverse_  go =<< receiveWait
-      [ match $ handleMsg state
-      , fmap Just . matchChan receiveQuery $ handleQuery state
+    go state@ChainSyncStoreState{..} = receiveWait
+      [ match \case
+          ChainSyncDone -> pure ()
+          ChainSyncEvent (MarloweRollForward header txs tip) -> do
+            rollForward dbChan (Block header txs) tip
+            go =<< rollForwardSubscribers state header txs
+          ChainSyncEvent (MarloweRollBackward MarloweChainPointAtGenesis tip) -> do
+            rollBackwardToGenesis dbChan tip
+            go =<< rollbackAllSubscribers state
+          ChainSyncEvent (MarloweRollBackward (MarloweChainPoint slot hash) tip) -> do
+            rolledBackBlocks <- rollBackward dbChan slot hash tip
+            go =<< rollbackSubscribers slot hash state rolledBackBlocks
+          _ -> go state
+      , matchChan receiveQuery $ go <=< \case
+          GetConsumingTx ref subscriber               -> handleGetConsumingTx state ref subscriber
+          AwaitSecurityParameter fromBlock subscriber -> handleAwaitSecurityParameter state fromBlock subscriber
+      , match \(ProcessMonitorNotification _ pid _) -> go state { deadSubscribers = Set.insert pid deadSubscribers }
       ]
 
-    handleMsg ChainSyncStoreState{..} (ChainSyncEvent (MarloweRollBackward point _)) = do
-      let
-        pointNo = getPointNo point
-        afterRollbackPoint (MarloweBlockHeader slotNo _ _, _) = Just slotNo > pointNo
-        (beforeRollbackBySlot, afterRollback) = IntMap.partition afterRollbackPoint blockIndexBySlotNo
-        (beforeRollbackByBlock, _) = IntMap.partition afterRollbackPoint blockIndexByBlockNo
-        (txOutsConsumedAfterRollback, txOutsProducedAfterRollback) =
-          (fmap fst &&& fmap snd) do
-            (_, (_, txns)) <- IntMap.toList afterRollback
-            MarloweTx{..} <- txns
-            pure (txInToTxOutRef <$> marloweTx_inputs, marloweTxOut_txOutRef <$> marloweTx_outputs)
-        foldConsumer pending txOutRef = case Map.lookup txOutRef pending of
-          Nothing -> pure pending
-          Just recipients -> do
-            traverse_ (flip sendRollback point) recipients
-            pure $ Map.delete txOutRef pending
-        foldBlock pending (MarloweBlockHeader _ _ (MarloweBlockNo blockNo), _) = do
-          let blockNoInt = fromIntegral blockNo
-          case IntMap.lookup blockNoInt pending of
-            Nothing -> pure pending
-            Just recipients -> do
-              traverse_ (flip sendRollback point) recipients
-              pure $ IntMap.delete blockNoInt pending
-      newPendingConsumerQueries <- foldM foldConsumer pendingConsumerQueries $ concat txOutsProducedAfterRollback
-      newPendingBlockQueries <- foldM foldBlock pendingBlockQueries afterRollback
-      pure $ Just ChainSyncStoreState
-        { blockIndexBySlotNo = beforeRollbackBySlot
-        , blockIndexByBlockNo = beforeRollbackByBlock
-        , consumerIndex = Map.withoutKeys consumerIndex $ Set.fromList $ concat txOutsConsumedAfterRollback
-        , pendingConsumerQueries = newPendingConsumerQueries
-        , pendingBlockQueries = newPendingBlockQueries
-        }
-    handleMsg ChainSyncStoreState{..} (ChainSyncEvent (MarloweRollForward header newTxs _)) = do
-      let
-        MarloweBlockHeader (MarloweSlotNo slotNo) _ (MarloweBlockNo blockNo) = header
-        newConsumers = do
-          tx@MarloweTx{..} <- newTxs
-          input <- marloweTx_inputs
-          pure (txInToTxOutRef input, TxWithBlockHeader header tx)
-        foldConsumer requests (consumed, consumer) = case Map.lookup consumed requests of
-          Nothing -> pure requests
-          Just recipients -> do
-            traverse_ (flip sendResponse consumer) recipients
-            pure $ Map.delete consumed requests
-      newPendingConsumerQueries <- foldM foldConsumer pendingConsumerQueries newConsumers
-      pure $ Just ChainSyncStoreState
-        { blockIndexBySlotNo = IntMap.insert (fromIntegral slotNo) (header, newTxs) blockIndexBySlotNo
-        , blockIndexByBlockNo = IntMap.insert (fromIntegral blockNo) (header, newTxs) blockIndexByBlockNo
-        , consumerIndex = Map.union consumerIndex $ Map.fromList newConsumers
-        , pendingConsumerQueries = newPendingConsumerQueries
-        , pendingBlockQueries = IntMap.delete (fromIntegral blockNo) pendingBlockQueries
-        }
-    handleMsg _ ChainSyncDone = pure Nothing
-    handleMsg state (ChainSyncStart _ _) = pure $ Just state
-
-    handleQuery state@ChainSyncStoreState{..} = \case
-      QueryTxThatConsumes txOut replyTo ->
-        -- have we already seen this txOut get consumed?
-        case Map.lookup txOut consumerIndex of
-          -- If so, reply straight away
-          Just tx -> sendResponse replyTo tx $> state
-          -- Otherwise remember the request for later
-          Nothing -> pure state
-            { pendingConsumerQueries = Map.insertWith
-                Set.union
-                txOut
-                (Set.singleton replyTo)
-                pendingConsumerQueries
+    handleAwaitSecurityParameter
+      state@ChainSyncStoreState{..}
+      (MarloweBlockHeader _ _ (MarloweBlockNo fromBlock))
+      subscriber@Subscriber{..} = do
+        tip <- getTip dbChan
+        let
+          tipBlockNo = case tip of
+            MarloweChainTipAtGenesis                   -> 0
+            MarloweChainTip _ _ (MarloweBlockNo block) -> block
+        if tipBlockNo - fromBlock >= securityParameter then do
+          sendResponse deadSubscribers () subscriber
+          pure state
+        else do
+          void $ monitor pid
+          pure state
+            { securityParamSubscribers = IntMap.insertWith
+                Map.union
+                (fromIntegral fromBlock)
+                (Map.singleton pid subscriber)
+                securityParamSubscribers
             }
 
-      QueryBlockNo (MarloweBlockNo blockNo) replyTo -> do
-        let blockInt = fromIntegral blockNo
-        -- do we already have this block?
-        case IntMap.lookup blockInt blockIndexByBlockNo of
-          -- If so, reply straight away
-          Just (header, _) -> sendResponse replyTo header $> state
-          -- If not, remember the request for later
-          Nothing          -> pure state
-            { pendingBlockQueries = IntMap.insertWith
-                Set.union
-                blockInt
-                (Set.singleton replyTo)
-                pendingBlockQueries
+    handleGetConsumingTx state@ChainSyncStoreState{..} ref subscriber@Subscriber{..} =
+      getConsumer dbChan ref >>= \case
+        Just consumer -> state <$ sendResponse deadSubscribers consumer subscriber
+        Nothing -> do
+          void $ monitor pid
+          pure state
+            { consumerSubscribers = Map.insertWith
+                Map.union
+                ref
+                (Map.singleton pid subscriber)
+                consumerSubscribers
             }
 
-      QueryIntersectionPoints replyTo -> do
-        let mMaxItem = fst <$> IntMap.maxView blockIndexBySlotNo
-        let toPoint (MarloweBlockHeader slot hash _, _) = MarloweChainPoint slot hash
-        let intersectionPoints = maybeToList $ toPoint <$> mMaxItem
-        sendChan replyTo intersectionPoints
-        pure state
 
-  sendChan initQueryChan sendQuery
-  go ChainSyncStoreState
-    { blockIndexBySlotNo = mempty
-    , blockIndexByBlockNo = mempty
-    , consumerIndex = mempty
-    , pendingConsumerQueries = mempty
-    , pendingBlockQueries = mempty
-    }
+
+    rollbackAllSubscribers ChainSyncStoreState{..} = do
+      traverse_ (traverse_ (sendError deadSubscribers MarloweChainPointAtGenesis)) consumerSubscribers
+      traverse_ (traverse_ (sendError deadSubscribers MarloweChainPointAtGenesis)) securityParamSubscribers
+      pure initialState
+
+    rollbackSubscribers rollbackToSlot hash state@ChainSyncStoreState{..} rolledBackBlocks = do
+      let
+        rolledBackTxOuts = Set.fromList
+          $   fmap marloweTxOut_txOutRef
+          $   marloweTx_outputs
+          =<< txs
+          =<< rolledBackBlocks
+        isProducerRolledBack ref = Set.member ref rolledBackTxOuts
+        (consumerSubscribersRolledBack, consumerSubscribers') =
+          Map.partitionWithKey (const . isProducerRolledBack) consumerSubscribers
+        isSlotAfterRollback slot = MarloweSlotNo (fromIntegral slot) > rollbackToSlot
+        (securityParamSubscribersRolledBack, securityParamSubscribers') =
+          IntMap.partitionWithKey (const . isSlotAfterRollback) securityParamSubscribers
+        point = MarloweChainPoint rollbackToSlot hash
+      traverse_ (traverse_ (sendError deadSubscribers point)) consumerSubscribersRolledBack
+      traverse_ (traverse_ (sendError deadSubscribers point)) securityParamSubscribersRolledBack
+      pure state
+        { consumerSubscribers = consumerSubscribers'
+        , securityParamSubscribers = securityParamSubscribers'
+        }
+
+    rollForwardSubscribers state@ChainSyncStoreState{..} header@(MarloweBlockHeader _ _ (MarloweBlockNo blockNo)) txs = do
+      let
+        txOutsConsumed = Map.fromList do
+          tx@MarloweTx{..} <- txs
+          MarloweTxIn txid txix _ <- marloweTx_inputs
+          pure (TxOutRef txid txix, TxWithBlockHeader header tx)
+        consumerSubscribersToNotify = Map.intersectionWith (\ref -> fmap (ref,)) txOutsConsumed consumerSubscribers
+        consumerSubscribers' = Map.difference consumerSubscribers consumerSubscribersToNotify
+        maxConfirmedBlock = fromIntegral $ blockNo - securityParameter
+        keysToNotify = case IntMap.minViewWithKey securityParamSubscribers of
+          Nothing -> mempty
+          Just ((minKey, _), _)
+            | minKey > maxConfirmedBlock -> mempty
+            | otherwise -> case IntMap.maxViewWithKey securityParamSubscribers of
+              Nothing               -> mempty
+              Just ((maxKey, _), _) -> IntSet.fromDistinctAscList [minKey..min maxConfirmedBlock maxKey]
+        securityParamSubscribers' = IntMap.withoutKeys securityParamSubscribers keysToNotify
+        securityParamSubscribersToNotify = IntMap.difference securityParamSubscribers securityParamSubscribers'
+      traverse_ (traverse_ (uncurry $ sendResponse deadSubscribers)) consumerSubscribersToNotify
+      traverse_ (traverse_ (sendResponse deadSubscribers ())) securityParamSubscribersToNotify
+      pure state
+        { consumerSubscribers = consumerSubscribers'
+        , securityParamSubscribers = securityParamSubscribers'
+        }
+  go initialState
 
 remotable ['chainSyncStore]
 

@@ -109,6 +109,7 @@ executable distributed
     ChainSync.Client
     ChainSync.Logger
     ChainSync.Store
+    ChainSync.Database
     Control.Distributed.Protocol
     History
     History.Digest

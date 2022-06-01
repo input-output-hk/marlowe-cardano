@@ -148,7 +148,7 @@ instance Binary MarloweTx where
     pure $ MarloweTx tid policies interval metadata inputs outputs
 
 newtype MarloweAddress = MarloweAddress AddressAny
-  deriving (Generic, Typeable, Show, Eq)
+  deriving (Generic, Typeable, Show, Eq, Ord)
 
 instance Binary MarloweAddress where
   put (MarloweAddress address) = putToRawBytes address

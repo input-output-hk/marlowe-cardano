@@ -14,7 +14,8 @@ module History.Digest where
 
 import Cardano.Api (NetworkId (Testnet))
 import Cardano.Api.Byron (NetworkMagic (NetworkMagic))
-import ChainSync.Client (ChainSyncMsg (..), ChainSyncQuery)
+import ChainSync.Client (ChainSyncMsg (..))
+import ChainSync.Store (ChainStoreQuery)
 import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, match, receiveWait, say, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras (spawnLinkLocal)
@@ -43,9 +44,9 @@ data HistoryDigestConfig = HistoryDigestConfig
 instance Binary HistoryDigestConfig
 
 data HistoryDigestDependencies = HistoryDigestDependencies
-  { config      :: HistoryDigestConfig
-  , sendEvent   :: SendPort Event
-  , sendRequest :: SendPort ChainSyncQuery
+  { config         :: HistoryDigestConfig
+  , sendEvent      :: SendPort Event
+  , chainStoreChan :: SendPort ChainStoreQuery
   }
   deriving (Generic, Typeable, Show, Eq)
 
@@ -61,7 +62,7 @@ historyDigest HistoryDigestDependencies{..} = do
         case msg of
           ChainSyncEvent (MarloweRollForward header txs _) -> do
             let creations = extractCreations (Testnet $ NetworkMagic 1566) header =<< txs
-            workersToStart <- processCreations sendEvent sendRequest creations
+            workersToStart <- processCreations sendEvent chainStoreChan creations
             traverse_ (Supervisor.startNewChild supervisor) workersToStart
             loop
           ChainSyncDone -> pure ()
@@ -71,7 +72,7 @@ historyDigest HistoryDigestDependencies{..} = do
 
 processCreations
   :: SendPort Event
-  -> SendPort ChainSyncQuery
+  -> SendPort ChainStoreQuery
   -> [Either ([TxOutRef], String) ContractCreationTxOut]
   -> Process [ChildSpec]
 processCreations sendEvent sendQuery = fmap concat . traverse \case

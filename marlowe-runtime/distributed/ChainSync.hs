@@ -10,12 +10,13 @@
 {-# LANGUAGE TypeApplications           #-}
 module ChainSync where
 
-import ChainSync.Client (ChainSyncClientConfig, ChainSyncClientDependencies (ChainSyncClientDependencies), ChainSyncMsg,
-                         ChainSyncQuery)
+import ChainSync.Client (ChainSyncClientConfig, ChainSyncClientDependencies (ChainSyncClientDependencies), ChainSyncMsg)
 import qualified ChainSync.Client as Client
+import ChainSync.Database (ChainSyncDatabaseDependencies (..), ChainSyncQuery)
+import qualified ChainSync.Database as Database
 import ChainSync.Logger (ChainSyncLoggerConfig)
 import qualified ChainSync.Logger as Logger
-import ChainSync.Store (ChainSyncStoreConfig, ChainSyncStoreDependencies (ChainSyncStoreDependencies))
+import ChainSync.Store (ChainStoreQuery, ChainSyncStoreDependencies (ChainSyncStoreDependencies))
 import qualified ChainSync.Store as Store
 import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, newChan, receiveChan, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
@@ -34,10 +35,11 @@ worker name restartPolicy restartDelay stopPolicy start =
   ChildSpec name Worker restartPolicy restartDelay stopPolicy start $ Just $ LocalName name
 
 data ChainSyncDependencies = ChainSyncDependencies
-  { config          :: ChainSyncConfig
-  , msgChan         :: SendPort ChainSyncMsg
-  , initRequestChan :: SendPort (SendPort ChainSyncQuery)
-  , sendRequest     :: SendPort ChainSyncQuery
+  { config        :: ChainSyncConfig
+  , msgChan       :: SendPort ChainSyncMsg
+  , initDbChan    :: SendPort (SendPort ChainSyncQuery)
+  , initStoreChan :: SendPort (SendPort ChainStoreQuery)
+  , dbChan        :: SendPort ChainSyncQuery
   }
   deriving (Generic, Typeable, Show, Eq)
 
@@ -46,7 +48,6 @@ instance Binary ChainSyncDependencies
 data ChainSyncConfig = ChainSyncConfig
   { client :: ChainSyncClientConfig
   , logger :: ChainSyncLoggerConfig
-  , store  :: ChainSyncStoreConfig
   }
   deriving (Generic, Typeable, Show, Eq)
 
@@ -57,8 +58,9 @@ chainSync ChainSyncDependencies{..} = do
   (sendMsg, receiveMsg) <- newChan
   let ChainSyncConfig{..} =  config
   _ <- spawnLinkLocal $ Supervisor.run restartOne ParallelShutdown
-    [ worker "chain-sync.store" Permanent Nothing StopImmediately $ RunClosure $ Store.process $ ChainSyncStoreDependencies store initRequestChan
-    , worker "chain-sync.client" Intrinsic (Just (seconds 5)) (StopTimeout (Delay $ minutes 1)) $ RunClosure $ Client.process $ ChainSyncClientDependencies client sendMsg sendRequest
+    [ worker "chain-sync.db" Permanent Nothing StopImmediately $ RunClosure $ Database.process $ ChainSyncDatabaseDependencies initDbChan
+    , worker "chain-sync.store" Permanent Nothing StopImmediately $ RunClosure $ Store.process $ ChainSyncStoreDependencies dbChan initStoreChan
+    , worker "chain-sync.client" Intrinsic (Just (seconds 5)) (StopTimeout (Delay $ minutes 1)) $ RunClosure $ Client.process $ ChainSyncClientDependencies client sendMsg dbChan
     , worker "chain-sync.logger" Permanent Nothing StopImmediately $ RunClosure $ Logger.process logger
     ]
   forever do
@@ -70,7 +72,7 @@ chainSync ChainSyncDependencies{..} = do
 remotable ['chainSync]
 
 remoteTable :: RemoteTable -> RemoteTable
-remoteTable = __remoteTable . Logger.__remoteTable . Client.__remoteTable . Store.__remoteTable
+remoteTable = __remoteTable . Logger.__remoteTable . Client.__remoteTable . Store.__remoteTable . Database.__remoteTable
 
 process :: ChainSyncDependencies -> Closure (Process ())
 process = $(mkClosure 'chainSync)

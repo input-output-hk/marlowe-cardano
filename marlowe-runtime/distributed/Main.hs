@@ -13,7 +13,6 @@ module Main where
 import qualified ChainSync
 import ChainSync.Client (ChainSyncClientConfig (..))
 import ChainSync.Logger (ChainSyncLoggerConfig (..))
-import ChainSync.Store (ChainSyncStoreConfig (..))
 import Control.Distributed.Process (Process, ProcessInfo (ProcessInfo, infoRegisteredNames), RemoteTable, expect,
                                     getProcessInfo, kill, liftIO, link, matchChan, newChan, nsend, receiveChan,
                                     receiveWait, reregister, sendChan)
@@ -57,29 +56,37 @@ instance Binary Config
 app :: Config -> Process ()
 app Config{..} = do
   (sendMsg, receiveMsg) <- newChan
-  (sendSendRequest, receiveSendRequest) <- newChan
-  (sendRequestProxy, receiveRequest) <- newChan
+  (initChainDbChan, receiveInitChainDbChan) <- newChan
+  (initChainStoreChan, receiveInitChainStoreChan) <- newChan
+  (dbChanProxy, receiveChainDbChan) <- newChan
+  (chainStoreChanProxy, receiveChainStoreChan) <- newChan
   reregister "logger" =<< spawnLinkLocal appLogger
   h <- liftIO $ openFile "./system.log" AppendMode
   liftIO $ hSetBuffering h LineBuffering
   syslog <- systemLog (liftIO . hPutStrLn h) (liftIO (hClose h)) Info pure
   kill syslog "killing syslog"
   appSupervisor <- Supervisor.start restartOne ParallelShutdown
-    [ supervisor "chain-sync" $ RunClosure $ ChainSync.process $ ChainSync.ChainSyncDependencies chainSync sendMsg sendSendRequest sendRequestProxy
-    , supervisor "history" $ RunClosure $ History.process $ History.HistoryDependencies history sendRequestProxy
+    [ supervisor "chain-sync" $ RunClosure $ ChainSync.process $ ChainSync.ChainSyncDependencies chainSync sendMsg initChainDbChan initChainStoreChan dbChanProxy
+    , supervisor "history" $ RunClosure $ History.process $ History.HistoryDependencies history chainStoreChanProxy
     ]
   link appSupervisor
   let
-    go sendRequest = receiveWait
+    go currentChainDbChan currentChainStoreChan = receiveWait
       [ matchChan receiveMsg \msg -> do
           nsend "history" msg
-          go sendRequest
-      , matchChan receiveSendRequest go
-      , matchChan receiveRequest \request -> do
-          sendChan sendRequest request
-          go sendRequest
+          go currentChainDbChan currentChainStoreChan
+      , matchChan receiveInitChainStoreChan \chainStoreChan -> go currentChainDbChan chainStoreChan
+      , matchChan receiveInitChainDbChan \chainDbChan -> go chainDbChan currentChainStoreChan
+      , matchChan receiveChainDbChan \query -> do
+          sendChan currentChainDbChan query
+          go currentChainDbChan currentChainStoreChan
+      , matchChan receiveChainStoreChan \query -> do
+          sendChan currentChainStoreChan query
+          go currentChainDbChan currentChainStoreChan
       ]
-  go =<< receiveChan receiveSendRequest
+  initialChainDbChan <- receiveChan receiveInitChainDbChan
+  initialChainStoreChan <- receiveChan receiveInitChainStoreChan
+  go initialChainDbChan initialChainStoreChan
 
 main :: IO ()
 main = do
@@ -95,10 +102,6 @@ main = do
             { epochSlots = 21600
             , networkMagic = Just 1566
             , nodeSocket = "/var/lib/containers/storage/volumes/marlowe-dashboard-client_cardano-ipc/_data/node.socket"
-            }
-        , store = ChainSyncStoreConfig
-            { directory = "."
-            , batchSize = 4000
             }
         }
       , history = History.HistoryConfig

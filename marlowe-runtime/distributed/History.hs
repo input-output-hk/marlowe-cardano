@@ -10,7 +10,8 @@
 {-# LANGUAGE TypeApplications           #-}
 module History where
 
-import ChainSync.Client (ChainSyncMsg, ChainSyncQuery)
+import ChainSync.Client (ChainSyncMsg)
+import ChainSync.Store (ChainStoreQuery)
 import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, match, matchChan, newChan, nsend,
                                     receiveWait)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
@@ -48,8 +49,8 @@ data HistoryConfig = HistoryConfig
 instance Binary HistoryConfig
 
 data HistoryDependencies = HistoryDependencies
-  { config      :: HistoryConfig
-  , sendRequest :: SendPort ChainSyncQuery
+  { config         :: HistoryConfig
+  , chainStoreChan :: SendPort ChainStoreQuery
   }
   deriving (Generic, Typeable, Show, Eq)
 
@@ -60,7 +61,7 @@ history HistoryDependencies{..} = do
   let HistoryConfig{..} = config
   (sendEvent, receiveEvent) <- newChan
   _ <- spawnLinkLocal $ Supervisor.run restartOne ParallelShutdown
-    [ supervisor "history.digest" $ RunClosure $ Digest.process $ Digest.HistoryDigestDependencies digest sendEvent sendRequest
+    [ supervisor "history.digest" $ RunClosure $ Digest.process $ Digest.HistoryDigestDependencies digest sendEvent chainStoreChan
     , worker "history.logger" Permanent Nothing StopImmediately $ RunClosure $ Logger.process logger
     ]
   forever $ receiveWait
