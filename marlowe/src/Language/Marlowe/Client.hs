@@ -525,10 +525,10 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             let
               closingEntry = case onChainMarloweRef of
                 Just _ -> Nothing
-                -- It seems that contract was closed and we can try to extract
-                -- the rest of the history from the last update tx which we have at hand.
-                -- This *can't* be done in the `marloweHistory` because
-                -- we lack necessary indexes to extract the closing transaction.
+                -- Contract was closed and we can try to extract the rest of the history
+                -- from the last tx which we have at hand.
+                -- This can also be done by `marloweHistory slotConfig params (IncludePkhTxns True)`
+                -- as above but it can stress chain index with a heavy query.
                 Nothing -> do
                   history <- newHistory
                   mUtxo <- marloweUtxo history
