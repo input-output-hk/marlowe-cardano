@@ -127,6 +127,9 @@ module.exports = {
     modules: ["node_modules", path.resolve(__dirname, ".")],
   },
   plugins: [
+    new webpack.EnvironmentPlugin({
+      NODE_ENV: process.env.NODE_ENV,
+    }),
     new HtmlWebpackPlugin({
       template: `${process.env.WEB_COMMON_SRC}/static/index.html`,
       favicon: "static/favicon.ico",

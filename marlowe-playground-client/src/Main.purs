@@ -3,9 +3,19 @@ module Main where
 import Prologue
 
 import AppM (runAppM)
+import Control.Monad.Error.Class (liftEither)
+import Data.Argonaut
+  ( Json
+  , JsonDecodeError
+  , decodeJson
+  , printJsonDecodeError
+  , (.:)
+  )
+import Data.Bifunctor (lmap)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
+import Effect.Exception (error)
 import Effect.Now (getTimezoneOffset)
 import Halogen as H
 import Halogen.Aff as HA
@@ -15,13 +25,23 @@ import MainFrame.Types (Query(..)) as MainFrame
 import Router as Router
 import Routing.Duplex as Routing
 import Routing.Hash (matchesWith)
+import Types (WebpackBuildMode(..))
 
-main :: Effect Unit
-main = do
+decodeMainArgs :: Json -> Either JsonDecodeError WebpackBuildMode
+decodeMainArgs = decodeJson >=> \obj -> obj .: "webpackDevelMode" <#>
+  if _ then Development
+  else Production
+
+main :: Json -> Effect Unit
+main args = do
+  let
+    badArgsError e = error $ "Failed to start: bad startup args.\n\n" <>
+      printJsonDecodeError e
+  webpackBuildMode <- liftEither $ lmap badArgsError $ decodeMainArgs args
   tzOffset <- getTimezoneOffset
   HA.runHalogenAff do
     body <- HA.awaitBody
-    let mainFrame = H.hoist runAppM MainFrame.component
+    let mainFrame = H.hoist (runAppM { webpackBuildMode }) MainFrame.component
     driver <- runUI mainFrame tzOffset body
     void
       $ liftEffect
