@@ -18,16 +18,16 @@ module History.Digest.Worker where
 
 import ChainSync.Database (TxWithBlockHeader (..))
 import ChainSync.Store (ChainStoreQuery, awaitSecurityParameter, getConsumingTx)
-import Control.Distributed.Process (Closure, Process, SendPort, receiveChan, say, sendChan)
+import Control.Distributed.Process (Closure, Process, SendPort, say, sendChan)
 import Control.Distributed.Process.Closure (remotable)
 import Control.Distributed.Process.Internal.Closure.TH (mkClosure)
-import Data.Binary (Binary, Word64)
+import Data.Binary (Binary)
 import Data.Data (Typeable)
 import Data.Foldable (traverse_)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockNo (..), MarloweChainPoint (..),
-                                             MarloweSlotNo (..), MarloweTxId (..), MarloweTxOut (..))
+import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweChainPoint (..), MarloweSlotNo (..),
+                                             MarloweTxId (..), MarloweTxOut (..))
 import Language.Marlowe.Runtime.History (extractEvents)
 import Language.Marlowe.Runtime.History.Types (AppTxOutRef (..), ContractCreationTxOut (..), Event (..))
 
@@ -53,6 +53,7 @@ type State = NonEmpty AppTxOutRefWithBlockHeader
 
 digestWorker :: HistoryDigestWorkerDependencies -> Process ()
 digestWorker HistoryDigestWorkerDependencies{..} = do
+  say "starting"
   work initialState
   where
     ContractCreationTxOut{..} = creation
@@ -73,8 +74,7 @@ digestWorker HistoryDigestWorkerDependencies{..} = do
     work :: NonEmpty AppTxOutRefWithBlockHeader -> Process ()
     work history@(prevUtxo@(AppTxOutRefWithBlockHeader _ appOut) :| prevTxos) = do
       let AppTxOutRef out _ = appOut
-      resultChan <- getConsumingTx chainStoreChan out
-      receiveChan resultChan >>= \case
+      getConsumingTx chainStoreChan out >>= \case
         Left point -> handleRollback history point
         Right TxWithBlockHeader{..} -> do
           case extractEvents validatorAddress contractId appOut blockHeader tx of

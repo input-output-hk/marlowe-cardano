@@ -29,9 +29,11 @@ import Data.Data (Typeable)
 import Data.Foldable (fold)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import qualified Data.IntSet as IntSet
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash, MarloweChainPoint (..),
@@ -56,6 +58,7 @@ data ChainSyncQuery
   = GetIntersectionPoints (SendPort [MarloweChainPoint])
   | GetTip (SendPort MarloweChainTip)
   | GetConsumer TxOutRef (SendPort (Maybe TxWithBlockHeader))
+  | GetBlocksAfter MarloweChainPoint (SendPort (Maybe [Block]))
   | RollForward Block MarloweChainTip
   | RollBackwardToGenesis MarloweChainTip
   | RollBackward MarloweSlotNo MarloweBlockHeaderHash MarloweChainTip (SendPort [Block])
@@ -78,6 +81,7 @@ data ChainSyncDatabaseState = ChainSyncDatabaseState
   , tip                :: MarloweChainTip
   , consumerIndex      :: Map TxOutRef MarloweTxId
   , consumerSlotIndex  :: IntMap (Set TxOutRef)
+  , blockSlotIndex     :: IntMap MarloweBlockHeaderHash
   }
   deriving (Generic, Typeable)
   deriving anyclass (Binary)
@@ -112,6 +116,12 @@ getConsumer sendQuery ref = do
   sendChan sendQuery $ GetConsumer ref sendPort
   receiveChan receiveResponse
 
+getBlocksAfter :: ChainSyncQueryChan -> MarloweChainPoint -> Process (Maybe [Block])
+getBlocksAfter sendQuery point = do
+  (sendPort, receiveResponse) <- newChan
+  sendChan sendQuery $ GetBlocksAfter point sendPort
+  receiveChan receiveResponse
+
 file :: FilePath
 file = "./chain-db"
 
@@ -143,6 +153,7 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
         , tip = MarloweChainTipAtGenesis
         , consumerIndex = mempty
         , consumerSlotIndex = mempty
+        , blockSlotIndex = mempty
         }
       handleQuery lastWrite state@ChainSyncDatabaseState{..} = \case
         GetIntersectionPoints sendResponse       -> (lastWrite, state) <$ sendChan sendResponse intersectionPoints
@@ -151,6 +162,7 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
         RollBackward slot hash newTip sendBlocks -> handleRollBackward newTip state sendBlocks slot hash
         GetTip sendTip                           -> (lastWrite, state) <$ sendChan sendTip tip
         GetConsumer txOut sendTx                 -> (lastWrite, state) <$ sendChan sendTx (lookupConsumer state txOut)
+        GetBlocksAfter point sendBlock                 -> (lastWrite, state) <$ sendChan  sendBlock (lookupBlocksAfer state point)
 
       saveState state = liftIO do
         fileExists <- doesFileExist file
@@ -163,6 +175,16 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
       lookupConsumer ChainSyncDatabaseState{..} txOut = do
         txId <- Map.lookup txOut consumerIndex
         Map.lookup txId transactions
+
+      lookupBlocksAfer ChainSyncDatabaseState{..} MarloweChainPointAtGenesis =
+        Just $ Map.elems blocks
+      lookupBlocksAfer ChainSyncDatabaseState{..} (MarloweChainPoint (MarloweSlotNo slot) hash) = do
+        _ <- Map.lookup hash blocks
+        let
+          filteredIndex = IntMap.difference blockSlotIndex
+            $ IntMap.withoutKeys blockSlotIndex
+            $ IntSet.fromDistinctAscList [0..fromIntegral slot]
+        pure $ Map.elems $ Map.withoutKeys blocks $ Set.fromList $ IntMap.elems filteredIndex
 
       handleRollForward
         newTip
@@ -190,6 +212,7 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
             , tip = newTip
             , consumerIndex = Map.union consumerIndex newConsumptions
             , consumerSlotIndex = IntMap.insert (fromIntegral slotInt) (Map.keysSet newConsumptions) consumerSlotIndex
+            , blockSlotIndex = IntMap.insert (fromIntegral slotInt) hash blockSlotIndex
             }
 
       handleRollBackward newTip ChainSyncDatabaseState{..} sendBlocks rollbackSlot hash = do
@@ -203,6 +226,8 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
           MarloweSlotNo slotInt = rollbackSlot
           (consumerSlotIndexAfterRollback, consumerSlotIndexBeforeRollback) =
             IntMap.partitionWithKey (const . (> fromIntegral slotInt)) consumerSlotIndex
+          (_, blockSlotIndexBeforeRollback) =
+            IntMap.partitionWithKey (const . (> fromIntegral slotInt)) blockSlotIndex
         sendChan sendBlocks $ Map.elems afterBlocks
         saveState ChainSyncDatabaseState
           { blocks = beforeBlocks
@@ -211,6 +236,7 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
           , tip = newTip
           , consumerIndex = Map.withoutKeys consumerIndex $ fold consumerSlotIndexAfterRollback
           , consumerSlotIndex = consumerSlotIndexBeforeRollback
+          , blockSlotIndex = blockSlotIndexBeforeRollback
           }
 
 remotable ['chainSyncDatabase]

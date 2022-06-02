@@ -14,9 +14,9 @@ module History.Digest where
 
 import Cardano.Api (NetworkId (Testnet))
 import Cardano.Api.Byron (NetworkMagic (NetworkMagic))
-import ChainSync.Client (ChainSyncMsg (..))
-import ChainSync.Store (ChainStoreQuery)
-import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, match, receiveWait, say, sendChan)
+import ChainSync.Database (Block (..))
+import ChainSync.Store (ChainStoreQuery, getBlocks)
+import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, receiveChan, say, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras (spawnLinkLocal)
 import Control.Distributed.Process.Extras.Time (TimeInterval)
@@ -24,10 +24,10 @@ import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), 
                                                RegisteredName (..), RestartPolicy (..), ShutdownMode (ParallelShutdown),
                                                restartOne)
 import qualified Control.Distributed.Process.Supervisor as Supervisor
+import Control.Monad (forever)
 import Data.Binary (Binary)
 import Data.Data (Typeable)
 import Data.Foldable (traverse_)
-import Data.Function (fix)
 import GHC.Generics (Generic)
 import qualified History.Digest.Worker as Worker
 import Language.Marlowe.Runtime.Chain.Types
@@ -57,18 +57,13 @@ historyDigest HistoryDigestDependencies{..} = do
   say "starting"
   supervisor <- spawnLinkLocal $ Supervisor.run restartOne ParallelShutdown []
   say $ "started supervisor " <> show supervisor
-  fix \loop -> receiveWait
-    [ match \(msg :: ChainSyncMsg) -> do
-        case msg of
-          ChainSyncEvent (MarloweRollForward header txs _) -> do
-            let creations = extractCreations (Testnet $ NetworkMagic 1566) header =<< txs
-            workersToStart <- processCreations sendEvent chainStoreChan creations
-            traverse_ (Supervisor.startNewChild supervisor) workersToStart
-            loop
-          ChainSyncDone -> pure ()
-          _ -> loop
-    ]
-  say "exiting"
+  getNextBlock <- getBlocks chainStoreChan MarloweChainPointAtGenesis
+  forever $ receiveChan getNextBlock >>= \case
+    Left _ -> pure ()
+    Right Block{..} -> do
+      let creations = extractCreations (Testnet $ NetworkMagic 1566) header =<< txs
+      workersToStart <- processCreations sendEvent chainStoreChan creations
+      traverse_ (Supervisor.startNewChild supervisor) workersToStart
 
 processCreations
   :: SendPort Event

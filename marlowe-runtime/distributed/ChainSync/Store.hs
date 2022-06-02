@@ -16,12 +16,12 @@
 module ChainSync.Store where
 
 import ChainSync.Client (ChainSyncMsg (..))
-import ChainSync.Database (Block (..), ChainSyncQuery (..), TxWithBlockHeader (..), getConsumer, getTip, rollBackward,
+import ChainSync.Database (Block (..), ChainSyncQuery, TxWithBlockHeader (..), getConsumer, getTip, rollBackward,
                            rollBackwardToGenesis, rollForward)
-import Control.Distributed.Process (Closure, Process, ProcessId, ProcessMonitorNotification (..), SendPort, getSelfPid,
-                                    match, matchChan, monitor, newChan, receiveChan, receiveWait, sendChan)
+import qualified ChainSync.Database as DB
+import Control.Distributed.Process (Closure, Process, ProcessId, ProcessMonitorNotification (..), ReceivePort, SendPort,
+                                    getSelfPid, match, matchChan, monitor, newChan, receiveChan, receiveWait, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
-import Control.Distributed.Process.Internal.Types (ReceivePort)
 import Control.Distributed.Process.Serializable (Serializable)
 import Control.Monad (unless, (<=<))
 import Data.Binary (Binary)
@@ -41,23 +41,33 @@ import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlo
                                              MarloweChainPoint (..), MarloweChainTip (..), MarloweSlotNo (..),
                                              MarloweTx (..), MarloweTxIn (..), MarloweTxOut (..), TxOutRef (..))
 
-sendSubscriber :: (Serializable e, Serializable a) => Set ProcessId -> Either e a -> Subscriber e a -> Process ()
+sendSubscriber :: Serializable a => Set ProcessId -> Either MarloweChainPoint a -> Subscriber a -> Process ()
 sendSubscriber deadProcesses msg Subscriber{..} = unless (Set.member pid deadProcesses) $ sendChan replyChan msg
 
-sendResponse :: (Serializable e, Serializable a) => Set ProcessId -> a -> Subscriber e a -> Process ()
+sendResponse :: Serializable a => Set ProcessId -> a -> Subscriber a -> Process ()
 sendResponse deadProcesses = sendSubscriber deadProcesses . Right
 
-sendError :: (Serializable e, Serializable a) => Set ProcessId -> e -> Subscriber e a -> Process ()
-sendError deadProcesses = sendSubscriber deadProcesses . Left
+sendRollback :: Serializable a => Set ProcessId -> MarloweChainPoint -> Subscriber a -> Process ()
+sendRollback deadProcesses = sendSubscriber deadProcesses . Left
 
 getConsumingTx
   :: SendPort ChainStoreQuery
   -> TxOutRef
-  -> Process (ReceivePort (Either MarloweChainPoint TxWithBlockHeader))
+  -> Process (Either MarloweChainPoint TxWithBlockHeader)
 getConsumingTx queryChan txOutRef = do
   (replyChan, receiveResponse) <- newChan
   pid <- getSelfPid
   sendChan queryChan $ GetConsumingTx txOutRef $ Subscriber pid replyChan
+  receiveChan receiveResponse
+
+getBlocks
+  :: SendPort ChainStoreQuery
+  -> MarloweChainPoint
+  -> Process (ReceivePort (Either MarloweChainPoint Block))
+getBlocks queryChan startingAt = do
+  (replyChan, receiveResponse) <- newChan
+  pid <- getSelfPid
+  sendChan queryChan $ GetBlocks startingAt $ Subscriber pid replyChan
   pure receiveResponse
 
 awaitSecurityParameter
@@ -77,25 +87,28 @@ data ChainSyncStoreDependencies = ChainSyncStoreDependencies
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
 
-data Subscriber e a = Subscriber
+data Subscriber a = Subscriber
   { pid       :: ProcessId
-  , replyChan :: SendPort (Either e a)
+  , replyChan :: SendPort (Either MarloweChainPoint a)
   }
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
 
-type ConsumerSubscriber = Subscriber MarloweChainPoint TxWithBlockHeader
-type SecurityParamSubscriber = Subscriber MarloweChainPoint ()
+type ConsumerSubscriber = Subscriber TxWithBlockHeader
+type SecurityParamSubscriber = Subscriber ()
+type BlockSubscriber = Subscriber Block
 
 data ChainStoreQuery
   = GetConsumingTx TxOutRef ConsumerSubscriber
   | AwaitSecurityParameter MarloweBlockHeader SecurityParamSubscriber
+  | GetBlocks MarloweChainPoint BlockSubscriber
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
 
 data ChainSyncStoreState = ChainSyncStoreState
   { consumerSubscribers      :: Map TxOutRef (Map ProcessId ConsumerSubscriber)
   , securityParamSubscribers :: IntMap (Map ProcessId SecurityParamSubscriber)
+  , blockSubscribers         :: Map ProcessId BlockSubscriber
   , deadSubscribers          :: Set ProcessId
   }
 
@@ -110,11 +123,17 @@ chainSyncStore ChainSyncStoreDependencies{..} = do
     initialState = ChainSyncStoreState
       { consumerSubscribers = mempty
       , securityParamSubscribers = mempty
+      , blockSubscribers = mempty
       , deadSubscribers = mempty
       }
 
     go state@ChainSyncStoreState{..} = receiveWait
-      [ match \case
+      [ match \(ProcessMonitorNotification _ pid _) -> go state { deadSubscribers = Set.insert pid deadSubscribers }
+      , matchChan receiveQuery $ go <=< \case
+          GetConsumingTx ref subscriber               -> handleGetConsumingTx state ref subscriber
+          AwaitSecurityParameter fromBlock subscriber -> handleAwaitSecurityParameter state fromBlock subscriber
+          GetBlocks startingAt subscriber             -> handleGetBlocks state startingAt subscriber
+      , match \case
           ChainSyncDone -> pure ()
           ChainSyncEvent (MarloweRollForward header txs tip) -> do
             rollForward dbChan (Block header txs) tip
@@ -126,11 +145,16 @@ chainSyncStore ChainSyncStoreDependencies{..} = do
             rolledBackBlocks <- rollBackward dbChan slot hash tip
             go =<< rollbackSubscribers slot hash state rolledBackBlocks
           _ -> go state
-      , matchChan receiveQuery $ go <=< \case
-          GetConsumingTx ref subscriber               -> handleGetConsumingTx state ref subscriber
-          AwaitSecurityParameter fromBlock subscriber -> handleAwaitSecurityParameter state fromBlock subscriber
-      , match \(ProcessMonitorNotification _ pid _) -> go state { deadSubscribers = Set.insert pid deadSubscribers }
       ]
+
+    handleGetBlocks state@ChainSyncStoreState{..} startingAt subscriber@Subscriber{..} = do
+      DB.getBlocksAfter dbChan startingAt >>= \case
+        Nothing     -> sendRollback deadSubscribers MarloweChainPointAtGenesis subscriber
+        Just blocks -> traverse_ (\block -> sendResponse deadSubscribers block subscriber) blocks
+      void $ monitor pid
+      pure state
+        { blockSubscribers = Map.insert pid subscriber blockSubscribers
+        }
 
     handleAwaitSecurityParameter
       state@ChainSyncStoreState{..}
@@ -170,9 +194,10 @@ chainSyncStore ChainSyncStoreDependencies{..} = do
 
 
     rollbackAllSubscribers ChainSyncStoreState{..} = do
-      traverse_ (traverse_ (sendError deadSubscribers MarloweChainPointAtGenesis)) consumerSubscribers
-      traverse_ (traverse_ (sendError deadSubscribers MarloweChainPointAtGenesis)) securityParamSubscribers
-      pure initialState
+      traverse_ (traverse_ (sendRollback deadSubscribers MarloweChainPointAtGenesis)) consumerSubscribers
+      traverse_ (traverse_ (sendRollback deadSubscribers MarloweChainPointAtGenesis)) securityParamSubscribers
+      traverse_ (sendRollback deadSubscribers MarloweChainPointAtGenesis) blockSubscribers
+      pure initialState { blockSubscribers = blockSubscribers }
 
     rollbackSubscribers rollbackToSlot hash state@ChainSyncStoreState{..} rolledBackBlocks = do
       let
@@ -188,8 +213,9 @@ chainSyncStore ChainSyncStoreDependencies{..} = do
         (securityParamSubscribersRolledBack, securityParamSubscribers') =
           IntMap.partitionWithKey (const . isSlotAfterRollback) securityParamSubscribers
         point = MarloweChainPoint rollbackToSlot hash
-      traverse_ (traverse_ (sendError deadSubscribers point)) consumerSubscribersRolledBack
-      traverse_ (traverse_ (sendError deadSubscribers point)) securityParamSubscribersRolledBack
+      traverse_ (traverse_ (sendRollback deadSubscribers point)) consumerSubscribersRolledBack
+      traverse_ (traverse_ (sendRollback deadSubscribers point)) securityParamSubscribersRolledBack
+      traverse_ (sendRollback deadSubscribers point) blockSubscribers
       pure state
         { consumerSubscribers = consumerSubscribers'
         , securityParamSubscribers = securityParamSubscribers'
@@ -215,6 +241,7 @@ chainSyncStore ChainSyncStoreDependencies{..} = do
         securityParamSubscribersToNotify = IntMap.difference securityParamSubscribers securityParamSubscribers'
       traverse_ (traverse_ (uncurry $ sendResponse deadSubscribers)) consumerSubscribersToNotify
       traverse_ (traverse_ (sendResponse deadSubscribers ())) securityParamSubscribersToNotify
+      traverse_ (sendResponse deadSubscribers $ Block header txs) blockSubscribers
       pure state
         { consumerSubscribers = consumerSubscribers'
         , securityParamSubscribers = securityParamSubscribers'

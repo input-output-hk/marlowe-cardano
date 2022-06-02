@@ -15,7 +15,7 @@ import ChainSync.Store (ChainStoreQuery)
 import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, match, matchChan, newChan, nsend,
                                     receiveWait)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
-import Control.Distributed.Process.Extras (Routable (sendTo), spawnLinkLocal)
+import Control.Distributed.Process.Extras (spawnLinkLocal)
 import Control.Distributed.Process.Extras.Time (Delay (..), TimeInterval)
 import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), ChildStopPolicy (..), ChildType (..),
                                                RegisteredName (..), RestartPolicy (..), ShutdownMode (..), restartOne)
@@ -66,7 +66,6 @@ history HistoryDependencies{..} = do
     ]
   forever $ receiveWait
     [ match \(msg :: ChainSyncMsg) -> do
-        sendTo "history.digest" msg
         nsend "history.logger" msg
     , matchChan receiveEvent \event -> do
         nsend "history.logger" event

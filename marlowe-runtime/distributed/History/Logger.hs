@@ -14,6 +14,7 @@ module History.Logger where
 import ChainSync.Client (ChainSyncMsg (..))
 import Control.Distributed.Process (Closure, Process, match, receiveWait, say)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
+import Control.Monad (when)
 import Data.Binary (Binary)
 import Data.Data (Typeable)
 import GHC.Generics (Generic)
@@ -29,28 +30,37 @@ newtype HistoryLoggerConfig = HistoryLoggerConfig
 instance Binary HistoryLoggerConfig
 
 historyLogger :: HistoryLoggerConfig -> Process ()
-historyLogger HistoryLoggerConfig{..} = syncing 0
+historyLogger HistoryLoggerConfig{..} = syncing 0 (0 :: Integer) (0 :: Integer)
   where
-    syncing blocksSinceLastLog = do
-      inSync <- receiveWait
+    syncing blocksSinceLastLog startedCount closedCount = do
+      (inSync, startedCount', closedCount') <- receiveWait
         [ match $ pure . \case
+          ContractWasCreated _        -> (False, startedCount + 1, closedCount)
+          InputsWereApplied Nothing _ -> (False, startedCount, closedCount + 1)
+          _                           -> (False, startedCount, closedCount)
+        , match $ pure . \case
           ChainSyncStart point tip -> do
             let pointNo = getPointNo point
             let tipNo = getTipNo tip
-            tipNo == pointNo
+            (pointNo == tipNo, startedCount, closedCount)
           ChainSyncEvent (MarloweRollBackward point tip) -> do
             let pointNo = getPointNo point
             let tipNo = getTipNo tip
-            tipNo == pointNo
+            (pointNo == tipNo, startedCount, closedCount)
           ChainSyncEvent (MarloweRollForward (MarloweBlockHeader (MarloweSlotNo slot) _ _) _ tip) -> do
             let tipNo = getTipNo tip
-            slot == tipNo
-          ChainSyncDone -> False
-        , match \(_ :: Event) -> pure False
+            (slot == tipNo, startedCount, closedCount)
+          ChainSyncDone -> (False, startedCount, closedCount)
         ]
-      if inSync
-        then do synced
-        else syncing ((blocksSinceLastLog + 1) `mod` syncLoggingFrequency)
+      let blocksSinceLastLog' = (blocksSinceLastLog + 1) `mod` syncLoggingFrequency
+      if inSync then do
+        synced
+      else if blocksSinceLastLog' == 0 then do
+        when (closedCount' > 0 || startedCount' > 0) do
+          say $ show startedCount' <> " contracts started, " <> show closedCount' <> " closed since last log"
+        syncing 0 0 0
+      else do
+        syncing blocksSinceLastLog' startedCount' closedCount'
     synced = do
       receiveWait
         [ match \(_ :: ChainSyncMsg) -> pure ()
