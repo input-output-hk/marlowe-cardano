@@ -143,7 +143,7 @@ data ContractId = ContractId
   { currencySymbol      :: MarlowePolicyId
   , payoutValidatorHash :: ValidatorHash
   }
-  deriving (Generic, Typeable, Show, Eq)
+  deriving (Generic, Typeable, Show, Eq, Ord)
 
 instance Binary ContractId
 
@@ -166,7 +166,7 @@ instance Binary Assets  where
       Right a  -> pure a
 
 newtype ValidatorHash = ValidatorHash ScriptHash
-  deriving (Generic, Typeable, Show, Eq)
+  deriving (Generic, Typeable, Show, Eq, Ord)
 
 instance Binary ValidatorHash where
   put (ValidatorHash hash) = putToRawBytes hash

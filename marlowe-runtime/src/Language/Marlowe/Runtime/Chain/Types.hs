@@ -39,8 +39,14 @@ instance Binary MarloweBlockHeader
 newtype MarloweSlotNo = MarloweSlotNo Word64
   deriving (Typeable, Show, Eq, Binary, Ord)
 
+slotToIntegral :: forall a. Integral a => MarloweSlotNo -> a
+slotToIntegral (MarloweSlotNo slot) = fromIntegral slot
+
 newtype MarloweBlockNo = MarloweBlockNo Word64
   deriving (Typeable, Show, Eq, Binary, Ord)
+
+blockToIntegral :: forall a. Integral a => MarloweBlockNo -> a
+blockToIntegral (MarloweBlockNo block) = fromIntegral block
 
 newtype MarloweBlockHeaderHash = MarloweBlockHeaderHash ShortByteString
   deriving (Typeable, Show, Eq, Binary, Ord)

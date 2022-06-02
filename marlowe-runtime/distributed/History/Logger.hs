@@ -35,9 +35,9 @@ historyLogger HistoryLoggerConfig{..} = syncing 0 (0 :: Integer) (0 :: Integer)
     syncing blocksSinceLastLog startedCount closedCount = do
       (inSync, startedCount', closedCount') <- receiveWait
         [ match $ pure . \case
-          ContractWasCreated _        -> (False, startedCount + 1, closedCount)
-          InputsWereApplied Nothing _ -> (False, startedCount, closedCount + 1)
-          _                           -> (False, startedCount, closedCount)
+          Event { historyEvent = ContractWasCreated _ }        -> (False, startedCount + 1, closedCount)
+          Event { historyEvent = InputsWereApplied Nothing _ } -> (False, startedCount, closedCount + 1)
+          _                                                    -> (False, startedCount, closedCount)
         , match $ pure . \case
           ChainSyncStart point tip -> do
             let pointNo = getPointNo point

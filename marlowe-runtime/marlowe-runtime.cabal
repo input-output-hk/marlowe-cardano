@@ -113,7 +113,6 @@ executable distributed
     Control.Distributed.Protocol
     History
     History.Digest
-    History.Digest.Worker
     History.Logger
     Paths_marlowe_runtime
   autogen-modules:
@@ -133,3 +132,4 @@ executable distributed
     , distributed-process-supervisor
     , network-transport-tcp
     , time
+    , transformers
