@@ -6,16 +6,18 @@ module StaticAnalysis.BottomPanel
 
 import Prologue hiding (div)
 
+import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.Lens ((^.))
 import Data.Lens.Iso.Newtype (_Newtype)
-import Data.List (List, null, toUnfoldable)
+import Data.List (List(..), null, toUnfoldable, (:))
 import Data.List as List
 import Data.List.NonEmpty (toList)
 import Data.Time.Duration (Minutes)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Classes (btn, spaceBottom, spaceRight, spaceTop, spanText)
+import Halogen.Css (classNames)
 import Halogen.HTML
   ( ClassName(..)
   , HTML
@@ -26,21 +28,18 @@ import Halogen.HTML
   , h3
   , li_
   , ol
+  , span
   , span_
   , text
   , ul
   )
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes, enabled)
-import Humanize (humanizeValue)
+import Humanize (humanizeInterval, humanizeValue)
+import Icons (Icon(..), icon)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics
-  ( ChoiceId(..)
-  , Input(..)
-  , TimeInterval(..)
-  , TransactionInput(..)
-  )
+import Marlowe.Semantics (ChoiceId(..), Input(..), TransactionInput(..))
 import Marlowe.Symbolic.Types.Response as R
 import Marlowe.Template (TemplateContent(..))
 import Marlowe.ViewPartials (displayWarningList)
@@ -50,6 +49,8 @@ import Servant.PureScript (printAjaxError)
 import StaticAnalysis.Types
   ( AnalysisExecutionState(..)
   , AnalysisState
+  , ContractPath
+  , ContractPathStep(..)
   , MultiStageAnalysisData(..)
   , _analysisExecutionState
   , _analysisState
@@ -135,8 +136,8 @@ analysisResultPane metadata actionGen state =
                     , b_ [ spanText (BigInt.toString initialSlot) ]
                     ]
                 , li_
-                    [ spanText "Offending transaction list: "
-                    , displayTransactionList transactionList
+                    [ spanText "Offending sequence: "
+                    , displayTransactionList tzOffset transactionList
                     ]
                 ]
             ]
@@ -213,7 +214,11 @@ analysisResultPane metadata actionGen state =
                                 do
                                   contractPath <- toUnfoldable
                                     foundcounterExampleSubcontracts
-                                  pure (li_ [ text (show contractPath) ])
+                                  pure
+                                    ( li_ $ displayContractPath
+                                        (text "Unreachable code")
+                                        contractPath
+                                    )
                             ]
                       )
               )
@@ -241,7 +246,10 @@ analysisResultPane metadata actionGen state =
                     [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
                         contractPath <- toUnfoldable
                           (toList counterExampleSubcontracts)
-                        pure (li_ [ text (show contractPath) ])
+                        pure
+                          ( li_ $ displayContractPath (text "Unreachable code")
+                              contractPath
+                          )
                     ]
               )
           AnalysisFinishedAndPassed ->
@@ -281,7 +289,10 @@ analysisResultPane metadata actionGen state =
                               do
                                 contractPath <- toUnfoldable
                                   foundcounterExampleSubcontracts
-                                pure (li_ [ text (show contractPath) ])
+                                pure
+                                  ( li_ $ displayContractPath (text "Close")
+                                      contractPath
+                                  )
                           ]
                     )
             )
@@ -309,7 +320,8 @@ analysisResultPane metadata actionGen state =
                   [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
                       contractPath <- toUnfoldable
                         (toList counterExampleSubcontracts)
-                      pure (li_ [ text (show contractPath) ])
+                      pure
+                        (li_ $ displayContractPath (text "Close") contractPath)
                   ]
                 <>
                   [ text
@@ -325,12 +337,12 @@ analysisResultPane metadata actionGen state =
             ]
 
 displayTransactionList
-  :: forall p action. Array TransactionInput -> HTML p action
-displayTransactionList transactionList =
+  :: forall p action. Minutes -> Array TransactionInput -> HTML p action
+displayTransactionList tzOffset transactionList =
   ol [ classes [ ClassName "indented-enum" ] ]
     ( do
         ( TransactionInput
-            { interval: TimeInterval from to
+            { interval
             , inputs: inputList
             }
         ) <-
@@ -338,13 +350,14 @@ displayTransactionList transactionList =
         pure
           ( li_
               [ span_
-                  [ b_ [ text "Transaction" ]
-                  , text " with time interval "
-                  , b_ [ text $ (show from <> " to " <> show to) ]
+                  [ span [ classNames [ "capitalize" ] ]
+                      [ text $ humanizeInterval tzOffset interval ]
+                  , text " a "
+                  , b_ [ text "transaction" ]
                   , if List.null inputList then
-                      text " and no inputs (empty transaction)."
+                      text " with no inputs (empty transaction)."
                     else
-                      text " and inputs:"
+                      text " with the following inputs:"
                   ]
               , if List.null inputList then
                   text ""
@@ -364,7 +377,7 @@ displayInputList inputList =
 
 displayInput :: forall p i. Input -> Array (HTML p i)
 displayInput (IDeposit owner party tok money) =
-  [ b_ [ text "IDeposit" ]
+  [ b_ [ text "Deposit" ]
   , text " - Party "
   , b_ [ text $ show party ]
   , text " deposits "
@@ -375,18 +388,45 @@ displayInput (IDeposit owner party tok money) =
   ]
 
 displayInput (IChoice (ChoiceId choiceId party) chosenNum) =
-  [ b_ [ text "IChoice" ]
+  [ b_ [ text "Choice" ]
   , text " - Party "
   , b_ [ text $ show party ]
   , text " chooses number "
-  , b_ [ text $ show chosenNum ]
+  , b_ [ text $ BigInt.toString chosenNum ]
   , text " for choice "
   , b_ [ text $ show choiceId ]
   , text "."
   ]
 
 displayInput (INotify) =
-  [ b_ [ text "INotify" ]
+  [ b_ [ text "Notify" ]
   , text " - The contract is notified that an observation became "
   , b_ [ text "True" ]
   ]
+
+displayContractPath :: forall p i. HTML p i -> ContractPath -> Array (HTML p i)
+displayContractPath root list =
+  Array.intersperse
+    (span [ classNames [ "text-darkgray", "mx-1" ] ] [ icon ArrowRight ]) $ go
+    list
+  where
+  go Nil = [ root ]
+  go (head : tail) = Array.cons (displayStep head) (go tail)
+
+  whenCaseToStr = case _ of
+    0 -> "1st"
+    1 -> "2nd"
+    2 -> "3rd"
+    n -> show (n + 1) <> "th"
+
+  boldSpanText txt = span [ classNames [ "bold" ] ] [ text txt ]
+
+  displayStep = case _ of
+    PayContPath -> boldSpanText "Pay"
+    IfTruePath -> span_ [ boldSpanText "If", text " true" ]
+    IfFalsePath -> span_ [ boldSpanText "If", text "false" ]
+    WhenCasePath n -> span_
+      [ boldSpanText "When ", text $ whenCaseToStr n <> " case" ]
+    WhenTimeoutPath -> span_ [ boldSpanText "When ", text "timeout" ]
+    LetPath -> boldSpanText "Let"
+    AssertPath -> boldSpanText "Assert"

@@ -24,11 +24,22 @@ let
     socat -u OPEN:/dev/null "UNIX-CONNECT:''${sock_path}"
   '';
 
+  sleep-until-restart-slot = pkgs.writeShellScriptBin "sleep-until-restart-slot" ''
+    set -eEuo pipefail
+
+    export PATH="${pkgs.coreutils}/bin"
+
+    nowHour=$(date -u +%-H)
+    hoursLeft=$((3 - (nowHour % 3)))
+    wakeHour=$(((nowHour + hoursLeft) % 24))
+    exec sleep $((($(date -u -f - +%s- <<< "$wakeHour"$':00 tomorrow\nnow')0)%86400))
+  '';
+
   run-entrypoints = network: {
     marlowe-run-entrypoint = pkgs.callPackage ./pab.nix {
       pabExe = "${marlowe-pab}/bin/marlowe-pab";
       staticPkg = marlowe-dashboard.client;
-      inherit wait-for-socket network;
+      inherit wait-for-socket network sleep-until-restart-slot;
     };
 
     marlowe-run-server-entrypoint = pkgs.callPackage ./marlowe-run-server.nix {
@@ -40,7 +51,9 @@ let
       inherit cardano-node network;
     };
 
-    wbe = pkgs.callPackage ./wbe.nix { inherit cardano-wallet wait-for-socket network; };
+    wbe = pkgs.callPackage ./wbe.nix {
+      inherit cardano-wallet wait-for-socket network sleep-until-restart-slot;
+    };
 
     chain-index = pkgs.callPackage ./chain-index.nix { inherit plutus-chain-index wait-for-socket network; };
   };

@@ -2,74 +2,54 @@ module Component.CurrencyInput.State (component) where
 
 import Prologue
 
-import Component.CurrencyInput.Types (Action(..), Component, DSL, Message(..))
+import Component.CurrencyInput.Types (Action(..), Component, DSL, Input, State)
 import Component.CurrencyInput.View (render)
-import Data.Array (replicate, (!!))
-import Data.BigInt.Argonaut (BigInt)
-import Data.BigInt.Argonaut as BigInt
-import Data.Foldable (for_)
-import Data.Maybe (maybe)
-import Data.String (Pattern(..), Replacement(..), length, replace, split)
-import Data.String.CodeUnits (dropRight, fromCharArray)
-import Halogen (gets)
+import Data.Decimal as D
+import Data.Numbers.Natural as N
+import Effect.Class (class MonadEffect)
 import Halogen as H
-import Pretty (showBigIntAsCurrency)
 
 component
   :: forall query m
-   . Component query m
+   . MonadEffect m
+  => Component query m
 component = H.mkComponent
   { initialState: deriveState
   , render
-  , eval:
-      H.mkEval
-        ( H.defaultEval
-            { handleAction = handleAction
-            , receive = (\input -> pure $ Receive input.value)
-            }
-        )
+  , eval: H.mkEval $ H.defaultEval { handleAction = handleAction }
   }
-  where
-  deriveState input =
-    { value: fixDecimals input.numDecimals
-        (showBigIntAsCurrency input.value $ max 0 input.numDecimals)
-    , classList: input.classList
-    , prefix: input.prefix
-    , numDecimals: input.numDecimals
-    }
+
+deriveState :: Input -> State
+deriveState input = do
+  let
+    toRatio = map \precision ->
+      { ratio: D.fromInt 10 `D.pow` D.fromInt (-1 * N.toInt precision)
+      , precision
+      }
+  { amountInMinor: input.amountInMinor
+  , classList: input.classList
+  , currencySymbol: input.currencySymbol
+  , amountParseError: Nothing
+  , majorCurrencyRatio: toRatio input.majorCurrencyFactor
+  }
 
 handleAction
   :: forall m
-   . Action
+   . MonadEffect m
+  => Action
   -> DSL m Unit
-handleAction (Receive value) = do
-  numDecimals <- gets _.numDecimals
-  H.modify_ (_ { value = showBigIntAsCurrency value $ max 0 numDecimals })
-
-handleAction (ChangeValue newValue) = do
-  numDecimals <- gets _.numDecimals
+handleAction (Receive input) = do
+  state <- H.get
   let
-    mParsed = parseInput numDecimals newValue
-  for_ mParsed \parsedValue -> do
-    --    H.modify_ (_ { value = parsedValue })
-    H.raise $ ValueChanged parsedValue
+    state' = deriveState input
+  when (state /= state') $
+    H.put state'
 
-parseInput :: Int -> String -> Maybe BigInt
-parseInput numDecimals =
-  BigInt.fromString
-    <<< replace dot (Replacement "")
-    <<< fixDecimals numDecimals
+handleAction (ChangeValue value) = do
+  H.modify_ _ { amountInMinor = value, amountParseError = Nothing }
+  H.raise value
 
-fixDecimals :: Int -> String -> String
-fixDecimals numDecimals value = case compare providedDecimals numDecimals of
-  GT -> dropRight (providedDecimals - numDecimals) value
-  LT -> pad (numDecimals - providedDecimals) value
-  EQ -> value
-  where
-  providedDecimals = maybe 0 length $ split dot value !! 1
+handleAction (AmountParseError err) = do
+  H.modify_ _ { amountParseError = Just err }
+  pure unit
 
-pad :: Int -> String -> String
-pad num value = value <> fromCharArray (replicate num '0')
-
-dot :: Pattern
-dot = Pattern "."

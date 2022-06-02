@@ -36,6 +36,7 @@
   , "js-timers"
   , "json-helpers"
   , "lists"
+  , "math"
   , "maybe"
   , "media-types"
   , "newtype"

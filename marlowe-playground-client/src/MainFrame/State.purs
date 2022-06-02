@@ -350,7 +350,9 @@ handleAction (HandleKey _ ev)
   | otherwise = pure unit
 
 handleAction (HaskellAction action) = do
-  toHaskellEditor (HaskellEditor.handleAction action)
+  metadata <- use _contractMetadata
+
+  toHaskellEditor (HaskellEditor.handleAction metadata action)
   case action of
     HE.SendResultToSimulator -> do
       mContract <- peruse (_haskellState <<< HE._ContractString)
@@ -365,7 +367,9 @@ handleAction (HaskellAction action) = do
     _ -> pure unit
 
 handleAction (JavascriptAction action) = do
-  toJavascriptEditor (JavascriptEditor.handleAction action)
+  metadata <- use _contractMetadata
+
+  toJavascriptEditor (JavascriptEditor.handleAction metadata action)
   case action of
     JS.SendResultToSimulator -> do
       mContract <- peruse (_javascriptState <<< JS._ContractString)
@@ -381,7 +385,9 @@ handleAction (JavascriptAction action) = do
     _ -> pure unit
 
 handleAction (MarloweEditorAction action) = do
-  toMarloweEditor (MarloweEditor.handleAction action)
+  metadata <- use _contractMetadata
+  toMarloweEditor (MarloweEditor.handleAction metadata action)
+
   case action of
     ME.SendToSimulator -> do
       mContents <- MarloweEditor.editorGetValue
@@ -390,7 +396,7 @@ handleAction (MarloweEditorAction action) = do
     ME.ViewAsBlockly -> do
       mSource <- MarloweEditor.editorGetValue
       for_ mSource \source -> do
-        void $ toBlocklyEditor $ BlocklyEditor.handleAction $
+        void $ toBlocklyEditor $ BlocklyEditor.handleAction metadata $
           BE.InitBlocklyProject source
         assign _workflow (Just Blockly)
         selectView BlocklyEditor
@@ -402,7 +408,9 @@ handleAction (MarloweEditorAction action) = do
     _ -> pure unit
 
 handleAction (BlocklyEditorAction action) = do
-  toBlocklyEditor $ BlocklyEditor.handleAction action
+  metadata <- use _contractMetadata
+
+  toBlocklyEditor $ BlocklyEditor.handleAction metadata action
   case action of
     BE.SendToSimulator -> do
       mCode <- use (_blocklyEditorState <<< _marloweCode)
@@ -415,8 +423,9 @@ handleAction (BlocklyEditorAction action) = do
       for_ mCode \code -> do
         selectView MarloweEditor
         assign _workflow (Just Marlowe)
-        toMarloweEditor $ MarloweEditor.handleAction $ ME.InitMarloweProject
-          code
+        toMarloweEditor $ MarloweEditor.handleAction metadata $
+          ME.InitMarloweProject
+            code
     BE.HandleBlocklyMessage Blockly.CodeChange -> setUnsavedChangesForLanguage
       Blockly
       true
@@ -481,21 +490,25 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
   case lang of
     Haskell ->
       for_ (Map.lookup "Example" StaticData.demoFiles) \contents -> do
-        toHaskellEditor $ HaskellEditor.handleAction $ HE.InitHaskellProject
-          mempty
-          contents
+        toHaskellEditor $ HaskellEditor.handleAction emptyContractMetadata $
+          HE.InitHaskellProject
+            mempty
+            contents
     Javascript ->
       for_ (Map.lookup "Example" StaticData.demoFilesJS) \contents -> do
-        toJavascriptEditor $ JavascriptEditor.handleAction $
-          JS.InitJavascriptProject mempty contents
+        toJavascriptEditor $ JavascriptEditor.handleAction emptyContractMetadata
+          $
+            JS.InitJavascriptProject mempty contents
     Marlowe ->
       for_ (Map.lookup "Example" StaticData.marloweContracts) \contents -> do
-        toMarloweEditor $ MarloweEditor.handleAction $ ME.InitMarloweProject
-          contents
+        toMarloweEditor $ MarloweEditor.handleAction emptyContractMetadata $
+          ME.InitMarloweProject
+            contents
     Blockly ->
       for_ (Map.lookup "Example" StaticData.marloweContracts) \contents -> do
-        toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject
-          contents
+        toBlocklyEditor $ BlocklyEditor.handleAction emptyContractMetadata $
+          BE.InitBlocklyProject
+            contents
   selectView $ selectLanguageView lang
   modify_
     ( set _showModal Nothing
@@ -516,21 +529,24 @@ handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
   case lang of
     Haskell ->
       for_ (Map.lookup key StaticData.demoFiles) \contents ->
-        toHaskellEditor $ HaskellEditor.handleAction $ HE.InitHaskellProject
-          metadataHints
-          contents
+        toHaskellEditor $ HaskellEditor.handleAction metadata $
+          HE.InitHaskellProject
+            metadataHints
+            contents
     Javascript ->
       for_ (Map.lookup key StaticData.demoFilesJS) \contents -> do
-        toJavascriptEditor $ JavascriptEditor.handleAction $
+        toJavascriptEditor $ JavascriptEditor.handleAction metadata $
           JS.InitJavascriptProject metadataHints contents
     Marlowe -> do
       for_ (preview (ix key) StaticData.marloweContracts) \contents -> do
-        toMarloweEditor $ MarloweEditor.handleAction $ ME.InitMarloweProject
-          contents
+        toMarloweEditor $ MarloweEditor.handleAction metadata $
+          ME.InitMarloweProject
+            contents
     Blockly -> do
       for_ (preview (ix key) StaticData.marloweContracts) \contents -> do
-        toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject
-          contents
+        toBlocklyEditor $ BlocklyEditor.handleAction metadata $
+          BE.InitBlocklyProject
+            contents
   where
   metadata = fromMaybe emptyContractMetadata $ Map.lookup key
     StaticData.demoFilesMetadata
@@ -791,16 +807,22 @@ loadGist gist = do
 
     metadataHints = getHintsFromMetadata metadata
   -- Restore or reset all editors
-  toHaskellEditor $ HaskellEditor.handleAction
+  toHaskellEditor
+    $ HaskellEditor.handleAction
+        metadata
     $ HE.InitHaskellProject metadataHints
     $ fromMaybe mempty haskell
-  toJavascriptEditor $ JavascriptEditor.handleAction
+  toJavascriptEditor
+    $ JavascriptEditor.handleAction
+        metadata
     $ JS.InitJavascriptProject metadataHints
     $ fromMaybe mempty javascript
-  toMarloweEditor $ MarloweEditor.handleAction $ ME.InitMarloweProject $
-    fromMaybe mempty marlowe
-  toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject $
-    fromMaybe mempty blockly
+  toMarloweEditor $ MarloweEditor.handleAction metadata $ ME.InitMarloweProject
+    $
+      fromMaybe mempty marlowe
+  toBlocklyEditor $ BlocklyEditor.handleAction metadata $ BE.InitBlocklyProject
+    $
+      fromMaybe mempty blockly
   assign _contractMetadata metadata
   assign _gistId gistId'
   assign _projectName description

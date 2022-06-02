@@ -88,6 +88,7 @@ data Card
   | ContactsCard
   | ContractTemplateCard
   | ContractActionConfirmationCard ConfirmContractActionDialog.Input
+  | WalletNotFoundCard
 
 data ContractFilter
   = Running

@@ -14,12 +14,15 @@ import Data.Lens (assign, modifying, over, set, use, view)
 import Data.List ((:))
 import Data.List as List
 import Data.Map as Map
+import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
 import Data.String (drop, joinWith, length, take)
+import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
+import Effect.Now (now)
 import Examples.JS.Contracts as JSE
 import Halogen (Component, HalogenM, gets, liftEffect, modify_, query)
 import Halogen.Extra (mapSubmodule)
@@ -32,7 +35,11 @@ import Language.Javascript.Monaco as JSM
 import MainFrame.Types (ChildSlots, _jsEditorSlot)
 import Marlowe (Api)
 import Marlowe.Extended (Contract)
-import Marlowe.Extended.Metadata (MetadataHintInfo, getMetadataHintInfo)
+import Marlowe.Extended.Metadata
+  ( MetaData
+  , MetadataHintInfo
+  , getMetadataHintInfo
+  )
 import Marlowe.Template
   ( _timeContent
   , _valueContent
@@ -91,17 +98,18 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => Action
+  => MetaData
+  -> Action
   -> HalogenM State Action ChildSlots Void m Unit
-handleAction DoNothing = pure unit
+handleAction _ DoNothing = pure unit
 
-handleAction (HandleEditorMessage Monaco.EditorReady) = do
+handleAction _ (HandleEditorMessage Monaco.EditorReady) = do
   editorSetTheme
   mContents <- liftEffect $ SessionStorage.getItem jsBufferLocalStorageKey
   editorSetValue $ fromMaybe JSE.example mContents
   assign _editorReady true
 
-handleAction (HandleEditorMessage (Monaco.TextChanged text)) = do
+handleAction _ (HandleEditorMessage (Monaco.TextChanged text)) = do
   -- When the Monaco component start it fires two messages at the same time, an EditorReady
   -- and TextChanged. Because of how Halogen works, it interwines the handleActions calls which
   -- can cause problems while setting and getting the values of the session storage. To avoid
@@ -150,11 +158,11 @@ handleAction (HandleEditorMessage (Monaco.TextChanged text)) = do
           editorSetValue (fromMaybe "" mContent)
       Nothing -> editorSetValue prunedText
 
-handleAction (ChangeKeyBindings bindings) = do
+handleAction _ (ChangeKeyBindings bindings) = do
   assign _keybindings bindings
   void $ query _jsEditorSlot unit (Monaco.SetKeyBindings bindings unit)
 
-handleAction Compile = do
+handleAction metadata Compile = do
   maybeModel <- query _jsEditorSlot unit (Monaco.GetModel identity)
   compilationResult <- case maybeModel of
     Nothing -> pure NotCompiled
@@ -183,50 +191,56 @@ handleAction Compile = do
 
                 metadataHints :: MetadataHintInfo
                 metadataHints = getMetadataHintInfo contract
+              currentTime <- liftEffect now
               modify_
                 $
                   over (_analysisState <<< _templateContent)
-                    (updateTemplateContent $ getPlaceholderIds contract)
+                    ( updateTemplateContent
+                        currentTime
+                        (Minutes 5.0)
+                        (OMap.keys metadata.timeParameterDescriptions)
+                        (getPlaceholderIds contract)
+                    )
                     <<< set _metadataHintInfo metadataHints
               pure $ CompiledSuccessfully result
   assign _compilationResult compilationResult
   case compilationResult of
-    (CompilationError _) -> handleAction $ BottomPanelAction
+    (CompilationError _) -> handleAction metadata $ BottomPanelAction
       (BottomPanel.ChangePanel ErrorsView)
     _ -> pure unit
 
-handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
-  action
+handleAction metadata (BottomPanelAction (BottomPanel.PanelAction action)) =
+  handleAction metadata action
 
-handleAction (BottomPanelAction action) = do
+handleAction _ (BottomPanelAction action) = do
   toBottomPanel (BottomPanel.handleAction action)
 
-handleAction SendResultToSimulator = pure unit
+handleAction _ SendResultToSimulator = pure unit
 
-handleAction (InitJavascriptProject metadataHints prunedContent) = do
+handleAction _ (InitJavascriptProject metadataHints prunedContent) = do
   editorSetValue prunedContent
   assign _metadataHintInfo metadataHints
   liftEffect $ SessionStorage.setItem jsBufferLocalStorageKey prunedContent
 
-handleAction (SetValueTemplateParam key value) =
+handleAction _ (SetValueTemplateParam key value) =
   modifying
     (_analysisState <<< _templateContent <<< _valueContent)
     (Map.insert key value)
 
-handleAction (SetTimeTemplateParam key value) =
+handleAction _ (SetTimeTemplateParam key value) =
   modifying
     (_analysisState <<< _templateContent <<< _timeContent)
     (Map.insert key value)
 
-handleAction (MetadataAction _) = pure unit
+handleAction _ (MetadataAction _) = pure unit
 
-handleAction AnalyseContract = analyze analyseContract
+handleAction _ AnalyseContract = analyze analyseContract
 
-handleAction AnalyseReachabilityContract = analyze analyseReachability
+handleAction _ AnalyseReachabilityContract = analyze analyseReachability
 
-handleAction AnalyseContractForCloseRefund = analyze analyseClose
+handleAction _ AnalyseContractForCloseRefund = analyze analyseClose
 
-handleAction ClearAnalysisResults = assign
+handleAction _ ClearAnalysisResults = assign
   (_analysisState <<< _analysisExecutionState)
   NoneAsked
 

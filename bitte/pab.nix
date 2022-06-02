@@ -6,7 +6,19 @@
 #   NOMAD_PORT_pab
 #   NOMAD_ALLOC_DIR # With node socket in $NOMAD_ALLOC_DIR/node.sock
 
-{ writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket, network }:
+{ writeShellScriptBin
+, writeText
+, pabExe
+, staticPkg
+, network
+, cacert
+, coreutils
+, lib
+, gnused
+, utillinux
+, wait-for-socket
+, sleep-until-restart-slot
+}:
 let
   inherit (network) slotZeroTime slotLengthMillis;
 
@@ -74,9 +86,7 @@ let
 
     developmentOptions = {
       pabRollbackHistory = 100;
-      pabResumeFrom = {
-        tag = "PointAtGenesis";
-      };
+      pabResumeFrom = network.pabResumeFrom;
     };
   });
 
@@ -104,7 +114,7 @@ in
 writeShellScriptBin "entrypoint" ''
   set -eEuo pipefail
 
-  export PATH=${lib.makeBinPath [ coreutils gnused utillinux wait-for-socket ]}
+  export PATH=${lib.makeBinPath [ coreutils gnused utillinux wait-for-socket sleep-until-restart-slot ]}
 
   export SYSTEM_CERTIFICATE_PATH=${cacert}/etc/ssl/certs/ca-bundle.crt
 
@@ -124,9 +134,8 @@ writeShellScriptBin "entrypoint" ''
 
   ${pab-init-cmd}/bin/pab-init-cmd
 
-  # Ugly ugly hack to kill the PAB every hour
   ${pabExe} --config=pab.yaml webserver --passphrase fixme-allow-pass-per-wallet &
-  sleep 3600&
+  sleep-until-restart-slot&
   wait -n
   exit 1
 ''
