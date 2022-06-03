@@ -17,10 +17,11 @@ import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, mat
                                     receiveWait)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras (spawnLinkLocal)
-import Control.Distributed.Process.Extras.Time (Delay (..), TimeInterval)
+import Control.Distributed.Process.Extras.Time (Delay (..), TimeInterval, seconds)
 import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), ChildStopPolicy (..), ChildType (..),
-                                               RegisteredName (..), RestartPolicy (..), ShutdownMode (..), restartOne,
-                                               restartRight)
+                                               RegisteredName (..), RestartLimit (..), RestartMode (..),
+                                               RestartOrder (..), RestartPolicy (..), RestartStrategy (..),
+                                               ShutdownMode (..), maxRestarts)
 import qualified Control.Distributed.Process.Supervisor as Supervisor
 import Control.Monad (forever)
 import Data.Binary (Binary)
@@ -72,7 +73,9 @@ history :: HistoryDependencies -> Process ()
 history HistoryDependencies{..} = do
   let HistoryConfig{..} = config
   (sendEvents, receiveEvents) <- newChan
-  _ <- spawnLinkLocal $ Supervisor.run restartRight ParallelShutdown
+  let limit = RestartLimit (maxRestarts 20) (seconds 1)
+  let mode = RestartRevOrder RightToLeft
+  _ <- spawnLinkLocal $ Supervisor.run (RestartRight limit mode) ParallelShutdown
     [ worker "history.logger" Permanent Nothing StopImmediately $ RunClosure $ Logger.process logger
     , worker "history.store" Permanent Nothing StopImmediately $ RunClosure $ Store.process $ Store.HistoryStoreDependencies dbChan initStoreChan
     , worker "history.database" Permanent Nothing StopImmediately $ RunClosure $ Database.process $ Database.HistoryDatabaseDependencies initDbChan chainDbChan

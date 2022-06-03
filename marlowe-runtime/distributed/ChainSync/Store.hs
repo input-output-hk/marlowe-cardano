@@ -16,7 +16,7 @@
 module ChainSync.Store where
 
 import ChainSync.Client (ChainSyncMsg (..))
-import ChainSync.Database (Block (..), ChainSyncQuery, TxWithBlockHeader (..), rollBackward, rollForward)
+import ChainSync.Database (Block (..), ChainSyncQuery, rollBackward, rollForward)
 import qualified ChainSync.Database as DB
 import Control.Distributed.Process (Closure, Process, ProcessId, ProcessMonitorNotification (..), ReceivePort, SendPort,
                                     getSelfPid, match, matchChan, monitor, newChan, receiveWait, sendChan)
@@ -31,7 +31,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain.Types (MarloweChainEvent (..), MarloweChainPoint (..))
 
@@ -68,8 +67,6 @@ data Subscriber a = Subscriber
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
 
-type ConsumerSubscriber = Subscriber TxWithBlockHeader
-type SecurityParamSubscriber = Subscriber ()
 type BlockSubscriber = Subscriber Block
 
 data ChainStoreQuery
@@ -81,9 +78,6 @@ data ChainSyncStoreState = ChainSyncStoreState
   { blockSubscribers :: Map ProcessId BlockSubscriber
   , deadSubscribers  :: Set ProcessId
   }
-
-securityParameter :: Word64
-securityParameter = 2160
 
 chainSyncStore :: ChainSyncStoreDependencies -> Process ()
 chainSyncStore ChainSyncStoreDependencies{..} = do

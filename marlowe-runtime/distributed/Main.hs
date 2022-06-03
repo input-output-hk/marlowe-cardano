@@ -17,7 +17,7 @@ import ChainSync.Logger (ChainSyncLoggerConfig (..))
 import ChainSync.Store (ChainStoreQuery)
 import Control.Distributed.Process (Process, ProcessInfo (ProcessInfo, infoRegisteredNames), RemoteTable, SendPort,
                                     expect, getProcessInfo, kill, liftIO, link, matchChan, newChan, nsend, receiveChan,
-                                    receiveWait, register, reregister, say, sendChan, spawnLocal, whereis)
+                                    receiveWait, reregister, say, sendChan, spawnLocal, whereis)
 import Control.Distributed.Process.Extras (spawnLinkLocal)
 import Control.Distributed.Process.Extras.SystemLog (LogLevel (..), systemLog)
 import Control.Distributed.Process.Extras.Time (Delay (..), seconds)
@@ -105,7 +105,8 @@ app Config{..} = do
   liftIO $ hSetBuffering h LineBuffering
   syslog <- systemLog (liftIO . hPutStrLn h) (liftIO (hClose h)) Debug pure
   kill syslog "killing syslog"
-  void $ spawnLocal chaosMonkey
+  chaosMonkeyPid <- spawnLocal chaosMonkey
+  kill chaosMonkeyPid "killing chaos monkey"
   appSupervisor <- spawnLinkLocal $ Supervisor.run restartRight ParallelShutdown
     [ supervisor "chain-sync" $ RunClosure $ ChainSync.process $ ChainSync.ChainSyncDependencies chainSync sendMsg initChainDbChan initChainStoreChan chainDbChanProxy
     , supervisor "history" $ RunClosure $ History.process $ History.HistoryDependencies history chainDbChanProxy chainStoreChanProxy historyStoreChanProxy initHistoryDbChan initHistoryStoreChan historyDbChanProxy
