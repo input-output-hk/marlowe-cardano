@@ -17,7 +17,7 @@ import Cardano.Api (NetworkId (Testnet))
 import Cardano.Api.Byron (NetworkMagic (NetworkMagic))
 import ChainSync.Database (Block (..))
 import ChainSync.Store (ChainStoreQuery, getBlocks)
-import Control.Applicative (empty)
+import Control.Applicative (empty, (<|>))
 import Control.Distributed.Process (Closure, Process, SendPort, receiveChan, say, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras.Time (TimeInterval)
@@ -67,8 +67,9 @@ data HistoryDigestDependencies = HistoryDigestDependencies
 instance Binary HistoryDigestDependencies
 
 data State = State
-  { utxoIndex :: Map TxOutRef (Datum, ContractCreationTxOut)
-  , slotIndex :: IntMap (Set TxOutRef)
+  { utxoIndex        :: Map TxOutRef (Datum, ContractCreationTxOut)
+  , paymentUtxoIndex :: Map TxOutRef ContractCreationTxOut
+  , slotIndex        :: IntMap (Set TxOutRef)
   }
 
 data CandidateTx = CandidateTx
@@ -86,7 +87,7 @@ historyDigest HistoryDigestDependencies{..} = do
   let
     go state = go =<< ($ state) . either handleRollback handleRollForward =<< receiveChan getNextBlock
 
-    emptyState = State { utxoIndex = mempty, slotIndex = mempty }
+    emptyState = State { utxoIndex = mempty, paymentUtxoIndex = mempty, slotIndex = mempty }
 
     loadInitialState = do
       traverse_ initializeContractState contractIds
@@ -100,6 +101,9 @@ historyDigest HistoryDigestDependencies{..} = do
           InputsWereApplied (Just appTxOutRef) _ -> do
             let MarloweBlockHeader slot _ _ = blockHeader
             addUtxo slot creationTxOut appTxOutRef
+          RoleWasPaidOut{..} -> do
+            let MarloweBlockHeader slot _ _ = blockHeader
+            addPaymentUtxo slot creationTxOut payoutTxOut
           _ -> pure ()
 
 
@@ -124,6 +128,7 @@ historyDigest HistoryDigestDependencies{..} = do
       let afterSlotTxOuts = foldMap snd afterSlotIndex
       pure State
         { utxoIndex = Map.withoutKeys utxoIndex afterSlotTxOuts
+        , paymentUtxoIndex = Map.withoutKeys paymentUtxoIndex afterSlotTxOuts
         , slotIndex = IntMap.fromDistinctAscList beforeSlotIndex
         }
 
@@ -152,16 +157,23 @@ extractEvents' tx@MarloweTx{..} = concat <$> traverse go marloweTx_inputs
       header@(MarloweBlockHeader slot _ _) <- lift ask
       let txOutRef = TxOutRef txid txix
       guard $ Set.notMember txOutRef consumed
-      (datum, creationTx@ContractCreationTxOut{contractId, txOut, roleValidatorAddress}) <- hoistMaybe $ Map.lookup txOutRef utxoIndex
+      utxo <- hoistMaybe $ (Left <$> Map.lookup txOutRef paymentUtxoIndex) <|> (Right <$> Map.lookup txOutRef utxoIndex)
       lift $ modify $ first $ Set.insert txOutRef
-      let appTxOutRef = AppTxOutRef{..}
-      case extractEvents roleValidatorAddress (marloweTxOut_address txOut) contractId appTxOutRef header tx of
-        Left err -> do
-          lift $ lift $ say $ "error: " <> err
-          empty
-        Right (mNewAppOut, events) -> do
-          lift $ traverse_ (addUtxo slot creationTx) mNewAppOut
-          pure events
+      case utxo of
+        Left creationTx@ContractCreationTxOut{contractId, txOut, roleValidatorAddress} ->
+          pure [Event contractId header marloweTx_id $ PayoutWasRedeemed txOutRef]
+        Right (datum, creationTx@ContractCreationTxOut{contractId, txOut, roleValidatorAddress}) -> do
+          let appTxOutRef = AppTxOutRef{..}
+          case extractEvents roleValidatorAddress (marloweTxOut_address txOut) contractId appTxOutRef header tx of
+            Left err -> do
+              lift $ lift $ say $ "error: " <> err
+              empty
+            Right (mNewAppOut, events) -> do
+              lift $ traverse_ (addUtxo slot creationTx) mNewAppOut
+              for_ events \case
+                Event{historyEvent = RoleWasPaidOut{..}} -> lift $ addPaymentUtxo slot creationTx payoutTxOut
+                _                                        -> pure ()
+              pure events
 
 hoistMaybe :: Applicative f => Maybe a -> MaybeT f a
 hoistMaybe = MaybeT . pure
@@ -186,6 +198,19 @@ addUtxo
 addUtxo slot creation@ContractCreationTxOut{contractId} AppTxOutRef{..} =
   modify $ second \State{..} -> State
     { utxoIndex = Map.insert txOutRef (datum, creation) utxoIndex
+    , paymentUtxoIndex = paymentUtxoIndex
+    , slotIndex = IntMap.insertWith (<>) (slotToIntegral slot) (Set.singleton txOutRef) slotIndex
+    }
+
+addPaymentUtxo
+  :: MarloweSlotNo
+  -> ContractCreationTxOut
+  -> TxOutRef
+  -> RWST r () (s, State) Process ()
+addPaymentUtxo slot creation@ContractCreationTxOut{contractId} txOutRef =
+  modify $ second \State{..} -> State
+    { utxoIndex = utxoIndex
+    , paymentUtxoIndex = Map.insert txOutRef creation paymentUtxoIndex
     , slotIndex = IntMap.insertWith (<>) (slotToIntegral slot) (Set.singleton txOutRef) slotIndex
     }
 

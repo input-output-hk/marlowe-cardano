@@ -36,6 +36,7 @@ data HistoryEvent
       , assets      :: Assets
       , payoutTxOut :: TxOutRef
       }
+  | PayoutWasRedeemed TxOutRef
   deriving (Generic, Typeable, Show, Eq)
 
 instance Binary HistoryEvent
