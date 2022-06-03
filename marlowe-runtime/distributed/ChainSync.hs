@@ -21,7 +21,7 @@ import qualified ChainSync.Store as Store
 import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, newChan, receiveChan, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras (Routable (sendTo), spawnLinkLocal)
-import Control.Distributed.Process.Extras.Time (Delay (..), TimeInterval, minutes, seconds)
+import Control.Distributed.Process.Extras.Time (seconds)
 import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), ChildStopPolicy (..), ChildType (..),
                                                RegisteredName (..), RestartLimit (..), RestartMode (..),
                                                RestartOrder (..), RestartPolicy (..), RestartStrategy (..),
@@ -32,9 +32,9 @@ import Data.Binary (Binary)
 import Data.Data (Typeable)
 import GHC.Generics (Generic)
 
-worker :: String -> RestartPolicy -> Maybe TimeInterval -> ChildStopPolicy -> ChildStart -> ChildSpec
-worker name restartPolicy restartDelay stopPolicy start =
-  ChildSpec name Worker restartPolicy restartDelay stopPolicy start $ Just $ LocalName name
+worker :: String -> RestartPolicy -> ChildStart -> ChildSpec
+worker name restartPolicy start =
+  ChildSpec name Worker restartPolicy Nothing StopImmediately start $ Just $ LocalName name
 
 data ChainSyncDependencies = ChainSyncDependencies
   { config        :: ChainSyncConfig
@@ -62,10 +62,10 @@ chainSync ChainSyncDependencies{..} = do
   let limit = RestartLimit (maxRestarts 20) (seconds 1)
   let mode = RestartRevOrder RightToLeft
   _ <- spawnLinkLocal $ Supervisor.run (RestartRight limit mode) ParallelShutdown
-    [ worker "chain-sync.logger" Permanent Nothing StopImmediately $ RunClosure $ Logger.process logger
-    , worker "chain-sync.store" Permanent Nothing StopImmediately $ RunClosure $ Store.process $ ChainSyncStoreDependencies dbChan initStoreChan
-    , worker "chain-sync.db" Permanent Nothing StopImmediately $ RunClosure $ Database.process $ ChainSyncDatabaseDependencies initDbChan
-    , worker "chain-sync.client" Intrinsic (Just (seconds 5)) StopImmediately $ RunClosure $ Client.process $ ChainSyncClientDependencies client sendMsg dbChan
+    [ worker "chain-sync.logger" Permanent $ RunClosure $ Logger.process logger
+    , worker "chain-sync.store" Permanent $ RunClosure $ Store.process $ ChainSyncStoreDependencies dbChan initStoreChan
+    , worker "chain-sync.db" Permanent $ RunClosure $ Database.process $ ChainSyncDatabaseDependencies initDbChan
+    , worker "chain-sync.client" Intrinsic $ RunClosure $ Client.process $ ChainSyncClientDependencies client sendMsg dbChan
     ]
   forever do
     msg <- receiveChan receiveMsg

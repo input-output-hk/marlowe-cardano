@@ -17,9 +17,8 @@ import ChainSync.Logger (ChainSyncLoggerConfig (..))
 import ChainSync.Store (ChainStoreQuery)
 import Control.Distributed.Process (Process, ProcessInfo (ProcessInfo, infoRegisteredNames), RemoteTable, SendPort,
                                     expect, getProcessInfo, kill, liftIO, link, matchChan, newChan, nsend, receiveChan,
-                                    receiveWait, reregister, say, sendChan, spawnLocal, whereis)
+                                    receiveWait, reregister, say, sendChan, whereis)
 import Control.Distributed.Process.Extras (spawnLinkLocal)
-import Control.Distributed.Process.Extras.SystemLog (LogLevel (..), systemLog)
 import Control.Distributed.Process.Extras.Time (Delay (..), seconds)
 import Control.Distributed.Process.Extras.Timer (periodically)
 import Control.Distributed.Process.Internal.Primitives (SayMessage (..))
@@ -42,7 +41,7 @@ import History.Logger (HistoryLoggerConfig (..))
 import History.Store (HistoryStoreChan)
 import Network.Transport.TCP (TCPAddr (..), createTransport, defaultTCPParameters)
 import System.Directory.Internal.Prelude (traverse_)
-import System.IO (BufferMode (LineBuffering), IOMode (AppendMode), hClose, hPutStrLn, hSetBuffering, openFile)
+import System.IO (BufferMode (LineBuffering), IOMode (AppendMode), hSetBuffering, openFile)
 import System.Random (randomRIO)
 
 supervisor :: String -> ChildStart -> ChildSpec
@@ -103,10 +102,8 @@ app Config{..} = do
   reregister "logger" =<< spawnLinkLocal appLogger
   h <- liftIO $ openFile "./system.log" AppendMode
   liftIO $ hSetBuffering h LineBuffering
-  syslog <- systemLog (liftIO . hPutStrLn h) (liftIO (hClose h)) Debug pure
-  kill syslog "killing syslog"
-  chaosMonkeyPid <- spawnLocal chaosMonkey
-  kill chaosMonkeyPid "killing chaos monkey"
+  -- _ <- systemLog (liftIO . hPutStrLn h) (liftIO (hClose h)) Debug pure
+  -- _ <- spawnLocal chaosMonkey
   appSupervisor <- spawnLinkLocal $ Supervisor.run restartRight ParallelShutdown
     [ supervisor "chain-sync" $ RunClosure $ ChainSync.process $ ChainSync.ChainSyncDependencies chainSync sendMsg initChainDbChan initChainStoreChan chainDbChanProxy
     , supervisor "history" $ RunClosure $ History.process $ History.HistoryDependencies history chainDbChanProxy chainStoreChanProxy historyStoreChanProxy initHistoryDbChan initHistoryStoreChan historyDbChanProxy

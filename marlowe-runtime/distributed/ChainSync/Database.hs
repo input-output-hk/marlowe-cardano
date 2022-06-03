@@ -17,7 +17,7 @@
 module ChainSync.Database where
 
 import Control.Arrow ((&&&))
-import Control.Distributed.Process (Closure, Process, SendPort, newChan, receiveChan, say, sendChan)
+import Control.Distributed.Process (Closure, Process, SendPort, newChan, receiveChan, say, sendChan, spawnLocal)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
@@ -26,6 +26,7 @@ import Data.Binary (Binary, decode, decodeOrFail, encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Data (Typeable)
+import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import GHC.Base (when)
@@ -113,7 +114,7 @@ tipFile :: FilePath
 tipFile = dir <> "/tip"
 
 writeFrequency :: Int
-writeFrequency = 2000
+writeFrequency = 400
 
 chainSyncDatabase :: ChainSyncDatabaseDependencies -> Process ()
 chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
@@ -169,7 +170,7 @@ chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
 
       saveState state@ChainSyncDatabaseState{..} = do
         let blockCount = Map.size blocks
-        when (blockCount /= lastSavedBlocksCount) do
+        when (blockCount /= lastSavedBlocksCount) $ void $ spawnLocal do
           say $ "saving chain state with " <> show blockCount <> " blocks"
           liftIO $ overwrite blocksFile blocks
         liftIO $ overwrite tipFile tip

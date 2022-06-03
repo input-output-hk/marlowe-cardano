@@ -10,13 +10,16 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE TypeApplications          #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 module ChainSync.Client where
 
 import Cardano.Api
 import Cardano.Api.Shelley (Hash (HeaderHash))
 import ChainSync.Database (ChainSyncQuery, getIntersectionPoints)
-import Control.Distributed.Process (Closure, Process, SendPort, say, sendChan)
+import Control.Distributed.Process (Closure, Process, SendPort, catch, say, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
+import Control.Distributed.Process.Extras.Time (seconds)
+import Control.Distributed.Process.Extras.Timer (sleep)
 import Control.Distributed.Process.Internal.Types (Process (..))
 import Data.Binary (Binary (..))
 import Data.Maybe (fromMaybe)
@@ -61,7 +64,7 @@ data SendPortWithRollback a = SendPortWithRollback
   deriving anyclass Binary
 
 chainSyncClient :: ChainSyncClientDependencies -> Process ()
-chainSyncClient ChainSyncClientDependencies{..} = do
+chainSyncClient deps@ChainSyncClientDependencies{..} = flip catch restart do
   let ChainSyncClientConfig{..} = config
   intersectionPoints <- getIntersectionPoints sendQuery
   let
@@ -85,6 +88,10 @@ chainSyncClient ChainSyncClientDependencies{..} = do
       (pure False)
       (unProcess . sendChan msgChan . ChainSyncEvent)
       (unProcess $ sendChan msgChan ChainSyncDone)
+    where
+      restart (_ :: IOError) = do
+        sleep (seconds 1)
+        chainSyncClient deps
 
 remotable ['chainSyncClient]
 
