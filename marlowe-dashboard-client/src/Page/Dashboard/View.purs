@@ -494,8 +494,8 @@ dashboardFooter =
 dashboardLinks :: forall w i. Array (HTML w i)
 dashboardLinks =
   -- FIXME: SCP-2589 Add link to Docs
-  [ link "Docs" ""
-  , link "marlowe-finance.io" "https://marlowe-finance.io"
+  [ -- link "Docs" ""
+    link "marlowe-finance.io" "https://marlowe-finance.io"
   , link "play.marlowe-finance.io" "https://play.marlowe-finance.io"
   {- disabled for phase 1, link "Market" ""
   , link "Support" "" -}

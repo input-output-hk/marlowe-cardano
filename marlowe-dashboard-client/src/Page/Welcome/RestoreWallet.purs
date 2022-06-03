@@ -162,10 +162,8 @@ render { addressBook, result, fields, walletDetails } = do
             ]
         , HH.p_
             [ HH.b_ [ HH.text "IMPORTANT:" ]
-            -- FIXME: as part of SCP-3173, Write a section in the Marlowe Run documentation and add a link to it
-            , HH.text "Do not use a real wallet phrase <read more>"
+            , HH.text "Do not use a mainnet wallet phrase"
             ]
-        -- TODO replace with progress buttons when refactored.
         , HH.p [ classNames $ Css.inputError false ] [ HH.text serverError ]
         ]
     , inProgress
