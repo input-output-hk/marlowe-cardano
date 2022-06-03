@@ -110,6 +110,7 @@ handleAction _ (HandleEditorMessage Monaco.EditorReady) = do
   assign _editorReady true
 
 handleAction _ (HandleEditorMessage (Monaco.TextChanged text)) = do
+  clearAnalysisResults
   -- When the Monaco component start it fires two messages at the same time, an EditorReady
   -- and TextChanged. Because of how Halogen works, it interwines the handleActions calls which
   -- can cause problems while setting and getting the values of the session storage. To avoid
@@ -163,6 +164,7 @@ handleAction _ (ChangeKeyBindings bindings) = do
   void $ query _jsEditorSlot unit (Monaco.SetKeyBindings bindings unit)
 
 handleAction metadata Compile = do
+  clearAnalysisResults
   maybeModel <- query _jsEditorSlot unit (Monaco.GetModel identity)
   compilationResult <- case maybeModel of
     Nothing -> pure NotCompiled
@@ -222,12 +224,14 @@ handleAction _ (InitJavascriptProject metadataHints prunedContent) = do
   assign _metadataHintInfo metadataHints
   liftEffect $ SessionStorage.setItem jsBufferLocalStorageKey prunedContent
 
-handleAction _ (SetValueTemplateParam key value) =
+handleAction _ (SetValueTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< _valueContent)
     (Map.insert key value)
 
-handleAction _ (SetTimeTemplateParam key value) =
+handleAction _ (SetTimeTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< _timeContent)
     (Map.insert key value)
@@ -240,7 +244,8 @@ handleAction _ AnalyseReachabilityContract = analyze analyseReachability
 
 handleAction _ AnalyseContractForCloseRefund = analyze analyseClose
 
-handleAction _ ClearAnalysisResults = assign
+clearAnalysisResults :: forall m. HalogenM State Action ChildSlots Void m Unit
+clearAnalysisResults = assign
   (_analysisState <<< _analysisExecutionState)
   NoneAsked
 

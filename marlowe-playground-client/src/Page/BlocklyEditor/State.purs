@@ -82,7 +82,8 @@ handleAction metadata (HandleBlocklyMessage Blockly.BlocklyReady) = do
   mContents <- liftEffect $ SessionStorage.getItem marloweBufferLocalStorageKey
   handleAction metadata $ InitBlocklyProject $ fromMaybe ME.example mContents
 
-handleAction metadata (HandleBlocklyMessage Blockly.CodeChange) =
+handleAction metadata (HandleBlocklyMessage Blockly.CodeChange) = do
+  clearAnalysisResults
   processBlocklyCode metadata
 
 handleAction _ (HandleBlocklyMessage (Blockly.BlockSelection selection)) =
@@ -121,12 +122,14 @@ handleAction metadata (BottomPanelAction (BottomPanel.PanelAction action)) =
 handleAction _ (BottomPanelAction action) = toBottomPanel
   (BottomPanel.handleAction action)
 
-handleAction _ (SetValueTemplateParam key value) =
+handleAction _ (SetValueTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._valueContent)
     (Map.insert key value)
 
-handleAction _ (SetTimeTemplateParam key value) =
+handleAction _ (SetTimeTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._timeContent)
     (Map.insert key value)
@@ -141,12 +144,13 @@ handleAction metadata AnalyseReachabilityContract = runAnalysis metadata
 handleAction metadata AnalyseContractForCloseRefund = runAnalysis metadata
   analyseClose
 
-handleAction _ ClearAnalysisResults = assign
-  (_analysisState <<< _analysisExecutionState)
-  NoneAsked
-
 handleAction _ (SelectWarning warning) = H.tell _blocklySlot unit $
   Blockly.SelectWarning warning
+
+clearAnalysisResults :: forall m. HalogenM State Action ChildSlots Void m Unit
+clearAnalysisResults = assign
+  (_analysisState <<< _analysisExecutionState)
+  NoneAsked
 
 -- This function reads the Marlowe code from blockly and, process it and updates the component state
 processBlocklyCode

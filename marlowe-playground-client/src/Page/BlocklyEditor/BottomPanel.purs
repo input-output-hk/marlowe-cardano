@@ -6,7 +6,7 @@ import Prologue hiding (div)
 
 import Component.MetadataTab (render) as MetadataTab
 import Data.Array as Array
-import Data.Lens (to, (^.))
+import Data.Lens ((^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Classes
@@ -17,10 +17,10 @@ import Halogen.Classes
   , grid
   , gridColsDescriptionLocation
   , justifySelfEnd
-  , paddingRight
   , underline
   )
-import Halogen.HTML (a, div, div_, pre_, section, section_, span_, text)
+import Halogen.Css (classNames)
+import Halogen.HTML (a, div, div_, pre_, section, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
 import MainFrame.Types (ChildSlots)
@@ -33,19 +33,7 @@ import Page.BlocklyEditor.Types
   , _metadataHintInfo
   , _warnings
   )
-import StaticAnalysis.BottomPanel
-  ( analysisResultPane
-  , analyzeButton
-  , clearButton
-  )
-import StaticAnalysis.Types
-  ( _analysisExecutionState
-  , _analysisState
-  , isCloseAnalysisLoading
-  , isNoneAsked
-  , isReachabilityLoading
-  , isStaticLoading
-  )
+import StaticAnalysis.BottomPanel (analysisPane)
 
 panelContents
   :: forall m
@@ -70,47 +58,20 @@ panelContents state metadata StaticAnalysisView =
           ]
       ]
     else
-      [ analysisResultPane
+      [ analysisPane
           metadata
+          { warnings: AnalyseContract
+          , reachability: AnalyseReachabilityContract
+          , refund: AnalyseContractForCloseRefund
+          }
           { valueAction: SetValueTemplateParam
           , timeAction: SetTimeTemplateParam
           }
           state
-      , div [ classes [ paddingRight ] ]
-          [ analyzeButton loadingWarningAnalysis analysisEnabled
-              "Analyse for warnings"
-              AnalyseContract
-          , analyzeButton loadingReachability analysisEnabled
-              "Analyse reachability"
-              AnalyseReachabilityContract
-          , analyzeButton loadingCloseAnalysis analysisEnabled
-              "Analyse for refunds on Close"
-              AnalyseContractForCloseRefund
-          , clearButton clearEnabled "Clear" ClearAnalysisResults
-          ]
       ]
-  where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
-    <<< to isStaticLoading
-
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isReachabilityLoading
-
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isCloseAnalysisLoading
-
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
-    isNoneAsked
-
-  nothingLoading = not loadingWarningAnalysis && not loadingReachability && not
-    loadingCloseAnalysis
-
-  clearEnabled = nothingLoading && not noneAskedAnalysis
-
-  analysisEnabled = nothingLoading
 
 panelContents state _ BlocklyWarningsView =
-  section_
+  section [ classNames [ "py-4" ] ]
     if Array.null warnings then
       [ pre_ [ text "No warnings" ] ]
     else

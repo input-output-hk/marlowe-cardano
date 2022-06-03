@@ -44,7 +44,6 @@ data Action
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
-  | ClearAnalysisResults
   | Save
   | DoNothing
 
@@ -75,7 +74,6 @@ instance actionIsEvent :: IsEvent Action where
     "AnalyseReachabilityContract"
   toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
     "AnalyseContractForCloseRefund"
-  toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent Save = Just $ defaultEvent "Save"
   toEvent DoNothing = Nothing
 
