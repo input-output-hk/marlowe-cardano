@@ -11,10 +11,10 @@ import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
-import Halogen.Classes (first, rTable, rTable4cols, rTableCell, rTableEmptyRow)
+import Halogen.Classes (first, rTableCell, rTableEmptyRow)
 import Halogen.Classes as Classes
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, br_, div, div_, h4, text)
+import Halogen.HTML (HTML, br_, div, div_, h4, section, text)
 import Halogen.HTML.Properties (class_, classes)
 import Humanize (humanizeValue)
 import MainFrame.Types (ChildSlots)
@@ -65,11 +65,12 @@ panelContents _ state WarningsAndErrorsView =
       )
       state
   in
-    warningsAndErrorsView runtimeWarnings mRuntimeError
+    section [ classNames [ "py-4" ] ] $
+      [ warningsAndErrorsView runtimeWarnings mRuntimeError ]
 
 currentStateView :: forall p action. MetaData -> State -> HTML p action
 currentStateView metadata state =
-  div [ classes [ rTable, rTable4cols ] ]
+  div [ classNames [ "Rtable", "Rtable--4cols", "py-4" ] ]
     ( tableRow
         { title: "Accounts"
         , emptyMessage: "No accounts have been used"

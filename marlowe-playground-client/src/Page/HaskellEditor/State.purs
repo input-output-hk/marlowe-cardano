@@ -111,6 +111,7 @@ handleAction _ (ChangeKeyBindings bindings) = do
   void $ query _haskellEditorSlot unit (Monaco.SetKeyBindings bindings unit)
 
 handleAction metadata Compile = do
+  clearAnalysisResults
   mContents <- editorGetValue
   case mContents of
     Nothing -> pure unit
@@ -167,12 +168,14 @@ handleAction _ (InitHaskellProject metadataHints contents) = do
   assign _metadataHintInfo metadataHints
   liftEffect $ SessionStorage.setItem haskellBufferLocalStorageKey contents
 
-handleAction _ (SetValueTemplateParam key value) =
+handleAction _ (SetValueTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< _valueContent)
     (Map.insert key value)
 
-handleAction _ (SetTimeTemplateParam key value) =
+handleAction _ (SetTimeTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< _timeContent)
     (Map.insert key value)
@@ -185,7 +188,8 @@ handleAction _ AnalyseReachabilityContract = analyze analyseReachability
 
 handleAction _ AnalyseContractForCloseRefund = analyze analyseClose
 
-handleAction _ ClearAnalysisResults = assign
+clearAnalysisResults :: forall m. HalogenM State Action ChildSlots Void m Unit
+clearAnalysisResults = assign
   (_analysisState <<< _analysisExecutionState)
   NoneAsked
 

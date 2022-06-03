@@ -42,7 +42,6 @@ data Action
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
-  | ClearAnalysisResults
   | MetadataAction MetadataAction
   | DoNothing
 
@@ -63,7 +62,6 @@ instance actionIsEvent :: IsEvent Action where
     "AnalyseReachabilityContract"
   toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
     "AnalyseContractForCloseRefund"
-  toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
     { label = Just $ showConstructor action }
   toEvent DoNothing = Nothing
