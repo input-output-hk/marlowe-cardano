@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns              #-}
 {-# LANGUAGE BlockArguments            #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveAnyClass            #-}
@@ -18,28 +17,23 @@
 module ChainSync.Database where
 
 import Control.Arrow ((&&&))
-import Control.Distributed.Process (Closure, Process, SendPort, newChan, receiveChan, sendChan)
+import Control.Distributed.Process (Closure, Process, SendPort, newChan, receiveChan, say, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
-import Control.Monad (when)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
-import Data.Binary (Binary, decodeOrFail, encode)
+import Data.Bifunctor (Bifunctor (bimap))
+import Data.Binary (Binary, decode, decodeOrFail, encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Data (Typeable)
-import Data.Foldable (fold)
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
+import GHC.Base (when)
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash, MarloweChainPoint (..),
-                                             MarloweChainTip (..), MarloweSlotNo (..), MarloweTx (..), MarloweTxId,
-                                             MarloweTxIn (MarloweTxIn), TxOutRef (..))
-import System.Directory (doesFileExist, removeFile)
+import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweBlockHeaderHash, MarloweBlockNo (..),
+                                             MarloweChainPoint (..), MarloweChainTip (..), MarloweSlotNo (..),
+                                             MarloweTx (..), MarloweTxId, slotToIntegral)
+import System.Directory (createDirectory, doesDirectoryExist, renamePath)
 
 newtype ChainSyncDatabaseDependencies = ChainSyncDatabaseDependencies
   { initStoreChan :: SendPort ChainSyncQueryChan
@@ -57,11 +51,9 @@ data TxWithBlockHeader = TxWithBlockHeader
 data ChainSyncQuery
   = GetIntersectionPoints (SendPort [MarloweChainPoint])
   | GetTip (SendPort MarloweChainTip)
-  | GetConsumer TxOutRef (SendPort (Maybe TxWithBlockHeader))
   | GetBlocksAfter MarloweChainPoint (SendPort (Maybe [Block]))
   | RollForward Block MarloweChainTip
-  | RollBackwardToGenesis MarloweChainTip
-  | RollBackward MarloweSlotNo MarloweBlockHeaderHash MarloweChainTip (SendPort [Block])
+  | RollBackward MarloweChainPoint MarloweChainTip
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
 
@@ -74,14 +66,15 @@ data Block = Block
   deriving (Generic, Typeable, Show, Eq)
   deriving anyclass Binary
 
+data BlockKey = BlockKey MarloweSlotNo MarloweBlockHeaderHash
+  deriving (Generic, Typeable, Show, Eq, Ord)
+  deriving anyclass Binary
+
 data ChainSyncDatabaseState = ChainSyncDatabaseState
-  { blocks             :: Map MarloweBlockHeaderHash Block
-  , transactions       :: Map MarloweTxId TxWithBlockHeader
-  , intersectionPoints :: [MarloweChainPoint]
-  , tip                :: MarloweChainTip
-  , consumerIndex      :: Map TxOutRef MarloweTxId
-  , consumerSlotIndex  :: IntMap (Set TxOutRef)
-  , blockSlotIndex     :: IntMap MarloweBlockHeaderHash
+  { blocks               :: Map BlockKey (MarloweBlockNo, Map MarloweTxId MarloweTx)
+  , intersectionPoints   :: [MarloweChainPoint]
+  , tip                  :: MarloweChainTip
+  , lastSavedBlocksCount :: Int
   }
   deriving (Generic, Typeable)
   deriving anyclass (Binary)
@@ -89,14 +82,8 @@ data ChainSyncDatabaseState = ChainSyncDatabaseState
 rollForward :: ChainSyncQueryChan -> Block -> MarloweChainTip -> Process ()
 rollForward chan block = sendChan chan . RollForward block
 
-rollBackwardToGenesis :: ChainSyncQueryChan -> MarloweChainTip -> Process ()
-rollBackwardToGenesis chan = sendChan chan . RollBackwardToGenesis
-
-rollBackward :: ChainSyncQueryChan -> MarloweSlotNo -> MarloweBlockHeaderHash -> MarloweChainTip -> Process [Block]
-rollBackward chan slot hash tip = do
-  (sendBlocks, receiveBlocks) <- newChan
-  sendChan chan $ RollBackward slot hash tip sendBlocks
-  receiveChan receiveBlocks
+rollBackward :: ChainSyncQueryChan -> MarloweChainPoint -> MarloweChainTip -> Process  ()
+rollBackward chan point = sendChan chan . RollBackward point
 
 getIntersectionPoints :: ChainSyncQueryChan -> Process [MarloweChainPoint]
 getIntersectionPoints sendQuery = do
@@ -110,134 +97,125 @@ getTip sendQuery = do
   sendChan sendQuery $ GetTip sendPort
   receiveChan receiveResponse
 
-getConsumer :: ChainSyncQueryChan -> TxOutRef -> Process (Maybe TxWithBlockHeader)
-getConsumer sendQuery ref = do
-  (sendPort, receiveResponse) <- newChan
-  sendChan sendQuery $ GetConsumer ref sendPort
-  receiveChan receiveResponse
-
 getBlocksAfter :: ChainSyncQueryChan -> MarloweChainPoint -> Process (Maybe [Block])
 getBlocksAfter sendQuery point = do
   (sendPort, receiveResponse) <- newChan
   sendChan sendQuery $ GetBlocksAfter point sendPort
   receiveChan receiveResponse
 
-file :: FilePath
-file = "./chain-db"
+dir :: FilePath
+dir = "./chain-db"
 
-writeFrequency :: NominalDiffTime
-writeFrequency = secondsToNominalDiffTime 5
+blocksFile :: FilePath
+blocksFile = dir <> "/blocks"
+
+tipFile :: FilePath
+tipFile = dir <> "/tip"
+
+writeFrequency :: Int
+writeFrequency = 2000
 
 chainSyncDatabase :: ChainSyncDatabaseDependencies -> Process ()
 chainSyncDatabase ChainSyncDatabaseDependencies{..} = do
   (sendQuery, receiveQuery) <- newChan
   sendChan initStoreChan sendQuery
-  let go (lastWrite, state) = go =<< handleQuery lastWrite state =<< receiveChan receiveQuery
-  !initialState <- liftIO do
-    fileExists <- doesFileExist file
-    if fileExists then do
-      bytes <- BS.readFile file
-      pure case decodeOrFail $ LBS.fromStrict bytes of
-        Left _        -> emptyState
-        Right (_,_,a) -> a
-    else do
-      LBS.writeFile file $ encode emptyState
-      pure emptyState
-  lastWrite <- liftIO getCurrentTime
-  go (lastWrite, initialState)
+  let go state = go =<< handleQuery state =<< receiveChan receiveQuery
+  initialState <- liftIO do
+    directoryExists <- doesDirectoryExist dir
+    unless directoryExists do
+      createDirectory dir
+      LBS.writeFile tipFile $ encode MarloweChainTipAtGenesis
+      LBS.writeFile blocksFile $ encode $ blocks emptyState
+    tipBytes <- BS.readFile tipFile
+    blockBytes <- BS.readFile blocksFile
+    let tip = decode $ LBS.fromStrict tipBytes
+    let
+      blocks = case decodeOrFail $ LBS.fromStrict blockBytes of
+        Left _        -> mempty
+        Right (_,_,b) -> b
+      toPoint (BlockKey s h) = MarloweChainPoint s h
+    pure $ ChainSyncDatabaseState blocks (take 1 $ toPoint . fst <$> Map.toDescList blocks) tip (Map.size blocks)
+  go initialState
     where
       emptyState = ChainSyncDatabaseState
         { blocks = mempty
-        , transactions = mempty
         , intersectionPoints = mempty
         , tip = MarloweChainTipAtGenesis
-        , consumerIndex = mempty
-        , consumerSlotIndex = mempty
-        , blockSlotIndex = mempty
+        , lastSavedBlocksCount = 0
         }
-      handleQuery lastWrite state@ChainSyncDatabaseState{..} = \case
-        GetIntersectionPoints sendResponse       -> (lastWrite, state) <$ sendChan sendResponse intersectionPoints
-        RollForward block newTip                 -> handleRollForward newTip lastWrite state block
-        RollBackwardToGenesis newTip             -> saveState emptyState { tip = newTip }
-        RollBackward slot hash newTip sendBlocks -> handleRollBackward newTip state sendBlocks slot hash
-        GetTip sendTip                           -> (lastWrite, state) <$ sendChan sendTip tip
-        GetConsumer txOut sendTx                 -> (lastWrite, state) <$ sendChan sendTx (lookupConsumer state txOut)
-        GetBlocksAfter point sendBlock                 -> (lastWrite, state) <$ sendChan  sendBlock (lookupBlocksAfer state point)
 
-      saveState state = liftIO do
-        fileExists <- doesFileExist file
-        when fileExists do
-          removeFile file
-        LBS.writeFile file $ encode state
-        now <- getCurrentTime
-        pure (now, state)
+      handleQuery state@ChainSyncDatabaseState{..} = \case
+        GetIntersectionPoints sendResponse       -> state <$ sendChan sendResponse intersectionPoints
+        GetBlocksAfter point sendResponse        -> state <$ sendChan sendResponse (lookupBlocksAfer state point)
+        RollForward block newTip                 -> saveStateDebounced block newTip $ handleRollForward newTip state block
+        RollBackward MarloweChainPointAtGenesis newTip             -> saveState emptyState { tip = newTip }
+        RollBackward point newTip                -> handleRollBackward state point newTip
+        GetTip sendTip                           -> state <$ sendChan sendTip tip
 
-      lookupConsumer ChainSyncDatabaseState{..} txOut = do
-        txId <- Map.lookup txOut consumerIndex
-        Map.lookup txId transactions
+      saveStateDebounced Block{..} tip state = do
+        let tipNo = getTipNo tip
+        let MarloweBlockHeader slotNo _ _ = header
+        let blockCount = Map.size $ blocks state
+        let unsavedBlocks = blockCount - lastSavedBlocksCount state
+        if tipNo == slotToIntegral slotNo || unsavedBlocks >= writeFrequency then
+          saveState state
+        else
+          pure state
 
-      lookupBlocksAfer ChainSyncDatabaseState{..} MarloweChainPointAtGenesis =
-        Just $ Map.elems blocks
-      lookupBlocksAfer ChainSyncDatabaseState{..} (MarloweChainPoint (MarloweSlotNo slot) hash) = do
-        _ <- Map.lookup hash blocks
-        let
-          filteredIndex = IntMap.difference blockSlotIndex
-            $ IntMap.withoutKeys blockSlotIndex
-            $ IntSet.fromDistinctAscList [0..fromIntegral slot]
-        pure $ Map.elems $ Map.withoutKeys blocks $ Set.fromList $ IntMap.elems filteredIndex
+      overwrite path a = do
+        let tmpPath = path <> "-tmp"
+        LBS.writeFile tmpPath $ encode a
+        renamePath tmpPath path
 
-      handleRollForward
-        newTip
-        lastWrite
-        ChainSyncDatabaseState{..}
-        block@Block{header = header@(MarloweBlockHeader slot hash _), txs} = do
+      saveState state@ChainSyncDatabaseState{..} = do
+        let blockCount = Map.size blocks
+        when (blockCount /= lastSavedBlocksCount) do
+          say $ "saving chain state with " <> show blockCount <> " blocks"
+          liftIO $ overwrite blocksFile blocks
+        liftIO $ overwrite tipFile tip
+        pure state { lastSavedBlocksCount = blockCount }
+
+      lookupBlocksAfer ChainSyncDatabaseState{..} point = fmap toBlocks $ case point of
+        MarloweChainPointAtGenesis -> Just blocks
+        MarloweChainPoint slot hash -> do
+          -- make sure this block is actually in the database
+          _ <- Map.lookup (BlockKey slot hash) blocks
+          pure $ snd $ breakMap (BlockKey slot hash) blocks
+
+      toBlocks = fmap toBlock . Map.toAscList
+
+      toBlock (BlockKey slot hash, (blockNo, txs)) =
+        Block (MarloweBlockHeader slot hash blockNo) $ Map.elems txs
+
+      breakMap k = bimap Map.fromDistinctAscList Map.fromDistinctAscList . break ((> k) . fst) . Map.toAscList
+
+      handleRollForward newTip ChainSyncDatabaseState{..} (Block (MarloweBlockHeader slot hash blockNo) txs) =
           let
-            newConsumptions = Map.fromList do
-              MarloweTx{..} <- txs
-              MarloweTxIn txid txix _ <- marloweTx_inputs
-              pure (TxOutRef txid txix, marloweTx_id)
-            MarloweSlotNo slotInt = slot
-          now <- liftIO getCurrentTime
-          let diff = diffUTCTime now lastWrite
-          let
-            action
-              | diff >= writeFrequency = saveState
-              | otherwise = pure . (lastWrite,)
-          action ChainSyncDatabaseState
-            { blocks = Map.insert hash block blocks
-            , transactions = Map.union transactions
-                $ Map.fromList
-                $ (marloweTx_id &&& TxWithBlockHeader header) <$> txs
-            , intersectionPoints = [MarloweChainPoint slot hash]
-            , tip = newTip
-            , consumerIndex = Map.union consumerIndex newConsumptions
-            , consumerSlotIndex = IntMap.insert (fromIntegral slotInt) (Map.keysSet newConsumptions) consumerSlotIndex
-            , blockSlotIndex = IntMap.insert (fromIntegral slotInt) hash blockSlotIndex
-            }
+            txMap = Map.fromList $ (marloweTx_id &&& id) <$> txs
+            blockKey = BlockKey slot hash
+          in
+            ChainSyncDatabaseState
+              { blocks = if Map.null txMap then blocks else Map.insert blockKey (blockNo, txMap) blocks
+              , intersectionPoints = [MarloweChainPoint slot hash]
+              , tip = newTip
+              , lastSavedBlocksCount = lastSavedBlocksCount
+              }
 
-      handleRollBackward newTip ChainSyncDatabaseState{..} sendBlocks rollbackSlot hash = do
+      handleRollBackward _ MarloweChainPointAtGenesis newTip =
+        saveState emptyState { tip = newTip }
+      handleRollBackward ChainSyncDatabaseState{..} point@(MarloweChainPoint slot hash) newTip =
+        do
         let
-          beforeRollback Block{header = MarloweBlockHeader slot _ _} = slot <= rollbackSlot
-          (beforeBlocks, afterBlocks) = Map.partition beforeRollback blocks
-          afterTxIds = do
-            Block{txs} <- Map.elems afterBlocks
-            MarloweTx{..} <- txs
-            pure marloweTx_id
-          MarloweSlotNo slotInt = rollbackSlot
-          (consumerSlotIndexAfterRollback, consumerSlotIndexBeforeRollback) =
-            IntMap.partitionWithKey (const . (> fromIntegral slotInt)) consumerSlotIndex
-          (_, blockSlotIndexBeforeRollback) =
-            IntMap.partitionWithKey (const . (> fromIntegral slotInt)) blockSlotIndex
-        sendChan sendBlocks $ Map.elems afterBlocks
+          (beforeBlocks, _) = breakMap (BlockKey slot hash) blocks
         saveState ChainSyncDatabaseState
           { blocks = beforeBlocks
-          , transactions = foldr Map.delete transactions afterTxIds
-          , intersectionPoints = [MarloweChainPoint rollbackSlot hash]
+          , intersectionPoints = [point]
           , tip = newTip
-          , consumerIndex = Map.withoutKeys consumerIndex $ fold consumerSlotIndexAfterRollback
-          , consumerSlotIndex = consumerSlotIndexBeforeRollback
-          , blockSlotIndex = blockSlotIndexBeforeRollback
+          , lastSavedBlocksCount = lastSavedBlocksCount
           }
+
+      getTipNo MarloweChainTipAtGenesis                = 0
+      getTipNo (MarloweChainTip (MarloweSlotNo n) _ _) = n
 
 remotable ['chainSyncDatabase]
 

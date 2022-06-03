@@ -23,7 +23,7 @@ import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras (Routable (sendTo), spawnLinkLocal)
 import Control.Distributed.Process.Extras.Time (Delay (..), TimeInterval, minutes, seconds)
 import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), ChildStopPolicy (..), ChildType (..),
-                                               RegisteredName (..), RestartPolicy (..), ShutdownMode (..), restartOne)
+                                               RegisteredName (..), RestartPolicy (..), ShutdownMode (..), restartRight)
 import qualified Control.Distributed.Process.Supervisor as Supervisor
 import Control.Monad (forever)
 import Data.Binary (Binary)
@@ -57,11 +57,11 @@ chainSync :: ChainSyncDependencies -> Process ()
 chainSync ChainSyncDependencies{..} = do
   (sendMsg, receiveMsg) <- newChan
   let ChainSyncConfig{..} =  config
-  _ <- spawnLinkLocal $ Supervisor.run restartOne ParallelShutdown
-    [ worker "chain-sync.db" Permanent Nothing StopImmediately $ RunClosure $ Database.process $ ChainSyncDatabaseDependencies initDbChan
+  _ <- spawnLinkLocal $ Supervisor.run restartRight ParallelShutdown
+    [ worker "chain-sync.logger" Permanent Nothing StopImmediately $ RunClosure $ Logger.process logger
     , worker "chain-sync.store" Permanent Nothing StopImmediately $ RunClosure $ Store.process $ ChainSyncStoreDependencies dbChan initStoreChan
+    , worker "chain-sync.db" Permanent Nothing StopImmediately $ RunClosure $ Database.process $ ChainSyncDatabaseDependencies initDbChan
     , worker "chain-sync.client" Intrinsic (Just (seconds 5)) (StopTimeout (Delay $ minutes 1)) $ RunClosure $ Client.process $ ChainSyncClientDependencies client sendMsg dbChan
-    , worker "chain-sync.logger" Permanent Nothing StopImmediately $ RunClosure $ Logger.process logger
     ]
   forever do
     msg <- receiveChan receiveMsg

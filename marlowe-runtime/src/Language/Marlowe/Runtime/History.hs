@@ -20,7 +20,7 @@ import Data.Maybe (maybeToList)
 import Language.Marlowe (MarloweParams (..), Token (..), marloweParams)
 import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (..), MarloweBlockHeader (..), MarlowePolicyId (..),
                                              MarloweTx (..), MarloweTxIn (..), MarloweTxOut (..), TxOutRef (..),
-                                             headerPoint, matchOutputRef)
+                                             matchOutputRef)
 import Language.Marlowe.Runtime.History.Types (Account (..), AppTxOutRef (..), Assets (..), Choice (..),
                                                ChoiceSelection (..), ContinuationHash (..), ContractContinuation (..),
                                                ContractCreationTxOut (..), ContractId (..), Datum (..), Event (..),
@@ -66,11 +66,11 @@ extractDatum matchingTxOut = do
   pure $ Datum datum
 
 creationToEvent :: ContractCreationTxOut -> Event
-creationToEvent ContractCreationTxOut{..} =
+creationToEvent creation@ContractCreationTxOut{..} =
   let
-    chainPoint = headerPoint header
-    txOutRef@(TxOutRef txId _) = marloweTxOut_txOutRef txOut
-    historyEvent = ContractWasCreated $ AppTxOutRef{..}
+    blockHeader = header
+    (TxOutRef txId _) = marloweTxOut_txOutRef txOut
+    historyEvent = ContractWasCreated creation
   in
     Event{..}
 
@@ -89,7 +89,7 @@ extractEvents applicationValidatorAddress contractId prevUtxo header MarloweTx{.
   appTxOut <- forM nextUtxo \txOut -> AppTxOutRef (marloweTxOut_txOutRef txOut) <$> extractDatum txOut
   inputs <- extractInputs consumedInput
   let historyEvents = [InputsWereApplied{..}]
-  pure (appTxOut, Event contractId (headerPoint header) marloweTx_id <$> historyEvents)
+  pure (appTxOut, Event contractId header marloweTx_id <$> historyEvents)
 
 
 extractInputs :: MarloweTxIn -> Either String [Input]

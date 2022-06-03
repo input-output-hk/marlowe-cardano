@@ -10,15 +10,14 @@ import qualified Data.Aeson as Aeson
 import Data.Binary (Binary (..))
 import GHC.Generics (Generic)
 import Language.Marlowe (Contract)
-import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (..), MarloweBlockHeader, MarloweChainPoint,
-                                             MarlowePolicyId, MarloweTxId, MarloweTxOut, TxOutRef, getFromRawBytes,
-                                             putToRawBytes)
+import Language.Marlowe.Runtime.Chain.Types (MarloweAddress (..), MarloweBlockHeader, MarlowePolicyId, MarloweTxId,
+                                             MarloweTxOut, TxOutRef, getFromRawBytes, putToRawBytes)
 import Language.Marlowe.Semantics (MarloweData)
 import Type.Reflection (Typeable)
 
 data Event = Event
   { contractId   :: ContractId
-  , chainPoint   :: MarloweChainPoint
+  , blockHeader  :: MarloweBlockHeader
   , txId         :: MarloweTxId
   , historyEvent :: HistoryEvent
   }
@@ -27,7 +26,7 @@ data Event = Event
 instance Binary Event
 
 data HistoryEvent
-  = ContractWasCreated AppTxOutRef
+  = ContractWasCreated ContractCreationTxOut
   | InputsWereApplied
       { appTxOut :: Maybe AppTxOutRef
       , inputs   :: [Input]

@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -19,8 +20,9 @@ import Data.Binary (Binary)
 import Data.Data (Typeable)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweChainEvent (..), MarloweChainPoint (..),
-                                             MarloweChainTip (..), MarloweSlotNo (..))
-import Language.Marlowe.Runtime.History.Types (AppTxOutRef (..), Event (..), HistoryEvent (..))
+                                             MarloweChainTip (..), MarloweSlotNo (..), MarloweTxOut (..))
+import Language.Marlowe.Runtime.History.Types (AppTxOutRef (..), ContractCreationTxOut (..), Event (..),
+                                               HistoryEvent (..))
 
 newtype HistoryLoggerConfig = HistoryLoggerConfig
   { syncLoggingFrequency :: Integer
@@ -66,11 +68,11 @@ historyLogger HistoryLoggerConfig{..} = syncing 0 (0 :: Integer) (0 :: Integer)
         [ match \(_ :: ChainSyncMsg) -> pure ()
         , match \Event{..} ->
             case historyEvent of
-              ContractWasCreated AppTxOutRef{..}              -> do
+              ContractWasCreated ContractCreationTxOut{txOut, datum}              -> do
                 say "New contract started"
                 say $ "ContractId: " <> show contractId
                 say $ "Datum: " <> show datum
-                say $ "UTxO: " <> show txOutRef
+                say $ "UTxO: " <> show (marloweTxOut_txOutRef txOut)
               InputsWereApplied mTxOut inputs                -> do
                 say "Inputs applied to contract"
                 say $ "ContractId: " <> show contractId

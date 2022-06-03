@@ -18,19 +18,19 @@ import Cardano.Api.Byron (NetworkMagic (NetworkMagic))
 import ChainSync.Database (Block (..))
 import ChainSync.Store (ChainStoreQuery, getBlocks)
 import Control.Applicative (empty)
-import Control.Distributed.Process (Closure, Process, RemoteTable, SendPort, receiveChan, say, sendChan)
+import Control.Distributed.Process (Closure, Process, SendPort, receiveChan, say, sendChan)
 import Control.Distributed.Process.Closure (mkClosure, remotable)
 import Control.Distributed.Process.Extras.Time (TimeInterval)
 import Control.Distributed.Process.Supervisor (ChildSpec (..), ChildStart (..), ChildStopPolicy (..), ChildType (..),
                                                RegisteredName (..), RestartPolicy (..))
-import Control.Monad (guard)
+import Control.Monad (guard, unless)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.RWS (RWST, ask, execRWST, get, modify)
 import Data.Bifunctor (first, second)
 import Data.Binary (Binary)
 import Data.Data (Typeable)
-import Data.Foldable (Foldable (..), traverse_)
+import Data.Foldable (Foldable (..), for_, traverse_)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Map (Map)
@@ -39,10 +39,13 @@ import Data.Maybe (isJust, mapMaybe, maybeToList)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweChainPoint (..), MarloweTx (..),
-                                             MarloweTxIn (..), MarloweTxOut (..), TxOutRef (..), slotToIntegral)
+import History.Database (History (..), HistoryQueryChan, getContractIds, getHistory, getIntersectionPoint)
+import Language.Marlowe.Runtime.Chain.Types (MarloweBlockHeader (..), MarloweChainPoint (..), MarloweSlotNo (..),
+                                             MarloweTx (..), MarloweTxIn (..), MarloweTxOut (..), TxOutRef (..),
+                                             slotToIntegral)
 import Language.Marlowe.Runtime.History (creationToEvent, extractCreations, extractEvents)
-import Language.Marlowe.Runtime.History.Types (AppTxOutRef (..), ContractCreationTxOut (..), Datum (..), Event)
+import Language.Marlowe.Runtime.History.Types (AppTxOutRef (..), ContractCreationTxOut (..), Datum (..), Event (..),
+                                               HistoryEvent (..))
 
 worker :: String -> RestartPolicy -> Maybe TimeInterval -> ChildStopPolicy -> ChildStart -> ChildSpec
 worker name restartPolicy restartDelay stopPolicy start =
@@ -55,8 +58,9 @@ instance Binary HistoryDigestConfig
 
 data HistoryDigestDependencies = HistoryDigestDependencies
   { config         :: HistoryDigestConfig
-  , sendEvent      :: SendPort Event
+  , sendEvents     :: SendPort [Event]
   , chainStoreChan :: SendPort ChainStoreQuery
+  , dbChan         :: HistoryQueryChan
   }
   deriving (Generic, Typeable, Show, Eq)
 
@@ -75,12 +79,29 @@ data CandidateTx = CandidateTx
 
 historyDigest :: HistoryDigestDependencies -> Process ()
 historyDigest HistoryDigestDependencies{..} = do
-  say "starting"
-  getNextBlock <- getBlocks chainStoreChan MarloweChainPointAtGenesis
+  intersectionPoint <- getIntersectionPoint dbChan
+  contractIds <- getContractIds dbChan
+  getNextBlock <- getBlocks chainStoreChan intersectionPoint
+
   let
     go state = go =<< ($ state) . either handleRollback handleRollForward =<< receiveChan getNextBlock
 
-    initialState = State { utxoIndex = mempty, slotIndex = mempty }
+    emptyState = State { utxoIndex = mempty, slotIndex = mempty }
+
+    loadInitialState = do
+      traverse_ initializeContractState contractIds
+
+    initializeContractState contractId =
+      lift (getHistory dbChan contractId) >>= traverse_ \History{..} ->
+        for_ events \Event{historyEvent, blockHeader} -> case historyEvent of
+          ContractWasCreated ContractCreationTxOut{datum, txOut} -> do
+            let MarloweBlockHeader slot _ _ = blockHeader
+            addUtxo slot creationTxOut $ AppTxOutRef (marloweTxOut_txOutRef txOut) datum
+          InputsWereApplied (Just appTxOutRef) _ -> do
+            let MarloweBlockHeader slot _ _ = blockHeader
+            addUtxo slot creationTxOut appTxOutRef
+          _ -> pure ()
+
 
     handleRollForward Block{..} state = snd . fst <$> execRWST go' header (mempty, state)
       where
@@ -91,11 +112,12 @@ historyDigest HistoryDigestDependencies{..} = do
             creationCandidates = mapMaybe (extractCandidateWith isCreationCandidate) candidateTxs
             eventCandidates = mapMaybe (extractCandidateWith isEventCandidate) candidateTxs
             creations = extractCreations (Testnet $ NetworkMagic 1566) header =<< creationCandidates
-          processCreations sendEvent creations
-          events <- expand eventCandidates extractEvents'
-          lift $ traverse_ (sendChan sendEvent) events
+          creationEvents <- processCreations creations
+          nonCreationEvents <- expand eventCandidates extractEvents'
+          let events = creationEvents <> nonCreationEvents
+          lift $ unless (null events) $ sendChan sendEvents events
 
-    handleRollback MarloweChainPointAtGenesis _ = pure initialState
+    handleRollback MarloweChainPointAtGenesis _ = pure emptyState
     handleRollback (MarloweChainPoint rollbackSlot _) State{..} = do
       let afterRollback (slot, _) = slot > slotToIntegral rollbackSlot
       let (beforeSlotIndex, afterSlotIndex) = break afterRollback $ IntMap.toAscList slotIndex
@@ -111,6 +133,8 @@ historyDigest HistoryDigestDependencies{..} = do
         isEventCandidate = any hasRedeemer marloweTx_inputs
         isCreationCandidate = not $ null marloweTx_policies
 
+  initialState <- snd . fst <$> execRWST loadInitialState () ((), emptyState)
+
   go initialState
 
 expand :: Monad m => [a] -> (a -> m [b]) -> m [b]
@@ -125,7 +149,7 @@ extractEvents' tx@MarloweTx{..} = concat <$> traverse go marloweTx_inputs
   where
     go (MarloweTxIn txid txix _) = fmap (concat . maybeToList) $ runMaybeT do
       (consumed, State{..}) <- lift get
-      header <- lift ask
+      header@(MarloweBlockHeader slot _ _) <- lift ask
       let txOutRef = TxOutRef txid txix
       guard $ Set.notMember txOutRef consumed
       (datum, creationTx@ContractCreationTxOut{contractId, txOut}) <- hoistMaybe $ Map.lookup txOutRef utxoIndex
@@ -136,39 +160,36 @@ extractEvents' tx@MarloweTx{..} = concat <$> traverse go marloweTx_inputs
           lift $ lift $ say $ "error: " <> err
           empty
         Right (mNewAppOut, events) -> do
-          lift $ traverse_ (addUtxo creationTx) mNewAppOut
+          lift $ traverse_ (addUtxo slot creationTx) mNewAppOut
           pure events
 
 hoistMaybe :: Applicative f => Maybe a -> MaybeT f a
 hoistMaybe = MaybeT . pure
 
 processCreations
-  :: SendPort Event
-  -> [Either ([TxOutRef], String) ContractCreationTxOut]
-  -> RWST MarloweBlockHeader () (Set TxOutRef, State) Process ()
-processCreations sendEvent = fmap fold . traverse \case
+  :: [Either ([TxOutRef], String) ContractCreationTxOut]
+  -> RWST MarloweBlockHeader () (Set TxOutRef, State) Process [Event]
+processCreations = fmap fold . traverse \case
   Left err -> do
     lift $ say $ "found invalid creation transaction " <> show err
-    pure ()
+    pure []
   Right creation@ContractCreationTxOut{..} -> do
-    lift $ sendChan sendEvent $ creationToEvent creation
-    addUtxo creation (AppTxOutRef (marloweTxOut_txOutRef txOut) datum)
+    MarloweBlockHeader slot _ _ <- ask
+    addUtxo slot creation (AppTxOutRef (marloweTxOut_txOutRef txOut) datum)
+    pure [creationToEvent creation]
 
 addUtxo
-  :: ContractCreationTxOut
+  :: MarloweSlotNo
+  -> ContractCreationTxOut
   -> AppTxOutRef
-  -> RWST MarloweBlockHeader () (Set TxOutRef, State) Process ()
-addUtxo creation@ContractCreationTxOut{contractId} AppTxOutRef{..} = do
-  MarloweBlockHeader slot _ _ <- ask
+  -> RWST r () (s, State) Process ()
+addUtxo slot creation@ContractCreationTxOut{contractId} AppTxOutRef{..} =
   modify $ second \State{..} -> State
     { utxoIndex = Map.insert txOutRef (datum, creation) utxoIndex
     , slotIndex = IntMap.insertWith (<>) (slotToIntegral slot) (Set.singleton txOutRef) slotIndex
     }
 
 remotable ['historyDigest]
-
-remoteTable :: RemoteTable -> RemoteTable
-remoteTable = __remoteTable
 
 process :: HistoryDigestDependencies -> Closure (Process ())
 process = $(mkClosure 'historyDigest)

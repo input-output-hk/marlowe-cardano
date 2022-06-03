@@ -112,8 +112,10 @@ executable distributed
     ChainSync.Database
     Control.Distributed.Protocol
     History
+    History.Database
     History.Digest
     History.Logger
+    History.Store
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
@@ -131,5 +133,6 @@ executable distributed
     , distributed-process-extras
     , distributed-process-supervisor
     , network-transport-tcp
+    , random
     , time
     , transformers
