@@ -34,7 +34,7 @@ data HistoryEvent
   | RoleWasPaidOut
       { tokenName   :: String
       , assets      :: Assets
-      , payoutTxOut :: PayoutTxOutRef
+      , payoutTxOut :: TxOutRef
       }
   deriving (Generic, Typeable, Show, Eq)
 
@@ -60,10 +60,11 @@ data Input
 instance Binary Input
 
 data ContractCreationTxOut = ContractCreationTxOut
-  { contractId :: ContractId
-  , datum      :: Datum
-  , txOut      :: MarloweTxOut
-  , header     :: MarloweBlockHeader
+  { contractId           :: ContractId
+  , datum                :: Datum
+  , txOut                :: MarloweTxOut
+  , header               :: MarloweBlockHeader
+  , roleValidatorAddress :: MarloweAddress
   }
   deriving (Generic, Typeable, Show, Eq)
 
@@ -76,11 +77,6 @@ data AppTxOutRef = AppTxOutRef
   deriving (Generic, Typeable, Show, Eq)
 
 instance Binary AppTxOutRef
-
-newtype PayoutTxOutRef = PayoutTxOutRef { unPayoutTxOutRef :: TxOutRef }
-  deriving (Generic, Typeable, Show, Eq)
-
-instance Binary PayoutTxOutRef
 
 data Choice = Choice
   { name        :: String

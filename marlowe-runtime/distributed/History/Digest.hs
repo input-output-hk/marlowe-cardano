@@ -152,10 +152,10 @@ extractEvents' tx@MarloweTx{..} = concat <$> traverse go marloweTx_inputs
       header@(MarloweBlockHeader slot _ _) <- lift ask
       let txOutRef = TxOutRef txid txix
       guard $ Set.notMember txOutRef consumed
-      (datum, creationTx@ContractCreationTxOut{contractId, txOut}) <- hoistMaybe $ Map.lookup txOutRef utxoIndex
+      (datum, creationTx@ContractCreationTxOut{contractId, txOut, roleValidatorAddress}) <- hoistMaybe $ Map.lookup txOutRef utxoIndex
       lift $ modify $ first $ Set.insert txOutRef
       let appTxOutRef = AppTxOutRef{..}
-      case extractEvents (marloweTxOut_address txOut) contractId appTxOutRef header tx of
+      case extractEvents roleValidatorAddress (marloweTxOut_address txOut) contractId appTxOutRef header tx of
         Left err -> do
           lift $ lift $ say $ "error: " <> err
           empty

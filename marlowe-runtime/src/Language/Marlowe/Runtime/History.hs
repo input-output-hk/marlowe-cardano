@@ -31,6 +31,7 @@ import Ledger (MintingPolicyHash (..))
 import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, toCardanoAddress, toCardanoScriptHash)
 import Ledger.Typed.Scripts (validatorAddress)
 import Ledger.Value (CurrencySymbol (..), TokenName (..), toString)
+import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Api (fromBuiltin, fromData)
 
 extractCreations :: NetworkId -> MarloweBlockHeader -> MarloweTx -> [Either ([TxOutRef], String) ContractCreationTxOut]
@@ -43,11 +44,14 @@ extractCreations networkId header MarloweTx{..} = do
     AddressInEra _ applicationValidatorCardanoAddress <- first (([],) . show) $ toCardanoAddress networkId applicationValidatorPlutusAddress
     let applicationValidatorAddress = MarloweAddress $ toAddressAny applicationValidatorCardanoAddress
     payoutValidatorHash <- first (([],) . show) $ toCardanoScriptHash rolePayoutValidatorHash
+    let roleValidatorPlutusAddress = scriptHashAddress rolePayoutValidatorHash
+    AddressInEra _ roleValidatorCardanoAddress <- first (([],) . show) $ toCardanoAddress networkId roleValidatorPlutusAddress
+    let roleValidatorAddress = MarloweAddress $ toAddressAny roleValidatorCardanoAddress
     let contractId = ContractId policyId $ ValidatorHash payoutValidatorHash
     exclusive do
       matchingTxOut <- filter (wasSentToAddress applicationValidatorAddress) marloweTx_outputs
       datum <- maybeToList $ hush $ extractDatum matchingTxOut
-      pure $ ContractCreationTxOut contractId datum matchingTxOut header
+      pure $ ContractCreationTxOut contractId datum matchingTxOut header roleValidatorAddress
     where
       wasSentToAddress address MarloweTxOut{..} = address == marloweTxOut_address
       exclusive []    = Right Nothing
@@ -65,6 +69,16 @@ extractDatum matchingTxOut = do
     Just d  -> Right d
   pure $ Datum datum
 
+extractPayoutDatum :: MarloweTxOut -> Either String String
+extractPayoutDatum matchingTxOut = do
+  scriptData <- case marloweTxOut_datum matchingTxOut of
+    Nothing -> Left "No datum at tx out"
+    Just d  -> Right d
+  TokenName tokenName <- case fromData $ toPlutusData scriptData of
+    Nothing -> Left "Invalid datum at tx out"
+    Just d  -> Right d
+  pure $ unpack $ fromBuiltin tokenName
+
 creationToEvent :: ContractCreationTxOut -> Event
 creationToEvent creation@ContractCreationTxOut{..} =
   let
@@ -76,12 +90,13 @@ creationToEvent creation@ContractCreationTxOut{..} =
 
 extractEvents
   :: MarloweAddress -- ^ Marlowe validator address
+  -> MarloweAddress -- ^ Marlowe validator address
   -> ContractId -- ^ The marlowe params
   -> AppTxOutRef -- ^ The UTxO from the previous transaction
   -> MarloweBlockHeader -- ^ The block header for the current tx
   -> MarloweTx -- ^ The current tx
   -> Either String (Maybe AppTxOutRef, [Event])
-extractEvents applicationValidatorAddress contractId prevUtxo header MarloweTx{..} = do
+extractEvents payoutValidatorAddress applicationValidatorAddress contractId prevUtxo header MarloweTx{..} = do
   consumedInput <- case find (matchOutputRef (txOutRef prevUtxo)) marloweTx_inputs of
     Nothing    -> Left "The next transaction did not contain any extracable events"
     Just input -> Right input
@@ -89,8 +104,16 @@ extractEvents applicationValidatorAddress contractId prevUtxo header MarloweTx{.
   appTxOut <- forM nextUtxo \txOut -> AppTxOutRef (marloweTxOut_txOutRef txOut) <$> extractDatum txOut
   inputs <- extractInputs consumedInput
   let historyEvents = [InputsWereApplied{..}]
-  pure (appTxOut, Event contractId header marloweTx_id <$> historyEvents)
+  let payoutUtxos = filter ((payoutValidatorAddress ==) . marloweTxOut_address) marloweTx_outputs
+  payoutEvents <- traverse extractPayout payoutUtxos
+  pure (appTxOut, Event contractId header marloweTx_id <$> historyEvents <> payoutEvents)
 
+extractPayout :: MarloweTxOut -> Either String HistoryEvent
+extractPayout txOut@MarloweTxOut{..} = do
+  tokenName <- extractPayoutDatum txOut
+  let assets = Assets marloweTxOut_value
+  let payoutTxOut = marloweTxOut_txOutRef
+  pure RoleWasPaidOut{..}
 
 extractInputs :: MarloweTxIn -> Either String [Input]
 extractInputs (MarloweTxIn _ _ Nothing) = Left "No redeemer found"
