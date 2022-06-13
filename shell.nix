@@ -105,6 +105,7 @@ let
     easyPS.pulp
     easyPS.purs
     easyPS.purs-tidy
+    easyPS.purescript-language-server
     start-cardano-node
     start-wallet
     start-chain-index
