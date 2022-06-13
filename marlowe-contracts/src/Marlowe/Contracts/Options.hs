@@ -24,8 +24,8 @@ import Marlowe.Contracts.Common
 
 -- |Option type
 data OptionType =
-      Call -- ^ Call, the right to buy the Option
-    | Put  -- ^ Put, the right to sell the Option
+      Call -- ^ Call, the right to buy the underlying
+    | Put  -- ^ Put, the right to sell the underlying
   deriving Show
 
 -- |Exercise type
