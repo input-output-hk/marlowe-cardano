@@ -99,6 +99,12 @@ let
   localInputs = (with marlowe; [
     cabal-install
     cardano-node
+    easyPS.spago
+    easyPS.psc-package
+    easyPS.psc-package2nix
+    easyPS.pulp
+    easyPS.purs
+    easyPS.purs-tidy
     start-cardano-node
     start-wallet
     start-chain-index
@@ -133,7 +139,7 @@ let
     docs.build-and-serve-docs
     marlowe-cli
     cardano-cli
-  ] ++ easyPS.buildInputs);
+  ]);
 
 in
 haskell.project.shellFor {

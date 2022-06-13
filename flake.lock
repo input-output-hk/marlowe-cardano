@@ -36,10 +36,10 @@
       "flake": false,
       "locked": {
         "lastModified": 1646209831,
-        "narHash": "sha256-or8Z6aMWdrqcmFA0hhjjb6FIiW14C0ruwXAqy+zYZ8g=",
+        "narHash": "sha256-mkHIyWk5Xh54FqCU7CT3G/tnHF7mLbQt3EfnNCMCTO8=",
         "owner": "justinwoo",
         "repo": "easy-purescript-nix",
-        "rev": "aa72388ca0fb72ed64467f59a121db1f104897db",
+        "rev": "5dca2f0f3b9ec0bceabb23fa1fd2b5f8ec30fa53",
         "type": "github"
       },
       "original": {
