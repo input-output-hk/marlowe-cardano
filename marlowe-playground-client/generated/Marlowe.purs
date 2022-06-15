@@ -173,6 +173,30 @@ postApiCompile reqBody =
     ]
   query = Nothing
 
+getApiLogout
+  :: forall m
+   . MonadAjax Api m
+  => m (Either (AjaxError JsonDecodeError Json) Unit)
+getApiLogout =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left GET
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Nothing
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.null
+  decoder = D.unit
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "logout"
+    ]
+  query = Nothing
+
 getApiOauthStatus
   :: forall m
    . MonadAjax Api m
