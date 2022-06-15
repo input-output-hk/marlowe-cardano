@@ -99,6 +99,7 @@ let
   localInputs = (with marlowe; [
     cabal-install
     cardano-node
+    easyPS.psa
     easyPS.spago
     easyPS.psc-package
     easyPS.psc-package2nix
