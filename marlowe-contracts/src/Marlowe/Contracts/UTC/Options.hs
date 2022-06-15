@@ -33,6 +33,7 @@ option ::
   -> (Token, Value) -- ^ Strike
   -> UTCTime        -- ^ Expiry
   -> UTCTime        -- ^ Settlement date
+  -> Contract       -- ^ Continuation
   -> Contract       -- ^ Option Contract
 option exerciseType optionType buyer seller priceFeed asset strike expiry settlement =
   C.option exerciseType optionType buyer seller priceFeed asset strike (toTimeout expiry) (toTimeout settlement)

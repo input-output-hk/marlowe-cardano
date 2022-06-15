@@ -24,8 +24,8 @@ import Marlowe.Contracts.Common
 
 -- |Option type
 data OptionType =
-      Call -- ^ Call, the right to buy the Option
-    | Put  -- ^ Put, the right to sell the Option
+      Call -- ^ Call, the right to buy the underlying
+    | Put  -- ^ Put, the right to sell the underlying
   deriving Show
 
 -- |Exercise type
@@ -54,8 +54,9 @@ option ::
   -> (Token, Value) -- ^ Strike
   -> Timeout        -- ^ Expiry
   -> Timeout        -- ^ Settlement date
+  -> Contract       -- ^ Continuation
   -> Contract       -- ^ Option Contract
-option American optionType buyer seller priceFeed asset strike expiry _ =
+option American optionType buyer seller priceFeed asset strike expiry _ continuation =
   exercise
     optionType
     buyer
@@ -64,7 +65,8 @@ option American optionType buyer seller priceFeed asset strike expiry _ =
     asset
     strike
     expiry
-option European optionType buyer seller priceFeed asset strike expiry settlement =
+    continuation
+option European optionType buyer seller priceFeed asset strike expiry settlement continuation =
   waitUntil expiry $
     exercise
       optionType
@@ -74,6 +76,7 @@ option European optionType buyer seller priceFeed asset strike expiry settlement
       asset
       strike
       settlement
+      continuation
 
 -- |Choose whether to exercise an option and transfer the assets or close
 -- the contract
@@ -85,8 +88,9 @@ exercise ::
   -> (Token, Value) -- ^ Underlying
   -> (Token, Value) -- ^ Strike
   -> Timeout        -- ^ Timeout
+  -> Contract       -- ^ Continuation
   -> Contract       -- ^ Contract
-exercise optionType buyer seller priceFeed asset strike timeout =
+exercise optionType buyer seller priceFeed asset strike timeout continuation =
   When
     [ exercise'
         optionType
@@ -96,12 +100,12 @@ exercise optionType buyer seller priceFeed asset strike timeout =
     Close
   where
     -- without a price-feed (oracle)
-    exercise' Call Nothing = choose (ChoiceId "Exercise Call" buyer) Close $ depositAndPay buyer seller strike asset timeout
-    exercise' Put Nothing  = choose (ChoiceId "Exercise Put"  buyer) Close $ depositAndPay buyer seller asset strike timeout
+    exercise' Call Nothing = choose (ChoiceId "Exercise Call" buyer) continuation $ depositAndPay buyer seller strike asset timeout continuation
+    exercise' Put Nothing  = choose (ChoiceId "Exercise Put"  buyer) continuation $ depositAndPay buyer seller asset strike timeout continuation
 
     -- with a price-feed (oracle)
-    exercise' Call (Just choiceId) = chooseOracle choiceId strike ValueLT Close $ depositAndPay buyer seller strike asset timeout
-    exercise' Put  (Just choiceId) = chooseOracle choiceId strike ValueGT Close $ depositAndPay buyer seller asset strike timeout
+    exercise' Call (Just choiceId) = chooseOracle choiceId strike ValueLT continuation $ depositAndPay buyer seller strike asset timeout continuation
+    exercise' Put  (Just choiceId) = chooseOracle choiceId strike ValueGT continuation $ depositAndPay buyer seller asset strike timeout continuation
 
 -- |Deposit an asset and swap
 depositAndPay ::
@@ -110,12 +114,13 @@ depositAndPay ::
   -> (Token, Value) -- ^ Underlying asset
   -> (Token, Value) -- ^ Strike price
   -> Timeout        -- ^ Timeout for deposit
+  -> Contract       -- ^ Continuation
   -> Contract       -- ^ Contract
-depositAndPay buyer seller asset strike timeout =
+depositAndPay buyer seller asset strike timeout continuation =
     deposit buyer buyer asset timeout Close
   $ pay seller buyer strike
   $ pay buyer seller asset
-    Close
+    continuation
 
 -- |Choosing explicitly
 choose ::
@@ -157,7 +162,7 @@ coveredCall ::
   -> Contract       -- ^ Covered Call Contract
 coveredCall issuer counterparty priceFeed currency underlying strike ratio issue maturity settlement =
     deposit issuer issuer (underlying, ratio) issue Close
-  $ option European Call counterparty issuer priceFeed (underlying, ratio) (currency, strike) maturity settlement
+  $ option European Call counterparty issuer priceFeed (underlying, ratio) (currency, strike) maturity settlement Close
 
 -- |A /Straddle/ involves simultaneously buying a call and a put option
 -- for the same underlying with the same strike and the same expiry.
@@ -173,8 +178,8 @@ straddle ::
   -> Timeout        -- ^ Settlement date
   -> Contract       -- ^ Straddle Contract
 straddle buyer seller priceFeed currency underlying ratio strike maturity settlement =
-  let c = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement
-      p = option European Put  buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement
+  let c = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement Close
+      p = option European Put  buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement Close
    in c `both` p
 
 -- |A /Strangle/ involves simultaneously buying a call and a put option
@@ -192,8 +197,8 @@ strangle ::
   -> Timeout        -- ^ Settlement date
   -> Contract       -- ^ Straddle Contract
 strangle buyer seller priceFeed currency underlying ratio strike1 strike2 maturity settlement =
-  let c = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike1) maturity settlement
-      p = option European Put  buyer seller priceFeed (underlying, ratio) (currency, strike2) maturity settlement
+  let c = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike1) maturity settlement Close
+      p = option European Put  buyer seller priceFeed (underlying, ratio) (currency, strike2) maturity settlement Close
    in c `both` p
 
 -- |A /Call Spread/ involves simultaneously buying two call options
@@ -211,8 +216,8 @@ callSpread ::
   -> Timeout        -- ^ Settlement date
   -> Contract       -- ^ Call Spread Contract
 callSpread buyer seller priceFeed currency underlying strike1 strike2 ratio maturity settlement =
-  let l = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike1) maturity settlement
-      s = option European Call seller buyer priceFeed (underlying, ratio) (currency, strike2) maturity settlement
+  let l = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike1) maturity settlement Close
+      s = option European Call seller buyer priceFeed (underlying, ratio) (currency, strike2) maturity settlement Close
    in l `both` s
 
 -- |A /Barrier Option/ is a path dependent option. The option gets activated or deactivated depending on current
@@ -237,7 +242,7 @@ barrierOption exerciseType optionType barrierType issuer counterparty priceFeed 
   foldl checkBarrierCondition initialContract observationDates
   where
     -- The option contract, that can be activated (knock-in) or deactivated (knock-out) over time
-    optionContract = option exerciseType optionType issuer counterparty priceFeed (underlying, ratio) (currency, strike) maturity settlement
+    optionContract = option exerciseType optionType issuer counterparty priceFeed (underlying, ratio) (currency, strike) maturity settlement Close
 
     -- Knock-in options are set to the Close contract initially, knock-out options to the option contract
     initialContract = initialContract' barrierType
