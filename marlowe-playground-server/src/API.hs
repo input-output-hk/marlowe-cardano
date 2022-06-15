@@ -13,8 +13,12 @@ import GHC.Generics (Generic)
 import Language.Haskell.Interpreter (InterpreterError, InterpreterResult)
 import qualified Language.Marlowe.ACTUS.Domain.ContractTerms as A (ContractTerms)
 import qualified Language.Marlowe.ACTUS.Domain.Schedule as A (CashFlow)
-import Servant.API (Capture, Get, Header, JSON, NoContent, PlainText, Post, Raw, ReqBody, (:<|>), (:>))
+import Servant.API (Capture, Get, Header, Headers, JSON, NoContent, PlainText, Post, Raw, ReqBody, StdMethod (GET),
+                    Verb, (:<|>), (:>))
+import Web.Cookie (SetCookie)
 import Webghc.Server (CompileRequest)
+
+type Get302 headers = Verb 'GET 302 '[PlainText, JSON] (headers NoContent)
 
 type API
      = "oracle" :> Capture "exchange" String :> Capture "pair" String :> Get '[JSON] Value
@@ -22,3 +26,4 @@ type API
                         :<|> "generate-static" :> ReqBody '[ JSON] A.ContractTerms :> Post '[ JSON] String
                         :<|> "cashflows" :> ReqBody '[ JSON] A.ContractTerms :> Post '[ JSON] [A.CashFlow])
        :<|> "compile" :> ReqBody '[JSON] CompileRequest :> Post '[JSON] (Either InterpreterError (InterpreterResult String))
+       :<|> "logout" :> Get302 (Headers '[Header "SetCookie" SetCookie, Header "Location" Text])
