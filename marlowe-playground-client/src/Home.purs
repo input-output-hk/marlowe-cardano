@@ -47,10 +47,7 @@ render state =
                 else
                   OpenModal $ GithubLogin (OpenModal OpenProject)
             ]
-            if isAuthenticated state then
-              [ text "Open existing project (authenticated)" ]
-            else
-              [ text "Open existing project (non authenticated)" ]
+            [ text "Open existing project" ]
         , button
             [ classNames
                 ( primaryButton <>
