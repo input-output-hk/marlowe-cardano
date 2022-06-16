@@ -30,6 +30,7 @@
     "nearley": "^2.19.1",
     "popper.js": "^1.16.1",
     "safe-eval": "^0.4.1",
+    "tarballjs": "https://github.com:ankitrohatgi/tarballjs#64ea5eb78f7fc018a223207e67f4f863fcc5d3c5",
     "xhr2": "^0.1.4"
   },
   "resolutions": {},
