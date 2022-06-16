@@ -4,6 +4,7 @@ import Prologue hiding (div)
 
 import Auth (_GithubUser, authStatusAuthRole)
 import Component.Modal.View (modal)
+import Contrib.Data.Array.Builder ((:>))
 import Contrib.Data.Array.Builder as AB
 import Data.Lens (has, (^.))
 import Data.Maybe (isNothing)
@@ -85,7 +86,7 @@ render state =
                   , src marlowePlayLogo
                   ]
               , projectTitle
-              , div_ $ AB.build $ do
+              , div_ $ AB.unsafeBuild $ do
                   let
                     tutorial = a
                       [ href "./doc/marlowe/tutorials/index.html"
@@ -98,8 +99,8 @@ render state =
                       , classNames [ "font-semibold", "ml-4" ]
                       ]
                       [ text "Logout" ]
-                  AB.cons tutorial
-                    <> guard
+                  tutorial
+                    :> guard
                       (isAuthenticated state && state.featureFlags.logout)
                       (AB.cons logout)
 
@@ -283,17 +284,18 @@ render state =
 menuBar :: forall p. State -> HTML p Action
 menuBar state =
   div [ classNames [ "menu-bar" ] ]
-    [ menuButton (OpenModal NewProject) "New Project"
-    , gistModal (OpenModal OpenProject) "Open"
-    , menuButton (OpenModal OpenDemo) "Open Example"
-    , menuButton (OpenModal RenameProject) "Rename"
-    , gistModal
-        ( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
-          else GistAction PublishOrUpdateGist
-        )
-        "Save"
-    , gistModal (OpenModal SaveProjectAs) "Save As..."
-    ]
+    $ AB.unsafeBuild
+    $ menuButton (OpenModal NewProject) "New Project"
+        :> gistModal (OpenModal OpenProject) "Open"
+        :> menuButton (OpenModal OpenDemo) "Open Example"
+        :> menuButton (OpenModal RenameProject) "Rename"
+        :> gistModal
+          ( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
+            else GistAction PublishOrUpdateGist
+          )
+          "Save"
+        :> gistModal (OpenModal SaveProjectAs) "Save As..."
+        :> mempty
   where
   menuButton action name =
     a [ onClick $ const action ]

@@ -1,4 +1,4 @@
-exports.unsafeAppend = function (suffix) {
+exports.unsafeSnocArray = function (suffix) {
   return function (arr) {
     arr.push(...suffix);
     return arr;
@@ -12,7 +12,7 @@ exports.unsafeCons = function (a) {
   };
 };
 
-exports.unsafePrepend = function (prefix) {
+exports.unsafeConsArray = function (prefix) {
   return function (arr) {
     arr.unshift(...prefix);
     return arr;

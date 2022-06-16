@@ -3,7 +3,7 @@ module Component.MetadataTab.View (metadataView) where
 import Prologue hiding (div, min)
 
 import Component.MetadataTab.Types (MetadataAction(..))
-import Contrib.Data.Array.Builder (build, cons) as AB
+import Contrib.Data.Array.Builder (cons, unsafeBuild) as AB
 import Contrib.Data.List.Infinite.Finalize (zip) as Infinite.Finalize
 import Contrib.Halogen.Components.Sortable (DragHandlers(..), GenDragHandlers)
 import Data.Array (concat, concatMap)
@@ -414,7 +414,7 @@ sortableMetadataList
       div props children
   if OMap.isEmpty combinedMap then
     []
-  else AB.build $
+  else AB.unsafeBuild $
     AB.cons do
       div [ class_ $ ClassName "metadata-group-title" ]
         [ h6_ [ em_ [ text $ typeNameTitle <> " descriptions" ] ] ]
