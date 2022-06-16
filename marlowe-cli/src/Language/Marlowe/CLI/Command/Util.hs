@@ -31,6 +31,7 @@ import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseOutputQuery, parseSlotNo,
                                            parseTokenName)
+import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
 import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, querySlotting, selectUtxos)
 import Language.Marlowe.CLI.Types (CliError, OutputQuery)
@@ -114,6 +115,18 @@ data UtilCommand =
     , restartFile :: Maybe FilePath   -- ^ File for restoring and saving current point on the chain.
     , outputFile  :: Maybe FilePath   -- ^ File for recording Marlowe transactions.
     }
+    -- | Merkleize a contract.
+  | Merkleize
+    {
+      marloweFile :: FilePath        -- ^ The Marlowe JSON file containing the contract to be merkleized.
+    , outputFile  :: Maybe FilePath  -- ^ The output file for the Marlowe JSON containing the merkleized contract.
+    }
+    -- | Demerkleize a contract.
+  | Demerkleize
+    {
+      marloweFile :: FilePath        -- ^ The Marlowe JSON file containing the contract to be demerkleized.
+    , outputFile  :: Maybe FilePath  -- ^ The output file for the Marlowe JSON containing the demerkleized contract, if any.
+    }
 
 
 -- | Run a miscellaneous command.
@@ -182,6 +195,12 @@ runUtilCommand command =
                             continue
                             restartFile
                             outputFile
+      Merkleize{..}    -> merkleize
+                            marloweFile
+                            outputFile
+      Demerkleize{..}  -> demerkleize
+                            marloweFile
+                            outputFile
 
 
 -- | Parser for miscellaneous commands.
@@ -191,8 +210,10 @@ parseUtilCommand network socket =
     $ O.commandGroup "Miscellaneous low-level commands:"
     <> cleanCommand network socket
     <> decodeBechCommand
+    <> demerkleizeCommand
     <> encodeBechCommand
     <> faucetCommand network socket
+    <> merkleizeCommand
     <> mintCommand network socket
     <> selectCommand network socket
     <> slottingCommand network socket
@@ -350,3 +371,35 @@ watchOptions network socket =
     <*> O.switch                   (O.long "continue"                                            <> O.help "Whether to continue when the current tip of the chain is reached."                                               )
     <*> (O.optional . O.strOption) (O.long "restart"       <> O.metavar "POINT_FILE"             <> O.help "File for restoring and saving current point on the chain."                                                       )
     <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "OUTPUT_FILE"            <> O.help "File in which to store records of Marlowe transactions."                                                         )
+
+
+-- | Parser for the "merkleize" command.
+merkleizeCommand :: O.Mod O.CommandFields UtilCommand
+merkleizeCommand =
+  O.command "merkleize"
+    $ O.info merkleizeOptions
+    $ O.progDesc "Merkleize a Marlowe contract."
+
+
+-- | Parser for the "merkleize" options.
+merkleizeOptions :: O.Parser UtilCommand
+merkleizeOptions =
+  Merkleize
+    <$> O.strOption                (O.long "in-file"  <> O.metavar "MARLOWE_FILE"  <> O.help "The Marlowe JSON file containing the contract to be merkleized.")
+    <*> (O.optional . O.strOption) (O.long "out-file" <> O.metavar "MARLOWE_FILE"  <> O.help "Output file Marlowe JSON containing the merkleized contract."   )
+
+
+-- | Parser for the "demerkleize" command.
+demerkleizeCommand :: O.Mod O.CommandFields UtilCommand
+demerkleizeCommand =
+  O.command "demerkleize"
+    $ O.info demerkleizeOptions
+    $ O.progDesc "Demerkleize a Marlowe contract."
+
+
+-- | Parser for the "demerkleize" options.
+demerkleizeOptions :: O.Parser UtilCommand
+demerkleizeOptions =
+  Demerkleize
+    <$> O.strOption                (O.long "in-file"  <> O.metavar "MARLOWE_FILE"  <> O.help "The Marlowe JSON file containing the contract to be demerkleized.")
+    <*> (O.optional . O.strOption) (O.long "out-file" <> O.metavar "MARLOWE_FILE"  <> O.help "Output file Marlowe JSON containing the demerkleized contract."   )

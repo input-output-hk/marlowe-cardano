@@ -35,6 +35,8 @@ module Language.Marlowe.CLI.Types (
 , CliError(..)
 -- * Queries
 , OutputQuery(..)
+-- * Merklization
+, Continuations
 ) where
 
 
@@ -44,8 +46,9 @@ import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), AssetId, Hash, IsCarda
                     serialiseAddress, serialiseToTextEnvelope)
 import Cardano.Api.Shelley (PlutusScript (..))
 import Codec.Serialise (deserialise)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.ByteString.Short (ShortByteString)
+import Data.Maybe (fromMaybe)
 import Data.String (IsString)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
@@ -57,6 +60,7 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeeme
 import qualified Cardano.Api as Api (Value)
 import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort)
+import qualified Data.Map.Strict as M (Map)
 
 
 -- | Exception for Marlowe CLI.
@@ -72,6 +76,10 @@ type SomePaymentVerificationKey = Either (VerificationKey PaymentKey) (Verificat
 type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentExtendedKey)
 
 
+-- | Continuations for contracts.
+type Continuations = M.Map DatumHash Contract
+
+
 -- | Complete description of a Marlowe transaction.
 data MarloweTransaction era =
   MarloweTransaction
@@ -81,6 +89,7 @@ data MarloweTransaction era =
   , mtRoles         :: CurrencySymbol          -- ^ The roles currency.
   , mtState         :: State                   -- ^ The Marlowe state after the transaction.
   , mtContract      :: Contract                -- ^ The Marlowe contract after the transaction.
+  , mtContinuations :: Continuations           -- ^ The merkleized continuations for the contract.
   , mtRange         :: Maybe (SlotNo, SlotNo)  -- ^ The slot range for the transaction, if any.
   , mtInputs        :: [Input]                 -- ^ The inputs to the transaction.
   , mtPayments      :: [Payment]               -- ^ The payments from the transaction.
@@ -97,6 +106,7 @@ instance IsCardanoEra era => ToJSON (MarloweTransaction era) where
       , "roles"            .= toJSON mtRoles
       , "state"            .= toJSON mtState
       , "contract"         .= toJSON mtContract
+      , "continuations"    .= toJSON mtContinuations
       , "range"            .= toJSON mtRange
       , "inputs"           .= toJSON mtInputs
       , "payments"         .= toJSON mtPayments
@@ -113,6 +123,7 @@ instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize era
           mtRoles         <- o .: "roles"
           mtState         <- o .: "state"
           mtContract      <- o .: "contract"
+          mtContinuations <- fromMaybe mempty <$> (o .:? "continuations")
           mtRange         <- o .: "range"
           mtInputs        <- o .: "inputs"
           mtPayments      <- o .: "payments"

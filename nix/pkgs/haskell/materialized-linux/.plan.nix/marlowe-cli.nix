@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-cli"; version = "0.0.4.4"; };
+      identifier = { name = "marlowe-cli"; version = "0.0.5.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "brian.bush@iohk.io";
@@ -105,6 +105,7 @@
           "Language/Marlowe/CLI/Command/Util"
           "Language/Marlowe/CLI/Examples"
           "Language/Marlowe/CLI/Export"
+          "Language/Marlowe/CLI/Merkle"
           "Language/Marlowe/CLI/IO"
           "Language/Marlowe/CLI/Orphans"
           "Language/Marlowe/CLI/PAB"

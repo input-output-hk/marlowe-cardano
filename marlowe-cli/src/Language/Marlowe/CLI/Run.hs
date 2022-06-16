@@ -153,9 +153,10 @@ initializeTransactionImpl marloweParams mtSlotConfig costModelParams network sta
      mtRoleValidator <- liftCli $ buildRoleValidator mtRoles costModelParams network stake
      let
        ValidatorInfo{..} = mtValidator :: ValidatorInfo AlonzoEra  -- FIXME: Generalize eras.
-       mtRange    = Nothing
-       mtInputs   = []
-       mtPayments = []
+       mtContinuations = mempty
+       mtRange         = Nothing
+       mtInputs        = []
+       mtPayments      = []
      maybeWriteJson outputFile MarloweTransaction{..}
      liftIO
        $ when printStats
