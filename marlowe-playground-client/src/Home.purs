@@ -2,10 +2,8 @@ module Home where
 
 import Prologue hiding (div)
 
-import Auth (_GithubUser, authStatusAuthRole)
 import Component.NewProject.Types as NewProject
 import Component.Projects.Types (Lang(..))
-import Data.Lens (has)
 import Halogen (ComponentHTML)
 import Halogen.Classes
   ( arrowLeftDown
@@ -29,9 +27,8 @@ import MainFrame.Types
   , ChildSlots
   , ModalView(..)
   , State
-  , _authStatus
+  , isAuthenticated
   )
-import Network.RemoteData (_Success)
 
 render :: forall m. State -> ComponentHTML Action ChildSlots m
 render state =
@@ -45,17 +42,15 @@ render state =
                     [ "mr-small", "w-56", "text-base", "cursor-pointer" ]
                 )
             , onClick \_ ->
-                if
-                  has
-                    ( _authStatus <<< _Success <<< authStatusAuthRole <<<
-                        _GithubUser
-                    )
-                    state then
+                if isAuthenticated state then
                   OpenModal OpenProject
                 else
                   OpenModal $ GithubLogin (OpenModal OpenProject)
             ]
-            [ text "Open existing project" ]
+            if isAuthenticated state then
+              [ text "Open existing project (authenticated)" ]
+            else
+              [ text "Open existing project (non authenticated)" ]
         , button
             [ classNames
                 ( primaryButton <>

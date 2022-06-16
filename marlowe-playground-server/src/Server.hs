@@ -21,6 +21,7 @@ import Control.Monad.Now (MonadNow (getCurrentTime, getPOSIXTime))
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Data.Aeson (FromJSON, ToJSON, eitherDecode, encode)
 import Data.Aeson as Aeson
+import qualified Data.Aeson as A
 import Data.Bits (toIntegralSized)
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import qualified Data.HashMap.Strict as HM
@@ -29,7 +30,7 @@ import Data.String as S
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
-import Data.Time (UTCTime)
+import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime)
 import Data.Time.LocalTime (LocalTime)
 import Data.Time.Units (Second, toMicroseconds)
 import qualified Data.Validation as Validation
@@ -53,7 +54,8 @@ import Servant (Application, Handler (Handler), Header, Headers, NoContent (NoCo
 import Servant.Client (ClientEnv, mkClientEnv, parseBaseUrl)
 import System.Environment (lookupEnv)
 import System.IO (hPutStrLn, stderr)
-import Web.Cookie (SetCookie (setCookieExpires, setCookieName), defaultSetCookie)
+import Web.Cookie (SetCookie (setCookieExpires, setCookieHttpOnly, setCookieMaxAge, setCookieName, setCookiePath, setCookieSecure, setCookieValue),
+                   defaultSetCookie)
 import qualified Web.JWT as JWT
 import Webghc.Client (runscript)
 import Webghc.Server (CompileRequest)
@@ -95,16 +97,18 @@ oracle exchange pair = do
 hSessionIdCookie :: Text
 hSessionIdCookie = "sessionId"
 
-logout :: MonadIO m => m (Headers '[ Header "SetCookie" SetCookie, Header "Location" Text] NoContent)
+logout :: MonadIO m => m (Headers '[ Header "Set-Cookie" SetCookie ] Value)
 logout = do
   now <- liftIO getCurrentTime
   let
     cookie = defaultSetCookie
       { setCookieName = encodeUtf8 hSessionIdCookie
       , setCookieExpires = Just now
+      , setCookiePath = Just "/"
       }
-
-  pure . addHeader cookie . addHeader ("/" :: Text) $ NoContent
+  -- We are forced to return something from here
+  -- because generated PureScript expects JSON.
+  pure . addHeader cookie $ A.object []
 
 compile ::
        ClientEnv

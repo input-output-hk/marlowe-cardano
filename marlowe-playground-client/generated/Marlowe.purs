@@ -176,7 +176,7 @@ postApiCompile reqBody =
 getApiLogout
   :: forall m
    . MonadAjax Api m
-  => m (Either (AjaxError JsonDecodeError Json) Unit)
+  => m (Either (AjaxError JsonDecodeError Json) RawJson)
 getApiLogout =
   request Api req
   where
@@ -190,7 +190,7 @@ getApiLogout =
   encode = E.encode encoder
   decode = D.decode decoder
   encoder = E.null
-  decoder = D.unit
+  decoder = D.value
   relativePart = RelativePartNoAuth $ Just
     [ "api"
     , "logout"

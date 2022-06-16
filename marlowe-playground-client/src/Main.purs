@@ -28,9 +28,8 @@ import Routing.Hash (matchesWith)
 import Types (WebpackBuildMode(..))
 
 decodeMainArgs :: Json -> Either JsonDecodeError WebpackBuildMode
-decodeMainArgs = decodeJson >=> \obj -> obj .: "webpackDevelMode" <#>
-  if _ then Development
-  else Production
+decodeMainArgs = decodeJson >=> \obj -> obj .: "webpackBuildMode" <#>
+  (eq "development" >>> if _ then Development else Production)
 
 main :: Json -> Effect Unit
 main args = do
@@ -42,7 +41,7 @@ main args = do
   HA.runHalogenAff do
     body <- HA.awaitBody
     let mainFrame = H.hoist (runAppM { webpackBuildMode }) MainFrame.component
-    driver <- runUI mainFrame tzOffset body
+    driver <- runUI mainFrame { tzOffset, webpackBuildMode } body
     void
       $ liftEffect
       $ matchesWith (Routing.parse Router.route) \old new -> do

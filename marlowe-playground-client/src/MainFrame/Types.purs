@@ -3,7 +3,7 @@ module MainFrame.Types where
 import Prologue hiding (div)
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Auth (AuthStatus)
+import Auth (AuthStatus, _GithubUser, authStatusAuthRole)
 import Component.Blockly.Types as Blockly
 import Component.ConfirmUnsavedNavigation.Types as ConfirmUnsavedNavigation
 import Component.CurrencyInput.Types as CurrencyInput
@@ -24,6 +24,7 @@ import Data.Lens.Record (prop)
 import Data.Maybe (maybe)
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Minutes)
 import Gist (Gist)
 import Gists.Extra (GistId)
 import Gists.Types (GistAction)
@@ -33,7 +34,7 @@ import Halogen.Classes (activeClass)
 import Halogen.Monaco (KeyBindings)
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetaData)
-import Network.RemoteData (_Loading)
+import Network.RemoteData (_Loading, _Success)
 import Page.BlocklyEditor.Types as BE
 import Page.HaskellEditor.Types as HE
 import Page.JavascriptEditor.Types (CompilationState)
@@ -45,7 +46,7 @@ import Rename.Types as Rename
 import Router (Route)
 import SaveAs.Types as SaveAs
 import Type.Proxy (Proxy(..))
-import Types (WebData)
+import Types (WebData, WebpackBuildMode)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 
 data ModalView
@@ -86,6 +87,7 @@ data Action
   | ShowBottomPanel Boolean
   | ChangeView View
   | ConfirmUnsavedNavigationAction Action ConfirmUnsavedNavigation.Action
+  | Logout
   -- blockly
   | ProjectsAction Projects.Action
   | NewProjectAction NewProject.Action
@@ -125,6 +127,7 @@ instance actionIsEvent :: IsEvent Action where
     { category = Just "OpenModal" }
   toEvent CloseModal = Just $ defaultEvent "CloseModal"
   toEvent (OpenLoginPopup _) = Just $ defaultEvent "OpenLoginPopup"
+  toEvent Logout = Just $ defaultEvent "Logout"
 
 data View
   = HomePage
@@ -183,8 +186,12 @@ _dateTimeInputSlot :: Proxy "dateTimeInput"
 _dateTimeInputSlot = Proxy
 
 -----------------------------------------------------------
+type Input = { tzOffset :: Minutes, webpackBuildMode :: WebpackBuildMode }
+
+-- We store `Input` data so we are able to reset the state on logout
 type State =
-  { view :: View
+  { input :: Input
+  , view :: View
   , jsCompilationResult :: CompilationState
   , jsEditorKeybindings :: KeyBindings
   , activeJSDemo :: String
@@ -214,7 +221,14 @@ type State =
   -- which can be used interchangeably. This is used all across the site to know what are the posible
   -- transitions.
   , workflow :: Maybe Lang
+  , featureFlags ::
+      { fsProjectStorage :: Boolean
+      , logout :: Boolean
+      }
   }
+
+_input :: Lens' State Input
+_input = prop (Proxy :: _ "input")
 
 _view :: Lens' State View
 _view = prop (Proxy :: _ "view")
@@ -391,3 +405,7 @@ sessionToState (Session sessionData) defaultState =
     , workflow = sessionData.workflow
     , contractMetadata = sessionData.contractMetadata
     }
+
+isAuthenticated :: State -> Boolean
+isAuthenticated = has
+  (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser)

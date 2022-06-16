@@ -23,9 +23,10 @@ data MarloweError = MarloweError String
 data WebpackBuildMode = Production | Development
 
 derive instance Generic WebpackBuildMode _
+derive instance Eq WebpackBuildMode
+derive instance Ord WebpackBuildMode
 
 instance Show WebpackBuildMode where
   show = genericShow
 
 type Env = { webpackBuildMode :: WebpackBuildMode }
-

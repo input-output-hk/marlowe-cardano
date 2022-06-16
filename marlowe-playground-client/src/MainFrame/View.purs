@@ -4,8 +4,10 @@ import Prologue hiding (div)
 
 import Auth (_GithubUser, authStatusAuthRole)
 import Component.Modal.View (modal)
+import Contrib.Data.Array.Builder as AB
 import Data.Lens (has, (^.))
 import Data.Maybe (isNothing)
+import Data.Monoid (guard)
 import Effect.Aff.Class (class MonadAff)
 import Gists.Types (GistAction(..))
 import Halogen (ComponentHTML)
@@ -50,6 +52,7 @@ import MainFrame.Types
   , _simulationState
   , _view
   , hasGlobalLoading
+  , isAuthenticated
   )
 import Network.RemoteData (_Loading, _Success)
 import Page.BlocklyEditor.View as BlocklyEditor
@@ -82,16 +85,26 @@ render state =
                   , src marlowePlayLogo
                   ]
               , projectTitle
-              , div_
-                  [ a
+              , div_ $ AB.build $ do
+                  let
+                    tutorial = a
                       [ href "./doc/marlowe/tutorials/index.html"
                       , target "_blank"
                       , classNames [ "font-semibold" ]
                       ]
                       [ text "Tutorial" ]
-                  -- Link disabled as the Actus labs is not working properly. Future plans might include moving this functionality to Marlowe run
-                  -- , a [ onClick $ const $ ChangeView ActusBlocklyEditor, classNames [ "ml-medium", "font-semibold" ] ] [ text "Actus Labs" ]
-                  ]
+                    logout = a
+                      [ onClick $ const Logout
+                      , classNames [ "font-semibold", "ml-4" ]
+                      ]
+                      [ text "Logout" ]
+                  AB.cons tutorial
+                    <> guard
+                      (isAuthenticated state && state.featureFlags.logout)
+                      (AB.cons logout)
+
+              -- Link disabled as the Actus labs is not working properly. Future plans might include moving this functionality to Marlowe run
+              -- , a [ onClick $ const $ ChangeView ActusBlocklyEditor, classNames [ "ml-medium", "font-semibold" ] ] [ text "Actus Labs" ]
               ]
           , topBar
           ]

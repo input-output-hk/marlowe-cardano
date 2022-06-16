@@ -18,12 +18,10 @@ import Servant.API (Capture, Get, Header, Headers, JSON, NoContent, PlainText, P
 import Web.Cookie (SetCookie)
 import Webghc.Server (CompileRequest)
 
-type Get302 headers = Verb 'GET 302 '[PlainText, JSON] (headers NoContent)
-
 type API
      = "oracle" :> Capture "exchange" String :> Capture "pair" String :> Get '[JSON] Value
        :<|> "actus" :> ("generate" :> ReqBody '[ JSON] A.ContractTerms :> Post '[ JSON] String
                         :<|> "generate-static" :> ReqBody '[ JSON] A.ContractTerms :> Post '[ JSON] String
                         :<|> "cashflows" :> ReqBody '[ JSON] A.ContractTerms :> Post '[ JSON] [A.CashFlow])
        :<|> "compile" :> ReqBody '[JSON] CompileRequest :> Post '[JSON] (Either InterpreterError (InterpreterResult String))
-       :<|> "logout" :> Get302 (Headers '[Header "SetCookie" SetCookie, Header "Location" Text])
+       :<|> "logout" :> Get '[JSON] (Headers '[Header "Set-Cookie" SetCookie] Value)

@@ -26,5 +26,5 @@ JSON.stringify = stringify;
 JSON.parse = parse;
 
 main({
-  webpackDevelMode: process.env.NODE_ENV === "development",
+  webpackBuildMode: process.env.NODE_ENV,
 })();

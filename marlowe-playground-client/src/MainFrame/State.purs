@@ -26,9 +26,10 @@ import Data.Lens.Index (ix)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (un, unwrap)
-import Data.Time.Duration (Minutes)
+import Data.RawJson (RawJson(..))
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
+import Effect.Class.Console (log)
 import Gist (Gist, gistDescription, gistId)
 import Gists.Extra (_GistId)
 import Gists.Types (GistAction(..))
@@ -45,6 +46,7 @@ import LoginPopup (informParentAndClose, openLoginPopup)
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
+  , Input
   , ModalView(..)
   , Query(..)
   , Session(..)
@@ -57,6 +59,7 @@ import MainFrame.Types
   , _gistId
   , _hasUnsavedChanges
   , _haskellState
+  , _input
   , _javascriptState
   , _loadGistResult
   , _marloweEditorState
@@ -112,8 +115,10 @@ import SaveAs.State (handleAction) as SaveAs
 import SaveAs.Types (Action(..), State, _status, emptyState) as SaveAs
 import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
+import Simple.JSON (unsafeStringify)
 import StaticData (gistIdLocalStorageKey)
 import StaticData as StaticData
+import Types (WebpackBuildMode(..))
 import Web.HTML (window) as Web
 import Web.HTML.HTMLDocument (toEventTarget)
 import Web.HTML.Window (document) as Web
@@ -121,9 +126,11 @@ import Web.HTML.Window as Window
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes (keyup)
 
-initialState :: Minutes -> State
-initialState tzOffset =
-  { view: HomePage
+initialState
+  :: Input -> State
+initialState input@{ tzOffset, webpackBuildMode } =
+  { input
+  , view: HomePage
   , jsCompilationResult: NotCompiled
   , showBottomPanel: true
   , haskellState: HE.initialState tzOffset
@@ -146,6 +153,10 @@ initialState tzOffset =
   , showModal: Nothing
   , hasUnsavedChanges: false
   , workflow: Nothing
+  , featureFlags:
+      { fsProjectStorage: webpackBuildMode == Development
+      , logout: webpackBuildMode == Development
+      }
   }
 
 ------------------------------------------------------------
@@ -153,7 +164,7 @@ component
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => Component Query Minutes Void m
+  => Component Query Input Void m
 component =
   H.mkComponent
     { initialState
@@ -619,6 +630,19 @@ handleAction (OpenLoginPopup intendedAction) = do
 
 handleAction (ConfirmUnsavedNavigationAction intendedAction modalAction) =
   handleConfirmUnsavedNavigationAction intendedAction modalAction
+
+handleAction Logout = do
+  lift Server.getApiLogout >>= case _ of
+    -- TODO: Proper error reporting
+    Left err -> do
+      log "Logout request failed:"
+      log $ unsafeStringify err
+      pure unit
+    Right (RawJson _) -> do
+      (input :: Input) <- use _input
+      selectView HomePage
+      H.put $ (initialState input :: State)
+      handleAction Init
 
 sendToSimulation
   :: forall m
