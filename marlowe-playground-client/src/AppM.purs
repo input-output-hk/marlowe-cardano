@@ -2,15 +2,17 @@ module AppM where
 
 import Prologue
 
+import Control.Monad.Reader (ReaderT, runReaderT)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Servant.PureScript (class MonadAjax)
+import Types (Env)
 
-newtype AppM a = AppM (Aff a)
+newtype AppM a = AppM (ReaderT Env Aff a)
 
-runAppM :: AppM ~> Aff
-runAppM (AppM m) = m
+runAppM :: Env -> AppM ~> Aff
+runAppM env (AppM m) = runReaderT m env
 
 derive newtype instance Functor AppM
 

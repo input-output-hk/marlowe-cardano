@@ -415,7 +415,7 @@ contractReview assets template params =
                       { ref: "action-pay-and-start"
                       , caption: "Pay and start"
                       , styles: [ "flex-1" ]
-                      , enabled: true
+                      , enabled: hasSufficientFunds
                       , handler: OnStartContract template params
                       }
                   ]

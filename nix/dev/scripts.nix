@@ -7,7 +7,6 @@
 , plutus-chain-index
 }:
 let
-  network = pkgs.networks.testnet-dev;
   marlowe-pab-exe = marlowe-pab + "/bin/marlowe-pab";
   marlowe-dashboard-exe = marlowe-dashboard + "/bin/marlowe-dashboard-server";
 
@@ -74,6 +73,10 @@ let
   '';
 
   start-wallet = writeShellScriptBinInRepoRoot "start-cardano-wallet" ''
+    echo "Waiting for cardano-node socket connection"
+    until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${devNetworkConfig.node.socket-path} 2> /dev/null; do :; done
+    echo "Connection ready"
+
     mkdir -p ${devNetworkConfig.wallet.database-path}
 
     cardano-wallet serve \
@@ -85,6 +88,10 @@ let
 
   start-chain-index = writeShellScriptBinInRepoRoot "start-chain-index" ''
     mkdir -p ${devNetworkConfig.chain-index.database-path}
+
+    echo "Waiting for cardano-node socket connection"
+    until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${devNetworkConfig.node.socket-path} 2> /dev/null; do :; done
+    echo "Connection ready"
 
     ${plutus-chain-index}/bin/plutus-chain-index start-index \
       --network-id ${toString network.magic} \
@@ -113,11 +120,44 @@ let
   '';
 
   start-dashboard-server = writeShellScriptBinInRepoRoot "start-dashboard-server" ''
+    echo "Waiting for cardano-node socket connection"
+    until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${devNetworkConfig.node.socket-path} 2> /dev/null; do :; done
+    echo "Connection ready"
+
+
     ${marlowe-dashboard-exe} webserver \
       --config ${devNetworkConfig.dashboard-server.config-file} \
       --port ${toString devNetworkConfig.dashboard-server.port} \
       --network-id ${toString network.magic} \
       --verbosity 2
+  '';
+
+  start-marlowe-run = writeShellScriptBinInRepoRoot "start-marlowe-run" ''
+    #!/bin/bash
+
+    # The spago dependencies might fail downloading, so we invoke it until it works
+    cd marlowe-dashboard-client
+    counter=5
+    spago install
+    while [[ "$?" -ne 0 && "$counter" -gt 0 ]]; do
+      let "counter-=1";
+      echo "Failed, retrying $counter more times";
+      spago install
+    done
+    cd ..
+
+    ${pkgs.tmux}/bin/tmux -T 256,mouse,focus,title\
+      new-session "printf '\033]2;Cardano node\033\\' && start-cardano-node" \; \
+      set mouse on \; \
+      set pane-border-status top \; \
+      set pane-border-format "#{pane_index} #T" \; \
+      setw remain-on-exit on \; \
+      split-window -h "printf '\033]2;PAB\033\\' && start-marlowe-pab" \; \
+      split-window -h "printf '\033]2;WBE\033\\' && start-cardano-wallet" \; \
+      split-window "printf '\033]2;Chain IX\033\\' && start-chain-index" \; \
+      split-window "printf '\033]2;MRun BE\033\\' && start-dashboard-server" \; \
+      split-window "printf '\033]2;MRun FE\033\\' && cd marlowe-dashboard-client && npm run start" \; \
+      rename-window "Marlowe Run" \;
   '';
 
   #
@@ -131,5 +171,5 @@ let
 
 in
 {
-  inherit start-cardano-node start-wallet start-chain-index start-marlowe-pab start-dashboard-server;
+  inherit start-cardano-node start-wallet start-chain-index start-marlowe-pab start-dashboard-server start-marlowe-run;
 }

@@ -31,7 +31,7 @@ tests = testGroup "Marlowe Contract"
   , testCase "Swap Contract" swapContractTest
   , testCase "Future Contract (repayment of initial margin)" futureNoChange
   , testCase "Future Contract (without margin calls)" futureNoMarginCall
-  , testCase "Future Contract (with margins calls)" futureWithMarinCall
+  , testCase "Future Contract (with margins calls)" futureWithMarginCall
   , testCase "American Call Option test" americanCallOptionTest
   , testCase "American Call Option (exercised) test" americanCallOptionExercisedTest
   , testCase "European Call Option test" europeanCallOptionTest
@@ -361,8 +361,8 @@ futureNoMarginCall =
           assertNoFailedTransactions err
 
 -- |Future, scenario with margin call
-futureWithMarinCall :: IO ()
-futureWithMarinCall =
+futureWithMarginCall :: IO ()
+futureWithMarginCall =
   let Just contract = toCore $
         future
           w1Pk

@@ -629,6 +629,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "heterogeneous" = pkgs.stdenv.mkDerivation {
+        name = "heterogeneous";
+        version = "v0.5.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/natefaubion/purescript-heterogeneous.git";
+          rev = "550445cf7932e158395423fc087cdc05bab41c40";
+          sha256 = "08bpgm9p8ib1jzrmssqpa1bqqzfmba43lsih1xvr3pf1jfizayxg";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "http-methods" = pkgs.stdenv.mkDerivation {
         name = "http-methods";
         version = "v5.0.0";
@@ -696,6 +708,18 @@ let
           url = "https://github.com/purescript-contrib/purescript-js-date.git";
           rev = "a6834eef986e3af0490cb672dc4a8b4b089dcb15";
           sha256 = "1dpiwn65qww862ilpfbd06gwfazpxvz3jwvsjsdrcxqqfcbjp8n8";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "js-object" = pkgs.stdenv.mkDerivation {
+        name = "js-object";
+        version = "c1e765914e107cece6e0f5442eabdd278d45c103";
+        src = pkgs.fetchgit {
+          url = "https://git@github.com/paluh/purescript-js-object";
+          rev = "c1e765914e107cece6e0f5442eabdd278d45c103";
+          sha256 = "0n6wlam01v1p4b2j0b4q11fscjklvw173rmjdx4bkhx2m104vz1l";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";

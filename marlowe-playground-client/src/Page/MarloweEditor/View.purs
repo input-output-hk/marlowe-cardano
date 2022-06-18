@@ -102,7 +102,7 @@ sendToSimulatorButton
   => State
   -> ComponentHTML Action ChildSlots m
 sendToSimulatorButton state =
-  div [ HP.id "marloweSendToSimulator" ]
+  div [ HP.id "marloweSendToSimulator", classNames [ "relative" ] ]
     [ button
         [ onClick $ const SendToSimulator
         , disabled disabled'

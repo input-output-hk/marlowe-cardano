@@ -265,9 +265,9 @@ data Input = NormalInput InputContent
 instance FromJSON Input where
   parseJSON (String s) = NormalInput <$> parseJSON (String s)
   parseJSON (Object v) = do
-    content <- parseJSON (Object v)
-    MerkleizedInput content <$> v .: "continuation_hash" <*> v .: "merkleized_continuation"
-      <|> return (NormalInput content)
+    MerkleizedInput <$> parseJSON (Object v) <*> v .: "continuation_hash" <*> v .: "merkleized_continuation"
+      <|> MerkleizedInput INotify <$> v .: "continuation_hash" <*> v .: "merkleized_continuation"
+      <|> NormalInput <$> parseJSON (Object v)
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
 instance ToJSON Input where
