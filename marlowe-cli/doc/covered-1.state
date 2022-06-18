@@ -1,0 +1,19 @@
+{
+    "choices": [],
+    "boundValues": [],
+    "accounts": [
+        [
+            [
+                {
+                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                },
+                {
+                    "currency_symbol": "",
+                    "token_name": ""
+                }
+            ],
+            3000000
+        ]
+    ],
+    "minTime": 1
+}

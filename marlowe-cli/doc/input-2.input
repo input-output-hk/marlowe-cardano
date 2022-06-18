@@ -1,0 +1,13 @@
+{
+    "input_from_party": {
+        "role_token": "Christopher Marlowe"
+    },
+    "into_account": {
+        "role_token": "Francis Bacon"
+    },
+    "of_token": {
+        "currency_symbol": "",
+        "token_name": ""
+    },
+    "that_deposits": 1000000000
+}
