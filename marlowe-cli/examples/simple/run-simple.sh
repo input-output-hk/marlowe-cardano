@@ -218,6 +218,7 @@ marlowe-cli run initialize --testnet-magic "$MAGIC"                  \
                            --contract-file tx-1.contract             \
                            --state-file    tx-1.state                \
                            --out-file      tx-1.marlowe              \
+                           --merkleize                               \
                            --print-stats
 
 echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."

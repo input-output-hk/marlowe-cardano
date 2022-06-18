@@ -11,10 +11,11 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 
 module Language.Marlowe.CLI.Run (
@@ -53,6 +54,7 @@ import qualified Data.Set as S (singleton)
 import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer, buildRoleValidator,
                                     buildValidator)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readMaybeMetadata, readSigningKey)
+import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, hashSigningKey, queryAlonzo,
                                          submitBody)
@@ -65,7 +67,8 @@ import Language.Marlowe.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, C
 import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
-import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum, POSIXTime, TokenName, toData)
+import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum (..), POSIXTime, TokenName,
+                             toBuiltinData, toData)
 import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue)
 import qualified PlutusTx.AssocMap as AM (toList)
 import Prettyprinter.Extras (Pretty (..))
@@ -119,9 +122,10 @@ initializeTransaction :: MonadError CliError m
               -> FilePath               -- ^ The JSON file containing the contract.
               -> FilePath               -- ^ The JSON file containing the contract's state.
               -> Maybe FilePath         -- ^ The output JSON file for the validator information.
+              -> Bool                   -- ^ Whether to deeply merkleize the contract.
               -> Bool                   -- ^ Whether to print statistics about the validator.
               -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransaction marloweParams slotConfig costModelParams network stake contractFile stateFile outputFile printStats =
+initializeTransaction marloweParams slotConfig costModelParams network stake contractFile stateFile outputFile merkleize printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
@@ -129,6 +133,7 @@ initializeTransaction marloweParams slotConfig costModelParams network stake con
       marloweParams slotConfig costModelParams network stake
       contract state
       outputFile
+      merkleize
       printStats
 
 
@@ -143,9 +148,10 @@ initializeTransactionImpl :: MonadError CliError m
                           -> Contract               -- ^ The initial Marlowe contract.
                           -> State                  -- ^ The initial Marlowe state.
                           -> Maybe FilePath         -- ^ The output JSON file for the validator information.
+                          -> Bool                   -- ^ Whether to deeply merkleize the contract.
                           -> Bool                   -- ^ Whether to print statistics about the validator.
                           -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState outputFile printStats =
+initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState outputFile merkleize printStats =
   do
      let
        mtRoles = rolesCurrency marloweParams
@@ -157,7 +163,9 @@ initializeTransactionImpl marloweParams mtSlotConfig costModelParams network sta
        mtRange         = Nothing
        mtInputs        = []
        mtPayments      = []
-     maybeWriteJson outputFile MarloweTransaction{..}
+     maybeWriteJson outputFile
+       . (if merkleize then merkleizeMarlowe else id)
+       $ MarloweTransaction{..}
      liftIO
        $ when printStats
          $ do
@@ -222,12 +230,14 @@ makeMarlowe :: MonadError CliError m
             => MarloweTransaction era                            -- ^ The Marlowe initial state and initial contract.
             -> TransactionInput                                  -- ^ The transaction input.
             -> m ([TransactionWarning], MarloweTransaction era)  -- ^ Action to compute the next step in the contract.
-makeMarlowe marloweIn@MarloweTransaction{..} transactionInput@TransactionInput{..} =
+makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
   do
-    case computeTransaction transactionInput mtState mtContract of
+    transactionInput'@TransactionInput{..} <- merkleizeInputs marloweIn transactionInput
+    case computeTransaction transactionInput' mtState mtContract of
       Error message          -> throwError . CliError . show $ message
       TransactionOutput{..} -> pure
-                                 ( txOutWarnings
+                                 (
+                                   txOutWarnings
                                  , marloweIn
                                    {
                                      mtState    = txOutState
@@ -239,7 +249,6 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput@TransactionInput{.
                                  )
                                    where
                                      convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot mtSlotConfig
-
 
 
 -- | Run a Marlowe transaction.
@@ -263,9 +272,9 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
     metadata <- readMaybeMetadata metadataFile
     protocol <- queryAlonzo connection QueryProtocolParameters
     marloweOut <- decodeFileStrict marloweOutFile
-    (spend, collateral) <-
+    (spend, collateral, datumOutputs) <-
       case marloweInBundle of
-        Nothing                                 -> pure ([], Nothing)
+        Nothing                                 -> pure ([], Nothing, [])
         Just (marloweInFile, spend, collateral) -> do
                                                     marloweIn  <- decodeFileStrict marloweInFile
                                                     let
@@ -274,7 +283,25 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                                       redeemer = riRedeemer $ buildRedeemer (mtInputs marloweOut)
                                                       inputDatum  = diDatum $ buildDatum (mtContract marloweIn) (mtState marloweIn)
                                                       spend' = buildPayFromScript validator inputDatum redeemer spend
-                                                    pure ([spend'], Just collateral)
+                                                      -- SCP-3610: Remove when Babbage era features become available and the validator is revised.
+                                                      merkles =
+                                                        catMaybes
+                                                          [
+                                                            case input of
+                                                              NormalInput     _                -> Nothing
+                                                              MerkleizedInput _ _ continuation -> Just
+                                                                                                   (
+                                                                                                     -- Send the ancillary datum to the change address.
+                                                                                                     changeAddress
+                                                                                                     -- Astonishing that this eUTxO can be spent without script or redeemer!
+                                                                                                   , Just . Datum $ toBuiltinData continuation
+                                                                                                     -- FIXME: Replace with protocol-dependent min-Ada.
+                                                                                                   , lovelaceToValue 1_500_000
+                                                                                                   )
+                                                          |
+                                                            input <- mtInputs marloweOut
+                                                          ]
+                                                    pure ([spend'], Just collateral, merkles)
     let
       toAddressAny' :: AddressInEra AlonzoEra -> AddressAny
       toAddressAny' (AddressInEra _ address) = toAddressAny address
@@ -331,7 +358,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                ]
         ]
     let
-      outputs' = payments <> outputs
+      outputs' = payments <> outputs <> datumOutputs
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection

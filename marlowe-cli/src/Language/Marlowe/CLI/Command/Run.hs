@@ -55,6 +55,7 @@ data RunCommand =
     , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
     , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
     , outputFile    :: Maybe FilePath               -- ^ The output JSON file for the validator information.
+    , merkleize     :: Bool                         -- ^ Whether to deeply merkleize the contract.
     , printStats    :: Bool                         -- ^ Whether to print statistics about the contract.
     }
     -- | Prepare a Marlowe transaction for execution.
@@ -138,6 +139,7 @@ runRunCommand command =
                             marloweParams' slotConfig costModel network' stake'
                             contractFile stateFile
                             outputFile
+                            merkleize
                             printStats
       Prepare{..}    -> prepareTransaction
                           marloweInFile
@@ -206,6 +208,7 @@ initializeOptions network socket =
     <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"              <> O.help "JSON input file for the contract."                                                                               )
     <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"                 <> O.help "JSON input file for the contract state."                                                                         )
     <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for initialize."                                                                                )
+    <*> O.switch                                           (O.long "merkleize"                                                <> O.help "Whether to deeply merkleize the contract."                                                                       )
     <*> O.switch                                           (O.long "print-stats"                                              <> O.help "Print statistics."                                                                                               )
 
 
