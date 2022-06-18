@@ -8,6 +8,10 @@
 *   [Reference for Marlowe CLI Commands](06-marlowe-cli-reference.ipynb)
 
 
-The lectures above can be viewed, edited, and run as Jupyter notebooks. Execute the command `nix run` from this folder in order to start JupyterLabs.
+The lectures above can be viewed, edited, and run as Jupyter notebooks.
+
+*  Run `nix-shell` in the top folder of this repository.
+*  Change directory to [`marlowe-cli/`](..).
+*  Execute the command `nix run` from that folder in order to start JupyterLabs.
 
 Run `make` in this folder to regenerate slides from the Jupyter notebooks.
