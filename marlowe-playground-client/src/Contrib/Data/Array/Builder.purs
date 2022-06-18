@@ -25,10 +25,8 @@ module Contrib.Data.Array.Builder where
 
 import Prelude
 
-import Data.Either (Either, hush)
-import Data.Maybe (Maybe(..))
-import Effect (Effect)
-import Effect.Exception (catchException)
+import Data.Either (hush)
+import Data.Maybe (Maybe)
 import Effect.Exception as EE
 import Effect.Unsafe (unsafePerformEffect)
 
