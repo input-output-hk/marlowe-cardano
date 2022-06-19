@@ -21,8 +21,8 @@ price = ConstantParam "Price"
 
 depositTimeout, disputeTimeout, answerTimeout, arbitrageTimeout :: Timeout
 depositTimeout = TimeParam "Payment deadline"
-disputeTimeout = TimeParam "Complaint response deadline"
-answerTimeout = TimeParam "Complaint deadline"
+disputeTimeout = TimeParam "Complaint deadline"
+answerTimeout = TimeParam "Complaint response deadline"
 arbitrageTimeout = TimeParam "Mediation deadline"
 
 choice :: ChoiceName -> Party -> Integer -> Contract -> Case
