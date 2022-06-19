@@ -158,8 +158,8 @@ filledEscrow =
             { timeContent:
                 Map.fromFoldable
                   [ "Payment deadline" /\ secondsSinceShelley 10
-                  , "Complaint response deadline" /\ secondsSinceShelley 50
-                  , "Complaint deadline" /\ secondsSinceShelley 100
+                  , "Complaint deadline" /\ secondsSinceShelley 50
+                  , "Complaint response deadline" /\ secondsSinceShelley 100
                   , "Mediation deadline" /\ secondsSinceShelley 1000
                   ]
             , valueContent:
