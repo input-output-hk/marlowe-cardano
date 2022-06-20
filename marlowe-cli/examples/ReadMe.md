@@ -1,6 +1,9 @@
 # Examples for Marlowe CLI Tool
 
 
+Also see the [Marlowe Contract Cookbook](../cookbook/ReadMe.md) for further examples of running contracts using `marlowe-cli`.
+
+
 ## Examples
 
 *   [simple contract](simple/ReadMe.md)
