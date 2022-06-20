@@ -17,7 +17,6 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Exception (error)
 import Effect.Now (getTimezoneOffset)
-import Halogen as H
 import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
 import MainFrame.State (component) as MainFrame
@@ -25,6 +24,7 @@ import MainFrame.Types (Query(..)) as MainFrame
 import Router as Router
 import Routing.Duplex as Routing
 import Routing.Hash (matchesWith)
+import Store (mkStore)
 import Types (WebpackBuildMode(..))
 
 decodeMainArgs :: Json -> Either JsonDecodeError WebpackBuildMode
@@ -40,7 +40,9 @@ main args = do
   tzOffset <- getTimezoneOffset
   HA.runHalogenAff do
     body <- HA.awaitBody
-    let mainFrame = H.hoist (runAppM { webpackBuildMode }) MainFrame.component
+    let store = mkStore Nothing
+    { component: mainFrame } <- runAppM { webpackBuildMode } store
+      MainFrame.component
     driver <- runUI mainFrame { tzOffset, webpackBuildMode } body
     void
       $ liftEffect
