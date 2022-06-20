@@ -47,7 +47,7 @@ import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Data.Bifunctor (bimap)
 import Data.Function (on)
-import Data.List (groupBy)
+import Data.List (groupBy, sortBy)
 import qualified Data.Map.Strict as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as S (singleton)
@@ -351,9 +351,8 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
 
             Account _         -> pure Nothing
         |
-           (payee, money) <- bimap head mconcat
-                               . unzip
-                               <$> groupBy ((==) `on` fst)
+           (payee, money) <- bimap head mconcat . unzip
+                               <$> (groupBy ((==) `on` fst) . sortBy (compare `on` fst))
                                [
                                  (payee, money)
                                | Payment _ payee money <- mtPayments marloweOut
