@@ -185,12 +185,12 @@ readLovelaceEither =
 readAssetValueEither :: String               -- ^ The string to be read.
                      -> Either String Value  -- ^ Either the value or an error message.
 readAssetValueEither s =
-  case words s of
-    [amount, token] -> do
-                         token' <- readAssetIdEither token
-                         amount' <- Quantity <$> readEither amount
-                         pure $ valueFromList [(token', amount')]
-    _               -> Left "Invalid asset value."
+  case break (== ' ') s of
+    (amount, ' ' : token) -> do
+                               token' <- readAssetIdEither $ dropWhile (== ' ') token
+                               amount' <- Quantity <$> readEither amount
+                               pure $ valueFromList [(token', amount')]
+    _                     -> Left "Invalid asset value."
 
 
 -- | Parser for `AssetId`.
