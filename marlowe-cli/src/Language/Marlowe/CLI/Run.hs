@@ -44,7 +44,7 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode, Local
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
+import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Data.Bifunctor (bimap)
 import Data.Function (on)
 import Data.List (groupBy)
@@ -232,7 +232,9 @@ makeMarlowe :: MonadError CliError m
             -> m ([TransactionWarning], MarloweTransaction era)  -- ^ Action to compute the next step in the contract.
 makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
   do
-    transactionInput'@TransactionInput{..} <- merkleizeInputs marloweIn transactionInput
+    transactionInput'@TransactionInput{..} <-
+      merkleizeInputs marloweIn transactionInput
+        `catchError` (const $ pure transactionInput)  -- TODO: Consider not catching errors here.
     case computeTransaction transactionInput' mtState mtContract of
       Error message          -> throwError . CliError . show $ message
       TransactionOutput{..} -> pure
