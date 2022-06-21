@@ -45,7 +45,7 @@ type HelperFunctions a =
   , getRange :: Term a -> IRange
   , mkBigInteger :: Int -> BigInt
   , mkPOSIXTime :: BigInt -> POSIXTime
-  , mkExtendedTimeValue :: BigInt -> Timeout
+  , mkExtendedTimeValue :: String -> Timeout
   , mkExtendedTimeParam :: String -> Timeout
   , mkClose :: Contract
   , mkPay ::
@@ -116,8 +116,9 @@ helperFunctions =
   , getRange: getLocation >>> locationToRange
   , mkBigInteger: BigInt.fromInt
   , mkPOSIXTime: \bi -> unsafePartial $ fromJust $ POSIXTime.fromBigInt bi
-  , mkExtendedTimeValue:
-      \bi -> H.TimeValue <<< unsafePartial $ fromJust $ POSIXTime.fromBigInt bi
+  , mkExtendedTimeValue: \str ->
+      H.TimeValue <<< unsafePartial $ fromJust $ POSIXTime.fromBigInt =<<
+        BigInt.fromString str
   , mkExtendedTimeParam: TimeParam
   , mkClose: Close
   , mkPay: Pay
