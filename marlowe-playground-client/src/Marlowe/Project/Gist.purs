@@ -1,15 +1,5 @@
 module Marlowe.Project.Gist where
 
--- -- module Marlowe.Gists
--- --   ( mkNewGist
--- --   , isPlaygroundGist
--- --   , playgroundFiles
--- --   , filenames
--- --   , fileExists
--- --   , PlaygroundFiles
--- --   ) where
---
-
 import Prologue
 
 import Data.Array as A
@@ -29,14 +19,14 @@ import Marlowe.Project.Types
   ( FileContent(..)
   , FileName(..)
   , Files(..)
-  , ProjectState
+  , Project
   , fromFiles
   , toFiles
   )
 
 newtype Description = Description String
 
-toNewGist :: ProjectState -> Description -> NewGist
+toNewGist :: Project -> Description -> NewGist
 toNewGist projectState (Description description) =
   NewGist
     { _newGistDescription: description
@@ -54,7 +44,7 @@ toNewGist projectState (Description description) =
   fromFile (FileName name) (FileContent content) = NewGistFile
     { _newGistFilename: name, _newGistFileContent: content }
 
-fromGist :: Gist -> ProjectState
+fromGist :: Gist -> (Maybe Project)
 fromGist gist = fromFiles $ Files $ do
   let
     files = gist ^. gistFiles

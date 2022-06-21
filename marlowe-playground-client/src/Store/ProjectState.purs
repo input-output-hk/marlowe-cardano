@@ -1,22 +1,27 @@
-module Store.ProjectStore where
+module Store.ProjectState where
 
-import Data.Lens (set)
+import Data.Lens (Lens', set)
+import Data.Lens.Record (prop)
 import Marlowe.Project.Types (Project, SourceCode, _code, _projectName)
+import Type.Prelude (Proxy(..))
 
-type ProjectStore =
+type ProjectState =
   { project :: Project
   , modified :: Boolean
   }
 
-mkProjectStore :: Project -> ProjectStore
-mkProjectStore = { modified: false, project: _ }
+_project :: forall a r. Lens' { project :: a | r } a
+_project = prop (Proxy :: _ "project")
 
-data ProjectStoreAction
+mkProjectState :: Project -> ProjectState
+mkProjectState = { modified: false, project: _ }
+
+data ProjectStateAction
   = OnProjectNameChanged String
   | OnProjectCodeChanged SourceCode
   | OnProjectSaved
 
-reduce :: ProjectStore -> ProjectStoreAction -> ProjectStore
+reduce :: ProjectState -> ProjectStateAction -> ProjectState
 reduce store = case _ of
   OnProjectNameChanged name -> store
     { project = set _projectName name store.project }

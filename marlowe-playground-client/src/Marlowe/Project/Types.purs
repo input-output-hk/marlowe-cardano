@@ -2,21 +2,86 @@ module Marlowe.Project.Types where
 
 import Prelude
 
+import CallByName.Alt ((<|>))
+import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
+import Data.Either (hush)
+import Data.Lens (Lens', lens)
 import Data.Map (Map)
 import Data.Map as M
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (class Newtype)
-import Safe.Coerce as Safe.Coerce
+import Data.Tuple.Nested ((/\))
+import Marlowe.Extended (Contract) as Marlowe.Extended
+import Marlowe.Extended.Metadata (MetaData) as Marlowe.Extended
+import Safe.Coerce (coerce)
 
-type ProjectBase f content =
-  { playground :: content
-  , marlowe :: f content
-  , haskell :: f content
-  , javascript :: f content
-  , actus :: f content
-  , metadata :: f content
+newtype SourceCode = SourceCode String
+
+type ProjectContent extra =
+  { projectName :: String
+  , code :: SourceCode
+  , metadata :: Marlowe.Extended.MetaData
+  | extra
   }
+
+data Project
+  = MarloweProject
+      (ProjectContent (contract :: Maybe Marlowe.Extended.Contract))
+  | HaskellProject (ProjectContent ())
+  | JavascriptProject (ProjectContent ())
+  | ActusProject (ProjectContent ())
+
+getProjectName :: Project -> String
+getProjectName = case _ of
+  MarloweProject r -> r.projectName
+  HaskellProject r -> r.projectName
+  JavascriptProject r -> r.projectName
+  ActusProject r -> r.projectName
+
+setProjectName :: Project -> String -> Project
+setProjectName project projectName = case project of
+  MarloweProject r -> MarloweProject r { projectName = projectName }
+  HaskellProject r -> HaskellProject r { projectName = projectName }
+  JavascriptProject r -> JavascriptProject r { projectName = projectName }
+  ActusProject r -> ActusProject r { projectName = projectName }
+
+_projectName :: Lens' Project String
+_projectName = lens getProjectName setProjectName
+
+getCode :: Project -> SourceCode
+getCode = case _ of
+  MarloweProject r -> r.code
+  HaskellProject r -> r.code
+  JavascriptProject r -> r.code
+  ActusProject r -> r.code
+
+setCode :: Project -> SourceCode -> Project
+setCode project code = case project of
+  MarloweProject r -> MarloweProject r { code = code }
+  HaskellProject r -> HaskellProject r { code = code }
+  JavascriptProject r -> JavascriptProject r { code = code }
+  ActusProject r -> ActusProject r { code = code }
+
+_code :: Lens' Project SourceCode
+_code = lens getCode setCode
+
+getMetadata :: Project -> Marlowe.Extended.MetaData
+getMetadata = case _ of
+  MarloweProject r -> r.metadata
+  HaskellProject r -> r.metadata
+  JavascriptProject r -> r.metadata
+  ActusProject r -> r.metadata
+
+setMetadata :: Project -> Marlowe.Extended.MetaData -> Project
+setMetadata project metadata = case project of
+  MarloweProject r -> MarloweProject r { metadata = metadata }
+  HaskellProject r -> HaskellProject r { metadata = metadata }
+  JavascriptProject r -> JavascriptProject r { metadata = metadata }
+  ActusProject r -> ActusProject r { metadata = metadata }
+
+_metadata :: Lens' Project Marlowe.Extended.MetaData
+_metadata = lens getMetadata setMetadata
 
 type Id :: forall k. k -> k
 type Id a = a
@@ -39,11 +104,14 @@ derive instance Newtype Files _
 derive newtype instance Eq Files
 derive newtype instance Ord Files
 
-newtype ProjectState = ProjectState (ProjectBase Maybe String)
-
-type FileNames = ProjectBase Id FileName
-
-fileNames :: FileNames
+fileNames
+  :: { actus :: FileName
+     , haskell :: FileName
+     , javascript :: FileName
+     , marlowe :: FileName
+     , metadata :: FileName
+     , playground :: FileName
+     }
 fileNames =
   { playground: FileName "playground.marlowe.json"
   , marlowe: FileName "playground.marlowe"
@@ -53,29 +121,46 @@ fileNames =
   , metadata: FileName "metadata.json"
   }
 
-toFiles :: ProjectState -> Files
-toFiles (ProjectState r) = do
+toFiles :: Project -> Files
+toFiles project = do
   let
-    insert' k (Just c) = Map.insert k (FileContent c)
-    insert' _ _ = identity
+    codeFileName /\ codeFileContent = case project of
+      MarloweProject { code: SourceCode code } -> do
+        let
+          codeFileContent = FileContent $ encodeStringifyJson code
+        fileNames.marlowe /\ codeFileContent
+      HaskellProject { code } -> fileNames.haskell /\ coerce code
+      JavascriptProject { code } -> fileNames.javascript /\ coerce code
+      ActusProject { code } -> fileNames.actus /\ coerce code
+  Files $ Map.fromFoldable
+    [ codeFileName /\ codeFileContent
+    , fileNames.playground /\ FileContent (getProjectName project)
+    , fileNames.metadata /\ FileContent
+        (encodeStringifyJson $ getMetadata project)
+    ]
 
-    x =
-      insert' fileNames.playground (Just r.playground)
-        <<< insert' fileNames.actus r.actus
-        <<< insert' fileNames.haskell r.haskell
-        <<< insert' fileNames.javascript r.javascript
-        <<< insert' fileNames.marlowe r.marlowe
-        <<< insert' fileNames.metadata r.metadata
-        $ M.empty
-  Files x
-
-fromFiles :: Files -> ProjectState
+fromFiles :: Files -> Maybe Project
 fromFiles (Files m) = do
-  ProjectState $ Safe.Coerce.coerce
-    { actus: M.lookup fileNames.actus m
-    , haskell: M.lookup fileNames.haskell m
-    , javascript: M.lookup fileNames.javascript m
-    , marlowe: M.lookup fileNames.marlowe m
-    , metadata: M.lookup fileNames.metadata m
-    , playground: fromMaybe (FileContent "{}") (M.lookup fileNames.playground m)
-    }
+  metadata <- do
+    FileContent json <- M.lookup fileNames.metadata m
+    hush $ parseDecodeJson json
+  ( do
+      code <- lookupContent fileNames.actus m
+      pure $ ActusProject { projectName, metadata, code }
+      <|> do
+        code <- lookupContent fileNames.haskell m
+        pure $ HaskellProject
+          { projectName, metadata, code }
+      <|>
+        do
+          code <- lookupContent fileNames.javascript m
+          pure $ JavascriptProject
+            { projectName, metadata, code }
+      <|> do
+        code <- lookupContent fileNames.marlowe m
+        pure $ MarloweProject { projectName, metadata, code, contract: Nothing }
+  )
+  where
+  lookupContent n = coerce <<< M.lookup n
+  FileContent projectName = fromMaybe (FileContent "Uknown")
+    (M.lookup fileNames.playground m)

@@ -18,18 +18,18 @@ import Marlowe.Project.Types
   ( FileContent(..)
   , FileName(..)
   , Files(..)
-  , ProjectState
+  , Project
   , fileNames
   , fromFiles
   , toFiles
   )
 import Web.File.File as W
 
-toArchive :: ProjectState -> Effect T.TarWriter
-toArchive projectState = do
+toArchive :: Project -> Effect T.TarWriter
+toArchive project = do
   let
     files :: Array _
-    files = M.toUnfoldable $ un Files $ toFiles projectState
+    files = M.toUnfoldable $ un Files $ toFiles project
   tarWriter <- T.tarWriter
 
   for_ files \(FileName n /\ FileContent c) ->
@@ -37,7 +37,7 @@ toArchive projectState = do
 
   pure tarWriter
 
-fromArchive :: W.File -> Aff ProjectState
+fromArchive :: W.File -> Aff (Maybe Project)
 fromArchive file = do
   let
     fileNamesArr = FO.values <<< FO.fromHomogeneous $ fileNames

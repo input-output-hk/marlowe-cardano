@@ -32,6 +32,7 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, id, src, target)
 import Halogen.HTML.Properties.ARIA (label, role)
+import Halogen.Store.Monad (class MonadStore)
 import Home as Home
 import Icons (Icon(..), icon)
 import MainFrame.Types
@@ -61,10 +62,12 @@ import Page.HaskellEditor.View (otherActions, render) as HaskellEditor
 import Page.JavascriptEditor.View as JSEditor
 import Page.MarloweEditor.View as MarloweEditor
 import Page.Simulation.View as Simulation
+import Store as Store
 
 render
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.State m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =
@@ -284,18 +287,17 @@ render state =
 menuBar :: forall p. State -> HTML p Action
 menuBar state =
   div [ classNames [ "menu-bar" ] ]
-    $ AB.unsafeBuild
-    $ menuButton (OpenModal NewProject) "New Project"
-        :> gistModal (OpenModal OpenProject) "Open"
-        :> menuButton (OpenModal OpenDemo) "Open Example"
-        :> menuButton (OpenModal RenameProject) "Rename"
-        :> gistModal
-          ( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
-            else GistAction PublishOrUpdateGist
-          )
-          "Save"
-        :> gistModal (OpenModal SaveProjectAs) "Save As..."
-        :> mempty
+    [ menuButton (OpenModal NewProject) "New Project"
+    , gistModal (OpenModal OpenProject) "Open"
+    , menuButton (OpenModal OpenDemo) "Open Example"
+    , menuButton (OpenModal RenameProject) "Rename"
+    , gistModal
+        ( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
+          else GistAction PublishOrUpdateGist
+        )
+        "Save"
+    , gistModal (OpenModal SaveProjectAs) "Save As..."
+    ]
   where
   menuButton action name =
     a [ onClick $ const action ]

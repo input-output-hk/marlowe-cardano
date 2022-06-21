@@ -42,6 +42,7 @@ import Halogen.Monaco (KeyBindings(DefaultBindings))
 import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
 import Halogen.Query.Event (eventListener)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import LoginPopup (informParentAndClose, openLoginPopup)
 import MainFrame.Types
   ( Action(..)
@@ -80,6 +81,7 @@ import Marlowe (Api, getApiGistsByGistId)
 import Marlowe as Server
 import Marlowe.Extended.Metadata (emptyContractMetadata, getHintsFromMetadata)
 import Marlowe.Gists (PlaygroundFiles, mkNewGist, playgroundFiles)
+import Marlowe.Project.Types (Project(..), SourceCode(..))
 import Network.RemoteData (RemoteData(..), _Success, fromEither)
 import Page.BlocklyEditor.State as BlocklyEditor
 import Page.BlocklyEditor.Types (_marloweCode)
@@ -118,6 +120,7 @@ import SessionStorage as SessionStorage
 import Simple.JSON (unsafeStringify)
 import StaticData (gistIdLocalStorageKey)
 import StaticData as StaticData
+import Store as Store
 import Types (WebpackBuildMode(..))
 import Web.HTML (window) as Web
 import Web.HTML.HTMLDocument (toEventTarget)
@@ -164,6 +167,7 @@ component
   :: forall m
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
   => Component Query Input Void m
 component =
   H.mkComponent
@@ -271,6 +275,7 @@ handleRoute
   :: forall m
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
   => Route
   -> HalogenM State Action ChildSlots Void m Unit
 handleRoute { gistId: (Just gistId), subroute } = do
@@ -284,6 +289,7 @@ handleQuery
   :: forall m a
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
   => Query a
   -> HalogenM State Action ChildSlots Void m (Maybe a)
 handleQuery (ChangeRoute route next) = do
@@ -298,6 +304,7 @@ fullHandleAction
   :: forall m
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 fullHandleAction =
@@ -310,6 +317,7 @@ handleActionWithoutNavigationGuard
   :: forall m
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleActionWithoutNavigationGuard =
@@ -324,6 +332,7 @@ handleActionWithoutNavigationGuard =
 handleAction
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.State m
   => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
@@ -491,7 +500,9 @@ handleAction (ProjectsAction Projects.Cancel) = fullHandleAction CloseModal
 handleAction (ProjectsAction action) = toProjects $ Projects.handleAction action
 
 handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
-  assign _projectName "New Project"
+  let
+    projectName = "New Project"
+  assign _projectName projectName
   assign _gistId Nothing
   assign _createGistResult NotAsked
   assign _contractMetadata emptyContractMetadata
@@ -501,17 +512,35 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
   case lang of
     Haskell ->
       for_ (Map.lookup "Example" StaticData.demoFiles) \contents -> do
+        updateStore $ Store.OnProjectLoaded $ HaskellProject
+          { projectName
+          , code: SourceCode contents
+          , metadata: emptyContractMetadata
+          }
+
         toHaskellEditor $ HaskellEditor.handleAction emptyContractMetadata $
           HE.InitHaskellProject
             mempty
             contents
     Javascript ->
-      for_ (Map.lookup "Example" StaticData.demoFilesJS) \contents -> do
+      for_ (Map.lookup "Example" StaticData.demoFilesJS) \code -> do
+        updateStore $ Store.OnProjectLoaded $ JavascriptProject
+          { projectName
+          , code: SourceCode code
+          , metadata: emptyContractMetadata
+          }
+
         toJavascriptEditor $ JavascriptEditor.handleAction emptyContractMetadata
           $
-            JS.InitJavascriptProject mempty contents
+            JS.InitJavascriptProject mempty code
     Marlowe ->
       for_ (Map.lookup "Example" StaticData.marloweContracts) \contents -> do
+        updateStore $ Store.OnProjectLoaded $ MarloweProject
+          { projectName
+          , code: SourceCode contents
+          , metadata: emptyContractMetadata
+          , contract: Nothing
+          }
         toMarloweEditor $ MarloweEditor.handleAction emptyContractMetadata $
           ME.InitMarloweProject
             contents
@@ -857,6 +886,7 @@ handleConfirmUnsavedNavigationAction
   :: forall m
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
   => Action
   -> ConfirmUnsavedNavigation.Action
   -> HalogenM State Action ChildSlots Void m Unit
@@ -893,6 +923,7 @@ withAccidentalNavigationGuard
   :: forall m
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
   => (Action -> HalogenM State Action ChildSlots Void m Unit)
   -> Action
   -> HalogenM State Action ChildSlots Void m Unit

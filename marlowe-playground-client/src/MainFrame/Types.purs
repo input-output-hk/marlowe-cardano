@@ -34,6 +34,7 @@ import Halogen.Classes (activeClass)
 import Halogen.Monaco (KeyBindings)
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetaData)
+import Marlowe.Project.Types (Project)
 import Network.RemoteData (_Loading, _Success)
 import Page.BlocklyEditor.Types as BE
 import Page.HaskellEditor.Types as HE
@@ -154,6 +155,7 @@ type ChildSlots =
   , metadata :: forall query. H.Slot query MetadataAction Unit
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
+  , saveProject :: forall query. H.Slot query Void Unit
   , currencyInput :: CurrencyInput.Slot String
   , dateTimeInput :: DateTimeLocalInput.Slot String
   )
@@ -166,6 +168,9 @@ _jsEditorSlot = Proxy
 
 _blocklySlot :: Proxy "blocklySlot"
 _blocklySlot = Proxy
+
+_saveProject :: Proxy "saveProject"
+_saveProject = Proxy
 
 _simulationSlot :: Proxy "simulationSlot"
 _simulationSlot = Proxy

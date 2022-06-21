@@ -1,10 +1,13 @@
 module Contrib.Data.Array.Builder where
 
--- | Monoidal array builder which should
--- | have much better performance than concatenation.
+-- | Monoidal array builder which should have much better performance than concatenation.
 -- |
--- | Use it for relatively small arrays (length < 10000).
--- | It is not stack safe.
+-- | Please be aware that `JS` engines are generaly optimized for `push` (`snoc`)
+-- | operation - O(1) vs `unshift` (`cons`) operation - O(n).
+-- | We have here the opposit characteristic then in the case of `Data.List`.
+-- |
+-- | Use it for relatively small arrays (length < 10000) otherwise you can get `Nothing`...
+-- | or just crash (stack overflow) in the case of `unsafeBuild`.
 -- |
 -- | `<>` is right associative and we execute its right hand
 -- | side argument to first so it works should work in
@@ -16,12 +19,13 @@ module Contrib.Data.Array.Builder where
 -- | ```
 -- | build $ snoc 8 <> snoc 9 <> snoc 10 <> mempty == [10, 9, 8]
 -- | ```
--- | There are right (`:>` and `++>`) and right (`<:` and `<++`)
+-- | There are right (`:>` and `+>`) and right (`<:` and `<+`)
 -- |associative operators provided by the lib which "should" behave
 -- | as you would expect when mixed:
 -- | ```
--- | build $ -3 :> [-2, -1] ++> 0 :> mempty <: 1 <++ [1, 2] <: 3
+-- | build $ -3 :> [-2, -1] +> 0 :> mempty <: 1 <+ [1, 2] <: 3
 -- | ```
+-- |
 
 import Prelude
 
@@ -73,18 +77,10 @@ appendSnocArray :: forall a. Builder a -> Array a -> Builder a
 appendSnocArray b a = snocArray a <> b
 
 -- | ```
--- | build $ -3 :> [-2, -1] ++> 0 :> 1 :> 2 :> mempty <++ [3,4] <: 5 <: 6 <++ [7, 8] <: 9 <: 10
+-- | build $ <> -3 :> [-2, -1] +> 0 :> 1 :> 2 :> mempty <+ [3,4] <: 5 <: 6 <+ [7, 8] <: 9 <: 10
 -- | ```
-infixl 7 appendSnocArray as <++
+infixl 7 appendSnocArray as <+
 
--- | Let's use `snocArray` as default - it behaves nicely when used together with operators
--- | ```
--- | x = build $ 1 :> 2:> fromArray [3, 4] <: 5 <: 6
--- | ```
-fromArray :: forall a. Array a -> Builder a
-fromArray = snocArray
-
--- | It is a bit unintuive but this:
 -- | ```
 -- | cons 1 <> consArray [2,3,4] <> cons 5 <> mempty
 -- | ```
@@ -94,7 +90,7 @@ consArray prefix = Builder (unsafeConsArray prefix)
 appendConsArray :: forall a. Array a -> Builder a -> Builder a
 appendConsArray a b = consArray a <> b
 
-infixr 6 appendConsArray as ++>
+infixr 6 appendConsArray as +>
 
 cons :: forall a. a -> Builder a
 cons a = Builder (unsafeCons a)

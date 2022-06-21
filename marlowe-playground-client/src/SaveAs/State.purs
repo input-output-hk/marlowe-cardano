@@ -2,7 +2,7 @@ module SaveAs.State where
 
 import Prologue hiding (div)
 
-import Data.Lens (assign, (^.))
+import Data.Lens (_Just, assign, (^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ClassName(..), ComponentHTML, HalogenM)
 import Halogen.Classes
@@ -36,7 +36,8 @@ handleAction
    . MonadAff m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
-handleAction (ChangeInput newName) = assign _projectName newName
+handleAction (ChangeInput newName) = do
+  assign _projectName newName
 
 handleAction _ = pure unit
 

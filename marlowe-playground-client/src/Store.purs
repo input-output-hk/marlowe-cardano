@@ -1,32 +1,42 @@
-module Store where
+module Store
+  ( module Store
+  , module Store.ProjectState
+  ) where
 
 import Prelude
 
-import Data.Maybe (Maybe(..))
+import Data.Lens (Lens', _Just, over, set)
+import Data.Lens.Iso.Newtype (_Newtype)
+import Data.Lens.Record (prop)
+import Data.Maybe (Maybe)
+import Data.Newtype (class Newtype)
 import Marlowe.Project.Types (Project)
-import Store.ProjectStore (ProjectStore, ProjectStoreAction, mkProjectStore)
-import Store.ProjectStore as ProjectStore
+import Store.ProjectState (ProjectState, ProjectStateAction, mkProjectState)
+import Store.ProjectState as ProjectState
+import Type.Prelude (Proxy(..))
 
-type Store =
-  { projectStore :: Maybe ProjectStore
+newtype State = State
+  { projectState :: Maybe ProjectState
   }
+
+derive instance Newtype State _
 
 mkStore
   :: Maybe Project
-  -> Store
-mkStore project = { projectStore: mkProjectStore <$> project }
+  -> State
+mkStore project = State { projectState: mkProjectState <$> project }
+
+_projectState :: Lens' State (Maybe ProjectState)
+_projectState = _Newtype <<< prop (Proxy :: _ "projectState")
 
 data Action
-  = ProjectStoreAction ProjectStoreAction
+  = ProjectStateAction ProjectStateAction
   | OnProjectLoaded Project
 
-reduce :: Store -> Action -> Store
+reduce :: State -> Action -> State
 reduce store = case _ of
-  ProjectStoreAction projectStoreAction ->
-    store
-      { projectStore = ProjectStore.reduce
-          <$> store.projectStore
-          <@> projectStoreAction
-      }
+  ProjectStateAction projectStateAction ->
+    over (_projectState <<< _Just) (flip ProjectState.reduce projectStateAction)
+      store
   OnProjectLoaded project ->
-    store { projectStore = Just $ ProjectStore.mkProjectStore project }
+    set (_projectState <<< _Just) (mkProjectState project) store
