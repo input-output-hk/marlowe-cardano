@@ -1,0 +1,9 @@
+steps:
+  - label: ':shipit: deploy marlowe docker images'
+    branches: "main"
+    command:
+      - "./scripts/deploy-docker"
+    concurrency: 1
+    concurrency_group: "marlowe-container-push"
+    agents:
+      system: x86_64-linux

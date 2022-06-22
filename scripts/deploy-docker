@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -eEuo pipefail
+
+upload_image () {
+    "$(nix-build -A dev.docker.images."$1".upload --no-out-link)/bin/upload-docker-$1" docker://inputoutput/marlowe-"$1":latest
+}
+
+for image in $(nix-instantiate -E 'builtins.attrNames (import ./. {}).dev.docker.images' --eval --json --read-write-mode | jq -r '.[]')
+do
+    upload_image "$image"
+done

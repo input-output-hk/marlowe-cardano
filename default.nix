@@ -66,14 +66,17 @@ rec {
       generate-purescript start-backend build-client test-client;
   };
 
-
-  dev-scripts = import ./nix/dev/scripts.nix {
+  dev = import ./nix/dev {
     inherit pkgs;
-    inherit cardano-cli marlowe-pab cardano-node plutus-chain-index;
+    inherit cardano-cli marlowe-pab cardano-node plutus-chain-index cardano-wallet marlowe-playground;
+    inherit (haskell.project) ghcWithPackages;
+    inherit (haskell.packages.web-ghc.components.exes) web-ghc-server;
     network = pkgs.networks.testnet-dev;
     marlowe-dashboard = marlowe-dashboard.marlowe-run-backend-invoker;
-
+    marlowe-dashboard-client = marlowe-dashboard.client;
   };
+
+  dev-scripts = dev.scripts;
 
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;
