@@ -192,12 +192,12 @@
     "marlowe-source": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-zFb6zYv6EbJ9RrvtWjLatVRC4tqphCTX6HLYPAYRmKo=",
-        "path": "/nix/store/7wfnm1xrdqal2czap1xc1q3kdiik202w-source",
+        "narHash": "sha256-gZRy2ETTS1GZp0vSETFfbvVWBLvazc4TiSls2UgRz98=",
+        "path": "/nix/store/8fsy7ywv1xc473j5c1nm9i7jdaa4bzx4-source",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/7wfnm1xrdqal2czap1xc1q3kdiik202w-source",
+        "path": "/nix/store/8fsy7ywv1xc473j5c1nm9i7jdaa4bzx4-source",
         "type": "path"
       }
     },
