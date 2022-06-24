@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module Marlowe.Contracts.Common where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 -- |Compose two contracts
 both :: Contract -> Contract -> Contract

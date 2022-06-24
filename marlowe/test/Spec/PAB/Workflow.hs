@@ -19,8 +19,9 @@ import qualified Data.Map as Map
 import Data.Maybe (listToMaybe)
 import qualified Data.Text as Text
 import qualified Language.Marlowe.Client as Marlowe
-import Language.Marlowe.Semantics (MarloweParams)
-import Language.Marlowe.Semantics.Types (Action (..), Case (..), Contract (..), Party (..), Payee (..), Value (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Case (..), Contract (..), Party (..), Payee (..),
+                                                 Value (..))
 import qualified Language.Marlowe.Semantics.Types as Marlowe
 import Language.Marlowe.Util (ada)
 import Ledger (POSIXTime, PaymentPubKeyHash (..), PubKeyHash)

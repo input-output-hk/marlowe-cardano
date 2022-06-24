@@ -19,7 +19,7 @@ module Marlowe.Contracts.UTC.Options
 where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import qualified Marlowe.Contracts.Options as C
 import Marlowe.Contracts.UTC.Common
 

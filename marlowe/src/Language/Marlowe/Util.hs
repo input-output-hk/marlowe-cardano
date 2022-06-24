@@ -9,8 +9,8 @@ import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String
-import Language.Marlowe.Semantics
-import Language.Marlowe.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
 import Ledger.Ada (adaSymbol, adaToken)
 import Ledger.Scripts (dataHash)
 import qualified Ledger.Value as Val

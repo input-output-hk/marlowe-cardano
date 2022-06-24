@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.StructuredProducts where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.StructuredProducts as C
 import Marlowe.Contracts.UTC.Common
 

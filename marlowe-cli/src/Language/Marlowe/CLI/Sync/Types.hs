@@ -34,8 +34,8 @@ import Cardano.Api (BlockHeader (..), ChainPoint (..), ChainTip, Hash, ScriptHas
 import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.Semantics (MarloweData (..), MarloweParams (..))
-import Language.Marlowe.Semantics.Types (Input, TimeInterval)
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Input, TimeInterval)
 import Ledger.Address (Address)
 import Plutus.V1.Ledger.Api (TokenName)
 

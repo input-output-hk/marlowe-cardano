@@ -60,10 +60,11 @@ import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPay
                                          submitBody)
 import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
                                    ValidatorInfo (..))
-import Language.Marlowe.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
-                                   TransactionOutput (..), TransactionWarning, computeTransaction)
-import Language.Marlowe.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
-                                         InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
+                                           TransactionOutput (..), TransactionWarning, computeTransaction)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
+                                                 InputContent (..), Party (..), Payee (..), State (accounts),
+                                                 Token (..))
 import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)

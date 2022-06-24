@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.ZeroCouponBond where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 
 -- |A zero-coupon bond is a debt security that does not pay interest.
