@@ -15,7 +15,7 @@ main = do
 
   pamTests <- testCasesFromFile [] $ p ++ "actus-tests-pam.json"
   lamTests <- testCasesFromFile [] $ p ++ "actus-tests-lam.json"
-  namTests <- testCasesFromFile ["nam15"] $ p ++ "actus-tests-nam.json"
+  namTests <- testCasesFromFile [] $ p ++ "actus-tests-nam.json"
   annTests <-
     testCasesFromFile
       [ "ann09" -- ann09: currently unsupported, see also actus-core AnnuityTest.java
@@ -33,7 +33,6 @@ main = do
   cegTests <- testCasesFromFile
     [ "guarantee09", "guarantee10" , "guarantee11" , "guarantee12" , "guarantee13" , "guarantee14"
     ] $ p ++ "actus-tests-ceg.json"
-  -- cecTests <- testCasesFromFile [] $ p ++ "actus-tests-cec.json"
 
   defaultMain $
     testGroup
@@ -52,7 +51,6 @@ main = do
           , Spec.Marlowe.ACTUS.TestFramework.tests "CLM" clmTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "SWPPV" swppvTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "CEG" cegTests
-          -- , Spec.Marlowe.ACTUS.TestFramework.tests "CEC" cecTests
           ],
         testGroup
           "ACTUS test-framework for Marlowe"
@@ -64,19 +62,9 @@ main = do
           , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "OPTNS" optnsTests
           , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "FUTUR" futurTests
           , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "COM" comTests
-          -- , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CSH" cshTests
           , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CLM" clmTests
           , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "SWPPV" swppvTests
-          -- , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CEG" cegTests
-          -- , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CEC" cecTests
           ],
-        testGroup
-          "ACTUS test-framework for Marlowe"
-          [
-          -- Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CEG" cegTests
-          -- Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "NAM" namTests
-          -- , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CEC" cecTests
-          ]{-,
         testGroup
           "ACTUS examples"
           [ Spec.Marlowe.ACTUS.Examples.tests
@@ -85,5 +73,4 @@ main = do
           "QuickCheck"
           [ Spec.Marlowe.ACTUS.QCTests.tests
           ]
-          -}
       ]
