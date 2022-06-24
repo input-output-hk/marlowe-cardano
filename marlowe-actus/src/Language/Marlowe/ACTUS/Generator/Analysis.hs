@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns    #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections   #-}
 
@@ -20,7 +21,6 @@ where
 import Control.Applicative ((<|>))
 import Control.Monad (filterM)
 import Control.Monad.Reader (Reader, ask, runReader, withReader)
-import Data.Functor ((<&>))
 import Data.List (groupBy)
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Sort (sortOn)
@@ -86,8 +86,8 @@ genProjectedPayoffs =
     payoffs <- trans $ genPayoffs states
 
     return $
-      sortOn (\(_,y,_,_) -> y) $
-        zipWith (\(x,y,z) -> (x,y,z,)) states payoffs
+      sortOn (\(x,y,_,_) -> (y,x)) $
+        zipWith (\(x,y,!z) -> (x,y,z,)) states payoffs
 
   where
     trans :: Reader (CtxPOF a) b -> Reader (CtxSTF a) b
@@ -117,19 +117,27 @@ genSchedules ct@ContractTermsPoly {..} =
           overwrite = map (sortOn (\(ev, _) -> fromEnum ev)) . regroup
        in concat . overwrite . trim
 
+mapAccumLM' :: Monad m => (acc -> x -> m (acc, y)) -> acc -> [x] -> m (acc, [y])
+mapAccumLM' f = go
+  where
+    go s (x : xs) = do
+      (!s1, !x') <- f s x
+      (s2, xs') <- go s1 xs
+      return (s2, x' : xs')
+    go s [] = return (s, [])
+
 -- |Generate states
 genStates :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
   [(EventType, ShiftedDay)]                                           -- ^ Schedules
   -> ContractStatePoly a                                              -- ^ Initial state
   -> Reader (CtxSTF a) [(EventType, ShiftedDay, ContractStatePoly a)] -- ^ New states
-genStates scs stn =
-  let l = scanl apply st0 scs
-    in sequence l >>= filterM filtersStates . tail
+genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
   where
-    apply prev (ev', t') =
-      prev >>= \(ev, ShiftedDay {..}, st) -> stateTransition ev calculationDay st <&> (ev',t',)
+    apply (ev, ShiftedDay {..}, st) (ev', t') =
+        do !st_n <- stateTransition ev calculationDay st
+           return ((ev',t',st_n), (ev',t',st_n))
 
-    st0 = return (AD,ShiftedDay (sd stn) (sd stn),stn)
+    st0 = (AD,ShiftedDay (sd stn) (sd stn),stn)
 
     filtersStates ::
       (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>

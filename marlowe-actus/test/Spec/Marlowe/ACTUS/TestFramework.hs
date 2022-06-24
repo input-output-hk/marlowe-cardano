@@ -13,9 +13,6 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 
 module Spec.Marlowe.ACTUS.TestFramework
-  ( tests
-  , testCasesFromFile
-  )
   where
 
 import Control.Applicative ((<|>))
@@ -123,6 +120,7 @@ testCasesFromFile excluded testfile =
       msg
       ( return
           . filter (\TestCase {..} -> notElem identifier excluded)
+          -- . filter (\TestCase {..} -> elem identifier excluded)
           . elems
       )
   where
