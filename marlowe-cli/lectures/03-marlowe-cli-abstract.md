@@ -3,11 +3,17 @@ date: 24 June 2022
 version: marlowe-cli 0.0.5.0
 ---
 
+<div class="cell markdown">
+
 # Running Marlowe Contracts without Blockchain Transactions
 
 This lecture shows how to execute a contract using `marlowe-cli`, but
 without submitting transactions on the blockchain. This lets one
 simulate the operation of a contract.
+
+</div>
+
+<div class="cell markdown">
 
 ## Escrow Contract
 
@@ -15,7 +21,7 @@ simulate the operation of a contract.
 -   They deposit funds.
 -   After they deposit funds they may report a problem with the
     purchase.
--   If they don't report a problem, then the funds are released to the
+-   If they don’t report a problem, then the funds are released to the
     seller.
 -   If they do report a problem, the seller may agree that there is a
     problem (in which case the buyer receives a refund) or they may
@@ -25,10 +31,18 @@ simulate the operation of a contract.
 -   The contract has logic to handle situations where a party fails to
     act in a timely manner.
 
+</div>
+
+<div class="cell markdown">
+
 ### Flow Chart for Escrow Example
 
 ![Execution paths through the escrow example
 contract.](diagrams/escrow-flow.png)
+
+</div>
+
+<div class="cell markdown">
 
 ### Escrow Example in Marlowe Format
 
@@ -70,23 +84,43 @@ When
   Close
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ### Escrow Example in Blockly
 
 ![Blockly representation of escrow example contract, split into three
 columns.](diagrams/escrow-blockly.png)
+
+</div>
+
+<div class="cell markdown">
 
 ### Four of the Eight Pathways through the Escrow Contract
 
 ![Four possible executions of the escrow
 contract.](diagrams/escrow-paths.png)
 
+</div>
+
+<div class="cell markdown">
+
 ## Scenario
 
 ![Overview of escrow example.](diagrams/escrow-detailed-setup.png)
 
+</div>
+
+<div class="cell markdown">
+
 ## Select the Parameters for the Contract
 
 First use some environment variables to store some values
+
+</div>
+
+<div class="cell code" execution_count="1">
 
 ``` bash
 INITIAL_LOVELACE=3000000             # The creation transaction will deposit 3₳.
@@ -104,12 +138,20 @@ DISPUTE_DEADLINE=$((NOW+14*HOUR))    # The dispute deadline, fourteen hours from
 MEDIATION_DEADLINE=$((NOW+16*HOUR))  # The mediation deadline, sixteen hours from now.
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Create the Contract and Its Initial State
 
 Now create the contract:
 
 -   The contract is stored in the JSON file `tx-1.contract`.
 -   The initial state is stored in the JSON file `tx-1.state`.
+
+</div>
+
+<div class="cell code" execution_count="2">
 
 ``` bash
 marlowe-cli template escrow --minimum-ada "$INITIAL_LOVELACE"          \
@@ -125,11 +167,21 @@ marlowe-cli template escrow --minimum-ada "$INITIAL_LOVELACE"          \
                             --out-state-file    tx-1.state
 ```
 
+</div>
+
+<div class="cell markdown">
+
 Examine the contract.
+
+</div>
+
+<div class="cell code" execution_count="3">
 
 ``` bash
 json2yaml tx-1.contract
 ```
+
+<div class="output stream stdout">
 
     timeout: 1656041997000
     timeout_continuation: close
@@ -228,11 +280,23 @@ json2yaml tx-1.contract
               currency_symbol: ''
               token_name: ''
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the initial state of the contract.
+
+</div>
+
+<div class="cell code" execution_count="4">
 
 ``` bash
 json2yaml tx-1.state
 ```
+
+<div class="output stream stdout">
 
     accounts:
     - - - role_token: CM
@@ -243,14 +307,20 @@ json2yaml tx-1.state
     choices: []
     minTime: 1
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ## Alternative: Download a Contract from Marlowe Playground
 
 Instead of using the `marlowe-cli template` command, one can create a
 contract in Marlowe Playground using Haskell, JavaScript, or Blockly.
 
 1.  Design the contract in Marlowe Playground.
-2.  Press the \"Send to Simulator\" button.
-3.  Click \"Download as JSON\" to download the contract, saving it as
+2.  Press the "Send to Simulator" button.
+3.  Click "Download as JSON" to download the contract, saving it as
     `tx-1.contract`.
 
 One also needs to create the initial state `tx-1.state`, which consists
@@ -261,6 +331,10 @@ can be started.
 Simply create a JSON file with no choices or bound values and just one
 account with the minimum ADA deposit for the role that creates the
 contract (in this case, `$MEDIATOR_ROLE`).
+
+</div>
+
+<div class="cell code" execution_count="5">
 
 ``` bash
 cat << EOI > tx-1.state
@@ -275,9 +349,15 @@ cat << EOI > tx-1.state
 EOI
 ```
 
+</div>
+
+<div class="cell code" execution_count="6">
+
 ``` bash
 json2yaml tx-1.state
 ```
+
+<div class="output stream stdout">
 
     accounts:
     - - - role_token: CM
@@ -288,6 +368,12 @@ json2yaml tx-1.state
     choices: []
     minTime: 1
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ## Minting the Role Currency
 
 Previously we created a wallet with a signing key file `my-wallet.skey`
@@ -295,13 +381,25 @@ and address file `my-wallet.address`. We also located the Cardano node
 socket path at `$CARDANO_NODE_SOCKET_PATH`. Now we use these to mint
 role tokens for use in the Marlowe contract.
 
+</div>
+
+<div class="cell code" execution_count="7">
+
 ``` bash
 export CARDANO_TESTNET_MAGIC=1567
 ```
 
+</div>
+
+<div class="cell code" execution_count="8">
+
 ``` bash
 export CARDANO_NODE_SOCKET_PATH=~/.local/share/Daedalus/marlowe_pioneers/cardano-node.socket
 ```
+
+</div>
+
+<div class="cell code" execution_count="9">
 
 ``` bash
 marlowe-cli util mint --required-signer my-wallet.skey          \
@@ -311,20 +409,42 @@ marlowe-cli util mint --required-signer my-wallet.skey          \
                       "$MEDIATOR_ROLE" "$SELLER_ROLE" "$BUYER_ROLE"
 ```
 
+<div class="output stream stdout">
+
     PolicyID "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 The policy ID will be used for the Marlowe roles currency.
+
+</div>
+
+<div class="cell code" execution_count="10">
 
 ``` bash
 ROLES_CURRENCY=1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c
 ```
 
+</div>
+
+<div class="cell markdown">
+
 We can query the address to see that the tokens have been minted. These
 will also be visible in Daedalus.
+
+</div>
+
+<div class="cell code" execution_count="11">
 
 ``` bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address $(cat my-wallet.address)
 ```
+
+<div class="output stream stdout">
 
                                TxHash                                 TxIx        Amount
     --------------------------------------------------------------------------------------
@@ -333,9 +453,19 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address $(cat 
     acd0cd4e234f7d34d1de79c5d640b88cb85d4244f6b60bf260e0a4ac73425429     2        10000000 lovelace + 1 1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c.4642 + TxOutDatumNone
     acd0cd4e234f7d34d1de79c5d640b88cb85d4244f6b60bf260e0a4ac73425429     3        10000000 lovelace + 1 1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c.544d + TxOutDatumNone
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ## Step 1: Mediator Creates Escrow Contract with Initial ADA
 
 ![Initialization for step 1.](diagrams/escrow-step1.png)
+
+</div>
+
+<div class="cell markdown">
 
 ## Initializing Step 1
 
@@ -343,6 +473,10 @@ Marlowe CLI uses `.marlowe` JSON files to store information about the
 progression of a Marlowe contract. Now that we have created the
 contract, we can bundle the contract, state, Plutus data, and network
 information into such a file.
+
+</div>
+
+<div class="cell code" execution_count="12">
 
 ``` bash
 marlowe-cli run initialize --roles-currency "$ROLES_CURRENCY"        \
@@ -352,21 +486,39 @@ marlowe-cli run initialize --roles-currency "$ROLES_CURRENCY"        \
                            --print-stats
 ```
 
+<div class="output stream stdout">
+
 
     Validator size: 12611
     Base-validator cost: ExBudget {exBudgetCPU = ExCPU 24562825, exBudgetMemory = ExMemory 82600}
+
+</div>
+
+</div>
+
+<div class="cell code" execution_count="13">
 
 ``` bash
 ls -lrt tx-1.*
 ```
 
+<div class="output stream stdout">
+
     -rw-rw-r-- 1 bbush bbush-upg  8286 Jun 23 11:41 tx-1.contract
     -rw-rw-r-- 1 bbush bbush-upg   173 Jun 23 11:44 tx-1.state
     -rw-rw-r-- 1 bbush bbush-upg 40759 Jun 23 11:48 tx-1.marlowe
 
+</div>
+
+</div>
+
+<div class="cell code" execution_count="14">
+
 ``` bash
 json2yaml tx-1.marlowe
 ```
+
+<div class="output stream stdout">
 
     continuations: []
     contract:
@@ -506,11 +658,25 @@ json2yaml tx-1.marlowe
       choices: []
       minTime: 1
 
-## Step 2: Buyer Deposits Funds into Seller's Account
+</div>
+
+</div>
+
+<div class="cell markdown">
+
+## Step 2: Buyer Deposits Funds into Seller’s Account
 
 ![Transition from step 1 to step 2.](diagrams/escrow-step2.png)
 
+</div>
+
+<div class="cell markdown">
+
 ## Transition from Step 1 to Step 2
+
+</div>
+
+<div class="cell code" execution_count="15">
 
 ``` bash
 marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
@@ -523,23 +689,45 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
                         --print-stats
 ```
 
+<div class="output stream stdout">
+
 
     Datum size: 463
+
+</div>
+
+</div>
+
+<div class="cell code" execution_count="16">
 
 ``` bash
 ls -lrt tx-?.*
 ```
+
+<div class="output stream stdout">
 
     -rw-rw-r-- 1 bbush bbush-upg  8286 Jun 23 11:41 tx-1.contract
     -rw-rw-r-- 1 bbush bbush-upg   173 Jun 23 11:44 tx-1.state
     -rw-rw-r-- 1 bbush bbush-upg 40759 Jun 23 11:48 tx-1.marlowe
     -rw-rw-r-- 1 bbush bbush-upg 39100 Jun 23 11:52 tx-2.marlowe
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the input that is being applied to the contract.
+
+</div>
+
+<div class="cell code" execution_count="17">
 
 ``` bash
 jq '.inputs' tx-2.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     - input_from_party:
         role_token: TM
@@ -550,11 +738,23 @@ jq '.inputs' tx-2.marlowe | json2yaml
         token_name: ''
       that_deposits: 256000000
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the new state of the contract.
+
+</div>
+
+<div class="cell code" execution_count="18">
 
 ``` bash
 jq '.state' tx-2.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     accounts:
     - - - role_token: CM
@@ -569,11 +769,23 @@ jq '.state' tx-2.marlowe | json2yaml
     choices: []
     minTime: 1656005997000
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the contract that remains to be executed.
+
+</div>
+
+<div class="cell code" execution_count="19">
 
 ``` bash
 jq '.contract' tx-2.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     timeout: 1656049197000
     timeout_continuation: close
@@ -659,11 +871,25 @@ jq '.contract' tx-2.marlowe | json2yaml
           currency_symbol: ''
           token_name: ''
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ## Step 3: The Buyer Reports That There is a Problem
 
 ![Transition from step 2 to step 3.](diagrams/escrow-step3.png)
 
+</div>
+
+<div class="cell markdown">
+
 ## Transition from Step 2 to Step 3
+
+</div>
+
+<div class="cell code" execution_count="20">
 
 ``` bash
 marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
@@ -676,6 +902,8 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
                         --print-stats
 ```
 
+<div class="output stream stdout">
+
 
     Datum size: 341
     Payment 1
@@ -683,9 +911,17 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
       Payee: Account "TM"
       Ada: 256.000000
 
+</div>
+
+</div>
+
+<div class="cell code" execution_count="21">
+
 ``` bash
 ls -lrt tx-?.*
 ```
+
+<div class="output stream stdout">
 
     -rw-rw-r-- 1 bbush bbush-upg  8286 Jun 23 11:41 tx-1.contract
     -rw-rw-r-- 1 bbush bbush-upg   173 Jun 23 11:44 tx-1.state
@@ -693,11 +929,23 @@ ls -lrt tx-?.*
     -rw-rw-r-- 1 bbush bbush-upg 39100 Jun 23 11:52 tx-2.marlowe
     -rw-rw-r-- 1 bbush bbush-upg 36852 Jun 23 11:55 tx-3.marlowe
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the input that is being applied to the contract.
+
+</div>
+
+<div class="cell code" execution_count="22">
 
 ``` bash
 jq '.inputs' tx-3.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     - for_choice_id:
         choice_name: Report problem
@@ -705,11 +953,23 @@ jq '.inputs' tx-3.marlowe | json2yaml
           role_token: TM
       input_that_chooses_num: 1
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the new state of the contract.
+
+</div>
+
+<div class="cell code" execution_count="23">
 
 ``` bash
 jq '.state' tx-3.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     accounts:
     - - - role_token: CM
@@ -728,11 +988,23 @@ jq '.state' tx-3.marlowe | json2yaml
       - 1
     minTime: 1656005997000
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the contract that remains to be executed.
+
+</div>
+
+<div class="cell code" execution_count="24">
 
 ``` bash
 jq '.contract' tx-3.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     timeout: 1656056397000
     timeout_continuation: close
@@ -787,11 +1059,25 @@ jq '.contract' tx-3.marlowe | json2yaml
                 role_token: CM
           then: close
 
+</div>
+
+</div>
+
+<div class="cell markdown" tags="[]">
+
 ## Step 4: The Seller Disputes that There is a Problem
 
 ![Transition from step 3 to step 4.](diagrams/escrow-step4.png)
 
+</div>
+
+<div class="cell markdown">
+
 ## Transition from Step 3 to Step 4
+
+</div>
+
+<div class="cell code" execution_count="25">
 
 ``` bash
 marlowe-cli run prepare --marlowe-file tx-3.marlowe            \
@@ -804,12 +1090,22 @@ marlowe-cli run prepare --marlowe-file tx-3.marlowe            \
                         --print-stats
 ```
 
+<div class="output stream stdout">
+
 
     Datum size: 262
+
+</div>
+
+</div>
+
+<div class="cell code" execution_count="26">
 
 ``` bash
 ls -lrt tx-?.*
 ```
+
+<div class="output stream stdout">
 
     -rw-rw-r-- 1 bbush bbush-upg  8286 Jun 23 11:41 tx-1.contract
     -rw-rw-r-- 1 bbush bbush-upg   173 Jun 23 11:44 tx-1.state
@@ -818,11 +1114,23 @@ ls -lrt tx-?.*
     -rw-rw-r-- 1 bbush bbush-upg 36852 Jun 23 11:55 tx-3.marlowe
     -rw-rw-r-- 1 bbush bbush-upg 34554 Jun 23 11:58 tx-4.marlowe
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the input that is being applied to the contract.
+
+</div>
+
+<div class="cell code" execution_count="27">
 
 ``` bash
 jq '.inputs' tx-4.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     - for_choice_id:
         choice_name: Dispute problem
@@ -830,11 +1138,23 @@ jq '.inputs' tx-4.marlowe | json2yaml
           role_token: FB
       input_that_chooses_num: 0
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the new state of the contract.
+
+</div>
+
+<div class="cell code" execution_count="28">
 
 ``` bash
 jq '.state' tx-4.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     accounts:
     - - - role_token: CM
@@ -857,11 +1177,23 @@ jq '.state' tx-4.marlowe | json2yaml
       - 0
     minTime: 1656005997000
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the contract that remains to be executed.
+
+</div>
+
+<div class="cell code" execution_count="29">
 
 ``` bash
 jq '.contract' tx-4.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     timeout: 1656063597000
     timeout_continuation: close
@@ -895,11 +1227,25 @@ jq '.contract' tx-4.marlowe | json2yaml
             role_token: CM
       then: close
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ## Step 5: The Mediator Dismisses the Claim
 
 ![Transition from step 4 to step 5](diagrams/escrow-step5.png)
 
+</div>
+
+<div class="cell markdown">
+
 ## Transition from Step 4 to Step 5
+
+</div>
+
+<div class="cell code" execution_count="30">
 
 ``` bash
 marlowe-cli run prepare --marlowe-file tx-4.marlowe           \
@@ -911,6 +1257,8 @@ marlowe-cli run prepare --marlowe-file tx-4.marlowe           \
                         --out-file tx-5.marlowe               \
                         --print-stats
 ```
+
+<div class="output stream stdout">
 
 
     Datum size: 104
@@ -927,9 +1275,17 @@ marlowe-cli run prepare --marlowe-file tx-4.marlowe           \
       Payee: Party "FB"
       Ada: 256.000000
 
+</div>
+
+</div>
+
+<div class="cell code" execution_count="31">
+
 ``` bash
 ls -lrt tx-?.*
 ```
+
+<div class="output stream stdout">
 
     -rw-rw-r-- 1 bbush bbush-upg  8286 Jun 23 11:41 tx-1.contract
     -rw-rw-r-- 1 bbush bbush-upg   173 Jun 23 11:44 tx-1.state
@@ -939,11 +1295,23 @@ ls -lrt tx-?.*
     -rw-rw-r-- 1 bbush bbush-upg 34554 Jun 23 11:58 tx-4.marlowe
     -rw-rw-r-- 1 bbush bbush-upg 34710 Jun 23 12:00 tx-5.marlowe
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the input that is being applied to the contract.
+
+</div>
+
+<div class="cell code" execution_count="32">
 
 ``` bash
 jq '.inputs' tx-5.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     - for_choice_id:
         choice_name: Dismiss claim
@@ -951,11 +1319,23 @@ jq '.inputs' tx-5.marlowe | json2yaml
           role_token: CM
       input_that_chooses_num: 0
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the new state of the contract.
+
+</div>
+
+<div class="cell code" execution_count="33">
 
 ``` bash
 jq '.state' tx-5.marlowe | json2yaml
 ```
+
+<div class="output stream stdout">
 
     accounts: []
     boundValues: []
@@ -974,22 +1354,46 @@ jq '.state' tx-5.marlowe | json2yaml
       - 0
     minTime: 1656005997000
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Examine the contract remaining to be executed.
+
+</div>
+
+<div class="cell code" execution_count="34">
 
 ``` bash
 jq '.contract' tx-5.marlowe | json2yaml
 ```
 
+<div class="output stream stdout">
+
     close
     ...
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ## Other Contract Templates
 
 Marlowe CLI provides several other templates for contracts.
 
+</div>
+
+<div class="cell code" execution_count="35">
+
 ``` bash
 marlowe-cli template --help
 ```
+
+<div class="output stream stdout">
 
     Usage: marlowe-cli template COMMAND
 
@@ -1005,9 +1409,19 @@ marlowe-cli template --help
       zcb                      Create a zero-coupon bond.
       coveredCall              Create a covered call Option.
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Additional templates are available in Marlowe Playground or in the
 Marlowe example contracts
 \<<https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>\>.
+
+</div>
+
+<div class="cell markdown">
 
 ## Troubleshooting
 
@@ -1033,6 +1447,10 @@ Marlowe example contracts
     -   `TEHashMismatch`: An incorrect contract was provided for the
         merkleized continuation.
 
+</div>
+
+<div class="cell markdown">
+
 ## Resources
 
 -   Marlowe CLI documentation:
@@ -1057,6 +1475,10 @@ Marlowe example contracts
 -   The Plutonomicon:
     \<<https://github.com/Plutonomicon/plutonomicon/blob/main/README.md>\>.
 
+</div>
+
+<div class="cell markdown">
+
 ## Exercises
 
 1.  Simulate the escrow contract in Marlowe Playground and compare its
@@ -1072,6 +1494,10 @@ Marlowe example contracts
 5.  Run a similar simulation using a different contract from
     `marlowe-cli template --help`, Marlowe Playground, or
     \<<https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>\>.
+
+</div>
+
+<div class="cell markdown">
 
 ## Summary
 
@@ -1090,16 +1516,22 @@ Marlowe example contracts
     causes it to transition from one state to another.
 -   Use `marlowe-cli util mint` if you need to mint role tokens.
 
+</div>
+
+<div class="cell markdown">
+
 ## Other Lectures
 
 Lectures on Marlowe CLI:
 \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>\>
 
--   [Overview of Marlowe CLI](01-marlowe-cli-overview.md)
+-   [Overview of Marlowe CLI](01-marlowe-cli-overview.ipynb)
 -   [Installing Marlowe CLI and Associated
-    Tools](02-marlowe-cli-installation.md)
+    Tools](02-marlowe-cli-installation.ipynb)
 -   ~~Running Marlowe Contracts without Blockchain Transactions~~
 -   [Running Marlowe Contacts on the
-    Blockchain](04-marlowe-cli-concrete.md)
+    Blockchain](04-marlowe-cli-concrete.ipynb)
 -   [Running Marlowe Contracts with the Marlowe
-    Backend](05-marlowe-cli-pab.md)
+    Backend](05-marlowe-cli-pab.ipynb)
+
+</div>
