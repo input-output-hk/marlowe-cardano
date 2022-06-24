@@ -40,9 +40,11 @@ import Control.Monad.Writer (Writer, runWriter, tell)
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Types (CliError (..), Continuations, MarloweTransaction (..))
-import Language.Marlowe.Semantics (ApplyResult (..), ReduceResult (..), TransactionInput (..), TransactionOutput (..),
-                                   applyInput, computeTransaction, fixInterval, reduceContractUntilQuiescent)
-import Language.Marlowe.Semantics.Types (Case (..), Contract (..), Input (..), IntervalResult (..), State, TimeInterval)
+import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ReduceResult (..), TransactionInput (..),
+                                           TransactionOutput (..), applyInput, computeTransaction, fixInterval,
+                                           reduceContractUntilQuiescent)
+import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Input (..), IntervalResult (..), State,
+                                                 TimeInterval)
 import Ledger.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltinData)
 

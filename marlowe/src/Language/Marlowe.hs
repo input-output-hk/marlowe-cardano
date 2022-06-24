@@ -1,6 +1,6 @@
 module Language.Marlowe
-    ( module Language.Marlowe.Semantics
-    , module Language.Marlowe.Semantics.Types
+    ( module Language.Marlowe.Core.V1.Semantics
+    , module Language.Marlowe.Core.V1.Semantics.Types
     , module Language.Marlowe.Client
     , module Language.Marlowe.Util
     , module Language.Marlowe.Pretty
@@ -12,9 +12,9 @@ module Language.Marlowe
 where
 
 import Language.Marlowe.Client
+import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types hiding (getAction)
 import Language.Marlowe.Pretty
-import Language.Marlowe.Semantics
-import Language.Marlowe.Semantics.Types hiding (getAction)
 import Language.Marlowe.Util
 import Ledger (POSIXTime (..))
 import Ledger.Ada (adaSymbol, adaToken)

@@ -52,7 +52,7 @@ import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
 import Language.Marlowe.CLI.Types (OutputQuery (..))
 import Language.Marlowe.Client (MarloweClientInput (..))
-import Language.Marlowe.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..), TokenName (..), toBuiltin)
@@ -65,7 +65,7 @@ import Wallet.Emulator.Wallet (WalletId, fromBase16)
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 import qualified Data.Text as T (pack)
-import qualified Language.Marlowe.Extended as E (Timeout (..))
+import qualified Language.Marlowe.Extended.V1 as E (Timeout (..))
 import qualified Options.Applicative as O
 
 

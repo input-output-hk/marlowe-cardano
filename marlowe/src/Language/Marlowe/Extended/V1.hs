@@ -15,7 +15,7 @@ in different situations without cluttering the code that goes on-chain
 (core Marlowe).
 -}
 
-module Language.Marlowe.Extended ( module Language.Marlowe.Extended
+module Language.Marlowe.Extended.V1 ( module Language.Marlowe.Extended.V1
                                  , module Language.Marlowe.Pretty
                                  , ada, adaSymbol, adaToken
                                  , S.AccountId, S.Bound(..), S.ChoiceId(..)
@@ -33,9 +33,9 @@ import qualified Data.Foldable as F
 import Data.Ratio ((%))
 import Data.Text (pack)
 import GHC.Generics
+import qualified Language.Marlowe.Core.V1.Semantics.Types as S
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..), pretty)
-import qualified Language.Marlowe.Semantics.Types as S
 import Language.Marlowe.Util (ada)
 import qualified Ledger as L (POSIXTime (..))
 import Ledger.Ada (adaSymbol, adaToken)

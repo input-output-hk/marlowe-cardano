@@ -10,7 +10,7 @@ where
 
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Language.Marlowe as C
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Ledger.Ada
 import Ledger.Value
 import Marlowe.Contracts.Common

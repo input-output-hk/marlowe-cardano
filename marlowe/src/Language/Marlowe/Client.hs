@@ -60,11 +60,11 @@ import Language.Marlowe.Client.History (History (..), IncludePkhTxns (IncludePkh
                                         foldlHistory, foldrHistory, historyFrom, marloweHistory, marloweHistory',
                                         marloweHistoryFrom, marloweUtxoStatesAt, toMarloweState, toRolePayout,
                                         txRoleData)
+import Language.Marlowe.Core.V1.Semantics
+import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
+import Language.Marlowe.Core.V1.Semantics.Types hiding (Contract, getAction)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 import Language.Marlowe.Scripts
-import Language.Marlowe.Semantics
-import qualified Language.Marlowe.Semantics as Marlowe
-import Language.Marlowe.Semantics.Types hiding (Contract, getAction)
-import qualified Language.Marlowe.Semantics.Types as Marlowe
 import Language.Marlowe.Util (extractNonMerkleizedContractRoles)
 import Ledger (CurrencySymbol, Datum (..), POSIXTime (..), PaymentPubKeyHash (..), PubKeyHash (..), TokenName,
                TxOut (..), TxOutRef (txOutRefId), dataHash, txOutValue)

@@ -41,7 +41,7 @@ and actions (i.e. /Choices/) are passed as
 /Validation Script/ is always the same Marlowe interpreter implementation, available below.
 -}
 
-module Language.Marlowe.Semantics where
+module Language.Marlowe.Core.V1.Semantics where
 
 import Control.Applicative ((<*>), (<|>))
 import qualified Data.Aeson as JSON
@@ -50,12 +50,13 @@ import qualified Data.Foldable as F
 import Data.Scientific (Scientific)
 import Data.Text (pack)
 import Deriving.Aeson
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..),
+                                                 Environment (..), Input (..), InputContent (..), IntervalError (..),
+                                                 IntervalResult (..), Money, Observation (..), Party, Payee (..),
+                                                 State (..), TimeInterval, Token (..), Value (..), ValueId, emptyState,
+                                                 getAction, getInputContent, inBounds)
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Language.Marlowe.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
-                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
-                                         Observation (..), Party, Payee (..), State (..), TimeInterval, Token (..),
-                                         Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
 import Ledger (POSIXTime (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
 import qualified Ledger.Value as Val

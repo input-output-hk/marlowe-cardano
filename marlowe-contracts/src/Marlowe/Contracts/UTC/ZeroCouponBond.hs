@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.ZeroCouponBond where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.UTC.Common
 import Marlowe.Contracts.ZeroCouponBond as C
 

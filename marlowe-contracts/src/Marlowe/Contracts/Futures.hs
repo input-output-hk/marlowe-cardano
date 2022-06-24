@@ -5,7 +5,7 @@ module Marlowe.Contracts.Futures
 where
 
 import Data.String (IsString (..))
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 
 -- |Future on the exchange rate of ADA/USD
