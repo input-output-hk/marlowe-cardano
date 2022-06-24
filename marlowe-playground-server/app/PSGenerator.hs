@@ -40,8 +40,8 @@ import qualified Language.Marlowe as S
 import Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
 import qualified Language.Marlowe.ACTUS.Domain.ContractTerms as CT
 import Language.Marlowe.ACTUS.Domain.Schedule as SC
-import Language.Marlowe.Extended
-import Language.Marlowe.Semantics.Types (State (..))
+import Language.Marlowe.Core.V1.Semantics.Types (State (..))
+import Language.Marlowe.Extended.V1
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), PSType, SumType (..),
                                    TypeInfo (TypeInfo), _typeName, argonaut, buildBridge, equal, genericShow, mkSumType,
                                    order, psTypeParameters, typeModule, typeName, (^==))

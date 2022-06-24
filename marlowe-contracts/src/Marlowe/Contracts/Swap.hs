@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.Swap where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 
 -- |Swap tokens between two parties

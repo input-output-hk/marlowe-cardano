@@ -22,7 +22,7 @@ module Language.Marlowe.CLI.Examples (
 
 import Control.Monad.Except (MonadIO, liftIO)
 import Data.Aeson.Encode.Pretty (encodePretty)
-import Language.Marlowe.Semantics (MarloweData (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
 
 import qualified Data.ByteString.Lazy as LBS (writeFile)
 

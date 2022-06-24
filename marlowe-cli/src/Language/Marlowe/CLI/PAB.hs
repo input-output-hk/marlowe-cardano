@@ -54,8 +54,8 @@ import Language.Marlowe.Client (ApplyInputsEndpointSchema, CompanionState, Creat
                                 FollowerContractState, MarloweClientInput, MarloweContractState,
                                 MarloweEndpointResult (CreateResponse), MarloweError, RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
-import Language.Marlowe.Semantics (MarloweParams)
-import Language.Marlowe.Semantics.Types (Contract)
+import Language.Marlowe.Core.V1.Semantics (MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Network.WebSockets (Connection, receiveData)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (..))
