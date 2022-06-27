@@ -41,15 +41,15 @@ import Halogen.HTML.Properties
   , value
   )
 import Humanize (humanizeValue)
-import Marlowe.Execution.State (isClosed)
-import Marlowe.Execution.Types (NamedAction(..))
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (getEncompassBound)
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Bound(..)
   , ChoiceId(..)
   , Party(..)
   , Token(..)
-  , getEncompassBound
   )
+import Marlowe.Execution.State (isClosed)
+import Marlowe.Execution.Types (NamedAction(..))
 import Page.Contract.Lenses (_metadata)
 import Store.RoleTokens (isMyRoleToken)
 import Text.Markdown.TrimmedInline (markdownToHTML)

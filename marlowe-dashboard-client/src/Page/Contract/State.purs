@@ -40,13 +40,17 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Contract(..)
+  , _accounts
+  , adaToken
+  )
+import Language.Marlowe.Extended.V1.Metadata (emptyContractMetadata)
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
 import Marlowe.Execution.State (expandBalances, extractNamedActions)
 import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
-import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics (Contract(..), _accounts, adaToken)
 import Page.Contract.Lenses
   ( _Started
   , _contract

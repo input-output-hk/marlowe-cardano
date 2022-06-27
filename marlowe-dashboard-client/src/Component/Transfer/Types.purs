@@ -3,7 +3,7 @@ module Component.Transfer.Types where
 import Prologue
 
 import Data.BigInt.Argonaut (BigInt)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , CurrencySymbol
   , Party(..)

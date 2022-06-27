@@ -29,10 +29,10 @@ import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
+import Language.Marlowe.Extended.V1 as Extended
+import Language.Marlowe.Extended.V1.Metadata (MetaData, MetadataHintInfo)
 import MainFrame.Types (ChildSlots, _marloweEditorPageSlot)
 import Marlowe (Api)
-import Marlowe.Extended as Extended
-import Marlowe.Extended.Metadata (MetaData, MetadataHintInfo)
 import Marlowe.Holes as Holes
 import Marlowe.LinterText as Linter
 import Marlowe.Monaco (updateAdditionalContext)

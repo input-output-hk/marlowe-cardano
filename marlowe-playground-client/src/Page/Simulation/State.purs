@@ -44,21 +44,22 @@ import Halogen (HalogenM, query, tell)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Help (HelpContext(..))
-import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
-import Marlowe (Api)
-import Marlowe as Server
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Holes (Contract) as Term
-import Marlowe.Holes (Location(..), Term, fromTerm, getLocation)
-import Marlowe.Monaco as MM
-import Marlowe.Parser (parseContract)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (inBounds)
+import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(..)
   , Contract
   , Input(..)
   , Party(..)
-  , inBounds
+
   )
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
+import Marlowe (Api)
+import Marlowe as Server
+import Marlowe.Holes (Contract) as Term
+import Marlowe.Holes (Location(..), Term, fromTerm, getLocation)
+import Marlowe.Monaco as MM
+import Marlowe.Parser (parseContract)
 import Marlowe.Template (_timeContent, _valueContent, fillTemplate)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData

@@ -12,7 +12,7 @@ import Data.ContractNickname (ContractNickname)
 import Data.Lens (Lens', iso, over, to, view)
 import Data.Map (Map)
 import Data.Map as Map
-import Marlowe.Semantics (MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (MarloweParams)
 
 newtype LocalContractNicknames = LocalContractNicknames
   (Map MarloweParams ContractNickname)

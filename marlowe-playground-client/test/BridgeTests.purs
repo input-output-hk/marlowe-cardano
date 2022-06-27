@@ -21,7 +21,7 @@ import Effect.Aff (Error)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Language.Haskell.Interpreter (CompilationError)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Action(..)
   , Bound(..)
   , Case(..)

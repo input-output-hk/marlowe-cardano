@@ -25,9 +25,7 @@ import Data.Show.Generic (genericShow)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Holes (Holes, Term)
-import Marlowe.Holes as T
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Assets
   , Bound
@@ -42,7 +40,9 @@ import Marlowe.Semantics
   , TransactionInput
   , TransactionWarning
   )
-import Marlowe.Semantics as S
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Marlowe.Holes (Holes, Term)
+import Marlowe.Holes as T
 import Marlowe.Template (TemplateContent)
 import Monaco (IMarker)
 

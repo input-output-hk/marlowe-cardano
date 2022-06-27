@@ -21,7 +21,10 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Semantics (TransactionInput, TransactionWarning)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( TransactionInput
+  , TransactionWarning
+  )
 import Type.Proxy (Proxy(Proxy))
 
 newtype Response = Response

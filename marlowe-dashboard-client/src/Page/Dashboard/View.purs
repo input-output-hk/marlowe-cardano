@@ -91,7 +91,12 @@ import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
-import Marlowe.Semantics (PubKey, _rolesCurrency, adaToken, getAda)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( PubKey
+  , _rolesCurrency
+  , adaToken
+  , getAda
+  )
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses

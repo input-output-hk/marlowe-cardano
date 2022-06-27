@@ -31,14 +31,14 @@ import Language.Haskell.Interpreter
   , InterpreterResult(..)
   )
 import Language.Haskell.Monaco as HM
-import MainFrame.Types (ChildSlots, _haskellEditorSlot)
-import Marlowe (Api, postApiCompile)
-import Marlowe.Extended (Contract)
-import Marlowe.Extended.Metadata
+import Language.Marlowe.Extended.V1 (Contract)
+import Language.Marlowe.Extended.V1.Metadata
   ( MetaData
   , MetadataHintInfo
   , getMetadataHintInfo
   )
+import MainFrame.Types (ChildSlots, _haskellEditorSlot)
+import Marlowe (Api, postApiCompile)
 import Marlowe.Template (_timeContent, _valueContent, getPlaceholderIds)
 import Marlowe.Template as Template
 import Monaco (IMarkerData, markerSeverity)

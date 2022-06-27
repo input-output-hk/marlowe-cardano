@@ -42,6 +42,10 @@ import Halogen.Monaco (KeyBindings(DefaultBindings))
 import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
 import Halogen.Query.Event (eventListener)
+import Language.Marlowe.Extended.V1.Metadata
+  ( emptyContractMetadata
+  , getHintsFromMetadata
+  )
 import LoginPopup (informParentAndClose, openLoginPopup)
 import MainFrame.Types
   ( Action(..)
@@ -78,7 +82,6 @@ import MainFrame.Types
 import MainFrame.View (render)
 import Marlowe (Api, getApiGistsByGistId)
 import Marlowe as Server
-import Marlowe.Extended.Metadata (emptyContractMetadata, getHintsFromMetadata)
 import Marlowe.Gists (PlaygroundFiles, mkNewGist, playgroundFiles)
 import Network.RemoteData (RemoteData(..), _Success, fromEither)
 import Page.BlocklyEditor.State as BlocklyEditor

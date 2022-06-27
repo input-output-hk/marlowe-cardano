@@ -6,7 +6,7 @@ import Data.BigInt.Argonaut (BigInt)
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, span, text)
 import Humanize (humanizeValue)
-import Marlowe.Semantics (Token)
+import Language.Marlowe.Core.V1.Semantics.Types (Token)
 
 amount :: forall w i. Token -> BigInt -> Array String -> HTML w i
 amount token quantity classes =
