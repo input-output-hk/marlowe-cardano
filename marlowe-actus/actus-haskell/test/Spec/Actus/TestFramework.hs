@@ -15,11 +15,11 @@
 module Spec.Actus.TestFramework
   where
 
+import Actus.Core
 import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractState
 import Actus.Domain.ContractTerms hiding (Assertion)
 import Actus.Domain.Schedule
-import Actus.Generator.Analysis
 import Actus.Haskell (CashFlow, ContractState, ContractTerms, setDefaultContractTermValues)
 import Actus.Model.ContractSchedule as S (maturity, schedule)
 import Actus.Model.Payoff (CtxPOF (CtxPOF))

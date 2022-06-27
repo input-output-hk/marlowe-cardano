@@ -2,14 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections   #-}
 
-{-| = ACTUS Analysis
+{-| = ACTUS
 
 Given ACTUS contract terms cashflows can be projected from the predefined risk factors.
 The cash flows can be used to generate the payments in a Marlowe contract.
 
 -}
 
-module Actus.Generator.Analysis
+module Actus.Core
   ( genStates
   , genPayoffs
   , genCashflow

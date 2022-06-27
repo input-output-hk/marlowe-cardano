@@ -17,12 +17,12 @@ module Spec.Marlowe.ACTUS.TestFrameworkMarlowe
   )
 where
 
+import Actus.Core
 import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractTerms hiding (Assertion)
 import Actus.Domain.Ops
 import Actus.Domain.Schedule
 import Actus.Generator (constant, toMarlowe)
-import Actus.Generator.Analysis
 import Actus.Haskell
 import Actus.Model.ContractSchedule as S (maturity, schedule)
 import Actus.Model.StateTransition (CtxSTF (..))

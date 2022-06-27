@@ -15,12 +15,12 @@ module Actus.Generator
   )
 where
 
+import Actus.Core (genProjectedCashflows)
 import Actus.Domain.BusinessEvents (EventType (..))
 import Actus.Domain.ContractTerms (ContractStructure (..), ContractTermsPoly (..), Reference (..),
                                    TermValidationError (..))
 import Actus.Domain.Ops (ActusOps (..), marloweFixedPoint)
 import Actus.Domain.Schedule (CashFlowPoly (..))
-import Actus.Generator.Analysis (genProjectedCashflows)
 import Actus.Haskell (ContractTerms, RiskFactors)
 import Actus.Marlowe (ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract, reduceValue)
 import Actus.Model.Applicability (validateTerms)

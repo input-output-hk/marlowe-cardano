@@ -55,17 +55,17 @@ library actus-core
                       DeriveFunctor DeriveFoldable
                       DeriveTraversable
   exposed-modules:
+    Actus.Core
     Actus.Domain.BusinessEvents
     Actus.Domain.ContractTerms
     Actus.Domain.ContractState
     Actus.Domain.Ops
     Actus.Domain.Schedule
-    Actus.Generator.Analysis
     Actus.Model.Applicability
     Actus.Model.ContractSchedule
+    Actus.Model.Payoff
     Actus.Model.StateInitialization
     Actus.Model.StateTransition
-    Actus.Model.Payoff
     Actus.Utility.ANN.Annuity
     Actus.Utility.DateShift
     Actus.Utility.ScheduleGenerator

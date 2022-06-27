@@ -8,10 +8,10 @@
 
 module Spec.Marlowe.ACTUS.QCGenerator where
 
+import Actus.Core
 import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractTerms
 import Actus.Domain.Schedule
-import Actus.Generator.Analysis
 import Actus.Haskell (ContractTerms, RiskFactors)
 import qualified Data.List as L
 import qualified Data.Map as M
