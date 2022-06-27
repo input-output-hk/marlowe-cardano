@@ -2,11 +2,10 @@ module MainFrame.View where
 
 import Prologue hiding (div)
 
-import Auth (_GithubUser, authStatusAuthRole)
 import Component.Modal.View (modal)
 import Contrib.Data.Array.Builder ((:>))
 import Contrib.Data.Array.Builder as AB
-import Data.Lens (has, (^.))
+import Data.Lens (_Just, has, (^.))
 import Data.Maybe (isNothing)
 import Data.Monoid (guard)
 import Effect.Aff.Class (class MonadAff)
@@ -63,11 +62,11 @@ import Page.JavascriptEditor.View as JSEditor
 import Page.MarloweEditor.View as MarloweEditor
 import Page.Simulation.View as Simulation
 import Store as Store
+import Type.Constraints (class MonadAffAjaxStore)
 
 render
   :: forall m
-   . MonadAff m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =
@@ -291,10 +290,11 @@ menuBar state =
     , gistModal (OpenModal OpenProject) "Open"
     , menuButton (OpenModal OpenDemo) "Open Example"
     , menuButton (OpenModal RenameProject) "Rename"
-    , gistModal
-        ( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
-          else GistAction PublishOrUpdateGist
-        )
+    , menuButton
+        --( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
+        --  else GistAction PublishOrUpdateGist
+        --)
+        (OpenModal SaveProjectAs)
         "Save"
     , gistModal (OpenModal SaveProjectAs) "Save As..."
     ]
@@ -306,7 +306,7 @@ menuBar state =
 
   gistModal action name =
     if
-      has (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser)
+      has (_authStatus <<< _Success <<< _Just)
         state then
       menuButton action name
     else

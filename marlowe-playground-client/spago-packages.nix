@@ -89,6 +89,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "argonaut-generic" = pkgs.stdenv.mkDerivation {
+        name = "argonaut-generic";
+        version = "v7.0.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/purescript-contrib/purescript-argonaut-generic.git";
+          rev = "be59a41bdce62bec453521ba4e7be27dddc82b36";
+          sha256 = "0s94c7xln9djrwzrfyc0w8ri0qirdbwlrbxksg8hzhj96447v7dm";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "argonaut-traversals" = pkgs.stdenv.mkDerivation {
         name = "argonaut-traversals";
         version = "v9.0.0";
@@ -168,6 +180,18 @@ let
           url = "https://github.com/sharkdp/purescript-bigints.git";
           rev = "d5151e04db7e18641fbb2b5892f4198b1cab5907";
           sha256 = "0x8s6d6q2rpfkk56bmayg57a7hl2h7sq9ljrxfc8sjnwd7mfs193";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "call-by-name" = pkgs.stdenv.mkDerivation {
+        name = "call-by-name";
+        version = "v3.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/natefaubion/purescript-call-by-name.git";
+          rev = "f9dbd399d7837400b169dfbce635376dfaa77a5b";
+          sha256 = "0a73is5cain9iymx0fkhsbpz2kn7qy2rv2panajzvxabhprnmvwn";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -600,6 +624,18 @@ let
           url = "https://github.com/jordanmartinez/purescript-halogen-hooks-extra.git";
           rev = "c400f9983123f5ce137cce8cda23285ec8062e5e";
           sha256 = "0clwakcz76636y2z8cc3n6y5x1iqjpj9rv8c9d3731y2fg5n1g4a";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "halogen-store" = pkgs.stdenv.mkDerivation {
+        name = "halogen-store";
+        version = "v0.4.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/thomashoneyman/purescript-halogen-store.git";
+          rev = "79e2800cef8865cd266567b55cb74645324c197f";
+          sha256 = "03yi869jl7vbq3r1dq8f82pyqawl55v2nmd44yhad6wz6lrdq7b4";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";

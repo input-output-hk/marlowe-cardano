@@ -10,7 +10,7 @@ import Data.Map (Map)
 import Data.Map as M
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, un)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Extended (Contract) as Marlowe.Extended
 import Marlowe.Extended.Metadata (MetaData) as Marlowe.Extended
@@ -18,8 +18,16 @@ import Safe.Coerce (coerce)
 
 newtype SourceCode = SourceCode String
 
+derive instance Newtype SourceCode _
+
+newtype ProjectName = ProjectName String
+
+derive instance Newtype ProjectName _
+derive newtype instance Eq ProjectName
+derive newtype instance Ord ProjectName
+
 type ProjectContent extra =
-  { projectName :: String
+  { projectName :: ProjectName
   , code :: SourceCode
   , metadata :: Marlowe.Extended.MetaData
   | extra
@@ -32,21 +40,21 @@ data Project
   | JavascriptProject (ProjectContent ())
   | ActusProject (ProjectContent ())
 
-getProjectName :: Project -> String
+getProjectName :: Project -> ProjectName
 getProjectName = case _ of
   MarloweProject r -> r.projectName
   HaskellProject r -> r.projectName
   JavascriptProject r -> r.projectName
   ActusProject r -> r.projectName
 
-setProjectName :: Project -> String -> Project
+setProjectName :: Project -> ProjectName -> Project
 setProjectName project projectName = case project of
   MarloweProject r -> MarloweProject r { projectName = projectName }
   HaskellProject r -> HaskellProject r { projectName = projectName }
   JavascriptProject r -> JavascriptProject r { projectName = projectName }
   ActusProject r -> ActusProject r { projectName = projectName }
 
-_projectName :: Lens' Project String
+_projectName :: Lens' Project ProjectName
 _projectName = lens getProjectName setProjectName
 
 getCode :: Project -> SourceCode
@@ -134,7 +142,8 @@ toFiles project = do
       ActusProject { code } -> fileNames.actus /\ coerce code
   Files $ Map.fromFoldable
     [ codeFileName /\ codeFileContent
-    , fileNames.playground /\ FileContent (getProjectName project)
+    , fileNames.playground /\ FileContent
+        (un ProjectName $ getProjectName project)
     , fileNames.metadata /\ FileContent
         (encodeStringifyJson $ getMetadata project)
     ]
@@ -162,5 +171,6 @@ fromFiles (Files m) = do
   )
   where
   lookupContent n = coerce <<< M.lookup n
-  FileContent projectName = fromMaybe (FileContent "Uknown")
+  FileContent pn = fromMaybe (FileContent "Uknown")
     (M.lookup fileNames.playground m)
+  projectName = ProjectName pn

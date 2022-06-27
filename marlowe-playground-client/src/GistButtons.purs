@@ -18,7 +18,7 @@ import Network.RemoteData (RemoteData(..))
 authButton :: forall p. Action -> State -> HTML p Action
 authButton intendedAction state =
   let
-    authStatus = state ^. (_authStatus <<< to (map (view authStatusAuthRole)))
+    authStatus = state ^. _authStatus
   in
     case authStatus of
       Failure _ ->
@@ -27,7 +27,7 @@ authButton intendedAction state =
           , classNames [ "btn" ]
           ]
           [ text "Failed to login" ]
-      Success Anonymous ->
+      Success Nothing ->
         div_
           [ modalHeader "Login with github" (Just CloseModal)
           , div [ classes [ modalContent, ClassName "auth-button-container" ] ]
@@ -50,7 +50,7 @@ authButton intendedAction state =
                   ]
               ]
           ]
-      Success GithubUser -> text ""
+      Success (Just _) -> text ""
       Loading ->
         button
           [ idPublishGist

@@ -2,7 +2,6 @@ module MainFrame.State (component) where
 
 import Prologue hiding (div)
 
-import Auth (AuthRole(..), _GithubUser, authStatusAuthRole)
 import Component.Blockly.Types as Blockly
 import Component.BottomPanel.Types (Action(..)) as BP
 import Component.ConfirmUnsavedNavigation.Types (Action(..)) as ConfirmUnsavedNavigation
@@ -20,13 +19,15 @@ import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.Either (either, hush, note)
 import Data.Foldable (fold, for_)
-import Data.Lens (_Right, assign, has, preview, set, use, view, (^.))
+import Data.Function.Uncurried (runFn2)
+import Data.Lens (_Just, _Right, assign, has, preview, set, use, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (un, unwrap)
 import Data.RawJson (RawJson(..))
+import Debug (traceM)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
 import Effect.Class.Console (log)
@@ -34,7 +35,7 @@ import Gist (Gist, gistDescription, gistId)
 import Gists.Extra (_GistId)
 import Gists.Types (GistAction(..))
 import Gists.Types (parseGistUrl) as Gists
-import Halogen (Component, liftEffect, subscribe')
+import Halogen (Component, getRef, liftEffect, subscribe')
 import Halogen as H
 import Halogen.Analytics (withAnalytics)
 import Halogen.Extra (mapSubmodule)
@@ -43,7 +44,7 @@ import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
 import Halogen.Query.Event (eventListener)
 import Halogen.Store.Monad (class MonadStore, updateStore)
-import LoginPopup (informParentAndClose, openLoginPopup)
+import Halogen.VDom.Util (refEq)
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
@@ -73,6 +74,7 @@ import MainFrame.Types
   , _simulationState
   , _view
   , _workflow
+  , modalBackdropLabel
   , sessionToState
   , stateToSession
   )
@@ -81,7 +83,7 @@ import Marlowe (Api, getApiGistsByGistId)
 import Marlowe as Server
 import Marlowe.Extended.Metadata (emptyContractMetadata, getHintsFromMetadata)
 import Marlowe.Gists (PlaygroundFiles, mkNewGist, playgroundFiles)
-import Marlowe.Project.Types (Project(..), SourceCode(..))
+import Marlowe.Project.Types (Project(..), ProjectName(..), SourceCode(..))
 import Network.RemoteData (RemoteData(..), _Success, fromEither)
 import Page.BlocklyEditor.State as BlocklyEditor
 import Page.BlocklyEditor.Types (_marloweCode)
@@ -116,18 +118,23 @@ import Routing.Hash as Routing
 import SaveAs.State (handleAction) as SaveAs
 import SaveAs.Types (Action(..), State, _status, emptyState) as SaveAs
 import Servant.PureScript (class MonadAjax, printAjaxError)
+import Session as Auth
 import SessionStorage as SessionStorage
 import Simple.JSON (unsafeStringify)
 import StaticData (gistIdLocalStorageKey)
 import StaticData as StaticData
 import Store as Store
+import Type.Constraints (class MonadAffAjaxStore)
 import Types (WebpackBuildMode(..))
+import Web.Event.Event as Event
 import Web.HTML (window) as Web
 import Web.HTML.HTMLDocument (toEventTarget)
+import Web.HTML.HTMLElement as HTMLElement
 import Web.HTML.Window (document) as Web
 import Web.HTML.Window as Window
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes (keyup)
+import Web.UIEvent.MouseEvent as MouseEvent
 
 initialState
   :: Input -> State
@@ -165,9 +172,7 @@ initialState input@{ tzOffset, webpackBuildMode } =
 ------------------------------------------------------------
 component
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => Component Query Input Void m
 component =
   H.mkComponent
@@ -261,21 +266,11 @@ handleSubRoute Router.Blockly = selectView BlocklyEditor
 -- This route is supposed to be called by the github oauth flow after a succesful login flow
 -- It is supposed to be run inside a popup window
 handleSubRoute Router.GithubAuthCallback = do
-  authResult <- lift $ Server.getApiOauthStatus
-  case authResult of
-    (Right authStatus) -> liftEffect $ informParentAndClose $ view
-      authStatusAuthRole
-      authStatus
-    -- TODO: is it worth showing a particular view for Failure, NotAsked and Loading?
-    -- Modifying this will mean to also modify the render function in the mainframe to be able to draw without
-    -- the headers/footers as this is supposed to be a dialog/popup
-    _ -> pure unit
+  liftEffect Auth.onAuthResponse
 
 handleRoute
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => Route
   -> HalogenM State Action ChildSlots Void m Unit
 handleRoute { gistId: (Just gistId), subroute } = do
@@ -287,9 +282,7 @@ handleRoute { subroute } = handleSubRoute subroute
 
 handleQuery
   :: forall m a
-   . MonadAff m
-  => MonadAjax Api m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => Query a
   -> HalogenM State Action ChildSlots Void m (Maybe a)
 handleQuery (ChangeRoute route next) = do
@@ -302,9 +295,7 @@ handleQuery (ChangeRoute route next) = do
 ------------------------------------------------------------
 fullHandleAction
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 fullHandleAction =
@@ -315,9 +306,7 @@ fullHandleAction =
 
 handleActionWithoutNavigationGuard
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleActionWithoutNavigationGuard =
@@ -331,9 +320,7 @@ handleActionWithoutNavigationGuard =
 -- defined above (handleActionWithoutNavigationGuard or fullHandleAction)
 handleAction
   :: forall m
-   . MonadAff m
-  => MonadStore Store.Action Store.State m
-  => MonadAjax Api m
+   . MonadAffAjaxStore m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction Init = do
@@ -501,8 +488,9 @@ handleAction (ProjectsAction action) = toProjects $ Projects.handleAction action
 
 handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
   let
-    projectName = "New Project"
-  assign _projectName projectName
+    projectName = ProjectName "New Project"
+  -- | FIXME paluh - add Project name to the global state as well
+  assign _projectName (un ProjectName projectName)
   assign _gistId Nothing
   assign _createGistResult NotAsked
   assign _contractMetadata emptyContractMetadata
@@ -649,13 +637,31 @@ handleAction (OpenModal modalView) = assign _showModal $ Just modalView
 
 handleAction CloseModal = assign _showModal Nothing
 
+handleAction (ModalBackdropClick mouseEvent) = do
+  maybeBackdropElement <- getRef modalBackdropLabel
+  let
+    event = MouseEvent.toEvent mouseEvent
+    backdropClicked = fromMaybe false do
+      target <- Event.target event
+      targetElement <-
+        HTMLElement.toElement <$> HTMLElement.fromEventTarget target
+      backdropElement <- maybeBackdropElement
+      pure $ runFn2 refEq backdropElement targetElement
+
+  when backdropClicked $ do
+    assign _showModal Nothing
+
+-- | FIXME: We should probably accept here also continuation for
+-- | unsuccessful login.
 handleAction (OpenLoginPopup intendedAction) = do
-  authRole <- liftAff openLoginPopup
+  possiblySession <- liftAff Auth.login
+  -- | FIXME: We should inform the user about the result.
+  -- | We get full information back.
   fullHandleAction CloseModal
-  assign (_authStatus <<< _Success <<< authStatusAuthRole) authRole
-  case authRole of
-    Anonymous -> pure unit
-    GithubUser -> fullHandleAction intendedAction
+  assignAuthStatus possiblySession
+  case possiblySession of
+    Success (Just _) -> fullHandleAction intendedAction
+    _ -> pure unit
 
 handleAction (ConfirmUnsavedNavigationAction intendedAction modalAction) =
   handleConfirmUnsavedNavigationAction intendedAction modalAction
@@ -711,15 +717,26 @@ viewToRoute = case _ of
   BlocklyEditor -> Router.Blockly
 
 ------------------------------------------------------------
-checkAuthStatus
+
+assignAuthStatus
   :: forall m
    . MonadAff m
   => MonadAjax Api m
+  => MonadStore Store.Action Store.State m
+  => Auth.AuthResponse
+  -> HalogenM State Action ChildSlots Void m Unit
+assignAuthStatus status = do
+  assign _authStatus Loading
+  updateStore $ Store.SetAuthResponse status
+
+checkAuthStatus
+  :: forall m
+   . MonadAffAjaxStore m
   => HalogenM State Action ChildSlots Void m Unit
 checkAuthStatus = do
-  assign _authStatus Loading
-  authResult <- lift Server.getApiOauthStatus
-  assign _authStatus $ fromEither authResult
+  assignAuthStatus Loading
+  session <- lift Auth.fetchSession
+  assignAuthStatus session
 
 ------------------------------------------------------------
 createFiles
@@ -884,9 +901,7 @@ loadGist gist = do
 -- Handles the actions fired by the Confirm Unsaved Navigation modal
 handleConfirmUnsavedNavigationAction
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => Action
   -> ConfirmUnsavedNavigation.Action
   -> HalogenM State Action ChildSlots Void m Unit
@@ -902,7 +917,7 @@ handleConfirmUnsavedNavigationAction intendedAction modalAction = do
       -- refactor into a `Save (Maybe Action)` action. The handler for that should do
       -- this check and call the next action as a continuation
       if
-        has (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser)
+        has (_authStatus <<< _Success <<< _Just)
           state then do
         fullHandleAction $ GistAction PublishOrUpdateGist
         fullHandleAction intendedAction
@@ -921,9 +936,7 @@ setUnsavedChangesForLanguage lang value = do
 -- would result in losing the progress.
 withAccidentalNavigationGuard
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => MonadStore Store.Action Store.State m
+   . MonadAffAjaxStore m
   => (Action -> HalogenM State Action ChildSlots Void m Unit)
   -> Action
   -> HalogenM State Action ChildSlots Void m Unit

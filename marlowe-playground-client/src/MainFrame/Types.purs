@@ -3,7 +3,6 @@ module MainFrame.Types where
 import Prologue hiding (div)
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Auth (AuthStatus, _GithubUser, authStatusAuthRole)
 import Component.Blockly.Types as Blockly
 import Component.ConfirmUnsavedNavigation.Types as ConfirmUnsavedNavigation
 import Component.CurrencyInput.Types as CurrencyInput
@@ -28,14 +27,13 @@ import Data.Time.Duration (Minutes)
 import Gist (Gist)
 import Gists.Extra (GistId)
 import Gists.Types (GistAction)
-import Halogen (ClassName)
+import Halogen (ClassName, RefLabel(..))
 import Halogen as H
 import Halogen.Classes (activeClass)
 import Halogen.Monaco (KeyBindings)
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Project.Types (Project)
-import Network.RemoteData (_Loading, _Success)
+import Network.RemoteData (_Loading)
 import Page.BlocklyEditor.Types as BE
 import Page.HaskellEditor.Types as HE
 import Page.JavascriptEditor.Types (CompilationState)
@@ -46,9 +44,12 @@ import Record (delete, get, insert) as Record
 import Rename.Types as Rename
 import Router (Route)
 import SaveAs.Types as SaveAs
+import Session (AuthResponse)
+import Session as Auth
 import Type.Proxy (Proxy(..))
 import Types (WebData, WebpackBuildMode)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
+import Web.UIEvent.MouseEvent (MouseEvent)
 
 data ModalView
   = NewProject
@@ -100,6 +101,7 @@ data Action
   | GistAction GistAction
   | OpenModal ModalView
   | CloseModal
+  | ModalBackdropClick MouseEvent
   | OpenLoginPopup Action
 
 -- | Here we decide which top-level queries to track as GA events, and
@@ -127,6 +129,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenModal view) = Just $ (defaultEvent (show view))
     { category = Just "OpenModal" }
   toEvent CloseModal = Just $ defaultEvent "CloseModal"
+  toEvent (ModalBackdropClick _) = Just $ defaultEvent "ModalBackdropClick"
   toEvent (OpenLoginPopup _) = Just $ defaultEvent "OpenLoginPopup"
   toEvent Logout = Just $ defaultEvent "Logout"
 
@@ -156,6 +159,7 @@ type ChildSlots =
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , saveProject :: forall query. H.Slot query Void Unit
+  , openProject :: forall query. H.Slot query Void Unit
   , currencyInput :: CurrencyInput.Slot String
   , dateTimeInput :: DateTimeLocalInput.Slot String
   )
@@ -171,6 +175,9 @@ _blocklySlot = Proxy
 
 _saveProject :: Proxy "saveProject"
 _saveProject = Proxy
+
+_openProject :: Proxy "openProject"
+_openProject = Proxy
 
 _simulationSlot :: Proxy "simulationSlot"
 _simulationSlot = Proxy
@@ -213,7 +220,7 @@ type State =
   , newProject :: NewProject.State
   , rename :: Rename.State
   , saveAs :: SaveAs.State
-  , authStatus :: WebData AuthStatus
+  , authStatus :: AuthResponse
   , gistId :: Maybe GistId
   , createGistResult :: WebData Gist
   , loadGistResult :: Either String (WebData Gist)
@@ -293,7 +300,7 @@ _rename = prop (Proxy :: _ "rename")
 _saveAs :: Lens' State SaveAs.State
 _saveAs = prop (Proxy :: _ "saveAs")
 
-_authStatus :: Lens' State (WebData AuthStatus)
+_authStatus :: Lens' State AuthResponse
 _authStatus = prop (Proxy :: _ "authStatus")
 
 _gistId :: Lens' State (Maybe GistId)
@@ -412,5 +419,10 @@ sessionToState (Session sessionData) defaultState =
     }
 
 isAuthenticated :: State -> Boolean
-isAuthenticated = has
-  (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser)
+isAuthenticated = Auth.possiblyAuthenticated <<< view _authStatus
+
+-- | Used to reference backdrop element
+-- | so we are able to filter out closing
+-- | mouse event click.
+modalBackdropLabel :: RefLabel
+modalBackdropLabel = RefLabel "modal-backdrop"

@@ -80,3 +80,9 @@ _projects = prop (Proxy :: _ "projects")
 
 modalIsLoading :: State -> Boolean
 modalIsLoading = has (_projects <<< _Loading)
+
+data Storage = FS | GistPlatform
+
+derive instance Generic Storage _
+instance Show Storage where
+  show = genericShow

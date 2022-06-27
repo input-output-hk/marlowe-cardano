@@ -2,7 +2,13 @@ module Store.ProjectState where
 
 import Data.Lens (Lens', set)
 import Data.Lens.Record (prop)
-import Marlowe.Project.Types (Project, SourceCode, _code, _projectName)
+import Marlowe.Project.Types
+  ( Project
+  , ProjectName
+  , SourceCode
+  , _code
+  , _projectName
+  )
 import Type.Prelude (Proxy(..))
 
 type ProjectState =
@@ -17,7 +23,7 @@ mkProjectState :: Project -> ProjectState
 mkProjectState = { modified: false, project: _ }
 
 data ProjectStateAction
-  = OnProjectNameChanged String
+  = OnProjectNameChanged ProjectName
   | OnProjectCodeChanged SourceCode
   | OnProjectSaved
 

@@ -20,6 +20,7 @@ import Halogen.Classes
   )
 import Halogen.Css (classNames)
 import Halogen.HTML (a, button, div, h1, img, span, span_, text)
+import Halogen.HTML as HH
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, src, target)
 import MainFrame.Types
@@ -31,7 +32,7 @@ import MainFrame.Types
   )
 
 render :: forall m. State -> ComponentHTML Action ChildSlots m
-render state =
+render _ =
   div [ classNames [ "flex", "flex-col", "items-center", "my-16" ] ]
     [ h1 [ classNames [ "font-semibold", "text-4xl", "mb-16" ] ]
         [ text "Get started" ]
@@ -41,11 +42,7 @@ render state =
                 ( secondaryButton <>
                     [ "mr-small", "w-56", "text-base", "cursor-pointer" ]
                 )
-            , onClick \_ ->
-                if isAuthenticated state then
-                  OpenModal OpenProject
-                else
-                  OpenModal $ GithubLogin (OpenModal OpenProject)
+            , onClick \_ -> OpenModal OpenProject
             ]
             [ text "Open existing project" ]
         , button
