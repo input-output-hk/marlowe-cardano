@@ -193,6 +193,9 @@ observationGenSized s
                       , return FalseObs
                       ]
 
+observationGen :: Gen Observation
+observationGen = sized observationGenSized
+
 
 shrinkObservation :: Observation -> [Observation]
 shrinkObservation obs = case obs of
