@@ -105,16 +105,8 @@ import Humanize
   , localToUtc
   , utcToLocal
   )
-import MainFrame.Types
-  ( ChildSlots
-  , _currencyInputSlot
-  , _dateTimeInputSlot
-  , _simulatorEditorSlot
-  )
-import Marlowe.Extended.Metadata (MetaData, NumberFormat(..), getChoiceFormat)
-import Marlowe.Holes as Holes
-import Marlowe.Monaco as MM
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (inBounds)
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Assets(..)
   , Bound(..)
@@ -128,9 +120,21 @@ import Marlowe.Semantics
   , Token(..)
   , TokenName
   , TransactionInput(..)
-  , inBounds
   , timeouts
   )
+import Language.Marlowe.Extended.V1.Metadata
+  ( MetaData
+  , NumberFormat(..)
+  , getChoiceFormat
+  )
+import MainFrame.Types
+  ( ChildSlots
+  , _currencyInputSlot
+  , _dateTimeInputSlot
+  , _simulatorEditorSlot
+  )
+import Marlowe.Holes as Holes
+import Marlowe.Monaco as MM
 import Marlowe.Template (TemplateContent(..), orderContentUsingMetadata)
 import Marlowe.Time (unixEpoch)
 import Monaco as Monaco

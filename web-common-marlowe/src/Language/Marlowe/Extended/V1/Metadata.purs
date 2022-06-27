@@ -1,4 +1,4 @@
-module Marlowe.Extended.Metadata where
+module Language.Marlowe.Extended.V1.Metadata where
 
 import Prologue
 
@@ -21,9 +21,9 @@ import Data.Set.Ordered.OSet as OSet
 import Data.Show.Generic (genericShow)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Extended (Contract, ContractType(..), getChoiceNames)
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 (Contract, ContractType(..), getChoiceNames)
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics as S
 import Marlowe.Template (Placeholders(..), getPlaceholderIds)
 import Type.Proxy (Proxy(..))
 

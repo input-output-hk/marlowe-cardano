@@ -7,12 +7,12 @@ import Data.Maybe (isNothing)
 import Data.Set as Set
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Extended (toCore)
-import Marlowe.Extended as EM
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 (toCore)
+import Language.Marlowe.Extended.V1 as EM
 import Marlowe.Gen (GenerationOptions(..), genBigInt, genContract, genInstant)
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (fromTerm)
-import Marlowe.Semantics as S
 import Marlowe.Template
   ( Placeholders(..)
   , TemplateContent(..)

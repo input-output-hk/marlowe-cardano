@@ -55,8 +55,8 @@ import Examples.Metadata
   , swap
   , zeroCouponBond
   ) as M
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
 import LocalStorage as LocalStorage
-import Marlowe.Extended.Metadata (MetaData)
 
 type Label = String
 

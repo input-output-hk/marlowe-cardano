@@ -66,10 +66,10 @@ walletNameBridge :: BridgePart
 walletNameBridge = (typeName ^== "WalletName") $> psWalletName
 
 psCurrencySymbol :: TypeInfo 'PureScript
-psCurrencySymbol = TypeInfo "" "Marlowe.Semantics" "CurrencySymbol" []
+psCurrencySymbol = TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "CurrencySymbol" []
 
 psTokenName :: TypeInfo 'PureScript
-psTokenName = TypeInfo "" "Marlowe.Semantics" "TokenName" []
+psTokenName = TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "TokenName" []
 
 psRoleToken :: TypeInfo 'PureScript
 psRoleToken = TypeInfo "" "Marlowe.Run.Contract.V1.Types" "RoleToken" []
@@ -114,7 +114,7 @@ walletV1CTBridge = do
   mnemonicBridge <|> passphraseBridge
 
 psTransactionError :: TypeInfo 'PureScript
-psTransactionError =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "TransactionError" []
+psTransactionError =  TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "TransactionError" []
 
 transactionErrorBridge :: BridgePart
 transactionErrorBridge = typeName ^== "TransactionError" >> return psTransactionError
@@ -142,19 +142,19 @@ walletBridge = do
   walletV1Bridge <|> walletV1CTBridge <|> paymentPubKeyHashBridge <|> pubKeyHashBridge
 
 psMarloweParams :: TypeInfo 'PureScript
-psMarloweParams =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "MarloweParams" []
+psMarloweParams =  TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "MarloweParams" []
 
 marloweParamsBridge :: BridgePart
 marloweParamsBridge = typeName ^== "MarloweParams" >> return psMarloweParams
 
 psTransactionInput :: TypeInfo 'PureScript
-psTransactionInput =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "TransactionInput" []
+psTransactionInput =  TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "TransactionInput" []
 
 transactionInputBridge :: BridgePart
 transactionInputBridge = typeName ^== "TransactionInput" >> return psTransactionInput
 
 psMarloweData :: TypeInfo 'PureScript
-psMarloweData =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "MarloweData" []
+psMarloweData =  TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "MarloweData" []
 
 marloweDataBridge :: BridgePart
 marloweDataBridge = typeName ^== "MarloweData" >> return psMarloweData

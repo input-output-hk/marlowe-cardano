@@ -9,8 +9,8 @@ import Data.PABConnectedWallet as C
 import Data.Wallet (SyncStatus, WalletDetails)
 import Data.Wallet as D
 import Data.WalletId (WalletId)
+import Language.Marlowe.Core.V1.Semantics.Types (Assets)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets)
 import MarloweContract (MarloweContract(..))
 
 data WalletStore

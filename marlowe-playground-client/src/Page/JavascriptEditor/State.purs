@@ -32,14 +32,14 @@ import Language.Haskell.Monaco as HM
 import Language.Javascript.Interpreter (InterpreterResult(..))
 import Language.Javascript.Interpreter as JSI
 import Language.Javascript.Monaco as JSM
-import MainFrame.Types (ChildSlots, _jsEditorSlot)
-import Marlowe (Api)
-import Marlowe.Extended (Contract)
-import Marlowe.Extended.Metadata
+import Language.Marlowe.Extended.V1 (Contract)
+import Language.Marlowe.Extended.V1.Metadata
   ( MetaData
   , MetadataHintInfo
   , getMetadataHintInfo
   )
+import MainFrame.Types (ChildSlots, _jsEditorSlot)
+import Marlowe (Api)
 import Marlowe.Template
   ( _timeContent
   , _valueContent

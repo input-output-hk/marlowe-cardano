@@ -61,14 +61,20 @@ import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (subscribeOnce)
 import Language.Marlowe.Client (MarloweError(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( MarloweParams
+  , TransactionInput
+  )
+import Language.Marlowe.Core.V1.Semantics.Types as Semantic
+import Language.Marlowe.Extended.V1 (resolveRelativeTimes, toCore)
+import Language.Marlowe.Extended.V1.Metadata
+  ( ContractTemplate
+  , _extendedContract
+  )
 import Marlowe.Execution.State (removePendingTransaction, setPendingTransaction)
-import Marlowe.Extended (resolveRelativeTimes, toCore)
-import Marlowe.Extended.Metadata (ContractTemplate, _extendedContract)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Server (Api) as MarloweApp
 import Marlowe.Run.Server as Marlowe
-import Marlowe.Semantics (MarloweParams, TransactionInput)
-import Marlowe.Semantics as Semantic
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Plutus.Contract.Error as P
 import Plutus.PAB.Webserver (Api) as PAB

@@ -36,15 +36,15 @@ import Effect.Aff (Aff, Error, forkAff, joinFiber)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Env (Env, _applyInputBus, _createBus, _redeemBus)
 import Language.Marlowe.Client (MarloweError)
-import Marlowe.PAB (PlutusAppId)
-import Marlowe.Run.Server as Marlowe
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Contract
   , MarloweParams
   , TimeInterval(..)
   , TokenName
   , TransactionInput(..)
   )
+import Marlowe.PAB (PlutusAppId)
+import Marlowe.Run.Server as Marlowe
 import Plutus.PAB.Webserver (Api) as PAB
 import Servant.PureScript (class MonadAjax)
 import Store.RoleTokens (Payout)

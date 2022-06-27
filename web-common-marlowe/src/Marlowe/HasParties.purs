@@ -5,8 +5,8 @@ import Prelude
 import Data.Array (foldMap)
 import Data.Set (Set)
 import Data.Set as Set
-import Marlowe.Extended as Extended
-import Marlowe.Semantics as Semantic
+import Language.Marlowe.Core.V1.Semantics.Types as Semantic
+import Language.Marlowe.Extended.V1 as Extended
 
 class HasParties a where
   getParties :: a -> Set Semantic.Party

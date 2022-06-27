@@ -64,12 +64,12 @@ import Halogen.Subscription.Extra
   , switchMapEmitter
   )
 import Halogen.VDom.Driver (runUI)
+import Language.Marlowe.Core.V1.Semantics.Types (Assets(..))
 import LocalStorage (Key(..), getItem, removeItem, setItem)
 import MainFrame.State (mkMainFrame)
 import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
-import Marlowe.Semantics (Assets(..))
 import Store (_wallet, mkStore)
 import Store as Store
 import Store.Contracts (getContractNicknames)
