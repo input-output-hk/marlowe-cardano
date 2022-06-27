@@ -3,6 +3,7 @@ module Main(main) where
 
 import qualified Spec.Marlowe.AutoExecute
 import qualified Spec.Marlowe.Marlowe
+import qualified Spec.Marlowe.Semantics (tests)
 
 import Test.Tasty
 import Test.Tasty.QuickCheck
@@ -24,4 +25,5 @@ tests = testGroup "Marlowe"
     , testGroup "Marlowe JSON"
         [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
         ]
+    , Spec.Marlowe.Semantics.tests
     ]

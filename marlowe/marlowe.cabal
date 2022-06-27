@@ -152,6 +152,7 @@ test-suite marlowe-test
     other-modules:
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
+        Spec.Marlowe.Semantics
         Spec.Marlowe.AutoExecute
         MarloweContract
     build-depends:
