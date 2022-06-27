@@ -17,7 +17,7 @@ import Data.String (Pattern(..))
 import Data.String.Extra (capitalize, endsWith)
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, span, text)
-import Marlowe.Semantics (Party(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
 
 transfer :: forall w i. Transfer -> HTML w i
 transfer { sender, recipient, token, quantity, termini } = case termini of

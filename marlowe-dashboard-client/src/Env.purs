@@ -16,8 +16,8 @@ import Effect.AVar (AVar)
 import Halogen (SubscriptionId)
 import Halogen.Subscription (Emitter, Listener)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
+import Language.Marlowe.Core.V1.Semantics.Types (Assets, MarloweParams)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweParams)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer

@@ -12,8 +12,11 @@ import Halogen.Css (classNames)
 import Halogen.HTML (ClassName(..), b_, div_, h4, li_, ol, text)
 import Halogen.HTML.Properties (classes)
 import Humanize (humanizeValue)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Payee(..)
+  , TransactionWarning(..)
+  )
 import MainFrame.Types (ChildSlots)
-import Marlowe.Semantics (Payee(..), TransactionWarning(..))
 
 displayWarningList
   :: forall m action

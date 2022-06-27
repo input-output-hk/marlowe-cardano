@@ -8,7 +8,8 @@ import Prelude
 
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Examples.Metadata as Metadata
-import Marlowe.Extended
+import Language.Marlowe.Core.V1.Semantics.Types (Party(..), Token(..))
+import Language.Marlowe.Extended.V1
   ( Action(..)
   , Case(..)
   , Contract(..)
@@ -16,8 +17,7 @@ import Marlowe.Extended
   , Timeout(..)
   , Value(..)
   )
-import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
-import Marlowe.Semantics (Party(..), Token(..))
+import Language.Marlowe.Extended.V1.Metadata (ContractTemplate, MetaData)
 import Marlowe.Time (unsafeInstantFromInt)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 

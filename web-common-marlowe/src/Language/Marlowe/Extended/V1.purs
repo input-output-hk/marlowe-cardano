@@ -1,4 +1,4 @@
-module Marlowe.Extended where
+module Language.Marlowe.Extended.V1 where
 
 import Prelude
 
@@ -14,6 +14,7 @@ import Data.Argonaut
   )
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode.Aeson as E
+import Data.Argonaut.Extra (caseConstantFrom, getProp, object, requireProp)
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
@@ -30,8 +31,7 @@ import Data.Set as Set
 import Data.Show.Generic (genericShow)
 import Data.Traversable (foldMap, traverse)
 import Data.Tuple (Tuple(..))
-import Marlowe.Semantics (caseConstantFrom, getProp, object, requireProp)
-import Marlowe.Semantics as S
+import Language.Marlowe.Core.V1.Semantics.Types as S
 import Marlowe.Template
   ( class Fillable
   , class Template

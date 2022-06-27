@@ -5,8 +5,8 @@ import Prelude
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Data.Tuple.Nested ((/\))
-import Marlowe.Extended (ContractType(..))
-import Marlowe.Extended.Metadata
+import Language.Marlowe.Extended.V1 (ContractType(..))
+import Language.Marlowe.Extended.V1.Metadata
   ( MetaData
   , NumberFormat(..)
   , emptyContractMetadata

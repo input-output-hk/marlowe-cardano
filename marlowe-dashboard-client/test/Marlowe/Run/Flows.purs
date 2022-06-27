@@ -38,9 +38,7 @@ import Data.WalletNickname as WN
 import Effect.Aff (Error)
 import Language.Marlowe.Client (ContractHistory, UnspentPayouts(..))
 import Language.Marlowe.Client.History (RolePayout(..))
-import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
-import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Assets(..)
   , Contract
   , MarloweData
@@ -49,7 +47,9 @@ import Marlowe.Semantics
   , TokenName
   , _rolesCurrency
   )
-import Marlowe.Semantics as Semantics
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import MarloweContract (MarloweContract(..))
 import Plutus.V1.Ledger.Tx (TxOutRef(..))
 import Test.Control.Monad.UUID (class MonadMockUUID, getLastUUID, getNextUUID)

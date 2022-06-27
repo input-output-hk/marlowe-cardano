@@ -48,13 +48,13 @@ import Halogen.HTML.Properties
   , type_
   , value
   )
-import Marlowe.Extended
+import Language.Marlowe.Extended.V1
   ( contractTypeArray
   , contractTypeInitials
   , contractTypeName
   , initialsToContractType
   )
-import Marlowe.Extended.Metadata
+import Language.Marlowe.Extended.V1.Metadata
   ( ChoiceInfo
   , MetaData
   , MetadataHintInfo
