@@ -13,30 +13,39 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 
 module Spec.Marlowe.ACTUS.TestFrameworkMarlowe
-  ( tests,
+  ( tests
   )
-where
+  where
 
-import Actus.Domain.BusinessEvents
-import Actus.Domain.ContractTerms hiding (Assertion)
-import Actus.Domain.Ops
-import Actus.Domain.Schedule
-import Actus.Generator (constant, toMarlowe)
-import Actus.Generator.Analysis
-import Actus.Haskell
-import Actus.Model.ContractSchedule as S (maturity, schedule)
-import Actus.Model.StateTransition (CtxSTF (..))
-import Actus.Utility.DateShift (applyBDCWithCfg)
 import Control.Monad.Reader (Reader, ask, runReader)
+import Data.Aeson (encode)
+import Data.ByteString.Lazy as B (writeFile)
 import Data.Char (toUpper)
-import Data.List as L (find)
-import Data.Map as Map (lookup)
+import Data.List as L (find, unzip4)
+import Data.Map as Map (Map, elems, lookup)
 import Data.Maybe (fromMaybe)
+import Data.Time (LocalTime (..))
+import Debug.Pretty.Simple
 import GHC.Records (getField)
 import Language.Marlowe
-import Spec.Actus.TestFramework hiding (run, tests)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents
+import Language.Marlowe.ACTUS.Domain.ContractTerms hiding (Assertion)
+import Language.Marlowe.ACTUS.Domain.Ops
+import Language.Marlowe.ACTUS.Domain.Schedule
+import Language.Marlowe.ACTUS.Generator.Analysis
+import Language.Marlowe.ACTUS.Generator.GeneratorFs (genFsContract')
+import Language.Marlowe.ACTUS.Generator.MarloweCompat (constnt, toMarlowe)
+import Language.Marlowe.ACTUS.Model.ContractSchedule as S (maturity, schedule)
+import Language.Marlowe.ACTUS.Model.StateTransition (CtxSTF (..))
+import Text.Pretty.Simple
+-- import Language.Marlowe.Semantics.Types
+--import Language.Marlowe.Semantics (evalObservation)
+import Data.Text.Lazy (unpack)
+import Language.Marlowe.ACTUS.Utility.DateShift (applyBDCWithCfg)
+import Spec.Marlowe.ACTUS.TestFramework hiding (run, tests)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
+import Text.Printf (printf)
 
 tests :: String -> [TestCase] -> TestTree
 tests n t =
@@ -72,7 +81,7 @@ tests n t =
                           let d = applyBDCWithCfg (scheduleConfig terms) timestamp in calculationDay d == date
                       )
                       values
-                  return $ constant value
+                  return $ constnt value
              in case ev of
                   RR -> rf {o_rf_RRMO = v}
                   SC -> rf {o_rf_SCMO = v}
@@ -90,19 +99,28 @@ tests n t =
                 (calculationDay <$> schedule IP terms)
                 (S.maturity terms)
                 riskFactors
+
+       -- in Prelude.writeFile (identifier ++ ".marlowe") (show . pretty $ genFsContract' riskFactors (toMarlowe terms)) >> assertTestResults cashFlows results
+       -- in B.writeFile (identifier ++ ".json") (encodePretty $ genFsContract' riskFactors (toMarlowe terms)) >> assertTestResults cashFlows results
        in assertTestResults cashFlows results
 
-    assertTestResults :: [CashFlowPoly (Value Observation)] -> [TestResult] -> IO ()
+    -- assertTestResults :: (Show a, RoleSignOps a, ScheduleOps a, YearFractionOps a) => [CashFlowPoly a] -> [TestResult] -> IO ()
     assertTestResults [] []               = return ()
     assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r >> assertTestResults cfs rs
     assertTestResults _ _                 = assertFailure "Sizes differ"
 
-assertTestResult :: CashFlowPoly (Value Observation) -> TestResult -> IO ()
+-- assertTestResult :: CashFlowPoly a -> TestResult -> IO ()
 assertTestResult CashFlowPoly {..} TestResult {eventDate, eventType, payoff} = do
-  assertBool "Mismatch" $ cashEvent == eventType
-  assertBool "Mismatch" $ cashPaymentDay == eventDate
-  assertBool "Mismatch" obs
+  assertEqual cashEvent eventType
+  assertEqual cashPaymentDay eventDate
+  -- pTraceShow ("XXXXXXXXXX", eventType, eventDate, evalValue env state am, evalValue env state amount, payoff) $ assertBool (err am payoff) obs
+  -- pTraceShow ("XX", eventType, eventDate) $ assertBool (err am payoff) obs
+  -- pTraceShow ("VAL", reduce' am, constnt payoff) $ assertBool (err am payoff) obs
+  assertBool (err am payoff) obs
   where
+    assertEqual a b = assertBool (err a b) $ a == b
+    -- assertEqual a b = assertBool (err a b) $ a == b
+    err a b = printf "Mismatch: actual %s, expected %s" (show a) (show b)
     env = Environment {timeInterval = (POSIXTime 0, POSIXTime 0)}
     state = emptyState $ POSIXTime 0
     obs =
@@ -110,9 +128,23 @@ assertTestResult CashFlowPoly {..} TestResult {eventDate, eventType, payoff} = d
         env
         state
         (ValueLE val (Constant marloweFixedPoint))
-    val = _abs $ SubValue amount (constant payoff)
+    val = _abs $ SubValue am (constnt payoff)
+    am = amount
+    -- am = amount
 
-run :: TestCase -> Reader (CtxSTF (Value Observation)) [CashFlowPoly (Value Observation)]
+defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactorsPoly a
+defaultRiskFactors _ _ =
+  RiskFactorsPoly
+    { o_rf_CURS = _one,
+      o_rf_RRMO = _one,
+      o_rf_SCMO = _one,
+      pp_payoff = _zero,
+      xd_payoff = _zero,
+      dv_payoff = _zero
+    }
+
+run :: (Show a, RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
+  TestCase -> Reader (CtxSTF a) [CashFlowPoly a]
 run TestCase {..} = do
   ctx <- ask
   pof <- genProjectedPayoffs

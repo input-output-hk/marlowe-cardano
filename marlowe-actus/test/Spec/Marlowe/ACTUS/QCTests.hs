@@ -6,14 +6,15 @@ module Spec.Marlowe.ACTUS.QCTests
   ( tests )
 where
 
+import Actus.Domain.BusinessEvents
+import Actus.Domain.ContractTerms
+import Actus.Domain.Schedule
+import Actus.Generator.Analysis
+import Actus.Haskell (ContractTerms, RiskFactors, setDefaultContractTermValues)
+import Actus.Model.Applicability
 import Data.Maybe (isJust)
 import Data.Time (LocalTime)
 import Data.Validation as V
-import Language.Marlowe.ACTUS.Domain.BusinessEvents
-import Language.Marlowe.ACTUS.Domain.ContractTerms
-import Language.Marlowe.ACTUS.Domain.Schedule
-import Language.Marlowe.ACTUS.Generator.Analysis
-import Language.Marlowe.ACTUS.Model.Applicability
 import Spec.Marlowe.ACTUS.QCGenerator
 import Test.QuickCheck
 import Test.Tasty

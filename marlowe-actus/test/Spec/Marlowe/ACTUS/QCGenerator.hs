@@ -8,16 +8,17 @@
 
 module Spec.Marlowe.ACTUS.QCGenerator where
 
+import Actus.Domain.BusinessEvents
+import Actus.Domain.ContractTerms
+import Actus.Domain.Schedule
+import Actus.Generator.Analysis
+import Actus.Haskell (ContractTerms, RiskFactors)
 import qualified Data.List as L
 import qualified Data.Map as M
 import Data.Maybe (catMaybes)
 import Data.Time
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
-import Language.Marlowe.ACTUS.Domain.BusinessEvents
-import Language.Marlowe.ACTUS.Domain.ContractTerms
-import Language.Marlowe.ACTUS.Domain.Schedule
-import Language.Marlowe.ACTUS.Generator.Analysis
 import Test.QuickCheck
 
 largeamount :: Gen Double

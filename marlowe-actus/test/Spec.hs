@@ -2,9 +2,9 @@
 
 module Main (main) where
 
+import Spec.Actus.TestFramework
 import Spec.Marlowe.ACTUS.Examples
 import Spec.Marlowe.ACTUS.QCTests
-import Spec.Marlowe.ACTUS.TestFramework
 import Spec.Marlowe.ACTUS.TestFrameworkMarlowe
 import System.Environment
 import Test.Tasty
@@ -25,45 +25,32 @@ main = do
   optnsTests <- testCasesFromFile [] $ p ++ "actus-tests-optns.json"
   futurTests <- testCasesFromFile [] $ p ++ "actus-tests-futur.json"
   comTests <- testCasesFromFile [] $ p ++ "actus-tests-com.json"
-  cshTests <- testCasesFromFile [] $ p ++ "actus-tests-csh.json"
-  clmTests <- testCasesFromFile
-    [ "clm07", "clm08", "clm09", "clm13", "clm14" -- same as in CallMoneyTest.java
-    ] $ p ++ "actus-tests-clm.json"
+  clmTests <-
+    testCasesFromFile
+      [ "clm07",
+        "clm08",
+        "clm09",
+        "clm13",
+        "clm14" -- same as in CallMoneyTest.java
+      ]
+      $ p ++ "actus-tests-clm.json"
   swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
-  cegTests <- testCasesFromFile
-    [ "guarantee09", "guarantee10" , "guarantee11" , "guarantee12" , "guarantee13" , "guarantee14"
-    ] $ p ++ "actus-tests-ceg.json"
 
   defaultMain $
     testGroup
       "ACTUS test cases"
       [ testGroup
-          "ACTUS test-framework"
-          [ Spec.Marlowe.ACTUS.TestFramework.tests "PAM" pamTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "LAM" lamTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "NAM" namTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "ANN" annTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "STK" stkTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "OPTNS" optnsTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "FUTUR" futurTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "COM" comTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "CSH" cshTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "CLM" clmTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "SWPPV" swppvTests
-          , Spec.Marlowe.ACTUS.TestFramework.tests "CEG" cegTests
-          ],
-        testGroup
           "ACTUS test-framework for Marlowe"
-          [ Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "PAM" pamTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "LAM" lamTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "NAM" namTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "ANN" annTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "STK" stkTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "OPTNS" optnsTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "FUTUR" futurTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "COM" comTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CLM" clmTests
-          , Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "SWPPV" swppvTests
+          [ Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "PAM" pamTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "LAM" lamTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "NAM" namTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "ANN" annTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "STK" stkTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "OPTNS" optnsTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "FUTUR" futurTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "COM" comTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CLM" clmTests,
+            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "SWPPV" swppvTests
           ],
         testGroup
           "ACTUS examples"

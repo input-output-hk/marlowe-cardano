@@ -39,9 +39,149 @@ flag defer-plugin-errors
     default: False
     manual: True
 
+library actus-core
+  hs-source-dirs: actus-core/src
+  build-depends:
+    aeson -any,
+    base -any,
+    mtl -any,
+    sort -any,
+    text -any,
+    time -any,
+    validation -any
+  default-language: Haskell2010
+  default-extensions: ExplicitForAll ScopedTypeVariables
+                      DeriveGeneric StandaloneDeriving DeriveLift
+                      DeriveFunctor DeriveFoldable
+                      DeriveTraversable
+  exposed-modules:
+    Actus.Domain.BusinessEvents
+    Actus.Domain.ContractTerms
+    Actus.Domain.ContractState
+    Actus.Domain.Ops
+    Actus.Domain.Schedule
+    Actus.Generator.Analysis
+    Actus.Model.Applicability
+    Actus.Model.ContractSchedule
+    Actus.Model.StateInitialization
+    Actus.Model.StateTransition
+    Actus.Model.Payoff
+    Actus.Utility.ANN.Annuity
+    Actus.Utility.DateShift
+    Actus.Utility.ScheduleGenerator
+    Actus.Utility.YearFraction
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+
+library actus-haskell
+  hs-source-dirs: actus-haskell/src
+  build-depends:
+    aeson -any,
+    base -any,
+    actus-core,
+    bytestring,
+    containers -any,
+    newtype-generics,
+    template-haskell -any,
+    text,
+    vector,
+    mtl -any,
+    time -any,
+    sort -any,
+    validation -any
+  default-language: Haskell2010
+  default-extensions: ExplicitForAll ScopedTypeVariables
+                      DeriveGeneric StandaloneDeriving DeriveLift
+                      DeriveFunctor DeriveFoldable
+                      DeriveTraversable
+  exposed-modules:
+    Actus.Haskell
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+
+library actus-testframework
+    default-language: Haskell2010
+    hs-source-dirs: actus-haskell/test
+    type: exitcode-stdio-1.0
+    exposed-modules:
+        Spec.Actus.TestFramework
+    build-depends:
+        actus-core,
+        actus-haskell,
+        vector -any,
+        unordered-containers -any,
+        scientific -any,
+        extra -any,
+        utf8-string -any,
+        aeson -any,
+        base >=4.9 && <5,
+        containers -any,
+        hedgehog -any,
+        lens -any,
+        bytestring -any,
+        tasty -any,
+        tasty-hunit -any,
+        tasty-quickcheck -any,
+        text -any,
+        cborg,
+        template-haskell -any,
+        time -any,
+        validation -any,
+        pretty-simple -any,
+        mtl -any,
+        sort -any,
+        QuickCheck
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+
+test-suite actus-haskell-test
+    default-language: Haskell2010
+    hs-source-dirs: actus-haskell/test
+    type: exitcode-stdio-1.0
+    main-is: Spec.hs
+    build-depends:
+        actus-core,
+        actus-haskell,
+        actus-testframework,
+        vector -any,
+        unordered-containers -any,
+        scientific -any,
+        extra -any,
+        utf8-string -any,
+        aeson -any,
+        base >=4.9 && <5,
+        containers -any,
+        hedgehog -any,
+        lens -any,
+        bytestring -any,
+        tasty -any,
+        tasty-hunit -any,
+        tasty-quickcheck -any,
+        text -any,
+        cborg,
+        template-haskell -any,
+        time -any,
+        validation -any,
+        pretty-simple -any,
+        mtl -any,
+        sort -any,
+        QuickCheck
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+
 library
   hs-source-dirs: src
   build-depends:
+    actus-core,
+    actus-haskell,
     aeson -any,
     base -any,
     bytestring,
@@ -64,25 +204,8 @@ library
                       DeriveFunctor DeriveFoldable
                       DeriveTraversable
   exposed-modules:
-    Language.Marlowe.ACTUS.Domain.BusinessEvents
-    Language.Marlowe.ACTUS.Domain.ContractTerms
-    Language.Marlowe.ACTUS.Domain.ContractState
-    Language.Marlowe.ACTUS.Domain.Ops
-    Language.Marlowe.ACTUS.Domain.Schedule
-    Language.Marlowe.ACTUS.Generator.Analysis
-    Language.Marlowe.ACTUS.Generator.Generator
-    Language.Marlowe.ACTUS.Generator.GeneratorFs
-    Language.Marlowe.ACTUS.Generator.GeneratorStatic
-    Language.Marlowe.ACTUS.Generator.MarloweCompat
-    Language.Marlowe.ACTUS.Model.Applicability
-    Language.Marlowe.ACTUS.Model.ContractSchedule
-    Language.Marlowe.ACTUS.Model.StateInitialization
-    Language.Marlowe.ACTUS.Model.StateTransition
-    Language.Marlowe.ACTUS.Model.Payoff
-    Language.Marlowe.ACTUS.Utility.ANN.Annuity
-    Language.Marlowe.ACTUS.Utility.DateShift
-    Language.Marlowe.ACTUS.Utility.ScheduleGenerator
-    Language.Marlowe.ACTUS.Utility.YearFraction
+    Actus.Marlowe
+    Actus.Generator
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
@@ -95,11 +218,13 @@ test-suite marlowe-actus-test
     main-is: Spec.hs
     other-modules:
         Spec.Marlowe.ACTUS.Examples
-        Spec.Marlowe.ACTUS.TestFramework
         Spec.Marlowe.ACTUS.TestFrameworkMarlowe
         Spec.Marlowe.ACTUS.QCGenerator
         Spec.Marlowe.ACTUS.QCTests
     build-depends:
+        actus-core,
+        actus-haskell,
+        actus-testframework,
         vector -any,
         unordered-containers -any,
         scientific -any,
