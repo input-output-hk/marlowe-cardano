@@ -18,7 +18,7 @@ import Data.Maybe (catMaybes)
 import Data.Time
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
-import Spec.Actus.Haskell (ContractTerms, RiskFactors)
+import Spec.Actus.Haskell (TestContractTerms, TestRiskFactors)
 import Test.QuickCheck
 
 largeamount :: Gen Double
@@ -79,10 +79,10 @@ cyclePeriodFreq =
 datecycle :: Gen Cycle
 datecycle = Cycle <$> sized (\n -> choose (1, max 1 (maxDate `div` (toInteger n+1 * secondsPerYear)))) <*> cyclePeriodFreq <*> elements [ShortStub, LongStub] <*> elements [True, False]
 
-contractTermsGen :: Gen ContractTerms
+contractTermsGen :: Gen TestContractTerms
 contractTermsGen = elements [PAM, LAM, NAM, ANN] >>= contractTermsGen'
 
-contractTermsGen' :: CT -> Gen ContractTerms
+contractTermsGen' :: CT -> Gen TestContractTerms
 contractTermsGen' ct = do
   -- initial exchange date is fixed
   let ied = epochToLocalTime anchor
@@ -170,7 +170,7 @@ contractTermsGen' ct = do
   feeAccrued <- mightbe smallamount
 
   return
-    ContractTermsPoly
+    ContractTerms
       { contractId = "0",
         contractType = ct,
         contractStructure = [],
@@ -267,8 +267,8 @@ contractTermsGen' ct = do
         constraints = Nothing
       }
 
-riskAtTGen :: Gen RiskFactors
-riskAtTGen = RiskFactorsPoly
+riskAtTGen :: Gen TestRiskFactors
+riskAtTGen = RiskFactors
     <$> percentage
     <*> percentage
     <*> percentage
@@ -276,10 +276,10 @@ riskAtTGen = RiskFactorsPoly
     <*> smallamount
     <*> smallamount
 
-riskFactorsGen :: ContractTerms -> Gen (M.Map LocalTime RiskFactors)
+riskFactorsGen :: TestContractTerms -> Gen (M.Map LocalTime TestRiskFactors)
 riskFactorsGen ct = do
     let riskFactors _ _ =
-         RiskFactorsPoly
+         RiskFactors
             { o_rf_CURS = 1.0,
               o_rf_RRMO = 1.0,
               o_rf_SCMO = 1.0,
@@ -291,7 +291,7 @@ riskFactorsGen ct = do
     rf <- vectorOf (L.length days) riskAtTGen
     return $ M.fromList $ L.zip days rf
 
-riskFactorsGenRandomWalkGen :: ContractTerms -> Gen (M.Map LocalTime RiskFactors)
+riskFactorsGenRandomWalkGen :: TestContractTerms -> Gen (M.Map LocalTime TestRiskFactors)
 riskFactorsGenRandomWalkGen contractTerms = do
     rfs <- riskFactorsGen contractTerms
     riskAtT <- riskAtTGen
@@ -301,7 +301,7 @@ riskFactorsGenRandomWalkGen contractTerms = do
         fluctuate state fluctiation = state + (fluctiation - 50) / 100
         walk rf st =
             let fluctuate' extractor = fluctuate (extractor rf) (extractor st)
-            in RiskFactorsPoly
+            in RiskFactors
                 (fluctuate' o_rf_CURS)
                 (fluctuate' o_rf_RRMO)
                 (fluctuate' o_rf_SCMO)

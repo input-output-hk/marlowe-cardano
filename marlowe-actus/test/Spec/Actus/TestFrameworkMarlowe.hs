@@ -49,7 +49,7 @@ tests n t =
     runTest tc@TestCase {..} =
       let riskFactors ev date =
             let rf =
-                  RiskFactorsPoly
+                  RiskFactors
                     { o_rf_CURS = _one,
                       o_rf_RRMO = _one,
                       o_rf_SCMO = _one,
@@ -93,13 +93,13 @@ tests n t =
                 riskFactors
        in assertTestResults cashFlows results
 
-    assertTestResults :: [CashFlowPoly (Value Observation)] -> [TestResult] -> IO ()
+    assertTestResults :: [CashFlow (Value Observation)] -> [TestResult] -> IO ()
     assertTestResults [] []               = return ()
     assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r >> assertTestResults cfs rs
     assertTestResults _ _                 = assertFailure "Sizes differ"
 
-assertTestResult :: CashFlowPoly (Value Observation) -> TestResult -> IO ()
-assertTestResult CashFlowPoly {..} TestResult {eventDate, eventType, payoff} = do
+assertTestResult :: CashFlow (Value Observation) -> TestResult -> IO ()
+assertTestResult CashFlow {..} TestResult {eventDate, eventType, payoff} = do
   assertBool "Mismatch" $ cashEvent == eventType
   assertBool "Mismatch" $ cashPaymentDay == eventDate
   assertBool "Mismatch" obs
@@ -113,7 +113,7 @@ assertTestResult CashFlowPoly {..} TestResult {eventDate, eventType, payoff} = d
         (ValueLE val (Constant marloweFixedPoint))
     val = _abs $ SubValue amount (constant payoff)
 
-run :: TestCase -> Reader (CtxSTF (Value Observation)) [CashFlowPoly (Value Observation)]
+run :: TestCase -> Reader (CtxSTF (Value Observation)) [CashFlow (Value Observation)]
 run TestCase {..} = do
   ctx <- ask
   pof <- genProjectedPayoffs

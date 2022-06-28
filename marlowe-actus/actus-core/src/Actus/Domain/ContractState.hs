@@ -8,7 +8,7 @@ import Data.Time (LocalTime)
 {-| ACTUS contract states are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-states.json
 -}
-data ContractStatePoly a = ContractStatePoly
+data ContractState a = ContractState
   {
     tmd   :: Maybe LocalTime -- ^ Maturity Date (MD): The timestamp as per which the contract matures according to the initial terms or as per unscheduled events
   , nt    :: a               -- ^ Notional Principal (NT): The outstanding nominal value

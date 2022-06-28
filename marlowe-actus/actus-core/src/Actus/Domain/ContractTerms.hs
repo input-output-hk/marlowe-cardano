@@ -350,7 +350,7 @@ data Identifier = Identifier
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
-data Reference a = ReferenceTerms (ContractTermsPoly a)
+data Reference a = ReferenceTerms (ContractTerms a)
                  | ReferenceId Identifier
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON)
@@ -374,7 +374,7 @@ instance ToJSON a => ToJSON (ContractStructure a) where
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
-data ContractTermsPoly a = ContractTermsPoly
+data ContractTerms a = ContractTerms
   { -- General
     contractId                               :: String
   , contractType                             :: CT

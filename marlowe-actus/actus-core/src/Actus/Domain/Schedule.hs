@@ -20,7 +20,7 @@ mkShiftedDay d = ShiftedDay d d
 
 type ShiftedSchedule = [ShiftedDay]
 
-data CashFlowPoly a = CashFlowPoly
+data CashFlow a = CashFlow
   { tick               :: Integer,
     cashContractId     :: String,
     cashParty          :: String,

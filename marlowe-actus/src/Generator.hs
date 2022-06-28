@@ -16,7 +16,7 @@ import Actus.Core (genProjectedCashflows)
 import Actus.Domain.BusinessEvents (EventType (..))
 import Actus.Domain.ContractTerms (TermValidationError (..))
 import Actus.Domain.Ops (ActusOps (..), marloweFixedPoint)
-import Actus.Domain.Schedule (CashFlowPoly (..))
+import Actus.Domain.Schedule (CashFlow (..))
 import Actus.Marlowe (ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract, reduceValue)
 import Actus.Model.Applicability (validateTerms)
 import Data.List as L (foldl')
@@ -53,8 +53,8 @@ genContract' rf ct =
   let cfs = genProjectedCashflows rf ct
    in foldl' (flip gen) Close $ reverse cfs
   where
-    gen :: CashFlowPoly (Value Observation) -> Contract -> Contract
-    gen CashFlowPoly {..} cont =
+    gen :: CashFlow (Value Observation) -> Contract -> Contract
+    gen CashFlow {..} cont =
       let t = POSIXTime $ timeToSlotNumber cashPaymentDay
           a = reduceValue $ DivValue amount (Constant marloweFixedPoint)
        in reduceContract $

@@ -5,16 +5,16 @@
 
 module Actus.Marlowe where
 
-import Actus.Domain.BusinessEvents (RiskFactorsPoly)
-import Actus.Domain.ContractState (ContractStatePoly)
+import Actus.Domain.BusinessEvents (RiskFactors)
+import Actus.Domain.ContractState (ContractState)
 import Actus.Domain.ContractTerms
 import Actus.Domain.Ops
 import Actus.Utility.YearFraction (yearFraction)
 import Language.Marlowe as Marlowe
 
-type ContractStateMarlowe = ContractStatePoly (Marlowe.Value Observation)
-type RiskFactorsMarlowe = RiskFactorsPoly (Marlowe.Value Observation)
-type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Observation)
+type ContractStateMarlowe = ContractState (Marlowe.Value Observation)
+type RiskFactorsMarlowe = RiskFactors (Marlowe.Value Observation)
+type ContractTermsMarlowe = ContractTerms (Marlowe.Value Observation)
 
 instance YearFractionOps (Marlowe.Value Observation) where
     _y a b c d = Constant . toMarloweFixedPoint $ yearFraction a b c d

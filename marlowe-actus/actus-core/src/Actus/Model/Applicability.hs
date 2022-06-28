@@ -18,16 +18,16 @@ module Actus.Model.Applicability
   )
 where
 
-import Actus.Domain.ContractTerms (CT (..), ContractTermsPoly (..), IPCB (..), ScheduleConfig (..),
+import Actus.Domain.ContractTerms (CT (..), ContractTerms (..), IPCB (..), ScheduleConfig (..),
                                    TermValidationError (..))
 import Data.Maybe (isJust)
 import Data.Validation (Validation (..))
 
 -- |Contract terms are validated with applicability rules
 validateTerms ::
-  ContractTermsPoly a                                       -- ^ Contract terms
-  -> Validation [TermValidationError] (ContractTermsPoly a) -- ^ Validated contract terms or validation errors
-validateTerms ct@ContractTermsPoly {contractType = PAM, ..} =
+  ContractTerms a                                       -- ^ Contract terms
+  -> Validation [TermValidationError] (ContractTerms a) -- ^ Validated contract terms or validation errors
+validateTerms ct@ContractTerms {contractType = PAM, ..} =
   ct
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
@@ -55,7 +55,7 @@ validateTerms ct@ContractTermsPoly {contractType = PAM, ..} =
     <* _NN_I_1 [isJust scalingEffect, isJust scalingIndexAtStatusDate, isJust scalingIndexAtContractDealDate] ct ["scaling effect", "scaling index at status date", "scaling index at contract deal date"]
     <* _X_I_1 [isJust penaltyRate, isJust penaltyType] [isJust prepaymentEffect] ct ["penalty rate", "penalty type"] ["prepayment effect"]
 
-validateTerms ct@ContractTermsPoly {contractType = LAM, ..} =
+validateTerms ct@ContractTerms {contractType = LAM, ..} =
   ct
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
@@ -85,7 +85,7 @@ validateTerms ct@ContractTermsPoly {contractType = LAM, ..} =
     <* _NN_I_1 [isJust scalingEffect, isJust scalingIndexAtStatusDate, isJust scalingIndexAtContractDealDate] ct ["scaling effect", "scaling index at status date", "scaling index at contract deal date"]
     <* _X_I_1 [isJust penaltyRate, isJust penaltyType] [isJust prepaymentEffect] ct ["penalty rate", "penalty type"] ["prepayment effect"]
 
-validateTerms ct@ContractTermsPoly {contractType = NAM, ..} =
+validateTerms ct@ContractTerms {contractType = NAM, ..} =
   ct
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
@@ -117,7 +117,7 @@ validateTerms ct@ContractTermsPoly {contractType = NAM, ..} =
     <* _NN_I_1 [isJust scalingEffect, isJust scalingIndexAtStatusDate, isJust scalingIndexAtContractDealDate] ct ["scaling effect", "scaling index at status date", "scaling index at contract deal date"]
     <* _X_I_1 [isJust penaltyRate, isJust penaltyType] [isJust prepaymentEffect] ct ["penalty rate", "penalty type"] ["prepayment effect"]
 
-validateTerms ct@ContractTermsPoly {contractType = ANN, ..} =
+validateTerms ct@ContractTerms {contractType = ANN, ..} =
   ct
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
@@ -152,49 +152,49 @@ validateTerms ct@ContractTermsPoly {contractType = ANN, ..} =
 validateTerms t = Success t -- TODO: Generate applicability rules from the JSON specification (SCP-2882)
 
 -- |Optional
-_X :: Maybe c -> ContractTermsPoly a -> b -> Validation [TermValidationError] (ContractTermsPoly a)
+_X :: Maybe c -> ContractTerms a -> b -> Validation [TermValidationError] (ContractTerms a)
 _X _ ct _ = Success ct
 
 -- |The conditional term with c=1 is optional when any of the unconditional terms with c=0 is defined.
-_X_I_1 :: [Bool] -> [Bool] -> ContractTermsPoly a -> [String] -> [String] -> Validation [TermValidationError] (ContractTermsPoly a)
-_X_I_1 uncond cond ct@ContractTermsPoly {..} uncondNames condNames
+_X_I_1 :: [Bool] -> [Bool] -> ContractTerms a -> [String] -> [String] -> Validation [TermValidationError] (ContractTerms a)
+_X_I_1 uncond cond ct@ContractTerms {..} uncondNames condNames
   | or uncond = Success ct
   | or cond = Failure [Required $ "The unconditional terms " ++ show uncondNames ++ " must be defined when any of " ++ show condNames ++ " are defined for contract type '" ++ show contractType ++ "'"]
   | otherwise = Success ct
 
 -- |If the unconditional term with c=0 in the group is defined, then at least one of the conditional terms with c=2 must be defined.
-_X_I_2 :: Maybe b -> [Bool] -> ContractTermsPoly a -> String -> [String] -> Validation [TermValidationError] (ContractTermsPoly a)
+_X_I_2 :: Maybe b -> [Bool] -> ContractTerms a -> String -> [String] -> Validation [TermValidationError] (ContractTerms a)
 _X_I_2 (Just _) cond ct _ _ | or cond = Success ct
-_X_I_2 (Just _) _ ContractTermsPoly {..} uncondName condNames = Failure [Required $ "At least one of the conditional terms in group " ++ show condNames ++ " must be defined when " ++ uncondName ++ " is defined for contract type '" ++ show contractType ++ "'"]
+_X_I_2 (Just _) _ ContractTerms {..} uncondName condNames = Failure [Required $ "At least one of the conditional terms in group " ++ show condNames ++ " must be defined when " ++ uncondName ++ " is defined for contract type '" ++ show contractType ++ "'"]
 _X_I_2 Nothing _ ct _ _ = Success ct
 
 -- |At least one of the CAs with c=4 in this group has to be defined provided that CA IPCB of the group takes the value NTL
-_X_I_4 :: [Bool] -> ContractTermsPoly a -> [String] -> Validation [TermValidationError] (ContractTermsPoly a)
-_X_I_4 cond ct@ContractTermsPoly {interestCalculationBase = Just IPCB_NTL, ..} condNames =
+_X_I_4 :: [Bool] -> ContractTerms a -> [String] -> Validation [TermValidationError] (ContractTerms a)
+_X_I_4 cond ct@ContractTerms {interestCalculationBase = Just IPCB_NTL, ..} condNames =
   if or cond
     then Success ct
     else Failure [Required $ "At least one of the conditional terms in group " ++ show condNames ++ " must be defined when interest calculation base is NTL for contract type '" ++ show contractType ++ "'"]
 _X_I_4 _ ct _ = Success ct
 
 -- |Non-nullable / required
-_NN :: Maybe b -> ContractTermsPoly a -> String -> Validation [TermValidationError] (ContractTermsPoly a)
+_NN :: Maybe b -> ContractTerms a -> String -> Validation [TermValidationError] (ContractTerms a)
 _NN (Just _) ct _ = Success ct
-_NN Nothing ContractTermsPoly{..} n = Failure [Required $ "Contract term '" ++ n ++ "' is required for contract type '" ++ show contractType ++ "'"]
+_NN Nothing ContractTerms{..} n = Failure [Required $ "Contract term '" ++ n ++ "' is required for contract type '" ++ show contractType ++ "'"]
 
 -- |Not applicable
-_NA :: Maybe a -> ContractTermsPoly a -> String -> Validation [TermValidationError] (ContractTermsPoly a)
-_NA (Just _) ContractTermsPoly{..} n = Failure [NotApplicable $ "Contract term '" ++ n ++ "' is not applicable for contract type '" ++ show contractType ++ "'"]
+_NA :: Maybe a -> ContractTerms a -> String -> Validation [TermValidationError] (ContractTerms a)
+_NA (Just _) ContractTerms{..} n = Failure [NotApplicable $ "Contract term '" ++ n ++ "' is not applicable for contract type '" ++ show contractType ++ "'"]
 _NA Nothing ct _ = Success ct
 
 -- |NN(I, 1, _) (If one is defined, all must be defined)
-_NN_I_1 :: [Bool] -> ContractTermsPoly a -> [String] -> Validation [TermValidationError] (ContractTermsPoly a)
-_NN_I_1 _cts ct@ContractTermsPoly{..} ns
+_NN_I_1 :: [Bool] -> ContractTerms a -> [String] -> Validation [TermValidationError] (ContractTerms a)
+_NN_I_1 _cts ct@ContractTerms{..} ns
   | and _cts = Success ct
   | or _cts = Failure [Required $ "All contract terms in group " ++ show ns ++ " should be defined if one of them is defined for contract type '" ++ show contractType ++ "'"]
   | otherwise = Success ct
 
 -- |Not nullable if CA IPCB of the group takes the value NTIED
-_NN_I_3 :: Maybe b -> ContractTermsPoly a -> [Char] -> Validation [TermValidationError] (ContractTermsPoly a)
-_NN_I_3 Nothing ContractTermsPoly {interestCalculationBase = Just IPCB_NTIED} n = Failure [Required $ "Contract term " ++ n ++ " must be defined when interest calculation base is NTIED"]
+_NN_I_3 :: Maybe b -> ContractTerms a -> [Char] -> Validation [TermValidationError] (ContractTerms a)
+_NN_I_3 Nothing ContractTerms {interestCalculationBase = Just IPCB_NTIED} n = Failure [Required $ "Contract term " ++ n ++ " must be defined when interest calculation base is NTIED"]
 _NN_I_3 _ ct _ = Success ct
 

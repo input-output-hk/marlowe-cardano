@@ -8,9 +8,9 @@ module Actus.Model.Payoff
   )
 where
 
-import Actus.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
-import Actus.Domain.ContractState (ContractStatePoly (..))
-import Actus.Domain.ContractTerms (CT (..), ContractTermsPoly (..), FEB (..), PYTP (..))
+import Actus.Domain.BusinessEvents (EventType (..), RiskFactors (..))
+import Actus.Domain.ContractState (ContractState (..))
+import Actus.Domain.ContractTerms (CT (..), ContractTerms (..), FEB (..), PYTP (..))
 import Actus.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
 import Control.Monad.Reader (Reader, reader)
 import Data.Time.LocalTime (LocalTime)
@@ -18,15 +18,15 @@ import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |The context for payoff functions
 data CtxPOF a = CtxPOF
-  { contractTerms :: ContractTermsPoly a                         -- ^ Contract terms
-  , riskFactors   :: EventType -> LocalTime -> RiskFactorsPoly a -- ^ Risk factors as a function of event type and time
+  { contractTerms :: ContractTerms a                         -- ^ Contract terms
+  , riskFactors   :: EventType -> LocalTime -> RiskFactors a -- ^ Risk factors as a function of event type and time
   }
 
 -- |The payoff function
 payoff :: (RoleSignOps a, YearFractionOps a) =>
      EventType           -- ^ Event type
   -> LocalTime           -- ^ Time
-  -> ContractStatePoly a -- ^ Contract state
+  -> ContractState a -- ^ Contract state
   -> Reader (CtxPOF a) a -- ^ Updated contract state
 payoff ev t st = reader payoff'
   where
@@ -34,7 +34,7 @@ payoff ev t st = reader payoff'
       where
         pof ::
           (RoleSignOps a, YearFractionOps a) =>
-            EventType -> RiskFactorsPoly a -> ContractTermsPoly a -> ContractStatePoly a -> a
+            EventType -> RiskFactors a -> ContractTerms a -> ContractState a -> a
         ----------------------------
         -- Initial Exchange (IED) --
         ----------------------------
@@ -42,17 +42,17 @@ payoff ev t st = reader payoff'
         pof
           IED
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV
             }
           _ = _zero
         -- POF_IED_CLM
         pof
           IED
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = CLM,
               contractRole,
               notionalPrincipal = Just nt
@@ -61,10 +61,10 @@ payoff ev t st = reader payoff'
         -- POF_IED_*
         pof
           IED
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { notionalPrincipal = Just nt,
               premiumDiscountAtIED = Just pdied,
               contractRole
@@ -73,10 +73,10 @@ payoff ev t st = reader payoff'
         -- POF_IED_*
         pof
           IED
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { notionalPrincipal = Just nt,
               contractRole
             }
@@ -87,14 +87,14 @@ payoff ev t st = reader payoff'
         -- POF_PR_LAM
         pof
           PR
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = LAM,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { nt,
               nsc,
               prnxt
@@ -105,16 +105,16 @@ payoff ev t st = reader payoff'
         -- POF_PR_ANN
         pof
           PR
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType,
               dayCountConvention = Just dcc,
               maturityDate,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { nt,
               nsc,
               prnxt,
@@ -132,7 +132,7 @@ payoff ev t st = reader payoff'
         pof
           PR
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV
             }
           _ = _zero
@@ -145,18 +145,18 @@ payoff ev t st = reader payoff'
         pof
           MD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType
             }
           _ | contractType `elem` [OPTNS, SWPPV, CEG] = _zero
         -- POF_IED_*
         pof
           MD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
           _
-          ContractStatePoly
+          ContractState
             { nt,
               nsc,
               isc,
@@ -169,7 +169,7 @@ payoff ev t st = reader payoff'
         -- POF_PP_*
         pof
           PP
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS,
               pp_payoff
             }
@@ -181,18 +181,18 @@ payoff ev t st = reader payoff'
         -- POF_PY_*
         pof
           PY
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS,
               o_rf_RRMO
             }
-          ContractTermsPoly
+          ContractTerms
             { penaltyType = Just pytp,
               penaltyRate = Just pyrt,
               dayCountConvention = Just dcc,
               maturityDate,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { nt,
               ipnr,
               sd
@@ -209,17 +209,17 @@ payoff ev t st = reader payoff'
         -- POF_FP_*
         pof
           FP
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { dayCountConvention = Just dcc,
               feeBasis = Just feb,
               feeRate = Just fer,
               maturityDate,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { nt,
               feac,
               sd
@@ -234,17 +234,17 @@ payoff ev t st = reader payoff'
         -- POF_PRD_PAM
         pof
           PRD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = PAM,
               dayCountConvention = Just dcc,
               priceAtPurchaseDate = Just pprd,
               maturityDate,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { nt,
               ipac,
               ipnr,
@@ -257,17 +257,17 @@ payoff ev t st = reader payoff'
         -- POF_PRD_ANN
         pof
           PRD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType,
               dayCountConvention = Just dcc,
               priceAtPurchaseDate = Just pprd,
               maturityDate,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { ipac,
               ipcb,
               ipnr,
@@ -283,7 +283,7 @@ payoff ev t st = reader payoff'
         pof
           PRD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType,
               priceAtPurchaseDate = Just pprd,
               contractRole
@@ -293,7 +293,7 @@ payoff ev t st = reader payoff'
         pof
           PRD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = COM,
               priceAtPurchaseDate = Just pprd,
               quantity = Just qt,
@@ -306,17 +306,17 @@ payoff ev t st = reader payoff'
         -- POF_TD_PAM
         pof
           TD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = PAM,
               dayCountConvention = Just dcc,
               priceAtTerminationDate = Just ptd,
               maturityDate,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { nt,
               ipac,
               ipnr,
@@ -328,7 +328,7 @@ payoff ev t st = reader payoff'
         pof
           TD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = STK,
               priceAtTerminationDate = Just ptd,
               contractRole
@@ -337,10 +337,10 @@ payoff ev t st = reader payoff'
         -- POF_TD_SWPPV
         pof
           TD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV,
               priceAtTerminationDate = Just ptd
             }
@@ -349,7 +349,7 @@ payoff ev t st = reader payoff'
         pof
           TD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = COM,
               priceAtTerminationDate = Just ptd,
               contractRole,
@@ -359,16 +359,16 @@ payoff ev t st = reader payoff'
         -- POF_TD_*
         pof
           TD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { dayCountConvention = Just dcc,
               priceAtTerminationDate = Just ptd,
               maturityDate,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { ipac,
               ipcb,
               ipnr,
@@ -382,15 +382,15 @@ payoff ev t st = reader payoff'
         -- POF_IP_PAM
         pof
           IP
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = PAM,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          ContractStatePoly
+          ContractState
             { nt,
               isc,
               ipac,
@@ -402,16 +402,16 @@ payoff ev t st = reader payoff'
         -- POF_IP_SWPPV
         pof
           IP
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV,
               dayCountConvention = Just dcc,
               nominalInterestRate = Just ipnr',
               maturityDate
             }
-          ContractStatePoly
+          ContractState
             { nt,
               ipac,
               ipnr,
@@ -422,15 +422,15 @@ payoff ev t st = reader payoff'
         -- POF_IP_CLM
         pof
           IP
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = CLM,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          ContractStatePoly
+          ContractState
             { nt,
               ipac,
               ipnr,
@@ -441,14 +441,14 @@ payoff ev t st = reader payoff'
         -- POF_IP_*
         pof
           IP
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { dayCountConvention = Just dcc,
               maturityDate
             }
-          ContractStatePoly
+          ContractState
             { isc,
               ipac,
               ipcb,
@@ -463,16 +463,16 @@ payoff ev t st = reader payoff'
         -- POF_IPFX_SWPPV
         pof
           IPFX
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV,
               dayCountConvention = Just dcc,
               nominalInterestRate = Just ipnr',
               maturityDate
             }
-          ContractStatePoly
+          ContractState
             { nt,
               ipac1 = Just ipac1',
               sd
@@ -485,13 +485,13 @@ payoff ev t st = reader payoff'
         -- POF_IPFL_SWPPV
         pof
           IPFL
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV
             }
-          ContractStatePoly
+          ContractState
             { nt,
               ipnr,
               ipac2 = Just ipac2',
@@ -504,11 +504,11 @@ payoff ev t st = reader payoff'
         -- POF_DV_*
         pof
           DV
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS,
               dv_payoff
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = STK,
               contractRole
             }
@@ -520,26 +520,26 @@ payoff ev t st = reader payoff'
         -- POF_STD_FUTUR
         pof
           STD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType,
               contractRole
             }
-          ContractStatePoly
+          ContractState
             { xa = Just exerciseAmount
             } | contractType `elem` [OPTNS, FUTUR] = o_rf_CURS * _r contractRole * exerciseAmount
         -- POF_STD_CEG
         pof
           STD
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = CEG
             }
-          ContractStatePoly
+          ContractState
             { xa = Just exerciseAmount,
               feac
             } = o_rf_CURS * (exerciseAmount + feac)
@@ -551,7 +551,7 @@ payoff ev t st = reader payoff'
         pof
           RR
           _
-          ContractTermsPoly
+          ContractTerms
           { contractType
           }
           _ | contractType `elem` [SWPPV, CLM] = _zero

@@ -17,11 +17,11 @@ module Actus.Core
   )
 where
 
-import Actus.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
-import Actus.Domain.ContractState (ContractStatePoly (..))
-import Actus.Domain.ContractTerms (CT (..), ContractTermsPoly (..))
+import Actus.Domain.BusinessEvents (EventType (..), RiskFactors (..))
+import Actus.Domain.ContractState (ContractState (..))
+import Actus.Domain.ContractTerms (CT (..), ContractTerms (..))
 import Actus.Domain.Ops (RoleSignOps (..), ScheduleOps (..), YearFractionOps)
-import Actus.Domain.Schedule (CashFlowPoly (..), ShiftedDay (..), calculationDay, paymentDay)
+import Actus.Domain.Schedule (CashFlow (..), ShiftedDay (..), calculationDay, paymentDay)
 import Actus.Model.ContractSchedule as S (maturity, schedule)
 import Actus.Model.Payoff (CtxPOF (CtxPOF), payoff)
 import Actus.Model.StateInitialization (initializeState)
@@ -39,9 +39,9 @@ import Data.Time (LocalTime)
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
 genProjectedCashflows :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
-  (EventType -> LocalTime -> RiskFactorsPoly a) -- ^ Risk factors as a function of event type and time
-  -> ContractTermsPoly a                        -- ^ Contract terms
-  -> [CashFlowPoly a]                           -- ^ List of projected cash flows
+  (EventType -> LocalTime -> RiskFactors a) -- ^ Risk factors as a function of event type and time
+  -> ContractTerms a                        -- ^ Contract terms
+  -> [CashFlow a]                           -- ^ List of projected cash flows
 genProjectedCashflows rf ct =
   genCashflow ct
     <$> ( runReader
@@ -57,11 +57,11 @@ genProjectedCashflows rf ct =
 
 -- |Generate cash flows
 genCashflow ::
-  ContractTermsPoly a                                -- ^ Contract terms
-  -> (EventType, ShiftedDay, ContractStatePoly a, a) -- ^ Projected payoff
-  -> CashFlowPoly a                                  -- ^ Projected cash flow
-genCashflow ct (ev, t, ContractStatePoly {..}, am) =
-        CashFlowPoly
+  ContractTerms a                                -- ^ Contract terms
+  -> (EventType, ShiftedDay, ContractState a, a) -- ^ Projected payoff
+  -> CashFlow a                                  -- ^ Projected cash flow
+genCashflow ct (ev, t, ContractState {..}, am) =
+        CashFlow
           { tick = 0,
             cashContractId = contractId ct,
             cashParty = "party",
@@ -76,7 +76,7 @@ genCashflow ct (ev, t, ContractStatePoly {..}, am) =
 
 -- |Generate projected cash flows
 genProjectedPayoffs :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
-  Reader (CtxSTF a) [(EventType, ShiftedDay, ContractStatePoly a, a)]
+  Reader (CtxSTF a) [(EventType, ShiftedDay, ContractState a, a)]
 genProjectedPayoffs =
   do
     schedules <- genSchedules . contractTerms <$> ask
@@ -94,9 +94,9 @@ genProjectedPayoffs =
 
 -- |Generate schedules
 genSchedules :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
-  ContractTermsPoly a          -- ^ Contract terms
+  ContractTerms a          -- ^ Contract terms
   -> [(EventType, ShiftedDay)] -- ^ Schedules
-genSchedules ct@ContractTermsPoly {..} =
+genSchedules ct@ContractTerms {..} =
   filter filtersSchedules . postProcessSchedules . sortOn (paymentDay . snd) $
     concatMap scheduleEvent eventTypes
   where
@@ -128,8 +128,8 @@ mapAccumLM' f = go
 -- |Generate states
 genStates :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
   [(EventType, ShiftedDay)]                                           -- ^ Schedules
-  -> ContractStatePoly a                                              -- ^ Initial state
-  -> Reader (CtxSTF a) [(EventType, ShiftedDay, ContractStatePoly a)] -- ^ New states
+  -> ContractState a                                              -- ^ Initial state
+  -> Reader (CtxSTF a) [(EventType, ShiftedDay, ContractState a)] -- ^ New states
 genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
   where
     apply (ev, ShiftedDay {..}, st) (ev', t') =
@@ -140,10 +140,10 @@ genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
 
     filtersStates ::
       (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
-      (EventType, ShiftedDay, ContractStatePoly a) ->
+      (EventType, ShiftedDay, ContractState a) ->
       Reader (CtxSTF a) Bool
     filtersStates (ev, ShiftedDay {..}, _) =
-      do ct@ContractTermsPoly {..} <- contractTerms <$> ask
+      do ct@ContractTerms {..} <- contractTerms <$> ask
          return $ case contractType of
                     PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
                     LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
@@ -158,7 +158,7 @@ genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
 
 -- |Generate payoffs
 genPayoffs :: (RoleSignOps a, YearFractionOps a) =>
-  [(EventType, ShiftedDay, ContractStatePoly a)] -- ^ States with schedule
+  [(EventType, ShiftedDay, ContractState a)] -- ^ States with schedule
   -> Reader (CtxPOF a) [a]                       -- ^ Payoffs
 genPayoffs = mapM calculatePayoff
   where

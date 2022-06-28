@@ -308,10 +308,10 @@ ex_optns1 =
                   assertBool ("total payments to counterparty: " ++ show tc) (tc == 40)
 
       where
-        rf :: EventType -> LocalTime -> RiskFactorsPoly (Value Observation)
+        rf :: EventType -> LocalTime -> RiskFactors (Value Observation)
         rf XD d
           | d == (fromJust $ maturityDate ct) =
-            RiskFactorsPoly
+            RiskFactors
               { o_rf_CURS = _one,
                 o_rf_RRMO = _one,
                 o_rf_SCMO = _one,
@@ -320,7 +320,7 @@ ex_optns1 =
                 dv_payoff = _zero
               }
         rf _ _ =
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_CURS = _one,
               o_rf_RRMO = _one,
               o_rf_SCMO = _one,
@@ -360,12 +360,12 @@ ex_com1 =
                   let tc = totalPayments (Party "counterparty") txPay
                   assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400)
 
-contractFromFile :: FilePath -> IO (Either String ContractTerms)
+contractFromFile :: FilePath -> IO (Either String TestContractTerms)
 contractFromFile f = eitherDecode <$> B.readFile f
 
-defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactorsPoly a
+defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactors a
 defaultRiskFactors _ _ =
-  RiskFactorsPoly
+  RiskFactors
     { o_rf_CURS = _one,
       o_rf_RRMO = _one,
       o_rf_SCMO = _one,

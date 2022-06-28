@@ -39,7 +39,7 @@ import Data.Time (LocalTime (..))
 import Debug.Pretty.Simple
 import GHC.Generics (Generic)
 import GHC.Records (getField)
-import Spec.Actus.Haskell (CashFlow, ContractState, ContractTerms, setDefaultContractTermValues)
+import Spec.Actus.Haskell (TestCashFlow, TestContractState, TestContractTerms, setDefaultContractTermValues)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
 import Text.Printf (printf)
@@ -54,7 +54,7 @@ tests n t =
     runTest tc@TestCase {..} =
       let riskFactors ev date =
             let rf =
-                  RiskFactorsPoly
+                  RiskFactors
                     { o_rf_CURS = 1.0,
                       o_rf_RRMO = 1.0,
                       o_rf_SCMO = 1.0,
@@ -99,13 +99,13 @@ tests n t =
 
        in assertTestResults cashFlows results
 
-    assertTestResults :: [CashFlow] -> [TestResult] -> IO ()
+    assertTestResults :: [TestCashFlow] -> [TestResult] -> IO ()
     assertTestResults [] []               = return ()
     assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r >> assertTestResults cfs rs
     assertTestResults _ _                 = assertFailure "Sizes differ"
 
-    assertTestResult :: CashFlow -> TestResult -> IO ()
-    assertTestResult cf@CashFlowPoly {..} tr@TestResult {eventDate, eventType, payoff} = do
+    assertTestResult :: TestCashFlow -> TestResult -> IO ()
+    assertTestResult cf@CashFlow {..} tr@TestResult {eventDate, eventType, payoff} = do
       assertEqual cashEvent eventType
       assertEqual cashPaymentDay eventDate
       assertEqual (realToFrac amount :: Float) (realToFrac payoff :: Float)
@@ -128,7 +128,7 @@ testCasesFromFile excluded testfile =
     load f = eitherDecode <$> B.readFile f
     msg err = putStr ("Cannot parse test specification from file: " ++ testfile ++ "\nError: " ++ err) >> return []
 
-run :: TestCase -> Reader (CtxSTF Double) [CashFlow]
+run :: TestCase -> Reader (CtxSTF Double) [TestCashFlow]
 run TestCase {..} = do
   ctx <- ask
   pof <- genProjectedPayoffs
@@ -156,21 +156,21 @@ run TestCase {..} = do
               [] -> Nothing
               ts -> Just $ minimum ts
             where
-              f CashFlowPoly {cashEvent = MD}  = True
-              f CashFlowPoly {cashEvent = STD} = True
-              f _                              = False
+              f CashFlow {cashEvent = MD}  = True
+              f CashFlow {cashEvent = STD} = True
+              f _                          = False
        in mergedTo
   where
     trans :: Reader (CtxPOF a) b -> Reader (CtxSTF a) b
     trans = withReader (\ctx -> CtxPOF (contractTerms ctx) (riskFactors ctx))
 
 unscheduledEvents ::
-  ContractTerms ->
-  [ContractState] ->
+  TestContractTerms ->
+  [TestContractState] ->
   EventObserved ->
-  Reader (CtxSTF Double) [(EventType, ShiftedDay, ContractStatePoly Double)]
+  Reader (CtxSTF Double) [(EventType, ShiftedDay, ContractState Double)]
 unscheduledEvents
-  ContractTermsPoly
+  ContractTerms
     { contractType,
       contractStructure,
       creditEventTypeCovered = Just CETC_DF
@@ -191,7 +191,7 @@ unscheduledEvents
             ]
             stn
 unscheduledEvents
-  ContractTermsPoly
+  ContractTerms
     { contractType = CSH
     }
   _
@@ -206,8 +206,8 @@ getMarketObjectCode (ReferenceId i)    = marketObjectCode i
 getMarketObjectCode (ReferenceTerms _) = Nothing
 
 getContractIdentifier :: Reference Double -> Maybe String
-getContractIdentifier (ReferenceId i)                         = contractIdentifier i
-getContractIdentifier (ReferenceTerms ContractTermsPoly {..}) = Just contractId
+getContractIdentifier (ReferenceId i)                     = contractIdentifier i
+getContractIdentifier (ReferenceTerms ContractTerms {..}) = Just contractId
 
 data DataObserved = DataObserved
   { identifier :: String
@@ -291,7 +291,7 @@ instance FromJSON TestResult where
 
 data TestCase = TestCase
   { identifier     :: String,
-    terms          :: ContractTerms,
+    terms          :: TestContractTerms,
     to             :: Maybe LocalTime,
     dataObserved   :: Map String DataObserved,
     eventsObserved :: [EventObserved],

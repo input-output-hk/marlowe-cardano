@@ -14,7 +14,7 @@ import Actus.Model.Applicability
 import Data.Maybe (isJust)
 import Data.Time (LocalTime)
 import Data.Validation as V
-import Spec.Actus.Haskell (ContractTerms, RiskFactors, setDefaultContractTermValues)
+import Spec.Actus.Haskell (TestContractTerms, TestRiskFactors, setDefaultContractTermValues)
 import Spec.Actus.QCGenerator
 import Test.QuickCheck
 import Test.Tasty
@@ -27,11 +27,11 @@ tests = testGroup "QuickCheck"
   , testProperty "Principal repayment (PAM)" prop_principal_payment
   ]
 
-newtype ContractTermsQC = ContractTermsQC ContractTerms deriving (Show)
-newtype ContractTermsPAM = ContractTermsPAM ContractTerms deriving (Show)
-newtype ContractTermsLAM = ContractTermsLAM ContractTerms deriving (Show)
-newtype ContractTermsNAM = ContractTermsNAM ContractTerms deriving (Show)
-newtype ContractTermsANN = ContractTermsANN ContractTerms deriving (Show)
+newtype ContractTermsQC = ContractTermsQC TestContractTerms deriving (Show)
+newtype ContractTermsPAM = ContractTermsPAM TestContractTerms deriving (Show)
+newtype ContractTermsLAM = ContractTermsLAM TestContractTerms deriving (Show)
+newtype ContractTermsNAM = ContractTermsNAM TestContractTerms deriving (Show)
+newtype ContractTermsANN = ContractTermsANN TestContractTerms deriving (Show)
 
 instance Arbitrary ContractTermsQC where
   arbitrary = ContractTermsQC . setDefaultContractTermValues <$> contractTermsGen
@@ -48,14 +48,14 @@ instance Arbitrary ContractTermsNAM where
 instance Arbitrary ContractTermsANN where
   arbitrary = ContractTermsANN . setDefaultContractTermValues <$> contractTermsGen' ANN
 
-validContract :: ContractTerms -> Bool
+validContract :: TestContractTerms -> Bool
 validContract ct = case validateTerms ct of
   V.Success _ -> True
   V.Failure _ -> False
 
-defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
+defaultRiskFactors :: EventType -> LocalTime -> TestRiskFactors
 defaultRiskFactors _ _ =
-  RiskFactorsPoly
+  RiskFactors
     { o_rf_CURS = 1.0,
       o_rf_RRMO = 1.0,
       o_rf_SCMO = 1.0,

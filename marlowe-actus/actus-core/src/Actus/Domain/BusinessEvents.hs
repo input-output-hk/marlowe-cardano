@@ -41,7 +41,7 @@ data EventType =
 
 {-| Risk factor observer
 -}
-data RiskFactorsPoly a = RiskFactorsPoly
+data RiskFactors a = RiskFactors
     { o_rf_CURS :: a
     , o_rf_RRMO :: a
     , o_rf_SCMO :: a

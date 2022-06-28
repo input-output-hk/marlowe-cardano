@@ -8,9 +8,9 @@ module Actus.Model.StateTransition
   )
 where
 
-import Actus.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
-import Actus.Domain.ContractState (ContractStatePoly (..))
-import Actus.Domain.ContractTerms (CT (..), ContractTermsPoly (..), FEB (..), IPCB (..), OPTP (..), SCEF (..))
+import Actus.Domain.BusinessEvents (EventType (..), RiskFactors (..))
+import Actus.Domain.ContractState (ContractState (..))
+import Actus.Domain.ContractTerms (CT (..), ContractTerms (..), FEB (..), IPCB (..), OPTP (..), SCEF (..))
 import Actus.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
 import Actus.Utility.ANN.Annuity (annuity)
 import Actus.Utility.ScheduleGenerator (inf, sup)
@@ -23,12 +23,12 @@ import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 -- schedules and the maturity of the contract. Furthermore a function to retrieve
 -- risk factors is available.
 data CtxSTF a = CtxSTF
-  { contractTerms :: ContractTermsPoly a                         -- ^ Contract terms
+  { contractTerms :: ContractTerms a                         -- ^ Contract terms
   , fpSchedule    :: [LocalTime]                                 -- ^ Fee payment schedule
   , prSchedule    :: [LocalTime]                                 -- ^ Principal redemption schedule
   , ipSchedule    :: [LocalTime]                                 -- ^ Interest payment schedule
   , maturity      :: Maybe LocalTime                             -- ^ Maturity
-  , riskFactors   :: EventType -> LocalTime -> RiskFactorsPoly a -- ^ Riskfactors per event and time
+  , riskFactors   :: EventType -> LocalTime -> RiskFactors a -- ^ Riskfactors per event and time
   }
 
 -- |A state transition updates the contract state based on the type of event and the time.
@@ -36,8 +36,8 @@ data CtxSTF a = CtxSTF
 stateTransition :: (RoleSignOps a, YearFractionOps a) =>
      EventType                               -- ^ Event type
   -> LocalTime                               -- ^ Time
-  -> ContractStatePoly a                     -- ^ Contract state
-  -> Reader (CtxSTF a) (ContractStatePoly a) -- ^ Updated contract state
+  -> ContractState a                     -- ^ Contract state
+  -> Reader (CtxSTF a) (ContractState a) -- ^ Updated contract state
 stateTransition ev t sn = reader stateTransition'
   where
     stateTransition' CtxSTF {..} = stf ev (riskFactors ev t) contractTerms sn
@@ -49,10 +49,10 @@ stateTransition ev t sn = reader stateTransition'
         stf
           AD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = CSH
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } =
             st
@@ -62,11 +62,11 @@ stateTransition ev t sn = reader stateTransition'
         stf
           AD
           _
-          ContractTermsPoly
+          ContractTerms
             { dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { nt,
               ipac,
               ipnr,
@@ -85,14 +85,14 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IED
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType,
               nominalInterestRate,
               notionalPrincipal = Just nt,
               accruedInterest = Just ipac,
               contractRole
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } | contractType `elem` [PAM, CLM] =
             st
@@ -104,7 +104,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IED
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = PAM,
               nominalInterestRate,
               notionalPrincipal = Just nt,
@@ -113,7 +113,7 @@ stateTransition ev t sn = reader stateTransition'
               contractRole,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } =
             let nt' = _r contractRole * nt
@@ -131,7 +131,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IED
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV,
               notionalPrincipal = Just nt,
               nominalInterestRate2 = Just ipnr2,
@@ -152,7 +152,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IED
           _
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               notionalPrincipal = Just nt,
               nominalInterestRate = Just ipnr,
@@ -161,7 +161,7 @@ stateTransition ev t sn = reader stateTransition'
               maturityDate,
               contractRole
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -169,13 +169,13 @@ stateTransition ev t sn = reader stateTransition'
                   nt' = _r contractRole * nt
                   ipcb' = interestCalculationBase' ct
                     where
-                      interestCalculationBase' ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
-                      interestCalculationBase' ContractTermsPoly {interestCalculationBaseA = Just ipcba} = _r contractRole * ipcba
+                      interestCalculationBase' ContractTerms {interestCalculationBase = Just IPCB_NT} = nt'
+                      interestCalculationBase' ContractTerms {interestCalculationBaseA = Just ipcba} = _r contractRole * ipcba
                       interestCalculationBase' _ = _zero
                   ipac' = interestAccrued' ct
                     where
-                      interestAccrued' ContractTermsPoly {accruedInterest = Just ipac} = _r contractRole * ipac
-                      interestAccrued' ContractTermsPoly {cycleAnchorDateOfInterestPayment = Just ipanx'} | ipanx' < t = y_ipanx_t * nt' * ipcb'
+                      interestAccrued' ContractTerms {accruedInterest = Just ipac} = _r contractRole * ipac
+                      interestAccrued' ContractTerms {cycleAnchorDateOfInterestPayment = Just ipanx'} | ipanx' < t = y_ipanx_t * nt' * ipcb'
                       interestAccrued' _ = _zero
                in st
                     { nt = nt',
@@ -191,22 +191,22 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PR
           _
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType = LAM,
               dayCountConvention = Just dcc,
               feeRate,
               contractRole,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
                 nt' = nt - _r contractRole * (prnxt - _r contractRole * _max _zero (_abs prnxt - _abs nt))
                 ipcb' = interestCalculationBase' ct
                   where
-                    interestCalculationBase' ContractTermsPoly {interestCalculationBase = Just IPCB_NTL} = ipcb
-                    interestCalculationBase' _                                                           = nt'
+                    interestCalculationBase' ContractTerms {interestCalculationBase = Just IPCB_NTL} = ipcb
+                    interestCalculationBase' _                                                       = nt'
              in st
                   { nt = nt',
                     feac = maybe feac (\fer -> feac + y_sd_t * nt * fer) feeRate,
@@ -219,14 +219,14 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PR
           _
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               dayCountConvention = Just dcc,
               feeRate,
               contractRole,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [NAM, ANN] =
@@ -238,8 +238,8 @@ stateTransition ev t sn = reader stateTransition'
                       r = ra - _max _zero (ra - _abs nt)
                   ipcb' = interestCalculationBase' ct
                     where
-                      interestCalculationBase' ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
-                      interestCalculationBase' _                                                          = ipcb
+                      interestCalculationBase' ContractTerms {interestCalculationBase = Just IPCB_NT} = nt'
+                      interestCalculationBase' _                                                      = ipcb
                in st
                     { nt = nt',
                       feac = maybe feac (\fer -> feac + y_sd_t * nt * fer) feeRate,
@@ -263,13 +263,13 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_PP_PAM
         stf
           PP
-          rf@RiskFactorsPoly
+          rf@RiskFactors
             { pp_payoff
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType = PAM
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let st' = stf PY rf ct st
@@ -281,13 +281,13 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_PP_ANN
         stf
           PP
-          rf@RiskFactorsPoly
+          rf@RiskFactors
             { pp_payoff
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -295,8 +295,8 @@ stateTransition ev t sn = reader stateTransition'
                   nt' = nt - pp_payoff
                   ipcb' = interestCalculationBase ct
                     where
-                      interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
-                      interestCalculationBase _                                                          = ipcb
+                      interestCalculationBase ContractTerms {interestCalculationBase = Just IPCB_NT} = nt'
+                      interestCalculationBase _                                                      = ipcb
                in st'
                     { nt = nt',
                       ipcb = ipcb'
@@ -308,7 +308,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PY
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = PAM,
               dayCountConvention = Just dcc,
               notionalPrincipal = Just nt',
@@ -316,7 +316,7 @@ stateTransition ev t sn = reader stateTransition'
               feeBasis = Just FEB_N,
               feeRate = Just fer
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
@@ -328,14 +328,14 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PY
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = PAM,
               dayCountConvention = Just dcc,
               maturityDate,
               contractRole,
               feeRate = Just fer
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
@@ -352,14 +352,14 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PY
           _
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               feeRate = Just fer,
               dayCountConvention = Just dcc,
               maturityDate,
               contractRole
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -370,7 +370,7 @@ stateTransition ev t sn = reader stateTransition'
                   ipac' = ipac + y_sd_t * ipnr * ipcb
                   feac' = feeAccrued' ct
                     where
-                      feeAccrued' ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fer
+                      feeAccrued' ContractTerms {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fer
                       feeAccrued' _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fer
                in st
                     { ipac = ipac',
@@ -380,12 +380,12 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PY
           _
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -394,8 +394,8 @@ stateTransition ev t sn = reader stateTransition'
                   ipac' = ipac + y_sd_t * ipnr * ipcb
                   feac' = feeAccrued' ct
                     where
-                      feeAccrued' ContractTermsPoly {feeBasis = Just FEB_N} = feac
-                      feeAccrued' _                                         = _zero
+                      feeAccrued' ContractTerms {feeBasis = Just FEB_N} = feac
+                      feeAccrued' _                                     = _zero
                in st
                     { ipac = ipac',
                       feac = feac',
@@ -408,12 +408,12 @@ stateTransition ev t sn = reader stateTransition'
         stf
           FP
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = PAM,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
@@ -428,12 +428,12 @@ stateTransition ev t sn = reader stateTransition'
         stf
           FP
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -453,7 +453,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PRD
           rf
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType
             }
           st
@@ -463,7 +463,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PRD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = CEG,
               feeRate = Just fer
             }
@@ -474,7 +474,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PRD
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = CEG,
               feeAccrued = Just feac
             }
@@ -500,10 +500,10 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IP
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } | contractType `elem` [SWPPV, CLM] =
             st
@@ -514,12 +514,12 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IP
           _
-          ContractTermsPoly
+          ContractTerms
             { dayCountConvention = Just dcc,
               feeRate,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
@@ -535,12 +535,12 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IPFX
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { sd
             } =
             st
@@ -555,10 +555,10 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IPFL
           _
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } =
             st
@@ -573,12 +573,12 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IPCI
           rf
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } | contractType `elem` [PAM, CLM] =
             let y_sd_t = _y dcc sd t maturityDate
@@ -592,12 +592,12 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IPCI
           rf
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -606,8 +606,8 @@ stateTransition ev t sn = reader stateTransition'
                   nt' = nt + ipac + y_sd_t * ipnr * ipcb
                   ipcb' = interestCalculationBase ct
                     where
-                      interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
-                      interestCalculationBase _                                                          = ipcb
+                      interestCalculationBase ContractTerms {interestCalculationBase = Just IPCB_NT} = nt'
+                      interestCalculationBase _                                                      = ipcb
                in st'
                     { nt = nt',
                       ipcb = ipcb'
@@ -618,10 +618,10 @@ stateTransition ev t sn = reader stateTransition'
         stf
           IPCB
           rf
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -636,10 +636,10 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_RR_CLM
         stf
           RR
-          rf@RiskFactorsPoly
+          rf@RiskFactors
             { o_rf_RRMO
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               feeBasis = Just FEB_N,
               feeRate = Just fer,
@@ -652,7 +652,7 @@ stateTransition ev t sn = reader stateTransition'
               dayCountConvention = Just dcc,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
               } | contractType `elem` [PAM, CLM] =
             let y_sd_t = _y dcc sd t maturityDate
@@ -667,10 +667,10 @@ stateTransition ev t sn = reader stateTransition'
                   }
         stf
           RR
-          rf@RiskFactorsPoly
+          rf@RiskFactors
             { o_rf_RRMO
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               feeRate = Just fer,
               lifeFloor = Just rrlf,
@@ -683,7 +683,7 @@ stateTransition ev t sn = reader stateTransition'
               contractRole,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } | contractType `elem` [PAM, CLM] =
             let y_sd_t = _y dcc sd t maturityDate
@@ -702,10 +702,10 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_RR_NAM
         stf
           RR
-          rf@RiskFactorsPoly
+          rf@RiskFactors
             { o_rf_RRMO
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               lifeFloor = Just rrlf,
               lifeCap = Just rrlc,
@@ -714,7 +714,7 @@ stateTransition ev t sn = reader stateTransition'
               rateMultiplier = Just rrmlt,
               rateSpread = Just rrsp
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM] =
@@ -727,10 +727,10 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_RR_ANN
         stf
           RR
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_RRMO
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType = ANN,
               dayCountConvention = Just dcc,
               lifeFloor = Just rrlf,
@@ -742,7 +742,7 @@ stateTransition ev t sn = reader stateTransition'
               contractRole,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
@@ -753,7 +753,7 @@ stateTransition ev t sn = reader stateTransition'
                 ipac' = ipac + y_sd_t * ipnr * ipcb
                 feac' = feeAccrued' ct
                   where
-                    feeAccrued' ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
+                    feeAccrued' ContractTerms {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
                     feeAccrued' _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fromMaybe _zero (feeRate ct)
 
                 ipnr' = _min (_max (ipnr + delta_r) rrlf) rrlc
@@ -771,10 +771,10 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_RR_SWPPV
         stf
           RR
-          RiskFactorsPoly
+          RiskFactors
             { o_rf_RRMO
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = SWPPV,
               dayCountConvention = Just dcc,
               rateMultiplier = Just rrmlt,
@@ -782,7 +782,7 @@ stateTransition ev t sn = reader stateTransition'
               nominalInterestRate = Just ipnr',
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { nt,
               ipnr,
               sd
@@ -802,7 +802,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           RRF
           rf
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType = PAM,
               nextResetRate = rrnxt
             }
@@ -816,7 +816,7 @@ stateTransition ev t sn = reader stateTransition'
         stf
           RRF
           rf
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               nextResetRate = rrnxt
             }
@@ -830,14 +830,14 @@ stateTransition ev t sn = reader stateTransition'
         stf
           RRF
           _
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType = ANN,
               dayCountConvention = Just dcc,
               nextResetRate = Just rrnxt,
               contractRole,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
@@ -848,7 +848,7 @@ stateTransition ev t sn = reader stateTransition'
                 ipac' = ipac + y_sd_t * ipnr * ipcb
                 feac' = feeAccrued' ct
                   where
-                    feeAccrued' ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
+                    feeAccrued' ContractTerms {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
                     feeAccrued' _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fromMaybe _zero (feeRate ct)
 
                 ipnr' = rrnxt
@@ -866,13 +866,13 @@ stateTransition ev t sn = reader stateTransition'
         stf
           PRF
           _
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType = ANN,
               dayCountConvention = Just dcc,
               contractRole,
               maturityDate
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let y_sd_t = _y dcc sd t maturityDate
@@ -884,7 +884,7 @@ stateTransition ev t sn = reader stateTransition'
                 ipac' = ipac + y_sd_t * ipnr * ipcb
                 feac' = feeAccrued' ct
                   where
-                    feeAccrued' ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
+                    feeAccrued' ContractTerms {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
                     feeAccrued' _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fromMaybe _zero (feeRate ct)
 
                 prnxt' = _r contractRole * frac * scale
@@ -903,15 +903,15 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_SC_PAM
         stf
           SC
-          rf@RiskFactorsPoly
+          rf@RiskFactors
             { o_rf_SCMO
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType = PAM,
               scalingEffect = Just scef,
               scalingIndexAtStatusDate = Just scied
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             } =
             let st' = stf PY rf ct st
@@ -933,15 +933,15 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_SC_ANN
         stf
           SC
-          rf@RiskFactorsPoly
+          rf@RiskFactors
             { o_rf_SCMO
             }
-          ct@ContractTermsPoly
+          ct@ContractTerms
             { contractType,
               scalingIndexAtContractDealDate = Just sccdd,
               scalingEffect = Just scef
             }
-          st@ContractStatePoly
+          st@ContractState
             { ..
             }
             | contractType `elem` [LAM, NAM, ANN] =
@@ -956,15 +956,15 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_XD_OPTNS
         stf
           XD
-          RiskFactorsPoly
+          RiskFactors
             { xd_payoff
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = OPTNS,
               optionType = Just OPTP_C,
               optionStrike1 = Just ops1
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } =
             st
@@ -973,15 +973,15 @@ stateTransition ev t sn = reader stateTransition'
               }
         stf
           XD
-          RiskFactorsPoly
+          RiskFactors
             { xd_payoff
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = OPTNS,
               optionType = Just OPTP_P,
               optionStrike1 = Just ops1
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } =
             st
@@ -990,15 +990,15 @@ stateTransition ev t sn = reader stateTransition'
               }
         stf
           XD
-          RiskFactorsPoly
+          RiskFactors
             { xd_payoff
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = OPTNS,
               optionType = Just OPTP_CP,
               optionStrike1 = Just ops1
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } =
             st
@@ -1008,14 +1008,14 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_XD_FUTUR
         stf
           XD
-          RiskFactorsPoly
+          RiskFactors
             { xd_payoff
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = FUTUR,
               futuresPrice = Just pfut
             }
-          st@ContractStatePoly
+          st@ContractState
             {
             } =
             st
@@ -1025,13 +1025,13 @@ stateTransition ev t sn = reader stateTransition'
         -- STF_XD_CEG
         stf
           XD
-          RiskFactorsPoly
+          RiskFactors
             {
             }
-          ContractTermsPoly
+          ContractTerms
             { contractType = CEG
             }
-          st@ContractStatePoly
+          st@ContractState
             { nt
             } =
               st

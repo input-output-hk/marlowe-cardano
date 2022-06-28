@@ -5,11 +5,11 @@
 
 module Spec.Actus.Haskell where
 
-import Actus.Domain.BusinessEvents (RiskFactorsPoly)
-import Actus.Domain.ContractState (ContractStatePoly)
+import Actus.Domain.BusinessEvents (RiskFactors)
+import Actus.Domain.ContractState (ContractState)
 import Actus.Domain.ContractTerms
 import Actus.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), ScheduleOps (..), YearFractionOps (..))
-import Actus.Domain.Schedule (CashFlowPoly)
+import Actus.Domain.Schedule (CashFlow)
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Applicative ((<|>))
 import Control.Monad (guard, mzero)
@@ -17,13 +17,13 @@ import Data.Aeson.Types as Aeson (FromJSON, Options (..), SumEncoding (..), Valu
                                   genericParseJSON, parseJSON, (.:), (.:?))
 import Data.Maybe (fromMaybe)
 
-type ContractState = ContractStatePoly Double
-type RiskFactors = RiskFactorsPoly Double
-type CashFlow = CashFlowPoly Double
-type ContractTerms = ContractTermsPoly Double
+type TestContractState = ContractState Double
+type TestRiskFactors = RiskFactors Double
+type TestCashFlow = CashFlow Double
+type TestContractTerms = ContractTerms Double
 
-setDefaultContractTermValues :: ContractTerms -> ContractTerms
-setDefaultContractTermValues ct@ContractTermsPoly {..} =
+setDefaultContractTermValues :: TestContractTerms -> TestContractTerms
+setDefaultContractTermValues ct@ContractTerms {..} =
   ct
     { scheduleConfig =
         scheduleConfig
@@ -74,9 +74,9 @@ instance FromJSON (ContractStructure Double) where
       <*> v .: "referenceRole"
   parseJSON _ = mzero
 
-instance FromJSON ContractTerms where
+instance FromJSON TestContractTerms where
   parseJSON (Object v) =
-    ContractTermsPoly
+    ContractTerms
       <$> (v .:  "contractID" <|> v .: "contractId")
       <*> v .:  "contractType"
       <*> (v .: "contractStructure" <|> return [])

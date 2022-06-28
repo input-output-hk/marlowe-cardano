@@ -9,15 +9,15 @@ module Spec.Actus.Helper
   )
 where
 
-import Actus.Domain.ContractTerms (ContractStructure (..), ContractTermsPoly (..), Reference (..))
+import Actus.Domain.ContractTerms (ContractStructure (..), ContractTerms (..), Reference (..))
 import Actus.Marlowe (ContractTermsMarlowe)
 import Generator
 import Language.Marlowe (Observation, Value)
 import Spec.Actus.Haskell
 
-toMarlowe :: ContractTerms -> ContractTermsMarlowe
+toMarlowe :: TestContractTerms -> ContractTermsMarlowe
 toMarlowe ct =
-  ContractTermsPoly
+  ContractTerms
     { contractId = contractId ct,
       contractType = contractType ct,
       contractStructure = map trans (contractStructure ct),
