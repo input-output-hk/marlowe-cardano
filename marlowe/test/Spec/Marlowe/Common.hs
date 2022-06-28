@@ -251,6 +251,9 @@ actionGenSized s =
         , Notify <$> observationGenSized (s - 1)
         ]
 
+actionGen :: Gen Action
+actionGen = sized actionGenSized
+
 
 shrinkAction :: Action -> [Action]
 shrinkAction action = case action of
@@ -301,7 +304,6 @@ contractRelGenSized s bn
 contractGenSized :: Int -> Gen Contract
 contractGenSized s = do iniBn <- simpleIntegerGen
                         contractRelGenSized s iniBn
-
 
 contractGen :: Gen Contract
 contractGen = sized contractGenSized
