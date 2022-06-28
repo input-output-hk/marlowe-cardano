@@ -3,7 +3,6 @@
 module Main (main) where
 
 import Spec.Actus.Examples
-import Spec.Actus.QCTests
 import Spec.Actus.TestFramework
 import Spec.Actus.TestFrameworkMarlowe
 import System.Environment
@@ -55,9 +54,5 @@ main = do
         testGroup
           "ACTUS examples"
           [ Spec.Actus.Examples.tests
-          ],
-        testGroup
-          "QuickCheck"
-          [ Spec.Actus.QCTests.tests
           ]
       ]

@@ -81,8 +81,10 @@ test-suite actus-core-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Spec.Actus.Haskell
-      Spec.Actus.TestFramework
+    Spec.Actus.Haskell
+    Spec.Actus.QCGenerator
+    Spec.Actus.QCTests
+    Spec.Actus.TestFramework
   build-depends:
     actus-core,
     aeson -any,
@@ -98,6 +100,7 @@ test-suite actus-core-test
     tasty-quickcheck -any,
     text -any,
     time -any,
+    validation -any,
     QuickCheck
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
@@ -143,8 +146,6 @@ test-suite marlowe-actus-test
     Spec.Actus.Helper
     Spec.Actus.TestFramework
     Spec.Actus.TestFrameworkMarlowe
-    Spec.Actus.QCGenerator
-    Spec.Actus.QCTests
   build-depends:
     actus-core,
     aeson -any,

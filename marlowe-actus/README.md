@@ -1,8 +1,8 @@
-# Marlowe ACTUS: standardised financial contracts on Cardano Computation Layer
+# Marlowe ACTUS: standardised financial contracts on Cardano
 
 _marlowe-actus_ is a library to generate Marlowe contracts from ACTUS contract terms
 
-## ACTUS (algorithmic contract types unified standards)
+## ACTUS - Algorithmic Contract Types Unified Standards
 
 ACTUS is a foundation that defines the ACTUS taxonomy of financial contracts, see https://www.actusfrf.org/
 
