@@ -10,8 +10,8 @@ module Spec.Actus.Helper
 where
 
 import Actus.Domain.ContractTerms (ContractStructure (..), ContractTermsPoly (..), Reference (..))
-import Actus.Generator
 import Actus.Marlowe (ContractTermsMarlowe)
+import Generator
 import Language.Marlowe (Observation, Value)
 import Spec.Actus.Haskell
 

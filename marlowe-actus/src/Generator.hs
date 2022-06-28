@@ -2,9 +2,9 @@
 {-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE TupleSections    #-}
 
--- | = ACTUS Generator
+-- | = Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.
-module Actus.Generator
+module Generator
   ( constant,
     letval,
     useval,

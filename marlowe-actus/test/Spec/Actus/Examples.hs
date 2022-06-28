@@ -8,12 +8,12 @@ where
 import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractTerms
 import Actus.Domain.Ops
-import Actus.Generator
 import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy as B (readFile)
 import Data.Maybe (fromJust)
 import Data.Time.LocalTime
 import Data.Validation (Validation (..))
+import Generator
 import Language.Marlowe
 import qualified Ledger.Value as Val
 import Spec.Actus.Haskell
