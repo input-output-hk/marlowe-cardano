@@ -22,7 +22,7 @@ import qualified Language.Marlowe.Client as Marlowe
 import Language.Marlowe.Core.V1.Semantics (MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Case (..), Contract (..), Party (..), Payee (..),
                                                  Value (..))
-import qualified Language.Marlowe.Semantics.Types as Marlowe
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 import Language.Marlowe.Util (ada)
 import Ledger (POSIXTime, PaymentPubKeyHash (..), PubKeyHash)
 import qualified Ledger.Value as Val
