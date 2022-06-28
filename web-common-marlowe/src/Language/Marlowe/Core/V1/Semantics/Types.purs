@@ -3,22 +3,16 @@ module Language.Marlowe.Core.V1.Semantics.Types where
 import Prologue
 
 import Control.Alt ((<|>))
-import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
-import Control.Monad.Reader (ReaderT(..), runReaderT)
+import Control.Monad.Reader (ReaderT(..))
 import Data.Argonaut
   ( class DecodeJson
   , class EncodeJson
-  , Json
-  , JsonDecodeError(..)
   , decodeJson
   , encodeJson
-  , getField
-  , getFieldOptional
   )
 import Data.Argonaut.Core (fromArray)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Decode.Decoders (decodeJArray, decodeJObject)
 import Data.Argonaut.Encode.Aeson as E
 import Data.Argonaut.Encode.Encoders (encodeArray)
 import Data.Argonaut.Extra
@@ -29,32 +23,25 @@ import Data.Argonaut.Extra
   , object
   , requireProp
   )
-import Data.Array (catMaybes, (!!))
-import Data.Array as Array
-import Data.Bifunctor (lmap)
-import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.Array (catMaybes)
+import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
-import Data.Either (note')
-import Data.Foldable (class Foldable, any, foldl, maximum, minimum)
-import Data.FoldableWithIndex (foldMapWithIndex)
+import Data.Foldable (maximum, minimum)
 import Data.Generic.Rep (class Generic)
-import Data.Lens (Lens', over, to, view)
+import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.List (List(..), fromFoldable, reverse, (:))
+import Data.List (List)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, maybe)
-import Data.Newtype (class Newtype, unwrap, wrap)
-import Data.Ord (abs, signum)
+import Data.Maybe (fromMaybe)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
-import Data.String (joinWith, toLower)
+import Data.String (toLower)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import Foreign.Object (Object)
 import Marlowe.Time (unixEpoch)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
-import Plutus.V1.Ledger.Time as POSIXTime
 import Text.Pretty
   ( class Args
   , class Pretty

@@ -2,58 +2,25 @@ module Language.Marlowe.Core.V1.Semantics where
 
 import Prologue
 
-import Control.Alt ((<|>))
-import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
-import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Data.Argonaut
-  ( class DecodeJson
-  , class EncodeJson
-  , Json
-  , JsonDecodeError(..)
-  , decodeJson
-  , encodeJson
-  , getField
-  , getFieldOptional
-  )
-import Data.Argonaut.Core (fromArray)
-import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Decode.Decoders (decodeJArray, decodeJObject)
-import Data.Argonaut.Encode.Aeson as E
-import Data.Argonaut.Encode.Encoders (encodeArray)
-import Data.Array (catMaybes, (!!))
-import Data.Array as Array
-import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt, fromInt)
-import Data.BigInt.Argonaut as BigInt
-import Data.Either (note')
-import Data.Foldable (class Foldable, any, foldl, maximum, minimum)
+import Data.Foldable (class Foldable, any, foldl)
 import Data.FoldableWithIndex (foldMapWithIndex)
-import Data.Generic.Rep (class Generic)
-import Data.Lens (Lens', over, to, view)
-import Data.Lens.Iso.Newtype (_Newtype)
-import Data.Lens.Record (prop)
+import Data.Lens (over, to, view)
 import Data.List (List(..), fromFoldable, reverse, (:))
-import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, maybe)
-import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Maybe (fromMaybe)
+import Data.Newtype (unwrap, wrap)
 import Data.Ord (abs, signum)
-import Data.Show.Generic (genericShow)
-import Data.String (joinWith, toLower)
-import Data.Tuple (uncurry)
-import Data.Tuple.Nested ((/\))
-import Foreign.Object (Object)
 import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
-  , Accounts(..)
+  , Accounts
   , Action(..)
   , ApplyAllResult(..)
   , ApplyResult(..)
   , ApplyWarning(..)
   , Bound(..)
   , Case(..)
-  , ChosenNum(..)
+  , ChosenNum
   , Contract(..)
   , Environment(..)
   , Input(..)
@@ -61,7 +28,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , IntervalResult(..)
   , Money
   , Observation(..)
-  , Party(..)
+  , Party
   , Payee(..)
   , Payment(..)
   , ReduceEffect(..)
@@ -72,7 +39,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , TimeInterval(..)
   , Token(..)
   , TransactionError(..)
-  , TransactionInput(..)
+  , TransactionInput
   , TransactionOutput(..)
   , TransactionWarning(..)
   , Value(..)
@@ -86,16 +53,6 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Time (unixEpoch)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Plutus.V1.Ledger.Time as POSIXTime
-import Text.Pretty
-  ( class Args
-  , class Pretty
-  , genericHasArgs
-  , genericHasNestedArgs
-  , genericPretty
-  , pretty
-  , text
-  )
-import Type.Proxy (Proxy(..))
 
 makeEnvironment :: POSIXTime -> POSIXTime -> Environment
 makeEnvironment l h = Environment
