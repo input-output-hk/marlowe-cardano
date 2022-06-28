@@ -52,7 +52,7 @@ tests = testGroup "Marlowe represenation of sample ACTUS contracts"
 -- 10:  10200
 ex_pam1 :: IO ()
 ex_pam1 =
-  contractFromFile "test/Spec/Marlowe/ACTUS/ex_pam1.json"
+  contractFromFile "test/Spec/Actus/ex_pam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genContract defaultRiskFactors (toMarlowe ct) of
@@ -113,7 +113,7 @@ ex_pam1 =
 -- 10:   1020
 ex_lam1 :: IO ()
 ex_lam1 =
-  contractFromFile "test/Spec/Marlowe/ACTUS/ex_lam1.json"
+  contractFromFile "test/Spec/Actus/ex_lam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genContract defaultRiskFactors (toMarlowe ct) of
@@ -174,7 +174,7 @@ ex_lam1 =
 -- 10:   2240
 ex_nam1 :: IO ()
 ex_nam1 =
-  contractFromFile "test/Spec/Marlowe/ACTUS/ex_nam1.json"
+  contractFromFile "test/Spec/Actus/ex_nam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genContract defaultRiskFactors (toMarlowe ct) of
@@ -235,7 +235,7 @@ ex_nam1 =
 -- 10:   2240
 ex_ann1 :: IO ()
 ex_ann1 =
-  contractFromFile "test/Spec/Marlowe/ACTUS/ex_ann1.json"
+  contractFromFile "test/Spec/Actus/ex_ann1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genContract defaultRiskFactors (toMarlowe ct) of
@@ -278,7 +278,7 @@ ex_ann1 =
 -- |ex_optns1 defines a contract of type OPTNS
 ex_optns1 :: IO ()
 ex_optns1 =
-  contractFromFile "test/Spec/Marlowe/ACTUS/ex_optns1.json"
+  contractFromFile "test/Spec/Actus/ex_optns1.json"
     >>= either msg run
   where
     msg err = putStr err
@@ -333,7 +333,7 @@ ex_optns1 =
 -- |ex_com1 defines a contract of type COM
 ex_com1 :: IO ()
 ex_com1 =
-  contractFromFile "test/Spec/Marlowe/ACTUS/ex_com1.json"
+  contractFromFile "test/Spec/Actus/ex_com1.json"
     >>= either msg run
   where
     msg err = putStr err
