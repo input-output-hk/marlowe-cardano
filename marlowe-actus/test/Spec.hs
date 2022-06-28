@@ -2,10 +2,10 @@
 
 module Main (main) where
 
+import Spec.Actus.Examples
+import Spec.Actus.QCTests
 import Spec.Actus.TestFramework
-import Spec.Marlowe.ACTUS.Examples
-import Spec.Marlowe.ACTUS.QCTests
-import Spec.Marlowe.ACTUS.TestFrameworkMarlowe
+import Spec.Actus.TestFrameworkMarlowe
 import System.Environment
 import Test.Tasty
 
@@ -41,23 +41,23 @@ main = do
       "ACTUS test cases"
       [ testGroup
           "ACTUS test-framework for Marlowe"
-          [ Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "PAM" pamTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "LAM" lamTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "NAM" namTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "ANN" annTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "STK" stkTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "OPTNS" optnsTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "FUTUR" futurTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "COM" comTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "CLM" clmTests,
-            Spec.Marlowe.ACTUS.TestFrameworkMarlowe.tests "SWPPV" swppvTests
+          [ Spec.Actus.TestFrameworkMarlowe.tests "PAM" pamTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "LAM" lamTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "NAM" namTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "ANN" annTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "STK" stkTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "OPTNS" optnsTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "FUTUR" futurTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "COM" comTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "CLM" clmTests,
+            Spec.Actus.TestFrameworkMarlowe.tests "SWPPV" swppvTests
           ],
         testGroup
           "ACTUS examples"
-          [ Spec.Marlowe.ACTUS.Examples.tests
+          [ Spec.Actus.Examples.tests
           ],
         testGroup
           "QuickCheck"
-          [ Spec.Marlowe.ACTUS.QCTests.tests
+          [ Spec.Actus.QCTests.tests
           ]
       ]

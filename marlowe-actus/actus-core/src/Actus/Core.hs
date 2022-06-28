@@ -4,8 +4,7 @@
 
 {-| = ACTUS
 
-Given ACTUS contract terms cashflows can be projected from the predefined risk factors.
-The cash flows can be used to generate the payments in a Marlowe contract.
+Given ACTUS contract terms, cashflows are projected based on risk factors.
 
 -}
 

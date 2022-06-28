@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Actus.Marlowe where
 
@@ -15,9 +16,6 @@ type ContractStateMarlowe = ContractStatePoly (Marlowe.Value Observation)
 type RiskFactorsMarlowe = RiskFactorsPoly (Marlowe.Value Observation)
 type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Observation)
 
-newtype MValue = MV (Marlowe.Value Observation)
-
--- instance YearFractionOps (Marlowe.Value Observation) where
 instance YearFractionOps (Marlowe.Value Observation) where
     _y a b c d = Constant . toMarloweFixedPoint $ yearFraction a b c d
       where

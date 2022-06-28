@@ -20,7 +20,6 @@ import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractState
 import Actus.Domain.ContractTerms hiding (Assertion)
 import Actus.Domain.Schedule
-import Actus.Haskell (CashFlow, ContractState, ContractTerms, setDefaultContractTermValues)
 import Actus.Model.ContractSchedule as S (maturity, schedule)
 import Actus.Model.Payoff (CtxPOF (CtxPOF))
 import Actus.Model.StateInitialization (initializeState)
@@ -37,13 +36,13 @@ import Data.Map as Map (Map, elems, lookup)
 import Data.Maybe (fromMaybe)
 import Data.Sort (sortOn)
 import Data.Time (LocalTime (..))
+import Debug.Pretty.Simple
 import GHC.Generics (Generic)
 import GHC.Records (getField)
+import Spec.Actus.Haskell (CashFlow, ContractState, ContractTerms, setDefaultContractTermValues)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
 import Text.Printf (printf)
-
-import Debug.Pretty.Simple
 
 tests :: String -> [TestCase] -> TestTree
 tests n t =

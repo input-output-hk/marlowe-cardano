@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 
-module Spec.Marlowe.ACTUS.TestFrameworkMarlowe
+module Spec.Actus.TestFrameworkMarlowe
   ( tests,
   )
 where
@@ -22,8 +22,7 @@ import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractTerms hiding (Assertion)
 import Actus.Domain.Ops
 import Actus.Domain.Schedule
-import Actus.Generator (constant, toMarlowe)
-import Actus.Haskell
+import Actus.Generator (constant)
 import Actus.Model.ContractSchedule as S (maturity, schedule)
 import Actus.Model.StateTransition (CtxSTF (..))
 import Actus.Utility.DateShift (applyBDCWithCfg)
@@ -34,6 +33,8 @@ import Data.Map as Map (lookup)
 import Data.Maybe (fromMaybe)
 import GHC.Records (getField)
 import Language.Marlowe
+import Spec.Actus.Haskell
+import Spec.Actus.Helper
 import Spec.Actus.TestFramework hiding (run, tests)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)

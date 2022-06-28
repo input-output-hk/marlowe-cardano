@@ -6,19 +6,19 @@
 
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
-module Spec.Marlowe.ACTUS.QCGenerator where
+module Spec.Actus.QCGenerator where
 
 import Actus.Core
 import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractTerms
 import Actus.Domain.Schedule
-import Actus.Haskell (ContractTerms, RiskFactors)
 import qualified Data.List as L
 import qualified Data.Map as M
 import Data.Maybe (catMaybes)
 import Data.Time
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
+import Spec.Actus.Haskell (ContractTerms, RiskFactors)
 import Test.QuickCheck
 
 largeamount :: Gen Double

@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Actus.Haskell where
+module Spec.Actus.Haskell where
 
 import Actus.Domain.BusinessEvents (RiskFactorsPoly)
 import Actus.Domain.ContractState (ContractStatePoly)
@@ -18,9 +19,7 @@ import Data.Maybe (fromMaybe)
 
 type ContractState = ContractStatePoly Double
 type RiskFactors = RiskFactorsPoly Double
-
 type CashFlow = CashFlowPoly Double
-
 type ContractTerms = ContractTermsPoly Double
 
 setDefaultContractTermValues :: ContractTerms -> ContractTerms

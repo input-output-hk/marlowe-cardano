@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TemplateHaskell   #-}
 
-module Spec.Marlowe.ACTUS.QCTests
+module Spec.Actus.QCTests
   ( tests )
 where
 
@@ -10,12 +10,12 @@ import Actus.Core
 import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractTerms
 import Actus.Domain.Schedule
-import Actus.Haskell (ContractTerms, RiskFactors, setDefaultContractTermValues)
 import Actus.Model.Applicability
 import Data.Maybe (isJust)
 import Data.Time (LocalTime)
 import Data.Validation as V
-import Spec.Marlowe.ACTUS.QCGenerator
+import Spec.Actus.Haskell (ContractTerms, RiskFactors, setDefaultContractTermValues)
+import Spec.Actus.QCGenerator
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.QuickCheck
