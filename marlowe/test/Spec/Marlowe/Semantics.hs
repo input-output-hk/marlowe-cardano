@@ -55,6 +55,20 @@ tests =
       , testProperty "UseValue" checkUseValue
       , testProperty "Cond" checkCond
       ]
+    , testGroup "Evaluation of Observation"
+      [
+        testProperty "AndObs" checkAndObs
+      , testProperty "OrObs" checkOrObs
+      , testProperty "NotObs" checkNotObs
+      , testProperty "ChoseSomething" checkChoseSomething
+      , testProperty "ValueGE" checkValueGE
+      , testProperty "ValueGT" checkValueGT
+      , testProperty "ValueLT" checkValueLT
+      , testProperty "ValueLE" checkValueLE
+      , testProperty "ValueEQ" checkValueEQ
+      , testCase "TrueObs" checkTrueObs
+      , testCase "FalseObs" checkFalseObs
+      ]
     ]
 
 
@@ -307,5 +321,106 @@ checkUseValue =
 
 checkCond :: Property
 checkCond =
-  checkValue (const . const $ (,,) <$> observationGen <*> valueGen <*> valueGen) $ \eval eval' _ _ (condition, thenValue, elseValue) ->
-    eval (Cond condition thenValue elseValue) == (if eval' condition then eval thenValue else eval elseValue)
+  let
+    gen _ _ = (,,) <$> observationGen <*> valueGen <*> valueGen
+  in
+    checkValue gen $ \eval eval' _ _ (condition, thenValue, elseValue) ->
+      eval (Cond condition thenValue elseValue) == (if eval' condition then eval thenValue else eval elseValue)
+
+
+checkAndObs :: Property
+checkAndObs =
+  let
+    gen _ _ = (,) <$> observationGen <*> observationGen
+  in
+    checkValue gen $ \_ eval _ _ (x, y) ->
+      eval (AndObs x y) == (eval x && eval y)
+
+
+checkOrObs :: Property
+checkOrObs =
+  let
+    gen _ _ = (,) <$> observationGen <*> observationGen
+  in
+    checkValue gen $ \_ eval _ _ (x, y) ->
+      eval (OrObs x y) == (eval x || eval y)
+
+
+checkNotObs :: Property
+checkNotObs =
+  checkValue (const . const $ observationGen) $ \_ eval _ _ x ->
+    eval (NotObs x) == not (eval x)
+
+
+checkChoseSomething :: Property
+checkChoseSomething =
+  let
+     gen _ State{choices} =
+       do
+         isElement <- frequency [(9, pure True), (1, pure False)]
+         if isElement && not (AM.null choices)
+           then elements $ AM.keys choices
+           else arbitrary
+  in
+    checkValue gen $ \_ eval _ State{choices} choice ->
+      let
+        x = ChoseSomething choice
+      in
+        choice `AM.member` choices == eval x
+
+
+checkValueGE :: Property
+checkValueGE =
+  let
+    gen _ _ = (,) <$> valueGen <*> valueGen
+  in
+    checkValue gen $ \eval eval' _ _ (x, y) ->
+      eval' (ValueGE x y) == (eval x >= eval y)
+
+
+checkValueGT :: Property
+checkValueGT =
+  let
+    gen _ _ = (,) <$> valueGen <*> valueGen
+  in
+    checkValue gen $ \eval eval' _ _ (x, y) ->
+      eval' (ValueGT x y) == (eval x > eval y)
+
+
+checkValueLT :: Property
+checkValueLT =
+  let
+    gen _ _ = (,) <$> valueGen <*> valueGen
+  in
+    checkValue gen $ \eval eval' _ _ (x, y) ->
+      eval' (ValueLT x y) == (eval x < eval y)
+
+
+checkValueLE :: Property
+checkValueLE =
+  let
+    gen _ _ = (,) <$> valueGen <*> valueGen
+  in
+    checkValue gen $ \eval eval' _ _ (x, y) ->
+      eval' (ValueLE x y) == (eval x <= eval y)
+
+
+checkValueEQ :: Property
+checkValueEQ =
+  let
+    gen _ _ = (,) <$> valueGen <*> valueGen
+  in
+    checkValue gen $ \eval eval' _ _ (x, y) ->
+      eval' (ValueEQ x y) == (eval x == eval y)
+
+
+checkTrueObs :: Assertion
+checkTrueObs =
+  assertBool "TrueObs is true."
+    $ evalObservation undefined undefined TrueObs
+
+
+checkFalseObs :: Assertion
+checkFalseObs =
+  assertBool "FalseObs is false."
+    . not $ evalObservation undefined undefined FalseObs
