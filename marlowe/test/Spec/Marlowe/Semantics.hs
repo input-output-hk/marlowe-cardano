@@ -9,16 +9,21 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+
 module Spec.Marlowe.Semantics (
   tests
 ) where
 
+
 import Control.Monad (replicateM)
+import Data.Function (on)
+import Data.List (nubBy)
+import Data.Word (Word8)
 import Language.Marlowe.Semantics
 import Language.Marlowe.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken,
                              toBuiltin)
-import Spec.Marlowe.Common
+import Spec.Marlowe.Common (observationGen, valueGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -33,9 +38,13 @@ tests :: TestTree
 tests =
   testGroup "Semantics"
     [
-      testGroup "Evaluation of Value"
+      testGroup "evalValue"
       [
-        testProperty "AvailableMoney" checkAvailableMoney
+        testGroup "AvailableMoney"
+        [
+          testProperty "Account exists" $ checkAvailableMoney True
+        , testProperty "Account does not exist" $ checkAvailableMoney False
+        ]
       , testProperty "Constant" checkConstant
       , testProperty "NegValue" checkNegValue
       , testProperty "AddValue" checkAddValue
@@ -49,18 +58,30 @@ tests =
         , testProperty "Exact multiple" checkDivValueMultiple
         , testProperty "Rounding" checkDivValueRounding
         ]
-      , testProperty "ChoiceValue" checkChoiceValue
+      , testGroup "ChoiceValue"
+        [
+          testProperty "Choice exists" $ checkChoiceValue True
+        , testProperty "Choice does not exist" $ checkChoiceValue False
+        ]
       , testProperty "TimeIntervalStart" checkTimeIntervalStart
       , testProperty "TimeIntervalEnd" checkTimeIntervalEnd
-      , testProperty "UseValue" checkUseValue
+      , testGroup "UseValue"
+        [
+          testProperty "Value exists" $ checkUseValue True
+        , testProperty "Value does not exist" $ checkUseValue False
+        ]
       , testProperty "Cond" checkCond
       ]
-    , testGroup "Evaluation of Observation"
+    , testGroup "evalObservation"
       [
         testProperty "AndObs" checkAndObs
       , testProperty "OrObs" checkOrObs
       , testProperty "NotObs" checkNotObs
-      , testProperty "ChoseSomething" checkChoseSomething
+      , testGroup "ChoseSomething"
+        [
+          testProperty "Choice exists" $ checkChoseSomething True
+        , testProperty "Choice does not exist" $ checkChoseSomething False
+        ]
       , testProperty "ValueGE" checkValueGE
       , testProperty "ValueGT" checkValueGT
       , testProperty "ValueLT" checkValueLT
@@ -69,6 +90,25 @@ tests =
       , testCase "TrueObs" checkTrueObs
       , testCase "FalseObs" checkFalseObs
       ]
+    , testGroup "applyAction"
+      [
+        testProperty "Input does not match action" checkApplyActionMismatch
+      , testGroup "IDeposit"
+        [
+          testProperty "AccountId does not match"                  $ checkIDeposit (Just False) Nothing     Nothing      Nothing
+        , testProperty "Party does not match"                      $ checkIDeposit Nothing     (Just False) Nothing      Nothing
+        , testProperty "Token does not match"                      $ checkIDeposit Nothing      Nothing     (Just False) Nothing
+        , testProperty "Amount does not match"                     $ checkIDeposit Nothing      Nothing     Nothing      (Just False)
+        , testProperty "AccountId, party, token, and amount match" $ checkIDeposit (Just True) (Just True)  (Just True)  (Just True)
+        ]
+      , testGroup "IChoice"
+        [
+          testProperty "ChoiceId does not match"       $ checkIChoice (Just False) Nothing
+        , testProperty "ChoiceNum out of bounds" $ checkIChoice Nothing      (Just False)
+        , testProperty "ChoiceNum in bounds"     $ checkIChoice (Just True)  (Just True)
+        ]
+      , testProperty "INotify" checkINotify
+      ]
     ]
 
 
@@ -76,15 +116,18 @@ instance Arbitrary POSIXTime where
   arbitrary = POSIXTime <$> arbitrary
 
 instance Arbitrary CurrencySymbol where
-  arbitrary = CurrencySymbol . toBuiltin . BS.pack <$> replicateM 28 arbitrary
+  arbitrary = CurrencySymbol . toBuiltin . BS.pack <$> replicateM 28 (arbitrary :: Gen Word8)
 
 instance Arbitrary TokenName where
-  arbitrary = TokenName . toBuiltin . BS8.pack <$> replicateM 32 arbitrary
+  arbitrary =
+    do
+      count <- elements $ [0] <> [2^n | n <- [0..5] :: [Int]]
+      TokenName . toBuiltin . BS8.pack <$> replicateM count (chooseEnum ('A', 'Z'))
 
 instance Arbitrary Token where
-  arbitrary =
+  arbitrary =  -- FIXME: Add correlations.
      do
-       isAda <- frequency [(7, pure True), (3, pure False)]
+       isAda <- arbitrary
        if isAda
          then pure $ Token adaSymbol adaToken
          else Token <$> arbitrary <*> arbitrary
@@ -103,46 +146,70 @@ instance Arbitrary Party where
 instance Arbitrary ValueId where
   arbitrary =
     do
-      n <- chooseInt (0, 64)
-      ValueId . toBuiltin . BS8.pack <$> replicateM n arbitrary
+      count <- elements $ [0] <> [2^n | n <- [0..6] :: [Int]]
+      ValueId . toBuiltin . BS8.pack <$> replicateM count (chooseEnum ('a', 'z'))
 
 instance Arbitrary ChoiceId where
+  arbitrary = ChoiceId <$> genChoiceName <*> arbitrary
+
+instance Arbitrary Bound where
   arbitrary =
     do
-      n <- chooseInt (0, 64)
-      ChoiceId <$> (toBuiltin . BS8.pack <$> replicateM n arbitrary) <*> arbitrary
+      lower <- arbitrary
+      upper <- suchThat arbitrary (>= lower)
+      pure $ Bound lower upper
 
 genChoiceName :: Gen ChoiceName
 genChoiceName =
   do
-    n <- chooseInt (0, 64)
-    toBuiltin . BS8.pack <$> replicateM n arbitrary
+    count <- elements $ [0] <> [2^n | n <- [0..6] :: [Int]]
+    toBuiltin . BS8.pack <$> replicateM count (elements $ ['A'..'Z'] <> ['a'..'z'])
 
 genTimeInterval :: Gen TimeInterval
 genTimeInterval =
   do
     start <- arbitrary
-    count <- suchThat arbitrary (> 0)
-    pure (start, start + count)
+    end <- suchThat arbitrary (> start)
+    pure (start, end)
 
 genAccounts :: Gen Accounts
 genAccounts =
-  do
+  do  -- FIXME: Add correlations.
     accounts <- replicateM 10 arbitrary
-    tokens <- replicateM 10 arbitrary
+    tokens <- replicateM 10 $ suchThat arbitrary (> 0)
     entries <- chooseInt (0, 10)
-    fmap AM.fromList
+    fmap (AM.fromList . nubBy ((==) `on` fst))
       . replicateM entries
       $ (,) <$> elements accounts <*> elements tokens
 
+genFromAccounts :: Accounts -> Gen ((AccountId, Token), Integer)
+genFromAccounts accounts
+  | AM.null accounts = (,) <$> ((,) <$> arbitrary <*> arbitrary) <*> arbitrary
+  | otherwise =
+    do
+      let entries = AM.toList accounts
+      exact <- arbitrary
+      exactKey <- arbitrary
+      exactAccountId <- arbitrary
+      exactToken <- arbitrary
+      exactAmount <- arbitrary
+      let chooseKey = elements $ fst <$> entries
+          chooseAccountId = if exactAccountId then elements $ fst . fst <$> entries else arbitrary
+          chooseToken = if exactToken then elements $ snd . fst <$> entries else arbitrary
+          chooseAmount = if exactAmount then elements $ snd <$> entries else arbitrary
+      case (exact, exactKey) of
+        (True , _    ) -> elements entries
+        (False, True ) -> (,) <$> chooseKey <*> chooseAmount
+        (False, False) -> (,) <$> ((,) <$> chooseAccountId <*> chooseToken) <*> chooseAmount
 
-genAssocMap :: Arbitrary k
+genAssocMap :: Eq k
+            => Arbitrary k
             => Arbitrary v
             => Gen (AM.Map k v)
 genAssocMap =
   do
     entries <- chooseInt (0, 10)
-    fmap AM.fromList
+    fmap (AM.fromList . nubBy ((==) `on` fst))
       . replicateM entries
       $ (,) <$> arbitrary <*> arbitrary
 
@@ -170,15 +237,13 @@ checkValue gen f =
     f (evalValue environment state) (evalObservation environment state) environment state x
 
 
-checkAvailableMoney :: Property
-checkAvailableMoney =
+checkAvailableMoney :: Bool -> Property
+checkAvailableMoney isElement =
   let
      gen _ State{accounts} =
-       do
-         isElement <- frequency [(9, pure True), (1, pure False)]
-         if isElement && not (AM.null accounts)
-           then elements $ AM.keys accounts
-           else (,) <$> arbitrary <*> arbitrary
+       if isElement && not (AM.null accounts)
+         then elements $ AM.keys accounts
+         else (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval _ _ State{accounts} (account, token) ->
       let
@@ -269,15 +334,13 @@ checkDivValueRounding =
       eval (DivValue x y) == eval x `roundedDivide` eval y || eval y == 0
 
 
-checkChoiceValue :: Property
-checkChoiceValue =
+checkChoiceValue :: Bool -> Property
+checkChoiceValue isElement =
   let
      gen _ State{choices} =
-       do
-         isElement <- frequency [(9, pure True), (1, pure False)]
-         if isElement && not (AM.null choices)
-           then elements $ AM.keys choices
-           else arbitrary
+       if isElement && not (AM.null choices)
+         then elements $ AM.keys choices
+         else arbitrary
   in
     checkValue gen $ \eval _ _ State{choices} choice ->
       let
@@ -300,15 +363,13 @@ checkTimeIntervalEnd =
     POSIXTime (eval TimeIntervalEnd) == snd timeInterval
 
 
-checkUseValue :: Property
-checkUseValue =
+checkUseValue :: Bool -> Property
+checkUseValue isElement =
   let
      gen _ State{boundValues} =
-       do
-         isElement <- frequency [(9, pure True), (1, pure False)]
-         if isElement && not (AM.null boundValues)
-           then elements $ AM.keys boundValues
-           else arbitrary
+       if isElement && not (AM.null boundValues)
+         then elements $ AM.keys boundValues
+         else arbitrary
   in
     checkValue gen $ \eval _ _ State{boundValues} variable ->
       let
@@ -352,15 +413,13 @@ checkNotObs =
     eval (NotObs x) == not (eval x)
 
 
-checkChoseSomething :: Property
-checkChoseSomething =
+checkChoseSomething :: Bool -> Property
+checkChoseSomething isElement =
   let
      gen _ State{choices} =
-       do
-         isElement <- frequency [(9, pure True), (1, pure False)]
-         if isElement && not (AM.null choices)
-           then elements $ AM.keys choices
-           else arbitrary
+       if isElement && not (AM.null choices)
+         then elements $ AM.keys choices
+         else arbitrary
   in
     checkValue gen $ \_ eval _ State{choices} choice ->
       let
@@ -424,3 +483,103 @@ checkFalseObs :: Assertion
 checkFalseObs =
   assertBool "FalseObs is false."
     . not $ evalObservation undefined undefined FalseObs
+
+
+checkApplyActionMismatch :: Property
+checkApplyActionMismatch = property $ do
+  let gen = do
+        let
+          inputs = [IDeposit undefined undefined undefined undefined, IChoice undefined undefined, INotify]
+          actions = [Deposit undefined undefined undefined undefined, Choice undefined undefined, Notify undefined]
+        x <- chooseInt (0, length inputs - 1)
+        y <- suchThat (chooseInt (0, length actions - 1)) (/= x)
+        pure (inputs !! x, actions !! y)
+  forAll gen $ \(x, y) ->
+    case applyAction undefined undefined x y of
+      NotAppliedAction -> True
+      _                -> False
+
+
+choiceInBoundsIfNonempty :: [Bound] -> Gen ChosenNum
+choiceInBoundsIfNonempty [] = arbitrary
+choiceInBoundsIfNonempty bounds =
+  do
+    Bound lower upper <- elements bounds
+    chooseInteger (lower, upper)
+
+
+choiceNotInBounds :: [Bound] -> Gen ChosenNum
+choiceNotInBounds [] = arbitrary
+choiceNotInBounds bounds =
+  let
+    inBound chosenNum (Bound lower upper) = chosenNum >= lower && chosenNum <= upper
+  in
+    suchThat arbitrary $ \chosenNum -> not $ any (inBound chosenNum) bounds
+
+
+checkIDeposit :: Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe Bool -> Property
+checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property $ do
+  let gen = do
+        environment <- arbitrary
+        state <- arbitrary
+        ((account, token), _) <- genFromAccounts $ accounts state
+        accountMatches' <- maybe arbitrary pure accountMatches
+        account' <- if accountMatches' then pure account else suchThat arbitrary (/= account)
+        partyMatches' <- maybe arbitrary pure partyMatches
+        party <- arbitrary
+        party' <- if partyMatches' then pure party else suchThat arbitrary (/= party)
+        tokenMatches' <- maybe arbitrary pure tokenMatches
+        token' <- if tokenMatches' then pure token else suchThat arbitrary (/= token)
+        amountMatches' <- maybe arbitrary pure amountMatches
+        amount <- valueGen
+        let amountEvaluated = evalValue environment state amount
+        amount' <- if amountMatches' then pure amountEvaluated else suchThat arbitrary (/= amountEvaluated)
+        pure (environment, state, account', party', token', amount', Deposit account party token amount, accountMatches' && partyMatches' && tokenMatches' && amountMatches')
+  forAll gen $ \(environment, state, account, party, token, amount, action, match) ->
+    let
+      amount' = maybe amount (+ amount) . AM.lookup (account, token) $ accounts state
+      newState = state {accounts = AM.insert (account, token) amount' $ accounts state}
+    in
+      case applyAction environment state (IDeposit account party token amount) action of
+        NotAppliedAction                    -> not match
+        AppliedAction ApplyNoWarning state' -> match && amount >  0 && newState == state'
+        AppliedAction _              state' -> match && amount <= 0 && state    == state'
+
+
+checkIChoice :: Maybe Bool -> Maybe Bool -> Property
+checkIChoice choiceMatches choiceInBounds = property $ do
+  let gen = do
+        choiceMatches' <- maybe arbitrary pure choiceMatches
+        choiceInBounds' <- maybe arbitrary pure choiceInBounds
+        environment <- arbitrary
+        state <- arbitrary
+        choiceId <- arbitrary
+        bounds <- if choiceInBounds' then suchThat arbitrary (not . null) else arbitrary
+        choiceId' <- if choiceMatches' then pure choiceId else suchThat arbitrary (/= choiceId)
+        choiceNum <- if choiceInBounds' then choiceInBoundsIfNonempty bounds else choiceNotInBounds bounds
+        pure (environment, state, choiceId', choiceNum, Choice choiceId bounds, choiceMatches' && choiceInBounds')
+  forAll gen $ \(environment, state, choiceId, choiceNum, action, match) ->
+    let
+      newState = state {choices = AM.insert choiceId choiceNum $ choices state}
+    in
+      case applyAction environment state (IChoice choiceId choiceNum) action of
+        NotAppliedAction                    -> not match
+        AppliedAction ApplyNoWarning state' -> match && newState == state'
+        AppliedAction _              state' -> state == state'
+
+
+checkINotify :: Property
+checkINotify = property $ do
+  let gen = do
+        environment <- arbitrary
+        state <- arbitrary
+        x <- observationGen
+        pure (environment, state, x)
+  forAll gen $ \(environment, state, x) ->
+    let
+      result = evalObservation environment state x
+    in
+      case applyAction environment state INotify (Notify x) of
+        AppliedAction ApplyNoWarning state' -> result && state == state'
+        AppliedAction _ _                   -> False
+        NotAppliedAction                    -> not result
