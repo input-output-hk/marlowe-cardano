@@ -102,7 +102,7 @@
             (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
             ];
           buildable = true;
-          modules = [ "Spec/Actus" "Spec/TestFramework" ];
+          modules = [ "Spec/TestFramework" ];
           hsSourceDirs = [ "actus-core/test" ];
           mainPath = [ "Spec.hs" ];
           };

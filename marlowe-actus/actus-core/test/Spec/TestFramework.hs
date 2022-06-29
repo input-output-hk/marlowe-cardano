@@ -33,10 +33,13 @@ import Data.Time (LocalTime (..))
 import Debug.Pretty.Simple
 import GHC.Generics (Generic)
 import GHC.Records (getField)
-import Spec.Actus (TestCashFlow, TestContractState, TestContractTerms, setDefaultContractTermValues)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
 import Text.Printf (printf)
+
+type TestCashFlow = CashFlow Double
+type TestContractState = ContractState Double
+type TestContractTerms = ContractTerms Double
 
 tests :: String -> [TestCase] -> TestTree
 tests n t =

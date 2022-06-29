@@ -9,9 +9,10 @@ import Actus.Domain
 import Actus.Utility (yearFraction)
 import Language.Marlowe as Marlowe
 
+type CashFlowMarlowe = CashFlow (Marlowe.Value Observation)
 type ContractStateMarlowe = ContractState (Marlowe.Value Observation)
-type RiskFactorsMarlowe = RiskFactors (Marlowe.Value Observation)
 type ContractTermsMarlowe = ContractTerms (Marlowe.Value Observation)
+type RiskFactorsMarlowe = RiskFactors (Marlowe.Value Observation)
 
 instance YearFractionOps (Marlowe.Value Observation) where
     _y a b c d = Constant . toMarloweFixedPoint $ yearFraction a b c d
