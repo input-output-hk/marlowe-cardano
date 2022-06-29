@@ -3,8 +3,8 @@ module Marlowe where
 
 import Prelude
 
+import Actus.Domain (CashFlow)
 import Actus.Domain.ContractTerms (ContractTerms)
-import Actus.Domain.Schedule (CashFlow)
 import Affjax.RequestHeader (RequestHeader(..))
 import Auth (AuthStatus)
 import Data.Argonaut (Json, JsonDecodeError)
