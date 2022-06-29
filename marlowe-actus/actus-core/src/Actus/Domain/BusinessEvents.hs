@@ -38,16 +38,3 @@ data EventType =
     | AD   -- ^ Monitoring
     deriving stock (Eq, Show, Read, Ord, Enum, Generic)
     deriving anyclass (FromJSON, ToJSON)
-
-{-| Risk factor observer
--}
-data RiskFactors a = RiskFactors
-    { o_rf_CURS :: a
-    , o_rf_RRMO :: a
-    , o_rf_SCMO :: a
-    , pp_payoff :: a
-    , xd_payoff :: a
-    , dv_payoff :: a
-    }
-    deriving stock (Show, Generic)
-    deriving anyclass (FromJSON, ToJSON)

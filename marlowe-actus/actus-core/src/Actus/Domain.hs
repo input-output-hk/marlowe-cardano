@@ -1,16 +1,21 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 module Actus.Domain
   ( module Actus.Domain.BusinessEvents
   , module Actus.Domain.ContractState
   , module Actus.Domain.ContractTerms
   , module Actus.Domain.Schedule
+  , RiskFactors (..)
+  , CashFlow (..)
   , ActusOps (..)
   , ActusNum (..)
-  , YearFractionOps (..)
-  , ScheduleOps (..)
   , RoleSignOps (..)
+  , ScheduleOps (..)
+  , YearFractionOps (..)
   , marloweFixedPoint
   , setDefaultContractTermValues
   )
@@ -23,7 +28,39 @@ import Actus.Domain.Schedule
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Applicative ((<|>))
 import Control.Monad (guard)
+import Data.Aeson.Types (FromJSON, ToJSON)
 import Data.Time (LocalTime)
+import GHC.Generics (Generic)
+
+{-| Risk factor observer
+-}
+data RiskFactors a = RiskFactors
+    { o_rf_CURS :: a
+    , o_rf_RRMO :: a
+    , o_rf_SCMO :: a
+    , pp_payoff :: a
+    , xd_payoff :: a
+    , dv_payoff :: a
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+{-| Cash flows
+-}
+data CashFlow a = CashFlow
+  { tick               :: Integer,
+    cashContractId     :: String,
+    cashParty          :: String,
+    cashCounterParty   :: String,
+    cashPaymentDay     :: LocalTime,
+    cashCalculationDay :: LocalTime,
+    cashEvent          :: EventType,
+    amount             :: a,
+    notional           :: a,
+    currency           :: String
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 marloweFixedPoint :: Integer
 marloweFixedPoint = 1000000
