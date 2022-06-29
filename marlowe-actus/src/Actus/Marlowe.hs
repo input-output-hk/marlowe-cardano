@@ -16,11 +16,7 @@ module Actus.Marlowe
 
     -- == Conversion from Double to Marlowe representation
     -- re-export
-    ActusOps (..),
-    EventType (..),
-    CashFlow (..),
-    ContractTerms (..),
-    RiskFactors (..),
+    module Actus.Domain,
     genProjectedCashflows,
 
     -- utility
@@ -29,8 +25,7 @@ module Actus.Marlowe
 where
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (ActusOps (..), CashFlow (..), ContractStructure (..), ContractTerms (..), EventType (..),
-                     Reference (..), RiskFactors (..), TermValidationError (..), marloweFixedPoint)
+import Actus.Domain
 import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract, reduceValue)
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
@@ -117,7 +112,7 @@ letval :: String -> Integer -> Value Observation -> Contract -> Contract
 letval name t = Let $ ValueId $ fromString $ name ++ "_" ++ show t
 
 toMarloweFixedPoint :: Double -> Integer
-toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint *)
+toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint Prelude.*)
 
 constant :: Double -> Value Observation
 constant = Constant . toMarloweFixedPoint
@@ -128,7 +123,7 @@ cardanoEpochStart = 100
 timeToSlotNumber :: LocalTime -> Integer
 timeToSlotNumber LocalTime {..} =
   let (MkSystemTime secs _) = utcToSystemTime (UTCTime localDay (timeOfDayToTime localTimeOfDay))
-   in fromIntegral secs - cardanoEpochStart
+   in fromIntegral secs Prelude.- cardanoEpochStart
 
 toMarlowe :: ContractTerms Double -> ContractTermsMarlowe
 toMarlowe ct =
