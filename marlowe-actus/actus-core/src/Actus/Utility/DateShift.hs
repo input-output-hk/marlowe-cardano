@@ -11,8 +11,7 @@ module Actus.Utility.DateShift
   )
 where
 
-import Actus.Domain.ContractTerms (BDC (..), Calendar (..), Cycle (..), EOMC (..), Period (..), ScheduleConfig (..))
-import Actus.Domain.Schedule (ShiftedDay (..))
+import Actus.Domain (BDC (..), Calendar (..), Cycle (..), EOMC (..), Period (..), ScheduleConfig (..), ShiftedDay (..))
 import Data.Time (LocalTime (..), addDays, toGregorian)
 import Data.Time.Calendar (addGregorianMonthsClip, addGregorianYearsClip, fromGregorian, gregorianMonthLength)
 import Data.Time.Calendar.WeekDate (toWeekDate)

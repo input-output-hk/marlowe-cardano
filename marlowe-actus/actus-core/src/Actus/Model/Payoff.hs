@@ -8,10 +8,8 @@ module Actus.Model.Payoff
   )
 where
 
-import Actus.Domain.BusinessEvents (EventType (..), RiskFactors (..))
-import Actus.Domain.ContractState (ContractState (..))
-import Actus.Domain.ContractTerms (CT (..), ContractTerms (..), FEB (..), PYTP (..))
-import Actus.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
+import Actus.Domain (ActusNum (..), ActusOps (..), CT (..), ContractState (..), ContractTerms (..), EventType (..),
+                     FEB (..), PYTP (..), RiskFactors (..), RoleSignOps (..), YearFractionOps (_y))
 import Control.Monad.Reader (Reader, reader)
 import Data.Time.LocalTime (LocalTime)
 import Prelude hiding (Fractional, Num, (*), (+), (-), (/))

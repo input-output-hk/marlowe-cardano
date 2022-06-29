@@ -15,13 +15,11 @@ module Actus.Model.StateInitialization
   )
 where
 
-import Actus.Domain.ContractState (ContractState (..))
-import Actus.Domain.ContractTerms (CEGE (..), CT (..), ContractStructure (..), ContractTerms (..), Cycle (..), FEB (..),
-                                   IPCB (..), Reference (..), SCEF (..))
-import Actus.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (_r), YearFractionOps (..))
+import Actus.Domain (ActusNum (..), ActusOps (..), CEGE (..), CT (..), ContractState (..), ContractStructure (..),
+                     ContractTerms (..), Cycle (..), FEB (..), IPCB (..), Reference (..), RoleSignOps (..), SCEF (..),
+                     YearFractionOps (..))
 import Actus.Model.StateTransition (CtxSTF (..))
-import Actus.Utility.ANN.Annuity (annuity)
-import Actus.Utility.ScheduleGenerator (generateRecurrentSchedule, inf, sup)
+import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup)
 import Control.Applicative ((<|>))
 import Control.Monad.Reader (Reader, reader)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)

@@ -1,6 +1,21 @@
-module Actus.Domain.Ops where
+module Actus.Domain
+  ( module Actus.Domain.BusinessEvents
+  , module Actus.Domain.ContractState
+  , module Actus.Domain.ContractTerms
+  , module Actus.Domain.Schedule
+  , ActusOps (..)
+  , ActusNum (..)
+  , YearFractionOps (..)
+  , ScheduleOps (..)
+  , RoleSignOps (..)
+  , marloweFixedPoint
+  )
+  where
 
-import Actus.Domain.ContractTerms (CR (..), DCC (..))
+import Actus.Domain.BusinessEvents
+import Actus.Domain.ContractState
+import Actus.Domain.ContractTerms
+import Actus.Domain.Schedule
 import Data.Time (LocalTime)
 
 marloweFixedPoint :: Integer

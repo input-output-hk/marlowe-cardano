@@ -12,19 +12,13 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 
-module Spec.Actus.TestFramework
+module Spec.TestFramework
   where
 
 import Actus.Core
-import Actus.Domain.BusinessEvents
-import Actus.Domain.ContractState
-import Actus.Domain.ContractTerms hiding (Assertion)
-import Actus.Domain.Schedule
-import Actus.Model.ContractSchedule as S (maturity, schedule)
-import Actus.Model.Payoff (CtxPOF (CtxPOF))
-import Actus.Model.StateInitialization (initializeState)
-import Actus.Model.StateTransition (CtxSTF (..))
-import Actus.Utility.DateShift (applyBDCWithCfg)
+import Actus.Domain hiding (Assertion)
+import Actus.Model (CtxPOF (CtxPOF), CtxSTF (..), initializeState, maturity, schedule)
+import Actus.Utility (applyBDCWithCfg)
 import Control.Applicative ((<|>))
 import Control.Monad (join, mzero)
 import Control.Monad.Reader (Reader, ask, runReader, withReader)
@@ -39,7 +33,7 @@ import Data.Time (LocalTime (..))
 import Debug.Pretty.Simple
 import GHC.Generics (Generic)
 import GHC.Records (getField)
-import Spec.Actus.Haskell (TestCashFlow, TestContractState, TestContractTerms, setDefaultContractTermValues)
+import Spec.Actus (TestCashFlow, TestContractState, TestContractTerms, setDefaultContractTermValues)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
 import Text.Printf (printf)
@@ -94,7 +88,7 @@ tests n t =
                 (calculationDay <$> schedule FP terms)
                 (calculationDay <$> schedule PR terms)
                 (calculationDay <$> schedule IP terms)
-                (S.maturity terms)
+                (maturity terms)
                 riskFactors
 
        in assertTestResults cashFlows results

@@ -8,12 +8,10 @@ module Actus.Model.StateTransition
   )
 where
 
-import Actus.Domain.BusinessEvents (EventType (..), RiskFactors (..))
-import Actus.Domain.ContractState (ContractState (..))
-import Actus.Domain.ContractTerms (CT (..), ContractTerms (..), FEB (..), IPCB (..), OPTP (..), SCEF (..))
-import Actus.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
-import Actus.Utility.ANN.Annuity (annuity)
-import Actus.Utility.ScheduleGenerator (inf, sup)
+import Actus.Domain (ActusNum (..), ActusOps (..), CT (..), ContractState (..), ContractTerms (..), EventType (..),
+                     FEB (..), IPCB (..), OPTP (..), RiskFactors (..), RoleSignOps (..), SCEF (..),
+                     YearFractionOps (..))
+import Actus.Utility (annuity, inf, sup)
 import Control.Monad.Reader (Reader, reader)
 import Data.Maybe (fromMaybe, maybeToList)
 import Data.Time.LocalTime (LocalTime)

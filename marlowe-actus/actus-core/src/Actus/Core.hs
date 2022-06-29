@@ -17,15 +17,9 @@ module Actus.Core
   )
 where
 
-import Actus.Domain.BusinessEvents (EventType (..), RiskFactors (..))
-import Actus.Domain.ContractState (ContractState (..))
-import Actus.Domain.ContractTerms (CT (..), ContractTerms (..))
-import Actus.Domain.Ops (RoleSignOps (..), ScheduleOps (..), YearFractionOps)
-import Actus.Domain.Schedule (CashFlow (..), ShiftedDay (..), calculationDay, paymentDay)
-import Actus.Model.ContractSchedule as S (maturity, schedule)
-import Actus.Model.Payoff (CtxPOF (CtxPOF), payoff)
-import Actus.Model.StateInitialization (initializeState)
-import Actus.Model.StateTransition (CtxSTF (..), stateTransition)
+import Actus.Domain (CT (..), CashFlow (..), ContractState (..), ContractTerms (..), EventType (..), RiskFactors (..),
+                     RoleSignOps (..), ScheduleOps (..), ShiftedDay (..), YearFractionOps (..))
+import Actus.Model (CtxPOF (CtxPOF), CtxSTF (..), initializeState, maturity, payoff, schedule, stateTransition)
 import Control.Applicative ((<|>))
 import Control.Monad (filterM)
 import Control.Monad.Reader (Reader, ask, runReader, withReader)
@@ -51,7 +45,7 @@ genProjectedCashflows rf ct =
               (calculationDay <$> schedule FP ct) -- init & stf rely on the fee payment schedule
               (calculationDay <$> schedule PR ct) -- init & stf rely on the principal redemption schedule
               (calculationDay <$> schedule IP ct) -- init & stf rely on the interest payment schedule
-              (S.maturity ct)
+              (maturity ct)
               rf
         )
 
@@ -150,7 +144,7 @@ genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
                     NAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
                     ANN ->
                       let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-                          b2 = let m = maturityDate <|> amortizationDate <|> S.maturity ct in isNothing m || Just calculationDay <= m
+                          b2 = let m = maturityDate <|> amortizationDate <|> maturity ct in isNothing m || Just calculationDay <= m
                        in b1 && b2
                     SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
                     CLM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate

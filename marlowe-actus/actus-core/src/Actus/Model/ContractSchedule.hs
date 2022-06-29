@@ -8,13 +8,10 @@ module Actus.Model.ContractSchedule
   )
 where
 
-import Actus.Domain.BusinessEvents (EventType (..))
-import Actus.Domain.ContractTerms (CT (..), ContractTerms (..), Cycle (..), DS (..), IPCB (..), PPEF (..), PYTP (..),
-                                   SCEF (..), ScheduleConfig (..))
-import Actus.Domain.Ops as O (ActusNum (..), ActusOps (..), ScheduleOps (..), YearFractionOps (..))
-import Actus.Domain.Schedule (ShiftedDay (..), mkShiftedDay)
-import Actus.Utility.DateShift (applyBDCWithCfg, applyEOMC)
-import Actus.Utility.ScheduleGenerator (generateRecurrentSchedule, inf, (<+>), (<->))
+import Actus.Domain (CT (..), ContractTerms (..), Cycle (..), DS (..), EventType (..), IPCB (..), PPEF (..), PYTP (..),
+                     SCEF (..), ScheduleConfig (..), ShiftedDay (..), mkShiftedDay)
+import Actus.Domain as O (ActusNum (..), ActusOps (..), ScheduleOps (..), YearFractionOps (..))
+import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, (<+>), (<->))
 import Control.Applicative ((<|>))
 import Control.Monad (liftM2, liftM4)
 import Data.Functor ((<&>))

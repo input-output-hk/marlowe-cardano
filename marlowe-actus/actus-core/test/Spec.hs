@@ -2,8 +2,7 @@
 
 module Main (main) where
 
-import qualified Spec.Actus.QCTests as QC
-import Spec.Actus.TestFramework (testCasesFromFile, tests)
+import Spec.TestFramework (testCasesFromFile, tests)
 import System.Environment
 import Test.Tasty
 
@@ -62,9 +61,5 @@ main = do
             tests "CLM" clmTests,
             tests "SWPPV" swppvTests,
             tests "CEG" cegTests
-          ],
-        testGroup
-          "QuickCheck"
-          [ QC.tests
           ]
       ]

@@ -4,7 +4,7 @@ module Actus.Utility.YearFraction
   ( yearFraction
   )
 where
-import Actus.Domain.ContractTerms (DCC (..))
+import Actus.Domain (DCC (..))
 import Data.Time (Day, LocalTime (..), TimeOfDay (..), addLocalTime, diffDays, fromGregorian, gregorianMonthLength,
                   isLeapYear, toGregorian)
 

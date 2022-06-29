@@ -3,14 +3,10 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Spec.Actus.Haskell where
+module Spec.Actus where
 
-import Actus.Domain.BusinessEvents (RiskFactors)
-import Actus.Domain.ContractState (ContractState)
-import Actus.Domain.ContractTerms
-import Actus.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), ScheduleOps (..), YearFractionOps (..))
-import Actus.Domain.Schedule (CashFlow)
-import Actus.Utility.YearFraction (yearFraction)
+import Actus.Domain
+import Actus.Utility (yearFraction)
 import Control.Applicative ((<|>))
 import Control.Monad (guard, mzero)
 import Data.Aeson.Types as Aeson (FromJSON, Options (..), SumEncoding (..), Value (Object), defaultOptions,

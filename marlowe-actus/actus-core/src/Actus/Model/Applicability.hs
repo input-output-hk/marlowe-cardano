@@ -18,8 +18,7 @@ module Actus.Model.Applicability
   )
 where
 
-import Actus.Domain.ContractTerms (CT (..), ContractTerms (..), IPCB (..), ScheduleConfig (..),
-                                   TermValidationError (..))
+import Actus.Domain (CT (..), ContractTerms (..), IPCB (..), ScheduleConfig (..), TermValidationError (..))
 import Data.Maybe (isJust)
 import Data.Validation (Validation (..))
 

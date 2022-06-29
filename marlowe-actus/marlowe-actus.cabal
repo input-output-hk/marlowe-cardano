@@ -56,10 +56,13 @@ library actus-core
                       DeriveTraversable
   exposed-modules:
     Actus.Core
+    Actus.Domain
+    Actus.Model
+    Actus.Utility
+  other-modules:
     Actus.Domain.BusinessEvents
     Actus.Domain.ContractTerms
     Actus.Domain.ContractState
-    Actus.Domain.Ops
     Actus.Domain.Schedule
     Actus.Model.Applicability
     Actus.Model.ContractSchedule
@@ -81,10 +84,8 @@ test-suite actus-core-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-    Spec.Actus.Haskell
-    Spec.Actus.QCGenerator
-    Spec.Actus.QCTests
-    Spec.Actus.TestFramework
+    Spec.Actus
+    Spec.TestFramework
   build-depends:
     actus-core,
     aeson -any,
@@ -101,7 +102,6 @@ test-suite actus-core-test
     text -any,
     time -any,
     validation -any,
-    QuickCheck
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
@@ -129,7 +129,8 @@ library
                       DeriveTraversable
   exposed-modules:
     Actus.Marlowe
-    Generator
+  other-modules:
+    Actus.Marlowe.Instance
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
@@ -137,15 +138,11 @@ library
 
 test-suite marlowe-actus-test
   default-language: Haskell2010
-  hs-source-dirs: test, actus-core/test
+  hs-source-dirs: test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
     Spec.Actus.Examples
-    Spec.Actus.Haskell
-    Spec.Actus.Helper
-    Spec.Actus.TestFramework
-    Spec.Actus.TestFrameworkMarlowe
   build-depends:
     actus-core,
     aeson -any,
@@ -168,7 +165,6 @@ test-suite marlowe-actus-test
     text -any,
     time -any,
     validation -any,
-    QuickCheck
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates

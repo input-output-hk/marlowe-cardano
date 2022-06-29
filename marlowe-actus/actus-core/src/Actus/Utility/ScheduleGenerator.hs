@@ -10,8 +10,7 @@ module Actus.Utility.ScheduleGenerator
   )
 where
 
-import Actus.Domain.ContractTerms (Cycle (..), ScheduleConfig (..), Stub (..))
-import Actus.Domain.Schedule (ShiftedSchedule, mkShiftedDay)
+import Actus.Domain (Cycle (..), ScheduleConfig (..), ShiftedSchedule, Stub (..), mkShiftedDay)
 import Actus.Utility.DateShift (applyBDC, applyEOMC, shiftDate)
 import qualified Data.List as L (delete, init, last, length)
 import Data.Time (LocalTime (..))

@@ -3,7 +3,7 @@ module Actus.Utility.ANN.Annuity
   (annuity)
 where
 
-import Actus.Domain.Ops (ActusNum (..), ActusOps (..))
+import Actus.Domain (ActusNum (..), ActusOps (..))
 import Data.List (foldl', tails)
 import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
