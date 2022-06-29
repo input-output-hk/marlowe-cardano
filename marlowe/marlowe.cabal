@@ -150,6 +150,7 @@ test-suite marlowe-test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
+        Spec.Marlowe.Arbitrary
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
         Spec.Marlowe.Semantics

@@ -1,13 +1,5 @@
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE NumericUnderscores  #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 
 module Spec.Marlowe.Semantics (
@@ -15,21 +7,15 @@ module Spec.Marlowe.Semantics (
 ) where
 
 
-import Control.Monad (replicateM)
-import Data.Function (on)
-import Data.List (nubBy)
-import Data.Word (Word8)
 import Language.Marlowe.Semantics
 import Language.Marlowe.Semantics.Types
-import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken,
-                             toBuiltin)
+import Plutus.V1.Ledger.Api (POSIXTime (..))
+import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Common (observationGen, valueGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Prelude as P
 
@@ -110,116 +96,6 @@ tests =
       , testProperty "INotify" checkINotify
       ]
     ]
-
-
-instance Arbitrary POSIXTime where
-  arbitrary = POSIXTime <$> arbitrary
-
-instance Arbitrary CurrencySymbol where
-  arbitrary = CurrencySymbol . toBuiltin . BS.pack <$> replicateM 28 (arbitrary :: Gen Word8)
-
-instance Arbitrary TokenName where
-  arbitrary =
-    do
-      count <- elements $ [0] <> [2^n | n <- [0..5] :: [Int]]
-      TokenName . toBuiltin . BS8.pack <$> replicateM count (chooseEnum ('A', 'Z'))
-
-instance Arbitrary Token where
-  arbitrary =  -- FIXME: Add correlations.
-     do
-       isAda <- arbitrary
-       if isAda
-         then pure $ Token adaSymbol adaToken
-         else Token <$> arbitrary <*> arbitrary
-
-instance Arbitrary PubKeyHash where
-  arbitrary = PubKeyHash . toBuiltin . BS.pack <$> replicateM 28 arbitrary
-
-instance Arbitrary Party where
-  arbitrary =
-    do
-       isPubKeyHash <- frequency [(1, pure True), (9, pure False)]
-       if isPubKeyHash
-         then PK <$> arbitrary
-         else Role <$> arbitrary
-
-instance Arbitrary ValueId where
-  arbitrary =
-    do
-      count <- elements $ [0] <> [2^n | n <- [0..6] :: [Int]]
-      ValueId . toBuiltin . BS8.pack <$> replicateM count (chooseEnum ('a', 'z'))
-
-instance Arbitrary ChoiceId where
-  arbitrary = ChoiceId <$> genChoiceName <*> arbitrary
-
-instance Arbitrary Bound where
-  arbitrary =
-    do
-      lower <- arbitrary
-      upper <- suchThat arbitrary (>= lower)
-      pure $ Bound lower upper
-
-genChoiceName :: Gen ChoiceName
-genChoiceName =
-  do
-    count <- elements $ [0] <> [2^n | n <- [0..6] :: [Int]]
-    toBuiltin . BS8.pack <$> replicateM count (elements $ ['A'..'Z'] <> ['a'..'z'])
-
-genTimeInterval :: Gen TimeInterval
-genTimeInterval =
-  do
-    start <- arbitrary
-    end <- suchThat arbitrary (> start)
-    pure (start, end)
-
-genAccounts :: Gen Accounts
-genAccounts =
-  do  -- FIXME: Add correlations.
-    accounts <- replicateM 10 arbitrary
-    tokens <- replicateM 10 $ suchThat arbitrary (> 0)
-    entries <- chooseInt (0, 10)
-    fmap (AM.fromList . nubBy ((==) `on` fst))
-      . replicateM entries
-      $ (,) <$> elements accounts <*> elements tokens
-
-genFromAccounts :: Accounts -> Gen ((AccountId, Token), Integer)
-genFromAccounts accounts
-  | AM.null accounts = (,) <$> ((,) <$> arbitrary <*> arbitrary) <*> arbitrary
-  | otherwise =
-    do
-      let entries = AM.toList accounts
-      exact <- arbitrary
-      exactKey <- arbitrary
-      exactAccountId <- arbitrary
-      exactToken <- arbitrary
-      exactAmount <- arbitrary
-      let chooseKey = elements $ fst <$> entries
-          chooseAccountId = if exactAccountId then elements $ fst . fst <$> entries else arbitrary
-          chooseToken = if exactToken then elements $ snd . fst <$> entries else arbitrary
-          chooseAmount = if exactAmount then elements $ snd <$> entries else arbitrary
-      case (exact, exactKey) of
-        (True , _    ) -> elements entries
-        (False, True ) -> (,) <$> chooseKey <*> chooseAmount
-        (False, False) -> (,) <$> ((,) <$> chooseAccountId <*> chooseToken) <*> chooseAmount
-
-genAssocMap :: Eq k
-            => Arbitrary k
-            => Arbitrary v
-            => Gen (AM.Map k v)
-genAssocMap =
-  do
-    entries <- chooseInt (0, 10)
-    fmap (AM.fromList . nubBy ((==) `on` fst))
-      . replicateM entries
-      $ (,) <$> arbitrary <*> arbitrary
-
-
-instance Arbitrary State where
-  arbitrary = State <$> genAccounts <*> genAssocMap <*> genAssocMap <*> arbitrary
-
-
-instance Arbitrary Environment where
-  arbitrary = Environment <$> genTimeInterval
 
 
 checkValue :: Show a
