@@ -41,9 +41,7 @@
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
-          (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
-          (hsPkgs."sort" or (errorHandler.buildDepError "sort"))
           (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
           ];
         buildable = true;
