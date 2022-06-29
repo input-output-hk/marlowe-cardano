@@ -118,9 +118,7 @@ library
     plutus-ledger,
     text,
     marlowe -any,
-    mtl -any,
     time -any,
-    sort -any,
     validation -any
   default-language: Haskell2010
   default-extensions: ExplicitForAll ScopedTypeVariables
