@@ -12,7 +12,7 @@ main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Marlowe"
+tests = testGroup "Marlowe" $
     [ testGroup "Contracts" [ Spec.Marlowe.Marlowe.tests
                             , Spec.Marlowe.AutoExecute.tests
 -- Does not work when invoking it from nix
@@ -25,5 +25,5 @@ tests = testGroup "Marlowe"
     , testGroup "Marlowe JSON"
         [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
         ]
-    , Spec.Marlowe.Semantics.tests
     ]
+    <> Spec.Marlowe.Semantics.tests

@@ -7,9 +7,11 @@ module Spec.Marlowe.Semantics (
 ) where
 
 
+import Control.Monad (replicateM)
+import Data.List (group, sort)
 import Language.Marlowe.Semantics
 import Language.Marlowe.Semantics.Types
-import Plutus.V1.Ledger.Api (POSIXTime (..))
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
 import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Common (observationGen, valueGen)
 import Test.Tasty
@@ -20,82 +22,110 @@ import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Prelude as P
 
 
-tests :: TestTree
+tests :: [TestTree]
 tests =
-  testGroup "Semantics"
-    [
-      testGroup "evalValue"
+  [
+    testGroup "Semantics"
       [
-        testGroup "AvailableMoney"
+        testGroup "evalValue"
         [
-          testProperty "Account exists" $ checkAvailableMoney True
-        , testProperty "Account does not exist" $ checkAvailableMoney False
+          testGroup "AvailableMoney"
+          [
+            testProperty "Account exists" $ checkAvailableMoney True
+          , testProperty "Account does not exist" $ checkAvailableMoney False
+          ]
+        , testProperty "Constant" checkConstant
+        , testProperty "NegValue" checkNegValue
+        , testProperty "AddValue" checkAddValue
+        , testProperty "SubValue" checkSubValue
+        , testProperty "MulValue" checkMulValue
+        , testGroup "DivValue"
+          [
+            testCase "Numerator and Denominator are zero" checkDivValueNumeratorDenominatorZero
+          , testProperty "Numerator is zero" checkDivValueNumeratorZero
+          , testProperty "Denominator is zero" checkDivValueDenominatorZero
+          , testProperty "Exact multiple" checkDivValueMultiple
+          , testProperty "Rounding" checkDivValueRounding
+          ]
+        , testGroup "ChoiceValue"
+          [
+            testProperty "Choice exists" $ checkChoiceValue True
+          , testProperty "Choice does not exist" $ checkChoiceValue False
+          ]
+        , testProperty "TimeIntervalStart" checkTimeIntervalStart
+        , testProperty "TimeIntervalEnd" checkTimeIntervalEnd
+        , testGroup "UseValue"
+          [
+            testProperty "Value exists" $ checkUseValue True
+          , testProperty "Value does not exist" $ checkUseValue False
+          ]
+        , testProperty "Cond" checkCond
         ]
-      , testProperty "Constant" checkConstant
-      , testProperty "NegValue" checkNegValue
-      , testProperty "AddValue" checkAddValue
-      , testProperty "SubValue" checkSubValue
-      , testProperty "MulValue" checkMulValue
-      , testGroup "DivValue"
+      , testGroup "evalObservation"
         [
-          testCase "Numerator and Denominator are zero" checkDivValueNumeratorDenominatorZero
-        , testProperty "Numerator is zero" checkDivValueNumeratorZero
-        , testProperty "Denominator is zero" checkDivValueDenominatorZero
-        , testProperty "Exact multiple" checkDivValueMultiple
-        , testProperty "Rounding" checkDivValueRounding
+          testProperty "AndObs" checkAndObs
+        , testProperty "OrObs" checkOrObs
+        , testProperty "NotObs" checkNotObs
+        , testGroup "ChoseSomething"
+          [
+            testProperty "Choice exists" $ checkChoseSomething True
+          , testProperty "Choice does not exist" $ checkChoseSomething False
+          ]
+        , testProperty "ValueGE" checkValueGE
+        , testProperty "ValueGT" checkValueGT
+        , testProperty "ValueLT" checkValueLT
+        , testProperty "ValueLE" checkValueLE
+        , testProperty "ValueEQ" checkValueEQ
+        , testCase "TrueObs" checkTrueObs
+        , testCase "FalseObs" checkFalseObs
         ]
-      , testGroup "ChoiceValue"
+      , testGroup "applyAction"
         [
-          testProperty "Choice exists" $ checkChoiceValue True
-        , testProperty "Choice does not exist" $ checkChoiceValue False
+          testProperty "Input does not match action" checkApplyActionMismatch
+        , testGroup "IDeposit"
+          [
+            testProperty "AccountId does not match"                  $ checkIDeposit (Just False) Nothing     Nothing      Nothing
+          , testProperty "Party does not match"                      $ checkIDeposit Nothing     (Just False) Nothing      Nothing
+          , testProperty "Token does not match"                      $ checkIDeposit Nothing      Nothing     (Just False) Nothing
+          , testProperty "Amount does not match"                     $ checkIDeposit Nothing      Nothing     Nothing      (Just False)
+          , testProperty "AccountId, party, token, and amount match" $ checkIDeposit (Just True) (Just True)  (Just True)  (Just True)
+          ]
+        , testGroup "IChoice"
+          [
+            testProperty "ChoiceId does not match"       $ checkIChoice (Just False) Nothing
+          , testProperty "ChoiceNum out of bounds" $ checkIChoice Nothing      (Just False)
+          , testProperty "ChoiceNum in bounds"     $ checkIChoice (Just True)  (Just True)
+          ]
+        , testProperty "INotify" checkINotify
         ]
-      , testProperty "TimeIntervalStart" checkTimeIntervalStart
-      , testProperty "TimeIntervalEnd" checkTimeIntervalEnd
-      , testGroup "UseValue"
-        [
-          testProperty "Value exists" $ checkUseValue True
-        , testProperty "Value does not exist" $ checkUseValue False
-        ]
-      , testProperty "Cond" checkCond
       ]
-    , testGroup "evalObservation"
+  , testGroup "Entropy of Arbitrary"
       [
-        testProperty "AndObs" checkAndObs
-      , testProperty "OrObs" checkOrObs
-      , testProperty "NotObs" checkNotObs
-      , testGroup "ChoseSomething"
-        [
-          testProperty "Choice exists" $ checkChoseSomething True
-        , testProperty "Choice does not exist" $ checkChoseSomething False
-        ]
-      , testProperty "ValueGE" checkValueGE
-      , testProperty "ValueGT" checkValueGT
-      , testProperty "ValueLT" checkValueLT
-      , testProperty "ValueLE" checkValueLE
-      , testProperty "ValueEQ" checkValueEQ
-      , testCase "TrueObs" checkTrueObs
-      , testCase "FalseObs" checkFalseObs
-      ]
-    , testGroup "applyAction"
-      [
-        testProperty "Input does not match action" checkApplyActionMismatch
-      , testGroup "IDeposit"
-        [
-          testProperty "AccountId does not match"                  $ checkIDeposit (Just False) Nothing     Nothing      Nothing
-        , testProperty "Party does not match"                      $ checkIDeposit Nothing     (Just False) Nothing      Nothing
-        , testProperty "Token does not match"                      $ checkIDeposit Nothing      Nothing     (Just False) Nothing
-        , testProperty "Amount does not match"                     $ checkIDeposit Nothing      Nothing     Nothing      (Just False)
-        , testProperty "AccountId, party, token, and amount match" $ checkIDeposit (Just True) (Just True)  (Just True)  (Just True)
-        ]
-      , testGroup "IChoice"
-        [
-          testProperty "ChoiceId does not match"       $ checkIChoice (Just False) Nothing
-        , testProperty "ChoiceNum out of bounds" $ checkIChoice Nothing      (Just False)
-        , testProperty "ChoiceNum in bounds"     $ checkIChoice (Just True)  (Just True)
-        ]
-      , testProperty "INotify" checkINotify
+        testCase "PubKeyHash"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen PubKeyHash     )
+      , testCase "CurrencySymbol" $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen CurrencySymbol )
+      , testCase "TokenName"      $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen TokenName      )
+      , testCase "Token"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Token          )
+      , testCase "Party"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Party          )
+      , testCase "ChoiceName"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100)  arbitraryChoiceName
+      , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ChoiceId       )
+      , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId        )
+      , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryAccounts   )
+      , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryChoices    )
+      , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryBoundValues)
       ]
     ]
+
+
+checkEntropy :: Ord a => Int -> (Double, Double) -> Gen a -> Assertion
+checkEntropy n (min', max') gen =
+  do
+    sample'' <- generate $ replicateM n gen
+    let
+      n' = fromIntegral n
+      histogram = fmap (fromIntegral . length) . group . sort $ sample''
+      entropy = sum $ (\f -> - f * logBase 2 f) . (/ n') <$> histogram
+    assertBool ("!(" <> show min' <> " <= " <> show entropy <> " <= " <> show max' <> ")")
+      $ min' <= entropy && entropy <= max'
 
 
 checkValue :: Show a
@@ -398,7 +428,7 @@ checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property 
   let gen = do
         environment <- arbitrary
         state <- arbitrary
-        ((account, token), _) <- genFromAccounts $ accounts state
+        ((account, token), _) <- arbitraryFromAccounts $ accounts state
         accountMatches' <- maybe arbitrary pure accountMatches
         account' <- if accountMatches' then pure account else suchThat arbitrary (/= account)
         partyMatches' <- maybe arbitrary pure partyMatches
