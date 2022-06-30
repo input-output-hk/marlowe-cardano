@@ -1,30 +1,54 @@
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
 module Spec.Marlowe.Arbitrary (
-  genAccounts
-, genAssocMap
+
+  arbitraryPositiveAmount
+, shrinkPositiveAmount
+
 , arbitraryChoiceName
 , shrinkChoiceName
-, genFromAccounts
+
 , arbitraryTimeInterval
 , shrinkTimeInterval
+
+, arbitraryAccounts
+, shrinkAccounts
+, arbitraryFromAccounts
+
+, arbitraryChoices
+, shrinkChoices
+, arbitraryChoiceIdFromParty
+
+, arbitraryBoundValues
+, shrinkBoundValues
+
 ) where
 
 
 import Control.Monad (replicateM)
 import Data.Function (on)
-import Data.List (nubBy)
-import Language.Marlowe.Semantics.Types (AccountId, Accounts, Bound (..), ChoiceId (..), ChoiceName, Environment (..),
-                                         Party (..), State (..), TimeInterval, Token (..), ValueId (..))
+import Data.List (nub, nubBy)
+import Language.Marlowe.Semantics.Types (AccountId, Accounts, Bound (..), ChoiceId (..), ChoiceName, ChosenNum,
+                                         Environment (..), Party (..), State (..), TimeInterval, Token (..),
+                                         ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInt, elements, frequency, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, suchThat)
 
-import qualified PlutusTx.AssocMap as AM (Map, fromList, null, toList)
+import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, null, toList)
+import qualified PlutusTx.Eq as P (Eq)
+
+
+arbitraryPositiveAmount :: Gen Integer
+arbitraryPositiveAmount = arbitrary `suchThat` (> 0)
+
+shrinkPositiveAmount :: Integer -> [Integer]
+shrinkPositiveAmount x = nub [1, x `div` 2, x-1]
 
 
 fibonaccis :: Num a => [a]
@@ -272,18 +296,34 @@ instance Arbitrary Bound where
       ]
 
 
-genAccounts :: Gen Accounts
-genAccounts =
-  do  -- FIXME: Add correlations.
-    accounts' <- replicateM 10 arbitrary
-    tokens <- replicateM 10 $ suchThat arbitrary (> 0)
-    entries <- chooseInt (0, 10)
+arbitraryAssocMap :: Eq k => Gen k -> Gen v -> Gen (AM.Map k v)
+arbitraryAssocMap arbitraryKey arbitraryValue =
+  do
+    entries <- arbitraryFibonacci [0..]
     fmap (AM.fromList . nubBy ((==) `on` fst))
       . replicateM entries
-      $ (,) <$> elements accounts' <*> elements tokens
+      $ (,) <$> arbitraryKey <*> arbitraryValue
 
-genFromAccounts :: Accounts -> Gen ((AccountId, Token), Integer)
-genFromAccounts accounts'
+shrinkAssocMap :: P.Eq k => AM.Map k v -> [AM.Map k v]
+shrinkAssocMap am =
+  [
+    AM.delete k am
+  |
+    k <- AM.keys am
+  ]
+
+
+arbitraryAccounts :: Gen Accounts
+arbitraryAccounts =
+  arbitraryAssocMap
+    ((,) <$> arbitrary <*> arbitrary)
+    arbitraryPositiveAmount
+
+shrinkAccounts :: Accounts -> [Accounts]
+shrinkAccounts = shrinkAssocMap
+
+arbitraryFromAccounts :: Accounts -> Gen ((AccountId, Token), Integer)
+arbitraryFromAccounts accounts'
   | AM.null accounts' = (,) <$> ((,) <$> arbitrary <*> arbitrary) <*> arbitrary
   | otherwise =
     do
@@ -302,21 +342,39 @@ genFromAccounts accounts'
         (False, True ) -> (,) <$> chooseKey <*> chooseAmount
         (False, False) -> (,) <$> ((,) <$> chooseAccountId <*> chooseToken) <*> chooseAmount
 
-genAssocMap :: Eq k
-            => Arbitrary k
-            => Arbitrary v
-            => Gen (AM.Map k v)
-genAssocMap =
-  do
-    entries <- chooseInt (0, 10)
-    fmap (AM.fromList . nubBy ((==) `on` fst))
-      . replicateM entries
-      $ (,) <$> arbitrary <*> arbitrary
+
+arbitraryChoices :: Gen (AM.Map ChoiceId ChosenNum)
+arbitraryChoices = arbitraryAssocMap arbitrary arbitrary
+
+shrinkChoices :: AM.Map ChoiceId ChosenNum -> [AM.Map ChoiceId ChosenNum]
+shrinkChoices = shrinkAssocMap
+
+arbitraryChoiceIdFromParty :: Gen Party -> Gen ChoiceId
+arbitraryChoiceIdFromParty party = ChoiceId <$> arbitraryChoiceName <*> party
+
+arbitraryBoundValues :: Gen (AM.Map ValueId Integer)
+arbitraryBoundValues = arbitraryAssocMap arbitrary arbitrary
+
+shrinkBoundValues :: AM.Map ValueId Integer -> [AM.Map ValueId Integer]
+shrinkBoundValues = shrinkAssocMap
 
 
 instance Arbitrary State where
-  arbitrary = State <$> genAccounts <*> genAssocMap <*> genAssocMap <*> arbitrary
+  arbitrary =
+    do
+      accounts' <- arbitraryAccounts
+      let party = fst . fst <$> arbitraryFromAccounts accounts'
+      State accounts'
+        <$> arbitraryAssocMap (arbitraryChoiceIdFromParty party) arbitrary
+        <*> arbitraryBoundValues
+        <*> arbitrary
+  shrink s@State{..} =
+    [s {accounts = accounts'} | accounts' <- shrinkAccounts accounts]
+      <> [s {choices = choices'} | choices' <- shrinkChoices choices]
+      <> [s {boundValues = boundValues'} | boundValues' <- shrinkBoundValues boundValues]
+      <> [s {minTime = minTime'} | minTime' <- shrink minTime]
 
 
 instance Arbitrary Environment where
   arbitrary = Environment <$> arbitraryTimeInterval
+  shrink (Environment x) = Environment <$> shrink x
