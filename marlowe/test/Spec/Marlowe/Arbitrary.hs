@@ -260,20 +260,20 @@ arbitraryTimeInterval :: Gen TimeInterval
 arbitraryTimeInterval =
   do
     start <- arbitrary
-    end <- arbitrary `suchThat` (> start)
+    end <- arbitrary `suchThat` (>= start)
     pure (start, end)
 
 shrinkTimeInterval :: TimeInterval -> [TimeInterval]
 shrinkTimeInterval (start, end) =
   let
-    mid = (start + end + 1) `div` 2
+    mid = (start + end) `div` 2
   in
     [
-      (start  , start + 1)
-    , (start  , mid      )
-    , (mid - 1, mid      )
-    , (mid - 1, end      )
-    , (end - 1, end      )
+      (start, start)
+    , (start, mid  )
+    , (mid  , mid  )
+    , (mid  , end  )
+    , (end  , end  )
     ]
 
 

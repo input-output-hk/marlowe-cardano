@@ -27,7 +27,13 @@ tests =
   [
     testGroup "Semantics"
       [
-        testGroup "evalValue"
+        testGroup "fixInterval"
+        [
+          testProperty "Invalid interval" $ checkFixInterval True  False
+        , testProperty "Interval in past" $ checkFixInterval False True
+        , testProperty "Interval trimmed" $ checkFixInterval False False
+        ]
+      , testGroup "evalValue"
         [
           testGroup "AvailableMoney"
           [
@@ -126,6 +132,23 @@ checkEntropy n (min', max') gen =
       entropy = sum $ (\f -> - f * logBase 2 f) . (/ n') <$> histogram
     assertBool ("!(" <> show min' <> " <= " <> show entropy <> " <= " <> show max' <> ")")
       $ min' <= entropy && entropy <= max'
+
+
+checkFixInterval :: Bool -> Bool -> Property
+checkFixInterval invalid inPast =
+  property $ do
+  let gen = do
+        state <- arbitrary
+        end   <- arbitrary `suchThat` (\t -> (t < minTime state) == inPast)
+        start <- arbitrary `suchThat` (\t -> (t > end) == invalid && (t < minTime state) == inPast)
+        pure ((start, end), state)
+  forAll gen $ \(interval, state) ->
+    case fixInterval interval state of
+      IntervalTrimmed environment' state'     -> not invalid && not inPast
+                                                   && timeInterval environment' == interval
+                                                   && state' == state {minTime = maximum [minTime state, fst interval]}
+      IntervalError (InvalidInterval     _  ) -> invalid
+      IntervalError (IntervalInPastError _ _) -> not invalid && inPast
 
 
 checkValue :: Show a
