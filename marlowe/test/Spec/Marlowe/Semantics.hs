@@ -8,10 +8,12 @@ module Spec.Marlowe.Semantics (
 
 
 import Control.Monad (replicateM)
+import Data.Function (on)
 import Data.List (group, sort)
 import Language.Marlowe.Semantics
 import Language.Marlowe.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
+import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Common (observationGen, valueGen)
 import Test.Tasty
@@ -84,6 +86,12 @@ tests =
         , testProperty "ValueEQ" checkValueEQ
         , testCase "TrueObs" checkTrueObs
         , testCase "FalseObs" checkFalseObs
+        ]
+      , testGroup "refundOne"
+        [
+          testProperty "No accounts"       $ checkRefundOne (== 0)
+        , testProperty "One account"       $ checkRefundOne (== 1)
+        , testProperty "Multiple accounts" $ checkRefundOne (>= 2)
         ]
       , testGroup "applyAction"
         [
@@ -512,3 +520,20 @@ checkINotify = property $ do
         AppliedAction ApplyNoWarning state' -> result && state == state'
         AppliedAction _ _                   -> False
         NotAppliedAction                    -> not result
+
+
+assocMapEq :: Ord k => Ord v => AM.Map k v -> AM.Map k v -> Bool
+assocMapEq = (==) `on` (sort . AM.toList)
+
+
+checkRefundOne :: (Int -> Bool) -> Property
+checkRefundOne f =
+  property
+    $ forAll (arbitraryAccounts `suchThat` (f . length . AM.toList)) $ \accounts' ->
+      case (AM.null accounts', refundOne accounts') of
+         (True, Nothing                          ) -> True
+         (True, _                                ) -> False
+         (_   , Nothing                          ) -> False
+         (_   , Just ((party, money), accounts'')) -> case flattenValue money of
+                                                        [(symbol, name, amount)] -> assocMapEq accounts' (AM.insert (party, Token symbol name) amount accounts'')
+                                                        _                        -> False
