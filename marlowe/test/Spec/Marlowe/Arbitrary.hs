@@ -34,7 +34,7 @@ import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
 import Language.Marlowe.Semantics.Types (AccountId, Accounts, Bound (..), ChoiceId (..), ChoiceName, ChosenNum,
-                                         Environment (..), Party (..), State (..), TimeInterval, Token (..),
+                                         Environment (..), Party (..), Payee (..), State (..), TimeInterval, Token (..),
                                          ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
@@ -190,6 +190,17 @@ instance Arbitrary Party where
          else Role <$> arbitraryFibonacci randomRoleNames
   shrink (PK x)   = (Role <$> randomRoleNames) <> (PK <$> filter (< x) randomPubKeyHashes)
   shrink (Role x) = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
+
+
+instance Arbitrary Payee where
+  arbitrary =
+    do
+      isParty <- arbitrary
+      if isParty
+        then Party <$> arbitrary
+        else Account <$> arbitrary
+  shrink (Party x)   = Party <$> shrink x
+  shrink (Account x) = Account <$> shrink x
 
 
 randomChoiceNames :: [ChoiceName]

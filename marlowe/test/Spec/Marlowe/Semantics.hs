@@ -1,5 +1,6 @@
 
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections  #-}
 
 
 module Spec.Marlowe.Semantics (
@@ -8,8 +9,10 @@ module Spec.Marlowe.Semantics (
 
 
 import Control.Monad (replicateM)
+import Data.Bifunctor (bimap)
 import Data.Function (on)
-import Data.List (group, sort)
+import Data.List (group, groupBy, sort)
+import Data.Maybe (fromMaybe)
 import Language.Marlowe.Semantics
 import Language.Marlowe.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
@@ -93,6 +96,10 @@ tests =
         , testProperty "One account"       $ checkRefundOne (== 1)
         , testProperty "Multiple accounts" $ checkRefundOne (>= 2)
         ]
+      , testProperty "moneyInAccount" checkMoneyInAccount
+      , testProperty "updateMoneyInAccount" checkUpdateMoneyInAccount
+      , testProperty "addMoneyToAccount" checkAddMoneyToAccount
+      , testProperty "giveMoney" checkGiveMoney
       , testGroup "applyAction"
         [
           testProperty "Input does not match action" checkApplyActionMismatch
@@ -525,6 +532,22 @@ checkINotify = property $ do
 assocMapEq :: Ord k => Ord v => AM.Map k v -> AM.Map k v -> Bool
 assocMapEq = (==) `on` (sort . AM.toList)
 
+assocMapInsert :: Eq k => k -> v -> AM.Map k v -> AM.Map k v
+assocMapInsert k v =
+  AM.fromList
+    . ((k, v) :)
+    . filter ((/= k) . fst)
+    . AM.toList
+
+assocMapAdd :: Ord k => Ord v => Num v => k -> v -> AM.Map k v -> AM.Map k v
+assocMapAdd k v =
+  AM.fromList
+    . fmap (bimap head sum . unzip)
+    . groupBy ((==) `on` fst)
+    . sort
+    . ((k, v) :)
+    . AM.toList
+
 
 checkRefundOne :: (Int -> Bool) -> Property
 checkRefundOne f =
@@ -535,5 +558,74 @@ checkRefundOne f =
          (True, _                                ) -> False
          (_   , Nothing                          ) -> False
          (_   , Just ((party, money), accounts'')) -> case flattenValue money of
-                                                        [(symbol, name, amount)] -> assocMapEq accounts' (AM.insert (party, Token symbol name) amount accounts'')
-                                                        _                        -> False
+                                                        [(s, n, a)] -> assocMapEq accounts' (AM.insert (party, Token s n) a accounts'')
+                                                        _           -> False
+
+
+checkMoneyInAccount :: Property
+checkMoneyInAccount =
+  property $ do
+  let gen =
+        do
+          accounts' <- arbitraryAccounts
+          (, accounts') <$> arbitraryFromAccounts accounts'
+  forAll gen $ \(((account, token), _), accounts') ->
+    fromMaybe 0 ((account, token) `AM.lookup` accounts') == moneyInAccount account token accounts'
+
+
+checkUpdateMoneyInAccount :: Property
+checkUpdateMoneyInAccount =
+  property $ do
+  let gen =
+        do
+          accounts' <- arbitraryAccounts
+          (, accounts') <$> arbitraryFromAccounts accounts'
+  forAll gen $ \(((account, token), amount), accounts') ->
+    let
+      newAccounts = AM.filter (> 0) $ assocMapInsert (account, token) amount accounts'
+    in
+      newAccounts `assocMapEq` updateMoneyInAccount account token amount accounts'
+
+
+checkAddMoneyToAccount :: Property
+checkAddMoneyToAccount =
+  property $ do
+  let gen =
+        do
+          accounts' <- arbitraryAccounts
+          (, accounts') <$> arbitraryFromAccounts accounts'
+  forAll gen $ \(((account, token), amount), accounts') ->
+    let
+      newAccounts = assocMapAdd (account, token) amount accounts'
+      accounts'' = addMoneyToAccount account token amount accounts'
+    in
+      if amount > 0
+        then newAccounts `assocMapEq` accounts''
+        else accounts' `assocMapEq` accounts''
+
+
+checkGiveMoney :: Property
+checkGiveMoney =
+  property $ do
+  let gen =
+        do
+          accounts' <- arbitraryAccounts
+          (, , accounts') <$> arbitraryFromAccounts accounts' <*> arbitrary
+  forAll gen $ \(((account, token), amount), payee, accounts') ->
+    let
+      newAccounts =
+        case payee of
+          Party   _        -> accounts'
+          Account account' -> assocMapAdd (account', token) amount accounts'
+      (result, accounts'') = giveMoney account payee token amount accounts'
+    in
+      (if amount > 0 then newAccounts else accounts') `assocMapEq` accounts''
+        && case result of
+             ReduceWithPayment (Payment account'' payee'' money'') -> case flattenValue money'' of
+                                                                        [(s, n, a)] -> account'' == account
+                                                                                         && payee == payee''
+                                                                                         && token == Token s n
+                                                                                         && amount == a
+                                                                        []          -> amount <= 0
+                                                                        _                     -> False
+             _                                                     -> False
