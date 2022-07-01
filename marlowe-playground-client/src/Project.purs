@@ -31,6 +31,7 @@ import Project.Types
   , ProjectStorage(..)
   , SourceCode(..)
   , Workflow(..)
+  , workflowLanguage
   ) as Types
 import Project.Types
   ( Bundle(..)

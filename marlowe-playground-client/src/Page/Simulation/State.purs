@@ -2,13 +2,15 @@ module Page.Simulation.State
   ( handleAction
   , editorGetValue
   , getCurrentContract
-  , mkStateBase
+  , mkState
   ) where
 
 import Prologue hiding (div)
 
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State, initialState) as BottomPanel
+import Contrib.Halogen.Store (useStore)
+import Contrib.Halogen.Store.Monad (preuseStore)
 import Control.Monad.Except (lift, runExcept)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Data.Argonaut (encodeJson, stringify)
@@ -20,8 +22,9 @@ import Data.Either (fromRight, hush)
 import Data.Foldable (for_)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Hashable (hash)
-import Data.Lens (assign, modifying, use)
+import Data.Lens (_Just, assign, modifying, use)
 import Data.Lens.Extra (peruse)
+import Data.Lens.Iso.Newtype (_Newtype)
 import Data.List.NonEmpty (last)
 import Data.List.NonEmpty as NEL
 import Data.List.Types (NonEmptyList)
@@ -44,7 +47,7 @@ import Halogen (HalogenM, query, tell)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Help (HelpContext(..))
-import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
+import MainFrame.Types (ChildSlots, _simulatorEditorSlot)
 import Marlowe (Api)
 import Marlowe as Server
 import Marlowe.Extended.Metadata (MetaData)
@@ -68,7 +71,8 @@ import Page.Simulation.Lenses
   , _helpContext
   , _showRightPanel
   )
-import Page.Simulation.Types (Action(..), BottomPanelView(..), State, StateBase)
+import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
+import Project (_projectName)
 import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import Simulator.Lenses
@@ -95,6 +99,9 @@ import Simulator.Types
   , PartiesAction(..)
   )
 import StaticData (simulatorBufferLocalStorageKey)
+import Store as Store
+import Store.ProjectState (_project, _projectState)
+import Type.Constraints (class MonadAffAjaxStore)
 import Web.Blob.Download (HandleMethod(..), download)
 import Web.DOM.Document as D
 import Web.DOM.Element (setScrollTop)
@@ -105,8 +112,8 @@ import Web.HTML as Web
 import Web.HTML.HTMLDocument (toDocument)
 import Web.HTML.Window as W
 
-mkStateBase :: Minutes -> StateBase ()
-mkStateBase tzOffset =
+mkState :: Minutes -> State
+mkState tzOffset =
   { showRightPanel: true
   , marloweState: NEL.singleton emptyMarloweState
   , tzOffset
@@ -129,9 +136,7 @@ toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
 
 mkContract
   :: forall m
-   . MonadAff m
-  => MonadEffect m
-  => MonadAjax Api m
+   . MonadAffAjaxStore m
   => HalogenM State Action ChildSlots Void m (Maybe (Term Term.Contract))
 mkContract = runMaybeT do
   termContract <- MaybeT $ peruse
@@ -148,8 +153,7 @@ mkContract = runMaybeT do
 
 handleAction
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
+   . MonadAffAjaxStore m
   => MetaData
   -> Action
   -> HalogenM State Action ChildSlots Void m Unit
@@ -202,7 +206,11 @@ handleAction metadata StartSimulation = do
 handleAction _ DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
   Just (contract :: Contract) -> do
     dateTime <- liftEffect $ nowDateTime
-    projectName <- use _projectName
+    projectName <- preuseStore
+      ( Store._State <<< _projectState <<< _Just <<< _project <<< _projectName
+          <<< _Just
+          <<< _Newtype
+      )
     let
       contractJson = stringify $ encodeJson contract
       blob = Blob.fromString contractJson applicationJSON
@@ -211,7 +219,13 @@ handleAction _ DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
       dateTime' = fromRight "WrongDateFormat" $ formatDateTime
         "YYYY-MM-DD-HH:mm:ss"
         dateTime
-      fullName = projectName <> "-" <> dateTime' <> "-" <> show id <> ".json"
+      fullName = do
+        let
+          pn = case projectName of
+            Just n -> n <> "-"
+            Nothing -> mempty
+        pn <> dateTime' <> "-" <> show id <> ".json"
+
     liftEffect do
       download (FileDownload fullName) blob
   Nothing -> pure unit
@@ -278,8 +292,7 @@ stripPair pair = case splitAt 4 pair of
 
 setOraclePrice
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
+   . MonadAffAjaxStore m
   => MetaData
   -> HalogenM State Action ChildSlots Void m Unit
 setOraclePrice metadata = do
@@ -396,8 +409,7 @@ editorGetValue = query _simulatorEditorSlot unit (Monaco.GetText identity)
 
 updateOracleAndContractEditor
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
+   . MonadAffAjaxStore m
   => MetaData
   -> HalogenM State Action ChildSlots Void m Unit
 updateOracleAndContractEditor metadata = do

@@ -7,6 +7,7 @@ import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(..))
 import Data.Variant (Variant)
 import Data.Variant as Variant
+import Debug (traceM)
 import Prim.Row as Row
 import Project (Project, ProjectName, SourceCode)
 import Project as Project
@@ -74,8 +75,8 @@ reduce = Variant.on _projectStateP case _ of
   OnProjectCodeChanged code -> modify $ Record.modify _projectP $ flip
     Project.setCode
     code
-  OnProjectLoaded project -> Record.set _projectStateP
-    (Just $ mkProjectState project)
+  OnProjectLoaded project ->
+    Record.set _projectStateP (Just $ mkProjectState project)
   OnProjectSaved -> modify $ Record.set _modifiedP false
   OnProjectModified -> modify $ Record.set _modifiedP true
   where

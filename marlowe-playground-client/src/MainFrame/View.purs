@@ -5,7 +5,7 @@ import Prologue hiding (div)
 import Component.Modal.View (modal)
 import Contrib.Data.Array.Builder ((:>))
 import Contrib.Data.Array.Builder as AB
-import Data.Lens (_Just, has, preview, (^.))
+import Data.Lens (_Just, has, preview, (^.), (^?))
 import Data.Maybe (fromMaybe)
 import Data.Monoid (guard)
 import Debug (spy)
@@ -47,7 +47,7 @@ import MainFrame.Types
   , _haskellState
   , _javascriptState
   , _marloweEditorState
-  , _projectName
+  , _project
   , _simulationState
   , _view
   , isAuthenticated
@@ -59,6 +59,8 @@ import Page.HaskellEditor.View (otherActions, render) as HaskellEditor
 import Page.JavascriptEditor.View as JSEditor
 import Page.MarloweEditor.View as MarloweEditor
 import Page.Simulation.View as Simulation
+import Project (ProjectName(..))
+import Project as Project
 import Type.Constraints (class MonadAffAjaxStore)
 
 render
@@ -202,7 +204,8 @@ render state =
     HomePage -> text ""
     _ ->
       let
-        title = state ^. _projectName
+        maybeProjectName = state ^? _project <<< _Just <<< Project._projectName
+          <<< _Just
 
         unsavedChangesIndicator =
           if state ^. _hasUnsavedChanges then "*" else ""
@@ -219,7 +222,9 @@ render state =
           ]
           [ h1 [ classNames [ "text-lg" ] ]
               {- TODO: Fix style when name is super long -}
-              [ text title
+              [ text $ case maybeProjectName of
+                  Just (ProjectName projectName) -> projectName
+                  Nothing -> "Untitled project"
               , span [ classNames [ "unsave-change-indicator" ] ]
                   [ text unsavedChangesIndicator ]
               ]

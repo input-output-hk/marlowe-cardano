@@ -239,10 +239,8 @@ type State =
   , javascriptState :: JS.State
   , marloweEditorState :: ME.State
   , blocklyEditorState :: BE.State
-  , simulationState :: Simulation.StateBase ()
-
+  , simulationState :: Simulation.State
   , project :: Maybe Project
-
   , newProject :: NewProject.State
   , rename :: Rename.State
   , saveAs :: SaveAs.State
@@ -250,7 +248,6 @@ type State =
   , gistId :: Maybe GistId
   , createGistResult :: RemoteData String Project
   , loadGistResult :: Either String (WebData Gist)
-  , projectName :: String
   , showModal :: Maybe ModalView
   , hasUnsavedChanges :: Boolean
 
@@ -260,7 +257,7 @@ type State =
       }
   }
 
-_project :: Lens' State (Maybe Project)
+_project :: forall r. Lens' { project :: Maybe Project | r } (Maybe Project)
 _project = prop (Proxy :: _ "project")
 
 _contractMetadata :: Traversal' State MetaData
@@ -301,20 +298,7 @@ _javascriptState :: Lens' State JS.State
 _javascriptState = prop (Proxy :: _ "javascriptState")
 
 _simulationState :: Lens' State Simulation.State
-_simulationState = do
-  let
-    _simulationStateBase = prop (Proxy :: Proxy "simulationState")
-    _projectNameProxy = Proxy :: Proxy "projectName"
-    get_ s = do
-      let
-        r = view _simulationStateBase s
-        n = view _projectName s
-      Record.insert _projectNameProxy n r
-    set_ s r =
-      set _simulationStateBase (Record.delete _projectNameProxy r)
-        <<< set _projectName (Record.get _projectNameProxy r)
-        $ s
-  lens get_ set_
+_simulationState = prop (Proxy :: Proxy "simulationState")
 
 _newProject :: Lens' State NewProject.State
 _newProject = prop (Proxy :: _ "newProject")
@@ -336,9 +320,6 @@ _createGistResult = prop (Proxy :: _ "createGistResult")
 
 _loadGistResult :: Lens' State (Either String (WebData Gist))
 _loadGistResult = prop (Proxy :: _ "loadGistResult")
-
-_projectName :: forall r. Lens' { projectName :: String | r } String
-_projectName = prop (Proxy :: _ "projectName")
 
 _showModal :: Lens' State (Maybe ModalView)
 _showModal = prop (Proxy :: _ "showModal")

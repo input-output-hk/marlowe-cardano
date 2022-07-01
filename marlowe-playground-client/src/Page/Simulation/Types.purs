@@ -19,7 +19,7 @@ import Marlowe.Symbolic.Types.Response (Result)
 import Network.RemoteData (RemoteData)
 import Simulator.Types (MarloweState)
 
-type StateBase r =
+type State =
   { showRightPanel :: Boolean
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , marloweState :: NonEmptyList MarloweState
@@ -27,10 +27,7 @@ type StateBase r =
   , helpContext :: HelpContext
   -- List of decoration ids used by the monaco editor to track the running contract
   , decorationIds :: Array String
-  | r
   }
-
-type State = StateBase (projectName :: String)
 
 data Action
   = HandleEditorMessage Monaco.Message

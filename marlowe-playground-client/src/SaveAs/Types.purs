@@ -41,3 +41,6 @@ emptyState = { projectName: "New Project", status: NotAsked }
 
 _status :: Lens' State (RemoteData String Void)
 _status = prop (Proxy :: _ "status")
+
+_projectName :: Lens' State String
+_projectName = prop (Proxy :: _ "projectName")

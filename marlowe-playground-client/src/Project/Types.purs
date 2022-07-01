@@ -150,3 +150,10 @@ instance Bounded Workflow where
 
 instance Show Workflow where
   show lang = genericShow lang
+
+workflowLanguage :: Workflow -> Language
+workflowLanguage HaskellWorkflow = Haskell
+workflowLanguage BlocklyWorkflow = Marlowe
+workflowLanguage JavascriptWorkflow = Javascript
+workflowLanguage MarloweWorkflow = Marlowe
+

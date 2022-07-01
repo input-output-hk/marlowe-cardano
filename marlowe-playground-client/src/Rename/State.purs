@@ -11,8 +11,8 @@ import Halogen.Css (classNames)
 import Halogen.HTML (button, div, div_, input, text)
 import Halogen.HTML.Events (onClick, onValueChange)
 import Halogen.HTML.Properties (class_, classes, value)
-import MainFrame.Types (ChildSlots, _projectName)
-import Rename.Types (Action(..), State, _error)
+import MainFrame.Types (ChildSlots)
+import Rename.Types (Action(..), State, _error, _projectName)
 
 handleAction
   :: forall m

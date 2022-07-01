@@ -2,7 +2,9 @@ module Contrib.Halogen.Store.Monad where
 
 import Prelude
 
-import Data.Lens (Lens', over, view)
+import Data.Lens (Fold', Lens', over, preview, view)
+import Data.Maybe (Maybe)
+import Data.Maybe.First (First)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 
 getsStore
@@ -20,6 +22,14 @@ useStore
   => Lens' s v
   -> m v
 useStore l = getsStore (view l)
+
+preuseStore
+  :: forall a v s m
+   . Functor m
+  => MonadStore a s m
+  => Fold' (First v) s v
+  -> m (Maybe v)
+preuseStore l = getsStore (preview l)
 
 overStore
   :: forall t17 t18 t19 t20 t21 t22

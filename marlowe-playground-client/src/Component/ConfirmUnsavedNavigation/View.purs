@@ -3,13 +3,15 @@ module Component.ConfirmUnsavedNavigation.View where
 import Prologue hiding (div)
 
 import Component.ConfirmUnsavedNavigation.Types as CN
-import Data.Lens ((^.))
+import Data.Lens (_Just, (^?))
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Classes (btn, btnSecondary, modalContent, spaceRight, uppercase)
 import Halogen.HTML (ClassName(..), ComponentHTML, button, div, div_, p_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes)
-import MainFrame.Types (Action(..), ChildSlots, State, _projectName)
+import MainFrame.Types (Action(..), ChildSlots, State, _project)
+import Project (ProjectName(..))
+import Project as Project
 
 render
   :: forall m
@@ -17,7 +19,10 @@ render
   => Action
   -> State
   -> ComponentHTML Action ChildSlots m
-render intendedAction state =
+render intendedAction state = do
+  let
+    maybeProjectName = state ^? _project <<< _Just <<< Project._projectName <<<
+      _Just
   div [ classes [ modalContent, ClassName "confirm-unsaved-navigation" ] ]
     [ p_
         [ text
@@ -25,8 +30,11 @@ render intendedAction state =
         ]
     , p_ [ text "Unsaved changes will be lost." ]
     , p_
-        [ text $ "Do you want to save changes to '" <> (state ^. _projectName)
-            <> "'?"
+        [ text $ case maybeProjectName of
+            Just (ProjectName projectName) -> "Do you want to save changes to '"
+              <> projectName
+              <> "'?"
+            Nothing -> "Do you want to save changes to your new project?"
         ]
     , div [ classes [ ClassName "actions" ] ]
         [ div_

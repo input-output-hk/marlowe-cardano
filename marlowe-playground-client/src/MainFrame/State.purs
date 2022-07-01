@@ -10,6 +10,8 @@ import Component.Demos.Types (Action(..), Demo(..)) as Demos
 import Component.MetadataTab.State (carryMetadataAction)
 import Component.NewProject.Types (Action(..), emptyState) as NewProject
 import Contrib.Halogen.Store (getsStore) as HS
+import Contrib.Halogen.Store (useStore)
+import Contrib.Halogen.Store.Monad (preuseStore)
 import Control.Bind (bindFlipped)
 import Control.Monad.Except (ExceptT(..), lift, runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
@@ -25,8 +27,8 @@ import Data.Lens (_Just, assign, has, over, preview, set, use, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
-import Data.Newtype (unwrap)
+import Data.Maybe (fromMaybe, maybe)
+import Data.Newtype (un, unwrap)
 import Data.RawJson (RawJson(..))
 import Debug (traceM)
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -70,7 +72,6 @@ import MainFrame.Types
   , _loadGistResult
   , _marloweEditorState
   , _project
-  , _projectName
   , _rename
   , _saveAs
   , _showBottomPanel
@@ -113,6 +114,7 @@ import Page.Simulation.Types as ST
 import Project
   ( Language(..)
   , Project
+  , ProjectName(..)
   , SourceCode(..)
   , Workflow
       ( JavascriptWorkflow
@@ -124,21 +126,23 @@ import Project
 import Project as Project
 import Rename.State (handleAction) as Rename
 import Rename.Types (Action(..), State, emptyState) as Rename
+import Rename.Types as Rename.Types
 import Router (Route, SubRoute)
 import Router as Router
 import Routing.Duplex as RD
 import Routing.Hash as Routing
 import SaveAs.State (handleAction) as SaveAs
 import SaveAs.Types (Action(..), State, _status, emptyState) as SaveAs
+import SaveAs.Types as SaveAs.Types
 import Servant.PureScript (class MonadAjax, printAjaxError)
 import Session as Auth
 import SessionStorage as SessionStorage
 import StaticData as StaticData
-import Store (Action, State(..), reset) as Store
+import Store (Action, State(..), _State, reset) as Store
 import Store.AuthState as Store.AuthState
 import Store.OverlayState (OverlayState, OverlayStateAction(..))
 import Store.OverlayState as Store.OverlayState
-import Store.ProjectState (ProjectStateAction(..))
+import Store.ProjectState (ProjectStateAction(..), _projectState)
 import Store.ProjectState as Store.ProjectState
 import Type.Constraints (class MonadAffAjaxStore)
 import Types (WebpackBuildMode(..))
@@ -170,7 +174,7 @@ initialState { input: input@{ tzOffset, webpackBuildMode }, context } =
   , javascriptState: JS.initialState tzOffset
   , marloweEditorState: ME.initialState tzOffset
   , blocklyEditorState: BE.initialState tzOffset
-  , simulationState: Simulation.mkStateBase tzOffset
+  , simulationState: Simulation.mkState tzOffset
   , jsEditorKeybindings: DefaultBindings
   , activeJSDemo: mempty
   , newProject: NewProject.emptyState
@@ -180,7 +184,6 @@ initialState { input: input@{ tzOffset, webpackBuildMode }, context } =
   , gistId: Nothing
   , createGistResult: NotAsked
   , loadGistResult: Right NotAsked
-  , projectName: "Untitled Project"
   , showModal: Nothing
   , hasUnsavedChanges: false
   -- , workflow: Nothing
@@ -353,6 +356,48 @@ closeModal = do
   updateStore $ Store.OverlayState.action $ ReleaseBackdrop
   assign _showModal Nothing
 
+loadProject project = do
+  let
+    metadataHints = project ^. Project._metadataHints
+    metadata = project ^. Project._metadata
+    SourceCode code = project ^. Project._code
+    workflow = Project.getWorkflow project
+
+  case workflow of
+    HaskellWorkflow -> toHaskellEditor
+      $ HaskellEditor.handleAction metadata
+      $ HE.InitHaskellProject metadataHints
+      $ code
+    JavascriptWorkflow -> toJavascriptEditor
+      $ JavascriptEditor.handleAction metadata
+      $ JS.InitJavascriptProject metadataHints
+      $ code
+    MarloweWorkflow -> toMarloweEditor
+      $ MarloweEditor.handleAction metadata
+      $ ME.InitMarloweProject code
+    BlocklyWorkflow -> toBlocklyEditor
+      $ BlocklyEditor.handleAction metadata
+      $ BE.InitBlocklyProject code
+
+  assign _project (Just project)
+  assign (_haskellState <<< HE._metadataHintInfo) metadataHints
+  assign (_javascriptState <<< JS._metadataHintInfo) metadataHints
+
+  updateStore $ Store.ProjectState.action $ OnProjectLoaded $ project
+  selectView $ workflowView workflow
+
+loadProjectFromSource projectName workflow sourceCode@(SourceCode code) metadata =
+  do
+    let
+      project =
+        flip Project.trySetWorkflow workflow
+          <<< flip Project.setProjectName projectName
+          <<< flip Project.setMetadata metadata
+          $ Project.fromSourceCode
+              sourceCode
+              (Project.workflowLanguage workflow)
+    loadProject project
+
 -- This handleAction can be called recursively, but because we use HOF to extend the functionality
 -- of the component, whenever we need to recurse we most likely be calling one of the extended functions
 -- defined above (handleActionWithoutNavigationGuard or fullHandleAction)
@@ -388,7 +433,10 @@ handleAction Init = do
 
 handleAction (Receive { context }) = do
   traceM context
-  H.modify_ _ { overlayState = context.overlayState }
+  H.modify_ _
+    { overlayState = context.overlayState
+    , project = _.project <$> context.projectState
+    }
 
 handleAction (HandleKey _ ev)
   | KE.key ev == "Escape" = closeModal
@@ -500,171 +548,61 @@ handleAction (ShowBottomPanel val) = do
   assign _showBottomPanel val
   pure unit
 
-handleAction (LoadProject project) = do
+handleAction (LoadProject project) = loadProject project
+
+handleAction (NewProjectAction (NewProject.CreateProject workflow)) = do
   let
-    metadataHints = project ^. Project._metadataHints
-    metadata = project ^. Project._metadata
-    SourceCode code = project ^. Project._code
-    workflow = Project.getWorkflow project
-
-  case workflow of
-    HaskellWorkflow -> toHaskellEditor
-      $ HaskellEditor.handleAction metadata
-      $ HE.InitHaskellProject metadataHints
-      $ code
-    JavascriptWorkflow -> toJavascriptEditor
-      $ JavascriptEditor.handleAction metadata
-      $ JS.InitJavascriptProject metadataHints
-      $ code
-    MarloweWorkflow -> toMarloweEditor
-      $ MarloweEditor.handleAction metadata
-      $ ME.InitMarloweProject code
-    BlocklyWorkflow -> toBlocklyEditor
-      $ BlocklyEditor.handleAction metadata
-      $ BE.InitBlocklyProject code
-
-  assign _project (Just project)
-  assign (_haskellState <<< HE._metadataHintInfo) metadataHints
-  assign (_javascriptState <<< JS._metadataHintInfo) metadataHints
-
-  selectView $ workflowView workflow
-
--- | FIXME: paluh
--- -- TODO: modify gist action type to take a gistid as a parameter
--- -- https://github.com/input-output-hk/plutus/pull/2498#discussion_r533478042
--- handleAction (ProjectsAction action@(Projects.LoadProject lang gistId)) = do
---   assign _createGistResult Loading
---   res <-
---     runExceptT
---       $ do
---           gist <- ExceptT $ lift $ getApiGistsByGistId gistId
---           lift $ loadGist gist
---           pure gist
---   case res of
---     Right gist ->
---       modify_
---         ( set _createGistResult (Success gist)
---             <<< set _showModal Nothing
---             <<< set _workflow (Just lang)
---         )
---     Left error ->
---       modify_
---         ( set _createGistResult (Failure error)
---             <<< set (_projects <<< Projects._projects)
---               (Failure "Failed to load gist")
---             <<< set _workflow Nothing
---         )
---   toProjects $ Projects.handleAction action
---   selectView $ workflowView lang
--- handleAction (ProjectsAction Projects.Cancel) = fullHandleAction (CloseModal Nothing)
--- handleAction (ProjectsAction action) = toProjects $ Projects.handleAction action
-
-handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
-  -- | FIXME paluh - add Project name to the global state as well
-  assign _projectName "New project"
-  assign _gistId Nothing
-  assign _createGistResult NotAsked
-  assign _contractMetadata emptyContractMetadata
-
-  case lang of
-    HaskellWorkflow ->
-      for_ (Map.lookup "Example" StaticData.demoFiles) \code -> do
-        updateStore $ Store.ProjectState.action $ OnProjectLoaded $
-          Project.fromSourceCode
-            (SourceCode code)
-            Haskell
-
-        toHaskellEditor $ HaskellEditor.handleAction emptyContractMetadata $
-          HE.InitHaskellProject
-            mempty
-            code
-    JavascriptWorkflow ->
-      for_ (Map.lookup "Example" StaticData.demoFilesJS) \code -> do
-        updateStore $ Store.ProjectState.action $ OnProjectLoaded $
-          Project.fromSourceCode
-            (SourceCode code)
-            Javascript
-
-        toJavascriptEditor $ JavascriptEditor.handleAction emptyContractMetadata
-          $
-            JS.InitJavascriptProject mempty code
-    MarloweWorkflow ->
-      for_ (Map.lookup "Example" StaticData.marloweContracts) \code -> do
-        updateStore $ Store.ProjectState.action $ OnProjectLoaded $
-          Project.fromSourceCode
-            (SourceCode code)
-            Marlowe
-        toMarloweEditor $ MarloweEditor.handleAction emptyContractMetadata $
-          ME.InitMarloweProject
-            code
-    BlocklyWorkflow ->
-      for_ (Map.lookup "Example" StaticData.marloweContracts) \code -> do
-        let
-          project = Project.fromSourceCode (SourceCode code) Marlowe
-        updateStore $ Store.ProjectState.action $ OnProjectLoaded $
-          Project.trySetWorkflow project
-            MarloweWorkflow
-
-        toBlocklyEditor $ BlocklyEditor.handleAction emptyContractMetadata $
-          BE.InitBlocklyProject
-            code
-  selectView $ workflowView lang
-  assign _hasUnsavedChanges false
+    maybeCode = case workflow of
+      HaskellWorkflow -> Map.lookup "Example" StaticData.demoFiles
+      JavascriptWorkflow -> Map.lookup "Example" StaticData.demoFilesJS
+      MarloweWorkflow -> Map.lookup "Example" StaticData.marloweContracts
+      BlocklyWorkflow -> Map.lookup "Example" StaticData.marloweContracts
+  case maybeCode of
+    Just code -> loadProjectFromSource
+      Nothing
+      workflow
+      (SourceCode code)
+      emptyContractMetadata
+    Nothing -> pure unit
   closeModal
 
 handleAction (NewProjectAction NewProject.Cancel) = fullHandleAction
   (CloseModal Nothing)
 
-handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
-  assign _projectName metadata.contractName
-  closeModal
-  assign _hasUnsavedChanges false
-  assign _gistId Nothing
-  assign _contractMetadata metadata
-  selectView $ workflowView lang
-  case lang of
-    HaskellWorkflow ->
-      for_ (Map.lookup key StaticData.demoFiles) \contents ->
-        toHaskellEditor $ HaskellEditor.handleAction metadata $
-          HE.InitHaskellProject
-            metadataHints
-            contents
-    JavascriptWorkflow ->
-      for_ (Map.lookup key StaticData.demoFilesJS) \contents -> do
-        toJavascriptEditor $ JavascriptEditor.handleAction metadata $
-          JS.InitJavascriptProject metadataHints contents
-    MarloweWorkflow -> do
-      for_ (preview (ix key) StaticData.marloweContracts) \contents -> do
-        toMarloweEditor $ MarloweEditor.handleAction metadata $
-          ME.InitMarloweProject
-            contents
-    BlocklyWorkflow -> do
-      for_ (preview (ix key) StaticData.marloweContracts) \contents -> do
-        toBlocklyEditor $ BlocklyEditor.handleAction metadata $
-          BE.InitBlocklyProject
-            contents
-  where
-  metadata = fromMaybe emptyContractMetadata $ Map.lookup key
-    StaticData.demoFilesMetadata
+handleAction (DemosAction (Demos.LoadDemo workflow (Demos.Demo key))) = do
+  let
+    maybeCode = case workflow of
+      HaskellWorkflow -> Map.lookup key StaticData.demoFiles
+      JavascriptWorkflow -> Map.lookup key StaticData.demoFilesJS
+      MarloweWorkflow -> (preview (ix key) StaticData.marloweContracts)
+      BlocklyWorkflow -> (preview (ix key) StaticData.marloweContracts)
+    metadata = fromMaybe emptyContractMetadata $ Map.lookup key
+      StaticData.demoFilesMetadata
+  case maybeCode of
+    Just code -> loadProjectFromSource
+      (Just $ ProjectName metadata.contractName)
+      workflow
+      (SourceCode code)
+      metadata
+    Nothing -> pure unit
 
-  metadataHints = getHintsFromMetadata metadata
+  closeModal
 
 handleAction (DemosAction Demos.Cancel) = fullHandleAction (CloseModal Nothing)
 
 handleAction (RenameAction action@Rename.SaveProject) = do
-  projectName <- use (_rename <<< _projectName)
-  assign _projectName projectName
+  projectName <- use (_rename <<< Rename.Types._projectName)
+  updateStore $ Store.ProjectState.action $ OnProjectNameChanged $ ProjectName
+    projectName
   closeModal
   toRename $ Rename.handleAction action
 
 handleAction (RenameAction action) = toRename $ Rename.handleAction action
 
 handleAction (SaveAsAction action@SaveAs.SaveProject) = do
-  currentName <- use _projectName
   currentGistId <- use _gistId
-  projectName <- use (_saveAs <<< _projectName)
+  projectName <- use (_saveAs <<< SaveAs.Types._projectName)
 
-  assign _projectName projectName
   assign _gistId Nothing
   assign (_saveAs <<< SaveAs._status) Loading
 
@@ -672,12 +610,13 @@ handleAction (SaveAsAction action@SaveAs.SaveProject) = do
   res <- peruse (_createGistResult <<< _Success)
   case res of
     Just gist -> do
+      updateStore $ Store.ProjectState.action $ OnProjectNameChanged $
+        ProjectName projectName
       closeModal
       assign (_saveAs <<< SaveAs._status) NotAsked
     Nothing -> do
       assign (_saveAs <<< SaveAs._status) (Failure "Could not save project")
       assign _gistId currentGistId
-      assign _projectName currentName
   toSaveAs $ SaveAs.handleAction action
 
 handleAction (SaveAsAction SaveAs.Cancel) = fullHandleAction
@@ -696,8 +635,9 @@ handleAction (OpenModal OpenProject) = do
 
 handleAction (OpenModal RenameProject) = do
   updateStore $ Store.OverlayState.action $ UseBackdrop
-  currentName <- use _projectName
-  assign (_rename <<< _projectName) currentName
+  currentName <- peruse (_project <<< _Just <<< Project._projectName <<< _Just)
+  assign (_rename <<< Rename.Types._projectName)
+    (maybe "" (un ProjectName) currentName)
   assign _showModal $ Just RenameProject
 
 handleAction (OpenModal modalView) = do
@@ -753,8 +693,7 @@ handleAction Logout = do
 
 sendToSimulation
   :: forall m
-   . MonadAff m
-  => MonadAjax Api m
+   . MonadAffAjaxStore m
   => String
   -> HalogenM State Action ChildSlots Void m Unit
 sendToSimulation contract = do

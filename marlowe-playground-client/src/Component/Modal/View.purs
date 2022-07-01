@@ -72,10 +72,7 @@ modal state = case state ^. _showModal of
     OpenDemo -> renderSubmodule identity DemosAction (const Demos.render) state
     RenameProject -> renderSubmodule _rename RenameAction Rename.render state
     SaveProjectAs -> do
-      if state.featureFlags.fsProjectStorage then
-        HH.slot_ _saveProject unit Projects.save state.projectName
-      else
-        renderSubmodule _saveAs SaveAsAction SaveAs.render state
+      HH.slot_ _saveProject unit Projects.save unit
 
     (ConfirmUnsavedNavigation intendedAction) -> ConfirmUnsavedNavigation.render
       intendedAction
