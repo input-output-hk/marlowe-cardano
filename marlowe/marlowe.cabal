@@ -151,10 +151,10 @@ test-suite marlowe-test
     main-is: Spec.hs
     other-modules:
         Spec.Marlowe.Arbitrary
+        Spec.Marlowe.AutoExecute
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
         Spec.Marlowe.Semantics
-        Spec.Marlowe.AutoExecute
         MarloweContract
     build-depends:
         aeson -any,
