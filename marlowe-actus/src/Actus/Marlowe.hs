@@ -26,7 +26,7 @@ where
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain
-import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract, reduceValue)
+import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract)
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
 import Data.String (IsString (fromString))
@@ -38,8 +38,8 @@ import Language.Marlowe (Action (..), Case (..), Contract (..), Observation (..)
 import Ledger.Value (TokenName (TokenName))
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
---  to genereate a Marlowe contract with risk factors observed at a given point
---  in time
+-- to genereate a Marlowe contract with risk factors observed at a given point
+-- in time
 genContract ::
   -- | Risk factors per event and time
   (EventType -> LocalTime -> RiskFactorsMarlowe) ->
@@ -60,12 +60,12 @@ genContract' ::
   Contract
 genContract' rf ct =
   let cfs = genProjectedCashflows rf ct
-   in foldl' (flip gen) Close $ reverse cfs
+   in foldl' gen Close $ reverse cfs
   where
-    gen :: CashFlow (Value Observation) -> Contract -> Contract
-    gen CashFlow {..} cont =
+    gen :: Contract -> CashFlow (Value Observation) -> Contract
+    gen cont CashFlow {..} =
       let t = POSIXTime $ timeToSlotNumber cashPaymentDay
-          a = reduceValue $ DivValue amount (Constant marloweFixedPoint)
+          a = DivValue amount (Constant marloweFixedPoint)
        in reduceContract $
             If
               (_zero `ValueLT` a)
@@ -87,6 +87,7 @@ genContract' rf ct =
                   )
                   cont
               )
+
     invoice :: String -> String -> Value Observation -> POSIXTime -> Contract -> Contract
     invoice from to amount timeout continue =
       let party = Role $ TokenName $ fromString from
