@@ -1,6 +1,7 @@
 
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TupleSections  #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 
 module Spec.Marlowe.Semantics (
@@ -11,14 +12,14 @@ module Spec.Marlowe.Semantics (
 import Control.Monad (replicateM)
 import Data.Bifunctor (bimap)
 import Data.Function (on)
-import Data.List (group, groupBy, sort)
+import Data.List (group, groupBy, sort, sortBy)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.Semantics
 import Language.Marlowe.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
 import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Arbitrary
-import Spec.Marlowe.Common (observationGen, valueGen)
+import Spec.Marlowe.Common (caseRelGenSized, contractGen, observationGen, simpleIntegerGen, valueGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -100,6 +101,15 @@ tests =
       , testProperty "updateMoneyInAccount" checkUpdateMoneyInAccount
       , testProperty "addMoneyToAccount" checkAddMoneyToAccount
       , testProperty "giveMoney" checkGiveMoney
+      , testGroup "reduceContractStep"
+        [
+          testProperty "Close" checkReduceContractStepClose
+        , testProperty "Pay" checkReduceContractStepPay
+        , testProperty "If" checkReduceContractStepIf
+        , testProperty "When" checkReduceContractStepWhen
+        , testProperty "Let" checkReduceContractStepLet
+        , testProperty "Assert" checkReduceContractStepAssert
+        ]
       , testGroup "applyAction"
         [
           testProperty "Input does not match action" checkApplyActionMismatch
@@ -557,9 +567,9 @@ checkRefundOne f =
          (True, Nothing                          ) -> True
          (True, _                                ) -> False
          (_   , Nothing                          ) -> False
-         (_   , Just ((party, money), accounts'')) -> case flattenValue money of
-                                                        [(s, n, a)] -> assocMapEq accounts' (AM.insert (party, Token s n) a accounts'')
-                                                        _           -> False
+         (_   , Just ((party, money), accounts'')) -> case flattenMoney money of
+                                                        [(token, amount)] -> accounts' `assocMapEq` assocMapInsert (party, token) amount accounts''
+                                                        _                 -> False
 
 
 checkMoneyInAccount :: Property
@@ -621,11 +631,179 @@ checkGiveMoney =
     in
       (if amount > 0 then newAccounts else accounts') `assocMapEq` accounts''
         && case result of
-             ReduceWithPayment (Payment account'' payee'' money'') -> case flattenValue money'' of
-                                                                        [(s, n, a)] -> account'' == account
-                                                                                         && payee == payee''
-                                                                                         && token == Token s n
-                                                                                         && amount == a
-                                                                        []          -> amount <= 0
+             ReduceWithPayment (Payment account'' payee'' money'') -> case flattenMoney money'' of
+                                                                        [(token', amount')] -> account'' == account
+                                                                                                 && payee == payee''
+                                                                                                 && token == token'
+                                                                                                 && amount == amount'
+                                                                        []                  -> amount <= 0
                                                                         _                     -> False
              _                                                     -> False
+
+
+flattenMoney :: Money -> [(Token, Integer)]
+flattenMoney = fmap (\(s, n, a) -> (Token s n, a)) .  flattenValue
+
+
+checkReduceContractStepClose :: Property
+checkReduceContractStepClose =
+  property $ do
+  forAll ((,) <$> arbitrary <*> arbitrary) $ \(environment, state) ->
+    let
+      checkPayment (Payment payee (Party payee') money) state' Close =
+        payee == payee'
+          && case flattenMoney money of
+               [(token, amount)] -> AM.lookup (payee, token) (accounts state) == Just amount
+                                      && AM.lookup (payee, token) (accounts state') == Nothing
+                                      && state == state' {accounts = assocMapInsert (payee, token) amount (accounts state')}
+               _                 -> False
+      checkPayment _ _ _ = False
+    in
+      case reduceContractStep environment state Close of
+        NotReduced                                                           -> AM.null $ accounts state
+        Reduced ReduceNoWarning (ReduceWithPayment payment) state' contract' -> checkPayment payment state' contract'
+        _                                                                    -> False
+
+
+-- FIXME: Turn this off when semantics are fixed!
+_ALLOW_ZERO_PAYMENT :: Bool
+_ALLOW_ZERO_PAYMENT = True
+
+
+checkReduceContractStepPay :: Property
+checkReduceContractStepPay =
+  property $ do
+  let gen = do
+        environment <- arbitrary
+        state <- arbitrary
+        ((account, token), _) <- arbitraryFromAccounts $ accounts state
+        (environment, state, account, , token, , ) <$> arbitrary <*> valueGen <*> contractGen
+  forAll gen $ \(environment, state, account, payee, token, value, contract) ->
+    let
+      prior = fromMaybe 0 $ AM.lookup (account, token) (accounts state)
+      request = evalValue environment state value
+      debit = minimum [prior, request]
+      positiveAmount = debit > 0
+      fullAmount = request == debit
+      posterior = prior - debit
+      newState = state {accounts = (if posterior == 0 then AM.delete else flip assocMapInsert posterior) (account, token) (accounts state)}
+      checkPayment (Payment account' (Party payee') money) state' =
+        account' == account
+          && Party payee' == payee
+          && case flattenMoney money of
+               [(token', amount)] -> token == token' && amount == debit && state' `stateEq` newState
+               []                 -> _ALLOW_ZERO_PAYMENT && state' `stateEq` state
+               _                  -> False
+      checkPayment (Payment account' (Account payee') money) state' =
+        let
+          other = fromMaybe 0 $ AM.lookup (payee', token) (accounts newState)
+          newState' = if other + debit > 0 then newState {accounts = assocMapInsert (payee', token) (other + debit) (accounts newState)} else newState
+        in
+          account' == account
+            && Account payee' == payee
+            && case flattenMoney money of
+                 [(token', amount)] -> token' == token && amount == debit && state' `stateEq` newState'
+                 []                 -> _ALLOW_ZERO_PAYMENT && state' `stateEq` state
+                 _                  -> False
+    in
+      case reduceContractStep environment state (Pay account payee token value contract) of
+        Reduced (ReduceNonPositivePay account' payee' token' request')    ReduceNoPayment state' contract'             -> not positiveAmount
+                                                                                                                            && account' == account
+                                                                                                                            && payee' == payee
+                                                                                                                            && token' == token
+                                                                                                                            && request' == request
+                                                                                                                            && state' `stateEq` state
+                                                                                                                            && contract' == contract
+        Reduced ReduceNoWarning                                           (ReduceWithPayment payment) state' contract' -> positiveAmount
+                                                                                                                            && fullAmount
+                                                                                                                            && checkPayment payment state'
+                                                                                                                            && contract' == contract
+        Reduced (ReducePartialPay account' payee' token' debit' request') (ReduceWithPayment payment) state' contract' -> (positiveAmount || _ALLOW_ZERO_PAYMENT && debit' == 0)
+                                                                                                                            && not fullAmount
+                                                                                                                            && account' == account
+                                                                                                                            && payee' == payee
+                                                                                                                            && token' == token
+                                                                                                                            && debit' == debit
+                                                                                                                            && request' == request
+                                                                                                                            && checkPayment payment state'
+                                                                                                                            && contract' == contract
+        _                                                                                                               -> False
+
+
+checkReduceContractStepIf :: Property
+checkReduceContractStepIf =
+  property $ do
+  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> observationGen <*> contractGen <*> contractGen) $ \(environment, state, observation, thenContract, elseContract) ->
+    let
+      passed = evalObservation environment state observation
+    in
+      case reduceContractStep environment state (If observation thenContract elseContract) of
+        Reduced ReduceNoWarning ReduceNoPayment state' contract' -> state == state' && (if passed then thenContract else elseContract) == contract'
+        _                                                        -> False
+
+
+assocMapSort :: Ord k => AM.Map k v -> AM.Map k v
+assocMapSort = AM.fromList . sortBy (compare `on` fst) . AM.toList
+
+
+canonicalState :: State -> State
+canonicalState State{..} =
+  State
+    (assocMapSort accounts)
+    (assocMapSort choices)
+    (assocMapSort boundValues)
+    minTime
+
+
+stateEq :: State -> State -> Bool
+stateEq = (==) `on` canonicalState
+
+
+checkReduceContractStepWhen :: Property
+checkReduceContractStepWhen =
+  property $ do
+  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> listOf caseGen <*> arbitrary <*> contractGen) $ \(environment, state, cases, timeout, contract) ->
+    let
+      before = snd (timeInterval environment) < timeout
+      afterwards = fst (timeInterval environment) >= timeout
+    in
+      case reduceContractStep environment state (When cases timeout contract) of
+        NotReduced                                               -> before
+        Reduced ReduceNoWarning ReduceNoPayment state' contract' -> afterwards && contract == contract' && state == state'
+        _                                                        -> not before && not afterwards
+
+
+caseGen :: Gen (Case Contract)
+caseGen = sized $ (simpleIntegerGen >>=) . caseRelGenSized
+
+
+checkReduceContractStepLet :: Property
+checkReduceContractStepLet =
+  property $ do
+  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> valueGen <*> contractGen) $ \(environment, state, valueId, value, contract) ->
+    let
+      x = evalValue environment state value
+      shadow = valueId `AM.member` boundValues state
+    in
+      case (shadow, reduceContractStep environment state (Let valueId value contract)) of
+        (False, Reduced ReduceNoWarning                      ReduceNoPayment state' contract') -> contract == contract'
+                                                                                                    && state {boundValues = assocMapInsert valueId x (boundValues state)} `stateEq` state'
+        (True , Reduced (ReduceShadowing valueId' value' x') ReduceNoPayment state' contract') -> contract == contract'
+                                                                                                    && state {boundValues = assocMapInsert valueId x (boundValues state)} `stateEq` state'
+                                                                                                    && valueId == valueId'
+                                                                                                    && AM.lookup valueId (boundValues state) == Just value'
+                                                                                                    && x == x'
+        _                                                                                      -> False
+
+
+checkReduceContractStepAssert :: Property
+checkReduceContractStepAssert =
+  property $ do
+  forAll ((,,,) <$> arbitrary <*> arbitrary <*> observationGen <*> contractGen) $ \(environment, state, observation, contract) ->
+    let
+      passed = evalObservation environment state observation
+    in
+      case reduceContractStep environment state (Assert observation contract) of
+        Reduced ReduceNoWarning       ReduceNoPayment state' contract' -> passed     && state == state' && contract == contract'
+        Reduced ReduceAssertionFailed ReduceNoPayment state' contract' -> not passed && state == state' && contract == contract'
+        _                                                              -> False
