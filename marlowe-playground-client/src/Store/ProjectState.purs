@@ -16,6 +16,7 @@ import Type.Prelude (Proxy(..))
 _projectStateP = Proxy :: Proxy "projectState"
 _projectP = Proxy :: Proxy "project"
 _modifiedP = Proxy :: Proxy "modified"
+_versionP = Proxy :: Proxy "version"
 
 _projectState :: forall r. Lens' (State r) (Maybe ProjectState)
 _projectState = prop _projectStateP
@@ -23,9 +24,13 @@ _projectState = prop _projectStateP
 _project :: Lens' ProjectState Project
 _project = prop _projectP
 
+-- | `version` is our internal piece 
+-- | to do quick comparison and estimate
+-- | efficacy.
 type ProjectState =
   { project :: Project
   , modified :: Boolean
+  , version :: Int
   }
 
 data ProjectStateAction
@@ -42,7 +47,7 @@ type ActionRow r = (projectState :: ProjectStateAction | r)
 type Action r = Variant (ActionRow r)
 
 mkProjectState :: Project -> ProjectState
-mkProjectState = { modified: false, project: _ }
+mkProjectState = { modified: false, project: _, version: 1 }
 
 insertInitialProjectState
   :: forall r
@@ -75,5 +80,6 @@ reduce = Variant.on _projectStateP case _ of
   OnProjectModified -> modify $ Record.set _modifiedP true
   where
   modify :: (ProjectState -> ProjectState) -> State st -> State st
-  modify = Record.modify _projectStateP <<< map
+  modify update = Record.modify _projectStateP $ map
+    (Record.modify _versionP (_ + 1) <<< update)
 

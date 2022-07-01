@@ -11,18 +11,21 @@ import Halogen (Component)
 import Halogen.Classes (border, borderBlue300, fullWidth, spaceBottom, textSm)
 import Halogen.HTML (button, div_, input, text) as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Events as HH
 import Halogen.HTML.Properties (classes, placeholder, value) as HH
 import Halogen.Hooks (component) as H
 import Halogen.Hooks.Extra.Hooks (usePutState)
 import Halogen.Hooks.Hook (bind, pure) as H
+import Halogen.Store.Monad (updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Store.UseSelector (useSelector)
-import Project (_projectName)
+import Project (ProjectName(..), _projectName)
 import Store (_State)
 import Store.AuthState.Hooks (useIsAuthenticated)
 import Store.Handlers (loginRequired)
-import Store.ProjectState (_project)
+import Store.ProjectState (ProjectStateAction(..), _project)
 import Store.ProjectState (_projectState)
+import Store.ProjectState as Store.ProjectState
 import Type.Constraints (class MonadAffAjaxStore)
 
 data Step
@@ -54,7 +57,11 @@ component = H.component \_ _ -> H.do
       , HH.input
           [ HH.classes [ spaceBottom, fullWidth, textSm, border, borderBlue300 ]
           , HH.value $ fromMaybe "" projectName
-          -- , HH.onValueInput ChangeInput
+          , HH.onValueInput \newName ->
+              updateStore
+                ( Store.ProjectState.action $ OnProjectNameChanged $ ProjectName
+                    newName
+                )
           , HH.placeholder "Type a name for your project"
           ]
       , HH.button [ HE.onClick $ const $ putStep (Save FS) ] [ HH.text "FS" ]

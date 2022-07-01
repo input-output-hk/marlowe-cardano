@@ -58,6 +58,7 @@ import Session (AuthResponse)
 import Session as Auth
 import Store as Store
 import Store.OverlayState (OverlayState)
+import Store.ProjectState (ProjectState)
 import Type.Proxy (Proxy(..))
 import Types (WebData, WebpackBuildMode)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
@@ -90,7 +91,10 @@ instance showModalView :: Show ModalView where
 -- show = genericShow
 data Query a = ChangeRoute Route a
 
-type StoreContext = { overlayState :: OverlayState }
+type StoreContext =
+  { overlayState :: OverlayState
+  , projectState :: Maybe ProjectState
+  }
 
 data Action
   = Init

@@ -19,6 +19,7 @@ import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.Either (hush, note)
 import Data.Foldable (fold, for_)
+import Data.Function (on)
 import Data.Function.Uncurried (runFn2)
 import Data.Lens (_Just, assign, has, over, preview, set, use, (^.))
 import Data.Lens.Extra (peruse)
@@ -45,7 +46,7 @@ import Halogen.Query.Event (eventListener)
 import Halogen.Store.Connect (connect) as HS
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Monad (updateStore) as HS
-import Halogen.Store.Select (selectEq) as HS
+import Halogen.Store.Select (select, selectEq) as HS
 import Halogen.VDom.Util (refEq)
 import MainFrame.Types
   ( Action(..)
@@ -153,8 +154,9 @@ import Web.UIEvent.MouseEvent as MouseEvent
 
 -- We use `storeSelectorFn` and `input` from state to
 -- perform full state reset during logout.
-storeSelectorFn :: Store.State -> { overlayState :: OverlayState }
-storeSelectorFn = \(Store.State { overlayState }) -> { overlayState }
+storeSelectorFn :: Store.State -> StoreContext
+storeSelectorFn = \(Store.State { overlayState, projectState }) ->
+  { overlayState, projectState }
 
 initialState
   :: { input :: Input, context :: StoreContext } -> State
@@ -182,7 +184,7 @@ initialState { input: input@{ tzOffset, webpackBuildMode }, context } =
   , showModal: Nothing
   , hasUnsavedChanges: false
   -- , workflow: Nothing
-  , project: Nothing
+  , project: _.project <$> context.projectState
   , featureFlags:
       { fsProjectStorage: webpackBuildMode == Development
       , logout: webpackBuildMode == Development
@@ -194,8 +196,11 @@ component
   :: forall m
    . MonadAffAjaxStore m
   => Component Query Input Void m
-component =
-  HS.connect (HS.selectEq storeSelectorFn) $
+component = do
+  let
+    storeContextEq = eq `on` (map _.version <<< _.projectState)
+      && eq `on` _.overlayState
+  HS.connect (HS.select storeContextEq storeSelectorFn) $
     H.mkComponent
       { initialState
       , render
@@ -344,6 +349,10 @@ assignWorkflow
 assignWorkflow workflow = do
   modify_ $ over _project $ map $ flip Project.trySetWorkflow workflow
 
+closeModal = do
+  updateStore $ Store.OverlayState.action $ ReleaseBackdrop
+  assign _showModal Nothing
+
 -- This handleAction can be called recursively, but because we use HOF to extend the functionality
 -- of the component, whenever we need to recurse we most likely be calling one of the extended functions
 -- defined above (handleActionWithoutNavigationGuard or fullHandleAction)
@@ -382,7 +391,7 @@ handleAction (Receive { context }) = do
   H.modify_ _ { overlayState = context.overlayState }
 
 handleAction (HandleKey _ ev)
-  | KE.key ev == "Escape" = assign _showModal Nothing
+  | KE.key ev == "Escape" = closeModal
   | KE.key ev == "Enter" = do
       modalView <- use _showModal
       case modalView of
@@ -600,18 +609,15 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
           BE.InitBlocklyProject
             code
   selectView $ workflowView lang
-  modify_
-    ( set _showModal Nothing
-        <<< set _hasUnsavedChanges false
-    )
+  assign _hasUnsavedChanges false
+  closeModal
 
 handleAction (NewProjectAction NewProject.Cancel) = fullHandleAction
   (CloseModal Nothing)
 
 handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
   assign _projectName metadata.contractName
-  assign _showModal Nothing
-  -- assign _workflow (Just lang)
+  closeModal
   assign _hasUnsavedChanges false
   assign _gistId Nothing
   assign _contractMetadata metadata
@@ -648,7 +654,7 @@ handleAction (DemosAction Demos.Cancel) = fullHandleAction (CloseModal Nothing)
 handleAction (RenameAction action@Rename.SaveProject) = do
   projectName <- use (_rename <<< _projectName)
   assign _projectName projectName
-  assign _showModal Nothing
+  closeModal
   toRename $ Rename.handleAction action
 
 handleAction (RenameAction action) = toRename $ Rename.handleAction action
@@ -666,10 +672,8 @@ handleAction (SaveAsAction action@SaveAs.SaveProject) = do
   res <- peruse (_createGistResult <<< _Success)
   case res of
     Just gist -> do
-      modify_
-        ( set _showModal Nothing
-            <<< set (_saveAs <<< SaveAs._status) NotAsked
-        )
+      closeModal
+      assign (_saveAs <<< SaveAs._status) NotAsked
     Nothing -> do
       assign (_saveAs <<< SaveAs._status) (Failure "Could not save project")
       assign _gistId currentGistId
@@ -701,8 +705,7 @@ handleAction (OpenModal modalView) = do
   assign _showModal $ Just modalView
 
 handleAction (CloseModal maybeAction) = do
-  updateStore $ Store.OverlayState.action $ ReleaseBackdrop
-  assign _showModal Nothing
+  closeModal
   case maybeAction of
     Just action -> handleAction action
     Nothing -> pure unit
