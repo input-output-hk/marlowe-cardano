@@ -3,7 +3,6 @@ module Home where
 import Prologue hiding (div)
 
 import Component.NewProject.Types as NewProject
-import Component.Projects.Types (Lang(..))
 import Halogen (ComponentHTML)
 import Halogen.Classes
   ( arrowLeftDown
@@ -20,16 +19,10 @@ import Halogen.Classes
   )
 import Halogen.Css (classNames)
 import Halogen.HTML (a, button, div, h1, img, span, span_, text)
-import Halogen.HTML as HH
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, src, target)
-import MainFrame.Types
-  ( Action(..)
-  , ChildSlots
-  , ModalView(..)
-  , State
-  , isAuthenticated
-  )
+import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State)
+import Project (Workflow(..))
 
 render :: forall m. State -> ComponentHTML Action ChildSlots m
 render _ =
@@ -42,7 +35,7 @@ render _ =
                 ( secondaryButton <>
                     [ "mr-small", "w-56", "text-base", "cursor-pointer" ]
                 )
-            , onClick \_ -> OpenModal OpenProject
+            , onClick $ const $ OpenModal OpenProject
             ]
             [ text "Open existing project" ]
         , button
@@ -50,7 +43,7 @@ render _ =
                 ( primaryButton <>
                     [ "ml-small", "w-56", "text-base", "cursor-pointer" ]
                 )
-            , onClick ((const <<< OpenModal) OpenDemo)
+            , onClick $ const $ OpenModal OpenDemo
             ]
             [ text "Open an example" ]
         ]
@@ -65,7 +58,9 @@ render _ =
             [ classNames (newProjectClasses <> [ "mr-24" ])
             , href "#/javascript"
             , onClick
-                (const $ NewProjectAction $ NewProject.CreateProject Javascript)
+                ( const $ NewProjectAction $ NewProject.CreateProject
+                    JavascriptWorkflow
+                )
             ]
             [ img
                 [ src newProjectJavascriptIcon, classNames [ "h-16", "mb-4" ] ]
@@ -76,7 +71,9 @@ render _ =
             [ classNames (newProjectClasses <> [ "mr-24" ])
             , href "#/haskell"
             , onClick
-                (const $ NewProjectAction $ NewProject.CreateProject Haskell)
+                ( const $ NewProjectAction $ NewProject.CreateProject
+                    HaskellWorkflow
+                )
             ]
             [ img [ src newProjectHaskellIcon, classNames [ "h-16", "mb-4" ] ]
             , text
@@ -97,7 +94,9 @@ render _ =
             [ classNames (newProjectClasses <> [ "ml-24", "mr-4" ])
             , href "#"
             , onClick
-                (const $ NewProjectAction $ NewProject.CreateProject Marlowe)
+                ( const $ NewProjectAction $ NewProject.CreateProject
+                    MarloweWorkflow
+                )
             ]
             [ img [ src marloweLogo, classNames [ "h-16", "mb-4" ] ]
             , text
@@ -111,7 +110,9 @@ render _ =
             [ classNames (newProjectClasses <> [ "ml-4", "mr-1" ])
             , href "#"
             , onClick
-                (const $ NewProjectAction $ NewProject.CreateProject Blockly)
+                ( const $ NewProjectAction $ NewProject.CreateProject
+                    BlocklyWorkflow
+                )
             ]
             [ img [ src newProjectBlocklyIcon, classNames [ "h-16", "mb-4" ] ]
             , text

@@ -58,7 +58,7 @@ import qualified Plutus.Contract.Error as CE (ContractError)
 import qualified PlutusTx.AssocMap as Map
 import Servant ((:<|>), (:>))
 import Servant.PureScript (HasBridge, Settings, addTypes, apiModuleName, defaultBridge, defaultSettings,
-                           generateWithSettings, languageBridge)
+                           generateWithSettings, languageBridge, mkPackageName, packageName)
 import qualified Swap
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
@@ -234,6 +234,7 @@ myTypes =
 mySettings :: Settings
 mySettings = defaultSettings
     & set apiModuleName "Marlowe"
+    -- & set packageName (mkPackageName "Server")
     & addTypes myTypes
 
 multilineString :: BS.ByteString -> BS.ByteString -> BS.ByteString

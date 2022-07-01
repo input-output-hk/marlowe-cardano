@@ -84,8 +84,6 @@ login = do
       <> show left
       <> ",menubar=no,status=no,location=no"
 
-  traceM "OPENING WINDOW?"
-
   liftAff (Window.Child.openAwaitClosed { url, features, window }) >>= case _ of
     Just _ -> fetchSession
     Nothing -> pure $ NotAsked

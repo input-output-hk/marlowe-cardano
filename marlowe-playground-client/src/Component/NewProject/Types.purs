@@ -3,13 +3,13 @@ module Component.NewProject.Types where
 import Prologue
 
 import Analytics (class IsEvent)
-import Component.Projects.Types (Lang)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
+import Project (Workflow)
 import Type.Proxy (Proxy(..))
 
 data Action
-  = CreateProject Lang
+  = CreateProject Workflow
   | Cancel
 
 instance isEventAction :: IsEvent Action where

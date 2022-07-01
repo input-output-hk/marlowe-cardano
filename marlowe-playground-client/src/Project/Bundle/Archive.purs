@@ -14,22 +14,20 @@ import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign.Object as FO
-import Marlowe.Project.Types
-  ( FileContent(..)
-  , FileName(..)
-  , Files(..)
-  , Project
-  , fileNames
-  , fromFiles
-  , toFiles
+import Project.Bundle as Bundle
+import Project.Types
+  ( Bundle
+  , FileContent(FileContent)
+  , FileName(FileName)
+  , Files(Files)
   )
 import Web.File.File as W
 
-toArchive :: Project -> Effect T.TarWriter
-toArchive project = do
+toArchive :: Bundle -> Effect T.TarWriter
+toArchive bundle = do
   let
     files :: Array _
-    files = M.toUnfoldable $ un Files $ toFiles project
+    files = M.toUnfoldable $ un Files $ Bundle.toFiles bundle
   tarWriter <- T.tarWriter
 
   for_ files \(FileName n /\ FileContent c) ->
@@ -37,14 +35,14 @@ toArchive project = do
 
   pure tarWriter
 
-fromArchive :: W.File -> Aff (Maybe Project)
+fromArchive :: W.File -> Aff (Maybe Bundle)
 fromArchive file = do
   let
-    fileNamesArr = FO.values <<< FO.fromHomogeneous $ fileNames
+    fileNamesArr = FO.values <<< FO.fromHomogeneous $ Bundle.fileNames
   tarReader <- liftEffect T.tarReader
   void $ T.readFile tarReader file
   files <- map (M.fromFoldable <<< A.catMaybes) $ for fileNamesArr
     \n@(FileName name) -> liftEffect $ do
       c <- T.getTextFile tarReader (T.FileName name)
       pure $ ((n /\ _) <<< FileContent) <$> c
-  pure $ fromFiles (Files files)
+  pure $ Bundle.fromFiles (Files files)

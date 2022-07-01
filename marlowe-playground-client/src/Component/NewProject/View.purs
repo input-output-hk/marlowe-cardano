@@ -4,7 +4,6 @@ import Prologue hiding (div)
 
 import Component.Modal.ViewHelpers (modalHeader)
 import Component.NewProject.Types (Action(..), State, _error)
-import Component.Projects.Types (Lang(..))
 import Data.Lens ((^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ClassName(..), ComponentHTML)
@@ -22,6 +21,7 @@ import Halogen.HTML (div, div_, h3, img, span, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes, src)
 import MainFrame.Types (ChildSlots)
+import Project (Workflow(..))
 
 render
   :: forall m
@@ -35,7 +35,13 @@ render state =
         [ h3 [ classes [ textBase, fontSemibold ] ]
             [ text "Please choose your initial coding environment" ]
         , div [ classes [ ClassName "environment-selector-group" ] ]
-            (map link [ Haskell, Javascript, Marlowe, Blockly ])
+            ( map link
+                [ HaskellWorkflow
+                , JavascriptWorkflow
+                , MarloweWorkflow
+                , BlocklyWorkflow
+                ]
+            )
         , renderError (state ^. _error)
         ]
     ]
@@ -55,13 +61,13 @@ render state =
       ]
 
   langIcon = case _ of
-    Haskell -> newProjectHaskellIcon
-    Javascript -> newProjectJavascriptIcon
-    Marlowe -> marloweLogo
-    Blockly -> newProjectBlocklyIcon
+    HaskellWorkflow -> newProjectHaskellIcon
+    JavascriptWorkflow -> newProjectJavascriptIcon
+    MarloweWorkflow -> marloweLogo
+    BlocklyWorkflow -> newProjectBlocklyIcon
 
   langTitle = case _ of
-    Haskell -> "Haskell Editor"
-    Javascript -> "JS Editor"
-    Marlowe -> "Marlowe"
-    Blockly -> "Blockly"
+    HaskellWorkflow -> "Haskell Editor"
+    JavascriptWorkflow -> "JS Editor"
+    MarloweWorkflow -> "Marlowe"
+    BlocklyWorkflow -> "Blockly"

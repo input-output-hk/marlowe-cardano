@@ -8,7 +8,6 @@ import Component.ConfirmUnsavedNavigation.View (render) as ConfirmUnsavedNavigat
 import Component.Demos.View (render) as Demos
 import Component.NewProject.View (render) as NewProject
 import Component.Projects as Projects
-import Component.Projects.View (render) as Projects
 import Data.Lens ((^.))
 import Debug (traceM)
 import Effect.Aff.Class (class MonadAff)
@@ -28,12 +27,10 @@ import MainFrame.Types
   , State
   , _newProject
   , _openProject
-  , _projects
   , _rename
   , _saveAs
   , _saveProject
   , _showModal
-  , hasGlobalLoading
   )
 import MainFrame.Types as Types
 import Rename.State (render) as Rename
@@ -53,7 +50,7 @@ modal state = case state ^. _showModal of
   Nothing -> text ""
   Just view ->
     div
-      [ classes overlayClass
+      [ classes [ ClassName "modal-backdrop" ]
       , onClick ModalBackdropClick
       , ref Types.modalBackdropLabel
       ]
@@ -61,22 +58,17 @@ modal state = case state ^. _showModal of
           [ modalContent view ]
       ]
   where
-  overlayClass =
-    if hasGlobalLoading state then
-      [ ClassName "overlay" ]
-    else
-      [ ClassName "overlay", ClassName "overlay-background" ]
 
   modalContent = case _ of
     NewProject -> renderSubmodule _newProject NewProjectAction NewProject.render
       state
-    OpenProject -> HH.slot_ _openProject unit Projects.open unit
-    -- else if isAuthenticated state then
-    --   OpenModal OpenProject
-    -- else
-    --   OpenModal $ GithubLogin (OpenModal OpenProject)
-    -- renderSubmodule _projects ProjectsAction Projects.render
-    -- state
+
+    --   Canceled -> CloseModal
+    --   LoadProject project -> CloseModal
+
+    OpenProject -> HH.slot _openProject unit Projects.open unit
+      (CloseModal <<< map LoadProject)
+
     OpenDemo -> renderSubmodule identity DemosAction (const Demos.render) state
     RenameProject -> renderSubmodule _rename RenameAction Rename.render state
     SaveProjectAs -> do

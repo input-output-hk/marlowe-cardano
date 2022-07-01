@@ -5,11 +5,10 @@ import Prologue hiding (div)
 import Component.Modal.View (modal)
 import Contrib.Data.Array.Builder ((:>))
 import Contrib.Data.Array.Builder as AB
-import Data.Lens (_Just, has, (^.))
-import Data.Maybe (isNothing)
+import Data.Lens (_Just, has, preview, (^.))
+import Data.Maybe (fromMaybe)
 import Data.Monoid (guard)
-import Effect.Aff.Class (class MonadAff)
-import Gists.Types (GistAction(..))
+import Debug (spy)
 import Halogen (ComponentHTML)
 import Halogen.Classes (marlowePlayLogo)
 import Halogen.Css (classNames)
@@ -31,7 +30,6 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, id, src, target)
 import Halogen.HTML.Properties.ARIA (label, role)
-import Halogen.Store.Monad (class MonadStore)
 import Home as Home
 import Icons (Icon(..), icon)
 import MainFrame.Types
@@ -43,8 +41,8 @@ import MainFrame.Types
   , _authStatus
   , _blocklyEditorState
   , _contractMetadata
+  , _contractMetadata'
   , _createGistResult
-  , _gistId
   , _hasUnsavedChanges
   , _haskellState
   , _javascriptState
@@ -52,16 +50,15 @@ import MainFrame.Types
   , _projectName
   , _simulationState
   , _view
-  , hasGlobalLoading
   , isAuthenticated
   )
+import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Network.RemoteData (_Loading, _Success)
 import Page.BlocklyEditor.View as BlocklyEditor
 import Page.HaskellEditor.View (otherActions, render) as HaskellEditor
 import Page.JavascriptEditor.View as JSEditor
 import Page.MarloweEditor.View as MarloweEditor
 import Page.Simulation.View as Simulation
-import Store as Store
 import Type.Constraints (class MonadAffAjaxStore)
 
 render
@@ -112,43 +109,47 @@ render state =
           , topBar
           ]
       , main []
-          [ section [ id "main-panel" ] case state ^. _view of
-              HomePage -> [ Home.render state ]
-              Simulation ->
-                [ renderSubmodule
-                    _simulationState
-                    SimulationAction
-                    (Simulation.render (state ^. _contractMetadata))
-                    state
-                ]
-              MarloweEditor ->
-                [ renderSubmodule
-                    _marloweEditorState
-                    MarloweEditorAction
-                    (MarloweEditor.render (state ^. _contractMetadata))
-                    state
-                ]
-              HaskellEditor ->
-                [ renderSubmodule
-                    _haskellState
-                    HaskellAction
-                    (HaskellEditor.render (state ^. _contractMetadata))
-                    state
-                ]
-              JSEditor ->
-                [ renderSubmodule
-                    _javascriptState
-                    JavascriptAction
-                    (JSEditor.render (state ^. _contractMetadata))
-                    state
-                ]
-              BlocklyEditor ->
-                [ renderSubmodule
-                    _blocklyEditorState
-                    BlocklyEditorAction
-                    (BlocklyEditor.render (state ^. _contractMetadata))
-                    state
-                ]
+          [ section [ id "main-panel" ] do
+              let
+                metadata = state ^. _contractMetadata'
+
+              case state ^. _view of
+                HomePage -> [ Home.render state ]
+                Simulation ->
+                  [ renderSubmodule
+                      _simulationState
+                      SimulationAction
+                      (Simulation.render metadata)
+                      state
+                  ]
+                MarloweEditor ->
+                  [ renderSubmodule
+                      _marloweEditorState
+                      MarloweEditorAction
+                      (MarloweEditor.render metadata)
+                      state
+                  ]
+                HaskellEditor ->
+                  [ renderSubmodule
+                      _haskellState
+                      HaskellAction
+                      (HaskellEditor.render metadata)
+                      state
+                  ]
+                JSEditor ->
+                  [ renderSubmodule
+                      _javascriptState
+                      JavascriptAction
+                      (JSEditor.render metadata)
+                      state
+                  ]
+                BlocklyEditor ->
+                  [ renderSubmodule
+                      _blocklyEditorState
+                      BlocklyEditorAction
+                      (BlocklyEditor.render metadata)
+                      state
+                  ]
           ]
       , modal state
       , globalLoadingOverlay
@@ -271,17 +272,24 @@ render state =
 
   otherActions _ = []
 
-  globalLoadingOverlay =
-    if hasGlobalLoading state then
+  globalLoadingOverlay = case state.overlayState of
+    { overlayCounter } | overlayCounter > 0 ->
       div
         [ classNames
-            [ "loading-overlay", "text-3xl", "font-semibold", "text-white" ]
+            [ "overlay"
+            , "overlay-background"
+            , "loading-overlay"
+            , "text-3xl"
+            , "font-semibold"
+            , "text-white"
+            ]
         ]
-        [ div [ classNames [ "mb-small" ] ] [ text "Loading..." ]
+        [ div [ classNames [ "mb-small" ] ] [ text "" ]
         , div_ [ icon Spinner ]
         ]
-    else
-      text ""
+    { backdropCounter } | backdropCounter > 0 -> do
+      div [ classNames [ "overlay" ] ] []
+    _ -> div_ []
 
 menuBar :: forall p. State -> HTML p Action
 menuBar state =

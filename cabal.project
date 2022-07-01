@@ -8,6 +8,8 @@ packages: marlowe
           marlowe-symbolic
           marlowe-cli
           marlowe-contracts
+          ../../servant-purescript/
+          ../../purescript-bridge/
 
 -- We never, ever, want this.
 write-ghc-environment-files: never
@@ -137,16 +139,16 @@ source-repository-package
   tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
 
 -- Upgrading this breaks purescript bridges.
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/servant-purescript
-  tag: 002e172173ad2f2f69f98a3b56b7312364f23afe
+-- source-repository-package
+--   type: git
+--   location: https://github.com/input-output-hk/servant-purescript
+--   tag: 002e172173ad2f2f69f98a3b56b7312364f23afe
 
 -- Copied from plutus-apps.
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/purescript-bridge
-  tag: 47a1f11825a0f9445e0f98792f79172efef66c00
+-- source-repository-package
+--   type: git
+--   location: https://github.com/input-output-hk/purescript-bridge
+--   tag: 47a1f11825a0f9445e0f98792f79172efef66c00
 
 -- Copied from plutus-apps.
 source-repository-package

@@ -4,7 +4,6 @@ import Prologue hiding (div)
 
 import Component.Demos.Types (Action(..), Demo)
 import Component.Modal.ViewHelpers (modalHeader)
-import Component.Projects.Types (Lang(..))
 import Data.Newtype (wrap)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ClassName(..), ComponentHTML)
@@ -15,6 +14,7 @@ import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
 import Halogen.HTML.Properties.ARIA (label)
 import MainFrame.Types (ChildSlots)
+import Project (Workflow(..))
 
 render :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
 render =
@@ -46,25 +46,25 @@ demoFile key name description =
         [ span [ class_ (ClassName "description") ] [ text description ]
         , div [ classes [ group, ClassName "open-buttons" ] ]
             [ button
-                [ onClick $ const $ LoadDemo Haskell key
+                [ onClick $ const $ LoadDemo HaskellWorkflow key
                 , classNames [ "btn" ]
                 , label $ name <> " Haskell"
                 ]
                 [ text "Haskell" ]
             , button
-                [ onClick $ const $ LoadDemo Javascript key
+                [ onClick $ const $ LoadDemo JavascriptWorkflow key
                 , classNames [ "btn" ]
                 , label $ name <> " Javascript"
                 ]
                 [ text "Javascript" ]
             , button
-                [ onClick $ const $ LoadDemo Marlowe key
+                [ onClick $ const $ LoadDemo MarloweWorkflow key
                 , classNames [ "btn" ]
                 , label $ name <> " Marlowe"
                 ]
                 [ text "Marlowe" ]
             , button
-                [ onClick $ const $ LoadDemo Blockly key
+                [ onClick $ const $ LoadDemo BlocklyWorkflow key
                 , classNames [ "btn" ]
                 , label $ name <> " Blockly"
                 ]

@@ -29,7 +29,7 @@ authButton intendedAction state =
           [ text "Failed to login" ]
       Success Nothing ->
         div_
-          [ modalHeader "Login with github" (Just CloseModal)
+          [ modalHeader "Login with github" (Just $ CloseModal Nothing)
           , div [ classes [ modalContent, ClassName "auth-button-container" ] ]
               [ p_
                   [ text

@@ -12,7 +12,9 @@ import Marlowe (Api)
 import Network.RemoteData as RemoteData
 import Servant.PureScript (class MonadAjax)
 import Session as Auth
-import Store as S
+import Store (Action, State, _State) as S
+import Store (_State)
+import Store.AuthState as AuthState
 
 isAuthenticated
   :: forall m
@@ -20,7 +22,7 @@ isAuthenticated
   => MonadStore S.Action S.State m
   => m Boolean
 isAuthenticated = do
-  authResponse <- useStore S._authResponse
+  authResponse <- useStore (S._State <<< AuthState._authState)
   liftEffect $ Auth.isAuthenticated authResponse
 
 -- This heler can be used in the context of `HalogenM` and `HookM`.
@@ -38,8 +40,10 @@ loginRequired
 loginRequired onFailure onSuccess = do
   whenM (not <$> lift isAuthenticated) do
     authResponse <- lift Auth.login
-    lift $ updateStore $ S.SetAuthResponse authResponse
+    lift $ updateStore $ AuthState.action authResponse
 
-  lift (useStore S._authResponse) >>= RemoteData.toMaybe >>> join >>> case _ of
-    Just s -> onSuccess s
-    Nothing -> onFailure
+  lift (useStore (_State <<< AuthState._authState)) >>= RemoteData.toMaybe
+    >>> join
+    >>> case _ of
+      Just s -> onSuccess s
+      Nothing -> onFailure

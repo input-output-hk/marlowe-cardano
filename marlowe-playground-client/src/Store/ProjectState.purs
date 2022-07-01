@@ -1,36 +1,79 @@
 module Store.ProjectState where
 
-import Data.Lens (Lens', set)
+import Prelude
+
+import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Marlowe.Project.Types
-  ( Project
-  , ProjectName
-  , SourceCode
-  , _code
-  , _projectName
-  )
+import Data.Maybe (Maybe(..))
+import Data.Variant (Variant)
+import Data.Variant as Variant
+import Prim.Row as Row
+import Project (Project, ProjectName, SourceCode)
+import Project as Project
+import Record as Record
 import Type.Prelude (Proxy(..))
+
+_projectStateP = Proxy :: Proxy "projectState"
+_projectP = Proxy :: Proxy "project"
+_modifiedP = Proxy :: Proxy "modified"
+
+_projectState :: forall r. Lens' (State r) (Maybe ProjectState)
+_projectState = prop _projectStateP
+
+_project :: Lens' ProjectState Project
+_project = prop _projectP
 
 type ProjectState =
   { project :: Project
   , modified :: Boolean
   }
 
-_project :: forall a r. Lens' { project :: a | r } a
-_project = prop (Proxy :: _ "project")
+data ProjectStateAction
+  = OnProjectNameChanged ProjectName
+  | OnProjectCodeChanged SourceCode
+  | OnProjectLoaded Project
+  | OnProjectSaved
+  | OnProjectModified
+
+type StateRow r = (projectState :: Maybe ProjectState | r)
+type State r = { | StateRow r }
+
+type ActionRow r = (projectState :: ProjectStateAction | r)
+type Action r = Variant (ActionRow r)
 
 mkProjectState :: Project -> ProjectState
 mkProjectState = { modified: false, project: _ }
 
-data ProjectStateAction
-  = OnProjectNameChanged ProjectName
-  | OnProjectCodeChanged SourceCode
-  | OnProjectSaved
+insertInitialProjectState
+  :: forall r
+   . Row.Lacks "projectState" r
+  => Maybe Project
+  -> { | r }
+  -> { | StateRow r }
+insertInitialProjectState project = Record.insert _projectStateP
+  (mkProjectState <$> project)
 
-reduce :: ProjectState -> ProjectStateAction -> ProjectState
-reduce store = case _ of
-  OnProjectNameChanged name -> store
-    { project = set _projectName name store.project }
-  OnProjectCodeChanged code -> store
-    { project = set _code code store.project }
-  OnProjectSaved -> store { modified = false }
+action :: forall acc. ProjectStateAction -> Action acc
+action = Variant.inj _projectStateP
+
+reduce
+  :: forall acc st
+   . (Variant acc -> State st -> State st)
+  -> Action acc
+  -> State st
+  -> State st
+reduce = Variant.on _projectStateP case _ of
+  OnProjectNameChanged n -> modify $ Record.modify _projectP $ flip
+    Project.setProjectName
+    (Just n)
+  OnProjectCodeChanged code -> modify $ Record.modify _projectP $ flip
+    Project.setCode
+    code
+  OnProjectLoaded project -> Record.set _projectStateP
+    (Just $ mkProjectState project)
+  OnProjectSaved -> modify $ Record.set _modifiedP false
+  OnProjectModified -> modify $ Record.set _modifiedP true
+  where
+  modify :: (ProjectState -> ProjectState) -> State st -> State st
+  modify = Record.modify _projectStateP <<< map
+

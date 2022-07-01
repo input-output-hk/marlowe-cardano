@@ -1,4 +1,4 @@
-module Marlowe.Project.Gist where
+module Project.Bundle.Gist where
 
 import Prologue
 
@@ -15,18 +15,12 @@ import Gist
   , gistFileContent
   , gistFiles
   )
-import Marlowe.Project.Types
-  ( FileContent(..)
-  , FileName(..)
-  , Files(..)
-  , Project
-  , fromFiles
-  , toFiles
-  )
+import Project.Bundle as Bundle
+import Project.Types (Bundle, FileContent(..), FileName(..), Files(..))
 
 newtype Description = Description String
 
-toNewGist :: Project -> Description -> NewGist
+toNewGist :: Bundle -> Description -> NewGist
 toNewGist projectState (Description description) =
   NewGist
     { _newGistDescription: description
@@ -34,7 +28,7 @@ toNewGist projectState (Description description) =
     , _newGistFiles
     }
   where
-  Files projectFiles = toFiles projectState
+  Files projectFiles = Bundle.toFiles projectState
 
   _newGistFiles =
     A.fromFoldable
@@ -44,12 +38,11 @@ toNewGist projectState (Description description) =
   fromFile (FileName name) (FileContent content) = NewGistFile
     { _newGistFilename: name, _newGistFileContent: content }
 
-fromGist :: Gist -> (Maybe Project)
-fromGist gist = fromFiles $ Files $ do
-  let
-    files = gist ^. gistFiles
-
+fromGist :: Gist -> Maybe Bundle
+fromGist gist = Bundle.fromFiles $ Files $ do
   M.fromFoldable
     <<< map (L.over _1 FileName)
     <<< (M.toUnfoldable :: _ -> Array _)
     <<< M.mapMaybe (map FileContent <<< view gistFileContent) $ files
+  where
+  files = gist ^. gistFiles

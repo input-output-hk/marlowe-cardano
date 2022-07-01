@@ -5,48 +5,76 @@ module Store
 
 import Prelude
 
-import Data.Lens (Lens', _Just, over, set)
+import Data.Lens (Iso')
 import Data.Lens.Iso.Newtype (_Newtype)
-import Data.Lens.Record (prop)
-import Data.Maybe (Maybe)
-import Data.Newtype (class Newtype)
-import Marlowe.Project.Types (Project)
-import Network.RemoteData (RemoteData(..))
-import Session (AuthResponse)
-import Store.ProjectState (ProjectState, ProjectStateAction, mkProjectState)
+import Data.Maybe (Maybe(..))
+import Data.Newtype (class Newtype, un)
+import Data.Variant (Variant, case_)
+import Data.Variant as Variant
+import Project (Project)
+import Store.AuthState as AuthState
+import Store.OverlayState as OverlayState
+import Store.ProjectState (ProjectState, ProjectStateAction)
 import Store.ProjectState as ProjectState
 import Type.Prelude (Proxy(..))
+import Type.Row (type (+))
 
-newtype State = State
-  { authResponse :: AuthResponse
-  , projectState :: Maybe ProjectState
-  }
+type StateRow =
+  ( AuthState.StateRow
+      + OverlayState.StateRow
+      + ProjectState.StateRow
+      + ()
+  )
+
+type StateRecord = { | StateRow }
+newtype State = State StateRecord
+
+-- | Reset action which is used during logout
+_resetP = Proxy :: Proxy "reset"
+
+reset :: Action
+reset = Variant.inj _resetP unit
+
+-- | Compiler bug?
+-- |
+-- | type ActionRow = ( OverlayState.ActionRow + AuthState.ActionRow + ProjectState.ActionRow + ())
+-- |
+-- | The above fails with:
+-- |
+-- | "PartiallyAppliedSynonym" (unknown module)
+-- | Type synonym Type.Row.RowApply is partially applied.
+-- |
+type ActionRow =
+  ( OverlayState.ActionRow
+      (AuthState.ActionRow (ProjectState.ActionRow (reset :: Unit)))
+  )
+
+type Action = Variant ActionRow
 
 derive instance Newtype State _
+
+_State
+  :: Iso' State
+       { | AuthState.StateRow + OverlayState.StateRow + ProjectState.StateRow +
+           ()
+       }
+_State = _Newtype
 
 mkStore
   :: Maybe Project
   -> State
 mkStore project = State
-  { projectState: mkProjectState <$> project
-  , authResponse: NotAsked
-  }
-
-_authResponse :: Lens' State AuthResponse
-_authResponse = _Newtype <<< prop (Proxy :: _ "authResponse")
-
-_projectState :: Lens' State (Maybe ProjectState)
-_projectState = _Newtype <<< prop (Proxy :: _ "projectState")
-
-data Action
-  = ProjectStateAction ProjectStateAction
-  | OnProjectLoaded Project
-  | SetAuthResponse AuthResponse
+  $ OverlayState.insertInitialOverlayState
+  $ ProjectState.insertInitialProjectState project
+  $ AuthState.insertInitialAuthState
+  $ {}
 
 reduce :: State -> Action -> State
-reduce = flip case _ of
-  ProjectStateAction projectStateAction ->
-    over (_projectState <<< _Just) (flip ProjectState.reduce projectStateAction)
-  OnProjectLoaded project ->
-    set (_projectState <<< _Just) (mkProjectState project)
-  SetAuthResponse resp -> set _authResponse resp
+reduce (State st) action = do
+  let
+    reduce' = case_
+      # OverlayState.reduce
+      # ProjectState.reduce
+      # AuthState.reduce
+      # Variant.on _resetP (\_ _ -> un State (mkStore Nothing))
+  State $ reduce' action st

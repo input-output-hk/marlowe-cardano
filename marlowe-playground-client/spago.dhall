@@ -80,6 +80,7 @@
   , "unordered-collections"
   , "unsafe-coerce"
   , "uri"
+  , "variant"
   , "web-common"
   , "web-dom"
   , "web-events"

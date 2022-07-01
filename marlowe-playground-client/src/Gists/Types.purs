@@ -3,9 +3,12 @@ module Gists.Types
   , parseGistUrl
   ) where
 
+import Prologue
+
 import Component.ErrorPane (ErrorPaneAction)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Either (Either, note)
+import Data.Newtype (class Newtype)
 import Data.String.Regex (Regex, match, regex)
 import Data.String.Regex.Flags (ignoreCase)
 import Gists.Extra (GistId(..))

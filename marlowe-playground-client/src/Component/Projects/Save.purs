@@ -5,42 +5,24 @@ import Prelude
 import Component.Projects.Types (Storage(..))
 import Data.Lens (_Just, view)
 import Data.Lens.Iso.Newtype (_Newtype)
-import Data.Maybe (fromMaybe, maybe)
-import Data.Newtype (un)
+import Data.Maybe (fromMaybe)
 import Data.Tuple.Nested ((/\))
 import Halogen (Component)
-import Halogen.Classes
-  ( border
-  , borderBlue300
-  , btn
-  , btnSecondary
-  , fontSemibold
-  , fullWidth
-  , modalContent
-  , noMargins
-  , spaceBottom
-  , spaceLeft
-  , spaceRight
-  , spaceTop
-  , textBase
-  , textRight
-  , textSm
-  , uppercase
-  )
-import Halogen.HTML as HH
+import Halogen.Classes (border, borderBlue300, fullWidth, spaceBottom, textSm)
+import Halogen.HTML (button, div_, input, text) as HH
 import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HH
+import Halogen.HTML.Properties (classes, placeholder, value) as HH
 import Halogen.Hooks (component) as H
 import Halogen.Hooks.Extra.Hooks (usePutState)
 import Halogen.Hooks.Hook (bind, pure) as H
 import Halogen.Store.Select (selectEq)
 import Halogen.Store.UseSelector (useSelector)
-import Marlowe.Project.Types (ProjectName(..), _projectName)
-import Safe.Coerce (coerce)
-import Store (_projectState)
+import Project (_projectName)
+import Store (_State)
+import Store.AuthState.Hooks (useIsAuthenticated)
 import Store.Handlers (loginRequired)
-import Store.Hooks (useIsAuthenticated)
 import Store.ProjectState (_project)
+import Store.ProjectState (_projectState)
 import Type.Constraints (class MonadAffAjaxStore)
 
 data Step
@@ -57,8 +39,14 @@ component = H.component \_ _ -> H.do
   authenticated <- fromMaybe false <$> useIsAuthenticated
 
   projectName <- useSelector
-    ( selectEq $ view $ _projectState <<< _Just <<< _project <<< _projectName
-        <<< _Newtype
+    ( selectEq $ view
+        $ _State
+            <<< _projectState
+            <<< _Just
+            <<< _project
+            <<< _projectName
+            <<< _Just
+            <<< _Newtype
     )
   let
     renderStorageChoice _ = HH.div_

@@ -3,15 +3,15 @@ module Component.Demos.Types where
 import Prologue
 
 import Analytics (class IsEvent)
-import Component.Projects.Types (Lang)
 import Data.Newtype (class Newtype)
+import Project (Workflow)
 
 newtype Demo = Demo String
 
 derive instance newtypeDemo :: Newtype Demo _
 
 data Action
-  = LoadDemo Lang Demo
+  = LoadDemo Workflow Demo
   | Cancel
 
 instance isEventAction :: IsEvent Action where

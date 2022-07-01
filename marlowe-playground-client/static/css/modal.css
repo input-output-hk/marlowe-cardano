@@ -5,19 +5,16 @@ without doing it as an Effect in a mainframe action
   overflow-y: hidden;
 }
 
-/* The "grey" background that prevents other actions to be performed */
-.overlay {
-  /*
-    Hidden by default
-    Centered vertically and horizontally
-  */
+/* Something between .backdrop and .loading-overlay
+ * which positions modal and we can click it to
+ * close the modal.
+ */
+.modal-backdrop {
+  position: fixed;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Stay in place */
-  position: fixed;
-  /* Sit on top */
-  z-index: 100; /* Blockly toolbar has z-index of 70, so we need this be bigger than that */
+  z-index: 101; /* Blockly toolbar has z-index of 70, so we need this be bigger than that */
   left: 0;
   top: 0;
   /* Full width */
@@ -26,17 +23,6 @@ without doing it as an Effect in a mainframe action
   height: 100vh;
 }
 
-/* The overlay and overlay-background are separated because modals can have a global loading indicator
-    which is an overlay on top of another. If both overlay have the transparency background, then what
-    is outside the overlay is too dark. This way, in the modal view, we can select to only have the positional
-    aspects of the overlay, without the background, if there are other overlays.
-*/
-.overlay-background {
-  /* Fallback color */
-  background-color: rgb(0, 0, 0);
-  /* Black w/ opacity */
-  background-color: rgba(0, 0, 0, 0.4);
-}
 /* Modal Content/Box */
 .modal {
   background-color: #fefefe;
@@ -53,6 +39,7 @@ without doing it as an Effect in a mainframe action
   */
   max-height: 96vh;
   overflow: auto;
+  z-index: 102; /* Blockly toolbar has z-index of 70, so we need this be bigger than that */
 }
 
 .modal-header {
