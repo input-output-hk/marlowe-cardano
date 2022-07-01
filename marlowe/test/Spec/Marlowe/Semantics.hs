@@ -1,7 +1,6 @@
 
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections  #-}
 
 
 module Spec.Marlowe.Semantics (
@@ -9,29 +8,47 @@ module Spec.Marlowe.Semantics (
 ) where
 
 
-import Control.Monad (replicateM)
-import Data.Bifunctor (bimap)
-import Data.Function (on)
-import Data.List (group, groupBy, sort, sortBy)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 import Language.Marlowe.Semantics
 import Language.Marlowe.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
-import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Arbitrary
-import Spec.Marlowe.Common (caseRelGenSized, contractGen, observationGen, simpleIntegerGen, valueGen)
+import Spec.Marlowe.Common (contractGen, observationGen, valueGen)
+import Spec.Marlowe.Util
+import Spec.Marlowe.Util.AssocMap
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import qualified PlutusTx.AssocMap as AM
-import qualified PlutusTx.Prelude as P
+
+
+-- FIXME: Turn this off when semantics are fixed!
+_ALLOW_ZERO_PAYMENT :: Bool
+_ALLOW_ZERO_PAYMENT = True
 
 
 tests :: [TestTree]
 tests =
   [
-    testGroup "Semantics"
+    testGroup "Arbitrary"
+      [
+        testGroup "Entropy"
+          [
+            testCase "PubKeyHash"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen PubKeyHash     )
+          , testCase "CurrencySymbol" $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen CurrencySymbol )
+          , testCase "TokenName"      $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen TokenName      )
+          , testCase "Token"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Token          )
+          , testCase "Party"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Party          )
+          , testCase "ChoiceName"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100)  arbitraryChoiceName
+          , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ChoiceId       )
+          , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId        )
+          , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryAccounts   )
+          , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryChoices    )
+          , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryBoundValues)
+          ]
+      ]
+  , testGroup "Semantics"
       [
         testGroup "fixInterval"
         [
@@ -130,33 +147,7 @@ tests =
         , testProperty "INotify" checkINotify
         ]
       ]
-  , testGroup "Entropy of Arbitrary"
-      [
-        testCase "PubKeyHash"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen PubKeyHash     )
-      , testCase "CurrencySymbol" $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen CurrencySymbol )
-      , testCase "TokenName"      $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen TokenName      )
-      , testCase "Token"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Token          )
-      , testCase "Party"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Party          )
-      , testCase "ChoiceName"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100)  arbitraryChoiceName
-      , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ChoiceId       )
-      , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId        )
-      , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryAccounts   )
-      , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryChoices    )
-      , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryBoundValues)
-      ]
     ]
-
-
-checkEntropy :: Ord a => Int -> (Double, Double) -> Gen a -> Assertion
-checkEntropy n (min', max') gen =
-  do
-    sample'' <- generate $ replicateM n gen
-    let
-      n' = fromIntegral n
-      histogram = fmap (fromIntegral . length) . group . sort $ sample''
-      entropy = sum $ (\f -> - f * logBase 2 f) . (/ n') <$> histogram
-    assertBool ("!(" <> show min' <> " <= " <> show entropy <> " <= " <> show max' <> ")")
-      $ min' <= entropy && entropy <= max'
 
 
 checkFixInterval :: Bool -> Bool -> Property
@@ -271,12 +262,6 @@ checkDivValueMultiple =
   in
     checkValue gen $ \eval _ _ _ (x, n) ->
       eval (DivValue (MulValue x n) n) == eval x || eval n == 0
-
-
-roundedDivide :: Integer
-              -> Integer
-              -> Integer
-roundedDivide x y = maybe 0 P.round $ x `P.ratio` y
 
 
 checkDivValueRounding :: Property
@@ -539,26 +524,6 @@ checkINotify = property $ do
         NotAppliedAction                    -> not result
 
 
-assocMapEq :: Ord k => Ord v => AM.Map k v -> AM.Map k v -> Bool
-assocMapEq = (==) `on` (sort . AM.toList)
-
-assocMapInsert :: Eq k => k -> v -> AM.Map k v -> AM.Map k v
-assocMapInsert k v =
-  AM.fromList
-    . ((k, v) :)
-    . filter ((/= k) . fst)
-    . AM.toList
-
-assocMapAdd :: Ord k => Ord v => Num v => k -> v -> AM.Map k v -> AM.Map k v
-assocMapAdd k v =
-  AM.fromList
-    . fmap (bimap head sum . unzip)
-    . groupBy ((==) `on` fst)
-    . sort
-    . ((k, v) :)
-    . AM.toList
-
-
 checkRefundOne :: (Int -> Bool) -> Property
 checkRefundOne f =
   property
@@ -641,10 +606,6 @@ checkGiveMoney =
              _                                                     -> False
 
 
-flattenMoney :: Money -> [(Token, Integer)]
-flattenMoney = fmap (\(s, n, a) -> (Token s n, a)) .  flattenValue
-
-
 checkReduceContractStepClose :: Property
 checkReduceContractStepClose =
   property $ do
@@ -654,7 +615,7 @@ checkReduceContractStepClose =
         payee == payee'
           && case flattenMoney money of
                [(token, amount)] -> AM.lookup (payee, token) (accounts state) == Just amount
-                                      && AM.lookup (payee, token) (accounts state') == Nothing
+                                      && isNothing (AM.lookup (payee, token) (accounts state'))
                                       && state == state' {accounts = assocMapInsert (payee, token) amount (accounts state')}
                _                 -> False
       checkPayment _ _ _ = False
@@ -663,11 +624,6 @@ checkReduceContractStepClose =
         NotReduced                                                           -> AM.null $ accounts state
         Reduced ReduceNoWarning (ReduceWithPayment payment) state' contract' -> checkPayment payment state' contract'
         _                                                                    -> False
-
-
--- FIXME: Turn this off when semantics are fixed!
-_ALLOW_ZERO_PAYMENT :: Bool
-_ALLOW_ZERO_PAYMENT = True
 
 
 checkReduceContractStepPay :: Property
@@ -742,23 +698,6 @@ checkReduceContractStepIf =
         _                                                        -> False
 
 
-assocMapSort :: Ord k => AM.Map k v -> AM.Map k v
-assocMapSort = AM.fromList . sortBy (compare `on` fst) . AM.toList
-
-
-canonicalState :: State -> State
-canonicalState State{..} =
-  State
-    (assocMapSort accounts)
-    (assocMapSort choices)
-    (assocMapSort boundValues)
-    minTime
-
-
-stateEq :: State -> State -> Bool
-stateEq = (==) `on` canonicalState
-
-
 checkReduceContractStepWhen :: Property
 checkReduceContractStepWhen =
   property $ do
@@ -771,10 +710,6 @@ checkReduceContractStepWhen =
         NotReduced                                               -> before
         Reduced ReduceNoWarning ReduceNoPayment state' contract' -> afterwards && contract == contract' && state == state'
         _                                                        -> not before && not afterwards
-
-
-caseGen :: Gen (Case Contract)
-caseGen = sized $ (simpleIntegerGen >>=) . caseRelGenSized
 
 
 checkReduceContractStepLet :: Property
