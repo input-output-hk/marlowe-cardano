@@ -7,7 +7,9 @@
 
 module Spec.Marlowe.Arbitrary (
 
-  arbitraryPositiveAmount
+  caseGen
+
+, arbitraryPositiveAmount
 , shrinkPositiveAmount
 
 , arbitraryChoiceName
@@ -33,12 +35,13 @@ module Spec.Marlowe.Arbitrary (
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
-import Language.Marlowe.Semantics.Types (AccountId, Accounts, Bound (..), ChoiceId (..), ChoiceName, ChosenNum,
-                                         Environment (..), Party (..), Payee (..), State (..), TimeInterval, Token (..),
-                                         ValueId (..))
+import Language.Marlowe.Semantics.Types (AccountId, Accounts, Bound (..), Case, ChoiceId (..), ChoiceName, ChosenNum,
+                                         Contract, Environment (..), Party (..), Payee (..), State (..), TimeInterval,
+                                         Token (..), ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, suchThat)
+import Spec.Marlowe.Common (caseRelGenSized, simpleIntegerGen)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, sized, suchThat)
 
 import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, null, toList)
 import qualified PlutusTx.Eq as P (Eq)
@@ -389,3 +392,7 @@ instance Arbitrary State where
 instance Arbitrary Environment where
   arbitrary = Environment <$> arbitraryTimeInterval
   shrink (Environment x) = Environment <$> shrink x
+
+
+caseGen :: Gen (Case Contract)
+caseGen = sized $ (simpleIntegerGen >>=) . caseRelGenSized

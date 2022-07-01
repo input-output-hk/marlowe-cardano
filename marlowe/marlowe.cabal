@@ -155,6 +155,8 @@ test-suite marlowe-test
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
         Spec.Marlowe.Semantics
+        Spec.Marlowe.Util
+        Spec.Marlowe.Util.AssocMap
         MarloweContract
     build-depends:
         aeson -any,
