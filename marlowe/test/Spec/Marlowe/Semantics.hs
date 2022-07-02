@@ -9,8 +9,8 @@ module Spec.Marlowe.Semantics (
 
 
 import Data.Maybe (fromMaybe, isNothing)
-import Language.Marlowe.Semantics
-import Language.Marlowe.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
 import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Common (contractGen, observationGen, valueGen)

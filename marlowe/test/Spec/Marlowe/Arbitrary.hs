@@ -35,9 +35,9 @@ module Spec.Marlowe.Arbitrary (
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
-import Language.Marlowe.Semantics.Types (AccountId, Accounts, Bound (..), Case, ChoiceId (..), ChoiceName, ChosenNum,
-                                         Contract, Environment (..), Party (..), Payee (..), State (..), TimeInterval,
-                                         Token (..), ValueId (..))
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Bound (..), Case, ChoiceId (..), ChoiceName,
+                                                 ChosenNum, Contract, Environment (..), Party (..), Payee (..),
+                                                 State (..), TimeInterval, Token (..), ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
 import Spec.Marlowe.Common (caseRelGenSized, simpleIntegerGen)

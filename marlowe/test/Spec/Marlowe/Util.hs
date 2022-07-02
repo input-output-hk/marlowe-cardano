@@ -13,7 +13,7 @@ module Spec.Marlowe.Util (
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (group, sort)
-import Language.Marlowe.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Util.AssocMap
 import Test.Tasty.HUnit (Assertion, assertBool)

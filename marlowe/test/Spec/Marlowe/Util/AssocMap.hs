@@ -11,7 +11,7 @@ module Spec.Marlowe.Util.AssocMap (
 import Data.Bifunctor (bimap)
 import Data.Function (on)
 import Data.List (groupBy, nub, sortBy)
-import qualified Data.Map.Strict as M
+
 import qualified PlutusTx.AssocMap as AM
 
 
