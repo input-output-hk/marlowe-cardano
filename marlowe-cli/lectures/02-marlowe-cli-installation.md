@@ -1,5 +1,5 @@
 ---
-date: 24 June 2022
+date: 01 July 2022
 version: marlowe-cli 0.0.5.0
 ---
 
@@ -111,12 +111,12 @@ Daedalus.](diagrams/daedalus-terminal-window.png)
 
 ### Using the Nix
 
-NixOS and the Nix package manager are available at
-\<<https://nixos.org/>\>. See also the Plutus Community Docs at
-\<<https://plutus-community.readthedocs.io/en/latest/>\>.
+NixOS and the Nix package manager are available at <https://nixos.org/>.
+See also the Plutus Community Docs at
+<https://plutus-community.readthedocs.io/en/latest/>.
 
 👉 See
-\<<https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc#how-to-set-up-the-iohk-binary-caches>\>
+<https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc#how-to-set-up-the-iohk-binary-caches>
 on how to set up binary caches for the Nix build. This will greatly
 speed the build process.
 
@@ -124,7 +124,7 @@ Once the binary caches have been set up, clone the Marlowe Git
 repository.
 
 The Marlowe repository for Cardano is located at
-\<<https://github.com/input-output-hk/marlowe-cardano.git>\>.
+<https://github.com/input-output-hk/marlowe-cardano.git>.
 
 -   This repository contains the Marlowe source code, documentation,
     examples, and test cases.
@@ -434,7 +434,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address $(cat 
 ## Troubleshooting
 
 👉 Installation assistance is available on the Marlowe Discord channel
-\<<https://discord.com/channels/826816523368005654/936295815926927390/936316494042779698>\>.
+<https://discord.com/channels/826816523368005654/936295815926927390/936316494042779698>.
 
 </div>
 
@@ -443,12 +443,12 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address $(cat 
 ## Resources
 
 -   General installation instructions for Marlowe:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc>.
 -   Plutus Community:
-    \<<https://plutus-community.readthedocs.io/en/latest/>\>.
--   Nix package manage and NixOs: \<<https://nixos.org/>\>.
+    <https://plutus-community.readthedocs.io/en/latest/>.
+-   Nix package manage and NixOs: <https://nixos.org/>.
 -   Marlowe CLI documentation:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>.
 
 </div>
 
@@ -475,7 +475,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address $(cat 
 ## Other Lectures
 
 Lectures on Marlowe CLI:
-\<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>\>
+<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>
 
 -   [Overview of Marlowe CLI](01-marlowe-cli-overview.ipynb)
 -   ~~Installing Marlowe CLI and Associated Tools~~

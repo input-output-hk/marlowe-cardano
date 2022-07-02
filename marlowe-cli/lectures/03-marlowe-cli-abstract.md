@@ -1,5 +1,5 @@
 ---
-date: 24 June 2022
+date: 01 July 2022
 version: marlowe-cli 0.0.5.0
 ---
 
@@ -1417,7 +1417,7 @@ marlowe-cli template --help
 
 Additional templates are available in Marlowe Playground or in the
 Marlowe example contracts
-\<<https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>\>.
+<https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>.
 
 </div>
 
@@ -1454,26 +1454,26 @@ Marlowe example contracts
 ## Resources
 
 -   Marlowe CLI documentation:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>.
 -   Marlowe Debugging Cookbook:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe/debugging-cookbook.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe/debugging-cookbook.md>.
 -   Example contracts with `marlowe-cli`:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/examples/ReadMe.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/examples/ReadMe.md>.
 -   Marlowe contract examples:
-    \<<https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>\>.
--   Marlowe Playground: \<<https://playground.marlowe.iohkdev.io/#/>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>.
+-   Marlowe Playground: <https://playground.marlowe.iohkdev.io/#/>.
 -   Marlowe Run
     -   On pioneers testnet:
-        \<<https://marlowe-run-marlowe-pioneers.plutus.aws.iohkdev.io/>\>.
-    -   On mock network: \<<https://marlowe-finance.io/>\>.
+        <https://marlowe-run-marlowe-pioneers.plutus.aws.iohkdev.io/>.
+    -   On mock network: <https://marlowe-finance.io/>.
 -   Cardano Docs for Marlowe:
-    \<<https://docs.cardano.org/marlowe/learn-about-marlowe>\>.
+    <https://docs.cardano.org/marlowe/learn-about-marlowe>.
 -   Plutus Pioneers Program:
-    \<<https://github.com/input-output-hk/plutus-pioneer-program>\>.
+    <https://github.com/input-output-hk/plutus-pioneer-program>.
 -   Plutus Community:
-    \<<https://plutus-community.readthedocs.io/en/latest/>\>.
+    <https://plutus-community.readthedocs.io/en/latest/>.
 -   The Plutonomicon:
-    \<<https://github.com/Plutonomicon/plutonomicon/blob/main/README.md>\>.
+    <https://github.com/Plutonomicon/plutonomicon/blob/main/README.md>.
 
 </div>
 
@@ -1493,7 +1493,7 @@ Marlowe example contracts
     the steps time out because no input is provided before the deadline.
 5.  Run a similar simulation using a different contract from
     `marlowe-cli template --help`, Marlowe Playground, or
-    \<<https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-contracts>.
 
 </div>
 
@@ -1523,7 +1523,7 @@ Marlowe example contracts
 ## Other Lectures
 
 Lectures on Marlowe CLI:
-\<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>\>
+<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>
 
 -   [Overview of Marlowe CLI](01-marlowe-cli-overview.ipynb)
 -   [Installing Marlowe CLI and Associated

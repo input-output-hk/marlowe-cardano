@@ -1,5 +1,5 @@
 ---
-date: 24 June 2022
+date: 01 July 2022
 version: marlowe-cli 0.0.5.0
 ---
 
@@ -368,16 +368,16 @@ marlowe-cli --help
 ## Resources
 
 -   Marlowe CLI documentation:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>.
 -   Marlowe Cardano repository:
-    \<<https://github.com/input-output-hk/marlowe-cardano/>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/>.
 -   Cardano Docs for Marlowe:
-    \<<https://docs.cardano.org/marlowe/learn-about-marlowe>\>.
--   Marlowe Playground: \<<https://playground.marlowe.iohkdev.io/#/>\>.
+    <https://docs.cardano.org/marlowe/learn-about-marlowe>.
+-   Marlowe Playground: <https://playground.marlowe.iohkdev.io/#/>.
 -   Marlowe Run
     -   On pioneers testnet:
-        \<<https://marlowe-run-marlowe-pioneers.plutus.aws.iohkdev.io/>\>.
-    -   On mock network: \<<https://marlowe-finance.io/>\>.
+        <https://marlowe-run-marlowe-pioneers.plutus.aws.iohkdev.io/>.
+    -   On mock network: <https://marlowe-finance.io/>.
 
 </div>
 
@@ -406,7 +406,7 @@ marlowe-cli --help
 ## Other Lectures
 
 Lectures on Marlowe CLI:
-\<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>\>
+<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>
 
 -   ~~Overview of Marlowe CLI~~
 -   [Installing Marlowe CLI and Associated

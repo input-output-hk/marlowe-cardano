@@ -1,5 +1,5 @@
 ---
-date: 24 June 2022
+date: 01 July 2022
 version: marlowe-cli 0.0.5.0
 ---
 
@@ -65,7 +65,7 @@ If needed, the Marlowe Run frontend can be launched similarly.
 ```
 
 See
-\<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-dashboard-client/README.md>\>
+<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-dashboard-client/README.md>
 for details.
 
 </div>
@@ -203,7 +203,7 @@ marlowe-cli pab --help
 ## Running a Simple Contract using the Backend
 
 -   Documentation at
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/doc/backend-tutorial.md>\>
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/doc/pab-tutorial.md>
     provides a full example of using all three backend contracts and
     their endpoints, along with the log messages expected from all of
     the backend services.
@@ -676,7 +676,7 @@ marlowe-cli query history --index-url http://localhost:9083 --roles-currency $RO
 Marlowe CLI can also be used to run test scripts for the PAB. Those test
 scripts contain a series of endpoint calls and other operations, along
 with assertions to check. See
-\<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/test/ReadMe.md>\>
+<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/test/ReadMe.md>
 for details.
 
 </div>
@@ -728,7 +728,7 @@ marlowe-cli test contracts --help
 -   Failures may occur when wallets do not have sufficient funds.
 -   Run the Marlowe backend test suite to verify that the backend
     components are working:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/run-tests.sh>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/run-tests.sh>.
 -   Study the log files of the backend components to see whether
     requests are reaching the backend, chain-index, wallet, and node.
 
@@ -739,22 +739,22 @@ marlowe-cli test contracts --help
 ## Resources
 
 -   Marlowe CLI documentation:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/ReadMe.md>.
 -   Marlowe Debugging Cookbook:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe/debugging-cookbook.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe/debugging-cookbook.md>.
 -   Test suite for Marlowe backend with `marlowe-cli`:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/test/ReadMe.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/test/ReadMe.md>.
 -   Detailed example for the Marlowe backend:
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/doc/backend-tutorial.md>\>.
--   Marlowe Playground: \<<https://playground.marlowe.iohkdev.io/#/>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/doc/pab-tutorial.md>.
+-   Marlowe Playground: <https://playground.marlowe.iohkdev.io/#/>.
 -   Marlowe Run
     -   On pioneers testnet:
-        \<<https://marlowe-run-marlowe-pioneers.plutus.aws.iohkdev.io/>\>.
-    -   On mock network: \<<https://marlowe-finance.io/>\>.
+        <https://marlowe-run-marlowe-pioneers.plutus.aws.iohkdev.io/>.
+    -   On mock network: <https://marlowe-finance.io/>.
 -   Plutus Pioneers Program:
-    \<<https://github.com/input-output-hk/plutus-pioneer-program>\>.
+    <https://github.com/input-output-hk/plutus-pioneer-program>.
 -   Plutus Community:
-    \<<https://plutus-community.readthedocs.io/en/latest/>\>.
+    <https://plutus-community.readthedocs.io/en/latest/>.
 
 </div>
 
@@ -763,9 +763,9 @@ marlowe-cli test contracts --help
 ## Exercises (Difficult)
 
 1.  Repeat the Marlowe backend tutorial
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/doc/backend-tutorial.md>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/doc/pab-tutorial.md>.
 2.  Run the Marlowe backend tests
-    \<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/run-tests.sh>\>.
+    <https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/run-tests.sh>.
 
 </div>
 
@@ -788,7 +788,7 @@ marlowe-cli test contracts --help
 ## Other Lectures
 
 Lectures on Marlowe CLI:
-\<<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>\>
+<https://github.com/input-output-hk/marlowe-cardano/blob/mpp-cli-lectures/marlowe-cli/lectures/ReadMe.md>
 
 -   [Overview of Marlowe CLI](01-marlowe-cli-overview.ipynb)
 -   [Installing Marlowe CLI and Associated
