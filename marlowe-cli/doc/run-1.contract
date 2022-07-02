@@ -1,0 +1,165 @@
+{
+   "when" : [
+      {
+         "case" : {
+            "party" : { "role_token" : "FB" },
+            "of_token" : { "currency_symbol" : "", "token_name" : "" },
+            "deposits" : 7000000,
+            "into_account" : { "role_token" : "FB" }
+         },
+         "then" : {
+            "when" : [
+               {
+                  "case" : {
+                     "party" : { "role_token" : "TM" },
+                     "deposits" : 8000000,
+                     "of_token" : { "currency_symbol" : "", "token_name" : "" },
+                     "into_account" : { "role_token" : "TM" }
+                  },
+                  "then" : {
+                     "when" : [],
+                     "timeout" : 1655566691000,
+                     "timeout_continuation" : {
+                        "when" : [
+                           {
+                              "case" : {
+                                 "choose_between" : [ { "from" : 0, "to" : 1000000000 } ],
+                                 "for_choice" : {
+                                    "choice_name" : "Price in first window",
+                                    "choice_owner" : { "role_token" : "CM" }
+                                 }
+                              },
+                              "then" : {
+                                 "when" : [],
+                                 "timeout" : 1655566751000,
+                                 "timeout_continuation" : {
+                                    "when" : [
+                                       {
+                                          "case" : {
+                                             "choose_between" : [ { "from" : 0, "to" : 1000000000 } ],
+                                             "for_choice" : {
+                                                "choice_name" : "Price in second window",
+                                                "choice_owner" : { "role_token" : "CM" }
+                                             }
+                                          },
+                                          "then" : {
+                                             "if" : {
+                                                "value" : {
+                                                   "value_of_choice" : {
+                                                      "choice_name" : "Price in first window",
+                                                      "choice_owner" : { "role_token" : "CM" }
+                                                   }
+                                                },
+                                                "gt" : {
+                                                   "value_of_choice" : {
+                                                      "choice_name" : "Price in second window",
+                                                      "choice_owner" : { "role_token" : "CM" }
+                                                   }
+                                                }
+                                             },
+                                             "then" : {
+                                                "let" : "Decrease in price",
+                                                "be" : {
+                                                   "value" : {
+                                                      "value_of_choice" : {
+                                                         "choice_name" : "Price in first window",
+                                                         "choice_owner" : { "role_token" : "CM" }
+                                                      }
+                                                   },
+                                                   "minus" : {
+                                                      "value_of_choice" : {
+                                                         "choice_name" : "Price in second window",
+                                                         "choice_owner" : { "role_token" : "CM" }
+                                                      }
+                                                   }
+                                                },
+                                                "then" : {
+                                                   "from_account" : { "role_token" : "TM" },
+                                                   "pay" : {
+                                                      "if" : {
+                                                         "value" : { "use_value" : "Decrease in price" },
+                                                         "lt" : 8000000
+                                                      },
+                                                      "then" : {
+                                                         "use_value" : "Decrease in price"
+                                                      },
+                                                      "else" : 8000000
+                                                   },
+                                                   "token" : { "currency_symbol" : "", "token_name" : "" },
+                                                   "to" : { "account" : { "role_token" : "FB" } },
+                                                   "then" : "close"
+                                                }
+                                             },
+                                             "else" : {
+                                                "if" : {
+                                                   "value" : {
+                                                      "value_of_choice" : {
+                                                         "choice_name" : "Price in first window",
+                                                         "choice_owner" : { "role_token" : "CM" }
+                                                      }
+                                                   },
+                                                   "lt" : {
+                                                      "value_of_choice" : {
+                                                         "choice_name" : "Price in second window",
+                                                         "choice_owner" : { "role_token" : "CM" }
+                                                      }
+                                                   }
+                                                },
+                                                "then" : {
+                                                   "let" : "Increase in price",
+                                                   "be" : {
+                                                      "value" : {
+                                                         "value_of_choice" : {
+                                                            "choice_name" : "Price in second window",
+                                                            "choice_owner" : { "role_token" : "CM" }
+                                                         }
+                                                      },
+                                                      "minus" : {
+                                                         "value_of_choice" : {
+                                                            "choice_name" : "Price in first window",
+                                                            "choice_owner" : { "role_token" : "CM" }
+                                                         }
+                                                      }
+                                                   },
+                                                   "then" : {
+                                                      "pay" : {
+                                                         "if" : {
+                                                            "value" : { "use_value" : "Increase in price" },
+                                                            "lt" : 7000000
+                                                         },
+                                                         "then" : {
+                                                            "use_value" : "Increase in price"
+                                                         },
+                                                         "else" : 7000000
+                                                      },
+                                                      "from_account" : { "role_token" : "FB" },
+                                                      "token" : { "currency_symbol" : "", "token_name" : "" },
+                                                      "to" : { "account" : { "role_token" : "TM" } },
+                                                      "then" : "close"
+                                                   }
+                                                },
+                                                "else" : "close"
+                                             }
+                                          }
+                                       }
+                                    ],
+                                    "timeout" : 1655740691000,
+                                    "timeout_continuation" : "close"
+                                 }
+                              }
+                           }
+                        ],
+                        "timeout" : 1655654291000,
+                        "timeout_continuation" : "close"
+                     }
+                  }
+               }
+            ],
+            "timeout" : 1655632691000,
+            "timeout_continuation" : "close"
+         }
+      }
+   ],
+   "timeout" : 1655611091000,
+   "timeout_continuation" : "close"
+}

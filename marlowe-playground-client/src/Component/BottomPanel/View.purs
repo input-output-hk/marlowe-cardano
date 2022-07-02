@@ -28,7 +28,6 @@ import Halogen.Classes
   , paddingX
   , smallPaddingRight
   , smallPaddingTop
-  , smallPaddingY
   , spaceX
   , textInactive
   , textSecondary
@@ -96,7 +95,7 @@ render panelTitles panelContent state =
     -- Panel contents
     , div
         [ classes
-            ( [ spaceX, smallPaddingY, accentBorderTop, overflowScroll, minH0 ]
+            ( [ spaceX, accentBorderTop, overflowScroll, minH0 ]
                 <> dontDisplayWhenHidden
             )
         ]

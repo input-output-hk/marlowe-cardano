@@ -1,5 +1,5 @@
 module Data.UserNamedActions
-  ( UserNamedActions
+  ( UserNamedActions(..)
   , _Actions
   , empty
   , getParticipantsWithAction
@@ -18,11 +18,15 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.Tuple as Tuple
 import Data.Tuple.Nested ((/\))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Party(..)
+  , Token(..)
+  , _rolesCurrency
+  )
 import Marlowe.Execution.State (getActionParticipant)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics (Party(..), Token(..), _rolesCurrency)
 import Store.RoleTokens (RoleTokenStore, isMyRoleToken)
 
 -- These are the Execution.NamedActions viewed as an User (grouped by participants

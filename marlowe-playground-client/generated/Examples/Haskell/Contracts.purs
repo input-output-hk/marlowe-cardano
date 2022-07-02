@@ -5,7 +5,7 @@ example =
   """{-# LANGUAGE OverloadedStrings #-}
 module Example where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract
@@ -23,7 +23,7 @@ escrow =
   """{-# LANGUAGE OverloadedStrings #-}
 module Escrow where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract
@@ -111,7 +111,7 @@ escrowWithCollateral =
   """{-# LANGUAGE OverloadedStrings #-}
 module EscrowWithCollateral where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract
@@ -218,7 +218,7 @@ zeroCouponBond =
   """{-# LANGUAGE OverloadedStrings #-}
 module ZeroCouponBond where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract
@@ -253,7 +253,7 @@ couponBondGuaranteed =
   """{-# LANGUAGE OverloadedStrings #-}
 module CouponBondGuaranteed where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract
@@ -320,7 +320,7 @@ swap =
   """{-# LANGUAGE OverloadedStrings #-}
 module Swap where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract
@@ -388,7 +388,7 @@ contractForDifferences =
 {-# LANGUAGE OverloadedStrings  #-}
 module ContractForDifferences where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract
@@ -494,7 +494,7 @@ contractForDifferencesWithOracle =
 {-# LANGUAGE OverloadedStrings  #-}
 module ContractForDifferencesWithOracle where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract

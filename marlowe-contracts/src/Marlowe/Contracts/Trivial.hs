@@ -6,7 +6,7 @@ module Marlowe.Contracts.Trivial
 where
 
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 -- | A trivial contract, for testing.
 trivial :: Party    -- ^ The party.

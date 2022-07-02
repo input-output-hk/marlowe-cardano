@@ -11,7 +11,7 @@ import Data.Map (Map)
 import Data.Set (Set)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested (type (/\))
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Case
   , Contract
@@ -22,7 +22,7 @@ import Marlowe.Semantics
   , Value
   , ValueId
   )
-import Marlowe.Semantics as S
+import Language.Marlowe.Core.V1.Semantics.Types as S
 import Marlowe.Symbolic.Types.Response (Result)
 import Marlowe.Template (TemplateContent)
 import Network.RemoteData (isLoading)

@@ -26,8 +26,8 @@ import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.Show.Generic (genericShow)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
+import Language.Marlowe.Core.V1.Semantics.Types (Assets)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
-import Marlowe.Semantics (Assets)
 import Type.Proxy (Proxy(..))
 
 data SyncStatus

@@ -2,11 +2,11 @@ module Marlowe.Holes.TimeoutTest where
 
 import Prologue
 
+import Language.Marlowe.Core.V1.Semantics.Types (timeouts)
+import Language.Marlowe.Core.V1.Semantics.Types as S
 import Marlowe.Gen (GenerationOptions(..), genContract)
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (fromTerm)
-import Marlowe.Semantics (timeouts)
-import Marlowe.Semantics as S
 import Test.QuickCheck (Result, (===))
 import Test.Spec (Spec, describe, it)
 

@@ -57,14 +57,17 @@ import Data.Set (Set)
 import Data.Tuple (uncurry)
 import Data.UUID.Argonaut (UUID, emptyUUID)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( MarloweParams
+  , TransactionError
+  )
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
 import Marlowe.Client (_chHistory, getMarloweParams)
 import Marlowe.Client as Client
 import Marlowe.Execution.State (restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams, TransactionError)
 import Type.Proxy (Proxy(..))
 
 newtype ContractStore = ContractStore ContractStoreFields

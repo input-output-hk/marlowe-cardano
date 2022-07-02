@@ -17,8 +17,8 @@ import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Language.Javascript.Interpreter (_result)
 import Language.Javascript.Interpreter as JS
-import Marlowe.Extended (Contract)
-import Marlowe.Extended.Metadata (MetadataHintInfo)
+import Language.Marlowe.Extended.V1 (Contract)
+import Language.Marlowe.Extended.V1.Metadata (MetadataHintInfo)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)
 import Type.Proxy (Proxy(..))
@@ -55,7 +55,6 @@ data Action
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
-  | ClearAnalysisResults
   | MetadataAction MetadataAction
   | DoNothing
 
@@ -77,7 +76,6 @@ instance actionIsEvent :: IsEvent Action where
     "AnalyseReachabilityContract"
   toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
     "AnalyseContractForCloseRefund"
-  toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
     { label = Just $ showConstructor action }
   toEvent DoNothing = Nothing

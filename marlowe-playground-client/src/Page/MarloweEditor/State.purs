@@ -29,10 +29,10 @@ import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
+import Language.Marlowe.Extended.V1 as Extended
+import Language.Marlowe.Extended.V1.Metadata (MetaData, MetadataHintInfo)
 import MainFrame.Types (ChildSlots, _marloweEditorPageSlot)
 import Marlowe (Api)
-import Marlowe.Extended as Extended
-import Marlowe.Extended.Metadata (MetaData, MetadataHintInfo)
 import Marlowe.Holes as Holes
 import Marlowe.LinterText as Linter
 import Marlowe.Monaco (updateAdditionalContext)
@@ -106,6 +106,7 @@ handleAction metadata (HandleEditorMessage Monaco.EditorReady) = do
   assign _editorReady true
 
 handleAction metadata (HandleEditorMessage (Monaco.TextChanged text)) = do
+  clearAnalysisResults
   -- When the Monaco component start it fires two messages at the same time, an EditorReady
   -- and TextChanged. Because of how Halogen works, it interwines the handleActions calls which
   -- can cause problems while setting and getting the values of the session storage. To avoid
@@ -161,12 +162,14 @@ handleAction _ (InitMarloweProject contents) = do
 
 handleAction _ (SelectHole hole) = assign _selectedHole hole
 
-handleAction _ (SetValueTemplateParam key value) =
+handleAction _ (SetValueTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._valueContent)
     (Map.insert key value)
 
-handleAction _ (SetTimeTemplateParam key value) =
+handleAction _ (SetTimeTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._timeContent)
     (Map.insert key value)
@@ -181,12 +184,11 @@ handleAction metadata AnalyseReachabilityContract = runAnalysis metadata $
 handleAction metadata AnalyseContractForCloseRefund = runAnalysis metadata $
   analyseClose
 
-handleAction metadata ClearAnalysisResults = do
-  assign (_analysisState <<< _analysisExecutionState) NoneAsked
-  mContents <- editorGetValue
-  for_ mContents $ processMarloweCode metadata
-
 handleAction _ Save = pure unit
+
+clearAnalysisResults :: forall m. HalogenM State Action ChildSlots Void m Unit
+clearAnalysisResults = assign (_analysisState <<< _analysisExecutionState)
+  NoneAsked
 
 runAnalysis
   :: forall m

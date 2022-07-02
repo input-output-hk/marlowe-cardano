@@ -3,7 +3,7 @@ module Marlowe.Symbolic.Types.Response where
 
 import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics
-import Language.Marlowe.Semantics (TransactionInput, TransactionWarning)
+import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionWarning)
 
 data Result = Valid
             | CounterExample

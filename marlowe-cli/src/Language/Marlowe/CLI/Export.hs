@@ -59,9 +59,9 @@ import Data.Aeson (encode)
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson, maybeWriteTextEnvelope)
 import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                    ValidatorInfo (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..))
 import Language.Marlowe.Scripts (marloweTxInputsFromInputs, rolePayoutScript, smallUntypedValidator)
-import Language.Marlowe.Semantics (MarloweData (..), MarloweParams)
-import Language.Marlowe.Semantics.Types (Contract (..), Input, State (..))
 import Ledger.Scripts (datumHash, toCardanoApiScript, validatorHash)
 import Ledger.Typed.Scripts (validatorScript)
 import Plutus.V1.Ledger.Api (BuiltinData, CostModelParams, CurrencySymbol, Datum (..), Redeemer (..), TokenName,

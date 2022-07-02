@@ -17,9 +17,7 @@ import Data.List (List)
 import Data.Map (Map)
 import Data.Show.Generic (genericShow)
 import Language.Marlowe.Client (ContractHistory)
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Accounts
   , Bound
@@ -33,7 +31,9 @@ import Marlowe.Semantics
   , TransactionInput
   , ValueId
   )
-import Marlowe.Semantics (State) as Semantic
+import Language.Marlowe.Core.V1.Semantics.Types (State) as Semantic
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Marlowe.PAB (PlutusAppId)
 
 -- The execution state represents the status of a Marlowe contract synced with the PAB.
 -- It is currently optmized for speed and ease of computation at expense of storage and clear

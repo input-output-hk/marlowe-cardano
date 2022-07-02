@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.Swap where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import qualified Marlowe.Contracts.Swap as C
 import Marlowe.Contracts.UTC.Common
 

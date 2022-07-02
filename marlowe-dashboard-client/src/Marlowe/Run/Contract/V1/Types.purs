@@ -10,7 +10,11 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Newtype (class Newtype)
 import Data.Tuple (Tuple(..))
-import Marlowe.Semantics (CurrencySymbol, Token(..), TokenName)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( CurrencySymbol
+  , Token(..)
+  , TokenName
+  )
 import Type.Proxy (Proxy(..))
 
 newtype RoleToken = RoleToken

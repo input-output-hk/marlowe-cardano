@@ -13,7 +13,14 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Examples.Metadata as Metadata
-import Marlowe.Extended
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Bound(..)
+  , ChoiceId(..)
+  , Party(..)
+  , Token(..)
+  , ValueId(..)
+  )
+import Language.Marlowe.Extended.V1
   ( Action(..)
   , Case(..)
   , Contract(..)
@@ -22,14 +29,7 @@ import Marlowe.Extended
   , Timeout(..)
   , Value(..)
   )
-import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
-import Marlowe.Semantics
-  ( Bound(..)
-  , ChoiceId(..)
-  , Party(..)
-  , Token(..)
-  , ValueId(..)
-  )
+import Language.Marlowe.Extended.V1.Metadata (ContractTemplate, MetaData)
 import Marlowe.Time (unsafeInstantFromInt)
 
 contractTemplate :: ContractTemplate

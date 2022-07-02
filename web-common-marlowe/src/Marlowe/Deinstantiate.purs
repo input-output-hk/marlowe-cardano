@@ -16,10 +16,10 @@ import Data.Generic.Rep
   )
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol)
-import Marlowe.Extended as EM
-import Marlowe.Extended.Metadata (ContractTemplate)
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 as EM
+import Language.Marlowe.Extended.V1.Metadata (ContractTemplate)
 import Marlowe.Market (contractTemplates)
-import Marlowe.Semantics as S
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 class IsInstanceOf a b where

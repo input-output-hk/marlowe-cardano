@@ -5,7 +5,7 @@ module Marlowe.Contracts.UTC.Forward
 where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import qualified Marlowe.Contracts.Forward as C
 import Marlowe.Contracts.UTC.Common
 

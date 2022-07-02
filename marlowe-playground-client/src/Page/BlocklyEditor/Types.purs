@@ -14,7 +14,7 @@ import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Show.Generic (genericShow)
 import Data.Time.Duration (Minutes)
-import Marlowe.Extended.Metadata (MetadataHintInfo)
+import Language.Marlowe.Extended.V1.Metadata (MetadataHintInfo)
 import Marlowe.Linter (Warning)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Type.Proxy (Proxy(..))
@@ -32,7 +32,6 @@ data Action
   | MetadataAction MetadataAction
   | SetTimeTemplateParam String Instant
   | SetValueTemplateParam String BigInt
-  | ClearAnalysisResults
   | SelectWarning Warning
 
 defaultEvent :: String -> Event
@@ -55,7 +54,6 @@ instance blocklyActionIsEvent :: IsEvent Action where
     { label = Just $ showConstructor action }
   toEvent (SetTimeTemplateParam _ _) = Nothing
   toEvent (SetValueTemplateParam _ _) = Nothing
-  toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent (SelectWarning _) = Just $ defaultEvent "SelectWarning"
 
 data BottomPanelView

@@ -31,10 +31,14 @@ import Halogen as H
 import Halogen.Component.Reactive as Reactive
 import Halogen.Store.Connect (Connected)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ChosenNum
+  , MarloweData
+  , MarloweParams
+  )
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (ChosenNum, MarloweData, MarloweParams)
 import Page.Contract.Types as ContractPage
 import Plutus.Contract.Effects (ActiveEndpoint)
 import Store.Contracts (ContractStore)

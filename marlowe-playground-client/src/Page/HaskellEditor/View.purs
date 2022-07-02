@@ -11,7 +11,7 @@ import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
-import Data.Lens (_Right, has, to, view, (^.))
+import Data.Lens (_Right, has, view, (^.))
 import Data.Maybe (maybe)
 import Data.String (Pattern(..), split)
 import Data.String as String
@@ -56,9 +56,9 @@ import Language.Haskell.Interpreter
   , InterpreterResult(..)
   )
 import Language.Haskell.Monaco as HM
+import Language.Marlowe.Extended.V1 as E
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
 import MainFrame.Types (ChildSlots, _haskellEditorSlot)
-import Marlowe.Extended as E
-import Marlowe.Extended.Metadata (MetaData)
 import Network.RemoteData (RemoteData(..), _Success)
 import Page.HaskellEditor.Types
   ( Action(..)
@@ -69,19 +69,7 @@ import Page.HaskellEditor.Types
   , _haskellEditorKeybindings
   , _metadataHintInfo
   )
-import StaticAnalysis.BottomPanel
-  ( analysisResultPane
-  , analyzeButton
-  , clearButton
-  )
-import StaticAnalysis.Types
-  ( _analysisExecutionState
-  , _analysisState
-  , isCloseAnalysisLoading
-  , isNoneAsked
-  , isReachabilityLoading
-  , isStaticLoading
-  )
+import StaticAnalysis.BottomPanel (analysisPane)
 import Text.Pretty (pretty)
 
 render
@@ -198,7 +186,7 @@ panelContents
   -> BottomPanelView
   -> ComponentHTML Action ChildSlots m
 panelContents state _ GeneratedOutputView =
-  section_ case view _compilationResult state of
+  section [ classNames [ "py-4" ] ] case view _compilationResult state of
     Success (Right (InterpreterResult result)) ->
       [ div [ classes [ bgWhite, spaceBottom, ClassName "code" ] ]
           numberedText
@@ -220,66 +208,41 @@ panelContents state _ GeneratedOutputView =
 
 panelContents state metadata StaticAnalysisView =
   section_
-    ( [ analysisResultPane
+    if isCompiled then
+      [ analysisPane
           metadata
+          { warnings: AnalyseContract
+          , reachability: AnalyseReachabilityContract
+          , refund: AnalyseContractForCloseRefund
+          }
           { valueAction: SetValueTemplateParam
           , timeAction: SetTimeTemplateParam
           }
           state
-      , analyzeButton loadingWarningAnalysis analysisEnabled
-          "Analyse for warnings"
-          AnalyseContract
-      , analyzeButton loadingReachability analysisEnabled "Analyse reachability"
-          AnalyseReachabilityContract
-      , analyzeButton loadingCloseAnalysis analysisEnabled
-          "Analyse for refunds on Close"
-          AnalyseContractForCloseRefund
-      , clearButton clearEnabled "Clear" ClearAnalysisResults
       ]
-        <>
-          ( if isCompiled then []
-            else
-              [ div [ classes [ ClassName "choice-error" ] ]
-                  [ text
-                      "Haskell code needs to be compiled in order to run static analysis"
-                  ]
-              ]
-          )
-    )
+    else
+      [ div [ classNames [ "py-4", "choice-error" ] ]
+          [ text
+              "Haskell code needs to be compiled in order to run static analysis"
+          ]
+      ]
   where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
-    <<< to isStaticLoading
-
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isReachabilityLoading
-
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isCloseAnalysisLoading
-
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
-    isNoneAsked
-
-  anyAnalysisLoading = loadingWarningAnalysis || loadingReachability ||
-    loadingCloseAnalysis
-
-  analysisEnabled = not anyAnalysisLoading && isCompiled
-
-  clearEnabled = not (anyAnalysisLoading || noneAskedAnalysis)
-
   isCompiled = has (_compilationResult <<< _Success <<< _Right) state
 
 panelContents state _ ErrorsView =
-  section_ case view _compilationResult state of
+  section [ classNames [ "py-4" ] ] case view _compilationResult state of
     Success (Left (TimeoutError error)) -> [ text error ]
     Success (Left (CompilationErrors errors)) -> map compilationErrorPane errors
     _ -> [ text "No errors" ]
 
 panelContents state metadata MetadataView =
-  MetadataTab.render
-    { metadataHintInfo: state ^. _metadataHintInfo
-    , metadata
-    }
-    MetadataAction
+  section [ classNames [ "py-4" ] ]
+    [ MetadataTab.render
+        { metadataHintInfo: state ^. _metadataHintInfo
+        , metadata
+        }
+        MetadataAction
+    ]
 
 compilationErrorPane :: forall p. CompilationError -> HTML p Action
 compilationErrorPane (RawError error) = div_ [ text error ]

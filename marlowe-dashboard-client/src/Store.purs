@@ -19,11 +19,15 @@ import Data.Slot (Slot, zeroSlot)
 import Data.Wallet (WalletDetails)
 import Errors.Explain (explain)
 import Language.Marlowe.Client (ContractHistory, MarloweError, UnspentPayouts)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Assets(..)
+  , MarloweParams
+  , Token
+  )
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Contract.V1.Types (RoleToken)
-import Marlowe.Semantics (Assets(..), MarloweParams, Token)
 import Store.Contracts (ContractStore, mkContractStore, tick)
 import Store.Contracts as Contracts
 import Store.RoleTokens

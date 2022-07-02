@@ -25,7 +25,7 @@ module.exports = {
       darkgray: "#b7b7b7",
       purple: "#4700c3",
       lightpurple: "#8701fc",
-
+      "layout-accent": "rgba(51, 51, 51, 0.2)",
       gray: {
         light: "#f8f8f8",
         dark: "#e7e7e9",

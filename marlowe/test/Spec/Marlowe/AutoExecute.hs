@@ -19,8 +19,8 @@ import qualified Data.Text.IO as T
 import Data.Text.Lazy (toStrict)
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
-import Language.Marlowe.Semantics
-import Language.Marlowe.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Util
 
 import Data.Aeson (decode, encode)

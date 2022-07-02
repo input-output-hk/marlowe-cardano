@@ -44,10 +44,10 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode, Local
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
+import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Data.Bifunctor (bimap)
 import Data.Function (on)
-import Data.List (groupBy)
+import Data.List (groupBy, sortBy)
 import qualified Data.Map.Strict as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as S (singleton)
@@ -60,10 +60,11 @@ import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPay
                                          submitBody)
 import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
                                    ValidatorInfo (..))
-import Language.Marlowe.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
-                                   TransactionOutput (..), TransactionWarning, computeTransaction)
-import Language.Marlowe.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
-                                         InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
+                                           TransactionOutput (..), TransactionWarning, computeTransaction)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
+                                                 InputContent (..), Party (..), Payee (..), State (accounts),
+                                                 Token (..))
 import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
@@ -232,7 +233,9 @@ makeMarlowe :: MonadError CliError m
             -> m ([TransactionWarning], MarloweTransaction era)  -- ^ Action to compute the next step in the contract.
 makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
   do
-    transactionInput'@TransactionInput{..} <- merkleizeInputs marloweIn transactionInput
+    transactionInput'@TransactionInput{..} <-
+      merkleizeInputs marloweIn transactionInput
+        `catchError` (const $ pure transactionInput)  -- TODO: Consider not catching errors here.
     case computeTransaction transactionInput' mtState mtContract of
       Error message          -> throwError . CliError . show $ message
       TransactionOutput{..} -> pure
@@ -349,9 +352,8 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
 
             Account _         -> pure Nothing
         |
-           (payee, money) <- bimap head mconcat
-                               . unzip
-                               <$> groupBy ((==) `on` fst)
+           (payee, money) <- bimap head mconcat . unzip
+                               <$> (groupBy ((==) `on` fst) . sortBy (compare `on` fst))
                                [
                                  (payee, money)
                                | Payment _ payee money <- mtPayments marloweOut

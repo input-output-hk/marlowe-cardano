@@ -58,11 +58,7 @@ import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (IProp, enabled, id, ref)
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (formatDate, formatTime, humanizeOffset, humanizeValue)
-import Marlowe.Execution.Lenses (_semanticState)
-import Marlowe.Execution.State (expandBalances, isClosed)
-import Marlowe.Execution.Types (NamedAction(..))
-import Marlowe.PAB (applyInputsFee)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(..)
   , Party(..)
   , TimeInterval(..)
@@ -71,7 +67,11 @@ import Marlowe.Semantics
   , _accounts
   , adaToken
   )
-import Marlowe.Semantics (Input(..)) as S
+import Language.Marlowe.Core.V1.Semantics.Types (Input(..)) as S
+import Marlowe.Execution.Lenses (_semanticState)
+import Marlowe.Execution.State (expandBalances, isClosed)
+import Marlowe.Execution.Types (NamedAction(..))
+import Marlowe.PAB (applyInputsFee)
 import Page.Contract.Lenses
   ( _executionState
   , _expandPayments

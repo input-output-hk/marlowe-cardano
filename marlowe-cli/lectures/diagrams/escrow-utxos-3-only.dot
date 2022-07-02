@@ -1,0 +1,58 @@
+digraph EscrowUtxos {
+
+
+rankdir=LR
+
+node [shape=record]
+
+
+subgraph cluster_2 {
+
+peripheries=0
+
+Tx2_0 [label="Thomas\nMiddleton|2696.0 ADA" color=darkred fontcolor=darkred]
+
+Tx2_2 [label="Thomas\nMidddleton|3 ADA + 1 TM" color=darkred fontcolor=darkred]
+
+}
+
+
+Tx2_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 256 ADA|T.M. has 0 ADA|C.M. has 3 ADA}}" color=darkred fontcolor=darkred]
+
+
+Tx3 [shape=oval label="Tx 3" color=darkred fontcolor=darkred]
+
+Tx2_1 -> Tx3 [label="Report problem" color=darkred fontcolor=darkred]
+
+Tx2_0 -> Tx3 [color=darkred fontcolor=darkred]
+
+Tx2_2 -> Tx3 [color=darkred fontcolor=darkred]
+
+
+Tx3_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}" color=black fontcolor=black]
+
+Tx3 -> Tx3_1 [label="#1" color=darkred fontcolor=darkred]
+
+
+Tx3_Fee [label="Fee\n1.4 ADA" color=darkred fontcolor=darkred]
+
+Tx3 -> Tx3_Fee [color=darkred fontcolor=darkred]
+
+
+  subgraph cluster_3 {
+
+  peripheries=0
+
+  Tx3_0 [label="Thomas\nMiddleton|2694.6 ADA" color=black fontcolor=black]
+
+  Tx3_2 [label="Thomas\nMiddleton|3 ADA + 1 TM" color=black fontcolor=black]
+
+  }
+
+
+Tx3 -> Tx3_0 [label="#0" color=darkred fontcolor=darkred]
+
+Tx3 -> Tx3_2 [label="#2" color=darkred fontcolor=darkred]
+
+
+}

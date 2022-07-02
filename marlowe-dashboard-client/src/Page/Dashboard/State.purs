@@ -100,14 +100,7 @@ import Language.Marlowe.Client
   , MarloweEndpointResult(..)
   , _ContractHistory
   )
-import Marlowe.Execution.State (extractNamedActions, isClosed)
-import Marlowe.Execution.Types as Execution
-import Marlowe.HasParties (getParties)
-import Marlowe.Run.Server
-  ( getApiContractsV1ByCurrencysymbolRoletokensByTokenname
-  )
-import Marlowe.Run.Server as MarloweRun
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Assets
   , MarloweData
   , MarloweParams
@@ -115,6 +108,13 @@ import Marlowe.Semantics
   , Token(..)
   , _rolesCurrency
   )
+import Marlowe.Execution.State (extractNamedActions, isClosed)
+import Marlowe.Execution.Types as Execution
+import Marlowe.HasParties (getParties)
+import Marlowe.Run.Server
+  ( getApiContractsV1ByCurrencysymbolRoletokensByTokenname
+  )
+import Marlowe.Run.Server as MarloweRun
 import MarloweContract (MarloweContract(..))
 import Page.Dashboard.Lenses
   ( _card

@@ -1,15 +1,12 @@
 module StaticAnalysis.BottomPanel
-  ( analysisResultPane
-  , analyzeButton
-  , clearButton
+  ( analysisPane
   ) where
 
 import Prologue hiding (div)
 
 import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
-import Data.Lens ((^.))
-import Data.Lens.Iso.Newtype (_Newtype)
+import Data.Lens (to, (^.))
 import Data.List (List(..), null, toUnfoldable, (:))
 import Data.List as List
 import Data.List.NonEmpty (toList)
@@ -37,11 +34,15 @@ import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes, enabled)
 import Humanize (humanizeInterval, humanizeValue)
 import Icons (Icon(..), icon)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ChoiceId(..)
+  , Input(..)
+  , TransactionInput(..)
+  )
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
 import MainFrame.Types (ChildSlots)
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics (ChoiceId(..), Input(..), TransactionInput(..))
+import Marlowe.Symbolic.Types.Response (Result)
 import Marlowe.Symbolic.Types.Response as R
-import Marlowe.Template (TemplateContent(..))
 import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
 import Page.Simulation.View (TemplateParameterActionsGen, templateParameters)
@@ -55,8 +56,11 @@ import StaticAnalysis.Types
   , _analysisExecutionState
   , _analysisState
   , _templateContent
+  , isCloseAnalysisLoading
+  , isReachabilityLoading
+  , isStaticLoading
   )
-import Types (WarningAnalysisError(..))
+import Types (WarningAnalysisData, WarningAnalysisError(..))
 
 analyzeButton
   :: forall p action. Boolean -> Boolean -> String -> action -> HTML p action
@@ -68,273 +72,330 @@ analyzeButton isLoading isEnabled name action =
     ]
     [ text (if isLoading then "Analysing..." else name) ]
 
-clearButton
-  :: forall p action. Boolean -> String -> action -> HTML p action
-clearButton isEnabled name action =
-  button
-    [ onClick $ const action
-    , enabled isEnabled
-    , classes [ spaceTop, spaceBottom, spaceRight, btn ]
+type AnalyseActionGen action =
+  { warnings :: action
+  , reachability :: action
+  , refund :: action
+  }
+
+analysisPane
+  :: forall action m state
+   . MonadAff m
+  => MetaData
+  -> AnalyseActionGen action
+  -> TemplateParameterActionsGen action
+  -> { analysisState :: AnalysisState, tzOffset :: Minutes | state }
+  -> ComponentHTML action ChildSlots m
+analysisPane metadata analysisAction templateAction state =
+  div
+    [ classNames [ "flex" ]
     ]
-    [ text name ]
+    [ div [ classNames [ "flex-grow" ] ]
+        [ analysisResultPane state
+        , analysisButtons
+        ]
+    , div
+        [ classNames
+            [ "pl-4"
+            , "border-0"
+            , "border-l"
+            , "border-solid"
+            , "border-layout-accent"
+            ]
+        ]
+        [ h3 [ classNames [ "analysis-result-title" ] ]
+            [ text "Template parameters" ]
+
+        , templateParameters
+            "static-analisys"
+            metadata
+            templateContent
+            templateAction
+            tzOffset
+        ]
+    ]
+  where
+  analysisButtons = div [ classNames [ "pr-4" ] ]
+    [ analyzeButton loadingWarningAnalysis analysisEnabled
+        "Analyse for warnings"
+        analysisAction.warnings
+    , analyzeButton loadingReachability analysisEnabled
+        "Analyse reachability"
+        analysisAction.reachability
+    , analyzeButton loadingCloseAnalysis analysisEnabled
+        "Analyse for refunds on Close"
+        analysisAction.refund
+    ]
+
+  templateContent =
+    state ^. (_analysisState <<< _templateContent)
+  tzOffset = state.tzOffset
+
+  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
+    <<< to isStaticLoading
+
+  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isReachabilityLoading
+
+  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isCloseAnalysisLoading
+
+  nothingLoading = not loadingWarningAnalysis && not loadingReachability && not
+    loadingCloseAnalysis
+
+  analysisEnabled = nothingLoading
 
 analysisResultPane
   :: forall action m state
    . MonadAff m
-  => MetaData
-  -> TemplateParameterActionsGen action
-  -> { analysisState :: AnalysisState, tzOffset :: Minutes | state }
+  => { analysisState :: AnalysisState, tzOffset :: Minutes | state }
   -> ComponentHTML action ChildSlots m
-analysisResultPane metadata actionGen state =
+analysisResultPane state =
   let
-    { timeContent, valueContent } =
-      state ^. (_analysisState <<< _templateContent <<< _Newtype)
-
-    templateContent = TemplateContent { timeContent, valueContent }
     result = state ^. (_analysisState <<< _analysisExecutionState)
     tzOffset = state.tzOffset
-    explanation = div [ classes [ ClassName "padded-explanation" ] ]
   in
     case result of
-      NoneAsked ->
-        explanation
-          [ text ""
-          , templateParameters
-              "static-analisys"
-              metadata
-              templateContent
-              actionGen
-              tzOffset
+      NoneAsked -> h3 [ classNames [ "analysis-result-title" ] ]
+        [ text "Static Analysis: None Asked" ]
+      WarningAnalysis staticSubResult -> warningAnalysisResult tzOffset
+        staticSubResult
+      ReachabilityAnalysis reachabilitySubResult -> reachabilityAnalysisResult
+        reachabilitySubResult
+      CloseAnalysis closeAnalysisSubResult -> closeAnalysisResult
+        closeAnalysisSubResult
+
+warningAnalysisResult
+  :: forall action m
+   . MonadAff m
+  => Minutes
+  -> WarningAnalysisData Result
+  -> ComponentHTML action ChildSlots m
+warningAnalysisResult tzOffset staticSubResult = div
+  [ classNames [ "padded-explanation" ] ]
+
+  case staticSubResult of
+    NotAsked -> [ text "" ]
+    Success (R.Valid) ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Warning Analysis Result: Pass" ]
+      , text
+          "Static analysis could not find any execution that results in any warning."
+      ]
+    Success
+      ( R.CounterExample
+          { initialSlot, transactionList, transactionWarning }
+      ) ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Warning Analysis Result: Warnings Found" ]
+      , text "Static analysis found the following counterexample:"
+      , ul [ classes [ ClassName "indented-enum-initial" ] ]
+          [ li_
+              [ spanText "Warnings issued: "
+              , displayWarningList transactionWarning
+              ]
+          , li_
+              [ spanText "Initial slot: "
+              , b_ [ spanText (BigInt.toString initialSlot) ]
+              ]
+          , li_
+              [ spanText "Offending sequence: "
+              , displayTransactionList tzOffset transactionList
+              ]
           ]
-      WarningAnalysis staticSubResult -> case staticSubResult of
-        NotAsked ->
-          explanation
-            [ text ""
-            ]
-        Success (R.Valid) ->
-          explanation
-            [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                [ text "Warning Analysis Result: Pass" ]
-            , text
-                "Static analysis could not find any execution that results in any warning."
-            ]
-        Success
-          ( R.CounterExample
-              { initialSlot, transactionList, transactionWarning }
-          ) ->
-          explanation
-            [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                [ text "Warning Analysis Result: Warnings Found" ]
-            , text "Static analysis found the following counterexample:"
-            , ul [ classes [ ClassName "indented-enum-initial" ] ]
-                [ li_
-                    [ spanText "Warnings issued: "
-                    , displayWarningList transactionWarning
-                    ]
-                , li_
-                    [ spanText "Initial slot: "
-                    , b_ [ spanText (BigInt.toString initialSlot) ]
-                    ]
-                , li_
-                    [ spanText "Offending sequence: "
-                    , displayTransactionList tzOffset transactionList
-                    ]
-                ]
-            ]
-        Success (R.Error str) ->
-          explanation
-            [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                [ text "Error during warning analysis" ]
-            , text "Analysis failed for the following reason:"
-            , ul [ classes [ ClassName "indented-enum-initial" ] ]
-                [ li_
-                    [ b_ [ spanText str ]
-                    ]
-                ]
-            ]
-        Failure (WarningAnalysisAjaxError error) ->
-          explanation
-            [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                [ text "Error during warning analysis" ]
-            , text "Analysis failed for the following reason:"
-            , ul [ classes [ ClassName "indented-enum-initial" ] ]
-                [ li_
-                    [ b_
-                        [ spanText $ printAjaxError error
-                        ]
-                    ]
-                ]
-            ]
-        Failure WarningAnalysisIsExtendedMarloweError ->
-          explanation
-            [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                [ text "Error during warning analysis" ]
-            , text "Analysis failed for the following reason:"
-            , ul [ classes [ ClassName "indented-enum-initial" ] ]
-                [ li_
-                    [ b_
-                        [ spanText
-                            "The code has templates. Static analysis can only be run in core Marlowe code."
-                        ]
-                    ]
-                ]
-            ]
-        Loading -> text ""
-      ReachabilityAnalysis reachabilitySubResult ->
-        case reachabilitySubResult of
-          AnalysisNotStarted ->
-            explanation
-              [ text ""
+      ]
+    Success (R.Error str) ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Error during warning analysis" ]
+      , text "Analysis failed for the following reason:"
+      , ul [ classes [ ClassName "indented-enum-initial" ] ]
+          [ li_
+              [ b_ [ spanText str ]
               ]
-          AnalysisInProgress
-            { numSubproblems: totalSteps
-            , numSolvedSubproblems: doneSteps
-            , counterExampleSubcontracts: foundcounterExampleSubcontracts
-            } ->
-            explanation
-              ( [ text
-                    ( "Reachability analysis in progress, " <> show doneSteps
-                        <> " subcontracts out of "
-                        <> show totalSteps
-                        <> " analysed..."
-                    )
-                ]
-                  <>
-                    if null foundcounterExampleSubcontracts then
-                      [ br_, text "No unreachable subcontracts found so far." ]
-                    else
-                      ( [ br_
-                        , text
-                            "Found the following unreachable subcontracts so far:"
-                        ]
-                          <>
-                            [ ul
-                                [ classes [ ClassName "indented-enum-initial" ]
-                                ]
-                                do
-                                  contractPath <- toUnfoldable
-                                    foundcounterExampleSubcontracts
-                                  pure
-                                    ( li_ $ displayContractPath
-                                        (text "Unreachable code")
-                                        contractPath
-                                    )
-                            ]
-                      )
-              )
-          AnalysisFailure err ->
-            explanation
-              [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                  [ text "Error during reachability analysis" ]
-              , text "Reachability analysis failed for the following reason:"
-              , ul [ classes [ ClassName "indented-enum-initial" ] ]
-                  [ li_
-                      [ b_ [ spanText err ]
-                      ]
+          ]
+      ]
+    Failure (WarningAnalysisAjaxError error) ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Error during warning analysis" ]
+      , text "Analysis failed for the following reason:"
+      , ul [ classes [ ClassName "indented-enum-initial" ] ]
+          [ li_
+              [ b_
+                  [ spanText $ printAjaxError error
                   ]
               ]
-          AnalysisFoundCounterExamples { counterExampleSubcontracts } ->
-            explanation
-              ( [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                    [ text
-                        "Reachability Analysis Result: Unreachable Subcontract Found"
-                    ]
+          ]
+      ]
+    Failure WarningAnalysisIsExtendedMarloweError ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Error during warning analysis" ]
+      , text "Analysis failed for the following reason:"
+      , ul [ classes [ ClassName "indented-enum-initial" ] ]
+          [ li_
+              [ b_
+                  [ spanText
+                      "The code has templates. Static analysis can only be run in core Marlowe code."
+                  ]
+              ]
+          ]
+      ]
+    Loading -> [ text "" ]
+
+reachabilityAnalysisResult
+  :: forall action m
+   . MonadAff m
+  => MultiStageAnalysisData
+  -> ComponentHTML action ChildSlots m
+reachabilityAnalysisResult reachabilitySubResult = div
+  [ classNames [ "padded-explanation" ] ]
+  case reachabilitySubResult of
+    AnalysisNotStarted -> [ text "" ]
+    AnalysisInProgress
+      { numSubproblems: totalSteps
+      , numSolvedSubproblems: doneSteps
+      , counterExampleSubcontracts: foundcounterExampleSubcontracts
+      } ->
+      ( [ text
+            ( "Reachability analysis in progress, " <> show doneSteps
+                <> " subcontracts out of "
+                <> show totalSteps
+                <> " analysed..."
+            )
+        ]
+          <>
+            if null foundcounterExampleSubcontracts then
+              [ br_, text "No unreachable subcontracts found so far." ]
+            else
+              ( [ br_
                 , text
-                    "Static analysis found the following subcontracts that are unreachable:"
+                    "Found the following unreachable subcontracts so far:"
                 ]
                   <>
-                    [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
-                        contractPath <- toUnfoldable
-                          (toList counterExampleSubcontracts)
-                        pure
-                          ( li_ $ displayContractPath (text "Unreachable code")
-                              contractPath
-                          )
+                    [ ul
+                        [ classes [ ClassName "indented-enum-initial" ]
+                        ]
+                        do
+                          contractPath <- toUnfoldable
+                            foundcounterExampleSubcontracts
+                          pure
+                            ( li_ $ displayContractPath
+                                (text "Unreachable code")
+                                contractPath
+                            )
                     ]
               )
-          AnalysisFinishedAndPassed ->
-            explanation
-              [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                  [ text "Reachability Analysis Result: Pass" ]
-              , text
-                  "Reachability analysis could not find any subcontract that is not reachable."
+      )
+    AnalysisFailure err ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Error during reachability analysis" ]
+      , text "Reachability analysis failed for the following reason:"
+      , ul [ classes [ ClassName "indented-enum-initial" ] ]
+          [ li_
+              [ b_ [ spanText err ]
               ]
-      CloseAnalysis closeAnalysisSubResult -> case closeAnalysisSubResult of
-        AnalysisNotStarted ->
-          explanation
-            [ text ""
+          ]
+      ]
+    AnalysisFoundCounterExamples { counterExampleSubcontracts } ->
+      ( [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+            [ text
+                "Reachability Analysis Result: Unreachable Subcontract Found"
             ]
-        AnalysisInProgress
-          { numSubproblems: totalSteps
-          , numSolvedSubproblems: doneSteps
-          , counterExampleSubcontracts: foundcounterExampleSubcontracts
-          } ->
-          explanation
-            ( [ text
-                  ( "Close analysis in progress, " <> show doneSteps
-                      <> " subcontracts out of "
-                      <> show totalSteps
-                      <> " analysed..."
+        , text
+            "Static analysis found the following subcontracts that are unreachable:"
+        ]
+          <>
+            [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
+                contractPath <- toUnfoldable
+                  (toList counterExampleSubcontracts)
+                pure
+                  ( li_ $ displayContractPath (text "Unreachable code")
+                      contractPath
                   )
-              ]
-                <>
-                  if null foundcounterExampleSubcontracts then
-                    [ br_, text "No refunds on Close found so far." ]
-                  else
-                    ( [ br_
-                      , text "Found the following refunds on Close so far:"
-                      ]
-                        <>
-                          [ ul [ classes [ ClassName "indented-enum-initial" ] ]
-                              do
-                                contractPath <- toUnfoldable
-                                  foundcounterExampleSubcontracts
-                                pure
-                                  ( li_ $ displayContractPath (text "Close")
-                                      contractPath
-                                  )
-                          ]
-                    )
+            ]
+      )
+    AnalysisFinishedAndPassed ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Reachability Analysis Result: Pass" ]
+      , text
+          "Reachability analysis could not find any subcontract that is not reachable."
+      ]
+
+closeAnalysisResult
+  :: forall action m
+   . MonadAff m
+  => MultiStageAnalysisData
+  -> ComponentHTML action ChildSlots m
+closeAnalysisResult closeAnalysisSubResult = div
+  [ classNames [ "padded-explanation" ] ]
+  case closeAnalysisSubResult of
+    AnalysisNotStarted -> [ text "" ]
+    AnalysisInProgress
+      { numSubproblems: totalSteps
+      , numSolvedSubproblems: doneSteps
+      , counterExampleSubcontracts: foundcounterExampleSubcontracts
+      } ->
+      ( [ text
+            ( "Close analysis in progress, " <> show doneSteps
+                <> " subcontracts out of "
+                <> show totalSteps
+                <> " analysed..."
             )
-        AnalysisFailure err ->
-          explanation
-            [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                [ text "Error during Close refund analysis" ]
-            , text "Close refund analysis failed for the following reason:"
-            , ul [ classes [ ClassName "indented-enum-initial" ] ]
-                [ li_
-                    [ b_ [ spanText err ]
-                    ]
+        ]
+          <>
+            if null foundcounterExampleSubcontracts then
+              [ br_, text "No refunds on Close found so far." ]
+            else
+              ( [ br_
+                , text "Found the following refunds on Close so far:"
                 ]
-            ]
-        AnalysisFoundCounterExamples { counterExampleSubcontracts } ->
-          explanation
-            ( [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                  [ text
-                      "Close Refund Analysis Result: Some of the Close constructs may refund assets"
-                  ]
-              , text
-                  "The following Close constructs may implicitly refund money:"
+                  <>
+                    [ ul [ classes [ ClassName "indented-enum-initial" ] ]
+                        do
+                          contractPath <- toUnfoldable
+                            foundcounterExampleSubcontracts
+                          pure
+                            ( li_ $ displayContractPath (text "Close")
+                                contractPath
+                            )
+                    ]
+              )
+      )
+    AnalysisFailure err ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Error during Close refund analysis" ]
+      , text "Close refund analysis failed for the following reason:"
+      , ul [ classes [ ClassName "indented-enum-initial" ] ]
+          [ li_
+              [ b_ [ spanText err ]
               ]
-                <>
-                  [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
-                      contractPath <- toUnfoldable
-                        (toList counterExampleSubcontracts)
-                      pure
-                        (li_ $ displayContractPath (text "Close") contractPath)
-                  ]
-                <>
-                  [ text
-                      "This does not necessarily mean there is anything wrong with the contract."
-                  ]
-            )
-        AnalysisFinishedAndPassed ->
-          explanation
-            [ h3 [ classes [ ClassName "analysis-result-title" ] ]
-                [ text "Close Refund Analysis Result: No implicit refunds" ]
-            , text
-                "None of the Close constructs refunds any money, all refunds are explicit."
+          ]
+      ]
+    AnalysisFoundCounterExamples { counterExampleSubcontracts } ->
+      ( [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+            [ text
+                "Close Refund Analysis Result: Some of the Close constructs may refund assets"
             ]
+        , text
+            "The following Close constructs may implicitly refund money:"
+        ]
+          <>
+            [ ul [ classes [ ClassName "indented-enum-initial" ] ] do
+                contractPath <- toUnfoldable
+                  (toList counterExampleSubcontracts)
+                pure
+                  (li_ $ displayContractPath (text "Close") contractPath)
+            ]
+          <>
+            [ text
+                "This does not necessarily mean there is anything wrong with the contract."
+            ]
+      )
+    AnalysisFinishedAndPassed ->
+      [ h3 [ classes [ ClassName "analysis-result-title" ] ]
+          [ text "Close Refund Analysis Result: No implicit refunds" ]
+      , text
+          "None of the Close constructs refunds any money, all refunds are explicit."
+      ]
 
 displayTransactionList
   :: forall p action. Minutes -> Array TransactionInput -> HTML p action

@@ -4,7 +4,7 @@ module Marlowe.Contracts.Escrow (
   escrow
 ) where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 -- | An escrow contract with mediation
 escrow ::

@@ -29,13 +29,7 @@ import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral
 import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
-import Marlowe.Extended (resolveRelativeTimes)
-import Marlowe.Extended as EM
-import Marlowe.Extended.Metadata (emptyContractMetadata)
-import Marlowe.Holes (Term(..), fromTerm)
-import Marlowe.Holes as T
-import Marlowe.Parser (parseContract)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Bound(..)
   , ChoiceId(..)
   , Contract(..)
@@ -45,6 +39,12 @@ import Marlowe.Semantics
   , TransactionError
   , TransactionWarning
   )
+import Language.Marlowe.Extended.V1 (resolveRelativeTimes)
+import Language.Marlowe.Extended.V1 as EM
+import Language.Marlowe.Extended.V1.Metadata (emptyContractMetadata)
+import Marlowe.Holes (Term(..), fromTerm)
+import Marlowe.Holes as T
+import Marlowe.Parser (parseContract)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (secondsSinceShelley, shelleyEpoch, unixEpoch)
 import Page.Simulation.State (mkStateBase)

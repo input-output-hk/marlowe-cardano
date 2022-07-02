@@ -10,7 +10,7 @@ import Data.Bimap as Bimap
 import Data.Map as Map
 import Data.WalletNickname as WN
 import Language.Marlowe.Client (ContractHistory(..))
-import Marlowe.Semantics (Contract(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract(..))
 import Marlowe.Time (unixEpoch)
 import MarloweContract (MarloweContract(..))
 import Plutus.V1.Ledger.Address (Address(..))

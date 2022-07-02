@@ -22,8 +22,8 @@ import Language.Haskell.Interpreter
   , InterpreterResult
   , _InterpreterResult
   )
-import Marlowe.Extended as E
-import Marlowe.Extended.Metadata (MetadataHintInfo)
+import Language.Marlowe.Extended.V1 as E
+import Language.Marlowe.Extended.V1.Metadata (MetadataHintInfo)
 import Network.RemoteData (RemoteData(..), _Loading, _Success)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)
@@ -42,7 +42,6 @@ data Action
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
-  | ClearAnalysisResults
   | MetadataAction MetadataAction
   | DoNothing
 
@@ -63,7 +62,6 @@ instance actionIsEvent :: IsEvent Action where
     "AnalyseReachabilityContract"
   toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
     "AnalyseContractForCloseRefund"
-  toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
     { label = Just $ showConstructor action }
   toEvent DoNothing = Nothing

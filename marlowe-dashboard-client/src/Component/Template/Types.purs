@@ -11,8 +11,8 @@ import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Effect.Aff (Aff)
 import Halogen as H
-import Marlowe.Extended.Metadata (ContractTemplate)
-import Marlowe.Semantics (MarloweParams, TokenName)
+import Language.Marlowe.Core.V1.Semantics.Types (MarloweParams, TokenName)
+import Language.Marlowe.Extended.V1.Metadata (ContractTemplate)
 
 type Input = PABConnectedWallet
 

@@ -34,14 +34,14 @@ import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Language.Marlowe.Client (UnspentPayouts(..))
 import Language.Marlowe.Client.History (RolePayout(..))
-import Marlowe.Run.Contract.V1.Types (RoleToken, _token, _utxoAddress)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Assets(..)
   , MarloweParams
   , Token(..)
   , TokenName
   , _rolesCurrency
   )
+import Marlowe.Run.Contract.V1.Types (RoleToken, _token, _utxoAddress)
 import Network.RemoteData (RemoteData(..), toMaybe)
 import Plutus.V1.Ledger.Tx (TxOutRef)
 import Servant.PureScript (printAjaxError)

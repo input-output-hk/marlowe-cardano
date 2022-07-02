@@ -4,7 +4,7 @@ module Marlowe.Contracts.Forward
   )
 where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.Swap
 

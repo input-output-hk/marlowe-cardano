@@ -19,7 +19,7 @@ module Marlowe.Contracts.Options
   )
 where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 
 -- |Option type

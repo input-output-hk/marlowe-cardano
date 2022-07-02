@@ -1,0 +1,47 @@
+digraph EscrowUtxos {
+
+
+rankdir=LR
+
+node [shape=record]
+
+
+Tx0MediatorAda [label="Christopher Marlowe\n(the mediator)|1971.7 ADA" color=darkred fontcolor=darkred]
+
+
+Tx1 [shape=oval label="Tx 1" color=darkred fontcolor=darkred]
+
+Tx0MediatorAda -> Tx1 [color=darkred fontcolor=darkred]
+
+
+Tx1_1 [label="Marlowe Script|3 ADA|{State|{F.B. has 0 ADA|T.M. has 0 ADA|C.M. has 3 ADA}}" color=black fontcolor=black]
+
+Tx1 -> Tx1_1 [label="#1" color=darkred fontcolor=darkred]
+
+
+Tx1_0 [label="Christopher\nMarlowe|1962.5 ADA" color=black fontcolor=black]
+
+Tx1 -> Tx1_0 [label="#0" color=darkred fontcolor=darkred]
+
+
+Tx0MediatorToken [label="Christopher\nMarlowe|2 ADA + 1 CM" color=black fontcolor=black]
+
+Tx1 -> Tx0MediatorToken [label="#4" color=darkred fontcolor=darkred]
+
+
+Tx0SellerToken [label="Francis\nBeaumont|2 ADA + 1 FB" color=black fontcolor=black]
+
+Tx1 -> Tx0SellerToken [label="#2" color=darkred fontcolor=darkred]
+
+
+Tx0BuyerToken [label="Thomas\nMiddleton|2 ADA + 1 TM" color=black fontcolor=black]
+
+Tx1 -> Tx0BuyerToken [label="#3" color=darkred fontcolor=darkred]
+
+
+Tx1_Fee [label="Fee\n0.2 ADA" color=darkred fontcolor=darkred]
+
+Tx1 -> Tx1_Fee [color=darkred fontcolor=darkred]
+
+
+}

@@ -1,0 +1,51 @@
+digraph EscrowUtxos {
+
+
+rankdir=LR
+
+node [shape=record]
+
+
+Tx0SellerAda [label="Francis Beaumont\n(the seller)|3003.6 ADA" color=darkred fontcolor=darkred]
+
+Tx0SellerToken [label="Francis\nBeaumont|2 ADA + 1 FB" color=darkred fontcolor=darkred]
+
+
+Tx3_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}" color=darkred fontcolor=darkred]
+
+
+Tx4 [shape=oval label="Tx 4" color=darkred fontcolor=darkred]
+
+Tx3_1 -> Tx4 [label="Dispute problem" color=darkred fontcolor=darkred]
+
+Tx0SellerAda -> Tx4 [color=darkred fontcolor=darkred]
+
+Tx0SellerToken -> Tx4 [color=darkred fontcolor=darkred]
+
+
+subgraph cluster_4 {
+
+peripheries=0
+
+Tx4_0 [label="Francis\nBeaumont|3001.3 ADA" color=black fontcolor=black]
+
+Tx4_2 [label="Francis\nBeaumont|3 ADA + 1 FB" color=black fontcolor=black]
+
+}
+
+Tx4 -> Tx4_0 [label="#0" color=darkred fontcolor=darkred]
+
+Tx4 -> Tx4_2 [label="#2" color=darkred fontcolor=darkred]
+
+
+Tx4_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}" color=black fontcolor=black]
+
+Tx4 -> Tx4_1 [label="#1" color=darkred fontcolor=darkred]
+
+
+Tx4_Fee [label="Fee\n1.3 ADA" color=darkred fontcolor=darkred]
+
+Tx4 -> Tx4_Fee [color=darkred fontcolor=darkred]
+
+
+}

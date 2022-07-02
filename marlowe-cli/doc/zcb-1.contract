@@ -1,0 +1,79 @@
+{
+    "timeout": 1655621700000,
+    "when": [
+        {
+            "then": {
+                "then": {
+                    "timeout": 1655664900000,
+                    "when": [
+                        {
+                            "then": {
+                                "then": "close",
+                                "to": {
+                                    "party": {
+                                        "role_token": "JF"
+                                    }
+                                },
+                                "from_account": {
+                                    "role_token": "TM"
+                                },
+                                "pay": {
+                                    "and": 5000000,
+                                    "add": 100000000
+                                },
+                                "token": {
+                                    "currency_symbol": "",
+                                    "token_name": ""
+                                }
+                            },
+                            "case": {
+                                "deposits": {
+                                    "and": 5000000,
+                                    "add": 100000000
+                                },
+                                "into_account": {
+                                    "role_token": "TM"
+                                },
+                                "of_token": {
+                                    "currency_symbol": "",
+                                    "token_name": ""
+                                },
+                                "party": {
+                                    "role_token": "TM"
+                                }
+                            }
+                        }
+                    ],
+                    "timeout_continuation": "close"
+                },
+                "to": {
+                    "party": {
+                        "role_token": "TM"
+                    }
+                },
+                "from_account": {
+                    "role_token": "JF"
+                },
+                "pay": 100000000,
+                "token": {
+                    "currency_symbol": "",
+                    "token_name": ""
+                }
+            },
+            "case": {
+                "deposits": 100000000,
+                "into_account": {
+                    "role_token": "JF"
+                },
+                "of_token": {
+                    "currency_symbol": "",
+                    "token_name": ""
+                },
+                "party": {
+                    "role_token": "JF"
+                }
+            }
+        }
+    ],
+    "timeout_continuation": "close"
+}

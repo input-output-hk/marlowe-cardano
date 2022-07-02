@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.Futures where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Futures as C
 import Marlowe.Contracts.UTC.Common
 

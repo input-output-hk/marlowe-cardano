@@ -3,7 +3,7 @@ module Data.ContractStatus where
 import Prelude
 
 import Data.UUID.Argonaut (UUID)
-import Marlowe.Semantics (MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (MarloweParams)
 
 -- This data type help us keep different data for the different status
 -- of a contract.
