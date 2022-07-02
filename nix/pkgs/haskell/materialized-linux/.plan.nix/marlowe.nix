@@ -185,9 +185,13 @@
             ];
           buildable = true;
           modules = [
+            "Spec/Marlowe/Arbitrary"
+            "Spec/Marlowe/AutoExecute"
             "Spec/Marlowe/Common"
             "Spec/Marlowe/Marlowe"
-            "Spec/Marlowe/AutoExecute"
+            "Spec/Marlowe/Semantics"
+            "Spec/Marlowe/Util"
+            "Spec/Marlowe/Util/AssocMap"
             "MarloweContract"
             ];
           hsSourceDirs = [ "test" "pab" ];
