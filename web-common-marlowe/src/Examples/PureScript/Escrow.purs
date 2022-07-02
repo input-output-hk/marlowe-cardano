@@ -77,10 +77,10 @@ depositTimeout :: Timeout
 depositTimeout = TimeParam "Payment deadline"
 
 disputeTimeout :: Timeout
-disputeTimeout = TimeParam "Complaint response deadline"
+disputeTimeout = TimeParam "Complaint deadline"
 
 answerTimeout :: Timeout
-answerTimeout = TimeParam "Complaint deadline"
+answerTimeout = TimeParam "Complaint response deadline"
 
 arbitrageTimeout :: Timeout
 arbitrageTimeout = TimeParam "Mediation deadline"

@@ -29,9 +29,9 @@ all =
                     { timeContent:
                         Map.fromFoldable
                           [ "Payment deadline" /\ unsafeInstantFromInt 600
+                          , "Complaint deadline" /\ unsafeInstantFromInt 1800
                           , "Complaint response deadline" /\
-                              unsafeInstantFromInt 1800
-                          , "Complaint deadline" /\ unsafeInstantFromInt 2400
+                              unsafeInstantFromInt 2400
                           , "Mediation deadline" /\ unsafeInstantFromInt 3600
                           ]
                     , valueContent:
