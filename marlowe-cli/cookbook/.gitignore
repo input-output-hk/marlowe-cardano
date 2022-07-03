@@ -1,2 +1,6 @@
 node.socket
+*.skey
+*.vkey
+*.address
 english-auction*
+revenue-based-loan*
