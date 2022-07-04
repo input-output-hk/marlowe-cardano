@@ -20,16 +20,6 @@ import Network.RemoteData (RemoteData(..), _Loading)
 import Project (Project(..))
 import Type.Proxy (Proxy(..))
 
-data OpenResult
-  = Canceled
-  | LoadProject Project
-
-data Storage = FS | GistPlatform
-
-derive instance Generic Storage _
-instance Show Storage where
-  show = genericShow
-
 -- data Action
 --   = LoadProjects
 --   | LoadProject CodeEditor GistId

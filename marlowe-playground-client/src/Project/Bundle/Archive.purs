@@ -1,9 +1,10 @@
-module Marlowe.Project.Archive where
+module Project.Bundle.Archive where
 
 import Prologue
 
 import Contrib.Tarballjs (addTextFile)
 import Contrib.Tarballjs as T
+import Contrib.Tarballjs as Tarballjs
 import Data.Array as A
 import Data.Foldable (for_)
 import Data.Map as M
@@ -14,12 +15,14 @@ import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign.Object as FO
+import Project (projectNameToString)
 import Project.Bundle as Bundle
 import Project.Types
   ( Bundle
   , FileContent(FileContent)
   , FileName(FileName)
   , Files(Files)
+  , unBundle
   )
 import Web.File.File as W
 
@@ -46,3 +49,12 @@ fromArchive file = do
       c <- T.getTextFile tarReader (T.FileName name)
       pure $ ((n /\ _) <<< FileContent) <$> c
   pure $ Bundle.fromFiles (Files files)
+
+save :: Bundle -> Effect Unit
+save bundle = do
+  archive <- toArchive bundle
+  let
+    projectName = _.projectName <<< unBundle $ bundle
+  Tarballjs.download archive $ Tarballjs.FileName $ projectNameToString
+    projectName
+

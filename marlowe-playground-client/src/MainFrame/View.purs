@@ -3,11 +3,14 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Component.Modal.View (modal)
+import Component.Projects as Projects
 import Contrib.Data.Array.Builder ((:>))
 import Contrib.Data.Array.Builder as AB
-import Data.Lens (_Just, has, preview, (^.), (^?))
+import Data.Foldable (foldMap)
+import Data.Lens (_Just, has, preview, use, (^.), (^?))
 import Data.Maybe (fromMaybe)
 import Data.Monoid (guard)
+import Data.Semigroup.Foldable (foldMap1)
 import Debug (spy)
 import Halogen (ComponentHTML)
 import Halogen.Classes (marlowePlayLogo)
@@ -59,7 +62,14 @@ import Page.HaskellEditor.View (otherActions, render) as HaskellEditor
 import Page.JavascriptEditor.View as JSEditor
 import Page.MarloweEditor.View as MarloweEditor
 import Page.Simulation.View as Simulation
-import Project (ProjectName(..))
+import Project
+  ( Project
+  , ProjectName(..)
+  , StorageLocation
+  , _projectName
+  , _storage
+  , projectNameToString
+  )
 import Project as Project
 import Type.Constraints (class MonadAffAjaxStore)
 
@@ -222,9 +232,8 @@ render state =
           ]
           [ h1 [ classNames [ "text-lg" ] ]
               {- TODO: Fix style when name is super long -}
-              [ text $ case maybeProjectName of
-                  Just (ProjectName projectName) -> projectName
-                  Nothing -> "Untitled project"
+              [ text $ fromMaybe "Untitled project" $ projectNameToString <$>
+                  maybeProjectName
               , span [ classNames [ "unsave-change-indicator" ] ]
                   [ text unsavedChangesIndicator ]
               ]
@@ -296,31 +305,33 @@ render state =
       div [ classNames [ "overlay" ] ] []
     _ -> div_ []
 
+-- | FIXME: paluh - handle redirect
+-- saveActionForProject :: forall t2. Project -> t2 -> Action
+-- saveActionForProject project _ = do
+--   let
+--     saveAsAction = OpenModal (ModalComponent Projects.saveAs)
+--   fromMaybe saveAsAction $ do
+--     storage <- project ^. _storage
+--     projectBundle <- Project.toBundle project
+--     pure $ SaveProject projectBundle storage
+
 menuBar :: forall p. State -> HTML p Action
-menuBar state =
-  div [ classNames [ "menu-bar" ] ]
+menuBar state = do
+  div [ classNames [ "menu-bar" ] ] $
     [ menuButton (OpenModal NewProject) "New Project"
-    , gistModal (OpenModal OpenProject) "Open"
+    , menuButton (OpenModal (ModalComponent Projects.open)) "Open"
     , menuButton (OpenModal OpenDemo) "Open Example"
-    , menuButton (OpenModal RenameProject) "Rename"
-    , menuButton
-        --( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
-        --  else GistAction PublishOrUpdateGist
-        --)
-        (OpenModal SaveProjectAs)
-        "Save"
-    , gistModal (OpenModal SaveProjectAs) "Save As..."
     ]
+      <> (state ^. _project) `flip foldMap` \_ -> do
+        let
+          saveAsAction = OpenModal (ModalComponent Projects.saveAs)
+        [ menuButton (OpenModal RenameProject) "Rename"
+        , menuButton SaveProject "Save"
+        , menuButton saveAsAction "Save As..."
+        ]
   where
   menuButton action name =
     a [ onClick $ const action ]
       [ span [] [ text name ]
       ]
 
-  gistModal action name =
-    if
-      has (_authStatus <<< _Success <<< _Just)
-        state then
-      menuButton action name
-    else
-      menuButton (OpenModal $ GithubLogin action) name

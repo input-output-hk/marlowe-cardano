@@ -3,7 +3,6 @@ module Component.Projects.Index where
 import Prologue hiding (div)
 
 import Component.Modal.ViewHelpers (modalHeader)
-import Component.Projects.Types (OpenResult(..))
 import Contrib.Data.Array.Builder ((+>), (:>), (<:))
 import Contrib.Data.Array.Builder as AB
 import Control.Monad.Trans.Class (lift)
@@ -48,7 +47,7 @@ import Halogen.HTML.Properties (class_, classes)
 import Halogen.Hooks (HookM)
 import Halogen.Hooks as H
 import Halogen.Hooks.Extra.Hooks (usePutState)
-import MainFrame.Types (ChildSlots)
+import MainFrame.Types (Action(..), ChildSlots)
 import Marlowe (Api, getApiGists, getApiGistsByGistId)
 import Marlowe.Gists (fileExists, filenames, isPlaygroundGist)
 import Network.RemoteData (RemoteData(..))
@@ -236,7 +235,7 @@ projectList actions state =
                 gist <- lift $ getApiGistsByGistId (g.gist ^. gistId)
 
                 case hush gist >>= Project.fromGist of
-                  Just project -> actions.raise $ Just project
+                  Just project -> actions.raise $ Just $ LoadProject project
                   Nothing -> actions.putGistLoadingFailure (Just g)
           ]
         else []

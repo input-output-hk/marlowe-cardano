@@ -10,7 +10,7 @@ import Halogen.HTML (ClassName(..), ComponentHTML, button, div, div_, p_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes)
 import MainFrame.Types (Action(..), ChildSlots, State, _project)
-import Project (ProjectName(..))
+import Project (projectNameToString)
 import Project as Project
 
 render
@@ -31,8 +31,8 @@ render intendedAction state = do
     , p_ [ text "Unsaved changes will be lost." ]
     , p_
         [ text $ case maybeProjectName of
-            Just (ProjectName projectName) -> "Do you want to save changes to '"
-              <> projectName
+            Just pn -> "Do you want to save changes to '"
+              <> projectNameToString pn
               <> "'?"
             Nothing -> "Do you want to save changes to your new project?"
         ]

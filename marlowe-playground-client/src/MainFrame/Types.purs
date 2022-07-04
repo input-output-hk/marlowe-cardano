@@ -10,8 +10,8 @@ import Component.DateTimeLocalInput.Types as DateTimeLocalInput
 import Component.Demos.Types as Demos
 import Component.MetadataTab.Types (MetadataAction)
 import Component.NewProject.Types as NewProject
-import Component.Projects.Types as Projects.Types
 import Component.Tooltip.Types (ReferenceId)
+import Contrib.Halogen.HTML (PlainHTML')
 import Data.Generic.Rep (class Generic)
 import Data.Lens
   ( Fold'
@@ -19,10 +19,8 @@ import Data.Lens
   , Lens'
   , Traversal'
   , _Just
-  , lens
   , non
   , preview
-  , set
   , view
   , (^.)
   )
@@ -33,8 +31,7 @@ import Data.Show.Generic (genericShow)
 import Data.Time.Duration (Minutes)
 import Gist (Gist)
 import Gists.Extra (GistId)
-import Gists.Types (GistAction)
-import Halogen (ClassName, RefLabel(..))
+import Halogen (ClassName, Component, RefLabel(..))
 import Halogen as H
 import Halogen.Classes (activeClass)
 import Halogen.Monaco (KeyBindings)
@@ -50,15 +47,15 @@ import Page.MarloweEditor.Types as ME
 import Page.Simulation.Types as Simulation
 import Project (Project, Workflow)
 import Project as Project
-import Record (delete, get, insert) as Record
 import Rename.Types as Rename
 import Router (Route)
 import SaveAs.Types as SaveAs
 import Session (AuthResponse)
 import Session as Auth
-import Store as Store
+import Store.AuthState (AuthState)
 import Store.OverlayState (OverlayState)
 import Store.ProjectState (ProjectState)
+import Type.Constraints (class MonadAffAjaxStore)
 import Type.Proxy (Proxy(..))
 import Types (WebData, WebpackBuildMode)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
@@ -66,23 +63,33 @@ import Web.UIEvent.MouseEvent (MouseEvent)
 
 data ModalView
   = NewProject
-  | OpenProject
   | OpenDemo
   | RenameProject
-  | SaveProjectAs
-  | GithubLogin Action
+  -- | SaveProjectAs
+  -- | GithubLogin Action
   | ConfirmUnsavedNavigation Action
+  | StaticHTML (PlainHTML' Action)
+  | ModalComponent
+      ( forall (m :: Type -> Type) query
+         . MonadAffAjaxStore m
+        => Component
+             query
+             Unit
+             (Maybe Action)
+             m
+      )
 
-derive instance genericModalView :: Generic ModalView _
+-- derive instance genericModalView :: Generic ModalView _
 
 instance showModalView :: Show ModalView where
   show NewProject = "NewProject"
-  show OpenProject = "OpenProject"
   show OpenDemo = "OpenDemo"
   show RenameProject = "RenameProject"
-  show SaveProjectAs = "SaveProjectAs"
+  -- show SaveProjectAs = "SaveProjectAs"
   show (ConfirmUnsavedNavigation _) = "ConfirmUnsavedNavigation"
-  show (GithubLogin _) = "GithubLogin"
+  -- show (GithubLogin _) = "GithubLogin"
+  show (StaticHTML _) = "StaticHTML"
+  show (ModalComponent _) = "ModalComponent"
 
 -- Before adding the intended action to GithubLogin, this instance was being
 -- handled by the genericShow. Action does not have a show instance so genericShow
@@ -92,7 +99,8 @@ instance showModalView :: Show ModalView where
 data Query a = ChangeRoute Route a
 
 type StoreContext =
-  { overlayState :: OverlayState
+  { authStatus :: AuthState
+  , overlayState :: OverlayState
   , projectState :: Maybe ProjectState
   }
 
@@ -114,15 +122,14 @@ data Action
   | NewProjectAction NewProject.Action
   | DemosAction Demos.Action
   | RenameAction Rename.Action
-  | SaveAsAction SaveAs.Action
+  -- | SaveAsAction SaveAs.Action
   -- Gist support.
   | CheckAuthStatus
-  | GistAction GistAction
   | OpenModal ModalView
   | CloseModal (Maybe Action)
   | ModalBackdropClick MouseEvent
-  | OpenLoginPopup Action
   | LoadProject Project
+  | SaveProject
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
@@ -142,18 +149,17 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (NewProjectAction action) = toEvent action
   toEvent (DemosAction action) = toEvent action
   toEvent (RenameAction action) = toEvent action
-  toEvent (SaveAsAction action) = toEvent action
+  -- toEvent (SaveAsAction action) = toEvent action
   toEvent (ConfirmUnsavedNavigationAction _ _) = Just $ defaultEvent
     "ConfirmUnsavedNavigation"
   toEvent CheckAuthStatus = Just $ defaultEvent "CheckAuthStatus"
-  toEvent (GistAction _) = Just $ defaultEvent "GistAction"
   toEvent (OpenModal view) = Just $ (defaultEvent (show view))
     { category = Just "OpenModal" }
   toEvent (CloseModal _) = Just $ defaultEvent "CloseModal"
   toEvent (ModalBackdropClick _) = Just $ defaultEvent "ModalBackdropClick"
-  toEvent (OpenLoginPopup _) = Just $ defaultEvent "OpenLoginPopup"
   toEvent Logout = Just $ defaultEvent "Logout"
   toEvent (LoadProject _) = Just $ defaultEvent "LoadProject"
+  toEvent SaveProject = Just $ defaultEvent "SaveProject"
 
 -- FIXME: We should merge `*Editor` into `CodeEditor` and derive
 -- a precise route based on the `Project` state.
@@ -182,10 +188,11 @@ type ChildSlots =
   , metadata :: forall query. H.Slot query MetadataAction Unit
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
-  , saveProject :: forall query. H.Slot query Void Unit
   , openProject :: forall query. H.Slot query (Maybe Project) Unit
   , currencyInput :: CurrencyInput.Slot String
   , dateTimeInput :: DateTimeLocalInput.Slot String
+
+  , modalContent :: forall query. H.Slot query (Maybe Action) Unit
   )
 
 _haskellEditorSlot :: Proxy "haskellEditorSlot"
@@ -196,9 +203,6 @@ _jsEditorSlot = Proxy
 
 _blocklySlot :: Proxy "blocklySlot"
 _blocklySlot = Proxy
-
-_saveProject :: Proxy "saveProject"
-_saveProject = Proxy
 
 _openProject :: Proxy "openProject"
 _openProject = Proxy
@@ -252,7 +256,7 @@ type State =
   , hasUnsavedChanges :: Boolean
 
   , featureFlags ::
-      { fsProjectStorage :: Boolean
+      { fsStorageLocation :: Boolean
       , logout :: Boolean
       }
   }

@@ -3,11 +3,10 @@ module Component.Projects.Open where
 import Prelude
 
 import Component.Projects.Index as Index
-import Component.Projects.Types (OpenResult(..), Storage(..))
 import Control.Monad.Trans.Class (lift)
 import Data.Lens (_Just, view)
 import Data.Lens.Iso.Newtype (_Newtype)
-import Data.Maybe (Maybe, fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (un)
 import Data.Tuple.Nested ((/\))
 import Debug (traceM)
@@ -40,7 +39,8 @@ import Halogen.Hooks.Extra.Hooks (usePutState)
 import Halogen.Hooks.Hook (bind, pure) as H
 import Halogen.Store.Select (selectEq)
 import Halogen.Store.UseSelector (useSelector)
-import Project (Project, ProjectName(..), _projectName)
+import MainFrame.Types (Action)
+import Project (Project, ProjectName(..), StorageLocation(..), _projectName)
 import Safe.Coerce (coerce)
 import Store.AuthState.Hooks (useIsAuthenticated)
 import Store.Handlers (loginRequired)
@@ -52,12 +52,12 @@ _projectsIndex = Proxy :: Proxy "projectsIndex"
 
 data Step
   = ChooseStorage
-  | Open Storage
+  | Open StorageLocation
 
 component
   :: forall t6 t7 m
    . MonadAffAjaxStore m
-  => Component t6 t7 (Maybe Project) m
+  => Component t6 t7 (Maybe Action) m
 component = H.component \{ outputToken } _ -> H.do
   step /\ putStep <- usePutState ChooseStorage
 
@@ -66,18 +66,19 @@ component = H.component \{ outputToken } _ -> H.do
   let
     renderStorageChoice _ = HH.div_
       [ HH.div_ [ HH.text $ show authenticated ]
-      , HH.button [ HE.onClick $ const $ putStep (Open FS) ] [ HH.text "FS" ]
+      , HH.button [ HE.onClick $ const $ putStep (Open LocalFileSystem) ]
+          [ HH.text "FS" ]
       , HH.button
           [ HE.onClick $ const $ loginRequired
               (putStep ChooseStorage)
-              (const $ putStep (Open GistPlatform))
+              (const $ putStep (Open $ GistPlatform Nothing))
           ]
           [ HH.text "GistPlatform" ]
       ]
   H.pure $ case step of
     ChooseStorage -> renderStorageChoice unit
-    Open FS -> HH.text $ "Opening from local file system..."
-    Open GistPlatform ->
+    Open LocalFileSystem -> HH.text $ "Opening from local file system..."
+    Open (GistPlatform _) ->
       if authenticated then
         HH.slot _projectsIndex unit Index.component unit (raise outputToken)
       -- case _ of

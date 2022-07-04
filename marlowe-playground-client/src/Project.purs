@@ -5,10 +5,10 @@ module Project
 
 import Prelude
 
-import Control.Alternative as Alternative
-import Data.Lens (AGetter, Getter, Getter', Lens', lens, (^.))
+import Data.Lens (Getter', Lens', lens, (^.))
 import Data.Lens.Getter as Getter
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Newtype as Newtype
 import Gist (Gist, gistId)
 import Marlowe.Extended.Metadata (MetaData) as Marlowe.Extended
 import Marlowe.Extended.Metadata
@@ -16,105 +16,109 @@ import Marlowe.Extended.Metadata
   , emptyContractMetadata
   , getHintsFromMetadata
   )
-import Prim.Row as Row
 import Project.Bundle.Gist as Bundle.Gist
 import Project.Types
   ( Bundle(..)
-  , BundleBase
   , FileContent(..)
   , FileName(..)
   , Files(..)
   , Language(..)
-  , Project(..)
+  , Project
   , ProjectBase
   , ProjectName(..)
-  , ProjectStorage(..)
   , SourceCode(..)
+  , StorageLocation(..)
   , Workflow(..)
+  , projectNameFromString
+  , projectNameToString
+  , unBundle
+  , unProject
   , workflowLanguage
   ) as Types
 import Project.Types
   ( Bundle(..)
   , Language(..)
-  , Project(..)
+  , Project
   , ProjectName
-  , ProjectStorage(..)
+  , ProjectRecord
+  , Snapshot(..)
   , SourceCode
+  , StorageLocation(..)
+  , Version(..)
   , Workflow(..)
+  , unProject
+  , unsafeProject
+  , workflowLanguage
   )
 import Record as Record
 import Type.Proxy (Proxy(..))
 
 getProjectName :: Project -> Maybe ProjectName
-getProjectName = case _ of
-  MarloweProject r -> r.projectName
-  HaskellProject r -> r.projectName
-  JavascriptProject r -> r.projectName
+getProjectName = unProject >>> _.projectName
 
--- ActusProject r -> r.projectName
+-- Modifies project and bumps version
+unsafeModifyProject :: (ProjectRecord -> ProjectRecord) -> Project -> Project
+unsafeModifyProject f = unProject >>> f >>> unsafeProject
+
+bumpVersion :: Project -> Project
+bumpVersion = unsafeModifyProject
+  (\r -> r { version = Newtype.over Version (_ + 1) r.version })
+
+_version :: Getter' Project Version
+_version = Getter.to (unProject >>> _.version)
 
 setProjectName :: Project -> Maybe ProjectName -> Project
-setProjectName project projectName = case project of
-  MarloweProject r -> MarloweProject r { projectName = projectName }
-  HaskellProject r -> HaskellProject r { projectName = projectName }
-  JavascriptProject r -> JavascriptProject r { projectName = projectName }
-
--- ActusProject r -> ActusProject r { projectName = projectName }
+setProjectName project projectName = project # unsafeModifyProject _
+  { projectName = projectName }
 
 _projectName :: Lens' Project (Maybe ProjectName)
 _projectName = lens getProjectName setProjectName
 
 getCode :: Project -> SourceCode
-getCode = case _ of
-  MarloweProject r -> r.code
-  HaskellProject r -> r.code
-  JavascriptProject r -> r.code
-
--- ActusProject r -> r.code
+getCode = unProject >>> _.code
 
 setCode :: Project -> SourceCode -> Project
-setCode project code = case project of
-  MarloweProject r -> MarloweProject r { code = code }
-  HaskellProject r -> HaskellProject r { code = code }
-  JavascriptProject r -> JavascriptProject r { code = code }
-
--- ActusProject r -> ActusProject r { code = code }
+setCode project code = project # unsafeModifyProject _ { code = code }
 
 _code :: Lens' Project SourceCode
 _code = lens getCode setCode
 
-getMetadata :: Project -> Marlowe.Extended.MetaData
-getMetadata = case _ of
-  MarloweProject r -> r.metadata
-  HaskellProject r -> r.metadata
-  JavascriptProject r -> r.metadata
+getLanguage :: Project -> Language
+getLanguage = unProject >>> _.language
 
--- ActusProject r -> r.metadata
+setLanguage :: Project -> Language -> Project
+setLanguage project language = project # unsafeModifyProject _
+  { language = language }
+
+_language :: Lens' Project Language
+_language = lens getLanguage setLanguage
+
+getStorage :: Project -> Maybe StorageLocation
+getStorage = unProject >>> _.storage
+
+setStorage :: Project -> Maybe StorageLocation -> Project
+setStorage project storage = project # unsafeModifyProject _
+  { storage = storage }
+
+_storage :: Lens' Project (Maybe StorageLocation)
+_storage = lens getStorage setStorage
+
+getMetadata :: Project -> Marlowe.Extended.MetaData
+getMetadata = unProject >>> _.metadata
 
 setMetadata :: Project -> Marlowe.Extended.MetaData -> Project
-setMetadata project metadata = case project of
-  MarloweProject r -> MarloweProject r { metadata = metadata }
-  HaskellProject r -> HaskellProject r { metadata = metadata }
-  JavascriptProject r -> JavascriptProject r { metadata = metadata }
-
--- ActusProject r -> ActusProject r { metadata = metadata }
+setMetadata project metadata = project # unsafeModifyProject _
+  { metadata = metadata }
 
 _metadata :: Lens' Project Marlowe.Extended.MetaData
 _metadata = lens getMetadata setMetadata
 
 getMetadataHints :: Project -> MetadataHintInfo
-getMetadataHints = case _ of
-  MarloweProject r -> r.metadataHints
-  HaskellProject r -> r.metadataHints
-  JavascriptProject r -> r.metadataHints
-
--- ActusProject r -> r.metadata
+getMetadataHints = unProject >>> _.metadataHints
 
 setMetadataHints :: Project -> MetadataHintInfo -> Project
-setMetadataHints project metadataHints = case project of
-  MarloweProject r -> MarloweProject r { metadataHints = metadataHints }
-  HaskellProject r -> HaskellProject r { metadataHints = metadataHints }
-  JavascriptProject r -> JavascriptProject r { metadataHints = metadataHints }
+setMetadataHints project metadataHints = project # unsafeModifyProject _
+  { metadataHints = metadataHints }
 
 _metadataHints :: Lens' Project MetadataHintInfo
 _metadataHints = lens getMetadataHints setMetadataHints
@@ -125,21 +129,24 @@ _metadataHintsP = (Proxy :: Proxy "metadataHints")
 
 _projectNameP = (Proxy :: Proxy "projectName")
 
-fromBundle :: Maybe ProjectStorage -> Bundle -> Project
-fromBundle storage (Bundle r) = case r.language of
-  Haskell -> HaskellProject $ Record.merge r'
-    { contract, metadataHints, storage }
-  Javascript -> JavascriptProject $ Record.merge r'
-    { contract, metadataHints, storage }
-  Marlowe -> MarloweProject $ Record.merge r'
-    { contract, metadataHints, storage, blocklyWorkflow: false }
+fromBundle :: Maybe StorageLocation -> Bundle -> Project
+fromBundle storage (Bundle r) =
+  unsafeProject
+    <<< Record.set _projectNameP (Just r.projectName)
+    <<< Record.merge { contract, metadataHints, storage, workflow, version }
+    $ r
   where
   contract = Nothing
   metadataHints = getHintsFromMetadata r.metadata
-  r' =
-    Record.set _projectNameP (Just r.projectName)
-      <<< Record.delete _languageP
-      $ r
+  workflow = defaultWorkflow r.language
+  -- Default workflow for a language
+  version = Version 0
+
+defaultWorkflow :: Language -> Workflow
+defaultWorkflow = case _ of
+  Haskell -> HaskellWorkflow
+  Javascript -> JavascriptWorkflow
+  Marlowe -> MarloweWorkflow
 
 _storageP = (Proxy :: Proxy "storage")
 _contractP = (Proxy :: Proxy "contract")
@@ -147,63 +154,56 @@ _blocklyWorkflowP = (Proxy :: Proxy "blocklyWorkflow")
 
 toBundle :: Project -> Maybe Bundle
 toBundle project = do
-  projectName <- project ^. _projectName
   let
-    manageCommonFields
-      :: forall t92 t105 t110
-       . Row.Lacks "language" t92
-      => Row.Lacks "storage" t92
-      => Row.Lacks "contract" t92
-      => Row.Lacks "metadataHints" t92
-      => Language
-      -> { contract :: t110
-         , storage :: t105
-         , metadataHints :: MetadataHintInfo
-         , projectName :: Maybe ProjectName
-         | t92
-         }
-      -> { language :: Language
-         , projectName :: ProjectName
-         | t92
-         }
-    manageCommonFields l =
-      Record.insert _languageP l
-        <<< Record.delete _storageP
-        <<< Record.delete _contractP
-        <<< Record.delete _metadataHintsP
-        <<< Record.set _projectNameP projectName
+    { code, language, metadata, projectName: maybeProjectName } = unProject
+      project
+  projectName <- maybeProjectName
+  pure $ Bundle
+    { code, language, metadata, projectName }
 
-  pure $ Bundle $ case project of
-    HaskellProject r -> manageCommonFields Haskell r
-    JavascriptProject r -> manageCommonFields Javascript r
-    MarloweProject r ->
-      manageCommonFields Marlowe
-        <<< Record.delete _blocklyWorkflowP
-        $ r
+toSnapshot :: Project -> Snapshot
+toSnapshot project = do
+  let
+    { code, language, metadata, projectName, version } = unProject project
+  Snapshot
+    { code, language, metadata, projectName, version }
+
+fromSnapshot :: Snapshot -> Project
+fromSnapshot (Snapshot r) =
+  unsafeProject
+    <<< Record.merge { contract, metadataHints, storage, workflow, version }
+    $ r
+  where
+  contract = Nothing
+  metadataHints = getHintsFromMetadata r.metadata
+  workflow = defaultWorkflow r.language
+  storage = Nothing
+  version = r.version
 
 fromGist :: Gist -> Maybe Project
 fromGist gist = do
   let
-    storage = GistProject $ gist ^. gistId
+    storage = GistPlatform $ Just $ gist ^. gistId
   bundle <- Bundle.Gist.fromGist gist
   pure $ fromBundle (Just storage) bundle
 
 getWorkflow :: Project -> Workflow
-getWorkflow (MarloweProject { blocklyWorkflow: true }) = BlocklyWorkflow
-getWorkflow (MarloweProject _) = MarloweWorkflow
-getWorkflow (HaskellProject _) = HaskellWorkflow
-getWorkflow (JavascriptProject _) = JavascriptWorkflow
+getWorkflow = unProject >>> _.workflow
 
 _workflow :: Getter' Project Workflow
 _workflow = Getter.to getWorkflow
 
+-- | Set workflow if possible. Usually noop. Have only sens
+-- | in the context of Marlowe and MarloweWorkflow / BlocklyWorkflow.
 setWorkflow :: Project -> Workflow -> Maybe Project
-setWorkflow (MarloweProject r) BlocklyWorkflow = Just $ MarloweProject r
-  { blocklyWorkflow = true }
-setWorkflow (MarloweProject r) MarloweWorkflow = Just $ MarloweProject r
-  { blocklyWorkflow = false }
-setWorkflow project workflow =
-  Alternative.guard (workflow == getWorkflow project) $> project
+setWorkflow project workflow = do
+  let
+    r@{ language } = unProject project
+  case workflow, language of
+    BlocklyWorkflow, Marlowe -> Just $ unsafeProject $ r
+      { workflow = BlocklyWorkflow }
+    w, l | workflowLanguage w == l -> Just project
+    _, _ -> Nothing
 
 -- | We can only change workflow in the case of `MarloweProject` currently
 -- | so in general this operation does nothing.
@@ -211,16 +211,15 @@ trySetWorkflow :: Project -> Workflow -> Project
 trySetWorkflow project = fromMaybe project <<< setWorkflow project
 
 fromSourceCode :: SourceCode -> Language -> Project
-fromSourceCode code = case _ of
-  Marlowe -> MarloweProject $ Record.insert _blocklyWorkflowP false base
-  Haskell -> HaskellProject base
-  Javascript -> JavascriptProject base
-  where
-  base =
-    { code
-    , contract: Nothing
-    , metadataHints: mempty
-    , metadata: emptyContractMetadata
-    , storage: Nothing
-    , projectName: Nothing
-    }
+fromSourceCode code language = unsafeProject
+  { code
+  , contract: Nothing
+  , language
+  , metadataHints: mempty
+  , metadata: emptyContractMetadata
+  , storage: Nothing
+  , projectName: Nothing
+  , workflow: defaultWorkflow language
+  , version: Version 0
+  }
+

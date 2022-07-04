@@ -25,6 +25,8 @@ import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype, un)
 import Data.Show.Generic (genericShow)
+import Data.String.NonEmpty (NonEmptyString)
+import Data.String.NonEmpty as NonEmptyString
 import Data.Tuple.Nested (type (/\), (/\))
 import Debug (traceM)
 import Foreign.Object as Object
@@ -48,8 +50,8 @@ import Project.Types
   ( Language(..)
   , Project(..)
   , ProjectName(..)
-  , ProjectStorage(..)
   , SourceCode(..)
+  , StorageLocation(..)
   )
 import Project.Types as Types
 import Safe.Coerce (coerce)
@@ -83,13 +85,14 @@ toFiles (Bundle bundle) = do
   Files $ Map.fromFoldable
     [ codeFileName /\ coerce bundle.code
     , fileNames.playground /\ FileContent
-        (un ProjectName $ bundle.projectName)
+        (NonEmptyString.toString $ un ProjectName $ bundle.projectName)
     , fileNames.metadata /\ FileContent
         (encodeStringifyJson $ bundle.metadata)
     ]
 
 fromFiles :: Files -> Maybe Bundle
 fromFiles (Files m) = Bundle <$> do
+  projectName <- ProjectName <$> NonEmptyString.fromString pn
   metadata <- do
     FileContent json <- M.lookup fileNames.metadata m
     hush $ parseDecodeJson json
@@ -111,7 +114,6 @@ fromFiles (Files m) = Bundle <$> do
   lookupContent n = coerce <<< M.lookup n
   FileContent pn = fromMaybe (FileContent "Uknown")
     (M.lookup fileNames.playground m)
-  projectName = ProjectName pn
 
 detectLanguage :: Array FileName -> Maybe Language
 detectLanguage fns = do

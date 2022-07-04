@@ -9,7 +9,6 @@ import Prologue hiding (div)
 
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State, initialState) as BottomPanel
-import Contrib.Halogen.Store (useStore)
 import Contrib.Halogen.Store.Monad (preuseStore)
 import Control.Monad.Except (lift, runExcept)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
@@ -34,6 +33,7 @@ import Data.MediaType.Common (applicationJSON)
 import Data.NonEmptyList.Extra (tailIfNotEmpty)
 import Data.RawJson (RawJson(..))
 import Data.String (splitAt)
+import Data.String.NonEmpty as NonEmptyString
 import Data.Time.Duration (Minutes)
 import Data.Traversable (sequence)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -206,7 +206,7 @@ handleAction metadata StartSimulation = do
 handleAction _ DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
   Just (contract :: Contract) -> do
     dateTime <- liftEffect $ nowDateTime
-    projectName <- preuseStore
+    projectName <- map NonEmptyString.toString <$> preuseStore
       ( Store._State <<< _projectState <<< _Just <<< _project <<< _projectName
           <<< _Just
           <<< _Newtype

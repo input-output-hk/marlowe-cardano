@@ -19,6 +19,7 @@ import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.State (modify_)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
+import Data.DateTime (Millisecond)
 import Data.Either (hush, note)
 import Data.Foldable (fold, for_)
 import Data.Function (on)
@@ -30,17 +31,19 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (un, unwrap)
 import Data.RawJson (RawJson(..))
+import Data.String.NonEmpty as NonEmptyString
 import Debug (traceM)
+import Effect.Aff (Milliseconds(..), delay, forkAff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
 import Gist (gistId)
 import Gists.Extra (GistId)
-import Gists.Types (GistAction(..))
 import Gists.Types (parseGistUrl) as Gists
-import Halogen (Component, getRef, liftEffect, subscribe')
+import Halogen (Component, getRef, liftEffect, query, subscribe')
 import Halogen as H
 import Halogen.Analytics (withAnalytics)
 import Halogen.Extra (mapSubmodule)
+import Halogen.HTML as HH
 import Halogen.Monaco (KeyBindings(DefaultBindings))
 import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
@@ -66,10 +69,13 @@ import MainFrame.Types
   , _createGistResult
   , _gistId
   , _hasUnsavedChanges
+  , _haskellEditorSlot
   , _haskellState
   , _input
   , _javascriptState
+  , _jsEditorSlot
   , _loadGistResult
+  , _marloweEditorPageSlot
   , _marloweEditorState
   , _project
   , _rename
@@ -116,14 +122,20 @@ import Project
   , Project
   , ProjectName(..)
   , SourceCode(..)
+  , StorageLocation(..)
   , Workflow
       ( JavascriptWorkflow
       , HaskellWorkflow
       , BlocklyWorkflow
       , MarloweWorkflow
       )
+  , _version
+  , projectNameFromString
+  , projectNameToString
   )
 import Project as Project
+import Project.Bundle.Archive as Project.Bundle.Archive
+import Project.Bundle.Gist as Project.Bundle.Gist
 import Rename.State (handleAction) as Rename
 import Rename.Types (Action(..), State, emptyState) as Rename
 import Rename.Types as Rename.Types
@@ -140,7 +152,8 @@ import SessionStorage as SessionStorage
 import StaticData as StaticData
 import Store (Action, State(..), _State, reset) as Store
 import Store.AuthState as Store.AuthState
-import Store.OverlayState (OverlayState, OverlayStateAction(..))
+import Store.Handlers (loginRequired)
+import Store.OverlayState (OverlayState, OverlayStateAction(..), withOverlay)
 import Store.OverlayState as Store.OverlayState
 import Store.ProjectState (ProjectStateAction(..), _projectState)
 import Store.ProjectState as Store.ProjectState
@@ -159,8 +172,8 @@ import Web.UIEvent.MouseEvent as MouseEvent
 -- We use `storeSelectorFn` and `input` from state to
 -- perform full state reset during logout.
 storeSelectorFn :: Store.State -> StoreContext
-storeSelectorFn = \(Store.State { overlayState, projectState }) ->
-  { overlayState, projectState }
+storeSelectorFn = \(Store.State { authState, overlayState, projectState }) ->
+  { authStatus: authState, overlayState, projectState }
 
 initialState
   :: { input :: Input, context :: StoreContext } -> State
@@ -180,7 +193,7 @@ initialState { input: input@{ tzOffset, webpackBuildMode }, context } =
   , newProject: NewProject.emptyState
   , rename: Rename.emptyState
   , saveAs: SaveAs.emptyState
-  , authStatus: NotAsked
+  , authStatus: context.authStatus
   , gistId: Nothing
   , createGistResult: NotAsked
   , loadGistResult: Right NotAsked
@@ -189,7 +202,7 @@ initialState { input: input@{ tzOffset, webpackBuildMode }, context } =
   -- , workflow: Nothing
   , project: _.project <$> context.projectState
   , featureFlags:
-      { fsProjectStorage: webpackBuildMode == Development
+      { fsStorageLocation: webpackBuildMode == Development
       , logout: webpackBuildMode == Development
       }
   }
@@ -266,13 +279,6 @@ toRename
   -> HalogenM State Action ChildSlots Void m a
 toRename = mapSubmodule _rename RenameAction
 
-toSaveAs
-  :: forall m a
-   . Functor m
-  => HalogenM SaveAs.State SaveAs.Action ChildSlots Void m a
-  -> HalogenM State Action ChildSlots Void m a
-toSaveAs = mapSubmodule _saveAs SaveAsAction
-
 ------------------------------------------------------------
 handleSubRoute
   :: forall m
@@ -302,10 +308,14 @@ handleRoute
    . MonadAffAjaxStore m
   => Route
   -> HalogenM State Action ChildSlots Void m Unit
-handleRoute { gistId: (Just gistId), subroute } = do
-  handleActionWithoutNavigationGuard (GistAction (SetGistUrl (unwrap gistId)))
-  handleActionWithoutNavigationGuard (GistAction LoadGist)
-  handleSubRoute subroute
+handleRoute { gistId: (Just gistId), subroute } =
+  loginRequired (pure unit) \_ -> do
+    gist <- lift $ Server.getApiGistsByGistId gistId
+    case hush gist >>= Project.fromGist of
+      Just project -> loadProject project
+      -- | FIXME: paluh
+      Nothing -> assign _showModal (Just $ StaticHTML $ HH.text "FAILURE")
+    handleSubRoute subroute
 
 handleRoute { subroute } = handleSubRoute subroute
 
@@ -398,6 +408,31 @@ loadProjectFromSource projectName workflow sourceCode@(SourceCode code) metadata
               (Project.workflowLanguage workflow)
     loadProject project
 
+-- handleGistAction PublishOrUpdateGist = do
+--   pure unit
+-- | FIXME: paluh
+--   description <- use _projectName
+--   files <- createFiles
+--   let
+--     newGist = mkNewGist description $ files
+--   void
+--     $ runMaybeT do
+--         mGist <- use _gistId
+--         assign _createGistResult Loading
+--         newResult <-
+--           lift
+--             $ lift
+--             $ case mGist of
+--                 Nothing -> Server.postApiGists newGist
+--                 Just gistId -> Server.postApiGistsByGistId newGist gistId
+--         assign _createGistResult $ fromEither newResult
+--         gistId <- hoistMaybe $ preview (_Right <<< gistId) newResult
+--         modify_
+--           ( set _gistId (Just gistId)
+--               <<< set _loadGistResult (Right NotAsked)
+--               <<< set _hasUnsavedChanges false
+--           )
+
 -- This handleAction can be called recursively, but because we use HOF to extend the functionality
 -- of the component, whenever we need to recurse we most likely be calling one of the extended functions
 -- defined above (handleActionWithoutNavigationGuard or fullHandleAction)
@@ -418,23 +453,18 @@ handleAction Init = do
   -- Load session data if available
   void
     $ runMaybeT do
-        bundleJSON <- MaybeT $ liftEffect $ SessionStorage.getItem
+        snapshotJSON <- MaybeT $ liftEffect $ SessionStorage.getItem
           StaticData.sessionStorageKey
         project <- hoistMaybe $ do
-          bundle <- hush $ parseDecodeJson bundleJSON
-          pure $ Project.fromBundle Nothing bundle
-        let
-          metadataHints = project ^. Project._metadataHints
-        H.modify_ $ _ { project = Just project }
-          <<< set (_haskellState <<< HE._metadataHintInfo) metadataHints
-          <<< set (_javascriptState <<< JS._metadataHintInfo) metadataHints
-
+          snapshot <- hush $ parseDecodeJson snapshotJSON
+          pure $ Project.fromSnapshot snapshot
+        lift $ loadProject project
   checkAuthStatus
 
 handleAction (Receive { context }) = do
-  traceM context
   H.modify_ _
-    { overlayState = context.overlayState
+    { authStatus = context.authStatus
+    , overlayState = context.overlayState
     , project = _.project <$> context.projectState
     }
 
@@ -444,7 +474,7 @@ handleAction (HandleKey _ ev)
       modalView <- use _showModal
       case modalView of
         Just RenameProject -> handleAction (RenameAction Rename.SaveProject)
-        Just SaveProjectAs -> handleAction (SaveAsAction SaveAs.SaveProject)
+        -- Just SaveProjectAs -> handleAction (SaveAsAction SaveAs.SaveProject)
         _ -> pure unit
   | otherwise = pure unit
 
@@ -580,7 +610,7 @@ handleAction (DemosAction (Demos.LoadDemo workflow (Demos.Demo key))) = do
       StaticData.demoFilesMetadata
   case maybeCode of
     Just code -> loadProjectFromSource
-      (Just $ ProjectName metadata.contractName)
+      (projectNameFromString $ metadata.contractName)
       workflow
       (SourceCode code)
       metadata
@@ -592,52 +622,51 @@ handleAction (DemosAction Demos.Cancel) = fullHandleAction (CloseModal Nothing)
 
 handleAction (RenameAction action@Rename.SaveProject) = do
   projectName <- use (_rename <<< Rename.Types._projectName)
-  updateStore $ Store.ProjectState.action $ OnProjectNameChanged $ ProjectName
-    projectName
+  case projectNameFromString projectName of
+    Just pn -> updateStore $ Store.ProjectState.action $ OnProjectNameChanged $
+      pn
+    Nothing -> pure unit
   closeModal
   toRename $ Rename.handleAction action
 
 handleAction (RenameAction action) = toRename $ Rename.handleAction action
 
-handleAction (SaveAsAction action@SaveAs.SaveProject) = do
-  currentGistId <- use _gistId
-  projectName <- use (_saveAs <<< SaveAs.Types._projectName)
-
-  assign _gistId Nothing
-  assign (_saveAs <<< SaveAs._status) Loading
-
-  handleGistAction PublishOrUpdateGist
-  res <- peruse (_createGistResult <<< _Success)
-  case res of
-    Just gist -> do
-      updateStore $ Store.ProjectState.action $ OnProjectNameChanged $
-        ProjectName projectName
-      closeModal
-      assign (_saveAs <<< SaveAs._status) NotAsked
-    Nothing -> do
-      assign (_saveAs <<< SaveAs._status) (Failure "Could not save project")
-      assign _gistId currentGistId
-  toSaveAs $ SaveAs.handleAction action
-
-handleAction (SaveAsAction SaveAs.Cancel) = fullHandleAction
-  (CloseModal Nothing)
-
-handleAction (SaveAsAction action) = toSaveAs $ SaveAs.handleAction action
+-- FIXME: paluh
+-- handleAction (SaveAsAction action@SaveAs.SaveProject) = do
+--   currentGistId <- use _gistId
+--   -- | FIXME: this subforms should return validated `ProjectName`
+--   projectName <- use (_saveAs <<< SaveAs.Types._projectName)
+-- 
+--   case projectNameFromString projectName of
+--     Nothing -> pure unit
+--     Just pn -> do
+--       assign _gistId Nothing
+--       assign (_saveAs <<< SaveAs._status) Loading
+-- 
+--       handleGistAction PublishOrUpdateGist
+--       res <- peruse (_createGistResult <<< _Success)
+--       case res of
+--         Just gist -> do
+--           updateStore $ Store.ProjectState.action $ OnProjectNameChanged $ pn
+--           closeModal
+--           assign (_saveAs <<< SaveAs._status) NotAsked
+--         Nothing -> do
+--           assign (_saveAs <<< SaveAs._status) (Failure "Could not save project")
+--           assign _gistId currentGistId
+--       toSaveAs $ SaveAs.handleAction action
+-- 
+-- handleAction (SaveAsAction SaveAs.Cancel) = fullHandleAction
+--   (CloseModal Nothing)
+-- 
+-- handleAction (SaveAsAction action) = toSaveAs $ SaveAs.handleAction action
 
 handleAction CheckAuthStatus = checkAuthStatus
-
-handleAction (GistAction subEvent) = handleGistAction subEvent
-
-handleAction (OpenModal OpenProject) = do
-  updateStore $ Store.OverlayState.action $ UseBackdrop
-  assign _showModal $ Just OpenProject
---   toProjects $ Projects.handleAction Projects.LoadProjects
 
 handleAction (OpenModal RenameProject) = do
   updateStore $ Store.OverlayState.action $ UseBackdrop
   currentName <- peruse (_project <<< _Just <<< Project._projectName <<< _Just)
   assign (_rename <<< Rename.Types._projectName)
-    (maybe "" (un ProjectName) currentName)
+    (fromMaybe "" $ projectNameToString <$> currentName)
   assign _showModal $ Just RenameProject
 
 handleAction (OpenModal modalView) = do
@@ -666,18 +695,20 @@ handleAction (ModalBackdropClick mouseEvent) = do
 
 -- | FIXME: We should probably accept here also continuation for
 -- | unsuccessful login.
-handleAction (OpenLoginPopup intendedAction) = do
-  possiblySession <- liftAff Auth.login
-  -- | FIXME: We should inform the user about the result.
-  -- | We get full information back.
-  fullHandleAction (CloseModal Nothing)
-  assignAuthStatus possiblySession
-  case possiblySession of
-    Success (Just _) -> fullHandleAction intendedAction
-    _ -> pure unit
+-- handleAction (OpenLoginPopup intendedAction) = do
+--   possiblySession <- liftAff Auth.login
+--   -- | FIXME: We should inform the user about the result.
+--   -- | We get full information back.
+--   fullHandleAction (CloseModal Nothing)
+--   assignAuthStatus possiblySession
+--   case possiblySession of
+--     Success (Just _) -> fullHandleAction intendedAction
+--     _ -> pure unit
 
-handleAction (ConfirmUnsavedNavigationAction intendedAction modalAction) =
-  handleConfirmUnsavedNavigationAction intendedAction modalAction
+-- | FIXME: paluh
+handleAction (ConfirmUnsavedNavigationAction intendedAction modalAction) = pure
+  unit
+--   handleConfirmUnsavedNavigationAction intendedAction modalAction
 
 handleAction Logout = do
   lift Server.getApiLogout >>= case _ of
@@ -690,6 +721,39 @@ handleAction Logout = do
       H.put $ ((initialState { input, context }) :: State)
       HS.updateStore $ Store.reset
       handleAction Init
+
+handleAction SaveProject = do
+  let
+    -- Shouldn't we share a single slot for this editor singleton?
+    languageSlot = case _ of
+      Javascript -> query _jsEditorSlot
+      Haskell -> query _haskellEditorSlot
+      Marlowe -> query _marloweEditorPageSlot
+
+  use _project >>= case _ of
+    Nothing -> pure unit
+    Just project -> do
+      let
+        language = project ^. Project._language
+        slot = languageSlot language
+      slot unit (Monaco.GetText identity) >>= case _ of
+        Just sourceCode -> do
+          updateStore $ Store.ProjectState.action $ OnProjectCodeChanged $
+            SourceCode sourceCode
+          assign _showModal $ Just (StaticHTML $ HH.text $ sourceCode)
+        Nothing -> pure unit
+
+-- LocalFileSystem -> liftEffect $ Project.Bundle.Archive.save projectBundle
+-- GistPlatform maybeGistId -> loginRequired (pure unit) \_ -> do
+--   withOverlay $ do
+--     assign _showModal $ Just (StaticHTML $ HH.text $ 
+--     -- let
+--     --   payload = Project.Bundle.Gist.toGistPayload projectBundle maybeGistId
+--     -- lift (Project.Bundle.Gist.submit payload) >>= case _ of
+--     --   Right _ -> do
+--     --     closeModal
+--     --   -- | FIXME: paluh fix errors
+--     --   Left _ -> assign _showModal $ Just (StaticHTML $ HH.text "FAILURE")
 
 sendToSimulation
   :: forall m
@@ -786,15 +850,15 @@ createFiles = do
       pure $ emptyFiles { javascript = javascript }
     Nothing -> mempty
 
-handleGistAction
-  :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => GistAction
-  -> HalogenM State Action ChildSlots Void m Unit
-handleGistAction PublishOrUpdateGist = do
-  pure unit
 -- | FIXME: paluh
+-- handleGistAction
+--   :: forall m
+--    . MonadAff m
+--   => MonadAjax Api m
+--   => GistAction
+--   -> HalogenM State Action ChildSlots Void m Unit
+-- handleGistAction PublishOrUpdateGist = do
+--   pure unit
 --   description <- use _projectName
 --   files <- createFiles
 --   let
@@ -817,50 +881,41 @@ handleGistAction PublishOrUpdateGist = do
 --               <<< set _hasUnsavedChanges false
 --           )
 
-handleGistAction (SetGistUrl url) = do
-  case Gists.parseGistUrl url of
-    Right newGistUrl ->
-      modify_
-        ( set _createGistResult NotAsked
-            <<< set _loadGistResult (Right NotAsked)
-            <<< set _gistId (Just newGistUrl)
-        )
-    Left _ -> pure unit
-
--- TODO: This action is only called when loading the site with a gistid param, something like
--- https://<base_url>/#/marlowe?gistid=<gist_id>
--- But it's not loading the gist correctly. For now I'm leaving it as it is, but we should rethink
--- this functionality in the redesign.
---
--- A separate issue is that the gistid is loaded in the state instead of passing it as a parameter
--- to the LoadGist action
--- https://github.com/input-output-hk/plutus/pull/2498#discussion_r533478042
-handleGistAction LoadGist = do
-  res <-
-    runExceptT
-      $ do
-          eGistId <- ExceptT $ note "Gist Id not set." <$> use _gistId
-          assign _loadGistResult $ Right Loading
-          aGist <- lift $ lift $ Server.getApiGistsByGistId eGistId
-          assign _loadGistResult $ Right $ fromEither aGist
-          gist <-
-            ExceptT
-              $ pure
-              $ toEither (Left "Gist not loaded.")
-              $ lmap printAjaxError
-              $ fromEither aGist
-          lift $ loadGist (gist ^. gistId) Nothing
-          pure aGist
-  assign _loadGistResult $ map fromEither res
-  where
-  toEither :: forall e a. Either e a -> RemoteData e a -> Either e a
-  toEither _ (Success a) = Right a
-
-  toEither _ (Failure e) = Left e
-
-  toEither x Loading = x
-
-  toEither x NotAsked = x
+-- | FIXME: paluh
+-- -- TODO: This action is only called when loading the site with a gistid param, something like
+-- -- https://<base_url>/#/marlowe?gistid=<gist_id>
+-- -- But it's not loading the gist correctly. For now I'm leaving it as it is, but we should rethink
+-- -- this functionality in the redesign.
+-- --
+-- -- A separate issue is that the gistid is loaded in the state instead of passing it as a parameter
+-- -- to the LoadGist action
+-- -- https://github.com/input-output-hk/plutus/pull/2498#discussion_r533478042
+-- handleGistAction LoadGist = do
+--   res <-
+--     runExceptT
+--       $ do
+--           eGistId <- ExceptT $ note "Gist Id not set." <$> use _gistId
+--           assign _loadGistResult $ Right Loading
+--           aGist <- lift $ lift $ Server.getApiGistsByGistId eGistId
+--           assign _loadGistResult $ Right $ fromEither aGist
+--           gist <-
+--             ExceptT
+--               $ pure
+--               $ toEither (Left "Gist not loaded.")
+--               $ lmap printAjaxError
+--               $ fromEither aGist
+--           lift $ loadGist (gist ^. gistId) Nothing
+--           pure aGist
+--   assign _loadGistResult $ map fromEither res
+--   where
+--   toEither :: forall e a. Either e a -> RemoteData e a -> Either e a
+--   toEither _ (Success a) = Right a
+-- 
+--   toEither _ (Failure e) = Left e
+-- 
+--   toEither x Loading = x
+-- 
+--   toEither x NotAsked = x
 
 -- other gist actions are irrelevant here
 handleGistAction _ = pure unit
@@ -954,6 +1009,7 @@ loadGist id possibleWorkflow = do
 --   toProjects $ Projects.handleAction action
 --   selectView $ workflowView lang
 
+-- FIXME: paluh
 ------------------------------------------------------------
 -- Handles the actions fired by the Confirm Unsaved Navigation modal
 handleConfirmUnsavedNavigationAction
@@ -969,19 +1025,24 @@ handleConfirmUnsavedNavigationAction intendedAction modalAction = do
     ConfirmUnsavedNavigation.DontSaveProject ->
       handleActionWithoutNavigationGuard intendedAction
     ConfirmUnsavedNavigation.SaveProject -> do
-      state <- H.get
-      -- TODO: This was taken from the view, from the gistModal helper. I think we should
-      -- refactor into a `Save (Maybe Action)` action. The handler for that should do
-      -- this check and call the next action as a continuation
-      if
-        has (_authStatus <<< _Success <<< _Just)
-          state then do
-        fullHandleAction $ GistAction PublishOrUpdateGist
-        fullHandleAction intendedAction
-      else
-        fullHandleAction $ OpenModal $ GithubLogin $
-          ConfirmUnsavedNavigationAction intendedAction modalAction
+      maybeProject <- use _project
+      case maybeProject of
+        Just action -> fullHandleAction SaveProject
+        Nothing -> pure unit
 
+-- -- TODO: This was taken from the view, from the gistModal helper. I think we should
+-- -- refactor into a `Save (Maybe Action)` action. The handler for that should do
+-- -- this check and call the next action as a continuation
+-- if
+--   has (_authStatus <<< _Success <<< _Just)
+--     state then do
+--   saveProject 
+--   fullHandleAction intendedAction
+-- else
+--   fullHandleAction $ OpenModal $ GithubLogin $
+--     ConfirmUnsavedNavigationAction intendedAction modalAction
+
+-- | FIXME: paluh - this should be debounced on the monaco level
 setUnsavedChangesForLanguage
   :: forall m
    . Workflow
@@ -989,8 +1050,8 @@ setUnsavedChangesForLanguage
   -> HalogenM State Action ChildSlots Void m Unit
 setUnsavedChangesForLanguage workflow value = do
   currWorkflow <- peruse _workflow
-  when (currWorkflow == Just workflow)
-    $ assign _hasUnsavedChanges value
+  when (currWorkflow == Just workflow) $
+    assign _hasUnsavedChanges value
 
 -- This is a HOF intented to be used on top of handleAction. It prevents the user from accidentally doing an Action that
 -- would result in losing the progress.
@@ -1051,12 +1112,12 @@ withSessionStorage
 withSessionStorage handleAction' action = do
   -- We use bundles here becase OMap has no Eq instance yet and so
   -- `Project` has no `Eq` instance as well.
-  preBundle <- use _project <#> bindFlipped Project.toBundle
+  preVersion <- peruse (_project <<< _Just <<< _version)
   handleAction' action
-  postBundle <- use _project <#> bindFlipped Project.toBundle
-  when (preBundle /= postBundle) do
-    case postBundle of
-      Just bundle -> do
-        liftEffect $ SessionStorage.setItem StaticData.sessionStorageKey $
-          encodeStringifyJson bundle
-      Nothing -> pure unit
+  postVersion <- peruse (_project <<< _Just <<< _version)
+  when (preVersion /= postVersion) do
+    project <- use _project
+    let
+      snapshot = Project.toSnapshot <$> project
+    liftEffect $ SessionStorage.setItem StaticData.sessionStorageKey $
+      encodeStringifyJson snapshot

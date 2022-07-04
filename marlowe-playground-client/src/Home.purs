@@ -3,6 +3,7 @@ module Home where
 import Prologue hiding (div)
 
 import Component.NewProject.Types as NewProject
+import Component.Projects as Projects
 import Halogen (ComponentHTML)
 import Halogen.Classes
   ( arrowLeftDown
@@ -35,7 +36,7 @@ render _ =
                 ( secondaryButton <>
                     [ "mr-small", "w-56", "text-base", "cursor-pointer" ]
                 )
-            , onClick $ const $ OpenModal OpenProject
+            , onClick $ const $ OpenModal (ModalComponent Projects.open)
             ]
             [ text "Open existing project" ]
         , button

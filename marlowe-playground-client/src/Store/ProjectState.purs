@@ -7,7 +7,6 @@ import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(..))
 import Data.Variant (Variant)
 import Data.Variant as Variant
-import Debug (traceM)
 import Prim.Row as Row
 import Project (Project, ProjectName, SourceCode)
 import Project as Project

@@ -1,4 +1,26 @@
-module Project.Types where
+module Project.Types
+  ( Bundle(..)
+  , BundleRecord(..)
+  , FileContent(..)
+  , FileName(..)
+  , Files(..)
+  , SourceCode(..)
+  , ProjectName(..)
+  , ProjectBase
+  , Language(..)
+  , Workflow(..)
+  , Project
+  , StorageLocation(..)
+  , ProjectRecord
+  , Version(..)
+  , Snapshot(..)
+  , projectNameToString
+  , projectNameFromString
+  , unsafeProject
+  , unBundle
+  , unProject
+  , workflowLanguage
+  ) where
 
 import Prelude
 
@@ -15,6 +37,8 @@ import Data.Map (Map)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
+import Data.String.NonEmpty (NonEmptyString)
+import Data.String.NonEmpty as NonEmptyString
 import Gists.Extra (GistId)
 import Marlowe.Extended (Contract) as Marlowe.Extended
 import Marlowe.Extended.Metadata (MetaData) as Marlowe.Extended
@@ -31,7 +55,7 @@ instance DecodeJson SourceCode where
 instance EncodeJson SourceCode where
   encodeJson = genericEncodeJson
 
-newtype ProjectName = ProjectName String
+newtype ProjectName = ProjectName NonEmptyString
 
 derive instance Newtype ProjectName _
 derive instance Generic ProjectName _
@@ -60,23 +84,31 @@ instance DecodeJson Language where
 instance EncodeJson Language where
   encodeJson = genericEncodeJson
 
-data ProjectStorage
-  = LocalFile
-  | GistProject GistId
+-- | We can have unknown `GistId`
+-- | when we attempted to save to github
+-- | but this action failed.
+data StorageLocation
+  = LocalFileSystem
+  | GistPlatform (Maybe GistId)
 
-derive instance Eq ProjectStorage
-derive instance Ord ProjectStorage
+derive instance Eq StorageLocation
+derive instance Ord StorageLocation
 
-type BundleBase r =
+type ProjectBase r =
   { code :: SourceCode
+  , language :: Language
   , metadata :: Marlowe.Extended.MetaData
   | r
   }
 
+type BundleRecord = ProjectBase (projectName :: ProjectName)
+
 -- | `Bundle` is UI agnostic and represents a set of data which we save
 -- | to preserve playground project.
-newtype Bundle = Bundle
-  (BundleBase (language :: Language, projectName :: ProjectName))
+newtype Bundle = Bundle BundleRecord
+
+unBundle :: Bundle -> BundleRecord
+unBundle (Bundle r) = r
 
 derive instance Eq Bundle
 derive instance Generic Bundle _
@@ -86,23 +118,56 @@ instance DecodeJson Bundle where
 instance EncodeJson Bundle where
   encodeJson = genericEncodeJson
 
-type ProjectBase r = BundleBase
-  ( storage :: Maybe ProjectStorage
+newtype Version = Version Int
+
+derive instance Generic Version _
+derive instance Newtype Version _
+derive instance Eq Version
+derive instance Ord Version
+
+instance DecodeJson Version where
+  decodeJson = genericDecodeJson
+
+instance EncodeJson Version where
+  encodeJson = genericEncodeJson
+
+type ProjectRecord = ProjectBase
+  ( storage :: Maybe StorageLocation
   , contract :: Maybe Marlowe.Extended.Contract
   , metadataHints :: MetadataHintInfo
   , projectName :: Maybe ProjectName
-  | r
+  , workflow :: Workflow
+  , version :: Version
   )
 
--- | `Project` is used to keep the current project state in the
--- | playground.
-data Project
-  = MarloweProject (ProjectBase (blocklyWorkflow :: Boolean))
-  | HaskellProject (ProjectBase ())
-  | JavascriptProject (ProjectBase ())
+-- | `Project` is used to keep the current project state in the app.
+-- | Internal invariants are guarded through smart constructor
+-- | but we expose `unsafeProject` constructor so it is easier
+-- | to modularize internal representation
+newtype Project = Project ProjectRecord
+
+unProject :: Project -> ProjectRecord
+unProject (Project r) = r
+
+unsafeProject :: ProjectRecord -> Project
+unsafeProject = Project
 
 -- `OSet` is missing Eq instance so we are not able to provide one here.
 -- derive instance Eq Project
+
+-- | Used to do auto saving of the environment
+-- | Version is copied so we can quickly detect
+-- | if anything has changed.
+newtype Snapshot = Snapshot
+  (ProjectBase (projectName :: Maybe ProjectName, version :: Version))
+
+derive instance Eq Snapshot
+derive instance Generic Snapshot _
+instance DecodeJson Snapshot where
+  decodeJson = genericDecodeJson
+
+instance EncodeJson Snapshot where
+  encodeJson = genericEncodeJson
 
 newtype FileContent = FileContent String
 
@@ -156,4 +221,10 @@ workflowLanguage HaskellWorkflow = Haskell
 workflowLanguage BlocklyWorkflow = Marlowe
 workflowLanguage JavascriptWorkflow = Javascript
 workflowLanguage MarloweWorkflow = Marlowe
+
+projectNameToString :: ProjectName -> String
+projectNameToString (ProjectName n) = NonEmptyString.toString n
+
+projectNameFromString :: String -> Maybe ProjectName
+projectNameFromString = map ProjectName <<< NonEmptyString.fromString
 

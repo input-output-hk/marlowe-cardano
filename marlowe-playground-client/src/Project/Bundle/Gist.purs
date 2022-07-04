@@ -15,20 +15,44 @@ import Gist
   , gistFileContent
   , gistFiles
   )
+import Gists.Extra (GistId)
+import Marlowe (Api)
+import Marlowe as Server
 import Project.Bundle as Bundle
-import Project.Types (Bundle, FileContent(..), FileName(..), Files(..))
+import Project.Types
+  ( Bundle
+  , FileContent(..)
+  , FileName(..)
+  , Files(..)
+  , projectNameToString
+  , unBundle
+  )
+import Servant.PureScript (class MonadAjax)
+import Types (JsonAjaxError)
 
-newtype Description = Description String
+submit
+  :: forall m. MonadAjax Api m => GistPayload -> m (Either JsonAjaxError Gist)
+submit (GistPayload { gistId: maybeGistId, payload }) = case maybeGistId of
+  Nothing -> Server.postApiGists payload
+  Just gistId -> Server.postApiGistsByGistId payload gistId
 
-toNewGist :: Bundle -> Description -> NewGist
-toNewGist projectState (Description description) =
-  NewGist
-    { _newGistDescription: description
-    , _newGistPublic: true
-    , _newGistFiles
-    }
+-- `NewGist` is a really missleading type name.
+-- It is just payload for new and already existing gist.
+newtype GistPayload = GistPayload
+  { payload :: NewGist
+  , gistId :: Maybe GistId
+  }
+
+toGistPayload :: Bundle -> Maybe GistId -> GistPayload
+toGistPayload projectBundle gistId = GistPayload
+  { payload
+  , gistId
+  }
   where
-  Files projectFiles = Bundle.toFiles projectState
+  projectName = projectNameToString <<< _.projectName <<< unBundle $
+    projectBundle
+
+  Files projectFiles = Bundle.toFiles projectBundle
 
   _newGistFiles =
     A.fromFoldable
@@ -37,6 +61,12 @@ toNewGist projectState (Description description) =
 
   fromFile (FileName name) (FileContent content) = NewGistFile
     { _newGistFilename: name, _newGistFileContent: content }
+
+  payload = NewGist
+    { _newGistDescription: projectName
+    , _newGistPublic: true
+    , _newGistFiles
+    }
 
 fromGist :: Gist -> Maybe Bundle
 fromGist gist = Bundle.fromFiles $ Files $ do
