@@ -37,7 +37,7 @@ import StaticAnalysis.Types
   , AnalysisState
   , ContractPath
   , ContractPathStep
-  , ContractZipper(..)
+  , ContractZipper
   , MultiStageAnalysisData(..)
   , MultiStageAnalysisProblemDef
   , PrefixMap
@@ -78,16 +78,7 @@ expandSubproblem z _ = zipperToContractPath z /\ closeZipperContract z
   (Assert FalseObs Close)
 
 isValidSubproblem :: ContractZipper -> Contract -> Boolean
-isValidSubproblem (IfTrueZip _ _ _) c
-  | c /= Close = true
-
-isValidSubproblem (IfFalseZip _ _ _) c
-  | c /= Close = true
-
-isValidSubproblem (WhenCaseZip _ _ _ _ _ _) c
-  | c /= Close = true
-
-isValidSubproblem _ _ = false
+isValidSubproblem _ _ = true
 
 reachabilityAnalysisDef :: MultiStageAnalysisProblemDef
 reachabilityAnalysisDef =
