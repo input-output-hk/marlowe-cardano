@@ -827,7 +827,8 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
     autoExecuteContract reqId params typedValidator party marloweData = do
         time <- currentTime
         let timeRange = (time, time + defaultTxValidationRange)
-        let action = getAction timeRange party marloweData
+        let (warnings, action) = getAction timeRange party marloweData
+        forM_ warnings $ \w -> logWarn $ "Warning: " <> show w
         case action of
             PayDeposit acc p token amount -> do
                 logInfo $ "PayDeposit " <> show amount <> " at within time " <> show timeRange
@@ -959,11 +960,11 @@ shelleyAddressToKeys (AddressInEra _ (Shelley.ShelleyAddress _ paymentCredential
             pure (ppkh,  Just . StakePubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes stakeHash)
 shelleyAddressToKeys _ = throwError $ OtherContractError $ Contract.OtherContractError "Byron Addresses not supported"
 
-getAction :: MarloweTimeRange -> Party -> MarloweData -> PartyAction
+getAction :: MarloweTimeRange -> Party -> MarloweData -> ([TransactionWarning], PartyAction)
 getAction timeRange party MarloweData{marloweContract,marloweState} = let
     env = Environment timeRange
     in case reduceContractUntilQuiescent env marloweState marloweContract of
-        ContractQuiescent _reduced _warnings _payments state contract ->
+        ContractQuiescent _reduced warnings _payments state contract -> (convertReduceWarnings warnings,
             -- here the contract is either When or Close
             case contract of
                 When [Case (Deposit acc depositParty tok value) _] _ _
@@ -976,6 +977,7 @@ getAction timeRange party MarloweData{marloweContract,marloweState} = let
                 When [] timeout _ -> WaitForTimeout timeout
                 Close -> CloseContract
                 _ -> NotSure
+          )
         -- When timeout is in the time range
         RRAmbiguousTimeIntervalError ->
             {- FIXME
@@ -991,7 +993,7 @@ getAction timeRange party MarloweData{marloweContract,marloweState} = let
                 Then we'd rather wait until time 100 instead and would make the Deposit.
                 I propose to modify RRAmbiguousTimeIntervalError to include the expected timeout.
              -}
-            WaitForTimeout (snd timeRange)
+            ([], WaitForTimeout (snd timeRange))
 
 
 
