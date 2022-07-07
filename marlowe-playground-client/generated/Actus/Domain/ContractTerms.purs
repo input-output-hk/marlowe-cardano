@@ -637,6 +637,8 @@ newtype ContractTerms a = ContractTerms
   , terminationDate :: Maybe String
   , priceAtTerminationDate :: Maybe a
   , quantity :: Maybe a
+  , currency :: Maybe String
+  , currency2 :: Maybe String
   , scalingIndexAtStatusDate :: Maybe a
   , cycleAnchorDateOfScalingIndex :: Maybe String
   , cycleOfScalingIndex :: Maybe Cycle
@@ -721,6 +723,8 @@ instance (EncodeJson a) => EncodeJson (ContractTerms a) where
         , terminationDate: (E.maybe E.value) :: _ (Maybe String)
         , priceAtTerminationDate: (E.maybe E.value) :: _ (Maybe a)
         , quantity: (E.maybe E.value) :: _ (Maybe a)
+        , currency: (E.maybe E.value) :: _ (Maybe String)
+        , currency2: (E.maybe E.value) :: _ (Maybe String)
         , scalingIndexAtStatusDate: (E.maybe E.value) :: _ (Maybe a)
         , cycleAnchorDateOfScalingIndex: (E.maybe E.value) :: _ (Maybe String)
         , cycleOfScalingIndex: (E.maybe E.value) :: _ (Maybe Cycle)
@@ -806,6 +810,8 @@ instance (DecodeJson a) => DecodeJson (ContractTerms a) where
         , terminationDate: (D.maybe D.value) :: _ (Maybe String)
         , priceAtTerminationDate: (D.maybe D.value) :: _ (Maybe a)
         , quantity: (D.maybe D.value) :: _ (Maybe a)
+        , currency: (D.maybe D.value) :: _ (Maybe String)
+        , currency2: (D.maybe D.value) :: _ (Maybe String)
         , scalingIndexAtStatusDate: (D.maybe D.value) :: _ (Maybe a)
         , cycleAnchorDateOfScalingIndex: (D.maybe D.value) :: _ (Maybe String)
         , cycleOfScalingIndex: (D.maybe D.value) :: _ (Maybe Cycle)
@@ -894,6 +900,8 @@ _ContractTerms
        , terminationDate :: Maybe String
        , priceAtTerminationDate :: Maybe a
        , quantity :: Maybe a
+       , currency :: Maybe String
+       , currency2 :: Maybe String
        , scalingIndexAtStatusDate :: Maybe a
        , cycleAnchorDateOfScalingIndex :: Maybe String
        , cycleOfScalingIndex :: Maybe Cycle

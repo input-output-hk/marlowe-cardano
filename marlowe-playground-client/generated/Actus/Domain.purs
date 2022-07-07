@@ -33,7 +33,7 @@ newtype CashFlow a = CashFlow
   , cashEvent :: EventType
   , amount :: a
   , notional :: a
-  , currency :: String
+  , cashCurrency :: String
   }
 
 instance (EncodeJson a) => EncodeJson (CashFlow a) where
@@ -48,7 +48,7 @@ instance (EncodeJson a) => EncodeJson (CashFlow a) where
         , cashEvent: E.value :: _ EventType
         , amount: E.value :: _ a
         , notional: E.value :: _ a
-        , currency: E.value :: _ String
+        , cashCurrency: E.value :: _ String
         }
     )
 
@@ -64,7 +64,7 @@ instance (DecodeJson a) => DecodeJson (CashFlow a) where
         , cashEvent: D.value :: _ EventType
         , amount: D.value :: _ a
         , notional: D.value :: _ a
-        , currency: D.value :: _ String
+        , cashCurrency: D.value :: _ String
         }
     )
 
@@ -86,6 +86,6 @@ _CashFlow
        , cashEvent :: EventType
        , amount :: a
        , notional :: a
-       , currency :: String
+       , cashCurrency :: String
        }
 _CashFlow = _Newtype
