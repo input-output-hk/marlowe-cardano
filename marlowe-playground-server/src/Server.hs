@@ -61,7 +61,7 @@ genActusContract terms =
         Validation.Success c -> pure . show . pretty $ c
 
 genActusCashflows :: ContractTerms Double -> Handler [CashFlow Double]
-genActusCashflows terms = pure $ genProjectedCashflows defaultRiskFactors terms
+genActusCashflows terms = pure $ genProjectedCashflows defaultRiskFactors terms []
 
 defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactors a
 defaultRiskFactors _ _ =
