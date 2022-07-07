@@ -8,9 +8,9 @@ module Actus.Model.StateTransition
   )
 where
 
-import Actus.Domain (ActusNum (..), ActusOps (..), CT (..), ContractState (..), ContractTerms (..), EventType (..),
-                     FEB (..), IPCB (..), OPTP (..), RiskFactors (..), RoleSignOps (..), SCEF (..),
-                     YearFractionOps (..))
+import Actus.Domain (ActusNum (..), ActusOps (..), CEGE (..), CT (..), ContractState (..), ContractTerms (..),
+                     EventType (..), FEB (..), IPCB (..), OPTP (..), RiskFactors (..), RoleSignOps (..), SCEF (..),
+                     ShiftedDay (..), YearFractionOps (..))
 import Actus.Utility (annuity, inf, sup)
 import Control.Monad.Reader (Reader, reader)
 import Data.Maybe (fromMaybe, maybeToList)
@@ -21,19 +21,20 @@ import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 -- schedules and the maturity of the contract. Furthermore a function to retrieve
 -- risk factors is available.
 data CtxSTF a = CtxSTF
-  { contractTerms :: ContractTerms a                         -- ^ Contract terms
-  , fpSchedule    :: [LocalTime]                                 -- ^ Fee payment schedule
-  , prSchedule    :: [LocalTime]                                 -- ^ Principal redemption schedule
-  , ipSchedule    :: [LocalTime]                                 -- ^ Interest payment schedule
-  , maturity      :: Maybe LocalTime                             -- ^ Maturity
-  , riskFactors   :: EventType -> LocalTime -> RiskFactors a -- ^ Riskfactors per event and time
+  { contractTerms   :: ContractTerms a                              -- ^ Contract terms
+  , fpSchedule      :: [LocalTime]                                  -- ^ Fee payment schedule
+  , prSchedule      :: [LocalTime]                                  -- ^ Principal redemption schedule
+  , ipSchedule      :: [LocalTime]                                  -- ^ Interest payment schedule
+  , maturity        :: Maybe LocalTime                              -- ^ Maturity
+  , riskFactors     :: EventType -> LocalTime -> RiskFactors a      -- ^ Riskfactors per event and time
+  , referenceStates :: [[(EventType, ShiftedDay, ContractState a)]] -- ^ Cash flows from underlying contracts
   }
 
 -- |A state transition updates the contract state based on the type of event and the time.
 -- `CtxSTF` provides in particular the contract terms and risk factors.
 stateTransition :: (RoleSignOps a, YearFractionOps a) =>
-     EventType                               -- ^ Event type
-  -> LocalTime                               -- ^ Time
+     EventType                           -- ^ Event type
+  -> LocalTime                           -- ^ Time
   -> ContractState a                     -- ^ Contract state
   -> Reader (CtxSTF a) (ContractState a) -- ^ Updated contract state
 stateTransition ev t sn = reader stateTransition'
@@ -1021,6 +1022,50 @@ stateTransition ev t sn = reader stateTransition'
                 sd = t
               }
         -- STF_XD_CEG
+        stf
+          XD
+          RiskFactors
+            {
+            }
+          ContractTerms
+            { contractType = CEG,
+              coverageOfCreditEnhancement = Just cecv,
+              guaranteedExposure = Just CEGE_NO,
+              contractRole
+            }
+          st@ContractState
+            {
+            } = let nt' = cecv * _r contractRole * (foldl (+) _zero $ map f referenceStates)
+                    f cs = let (_,_,c) = last $ takeWhile (\(_,d,_) -> calculationDay d <= t) cs
+                            in nt c
+                 in
+              st
+                { xa = Just nt',
+                  nt = nt',
+                  sd = t
+                }
+        stf
+          XD
+          RiskFactors
+            {
+            }
+          ContractTerms
+            { contractType = CEG,
+              coverageOfCreditEnhancement = Just cecv,
+              guaranteedExposure = Just CEGE_NI,
+              contractRole
+            }
+          st@ContractState
+            {
+            } = let nt' = cecv * _r contractRole * (foldl (+) _zero $ map f referenceStates)
+                    f cs = let (_,_,c) = last $ takeWhile (\(_,d,_) -> calculationDay d <= t) cs
+                            in nt c + ipac c
+                 in
+              st
+                { xa = Just nt',
+                  nt = nt',
+                  sd = t
+                }
         stf
           XD
           RiskFactors

@@ -57,7 +57,7 @@ data CashFlow a = CashFlow
     cashEvent          :: EventType,
     amount             :: a,
     notional           :: a,
-    currency           :: String
+    cashCurrency       :: String
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)

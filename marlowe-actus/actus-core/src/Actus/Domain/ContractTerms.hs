@@ -433,6 +433,8 @@ data ContractTerms a = ContractTerms
   , terminationDate                          :: Maybe LocalTime  -- ^ Termination Date
   , priceAtTerminationDate                   :: Maybe a          -- ^ Price At Termination Date
   , quantity                                 :: Maybe a          -- ^ Quantity
+  , currency                                 :: Maybe String     -- ^ The currency of the cash flows
+  , currency2                                :: Maybe String     -- ^ The currency of the cash flows of the second leg
 
   -- Scaling Index
   , scalingIndexAtStatusDate                 :: Maybe a          -- ^ Scaling Index At Status Date
@@ -507,9 +509,9 @@ instance FromJSON (ContractTerms Double) where
       <*> v .:? "dayCountConvention"
       <*> (v .: "scheduleConfig"
            <|> ScheduleConfig
-               <$> v .:? "calendar"
-               <*> v .:? "endOfMonthConvention"
-               <*> v .:? "businessDayConvention"
+               <$> (v .: "calendar" <|> return (Just CLDR_NC))
+               <*> (v .: "endOfMonthConvention" <|> return (Just EOMC_SD))
+               <*> (v .: "businessDayConvention" <|> return (Just BDC_NULL))
            )
       <*> v .:  "statusDate"
       <*> v .:? "contractPerformance"
@@ -545,6 +547,8 @@ instance FromJSON (ContractTerms Double) where
       <*> v .:? "terminationDate"
       <*> v .!? "priceAtTerminationDate"
       <*> v .!? "quantity"
+      <*> v .!? "currency"
+      <*> v .!? "currency2"
       <*> v .:? "scalingIndexAtStatusDate"
       <*> v .:? "cycleAnchorDateOfScalingIndex"
       <*> v .:? "cycleOfScalingIndex"

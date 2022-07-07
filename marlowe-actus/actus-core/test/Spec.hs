@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module Main (main) where
 
 import Spec.TestFramework (testCasesFromFile, tests)
@@ -35,14 +33,18 @@ main = do
   swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
   cegTests <-
     testCasesFromFile
-      [ "guarantee09",
-        "guarantee10",
+      [ "guarantee10",
         "guarantee11",
         "guarantee12",
         "guarantee13",
         "guarantee14"
       ]
       $ p ++ "actus-tests-ceg.json"
+  {-
+  cecTests <-
+    testCasesFromFile
+      [ ] $ p ++ "actus-tests-cec.json"
+  -}
 
   defaultMain $
     testGroup
@@ -61,5 +63,6 @@ main = do
             tests "CLM" clmTests,
             tests "SWPPV" swppvTests,
             tests "CEG" cegTests
+            -- tests "CEC" cecTests
           ]
       ]

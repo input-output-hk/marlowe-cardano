@@ -17,18 +17,14 @@ module Spec.TestFramework
 
 import Actus.Core
 import Actus.Domain hiding (Assertion)
-import Actus.Model (CtxPOF (CtxPOF), CtxSTF (..), initializeState, maturity, schedule)
 import Actus.Utility (applyBDCWithCfg)
 import Control.Applicative ((<|>))
 import Control.Monad (join, mzero)
-import Control.Monad.Reader (Reader, ask, runReader, withReader)
 import Data.Aeson
 import Data.ByteString.Lazy as B (readFile)
 import Data.Char (toUpper)
-import Data.List as L (find, unzip4)
+import Data.List as L (find)
 import Data.Map as Map (Map, elems, lookup)
-import Data.Maybe (fromMaybe)
-import Data.Sort (sortOn)
 import Data.Time (LocalTime (..))
 import Debug.Pretty.Simple
 import GHC.Generics (Generic)
@@ -46,69 +42,137 @@ tests n t =
   testGroup
     n
     [testCase (getField @"identifier" tc) (runTest tc {terms = setDefaultContractTermValues (terms tc)}) | tc <- t]
+
+runTest :: TestCase -> Assertion
+runTest tc@TestCase {..} =
+  let unscheduleEvents = join $ map (unSchedEv terms) eventsObserved
+      cashFlows = genProjectedCashflows riskFactors terms unscheduleEvents
+      latestCashFlow = cashPaymentDay
+                        <$> (find (\cf -> cashEvent cf == STD) cashFlows
+                        <|> find (\cf -> cashEvent cf == MD) cashFlows)
+      cashFlowsTo =
+        maybe
+          cashFlows
+          (\d -> filter ((<= d) . cashPaymentDay) cashFlows)
+          (min <$> latestCashFlow <*> to <|> latestCashFlow <|> to)
+   in assertTestResults cashFlowsTo results
   where
-    runTest :: TestCase -> Assertion
-    runTest tc@TestCase {..} =
-      let riskFactors ev date =
-            let rf =
-                  RiskFactors
-                    { o_rf_CURS = 1.0,
-                      o_rf_RRMO = 1.0,
-                      o_rf_SCMO = 1.0,
-                      pp_payoff = 0.0,
-                      xd_payoff = 0.0,
-                      dv_payoff = 0.0
-                    }
+    riskFactors ev date =
+      case getValue tc ev date of
+        Just v -> case ev of
+          RR -> defaultRiskFactors {o_rf_RRMO = v}
+          SC -> defaultRiskFactors {o_rf_SCMO = v}
+          DV -> defaultRiskFactors {dv_payoff = v}
+          XD -> defaultRiskFactors {xd_payoff = v}
+          _  -> defaultRiskFactors {o_rf_CURS = v}
+        Nothing -> defaultRiskFactors
 
-                observedKey RR = marketObjectCodeOfRateReset terms
-                observedKey SC = marketObjectCodeOfScalingIndex terms
-                observedKey DV = Just (fmap toUpper identifier ++ "_DV")
-                observedKey XD = Prelude.head $ map (getMarketObjectCode . reference) (contractStructure terms)
-                observedKey _  = settlementCurrency terms
+getValue :: TestCase -> EventType -> LocalTime -> Maybe Double
+getValue TestCase {..} ev date =
+  do
+    key <- observedKey ev
+    DataObserved {values} <- Map.lookup key dataObserved
+    ValueObserved {value} <-
+      L.find
+        ( \ValueObserved {timestamp} ->
+            let d = applyBDCWithCfg (scheduleConfig terms) timestamp
+             in calculationDay d == date
+        )
+        values
+    return value
+  where
+    observedKey RR = marketObjectCodeOfRateReset terms
+    observedKey SC = marketObjectCodeOfScalingIndex terms
+    observedKey DV = Just (fmap toUpper identifier ++ "_DV")
+    observedKey XD = Prelude.head $ map (getMarketObjectCode . reference) (contractStructure terms)
+    observedKey _  = settlementCurrency terms
 
-                v = fromMaybe 1.0 $ do
-                  k <- observedKey ev
-                  DataObserved {values} <- Map.lookup k dataObserved
-                  ValueObserved {value} <-
-                    L.find
-                      ( \ValueObserved {timestamp} ->
-                          let d = applyBDCWithCfg (scheduleConfig terms) timestamp in calculationDay d == date
-                      )
-                      values
-                  return value
-             in case ev of
-                  RR -> rf {o_rf_RRMO = v}
-                  SC -> rf {o_rf_SCMO = v}
-                  DV -> rf {dv_payoff = v}
-                  XD -> rf {xd_payoff = v}
-                  _  -> rf {o_rf_CURS = v}
+-- |Unscheduled events from test cases
+unSchedEv :: TestContractTerms -> EventObserved -> [(String, EventType, ShiftedDay)]
+unSchedEv
+  ContractTerms
+    { contractType,
+      contractStructure,
+      creditEventTypeCovered = Just CETC_DF,
+      maturityDate = Just mat,
+      scheduleConfig
+    }
+  EventObserved
+    { eventType = CE,
+      contractId = Just cid,
+      time,
+      states = Just PRF_DF
+    }
+    | contractType `elem` [CEG, CEC]
+        && (time <= mat)
+        && Just cid `elem` map (getContractIdentifier . reference) contractStructure =
+      [(cid, XD, applyBDCWithCfg scheduleConfig time), (cid, STD, applyBDCWithCfg scheduleConfig time)]
+unSchedEv
+  ContractTerms
+    { contractType,
+      contractStructure,
+      creditEventTypeCovered = Just CETC_DF,
+      scheduleConfig,
+      maturityDate = Nothing
+    }
+  EventObserved
+    { eventType = CE,
+      contractId = Just cid,
+      time,
+      states = Just PRF_DF
+    }
+    | contractType `elem` [CEG, CEC]
+        && Just cid `elem` map (getContractIdentifier . reference) contractStructure =
+      [(cid, XD, applyBDCWithCfg scheduleConfig time), (cid, STD, applyBDCWithCfg scheduleConfig time)]
+unSchedEv
+  ContractTerms
+    { contractType,
+      contractStructure,
+      creditEventTypeCovered = Just CETC_DF
+    }
+  EventObserved
+    { eventType = CE,
+      contractId,
+      states = Just PRF_DF
+    }
+    | contractType `elem` [CEG, CEC]
+        && contractId `elem` map (getContractIdentifier . reference) contractStructure =
+      []
+unSchedEv
+  ContractTerms
+    { contractType = CSH,
+      contractId
+    }
+  EventObserved
+    { eventType = AD,
+      time
+    } = [(contractId, AD, ShiftedDay time time)]
+unSchedEv _ _ = []
 
-          cashFlows =
-            runReader
-              (run tc)
-              $ CtxSTF
-                terms
-                (calculationDay <$> schedule FP terms)
-                (calculationDay <$> schedule PR terms)
-                (calculationDay <$> schedule IP terms)
-                (maturity terms)
-                riskFactors
+defaultRiskFactors :: RiskFactors Double
+defaultRiskFactors =
+  RiskFactors
+    { o_rf_CURS = 1.0,
+      o_rf_RRMO = 1.0,
+      o_rf_SCMO = 1.0,
+      pp_payoff = 0.0,
+      xd_payoff = 0.0,
+      dv_payoff = 0.0
+    }
 
-       in assertTestResults cashFlows results
+assertTestResults :: [TestCashFlow] -> [TestResult] -> IO ()
+assertTestResults [] []               = return ()
+assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r >> assertTestResults cfs rs
+assertTestResults _ _                 = assertFailure "Sizes differ"
 
-    assertTestResults :: [TestCashFlow] -> [TestResult] -> IO ()
-    assertTestResults [] []               = return ()
-    assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r >> assertTestResults cfs rs
-    assertTestResults _ _                 = assertFailure "Sizes differ"
-
-    assertTestResult :: TestCashFlow -> TestResult -> IO ()
-    assertTestResult cf@CashFlow {..} tr@TestResult {eventDate, eventType, payoff} = do
-      assertEqual cashEvent eventType
-      assertEqual cashPaymentDay eventDate
-      assertEqual (realToFrac amount :: Float) (realToFrac payoff :: Float)
-      where
-        assertEqual a b = assertBool (err a b) $ a == b
-        err a b = pTraceShow (cf, tr) $ printf "Mismatch: actual %s, expected %s" (show a) (show b)
+assertTestResult :: TestCashFlow -> TestResult -> IO ()
+assertTestResult cf@CashFlow {..} tr@TestResult {eventDate, eventType, payoff} = do
+  assertEqual cashEvent eventType
+  assertEqual cashPaymentDay eventDate
+  assertEqual (realToFrac amount :: Float) (realToFrac payoff :: Float)
+  where
+    assertEqual a b = assertBool (err a b) $ a == b
+    err a b = pTraceShow (cf, tr) $ printf "Mismatch: actual %s, expected %s" (show a) (show b)
 
 testCasesFromFile :: [String] -> FilePath -> IO [TestCase]
 testCasesFromFile excluded testfile =
@@ -117,86 +181,12 @@ testCasesFromFile excluded testfile =
       msg
       ( return
           . filter (\TestCase {..} -> notElem identifier excluded)
-          -- . filter (\TestCase {..} -> elem identifier excluded)
           . elems
       )
   where
     load :: FilePath -> IO (Either String (Map String TestCase))
     load f = eitherDecode <$> B.readFile f
     msg err = putStr ("Cannot parse test specification from file: " ++ testfile ++ "\nError: " ++ err) >> return []
-
-run :: TestCase -> Reader (CtxSTF Double) [TestCashFlow]
-run TestCase {..} = do
-  ctx <- ask
-  pof <- genProjectedPayoffs
-
-  -- scheduled events
-  let schedCfs = genCashflow (contractTerms ctx) <$> pof
-  let schedCfsTruncated = maybe schedCfs (\d -> filter ((<= d) . cashCalculationDay) schedCfs) to
-
-  let (_, _, st, _) = unzip4 pof
-
-  -- unscheduled events
-  unschedStates <- join <$> mapM (unscheduledEvents (contractTerms ctx) st) eventsObserved
-  unschedPayoffs <- trans . genPayoffs $ unschedStates
-
-  return $ case unschedPayoffs of
-    [] -> schedCfsTruncated
-    _ ->
-      -- merging together
-      let unschedCfs =
-            genCashflow (contractTerms ctx)
-              <$> zipWith (\(x, y, z) -> (x,y,z,)) unschedStates unschedPayoffs
-          merged = sortOn cashCalculationDay $ schedCfsTruncated ++ unschedCfs
-          mergedTo = maybe merged (\d -> filter ((<= d) . cashCalculationDay) merged) $
-            case map cashCalculationDay (filter f merged) of
-              [] -> Nothing
-              ts -> Just $ minimum ts
-            where
-              f CashFlow {cashEvent = MD}  = True
-              f CashFlow {cashEvent = STD} = True
-              f _                          = False
-       in mergedTo
-  where
-    trans :: Reader (CtxPOF a) b -> Reader (CtxSTF a) b
-    trans = withReader (\ctx -> CtxPOF (contractTerms ctx) (riskFactors ctx))
-
-unscheduledEvents ::
-  TestContractTerms ->
-  [TestContractState] ->
-  EventObserved ->
-  Reader (CtxSTF Double) [(EventType, ShiftedDay, ContractState Double)]
-unscheduledEvents
-  ContractTerms
-    { contractType,
-      contractStructure,
-      creditEventTypeCovered = Just CETC_DF
-    }
-  sts
-  EventObserved
-    { eventType = CE,
-      contractId,
-      time,
-      states = Just PRF_DF
-    }
-    | contractType `elem` [CEG, CEC]
-        && contractId `elem` map (getContractIdentifier . reference) contractStructure =
-      let stn = last $ filter (\st -> sd st < time) sts
-       in genStates
-            [ (XD, ShiftedDay time time),
-              (STD, ShiftedDay time time)
-            ]
-            stn
-unscheduledEvents
-  ContractTerms
-    { contractType = CSH
-    }
-  _
-  EventObserved
-    { eventType = AD,
-      time
-    } = initializeState >>= genStates [(AD, ShiftedDay time time)]
-unscheduledEvents _ _ _ = return []
 
 getMarketObjectCode :: Reference Double -> Maybe String
 getMarketObjectCode (ReferenceId i)    = marketObjectCode i
