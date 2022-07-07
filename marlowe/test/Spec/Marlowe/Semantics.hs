@@ -146,6 +146,7 @@ tests =
           ]
         , testProperty "INotify" checkINotify
         ]
+      , testCase "iClose" checkIsClose
       ]
     ]
 
@@ -742,3 +743,14 @@ checkReduceContractStepAssert =
         Reduced ReduceNoWarning       ReduceNoPayment state' contract' -> passed     && state == state' && contract == contract'
         Reduced ReduceAssertionFailed ReduceNoPayment state' contract' -> not passed && state == state' && contract == contract'
         _                                                              -> False
+
+
+checkIsClose :: Assertion
+checkIsClose =
+  do
+    assertBool "isClose Close = True"  $ isClose Close
+    assertBool "isClose Pay = False"   . not . isClose $ Pay undefined undefined undefined undefined undefined
+    assertBool "isClose If = False"    . not . isClose $ If undefined undefined undefined
+    assertBool "isClose When = False"  . not . isClose $ When undefined undefined undefined
+    assertBool "isClose Let = False"   . not . isClose $ Let undefined undefined undefined
+    assertBool "isClose Asset = False" . not . isClose $ Assert undefined undefined
