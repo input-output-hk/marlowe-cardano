@@ -59,7 +59,7 @@ genContract' ::
   -- | Marlowe contract
   Contract
 genContract' rf ct =
-  let cfs = genProjectedCashflows rf ct
+  let cfs = genProjectedCashflows rf ct []
    in foldl' gen Close $ reverse cfs
   where
     gen :: Contract -> CashFlow (Value Observation) -> Contract
@@ -171,6 +171,8 @@ toMarlowe ct =
       terminationDate = terminationDate ct,
       priceAtTerminationDate = constant <$> priceAtTerminationDate ct,
       quantity = constant <$> quantity ct,
+      currency = currency ct,
+      currency2 = currency2 ct,
       scalingIndexAtStatusDate = constant <$> scalingIndexAtStatusDate ct,
       cycleAnchorDateOfScalingIndex = cycleAnchorDateOfScalingIndex ct,
       cycleOfScalingIndex = cycleOfScalingIndex ct,
