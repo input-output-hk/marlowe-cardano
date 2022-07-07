@@ -11,7 +11,8 @@ module Spec.Marlowe.Semantics (
 import Data.Maybe (fromMaybe, isNothing)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
+import Ledger.Scripts (dataHash)
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
 import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Common (contractGen, observationGen, valueGen)
 import Spec.Marlowe.Util
@@ -146,7 +147,8 @@ tests =
           ]
         , testProperty "INotify" checkINotify
         ]
-      , testCase "iClose" checkIsClose
+      , testProperty "getContinuation" checkGetContinuation
+      , testCase "isClose" checkIsClose
       ]
     ]
 
@@ -743,6 +745,30 @@ checkReduceContractStepAssert =
         Reduced ReduceNoWarning       ReduceNoPayment state' contract' -> passed     && state == state' && contract == contract'
         Reduced ReduceAssertionFailed ReduceNoPayment state' contract' -> not passed && state == state' && contract == contract'
         _                                                              -> False
+
+
+checkGetContinuation :: Property
+checkGetContinuation =
+  property $ do
+    let gen =
+         do
+           sameContract <- arbitrary
+           correctHash <- arbitrary
+           contract <- contractGen
+           contract' <- if sameContract then pure contract else contractGen
+           contract'' <- contractGen
+           let contractHash  = dataHash $ toBuiltinData contract
+               contractHash' = dataHash . toBuiltinData $ if correctHash then contract' else contract''
+           input <- elements [NormalInput undefined, MerkleizedInput undefined contractHash' contract']
+           case' <- elements [Case undefined contract, MerkleizedCase undefined contractHash]
+           pure (input, case', contract, contractHash == contractHash')
+    forAll gen $ \(input, case', contract, hashesMatch) ->
+      case (input, case', getContinuation input case') of
+        (NormalInput{}    , Case{}          , contract') -> Just contract == contract'
+        (MerkleizedInput{}, MerkleizedCase{}, contract') -> (Just contract == contract') == hashesMatch
+        (_                , _               , Nothing  ) -> True
+        _                                                -> False
+
 
 
 checkIsClose :: Assertion
