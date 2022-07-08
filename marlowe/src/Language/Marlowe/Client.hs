@@ -107,7 +107,7 @@ import PlutusTx.Traversable (for)
 
 
 data MarloweClientInput = ClientInput InputContent
-                        | ClientMerkleizedInput InputContent Marlowe.Contract
+                        | ClientMerkleizedInput InputContent (Marlowe.Contract Token)
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON MarloweClientInput where
@@ -118,7 +118,7 @@ instance ToJSON MarloweClientInput where
   toJSON (ClientMerkleizedInput content contract) = toJSON (content, contract)
 
 
-type CreateEndpointSchema = (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract)
+type CreateEndpointSchema = (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract Token)
 type ApplyInputsEndpointSchema = (UUID, MarloweParams, Maybe TimeInterval, [MarloweClientInput])
 type ApplyInputsNonMerkleizedEndpointSchema = (UUID, MarloweParams, Maybe TimeInterval, [InputContent])
 type AutoEndpointSchema = (UUID, MarloweParams, Party, POSIXTime)
@@ -997,7 +997,7 @@ getAction timeRange party MarloweData{marloweContract,marloweState} = let
 
 
 
-canAutoExecuteContractForParty :: Party -> Marlowe.Contract -> Bool
+canAutoExecuteContractForParty :: Party -> Marlowe.Contract Token -> Bool
 canAutoExecuteContractForParty party = check
   where
     check cont =

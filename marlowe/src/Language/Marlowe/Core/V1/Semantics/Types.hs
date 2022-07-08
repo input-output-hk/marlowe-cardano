@@ -13,6 +13,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE UndecidableInstances       #-}
 
 -- Big hammer, but helps
 {-# OPTIONS_GHC -fno-specialise #-}
@@ -202,12 +203,12 @@ getAction (MerkleizedCase action _) = action
     At each step of execution, as well as returning a new state and continuation contract,
     it is possible that effects – payments – and warnings can be generated too.
 -}
-data Contract = Close
-              | Pay AccountId Payee Token (Value Observation) Contract
-              | If Observation Contract Contract
-              | When [Case Contract] Timeout Contract
-              | Let ValueId (Value Observation) Contract
-              | Assert Observation Contract
+data Contract t = Close
+                | Pay AccountId Payee t (Value Observation) (Contract t)
+                | If Observation (Contract t) (Contract t)
+                | When [Case (Contract t)] Timeout (Contract t)
+                | Let ValueId (Value Observation) (Contract t)
+                | Assert Observation (Contract t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -258,7 +259,7 @@ instance ToJSON InputContent where
   toJSON INotify = JSON.String $ pack "input_notify"
 
 data Input = NormalInput InputContent
-           | MerkleizedInput InputContent BuiltinByteString Contract
+           | MerkleizedInput InputContent BuiltinByteString (Contract Token)
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
@@ -564,7 +565,7 @@ instance ToJSON a => ToJSON (Case a) where
       ]
 
 
-instance FromJSON Contract where
+instance FromJSON t => FromJSON (Contract t) where
   parseJSON (String "close") = return Close
   parseJSON (Object v) =
         (Pay <$> (v .: "from_account")
@@ -588,7 +589,7 @@ instance FromJSON Contract where
                 <*> (v .: "then"))
   parseJSON _ = Haskell.fail "Contract must be either an object or a the string \"close\""
 
-instance ToJSON Contract where
+instance ToJSON t => ToJSON (Contract t) where
   toJSON Close = JSON.String $ pack "close"
   toJSON (Pay accountId payee token value contract) = object
       [ "from_account" .= accountId
@@ -697,7 +698,7 @@ instance Eq a => Eq (Case a) where
     MerkleizedCase acl bsl == MerkleizedCase acr bsr = acl == acr && bsl == bsr
     _ == _                                           = False
 
-instance Eq Contract where
+instance Eq t => Eq (Contract t) where
     {-# INLINABLE (==) #-}
     Close == Close = True
     Pay acc1 payee1 tok1 value1 cont1 == Pay acc2 payee2 tok2 value2 cont2 =

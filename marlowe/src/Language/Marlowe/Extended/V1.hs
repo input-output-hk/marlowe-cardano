@@ -125,7 +125,7 @@ data Contract = Close
 class ToCore a b where
   toCore :: a -> Maybe b
 
-instance ToCore Contract S.Contract where
+instance ToCore Contract (S.Contract S.Token) where
   toCore Close = Just S.Close
   toCore (Pay accId payee tok val cont) = pure (S.Pay accId) <*> toCore payee <*> pure tok <*> toCore val <*> toCore cont
   toCore (If obs cont1 cont2) = S.If <$> toCore obs <*> toCore cont1 <*> toCore cont2
@@ -174,7 +174,7 @@ instance ToCore Payee S.Payee where
   toCore (Account accId)  = Just $ S.Account accId
   toCore (Party roleName) = Just $ S.Party roleName
 
-instance ToCore Case (S.Case S.Contract) where
+instance ToCore Case (S.Case (S.Contract S.Token)) where
   toCore (Case act c) = S.Case <$> toCore act <*> toCore c
 
 instance FromJSON Value where

@@ -267,18 +267,18 @@ shrinkAction action = case action of
     Notify obs -> [Notify x | x <- shrinkObservation obs]
 
 
-caseRelGenSized :: Int -> Integer -> Gen (Case Contract)
+caseRelGenSized :: Int -> Integer -> Gen (Case (Contract Token))
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
                                  , (1, merkleizedCase <$> actionGenSized s <*> contractRelGenSized s bn)
                                  ]
 
-shrinkCase :: Case Contract -> [Case Contract]
+shrinkCase :: Case (Contract Token) -> [Case (Contract Token)]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
 shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]
 
 
-contractRelGenSized :: Int -> Integer -> Gen Contract
+contractRelGenSized :: Int -> Integer -> Gen (Contract Token)
 contractRelGenSized s bn
   | s > 0 = oneof [ return Close
                   , Pay <$> partyGen <*> payeeGen <*> tokenGen
@@ -301,15 +301,15 @@ contractRelGenSized s bn
   | otherwise = return Close
 
 
-contractGenSized :: Int -> Gen Contract
+contractGenSized :: Int -> Gen (Contract Token)
 contractGenSized s = do iniBn <- simpleIntegerGen
                         contractRelGenSized s iniBn
 
-contractGen :: Gen Contract
+contractGen :: Gen (Contract Token)
 contractGen = sized contractGenSized
 
 
-shrinkContract :: Contract -> [Contract]
+shrinkContract :: Contract Token -> [Contract Token]
 shrinkContract cont = case cont of
     Close -> []
     Let vid val cont -> Close : cont : ([Let vid v cont | v <- shrinkValue val]
@@ -336,7 +336,7 @@ shrinkContract cont = case cont of
               ++ [Assert obs y | y <- shrinkContract cont])
 
 
-pangramContract :: Contract
+pangramContract :: Contract Token
 pangramContract = let
     alicePk = PK . unPaymentPubKeyHash . mockWalletPaymentPubKeyHash $ knownWallet 1
     aliceAcc = alicePk

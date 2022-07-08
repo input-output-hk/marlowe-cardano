@@ -394,5 +394,5 @@ instance Arbitrary Environment where
   shrink (Environment x) = Environment <$> shrink x
 
 
-caseGen :: Gen (Case Contract)
+caseGen :: Gen (Case (Contract Token))
 caseGen = sized $ (simpleIntegerGen >>=) . caseRelGenSized

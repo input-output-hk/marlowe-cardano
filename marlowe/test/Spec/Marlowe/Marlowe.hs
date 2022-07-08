@@ -523,7 +523,7 @@ pangramContractSerialization = do
     -- T.putStrLn json
     Just pangramContract @=? (decode $ encode pangramContract)
     contract <- readFile "test/contract.json"
-    let decoded :: Maybe Contract
+    let decoded :: Maybe (Contract Token)
         decoded = decode (fromString contract)
     case decoded of
         Just cont -> cont @=? pangramContract
@@ -568,7 +568,7 @@ prop_showWorksForContracts :: Property
 prop_showWorksForContracts = forAllShrink contractGen shrinkContract showWorksForContract
 
 
-showWorksForContract :: Contract -> Property
+showWorksForContract :: Contract Token -> Property
 showWorksForContract contract = unsafePerformIO $ do
   res <- runInterpreter $ setImports ["Language.Marlowe"]
                         >> set [ languageExtensions := [ OverloadedStrings ] ]
@@ -578,11 +578,11 @@ showWorksForContract contract = unsafePerformIO $ do
             Left err -> counterexample (show err) False)
 
 
-interpretContractString :: MonadInterpreter m => String -> m Contract
-interpretContractString contractStr = interpret contractStr (as :: Contract)
+interpretContractString :: MonadInterpreter m => String -> m (Contract Token)
+interpretContractString contractStr = interpret contractStr (as :: Contract Token)
 
 
-noFalsePositivesForContract :: Contract -> Property
+noFalsePositivesForContract :: Contract Token -> Property
 noFalsePositivesForContract cont =
   unsafePerformIO (do res <- catch (wrapLeft $ warningsTrace cont)
                                    (\exc -> return $ Left (Left (exc :: SomeException)))
@@ -610,7 +610,7 @@ wrapLeft r = do tempRes <- r
 prop_noFalsePositives :: Property
 prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
 
-jsonLoops :: Contract -> Property
+jsonLoops :: Contract Token -> Property
 jsonLoops cont = decode (encode cont) === Just cont
 
 prop_jsonLoops :: Property
