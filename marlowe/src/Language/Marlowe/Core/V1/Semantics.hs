@@ -121,9 +121,9 @@ data ReduceWarning t = ReduceNoWarning
 
 
 -- | Result of 'reduceContractStep'
-data ReduceStepResult = Reduced (ReduceWarning Token) ReduceEffect (State Token) (Contract Token)
-                      | NotReduced
-                      | AmbiguousTimeIntervalReductionError
+data ReduceStepResult t = Reduced (ReduceWarning t) ReduceEffect (State t) (Contract t)
+                        | NotReduced
+                        | AmbiguousTimeIntervalReductionError
   deriving stock (Haskell.Show)
 
 
@@ -349,7 +349,7 @@ giveMoney accountId payee (Token cur tok) amount accounts = let
 
 
 -- | Carry a step of the contract with no inputs
-reduceContractStep :: Environment -> State Token -> Contract Token -> ReduceStepResult
+reduceContractStep :: Environment -> State Token -> Contract Token -> ReduceStepResult Token
 reduceContractStep env state contract = case contract of
 
     Close -> case refundOne (accounts state) of
