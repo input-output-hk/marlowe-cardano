@@ -572,7 +572,7 @@ groupResult _ _ = error "Wrong number of labels generated"
 
 -- Reconstructs an input from a Case list a Case position and a value (deposit amount or
 -- chosen value)
-caseToInput :: [Case a Token] -> Integer -> Integer -> Input
+caseToInput :: [Case a Token] -> Integer -> Integer -> Input Token
 caseToInput [] _ _ = error "Wrong number of cases interpreting result"
 caseToInput (Case h _:t) c v
   | c > 1 = caseToInput t (c - 1) v
@@ -593,7 +593,7 @@ caseToInput (MerkleizedCase _ _:t) c v
 -- Input is passed as a combination and function from input list to transaction input and
 -- input list for convenience. The list of 4-uples is passed through because it is used
 -- to recursively call executeAndInterpret (co-recursive funtion).
-computeAndContinue :: ([Input] -> TransactionInput) -> [Input] -> State -> Contract Token
+computeAndContinue :: ([Input Token] -> TransactionInput) -> [Input Token] -> State -> Contract Token
                    -> [(Integer, Integer, Integer, Integer)]
                    -> [([TransactionInput], [TransactionWarning])]
 computeAndContinue transaction inps sta cont t =

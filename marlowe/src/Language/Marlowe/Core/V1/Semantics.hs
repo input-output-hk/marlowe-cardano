@@ -178,7 +178,7 @@ data TransactionError = TEAmbiguousTimeIntervalError
 -}
 data TransactionInput = TransactionInput
     { txInterval :: TimeInterval
-    , txInputs   :: [Input] }
+    , txInputs   :: [Input Token] }
   deriving stock (Haskell.Show, Haskell.Eq)
 
 instance Pretty TransactionInput where
@@ -429,7 +429,7 @@ data ApplyAction = AppliedAction ApplyWarning State
   deriving stock (Haskell.Show)
 
 -- | Try to apply a single input content to a single action
-applyAction :: Environment -> State -> InputContent -> Action Token -> ApplyAction
+applyAction :: Environment -> State -> InputContent Token -> Action Token -> ApplyAction
 applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party2 tok2 val) =
     if accId1 == accId2 && party1 == party2 && tok1 == tok2 && amount == evalValue env state val
     then let warning = if amount > 0 then ApplyNoWarning
@@ -448,7 +448,7 @@ applyAction env state INotify (Notify obs)
 applyAction _ _ _ _ = NotAppliedAction
 
 -- | Try to get a continuation from a pair of Input and Case
-getContinuation :: Input -> Case (Contract Token) Token -> Maybe (Contract Token)
+getContinuation :: Input Token -> Case (Contract Token) Token -> Maybe (Contract Token)
 getContinuation (NormalInput _) (Case _ continuation) = Just continuation
 getContinuation (MerkleizedInput _ inputContinuationHash continuation) (MerkleizedCase _ continuationHash) =
     if inputContinuationHash == continuationHash
@@ -456,9 +456,9 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
-applyCases :: Environment -> State -> Input -> [Case (Contract Token) Token] -> ApplyResult
+applyCases :: Environment -> State -> Input Token -> [Case (Contract Token) Token] -> ApplyResult
 applyCases env state input (headCase : tailCase) =
-    let inputContent = getInputContent input :: InputContent
+    let inputContent = getInputContent input :: InputContent Token
         action = getAction headCase :: Action Token
         maybeContinuation = getContinuation input headCase :: Maybe (Contract Token)
     in case applyAction env state inputContent action of
@@ -470,7 +470,7 @@ applyCases env state input (headCase : tailCase) =
 applyCases _ _ _ [] = ApplyNoMatchError
 
 -- | Apply a single @Input@ to a current contract
-applyInput :: Environment -> State -> Input -> Contract Token -> ApplyResult
+applyInput :: Environment -> State -> Input Token -> Contract Token -> ApplyResult
 applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
 
@@ -489,14 +489,14 @@ convertReduceWarnings = foldr (\warn acc -> case warn of
     ) []
 
 -- | Apply a list of Inputs to the contract
-applyAllInputs :: Environment -> State -> Contract Token -> [Input] -> ApplyAllResult
+applyAllInputs :: Environment -> State -> Contract Token -> [Input Token] -> ApplyAllResult
 applyAllInputs env state contract inputs = let
     applyAllLoop
         :: Bool
         -> Environment
         -> State
         -> Contract Token
-        -> [Input]
+        -> [Input Token]
         -> [TransactionWarning]
         -> [Payment]
         -> ApplyAllResult

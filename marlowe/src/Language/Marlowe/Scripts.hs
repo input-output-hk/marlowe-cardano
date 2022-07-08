@@ -65,8 +65,8 @@ instance Scripts.ValidatorTypes TypedRolePayoutValidator where
   type instance DatumType TypedRolePayoutValidator = TokenName
 
 
-data MarloweTxInput = Input InputContent
-                    | MerkleizedTxInput InputContent BuiltinByteString
+data MarloweTxInput = Input (InputContent Token)
+                    | MerkleizedTxInput (InputContent Token) BuiltinByteString
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
@@ -208,7 +208,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
 
-    marloweTxInputToInput :: MarloweTxInput -> Input
+    marloweTxInputToInput :: MarloweTxInput -> Input Token
     marloweTxInputToInput (MerkleizedTxInput input hash) =
         case findDatum (DatumHash hash) scriptContextTxInfo of
             Just (Datum d) -> let
@@ -217,10 +217,10 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
             Nothing -> traceError "H"
     marloweTxInputToInput (Input input) = NormalInput input
 
-    validateInputs :: [Input] -> Bool
+    validateInputs :: [Input Token] -> Bool
     validateInputs inputs = all (validateInputWitness . getInputContent) inputs
       where
-        validateInputWitness :: InputContent -> Bool
+        validateInputWitness :: InputContent Token -> Bool
         validateInputWitness input =
             case input of
                 IDeposit _ party _ _         -> validatePartyWitness party
@@ -231,7 +231,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
             validatePartyWitness (Role role) = traceIfFalse "T" -- "Spent value not OK"
                                                $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
-    collectDeposits :: InputContent -> Val.Value
+    collectDeposits :: InputContent Token -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
     collectDeposits _                                     = zero
 
@@ -270,11 +270,11 @@ smallUntypedValidator params = let
 defaultTxValidationRange :: POSIXTime
 defaultTxValidationRange = 10000
 
-marloweTxInputFromInput :: Input -> MarloweTxInput
+marloweTxInputFromInput :: Input Token -> MarloweTxInput
 marloweTxInputFromInput (NormalInput i)         = Input i
 marloweTxInputFromInput (MerkleizedInput i h _) = MerkleizedTxInput i h
 
-marloweTxInputsFromInputs :: [Input] -> [MarloweTxInput]
+marloweTxInputsFromInputs :: [Input Token] -> [MarloweTxInput]
 marloweTxInputsFromInputs = fmap marloweTxInputFromInput
 
 makeLift ''MarloweTxInput

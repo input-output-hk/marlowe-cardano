@@ -45,7 +45,7 @@ addAccountsDiff party diffValue trOut = let
 
 
 -- | Extract total outcomes from transaction inputs and outputs
-getAccountsDiff :: [Payment] -> [Input] -> AccountsDiff
+getAccountsDiff :: [Payment] -> [Input Token] -> AccountsDiff
 getAccountsDiff payments inputs =
     foldl' (\acc (p, m) -> addAccountsDiff p m acc) emptyAccountsDiff (incomes ++ outcomes)
   where

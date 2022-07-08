@@ -230,13 +230,13 @@ newtype Environment = Environment { timeInterval :: TimeInterval }
 
 {-| Input for a Marlowe contract. Correspond to expected 'Action's.
 -}
-data InputContent = IDeposit AccountId Party Token Integer
-                  | IChoice ChoiceId ChosenNum
-                  | INotify
+data InputContent t = IDeposit AccountId Party t Integer
+                    | IChoice ChoiceId ChosenNum
+                    | INotify
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
-instance FromJSON InputContent where
+instance FromJSON t => FromJSON (InputContent t) where
   parseJSON (String "input_notify") = return INotify
   parseJSON (Object v) =
     IChoice <$> v .: "for_choice_id"
@@ -247,7 +247,7 @@ instance FromJSON InputContent where
               <*> v .: "that_deposits"
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
-instance ToJSON InputContent where
+instance ToJSON t => ToJSON (InputContent t) where
   toJSON (IDeposit accId party tok amount) = object
       [ "input_from_party" .= party
       , "that_deposits" .= amount
@@ -260,12 +260,12 @@ instance ToJSON InputContent where
       ]
   toJSON INotify = JSON.String $ pack "input_notify"
 
-data Input = NormalInput InputContent
-           | MerkleizedInput InputContent BuiltinByteString (Contract Token)
+data Input t = NormalInput (InputContent t)
+             | MerkleizedInput (InputContent t) BuiltinByteString (Contract t)
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
-instance FromJSON Input where
+instance FromJSON t => FromJSON (Input t) where
   parseJSON (String s) = NormalInput <$> parseJSON (String s)
   parseJSON (Object v) = do
     MerkleizedInput <$> parseJSON (Object v) <*> v .: "continuation_hash" <*> v .: "merkleized_continuation"
@@ -273,7 +273,7 @@ instance FromJSON Input where
       <|> NormalInput <$> parseJSON (Object v)
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
-instance ToJSON Input where
+instance ToJSON t => ToJSON (Input t) where
   toJSON (NormalInput content) = toJSON content
   toJSON (MerkleizedInput content hash continuation) =
     let
@@ -287,7 +287,7 @@ instance ToJSON Input where
           ]
 
 
-getInputContent :: Input -> InputContent
+getInputContent :: Input t -> InputContent t
 getInputContent (NormalInput inputContent)         = inputContent
 getInputContent (MerkleizedInput inputContent _ _) = inputContent
 

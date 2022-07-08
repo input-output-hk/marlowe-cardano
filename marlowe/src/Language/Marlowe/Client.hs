@@ -106,8 +106,8 @@ import PlutusTx.Traversable (for)
 
 
 
-data MarloweClientInput = ClientInput InputContent
-                        | ClientMerkleizedInput InputContent (Marlowe.Contract Token)
+data MarloweClientInput = ClientInput (InputContent Token)
+                        | ClientMerkleizedInput (InputContent Token) (Marlowe.Contract Token)
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON MarloweClientInput where
@@ -120,7 +120,7 @@ instance ToJSON MarloweClientInput where
 
 type CreateEndpointSchema = (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract Token)
 type ApplyInputsEndpointSchema = (UUID, MarloweParams, Maybe TimeInterval, [MarloweClientInput])
-type ApplyInputsNonMerkleizedEndpointSchema = (UUID, MarloweParams, Maybe TimeInterval, [InputContent])
+type ApplyInputsNonMerkleizedEndpointSchema = (UUID, MarloweParams, Maybe TimeInterval, [InputContent Token])
 type AutoEndpointSchema = (UUID, MarloweParams, Party, POSIXTime)
 type RedeemEndpointSchema = (UUID, MarloweParams, TokenName, AddressInEra ShelleyEra)
 type CloseEndpointSchema = UUID
@@ -1298,7 +1298,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
 
             Error e -> throwError $ MarloweEvaluationError e
 
-    clientInputToInputAndConstraints :: MarloweClientInput -> ([Input], TxConstraints Void Void)
+    clientInputToInputAndConstraints :: MarloweClientInput -> ([Input Token], TxConstraints Void Void)
     clientInputToInputAndConstraints = \case
         ClientInput input -> ([NormalInput input], inputContentConstraints input)
         ClientMerkleizedInput input continuation -> let
@@ -1307,7 +1307,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
             constraints = inputContentConstraints input <> mustIncludeDatum (Datum builtin)
             in ([MerkleizedInput input hash continuation], constraints)
       where
-        inputContentConstraints :: InputContent ->  TxConstraints Void Void
+        inputContentConstraints :: InputContent Token ->  TxConstraints Void Void
         inputContentConstraints input =
             case input of
                 IDeposit _ party _ _         -> partyWitnessConstraint party
@@ -1321,7 +1321,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
             mustSpendRoleToken role = mustSpendAtLeast $ Val.singleton rolesCurrency role 1
 
 
-    collectDeposits :: InputContent -> Val.Value
+    collectDeposits :: InputContent Token -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
     collectDeposits _                                     = P.zero
 
