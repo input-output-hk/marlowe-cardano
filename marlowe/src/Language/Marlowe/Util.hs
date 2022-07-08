@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Language.Marlowe.Util (ada, addAccountsDiff, emptyAccountsDiff, extractNonMerkleizedContractRoles,
-                              foldMapNonMerkleizedContract, foldMapContract, getAccountsDiff, isEmptyAccountsDiff,
+module Language.Marlowe.Util (ada, {- addAccountsDiff, emptyAccountsDiff, -} extractNonMerkleizedContractRoles,
+                              foldMapNonMerkleizedContract, foldMapContract, {- getAccountsDiff, isEmptyAccountsDiff, -}
                               merkleizedCase) where
-import Data.List (foldl')
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+-- import Data.List (foldl')
+-- import Data.Map.Strict (Map)
+-- import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String
-import Language.Marlowe.Core.V1.Semantics
+-- import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Ledger.Ada (adaSymbol, adaToken)
 import Ledger.Scripts (dataHash)
@@ -24,8 +24,8 @@ instance IsString Party where
 ada :: Token
 ada = Token adaSymbol adaToken
 
+{-
 type AccountsDiff = Map Party Money
-
 
 emptyAccountsDiff :: AccountsDiff
 emptyAccountsDiff = Map.empty
@@ -51,6 +51,7 @@ getAccountsDiff payments inputs =
   where
     incomes  = [ (p, Val.singleton cur tok m) | IDeposit _ p (Token cur tok) m <- map getInputContent inputs ]
     outcomes = [ (p, P.negate m) | Payment _ (Party p) m  <- payments ]
+-}
 
 
 foldMapContract :: Monoid m
