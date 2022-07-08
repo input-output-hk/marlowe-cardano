@@ -134,13 +134,13 @@ data ReduceResult t = ContractQuiescent Bool [ReduceWarning t] [Payment] (State 
 
 
 -- | Warning of 'applyCases'
-data ApplyWarning = ApplyNoWarning
-                  | ApplyNonPositiveDeposit Party AccountId Token Integer
+data ApplyWarning t = ApplyNoWarning
+                    | ApplyNonPositiveDeposit Party AccountId t Integer
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'applyCases'
-data ApplyResult = Applied ApplyWarning (State Token) (Contract Token)
+data ApplyResult = Applied (ApplyWarning Token) (State Token) (Contract Token)
                  | ApplyNoMatchError
                  | ApplyHashMismatch
   deriving stock (Haskell.Show)
@@ -426,7 +426,7 @@ reduceContractUntilQuiescent env state contract = let
 
     in reductionLoop False env state contract [] []
 
-data ApplyAction = AppliedAction ApplyWarning (State Token)
+data ApplyAction = AppliedAction (ApplyWarning Token) (State Token)
                  | NotAppliedAction
   deriving stock (Haskell.Show)
 
@@ -528,7 +528,7 @@ applyAllInputs env state contract inputs = let
                     ApplyHashMismatch -> ApplyAllHashMismatch
     in applyAllLoop False env state contract inputs [] []
   where
-    convertApplyWarning :: ApplyWarning -> [TransactionWarning Token]
+    convertApplyWarning :: ApplyWarning Token -> [TransactionWarning Token]
     convertApplyWarning warn =
         case warn of
             ApplyNoWarning -> []
