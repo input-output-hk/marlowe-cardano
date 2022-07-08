@@ -140,9 +140,9 @@ data ApplyWarning t = ApplyNoWarning
 
 
 -- | Result of 'applyCases'
-data ApplyResult = Applied (ApplyWarning Token) (State Token) (Contract Token)
-                 | ApplyNoMatchError
-                 | ApplyHashMismatch
+data ApplyResult t = Applied (ApplyWarning t) (State t) (Contract t)
+                   | ApplyNoMatchError
+                   | ApplyHashMismatch
   deriving stock (Haskell.Show)
 
 
@@ -458,7 +458,7 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
-applyCases :: Environment -> State Token -> Input Token -> [Case (Contract Token) Token] -> ApplyResult
+applyCases :: Environment -> State Token -> Input Token -> [Case (Contract Token) Token] -> ApplyResult Token
 applyCases env state input (headCase : tailCase) =
     let inputContent = getInputContent input :: InputContent Token
         action = getAction headCase :: Action Token
@@ -472,7 +472,7 @@ applyCases env state input (headCase : tailCase) =
 applyCases _ _ _ [] = ApplyNoMatchError
 
 -- | Apply a single @Input@ to a current contract
-applyInput :: Environment -> State Token -> Input Token -> Contract Token -> ApplyResult
+applyInput :: Environment -> State Token -> Input Token -> Contract Token -> ApplyResult Token
 applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
 
