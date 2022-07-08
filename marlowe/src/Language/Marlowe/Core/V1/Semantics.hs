@@ -110,25 +110,25 @@ data ReduceEffect = ReduceWithPayment Payment
 
 
 -- | Warning during 'reduceContractStep'
-data ReduceWarning = ReduceNoWarning
-                   | ReduceNonPositivePay AccountId Payee Token Integer
-                   | ReducePartialPay AccountId Payee Token Integer Integer
---                                      ^ src    ^ dest       ^ paid ^ expected
-                   | ReduceShadowing ValueId Integer Integer
---                                     oldVal ^  newVal ^
-                   | ReduceAssertionFailed
+data ReduceWarning t = ReduceNoWarning
+                     | ReduceNonPositivePay AccountId Payee t Integer
+                     | ReducePartialPay AccountId Payee t Integer Integer
+--                                        ^ src    ^ dest    ^ paid ^ expected
+                     | ReduceShadowing ValueId Integer Integer
+--                                       oldVal ^  newVal ^
+                     | ReduceAssertionFailed
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'reduceContractStep'
-data ReduceStepResult = Reduced ReduceWarning ReduceEffect (State Token) (Contract Token)
+data ReduceStepResult = Reduced (ReduceWarning Token) ReduceEffect (State Token) (Contract Token)
                       | NotReduced
                       | AmbiguousTimeIntervalReductionError
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'reduceContractUntilQuiescent'
-data ReduceResult = ContractQuiescent Bool [ReduceWarning] [Payment] (State Token) (Contract Token)
+data ReduceResult = ContractQuiescent Bool [ReduceWarning Token] [Payment] (State Token) (Contract Token)
                   | RRAmbiguousTimeIntervalError
   deriving stock (Haskell.Show)
 
@@ -409,7 +409,7 @@ reduceContractStep env state contract = case contract of
 reduceContractUntilQuiescent :: Environment -> State Token -> Contract Token -> ReduceResult
 reduceContractUntilQuiescent env state contract = let
     reductionLoop
-      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning] -> [Payment] -> ReduceResult
+      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning Token] -> [Payment] -> ReduceResult
     reductionLoop reduced env state contract warnings payments =
         case reduceContractStep env state contract of
             Reduced warning effect newState cont -> let
@@ -477,7 +477,7 @@ applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
 
 -- | Propagate 'ReduceWarning' to 'TransactionWarning'
-convertReduceWarnings :: [ReduceWarning] -> [TransactionWarning Token]
+convertReduceWarnings :: [ReduceWarning Token] -> [TransactionWarning Token]
 convertReduceWarnings = foldr (\warn acc -> case warn of
     ReduceNoWarning -> acc
     ReduceNonPositivePay accId payee tok amount ->
@@ -693,7 +693,7 @@ instance Eq Payment where
     Payment a1 p1 m1 == Payment a2 p2 m2 = a1 == a2 && p1 == p2 && m1 == m2
 
 
-instance Eq ReduceWarning where
+instance Eq t => Eq (ReduceWarning t) where
     {-# INLINABLE (==) #-}
     ReduceNoWarning == ReduceNoWarning = True
     (ReduceNonPositivePay acc1 p1 tn1 a1) == (ReduceNonPositivePay acc2 p2 tn2 a2) =
