@@ -147,10 +147,10 @@ data ApplyResult t = Applied (ApplyWarning t) (State t) (Contract t)
 
 
 -- | Result of 'applyAllInputs'
-data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning Token] [Payment] (State Token) (Contract Token)
-                    | ApplyAllNoMatchError
-                    | ApplyAllAmbiguousTimeIntervalError
-                    | ApplyAllHashMismatch
+data ApplyAllResult t = ApplyAllSuccess Bool [TransactionWarning t] [Payment] (State t) (Contract t)
+                      | ApplyAllNoMatchError
+                      | ApplyAllAmbiguousTimeIntervalError
+                      | ApplyAllHashMismatch
   deriving stock (Haskell.Show)
 
 
@@ -491,7 +491,7 @@ convertReduceWarnings = foldr (\warn acc -> case warn of
     ) []
 
 -- | Apply a list of Inputs to the contract
-applyAllInputs :: Environment -> State Token -> Contract Token -> [Input Token] -> ApplyAllResult
+applyAllInputs :: Environment -> State Token -> Contract Token -> [Input Token] -> ApplyAllResult Token
 applyAllInputs env state contract inputs = let
     applyAllLoop
         :: Bool
@@ -501,7 +501,7 @@ applyAllInputs env state contract inputs = let
         -> [Input Token]
         -> [TransactionWarning Token]
         -> [Payment]
-        -> ApplyAllResult
+        -> ApplyAllResult Token
     applyAllLoop contractChanged env state contract inputs warnings payments =
         case reduceContractUntilQuiescent env state contract of
             RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
