@@ -153,7 +153,8 @@ tests =
 checkFixInterval :: Bool -> Bool -> Property
 checkFixInterval invalid inPast =
   property $ do
-  let gen = do
+  let gen :: Gen ((POSIXTime, POSIXTime), State Token)
+      gen = do
         state <- arbitrary
         end   <- arbitrary `suchThat` (\t -> (t < minTime state) == inPast)
         start <- arbitrary `suchThat` (\t -> (t > end) == invalid && (t < minTime state) == inPast)
@@ -238,9 +239,11 @@ checkMulValue =
 
 
 checkDivValueNumeratorDenominatorZero :: Assertion
-checkDivValueNumeratorDenominatorZero =
+checkDivValueNumeratorDenominatorZero = do
+  let eval :: Value (Observation Token) Token -> Integer
+      eval = evalValue undefined undefined
   assertBool "DivValue 0 0 = 0"
-    $ evalValue undefined undefined (DivValue (Constant 0) (Constant 0)) == 0
+    $ eval (DivValue (Constant 0) (Constant 0)) == 0
 
 
 checkDivValueNumeratorZero :: Property
@@ -413,15 +416,19 @@ checkValueEQ =
 
 
 checkTrueObs :: Assertion
-checkTrueObs =
+checkTrueObs = do
+  let eval :: Observation Token -> Bool
+      eval = evalObservation undefined undefined
   assertBool "TrueObs is true."
-    $ evalObservation undefined undefined TrueObs
+    $ eval TrueObs
 
 
 checkFalseObs :: Assertion
-checkFalseObs =
+checkFalseObs = do
+  let eval :: Observation Token -> Bool
+      eval = evalObservation undefined undefined
   assertBool "FalseObs is false."
-    . not $ evalObservation undefined undefined FalseObs
+    . not $ eval FalseObs
 
 
 checkApplyActionMismatch :: Property

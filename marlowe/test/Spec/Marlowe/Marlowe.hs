@@ -422,7 +422,8 @@ valuesFormAbelianGroup = property $ do
 
 divisionRoundingTest :: Property
 divisionRoundingTest = property $ do
-    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    let eval :: Value (Observation Token) Token -> Integer
+        eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     -- test half-even rounding
     let gen = do
             n <- amount
@@ -495,7 +496,8 @@ divAnalysisTest = do
     result <- warningsTrace (contract 9 2)
     assertBool "Analysis ok" $ isRight result && either (const False) isJust result
 
-    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    let eval :: Value (Observation Token) Token -> Integer
+        eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2
@@ -506,7 +508,8 @@ divAnalysisTest = do
 
 divTest :: IO ()
 divTest = do
-    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    let eval :: Value (Observation Token) Token -> Integer
+        eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2

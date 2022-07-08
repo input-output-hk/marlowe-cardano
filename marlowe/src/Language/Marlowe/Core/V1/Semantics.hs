@@ -221,7 +221,7 @@ data MarloweParams = MarloweParams {
 
 
 {- Checks 'interval' and trim it if necessary. -}
-fixInterval :: TimeInterval -> State Token -> IntervalResult Token
+fixInterval :: TimeInterval -> State t -> IntervalResult t
 fixInterval interval state =
     case interval of
         (low, high)
@@ -241,7 +241,7 @@ fixInterval interval state =
 {-|
   Evaluates @Value@ given current @State@ and @Environment@
 -}
-evalValue :: Environment -> State Token -> Value (Observation Token) Token -> Integer
+evalValue :: Eq t => Environment -> State t -> Value (Observation t) t -> Integer
 evalValue env state value = let
     eval = evalValue env state
     in case value of
@@ -286,7 +286,7 @@ evalValue env state value = let
 
 
 -- | Evaluate 'Observation' to 'Bool'.
-evalObservation :: Environment -> State Token -> Observation Token -> Bool
+evalObservation :: Eq t => Environment -> State t -> Observation t -> Bool
 evalObservation env state obs = let
     evalObs = evalObservation env state
     evalVal = evalValue env state
@@ -315,7 +315,7 @@ refundOne accounts = case Map.toList accounts of
 
 
 -- | Obtains the amount of money available an account
-moneyInAccount :: AccountId -> Token -> Accounts Token -> Integer
+moneyInAccount :: Eq t => AccountId -> t -> Accounts t -> Integer
 moneyInAccount accId token accounts = case Map.lookup (accId, token) accounts of
     Just x  -> x
     Nothing -> 0
