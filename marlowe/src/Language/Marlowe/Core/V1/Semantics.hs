@@ -192,12 +192,12 @@ instance Pretty t => Pretty (TransactionInput t) where
 
 {-| Marlowe transaction output.
 -}
-data TransactionOutput =
+data TransactionOutput t =
     TransactionOutput
-        { txOutWarnings :: [TransactionWarning Token]
+        { txOutWarnings :: [TransactionWarning t]
         , txOutPayments :: [Payment]
-        , txOutState    :: State Token
-        , txOutContract :: Contract Token }
+        , txOutState    :: State t
+        , txOutContract :: Contract t }
     | Error TransactionError
   deriving stock (Haskell.Show)
 
@@ -540,7 +540,7 @@ isClose Close = True
 isClose _     = False
 
 -- | Try to compute outputs of a transaction given its inputs, a contract, and it's @State@
-computeTransaction :: TransactionInput Token -> State Token -> Contract Token -> TransactionOutput
+computeTransaction :: TransactionInput Token -> State Token -> Contract Token -> TransactionOutput Token
 computeTransaction tx state contract = let
     inputs = txInputs tx
     in case fixInterval (txInterval tx) state of
@@ -557,7 +557,7 @@ computeTransaction tx state contract = let
             ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
 
-playTraceAux :: TransactionOutput -> [TransactionInput Token] -> TransactionOutput
+playTraceAux :: TransactionOutput Token -> [TransactionInput Token] -> TransactionOutput Token
 playTraceAux res [] = res
 playTraceAux TransactionOutput
                 { txOutWarnings = warnings
@@ -576,7 +576,7 @@ playTraceAux TransactionOutput
           Error _ -> transRes
 playTraceAux err@(Error _) _ = err
 
-playTrace :: POSIXTime -> Contract Token -> [TransactionInput Token] -> TransactionOutput
+playTrace :: POSIXTime -> Contract Token -> [TransactionInput Token] -> TransactionOutput Token
 playTrace minTime c = playTraceAux TransactionOutput
                                  { txOutWarnings = []
                                  , txOutPayments = []
