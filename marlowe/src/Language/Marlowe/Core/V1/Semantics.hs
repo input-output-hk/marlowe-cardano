@@ -205,9 +205,9 @@ data TransactionOutput t =
 {-|
     This data type is a content of a contract's /Datum/
 -}
-data MarloweData = MarloweData {
-        marloweState    :: State Token,
-        marloweContract :: Contract Token
+data MarloweData t = MarloweData {
+        marloweState    :: State t,
+        marloweContract :: Contract t
     } deriving stock (Haskell.Show, Haskell.Eq, Generic)
       deriving anyclass (ToJSON, FromJSON)
 

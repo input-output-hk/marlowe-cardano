@@ -56,7 +56,7 @@ data TypedMarloweValidator
 {- Type instances for small typed Marlowe validator -}
 instance Scripts.ValidatorTypes TypedMarloweValidator where
     type instance RedeemerType TypedMarloweValidator = MarloweInput
-    type instance DatumType TypedMarloweValidator = MarloweData
+    type instance DatumType TypedMarloweValidator = MarloweData Token
 
 data TypedRolePayoutValidator
 
@@ -94,7 +94,7 @@ defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
 {-# INLINABLE smallMarloweValidator #-}
 smallMarloweValidator
     :: MarloweParams
-    -> MarloweData
+    -> MarloweData Token
     -> MarloweInput
     -> ScriptContext
     -> Bool
@@ -186,7 +186,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     findDatumHash' :: PlutusTx.ToData o => o -> Maybe DatumHash
     findDatumHash' datum = findDatumHash (Datum $ PlutusTx.toBuiltinData datum) scriptContextTxInfo
 
-    checkOwnOutputConstraint :: MarloweData -> Val.Value -> Bool
+    checkOwnOutputConstraint :: MarloweData Token -> Val.Value -> Bool
     checkOwnOutputConstraint ocDatum ocValue =
         let hsh = findDatumHash' ocDatum
         in traceIfFalse "L1" -- "Output constraint"

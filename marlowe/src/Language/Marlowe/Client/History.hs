@@ -104,7 +104,7 @@ data History =
     Created
     {
       historyTxOutRef :: TxOutRef          -- ^ The UTxO that created the contract.
-    , historyData     :: MarloweData       -- ^ The Marlowe data attached to the UTxO.
+    , historyData     :: MarloweData Token -- ^ The Marlowe data attached to the UTxO.
     , historyNext     :: Maybe History     -- ^ The next step in the history, if known.
     }
     -- | Input was applied to the contract.
@@ -112,7 +112,7 @@ data History =
     {
       historyInput    :: TransactionInput Token  -- ^ The Marlowe input that was applied.
     , historyTxOutRef :: TxOutRef                -- ^ The UTxO that resulted from the input being applied.
-    , historyData     :: MarloweData             -- ^ The Marlowe data attached to the UTxO.
+    , historyData     :: MarloweData Token       -- ^ The Marlowe data attached to the UTxO.
     , historyNext     :: Maybe History           -- ^ The next step in the history, if known.
     }
     -- | The contract was closed.
@@ -334,8 +334,8 @@ marloweStatesFrom validator citx =
 
 
 -- | Extract the Marlowe state from a Marlowe-specific output.
-toMarloweState :: MarloweTxOutRef  -- ^ The Marlowe-specific output.
-               -> MarloweData      -- ^ The Marlowe data.
+toMarloweState :: MarloweTxOutRef    -- ^ The Marlowe-specific output.
+               -> MarloweData Token  -- ^ The Marlowe data.
 toMarloweState = tyTxOutData . tyTxOutRefOut
 
 toRolePayout :: RolePayoutTxOutRef  -- ^ Role payout specific output

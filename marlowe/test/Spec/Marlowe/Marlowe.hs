@@ -329,7 +329,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
         roles = Set.fromList ["alice", "bob"]
 
-        (params, _ :: TxConstraints MarloweInput MarloweData, _) =
+        (params, _ :: TxConstraints MarloweInput (MarloweData Token), _) =
             let con = setupMarloweParams @MarloweSchema @MarloweError
                         (AssocMap.fromList [("alice", walletAddress alice), ("bob", walletAddress bob)])
                         roles

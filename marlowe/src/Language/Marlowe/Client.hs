@@ -182,8 +182,8 @@ type RoleOwners = AssocMap.Map Val.TokenName (AddressInEra ShelleyEra)
 -- Now we are not able to notify about role payouts before the contract is on the chain.
 data ContractHistory =
     ContractHistory
-        { chParams         :: MarloweParams            -- ^ The "instance id" of the contract
-        , chInitialData    :: MarloweData              -- ^ The initial Contract + State
+        { chParams         :: MarloweParams           -- ^ The "instance id" of the contract
+        , chInitialData    :: MarloweData Token       -- ^ The initial Contract + State
         , chHistory        :: [TransactionInput Token] -- ^ All the transaction that affected the contract.
                                                        --   The current state and intermediate states can
                                                        --   be recalculated by using computeTransaction
@@ -789,7 +789,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         marlowePlutusContract
     auto = endpoint @"auto" $ \(reqId, params, party, untilTime) -> catchError reqId "auto" $ do
         let typedValidator = mkMarloweTypedValidator params
-        let continueWith :: MarloweData -> Contract MarloweContractState MarloweSchema MarloweError ()
+        let continueWith :: MarloweData Token -> Contract MarloweContractState MarloweSchema MarloweError ()
             continueWith md@MarloweData{marloweContract} =
                 if canAutoExecuteContractForParty party marloweContract
                 then autoExecuteContract reqId params typedValidator party md
@@ -822,7 +822,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                       -> MarloweParams
                       -> SmallTypedValidator
                       -> Party
-                      -> MarloweData
+                      -> MarloweData Token
                       -> Contract MarloweContractState MarloweSchema MarloweError ()
     autoExecuteContract reqId params typedValidator party marloweData = do
         time <- currentTime
@@ -960,7 +960,7 @@ shelleyAddressToKeys (AddressInEra _ (Shelley.ShelleyAddress _ paymentCredential
             pure (ppkh,  Just . StakePubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes stakeHash)
 shelleyAddressToKeys _ = throwError $ OtherContractError $ Contract.OtherContractError "Byron Addresses not supported"
 
-getAction :: MarloweTimeRange -> Party -> MarloweData -> ([TransactionWarning Token], PartyAction)
+getAction :: MarloweTimeRange -> Party -> MarloweData Token -> ([TransactionWarning Token], PartyAction)
 getAction timeRange party MarloweData{marloweContract,marloweState} = let
     env = Environment timeRange
     in case reduceContractUntilQuiescent env marloweState marloweContract of
@@ -1021,7 +1021,7 @@ applyInputs :: AsMarloweError e
     -> SmallTypedValidator
     -> Maybe TimeInterval
     -> [MarloweClientInput]
-    -> Contract MarloweContractState MarloweSchema e MarloweData
+    -> Contract MarloweContractState MarloweSchema e (MarloweData Token)
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
     let debug' = debug "applyInputs"
     -- Wait until a block is produced, so we have an accurate current time and slot.
@@ -1065,9 +1065,9 @@ defaultMarloweParams :: MarloweParams
 defaultMarloweParams = marloweParams adaSymbol
 
 
-newtype CompanionState = CompanionState (Map MarloweParams MarloweData)
+newtype CompanionState = CompanionState (Map MarloweParams (MarloweData Token))
   deriving (Eq, Show)
-  deriving (Semigroup,Monoid) via (Map MarloweParams MarloweData)
+  deriving (Semigroup,Monoid) via (Map MarloweParams (MarloweData Token))
 
 instance ToJSON CompanionState where
     toJSON (CompanionState m) = toJSON $ Map.toList m
@@ -1148,7 +1148,7 @@ findMarloweContractsOnChainByRoleCurrency
     -> Contract CompanionState
                 MarloweCompanionSchema
                 MarloweError
-                (Maybe (MarloweParams, MarloweData))
+                (Maybe (MarloweParams, MarloweData Token))
 findMarloweContractsOnChainByRoleCurrency curSym = do
     let params = marloweParams curSym
     let typedValidator = mkMarloweTypedValidator params
@@ -1187,7 +1187,7 @@ mkStep ::
     -> SmallTypedValidator
     -> TimeInterval
     -> [MarloweClientInput]
-    -> Contract w MarloweSchema MarloweError MarloweData
+    -> Contract w MarloweSchema MarloweError (MarloweData Token)
 mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
     debug "mkStep" $ "clientInputs = " <> show clientInputs
     slotConfig <- getSlotConfig
@@ -1250,10 +1250,10 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                 debug "mkStep" $ "tx confirmation failed txId = " <> show txId
                 throwError $ OtherContractError $ Contract.OtherContractError "mkStep failed to confirm the transaction"
   where
-    evaluateTxContstraints :: MarloweData
+    evaluateTxContstraints :: MarloweData Token
         -> Ledger.POSIXTimeRange
         -> Tx.TxOutRef
-        -> Contract w MarloweSchema MarloweError (TxConstraints [MarloweTxInput] MarloweData, MarloweData)
+        -> Contract w MarloweSchema MarloweError (TxConstraints [MarloweTxInput] (MarloweData Token), MarloweData Token)
     evaluateTxContstraints MarloweData{..} times marloweTxOutRef = do
         let (inputs, inputsConstraints) = foldMap clientInputToInputAndConstraints clientInputs
         let txInput = TransactionInput {
