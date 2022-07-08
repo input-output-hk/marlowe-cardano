@@ -77,7 +77,7 @@ type Money = Val.Value
 type ChoiceName = BuiltinByteString
 type ChosenNum = Integer
 type TimeInterval = (POSIXTime, POSIXTime)
-type Accounts = Map (AccountId, Token) Integer
+type Accounts t = Map (AccountId, t) Integer
 
 -- * Data Types
 {-| Choices – of integers – are identified by ChoiceId
@@ -216,10 +216,10 @@ data Contract t = Close
 
 {-| Marlowe contract internal state. Stored in a /Datum/ of a transaction output.
 -}
-data State = State { accounts    :: Accounts
-                   , choices     :: Map ChoiceId ChosenNum
-                   , boundValues :: Map ValueId Integer
-                   , minTime     :: POSIXTime }
+data State t = State { accounts    :: Accounts t
+                     , choices     :: Map ChoiceId ChosenNum
+                     , boundValues :: Map ValueId Integer
+                     , minTime     :: POSIXTime }
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
 
 {-| Execution environment. Contains a time interval of a transaction.
@@ -304,13 +304,13 @@ data IntervalError = InvalidInterval TimeInterval
 
 
 -- | Result of 'fixInterval'
-data IntervalResult = IntervalTrimmed Environment State
-                    | IntervalError IntervalError
+data IntervalResult t = IntervalTrimmed Environment (State t)
+                      | IntervalError IntervalError
   deriving stock (Haskell.Show)
 
 
 -- | Empty State for a given minimal 'POSIXTime'
-emptyState :: POSIXTime -> State
+emptyState :: POSIXTime -> State t
 emptyState sn = State
     { accounts = Map.empty
     , choices  = Map.empty
@@ -323,7 +323,7 @@ inBounds :: ChosenNum -> [Bound] -> Bool
 inBounds num = any (\(Bound l u) -> num >= l && num <= u)
 
 
-instance FromJSON State where
+instance FromJSON t => FromJSON (State t) where
   parseJSON = withObject "State" (\v ->
          State <$> (v .: "accounts")
                <*> (v .: "choices")
@@ -331,7 +331,7 @@ instance FromJSON State where
                <*> (POSIXTime <$> (withInteger =<< (v .: "minTime")))
                                  )
 
-instance ToJSON State where
+instance ToJSON t => ToJSON (State t) where
   toJSON State { accounts = a
                , choices = c
                , boundValues = bv
@@ -717,7 +717,7 @@ instance Eq t => Eq (Contract t) where
     Assert obs1 cont1 == Assert obs2 cont2 = obs1 == obs2 && cont1 == cont2
     _ == _ = False
 
-instance Eq State where
+instance Eq t => Eq (State t) where
     {-# INLINABLE (==) #-}
     l == r = minTime l == minTime r
         && accounts l == accounts r

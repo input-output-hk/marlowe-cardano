@@ -13,6 +13,8 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE UndecidableInstances       #-}
+
 -- Big hammer, but helps
 {-# OPTIONS_GHC -fno-specialise #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
@@ -119,14 +121,14 @@ data ReduceWarning = ReduceNoWarning
 
 
 -- | Result of 'reduceContractStep'
-data ReduceStepResult = Reduced ReduceWarning ReduceEffect State (Contract Token)
+data ReduceStepResult = Reduced ReduceWarning ReduceEffect (State Token) (Contract Token)
                       | NotReduced
                       | AmbiguousTimeIntervalReductionError
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'reduceContractUntilQuiescent'
-data ReduceResult = ContractQuiescent Bool [ReduceWarning] [Payment] State (Contract Token)
+data ReduceResult = ContractQuiescent Bool [ReduceWarning] [Payment] (State Token) (Contract Token)
                   | RRAmbiguousTimeIntervalError
   deriving stock (Haskell.Show)
 
@@ -138,14 +140,14 @@ data ApplyWarning = ApplyNoWarning
 
 
 -- | Result of 'applyCases'
-data ApplyResult = Applied ApplyWarning State (Contract Token)
+data ApplyResult = Applied ApplyWarning (State Token) (Contract Token)
                  | ApplyNoMatchError
                  | ApplyHashMismatch
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'applyAllInputs'
-data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning] [Payment] State (Contract Token)
+data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning] [Payment] (State Token) (Contract Token)
                     | ApplyAllNoMatchError
                     | ApplyAllAmbiguousTimeIntervalError
                     | ApplyAllHashMismatch
@@ -194,7 +196,7 @@ data TransactionOutput =
     TransactionOutput
         { txOutWarnings :: [TransactionWarning]
         , txOutPayments :: [Payment]
-        , txOutState    :: State
+        , txOutState    :: State Token
         , txOutContract :: Contract Token }
     | Error TransactionError
   deriving stock (Haskell.Show)
@@ -204,7 +206,7 @@ data TransactionOutput =
     This data type is a content of a contract's /Datum/
 -}
 data MarloweData = MarloweData {
-        marloweState    :: State,
+        marloweState    :: State Token,
         marloweContract :: Contract Token
     } deriving stock (Haskell.Show, Haskell.Eq, Generic)
       deriving anyclass (ToJSON, FromJSON)
@@ -219,7 +221,7 @@ data MarloweParams = MarloweParams {
 
 
 {- Checks 'interval' and trim it if necessary. -}
-fixInterval :: TimeInterval -> State -> IntervalResult
+fixInterval :: TimeInterval -> State Token -> IntervalResult Token
 fixInterval interval state =
     case interval of
         (low, high)
@@ -239,7 +241,7 @@ fixInterval interval state =
 {-|
   Evaluates @Value@ given current @State@ and @Environment@
 -}
-evalValue :: Environment -> State -> Value (Observation Token) Token -> Integer
+evalValue :: Environment -> State Token -> Value (Observation Token) Token -> Integer
 evalValue env state value = let
     eval = evalValue env state
     in case value of
@@ -284,7 +286,7 @@ evalValue env state value = let
 
 
 -- | Evaluate 'Observation' to 'Bool'.
-evalObservation :: Environment -> State -> Observation Token -> Bool
+evalObservation :: Environment -> State Token -> Observation Token -> Bool
 evalObservation env state obs = let
     evalObs = evalObservation env state
     evalVal = evalValue env state
@@ -303,7 +305,7 @@ evalObservation env state obs = let
 
 
 -- | Pick the first account with money in it
-refundOne :: Accounts -> Maybe ((Party, Money), Accounts)
+refundOne :: Accounts Token -> Maybe ((Party, Money), Accounts Token)
 refundOne accounts = case Map.toList accounts of
     [] -> Nothing
     ((accId, Token cur tok), balance) : rest ->
@@ -313,21 +315,21 @@ refundOne accounts = case Map.toList accounts of
 
 
 -- | Obtains the amount of money available an account
-moneyInAccount :: AccountId -> Token -> Accounts -> Integer
+moneyInAccount :: AccountId -> Token -> Accounts Token -> Integer
 moneyInAccount accId token accounts = case Map.lookup (accId, token) accounts of
     Just x  -> x
     Nothing -> 0
 
 
 -- | Sets the amount of money available in an account
-updateMoneyInAccount :: AccountId -> Token -> Integer -> Accounts -> Accounts
+updateMoneyInAccount :: AccountId -> Token -> Integer -> Accounts Token -> Accounts Token
 updateMoneyInAccount accId token amount =
     if amount <= 0 then Map.delete (accId, token) else Map.insert (accId, token) amount
 
 
 -- Add the given amount of money to an accoun (only if it is positive)
 -- Return the updated Map
-addMoneyToAccount :: AccountId -> Token -> Integer -> Accounts -> Accounts
+addMoneyToAccount :: AccountId -> Token -> Integer -> Accounts Token -> Accounts Token
 addMoneyToAccount accId token amount accounts = let
     balance = moneyInAccount accId token accounts
     newBalance = balance + amount
@@ -338,7 +340,7 @@ addMoneyToAccount accId token amount accounts = let
 {-| Gives the given amount of money to the given payee.
     Returns the appropriate effect and updated accounts
 -}
-giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts -> (ReduceEffect, Accounts)
+giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts Token -> (ReduceEffect, Accounts Token)
 giveMoney accountId payee (Token cur tok) amount accounts = let
     newAccounts = case payee of
         Party _       -> accounts
@@ -347,7 +349,7 @@ giveMoney accountId payee (Token cur tok) amount accounts = let
 
 
 -- | Carry a step of the contract with no inputs
-reduceContractStep :: Environment -> State -> Contract Token -> ReduceStepResult
+reduceContractStep :: Environment -> State Token -> Contract Token -> ReduceStepResult
 reduceContractStep env state contract = case contract of
 
     Close -> case refundOne (accounts state) of
@@ -404,10 +406,10 @@ reduceContractStep env state contract = case contract of
         in Reduced warning ReduceNoPayment state cont
 
 -- | Reduce a contract until it cannot be reduced more
-reduceContractUntilQuiescent :: Environment -> State -> Contract Token -> ReduceResult
+reduceContractUntilQuiescent :: Environment -> State Token -> Contract Token -> ReduceResult
 reduceContractUntilQuiescent env state contract = let
     reductionLoop
-      :: Bool -> Environment -> State -> Contract Token -> [ReduceWarning] -> [Payment] -> ReduceResult
+      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning] -> [Payment] -> ReduceResult
     reductionLoop reduced env state contract warnings payments =
         case reduceContractStep env state contract of
             Reduced warning effect newState cont -> let
@@ -424,12 +426,12 @@ reduceContractUntilQuiescent env state contract = let
 
     in reductionLoop False env state contract [] []
 
-data ApplyAction = AppliedAction ApplyWarning State
+data ApplyAction = AppliedAction ApplyWarning (State Token)
                  | NotAppliedAction
   deriving stock (Haskell.Show)
 
 -- | Try to apply a single input content to a single action
-applyAction :: Environment -> State -> InputContent Token -> Action Token -> ApplyAction
+applyAction :: Environment -> State Token -> InputContent Token -> Action Token -> ApplyAction
 applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party2 tok2 val) =
     if accId1 == accId2 && party1 == party2 && tok1 == tok2 && amount == evalValue env state val
     then let warning = if amount > 0 then ApplyNoWarning
@@ -456,7 +458,7 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
-applyCases :: Environment -> State -> Input Token -> [Case (Contract Token) Token] -> ApplyResult
+applyCases :: Environment -> State Token -> Input Token -> [Case (Contract Token) Token] -> ApplyResult
 applyCases env state input (headCase : tailCase) =
     let inputContent = getInputContent input :: InputContent Token
         action = getAction headCase :: Action Token
@@ -470,7 +472,7 @@ applyCases env state input (headCase : tailCase) =
 applyCases _ _ _ [] = ApplyNoMatchError
 
 -- | Apply a single @Input@ to a current contract
-applyInput :: Environment -> State -> Input Token -> Contract Token -> ApplyResult
+applyInput :: Environment -> State Token -> Input Token -> Contract Token -> ApplyResult
 applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
 
@@ -489,12 +491,12 @@ convertReduceWarnings = foldr (\warn acc -> case warn of
     ) []
 
 -- | Apply a list of Inputs to the contract
-applyAllInputs :: Environment -> State -> Contract Token -> [Input Token] -> ApplyAllResult
+applyAllInputs :: Environment -> State Token -> Contract Token -> [Input Token] -> ApplyAllResult
 applyAllInputs env state contract inputs = let
     applyAllLoop
         :: Bool
         -> Environment
-        -> State
+        -> State Token
         -> Contract Token
         -> [Input Token]
         -> [TransactionWarning]
@@ -538,7 +540,7 @@ isClose Close = True
 isClose _     = False
 
 -- | Try to compute outputs of a transaction given its inputs, a contract, and it's @State@
-computeTransaction :: TransactionInput -> State -> Contract Token -> TransactionOutput
+computeTransaction :: TransactionInput -> State Token -> Contract Token -> TransactionOutput
 computeTransaction tx state contract = let
     inputs = txInputs tx
     in case fixInterval (txInterval tx) state of
@@ -597,7 +599,7 @@ contractLifespanUpperBound contract = case contract of
     Assert _ cont -> contractLifespanUpperBound cont
 
 
-totalBalance :: Accounts -> Money
+totalBalance :: Accounts Token -> Money
 totalBalance accounts = foldMap
     (\((_, Token cur tok), balance) -> Val.singleton cur tok balance)
     (Map.toList accounts)
@@ -606,7 +608,7 @@ totalBalance accounts = foldMap
 {-|
     Check that all accounts have positive balance.
  -}
-validateBalances :: State -> Bool
+validateBalances :: State Token -> Bool
 validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList accounts)
 
 

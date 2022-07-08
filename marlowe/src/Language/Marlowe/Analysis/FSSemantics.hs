@@ -105,7 +105,7 @@ toSymMap = foldAssocMapWithKey toSymItem mempty
 -- First parameter (pt) is the input parameter trace, which is just a fixed length
 -- list of symbolic integers that are matched to trace.
 -- When Nothing is passed as second parameter it acts like emptyState.
-mkInitialSymState :: [(SInteger, SInteger, SInteger, SInteger)] -> Maybe State
+mkInitialSymState :: [(SInteger, SInteger, SInteger, SInteger)] -> Maybe (State Token)
                   -> Symbolic SymState
 mkInitialSymState pt Nothing = do (ls, hs) <- generateSymbolicInterval Nothing
                                   return $ SymState { lowTime = ls
@@ -524,7 +524,7 @@ countWhensCaseList []                           = 0
 -- this function because then we would have to return a symbolic list that would make
 -- the whole process slower. It is meant to be used just with SBV, with a symbolic
 -- paramTrace, and we use the symbolic paramTrace to know which is the counterexample.
-wrapper :: Bool -> Contract Token -> [(SInteger, SInteger, SInteger, SInteger)] -> Maybe State
+wrapper :: Bool -> Contract Token -> [(SInteger, SInteger, SInteger, SInteger)] -> Maybe (State Token)
         -> Symbolic SBool
 wrapper oa c st maybeState = do ess <- mkInitialSymState st maybeState
                                 isValidAndFailsAux oa sFalse c ess
@@ -593,7 +593,7 @@ caseToInput (MerkleizedCase _ _:t) c v
 -- Input is passed as a combination and function from input list to transaction input and
 -- input list for convenience. The list of 4-uples is passed through because it is used
 -- to recursively call executeAndInterpret (co-recursive funtion).
-computeAndContinue :: ([Input Token] -> TransactionInput) -> [Input Token] -> State -> Contract Token
+computeAndContinue :: ([Input Token] -> TransactionInput) -> [Input Token] -> State Token -> Contract Token
                    -> [(Integer, Integer, Integer, Integer)]
                    -> [([TransactionInput], [TransactionWarning])]
 computeAndContinue transaction inps sta cont t =
@@ -607,7 +607,7 @@ computeAndContinue transaction inps sta cont t =
 
 -- Takes a list of 4-uples (and state and contract) and interprets it as a list of
 -- transactions and also computes the resulting list of warnings.
-executeAndInterpret :: State -> [(Integer, Integer, Integer, Integer)] -> Contract Token
+executeAndInterpret :: State Token -> [(Integer, Integer, Integer, Integer)] -> Contract Token
                     -> [([TransactionInput], [TransactionWarning])]
 executeAndInterpret _ [] _ = []
 executeAndInterpret sta ((l, h, v, b):t) cont
@@ -628,7 +628,7 @@ executeAndInterpret sta ((l, h, v, b):t) cont
 
 -- It wraps executeAndInterpret so that it takes an optional State, and also
 -- combines the results of executeAndInterpret in one single tuple.
-interpretResult :: [(Integer, Integer, Integer, Integer)] -> Contract Token -> Maybe State
+interpretResult :: [(Integer, Integer, Integer, Integer)] -> Contract Token -> Maybe (State Token)
                 -> (POSIXTime, [TransactionInput], [TransactionWarning])
 interpretResult [] _ _ = error "Empty result"
 interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
@@ -641,7 +641,7 @@ interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
 
 -- It interprets the counter example found by SBV (SMTModel), given the contract,
 -- and initial state (optional), and the list of variables used.
-extractCounterExample :: SMTModel -> Contract Token -> Maybe State -> [String]
+extractCounterExample :: SMTModel -> Contract Token -> Maybe (State Token) -> [String]
                       -> (POSIXTime, [TransactionInput], [TransactionWarning])
 extractCounterExample smtModel cont maybeState maps = interpretedResult
   where assocs = map (\(a, b) -> (a, fromCV b :: Integer)) $ modelAssocs smtModel
@@ -652,7 +652,7 @@ extractCounterExample smtModel cont maybeState maps = interpretedResult
 -- It generates variables, runs SBV, and it interprets the result in Marlow terms.
 warningsTraceCustom :: Bool
               -> Contract Token
-              -> Maybe State
+              -> Maybe (State Token)
               -> IO (Either ThmResult
                             (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTraceCustom onlyAssertions con maybeState =
@@ -671,14 +671,14 @@ warningsTraceCustom onlyAssertions con maybeState =
 
 -- Like warningsTraceCustom but checks all warnings (including assertions)
 warningsTraceWithState :: Contract Token
-              -> Maybe State
+              -> Maybe (State Token)
               -> IO (Either ThmResult
                             (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTraceWithState = warningsTraceCustom False
 
 -- Like warningsTraceCustom but only checks assertions.
 onlyAssertionsWithState :: Contract Token
-              -> Maybe State
+              -> Maybe (State Token)
               -> IO (Either ThmResult
                             (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 onlyAssertionsWithState = warningsTraceCustom True

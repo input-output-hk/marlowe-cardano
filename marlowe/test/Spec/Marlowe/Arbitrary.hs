@@ -1,4 +1,5 @@
 
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -327,16 +328,16 @@ shrinkAssocMap am =
   ]
 
 
-arbitraryAccounts :: Gen Accounts
+arbitraryAccounts :: Gen (Accounts Token)
 arbitraryAccounts =
   arbitraryAssocMap
     ((,) <$> arbitrary <*> arbitrary)
     arbitraryPositiveAmount
 
-shrinkAccounts :: Accounts -> [Accounts]
+shrinkAccounts :: Accounts Token -> [Accounts Token]
 shrinkAccounts = shrinkAssocMap
 
-arbitraryFromAccounts :: Accounts -> Gen ((AccountId, Token), Integer)
+arbitraryFromAccounts :: Accounts Token -> Gen ((AccountId, Token), Integer)
 arbitraryFromAccounts accounts'
   | AM.null accounts' = (,) <$> ((,) <$> arbitrary <*> arbitrary) <*> arbitrary
   | otherwise =
@@ -373,7 +374,7 @@ shrinkBoundValues :: AM.Map ValueId Integer -> [AM.Map ValueId Integer]
 shrinkBoundValues = shrinkAssocMap
 
 
-instance Arbitrary State where
+instance Arbitrary (State Token) where
   arbitrary =
     do
       accounts' <- arbitraryAccounts

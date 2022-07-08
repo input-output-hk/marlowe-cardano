@@ -22,7 +22,7 @@ import Test.Tasty.QuickCheck (Gen, generate)
 import qualified PlutusTx.Prelude as P
 
 
-canonicalState :: State -> State
+canonicalState :: State Token -> State Token
 canonicalState State{..} =
   State
     (assocMapSort accounts)
@@ -31,7 +31,7 @@ canonicalState State{..} =
     minTime
 
 
-stateEq :: State -> State -> Bool
+stateEq :: State Token -> State Token -> Bool
 stateEq = (==) `on` canonicalState
 
 

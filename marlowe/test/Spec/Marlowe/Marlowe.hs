@@ -555,7 +555,7 @@ inputSerialization = do
 stateSerialization :: IO ()
 stateSerialization = do
     state <- readFile "test/state.json"
-    let decoded :: Maybe State
+    let decoded :: Maybe (State Token)
         decoded = decode (fromString state)
     case decoded of
         Just st ->
