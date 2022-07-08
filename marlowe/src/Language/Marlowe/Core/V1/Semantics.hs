@@ -147,7 +147,7 @@ data ApplyResult = Applied ApplyWarning (State Token) (Contract Token)
 
 
 -- | Result of 'applyAllInputs'
-data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning] [Payment] (State Token) (Contract Token)
+data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning Token] [Payment] (State Token) (Contract Token)
                     | ApplyAllNoMatchError
                     | ApplyAllAmbiguousTimeIntervalError
                     | ApplyAllHashMismatch
@@ -155,13 +155,13 @@ data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning] [Payment] (State
 
 
 -- | Warnings during transaction computation
-data TransactionWarning = TransactionNonPositiveDeposit Party AccountId Token Integer
-                        | TransactionNonPositivePay AccountId Payee Token Integer
-                        | TransactionPartialPay AccountId Payee Token Integer Integer
---                                                 ^ src    ^ dest     ^ paid   ^ expected
-                        | TransactionShadowing ValueId Integer Integer
---                                                 oldVal ^  newVal ^
-                        | TransactionAssertionFailed
+data TransactionWarning t = TransactionNonPositiveDeposit Party AccountId t Integer
+                          | TransactionNonPositivePay AccountId Payee t Integer
+                          | TransactionPartialPay AccountId Payee t Integer Integer
+--                                                   ^ src    ^ dest     ^ paid   ^ expected
+                          | TransactionShadowing ValueId Integer Integer
+--                                                   oldVal ^  newVal ^
+                          | TransactionAssertionFailed
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
   deriving anyclass (Pretty)
 
@@ -194,7 +194,7 @@ instance Pretty t => Pretty (TransactionInput t) where
 -}
 data TransactionOutput =
     TransactionOutput
-        { txOutWarnings :: [TransactionWarning]
+        { txOutWarnings :: [TransactionWarning Token]
         , txOutPayments :: [Payment]
         , txOutState    :: State Token
         , txOutContract :: Contract Token }
@@ -477,7 +477,7 @@ applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
 
 -- | Propagate 'ReduceWarning' to 'TransactionWarning'
-convertReduceWarnings :: [ReduceWarning] -> [TransactionWarning]
+convertReduceWarnings :: [ReduceWarning] -> [TransactionWarning Token]
 convertReduceWarnings = foldr (\warn acc -> case warn of
     ReduceNoWarning -> acc
     ReduceNonPositivePay accId payee tok amount ->
@@ -499,7 +499,7 @@ applyAllInputs env state contract inputs = let
         -> State Token
         -> Contract Token
         -> [Input Token]
-        -> [TransactionWarning]
+        -> [TransactionWarning Token]
         -> [Payment]
         -> ApplyAllResult
     applyAllLoop contractChanged env state contract inputs warnings payments =
@@ -528,7 +528,7 @@ applyAllInputs env state contract inputs = let
                     ApplyHashMismatch -> ApplyAllHashMismatch
     in applyAllLoop False env state contract inputs [] []
   where
-    convertApplyWarning :: ApplyWarning -> [TransactionWarning]
+    convertApplyWarning :: ApplyWarning -> [TransactionWarning Token]
     convertApplyWarning warn =
         case warn of
             ApplyNoWarning -> []
@@ -637,7 +637,7 @@ instance ToJSON t => ToJSON (TransactionInput t) where
                                     , "to" .= to
                                     ]
 
-instance FromJSON TransactionWarning where
+instance FromJSON t => FromJSON (TransactionWarning t) where
   parseJSON (String "assertion_failed") = return TransactionAssertionFailed
   parseJSON (Object v) =
         (TransactionNonPositiveDeposit <$> (v .: "party")
@@ -660,7 +660,7 @@ instance FromJSON TransactionWarning where
                               <*> (v .: "is_now_assigned"))
   parseJSON _ = Haskell.fail "Contract must be either an object or a the string \"close\""
 
-instance ToJSON TransactionWarning where
+instance ToJSON t => ToJSON (TransactionWarning t) where
   toJSON (TransactionNonPositiveDeposit party accId tok amount) = object
       [ "party" .= party
       , "asked_to_deposit" .= amount

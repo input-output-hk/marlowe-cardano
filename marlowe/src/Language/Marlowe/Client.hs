@@ -960,7 +960,7 @@ shelleyAddressToKeys (AddressInEra _ (Shelley.ShelleyAddress _ paymentCredential
             pure (ppkh,  Just . StakePubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes stakeHash)
 shelleyAddressToKeys _ = throwError $ OtherContractError $ Contract.OtherContractError "Byron Addresses not supported"
 
-getAction :: MarloweTimeRange -> Party -> MarloweData -> ([TransactionWarning], PartyAction)
+getAction :: MarloweTimeRange -> Party -> MarloweData -> ([TransactionWarning Token], PartyAction)
 getAction timeRange party MarloweData{marloweContract,marloweState} = let
     env = Environment timeRange
     in case reduceContractUntilQuiescent env marloweState marloweContract of

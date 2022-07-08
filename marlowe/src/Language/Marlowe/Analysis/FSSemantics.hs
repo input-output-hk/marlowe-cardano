@@ -595,7 +595,7 @@ caseToInput (MerkleizedCase _ _:t) c v
 -- to recursively call executeAndInterpret (co-recursive funtion).
 computeAndContinue :: ([Input Token] -> TransactionInput Token) -> [Input Token] -> State Token -> Contract Token
                    -> [(Integer, Integer, Integer, Integer)]
-                   -> [([TransactionInput Token], [TransactionWarning])]
+                   -> [([TransactionInput Token], [TransactionWarning Token])]
 computeAndContinue transaction inps sta cont t =
   case computeTransaction (transaction inps) sta cont of
     Error TEUselessTransaction -> executeAndInterpret sta t cont
@@ -608,7 +608,7 @@ computeAndContinue transaction inps sta cont t =
 -- Takes a list of 4-uples (and state and contract) and interprets it as a list of
 -- transactions and also computes the resulting list of warnings.
 executeAndInterpret :: State Token -> [(Integer, Integer, Integer, Integer)] -> Contract Token
-                    -> [([TransactionInput Token], [TransactionWarning])]
+                    -> [([TransactionInput Token], [TransactionWarning Token])]
 executeAndInterpret _ [] _ = []
 executeAndInterpret sta ((l, h, v, b):t) cont
   | b == 0 = computeAndContinue transaction [] sta cont t
@@ -629,7 +629,7 @@ executeAndInterpret sta ((l, h, v, b):t) cont
 -- It wraps executeAndInterpret so that it takes an optional State, and also
 -- combines the results of executeAndInterpret in one single tuple.
 interpretResult :: [(Integer, Integer, Integer, Integer)] -> Contract Token -> Maybe (State Token)
-                -> (POSIXTime, [TransactionInput Token], [TransactionWarning])
+                -> (POSIXTime, [TransactionInput Token], [TransactionWarning Token])
 interpretResult [] _ _ = error "Empty result"
 interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
    where (tin, twa) = foldl' (\(accInp, accWarn) (elemInp, elemWarn) ->
@@ -642,7 +642,7 @@ interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
 -- It interprets the counter example found by SBV (SMTModel), given the contract,
 -- and initial state (optional), and the list of variables used.
 extractCounterExample :: SMTModel -> Contract Token -> Maybe (State Token) -> [String]
-                      -> (POSIXTime, [TransactionInput Token], [TransactionWarning])
+                      -> (POSIXTime, [TransactionInput Token], [TransactionWarning Token])
 extractCounterExample smtModel cont maybeState maps = interpretedResult
   where assocs = map (\(a, b) -> (a, fromCV b :: Integer)) $ modelAssocs smtModel
         counterExample = groupResult maps (M.fromList assocs)
@@ -654,7 +654,7 @@ warningsTraceCustom :: Bool
               -> Contract Token
               -> Maybe (State Token)
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
 warningsTraceCustom onlyAssertions con maybeState =
     do thmRes@(ThmResult result) <- satCommand
        return (case result of
@@ -673,20 +673,20 @@ warningsTraceCustom onlyAssertions con maybeState =
 warningsTraceWithState :: Contract Token
               -> Maybe (State Token)
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
 warningsTraceWithState = warningsTraceCustom False
 
 -- Like warningsTraceCustom but only checks assertions.
 onlyAssertionsWithState :: Contract Token
               -> Maybe (State Token)
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
 onlyAssertionsWithState = warningsTraceCustom True
 
 -- Like warningsTraceWithState but without initialState.
 warningsTrace :: Contract Token
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
 warningsTrace con = warningsTraceWithState con Nothing
 
 
