@@ -178,12 +178,12 @@ data TransactionError = TEAmbiguousTimeIntervalError
 
 {-| Marlowe transaction input.
 -}
-data TransactionInput = TransactionInput
+data TransactionInput t = TransactionInput
     { txInterval :: TimeInterval
-    , txInputs   :: [Input Token] }
+    , txInputs   :: [Input t] }
   deriving stock (Haskell.Show, Haskell.Eq)
 
-instance Pretty TransactionInput where
+instance Pretty t => Pretty (TransactionInput t) where
     prettyFragment tInp = text "TransactionInput" <> space <> lbrace <> line <> txIntLine <> line <> txInpLine
         where
             txIntLine = hang 2 $ text "txInterval = " <> prettyFragment (txInterval tInp) <> comma
@@ -540,7 +540,7 @@ isClose Close = True
 isClose _     = False
 
 -- | Try to compute outputs of a transaction given its inputs, a contract, and it's @State@
-computeTransaction :: TransactionInput -> State Token -> Contract Token -> TransactionOutput
+computeTransaction :: TransactionInput Token -> State Token -> Contract Token -> TransactionOutput
 computeTransaction tx state contract = let
     inputs = txInputs tx
     in case fixInterval (txInterval tx) state of
@@ -557,7 +557,7 @@ computeTransaction tx state contract = let
             ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
 
-playTraceAux :: TransactionOutput -> [TransactionInput] -> TransactionOutput
+playTraceAux :: TransactionOutput -> [TransactionInput Token] -> TransactionOutput
 playTraceAux res [] = res
 playTraceAux TransactionOutput
                 { txOutWarnings = warnings
@@ -576,7 +576,7 @@ playTraceAux TransactionOutput
           Error _ -> transRes
 playTraceAux err@(Error _) _ = err
 
-playTrace :: POSIXTime -> Contract Token -> [TransactionInput] -> TransactionOutput
+playTrace :: POSIXTime -> Contract Token -> [TransactionInput Token] -> TransactionOutput
 playTrace minTime c = playTraceAux TransactionOutput
                                  { txOutWarnings = []
                                  , txOutPayments = []
@@ -614,7 +614,7 @@ validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList acco
 
 -- Typeclass instances
 
-instance FromJSON TransactionInput where
+instance FromJSON t => FromJSON (TransactionInput t) where
   parseJSON (Object v) =
         TransactionInput <$> (parseTimeInterval =<< (v .: "tx_interval"))
                          <*> ((v .: "tx_inputs") >>=
@@ -628,7 +628,7 @@ instance FromJSON TransactionInput where
                                                       )
   parseJSON _ = Haskell.fail "TransactionInput must be an object"
 
-instance ToJSON TransactionInput where
+instance ToJSON t => ToJSON (TransactionInput t) where
   toJSON (TransactionInput (POSIXTime from, POSIXTime to) txInps) = object
       [ "tx_interval" .= timeIntervalJSON
       , "tx_inputs" .= toJSONList (map toJSON txInps)

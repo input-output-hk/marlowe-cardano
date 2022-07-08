@@ -43,13 +43,13 @@ expandContract (When cas sl con) = [When cas sl c | c <- expandContract con]
 expandContract (Let vi va con) = [Let vi va c | c <- expandContract con]
 expandContract (Assert _ con) = expandContract con
 
-getInputs :: Contract Token -> IO (Either (ThmResult, Contract Token) (Maybe (POSIXTime, [TransactionInput])))
+getInputs :: Contract Token -> IO (Either (ThmResult, Contract Token) (Maybe (POSIXTime, [TransactionInput Token])))
 getInputs c = bimap (\tr -> (tr, c)) (fmap (\(s, t, _) -> (s, t))) <$> onlyAssertionsWithState c Nothing
 
 -- | Uses static analysis to obtain a list of "unit tests" (lists of transactions) that
 -- | cover the different branches of the given contract. If static analysis fails
 -- | it returns a tuple that includes the error by the solver and the offending
 -- | extension of the contract
-getAllInputs :: Contract Token -> IO (Either (ThmResult, Contract Token) [(POSIXTime, [TransactionInput])])
+getAllInputs :: Contract Token -> IO (Either (ThmResult, Contract Token) [(POSIXTime, [TransactionInput Token])])
 getAllInputs c = second catMaybes . sequence <$> mapM getInputs (expandContract (removeAsserts c))
 

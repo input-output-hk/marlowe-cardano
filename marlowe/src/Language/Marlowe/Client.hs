@@ -182,16 +182,16 @@ type RoleOwners = AssocMap.Map Val.TokenName (AddressInEra ShelleyEra)
 -- Now we are not able to notify about role payouts before the contract is on the chain.
 data ContractHistory =
     ContractHistory
-        { chParams         :: MarloweParams      -- ^ The "instance id" of the contract
-        , chInitialData    :: MarloweData        -- ^ The initial Contract + State
-        , chHistory        :: [TransactionInput] -- ^ All the transaction that affected the contract.
-                                                 --   The current state and intermediate states can
-                                                 --   be recalculated by using computeTransaction
-                                                 --   of each TransactionInput to the initial state
-        , chAddress        :: Address            -- ^ The script address of the marlowe contract
-        , chUnspentPayouts :: UnspentPayouts     -- ^ All UTxOs associated with our payout script.
-                                                 --   Please note that in theory we include here outpus
-                                                 --   which possible were created by an "external" transactions.
+        { chParams         :: MarloweParams            -- ^ The "instance id" of the contract
+        , chInitialData    :: MarloweData              -- ^ The initial Contract + State
+        , chHistory        :: [TransactionInput Token] -- ^ All the transaction that affected the contract.
+                                                       --   The current state and intermediate states can
+                                                       --   be recalculated by using computeTransaction
+                                                       --   of each TransactionInput to the initial state
+        , chAddress        :: Address                  -- ^ The script address of the marlowe contract
+        , chUnspentPayouts :: UnspentPayouts           -- ^ All UTxOs associated with our payout script.
+                                                       --   Please note that in theory we include here outpus
+                                                       --   which possible were created by an "external" transactions.
         }
         deriving stock (Show, Generic)
         deriving anyclass (FromJSON, ToJSON)

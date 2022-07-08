@@ -56,6 +56,7 @@ import Data.Maybe (catMaybes, isJust, isNothing, mapMaybe)
 import Data.Tuple.Extra (secondM)
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
+import Language.Marlowe.Core.V1.Semantics.Types (Token)
 import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, TypedRolePayoutValidator,
                                  smallUntypedValidator)
 import Ledger (ChainIndexTxOut (..), ciTxOutAddress, toTxOut)
@@ -109,16 +110,16 @@ data History =
     -- | Input was applied to the contract.
   | InputApplied
     {
-      historyInput    :: TransactionInput  -- ^ The Marlowe input that was applied.
-    , historyTxOutRef :: TxOutRef          -- ^ The UTxO that resulted from the input being applied.
-    , historyData     :: MarloweData       -- ^ The Marlowe data attached to the UTxO.
-    , historyNext     :: Maybe History     -- ^ The next step in the history, if known.
+      historyInput    :: TransactionInput Token  -- ^ The Marlowe input that was applied.
+    , historyTxOutRef :: TxOutRef                -- ^ The UTxO that resulted from the input being applied.
+    , historyData     :: MarloweData             -- ^ The Marlowe data attached to the UTxO.
+    , historyNext     :: Maybe History           -- ^ The next step in the history, if known.
     }
     -- | The contract was closed.
   | Closed
     {
-      historyInput :: TransactionInput  -- ^ The Marlowe input that was applied.
-    , historyTxId  :: TxId              -- ^ The transaction that resulted from the input being applied.
+      historyInput :: TransactionInput Token  -- ^ The Marlowe input that was applied.
+    , historyTxId  :: TxId                    -- ^ The transaction that resulted from the input being applied.
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON, FromJSON)
@@ -429,9 +430,9 @@ txDatums citx =
 
 
 -- | Extract Marlowe input from a transaction.
-txInputs :: SlotConfig                      -- ^ The slot configuration.
-         -> ChainIndexTx                    -- ^ The transaction.
-         -> [(TxOutRef, TransactionInput)]  -- ^ The inputs that have Marlowe inputs.
+txInputs :: SlotConfig                            -- ^ The slot configuration.
+         -> ChainIndexTx                          -- ^ The transaction.
+         -> [(TxOutRef, TransactionInput Token)]  -- ^ The inputs that have Marlowe inputs.
 txInputs slotConfig citx =
   case slotRangeToPOSIXTimeRange slotConfig $ citx ^. citxValidRange of
     Interval (LowerBound (Finite l) True) (UpperBound (Finite h) False) ->
