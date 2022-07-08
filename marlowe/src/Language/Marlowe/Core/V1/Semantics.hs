@@ -128,8 +128,8 @@ data ReduceStepResult t = Reduced (ReduceWarning t) ReduceEffect (State t) (Cont
 
 
 -- | Result of 'reduceContractUntilQuiescent'
-data ReduceResult = ContractQuiescent Bool [ReduceWarning Token] [Payment] (State Token) (Contract Token)
-                  | RRAmbiguousTimeIntervalError
+data ReduceResult t = ContractQuiescent Bool [ReduceWarning t] [Payment] (State t) (Contract t)
+                    | RRAmbiguousTimeIntervalError
   deriving stock (Haskell.Show)
 
 
@@ -406,10 +406,10 @@ reduceContractStep env state contract = case contract of
         in Reduced warning ReduceNoPayment state cont
 
 -- | Reduce a contract until it cannot be reduced more
-reduceContractUntilQuiescent :: Environment -> State Token -> Contract Token -> ReduceResult
+reduceContractUntilQuiescent :: Environment -> State Token -> Contract Token -> ReduceResult Token
 reduceContractUntilQuiescent env state contract = let
     reductionLoop
-      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning Token] -> [Payment] -> ReduceResult
+      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning Token] -> [Payment] -> ReduceResult Token
     reductionLoop reduced env state contract warnings payments =
         case reduceContractStep env state contract of
             Reduced warning effect newState cont -> let
