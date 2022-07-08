@@ -56,7 +56,7 @@ getAccountsDiff payments inputs =
 foldMapContract :: Monoid m
     => (P.BuiltinByteString -> Maybe (Contract Token))
     -> (Contract Token -> m)
-    -> (Case (Contract Token) -> m)
+    -> (Case (Contract Token) Token -> m)
     -> (Observation -> m)
     -> (Value Observation -> m)
     -> Contract Token -> m
@@ -95,7 +95,7 @@ foldMapContract funmerk fcont fcase fobs fvalue contract =
 
 foldMapNonMerkleizedContract :: Monoid m
     => (Contract Token -> m)
-    -> (Case (Contract Token) -> m)
+    -> (Case (Contract Token) Token -> m)
     -> (Observation -> m)
     -> (Value Observation -> m)
     -> Contract Token -> m
@@ -119,7 +119,7 @@ extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extract
     fromPayee (Account party) = fromParty party
 
 
-merkleizedCase :: Action -> Contract Token -> Case (Contract Token)
+merkleizedCase :: Action Token -> Contract Token -> Case (Contract Token) Token
 merkleizedCase action continuation = let
     hash = dataHash (PlutusTx.toBuiltinData continuation)
     in MerkleizedCase action hash

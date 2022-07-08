@@ -167,9 +167,9 @@ data Bound = Bound Integer Integer
       Typically this would be done by one of the parties,
       or one of their wallets acting automatically.
 -}
-data Action = Deposit AccountId Party Token (Value Observation)
-            | Choice ChoiceId [Bound]
-            | Notify Observation
+data Action t = Deposit AccountId Party t (Value Observation)
+              | Choice ChoiceId [Bound]
+              | Notify Observation
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -187,12 +187,14 @@ data Payee = Account AccountId
 {-  Plutus doesn't support mutually recursive data types yet.
     datatype Case is mutually recurvive with @Contract@
 -}
-data Case a = Case Action a
-            | MerkleizedCase Action BuiltinByteString
+-- TODO: @Case a t = Case (Action t) (a t)@ might make more sense, but the TH
+-- code ('makeIsDataIndexed') gets confused by such higher-kinded types
+data Case a t = Case (Action t) a
+              | MerkleizedCase (Action t) BuiltinByteString
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
-getAction :: Case a -> Action
+getAction :: Case a t -> Action t
 getAction (Case action _)           = action
 getAction (MerkleizedCase action _) = action
 
@@ -206,7 +208,7 @@ getAction (MerkleizedCase action _) = action
 data Contract t = Close
                 | Pay AccountId Payee t (Value Observation) (Contract t)
                 | If Observation (Contract t) (Contract t)
-                | When [Case (Contract t)] Timeout (Contract t)
+                | When [Case (Contract t) t] Timeout (Contract t)
                 | Let ValueId (Value Observation) (Contract t)
                 | Assert Observation (Contract t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
@@ -509,7 +511,7 @@ instance ToJSON Bound where
       , "to" .= to
       ]
 
-instance FromJSON Action where
+instance FromJSON t => FromJSON (Action t) where
   parseJSON = withObject "Action" (\v ->
        (Deposit <$> (v .: "into_account")
                 <*> (v .: "party")
@@ -522,7 +524,7 @@ instance FromJSON Action where
                                             )))
    <|> (Notify <$> (v .: "notify_if"))
                                   )
-instance ToJSON Action where
+instance ToJSON t => ToJSON (Action t) where
   toJSON (Deposit accountId party token val) = object
       [ "into_account" .= accountId
       , "party" .= party
@@ -547,14 +549,14 @@ instance ToJSON Payee where
   toJSON (Party party) = object ["party" .= party]
 
 
-instance FromJSON a => FromJSON (Case a) where
+instance (FromJSON a, FromJSON t) => FromJSON (Case a t) where
   parseJSON = withObject "Case" (\v ->
         (Case <$> (v .: "case")
               <*> (v .: "then"))
     <|> (MerkleizedCase <$> (v .: "case")
                         <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_then")))
                                 )
-instance ToJSON a => ToJSON (Case a) where
+instance (ToJSON a, ToJSON t) => ToJSON (Case a t) where
   toJSON (Case act cont) = object
       [ "case" .= act
       , "then" .= cont
@@ -680,7 +682,7 @@ instance Eq Observation where
     FalseObs == FalseObs                       = True
     _ == _                                     = False
 
-instance Eq Action where
+instance Eq t => Eq (Action t) where
     {-# INLINABLE (==) #-}
     Deposit acc1 party1 tok1 val1 == Deposit acc2 party2 tok2 val2 =
         acc1 == acc2 && party1 == party2 && tok1 == tok2 && val1 == val2
@@ -692,7 +694,7 @@ instance Eq Action where
     Notify obs1 == Notify obs2 = obs1 == obs2
     _ == _ = False
 
-instance Eq a => Eq (Case a) where
+instance (Eq a, Eq t) => Eq (Case a t) where
     {-# INLINABLE (==) #-}
     Case acl cl == Case acr cr                       = acl == acr && cl == cr
     MerkleizedCase acl bsl == MerkleizedCase acr bsr = acl == acr && bsl == bsr

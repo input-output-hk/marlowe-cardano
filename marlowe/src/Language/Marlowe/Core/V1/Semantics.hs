@@ -429,7 +429,7 @@ data ApplyAction = AppliedAction ApplyWarning State
   deriving stock (Haskell.Show)
 
 -- | Try to apply a single input content to a single action
-applyAction :: Environment -> State -> InputContent -> Action -> ApplyAction
+applyAction :: Environment -> State -> InputContent -> Action Token -> ApplyAction
 applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party2 tok2 val) =
     if accId1 == accId2 && party1 == party2 && tok1 == tok2 && amount == evalValue env state val
     then let warning = if amount > 0 then ApplyNoWarning
@@ -448,7 +448,7 @@ applyAction env state INotify (Notify obs)
 applyAction _ _ _ _ = NotAppliedAction
 
 -- | Try to get a continuation from a pair of Input and Case
-getContinuation :: Input -> Case (Contract Token) -> Maybe (Contract Token)
+getContinuation :: Input -> Case (Contract Token) Token -> Maybe (Contract Token)
 getContinuation (NormalInput _) (Case _ continuation) = Just continuation
 getContinuation (MerkleizedInput _ inputContinuationHash continuation) (MerkleizedCase _ continuationHash) =
     if inputContinuationHash == continuationHash
@@ -456,10 +456,10 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
-applyCases :: Environment -> State -> Input -> [Case (Contract Token)] -> ApplyResult
+applyCases :: Environment -> State -> Input -> [Case (Contract Token) Token] -> ApplyResult
 applyCases env state input (headCase : tailCase) =
     let inputContent = getInputContent input :: InputContent
-        action = getAction headCase :: Action
+        action = getAction headCase :: Action Token
         maybeContinuation = getContinuation input headCase :: Maybe (Contract Token)
     in case applyAction env state inputContent action of
          AppliedAction warning newState ->

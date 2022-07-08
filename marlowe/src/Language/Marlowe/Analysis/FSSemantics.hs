@@ -392,7 +392,7 @@ addFreshSlotsToState sState =
 -- that happened then the current case would never be reached, we keep adding conditions
 -- to the function and pass it to the next iteration of isValidAndFailsWhen.
 -- - pos - Is the position of the current Case clause [1..], 0 means timeout branch.
-isValidAndFailsWhen :: Bool -> SBool -> [Case (Contract Token)] -> Timeout -> Contract Token -> (SymInput -> SymState -> SBool)
+isValidAndFailsWhen :: Bool -> SBool -> [Case (Contract Token) Token] -> Timeout -> Contract Token -> (SymInput -> SymState -> SBool)
                     -> SymState -> Integer -> Symbolic SBool
 isValidAndFailsWhen oa hasErr [] timeout cont previousMatch sState pos =
   do newLowSlot <- sInteger_
@@ -513,7 +513,7 @@ countWhens (Let va vb c)       = countWhens c
 countWhens (Assert o c)        = countWhens c
 
 -- Same as countWhens but it starts with a Case list
-countWhensCaseList :: [Case (Contract Token)] -> Integer
+countWhensCaseList :: [Case (Contract Token) Token] -> Integer
 countWhensCaseList (Case uu c : tail)           = max (countWhens c) (countWhensCaseList tail)
 countWhensCaseList (MerkleizedCase uu c : tail) = countWhensCaseList tail
 countWhensCaseList []                           = 0
@@ -572,7 +572,7 @@ groupResult _ _ = error "Wrong number of labels generated"
 
 -- Reconstructs an input from a Case list a Case position and a value (deposit amount or
 -- chosen value)
-caseToInput :: [Case a] -> Integer -> Integer -> Input
+caseToInput :: [Case a Token] -> Integer -> Integer -> Input
 caseToInput [] _ _ = error "Wrong number of cases interpreting result"
 caseToInput (Case h _:t) c v
   | c > 1 = caseToInput t (c - 1) v

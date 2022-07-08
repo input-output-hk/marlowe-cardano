@@ -19,15 +19,15 @@ removeAsserts = go
         go (Let vi va con)        = Let vi va (go con)
         go (Assert _ con)         = con
 
-        goCase :: Case (Contract Token) -> Case (Contract Token)
+        goCase :: Case (Contract Token) Token -> Case (Contract Token) Token
         goCase (Case ac con)           = Case ac (go con)
         goCase mc@(MerkleizedCase _ _) = mc
 
-expandCase :: Case (Contract Token) -> [Case (Contract Token)]
+expandCase :: Case (Contract Token) Token -> [Case (Contract Token) Token]
 expandCase (Case ac con)        = [Case ac c | c <- expandContract con]
 expandCase (MerkleizedCase _ _) = []
 
-expandCases :: [Case (Contract Token)] -> [[Case (Contract Token)]]
+expandCases :: [Case (Contract Token) Token] -> [[Case (Contract Token) Token]]
 expandCases [] = []
 expandCases (firstCase:restOfCases) =
        [c:restOfCases | c <- expandCase firstCase]

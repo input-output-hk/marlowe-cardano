@@ -244,18 +244,18 @@ boundListGen = do len <- listLengthGen
                   boundListGenAux len firstBound
 
 
-actionGenSized :: Int -> Gen Action
+actionGenSized :: Int -> Gen (Action Token)
 actionGenSized s =
   oneof [ Deposit <$> partyGen <*> partyGen <*> tokenGen <*> valueGenSized (s - 1)
         , Choice <$> choiceIdGen <*> boundListGen
         , Notify <$> observationGenSized (s - 1)
         ]
 
-actionGen :: Gen Action
+actionGen :: Gen (Action Token)
 actionGen = sized actionGenSized
 
 
-shrinkAction :: Action -> [Action]
+shrinkAction :: Action Token -> [Action Token]
 shrinkAction action = case action of
     Deposit accId party tok val -> Notify FalseObs : [Deposit accId party tok v | v <- shrinkValue val]
         ++ [Deposit x party tok val | x <- shrinkParty accId]
@@ -267,12 +267,12 @@ shrinkAction action = case action of
     Notify obs -> [Notify x | x <- shrinkObservation obs]
 
 
-caseRelGenSized :: Int -> Integer -> Gen (Case (Contract Token))
+caseRelGenSized :: Int -> Integer -> Gen (Case (Contract Token) Token)
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
                                  , (1, merkleizedCase <$> actionGenSized s <*> contractRelGenSized s bn)
                                  ]
 
-shrinkCase :: Case (Contract Token) -> [Case (Contract Token)]
+shrinkCase :: Case (Contract Token) Token -> [Case (Contract Token) Token]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
 shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]

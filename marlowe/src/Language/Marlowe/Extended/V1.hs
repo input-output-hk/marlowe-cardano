@@ -161,7 +161,7 @@ instance ToCore Observation S.Observation where
   toCore TrueObs                = Just S.TrueObs
   toCore FalseObs               = Just S.FalseObs
 
-instance ToCore Action S.Action where
+instance ToCore Action (S.Action S.Token) where
   toCore (Deposit accId party tok val) = pure (S.Deposit accId party tok) <*> toCore val
   toCore (Choice choId bounds)         = Just $ S.Choice choId bounds
   toCore (Notify obs)                  = S.Notify <$> toCore obs
@@ -174,7 +174,7 @@ instance ToCore Payee S.Payee where
   toCore (Account accId)  = Just $ S.Account accId
   toCore (Party roleName) = Just $ S.Party roleName
 
-instance ToCore Case (S.Case (S.Contract S.Token)) where
+instance ToCore Case (S.Case (S.Contract S.Token) S.Token) where
   toCore (Case act c) = S.Case <$> toCore act <*> toCore c
 
 instance FromJSON Value where
