@@ -133,7 +133,7 @@ instance ToCore Contract (S.Contract S.Token) where
   toCore (Let varId val cont) = pure (S.Let varId) <*> toCore val <*> toCore cont
   toCore (Assert obs cont) = S.Assert <$> toCore obs <*> toCore cont
 
-instance ToCore Value (S.Value S.Observation) where
+instance ToCore Value (S.Value (S.Observation S.Token) S.Token) where
   toCore (Constant c)               = Just $ S.Constant c
   toCore (ConstantParam _)          = Nothing
   toCore (AvailableMoney accId tok) = Just $ S.AvailableMoney accId tok
@@ -148,7 +148,7 @@ instance ToCore Value (S.Value S.Observation) where
   toCore (UseValue vId)             = Just $ S.UseValue vId
   toCore (Cond obs lhs rhs)         = S.Cond <$> toCore obs <*> toCore lhs <*> toCore rhs
 
-instance ToCore Observation S.Observation where
+instance ToCore Observation (S.Observation S.Token) where
   toCore (AndObs lhs rhs)       = S.AndObs <$> toCore lhs <*> toCore rhs
   toCore (OrObs lhs rhs)        = S.OrObs <$> toCore lhs <*> toCore rhs
   toCore (NotObs v)             = S.NotObs <$> toCore v

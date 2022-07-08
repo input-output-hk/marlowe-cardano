@@ -57,8 +57,8 @@ foldMapContract :: Monoid m
     => (P.BuiltinByteString -> Maybe (Contract Token))
     -> (Contract Token -> m)
     -> (Case (Contract Token) Token -> m)
-    -> (Observation -> m)
-    -> (Value Observation -> m)
+    -> (Observation Token -> m)
+    -> (Value (Observation Token) Token -> m)
     -> Contract Token -> m
 foldMapContract funmerk fcont fcase fobs fvalue contract =
     fcont contract <> case contract of
@@ -96,8 +96,8 @@ foldMapContract funmerk fcont fcase fobs fvalue contract =
 foldMapNonMerkleizedContract :: Monoid m
     => (Contract Token -> m)
     -> (Case (Contract Token) Token -> m)
-    -> (Observation -> m)
-    -> (Value Observation -> m)
+    -> (Observation Token -> m)
+    -> (Value (Observation Token) Token -> m)
     -> Contract Token -> m
 foldMapNonMerkleizedContract = foldMapContract (const Nothing)
 

@@ -451,7 +451,7 @@ divZeroTest = property $ do
 valueSerialization :: Property
 valueSerialization = property $
     forAll valueGen $ \a ->
-        let decoded :: Maybe (Value Observation)
+        let decoded :: Maybe (Value (Observation Token) Token)
             decoded = decode $ encode a
         in Just a === decoded
 
@@ -534,7 +534,7 @@ tokenShowTest :: IO ()
 tokenShowTest = do
     -- SCP-834, CurrencySymbol is HEX encoded ByteString,
     -- and TokenSymbol as UTF8 encoded Unicode string
-    let actual :: Value Observation
+    let actual :: Value (Observation Token) Token
         actual = AvailableMoney (Role "alice") (Token "00010afF" "ÚSD©")
 
     show actual @=? "AvailableMoney \"alice\" (Token \"00010aff\" \"ÚSD©\")"

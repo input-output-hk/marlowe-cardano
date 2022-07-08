@@ -239,7 +239,7 @@ fixInterval interval state =
 {-|
   Evaluates @Value@ given current @State@ and @Environment@
 -}
-evalValue :: Environment -> State -> Value Observation -> Integer
+evalValue :: Environment -> State -> Value (Observation Token) Token -> Integer
 evalValue env state value = let
     eval = evalValue env state
     in case value of
@@ -284,7 +284,7 @@ evalValue env state value = let
 
 
 -- | Evaluate 'Observation' to 'Bool'.
-evalObservation :: Environment -> State -> Observation -> Bool
+evalObservation :: Environment -> State -> Observation Token -> Bool
 evalObservation env state obs = let
     evalObs = evalObservation env state
     evalVal = evalValue env state

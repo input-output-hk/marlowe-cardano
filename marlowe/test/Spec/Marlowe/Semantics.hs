@@ -169,7 +169,7 @@ checkFixInterval invalid inPast =
 
 checkValue :: Show a
            => (Environment -> State -> Gen a)
-           -> ((Value Observation -> Integer) -> (Observation -> Bool) -> Environment -> State -> a -> Bool)
+           -> ((Value (Observation Token) Token -> Integer) -> (Observation Token -> Bool) -> Environment -> State -> a -> Bool)
            -> Property
 checkValue gen f =
   property $ do

@@ -115,7 +115,7 @@ rationalGen = do
     return $ a % b
 
 
-valueGenSized :: Int -> Gen (Value Observation)
+valueGenSized :: Int -> Gen (Value (Observation Token) Token)
 valueGenSized s
   | s > 0 = oneof [ AvailableMoney <$> partyGen <*> tokenGen
                   , Constant <$> simpleIntegerGen
@@ -140,11 +140,11 @@ valueGenSized s
                       ]
 
 
-valueGen ::  Gen (Value Observation)
+valueGen ::  Gen (Value (Observation Token) Token)
 valueGen = sized valueGenSized
 
 
-shrinkValue :: Value Observation -> [Value Observation]
+shrinkValue :: Value (Observation Token) Token -> [Value (Observation Token) Token]
 shrinkValue value = case value of
     Constant x -> [Constant y | y <- shrinkSimpleInteger x]
     TimeIntervalStart -> [Constant 0]
@@ -167,7 +167,7 @@ shrinkValue value = case value of
                          ++ [Cond b val1 y | y <- shrinkValue val2])
 
 
-observationGenSized :: Int -> Gen Observation
+observationGenSized :: Int -> Gen (Observation Token)
 observationGenSized s
   | s > 0 = oneof [ AndObs <$> observationGenSized (s `quot` 2)
                            <*> observationGenSized (s `quot` 2)
@@ -193,11 +193,11 @@ observationGenSized s
                       , return FalseObs
                       ]
 
-observationGen :: Gen Observation
+observationGen :: Gen (Observation Token)
 observationGen = sized observationGenSized
 
 
-shrinkObservation :: Observation -> [Observation]
+shrinkObservation :: Observation Token -> [Observation Token]
 shrinkObservation obs = case obs of
     FalseObs -> []
     TrueObs  -> [FalseObs]

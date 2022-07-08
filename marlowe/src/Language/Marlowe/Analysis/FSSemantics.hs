@@ -177,7 +177,7 @@ convertToSymbolicTrace refL symL =
  else error "Provided symbolic trace is not long enough"
 
 -- Symbolic version evalValue
-symEvalVal :: Value Observation -> SymState -> SInteger
+symEvalVal :: Value (Observation Token) Token -> SymState -> SInteger
 symEvalVal (AvailableMoney accId tok) symState =
   M.findWithDefault (literal 0) (accId, tok) (symAccounts symState)
 symEvalVal (Constant inte) symState = literal inte
@@ -211,7 +211,7 @@ symEvalVal (Cond cond v1 v2) symState = ite (symEvalObs cond symState)
                                             (symEvalVal v2 symState)
 
 -- Symbolic version evalObservation
-symEvalObs :: Observation -> SymState -> SBool
+symEvalObs :: Observation Token -> SymState -> SBool
 symEvalObs (AndObs obs1 obs2) symState = symEvalObs obs1 symState .&&
                                          symEvalObs obs2 symState
 symEvalObs (OrObs obs1 obs2) symState = symEvalObs obs1 symState .||

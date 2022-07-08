@@ -113,18 +113,18 @@ newtype ValueId = ValueId BuiltinByteString
 
     Values can also be scaled, and combined using addition, subtraction, and negation.
 -}
-data Value a = AvailableMoney AccountId Token
-           | Constant Integer
-           | NegValue (Value a)
-           | AddValue (Value a) (Value a)
-           | SubValue (Value a) (Value a)
-           | MulValue (Value a) (Value a)
-           | DivValue (Value a) (Value a)
-           | ChoiceValue ChoiceId
-           | TimeIntervalStart
-           | TimeIntervalEnd
-           | UseValue ValueId
-           | Cond a (Value a) (Value a)
+data Value a t = AvailableMoney AccountId t
+               | Constant Integer
+               | NegValue (Value a t)
+               | AddValue (Value a t) (Value a t)
+               | SubValue (Value a t) (Value a t)
+               | MulValue (Value a t) (Value a t)
+               | DivValue (Value a t) (Value a t)
+               | ChoiceValue ChoiceId
+               | TimeIntervalStart
+               | TimeIntervalEnd
+               | UseValue ValueId
+               | Cond a (Value a t) (Value a t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -135,17 +135,17 @@ data Value a = AvailableMoney AccountId Token
     It is also possible to observe whether any choice has been made
     (for a particular identified choice).
 -}
-data Observation = AndObs Observation Observation
-                 | OrObs Observation Observation
-                 | NotObs Observation
-                 | ChoseSomething ChoiceId
-                 | ValueGE (Value Observation) (Value Observation)
-                 | ValueGT (Value Observation) (Value Observation)
-                 | ValueLT (Value Observation) (Value Observation)
-                 | ValueLE (Value Observation) (Value Observation)
-                 | ValueEQ (Value Observation) (Value Observation)
-                 | TrueObs
-                 | FalseObs
+data Observation t = AndObs (Observation t) (Observation t)
+                   | OrObs (Observation t) (Observation t)
+                   | NotObs (Observation t)
+                   | ChoseSomething ChoiceId
+                   | ValueGE (Value (Observation t) t) (Value (Observation t) t)
+                   | ValueGT (Value (Observation t) t) (Value (Observation t) t)
+                   | ValueLT (Value (Observation t) t) (Value (Observation t) t)
+                   | ValueLE (Value (Observation t) t) (Value (Observation t) t)
+                   | ValueEQ (Value (Observation t) t) (Value (Observation t) t)
+                   | TrueObs
+                   | FalseObs
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -167,9 +167,9 @@ data Bound = Bound Integer Integer
       Typically this would be done by one of the parties,
       or one of their wallets acting automatically.
 -}
-data Action t = Deposit AccountId Party t (Value Observation)
+data Action t = Deposit AccountId Party t (Value (Observation t) t)
               | Choice ChoiceId [Bound]
-              | Notify Observation
+              | Notify (Observation t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -206,11 +206,11 @@ getAction (MerkleizedCase action _) = action
     it is possible that effects – payments – and warnings can be generated too.
 -}
 data Contract t = Close
-                | Pay AccountId Payee t (Value Observation) (Contract t)
-                | If Observation (Contract t) (Contract t)
+                | Pay AccountId Payee t (Value (Observation t) t) (Contract t)
+                | If (Observation t) (Contract t) (Contract t)
                 | When [Case (Contract t) t] Timeout (Contract t)
-                | Let ValueId (Value Observation) (Contract t)
-                | Assert Observation (Contract t)
+                | Let ValueId (Value (Observation t) t) (Contract t)
+                | Assert (Observation t) (Contract t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -383,7 +383,7 @@ instance ToJSON ValueId where
     toJSON (ValueId x) = JSON.String (Text.decodeUtf8 $ fromBuiltin x)
 
 
-instance FromJSON (Value Observation) where
+instance FromJSON t => FromJSON (Value (Observation t) t) where
   parseJSON (Object v) =
         (AvailableMoney <$> (v .: "in_account")
                         <*> (v .: "amount_of_token"))
@@ -404,7 +404,8 @@ instance FromJSON (Value Observation) where
   parseJSON (String "time_interval_end") = return TimeIntervalEnd
   parseJSON (Number n) = Constant <$> getInteger n
   parseJSON _ = Haskell.fail "Value must be either an object or an integer"
-instance ToJSON (Value Observation) where
+
+instance ToJSON t => ToJSON (Value (Observation t) t) where
   toJSON (AvailableMoney accountId token) = object
       [ "amount_of_token" .= token
       , "in_account" .= accountId
@@ -441,7 +442,7 @@ instance ToJSON (Value Observation) where
       ]
 
 
-instance FromJSON Observation where
+instance FromJSON t => FromJSON (Observation t) where
   parseJSON (Bool True) = return TrueObs
   parseJSON (Bool False) = return FalseObs
   parseJSON (Object v) =
@@ -463,7 +464,7 @@ instance FromJSON Observation where
                  <*> (v .: "equal_to"))
   parseJSON _ = Haskell.fail "Observation must be either an object or a boolean"
 
-instance ToJSON Observation where
+instance ToJSON t => ToJSON (Observation t) where
   toJSON (AndObs lhs rhs) = object
       [ "both" .= lhs
       , "and" .= rhs
@@ -650,7 +651,7 @@ instance Eq Payee where
     Party p1 == Party p2         = p1 == p2
     _ == _                       = False
 
-instance Eq a => Eq (Value a) where
+instance (Eq a, Eq t) => Eq (Value a t) where
     {-# INLINABLE (==) #-}
     AvailableMoney acc1 tok1 == AvailableMoney acc2 tok2 =
         acc1 == acc2 && tok1 == tok2
@@ -667,7 +668,7 @@ instance Eq a => Eq (Value a) where
     Cond obs1 thn1 els1 == Cond obs2 thn2 els2 =  obs1 == obs2 && thn1 == thn2 && els1 == els2
     _ == _ = False
 
-instance Eq Observation where
+instance Eq t => Eq (Observation t) where
     {-# INLINABLE (==) #-}
     AndObs o1l o2l == AndObs o1r o2r           = o1l == o1r && o2l == o2r
     OrObs  o1l o2l == OrObs  o1r o2r           = o1l == o1r && o2l == o2r
