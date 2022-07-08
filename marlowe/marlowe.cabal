@@ -85,6 +85,8 @@ library
     Language.Marlowe
     Language.Marlowe.Extended.V1
     Language.Marlowe.Core.V1.Semantics
+    Language.Marlowe.Core.V1.Semantics.Money
+    Language.Marlowe.Core.V1.Semantics.Token
     Language.Marlowe.Core.V1.Semantics.Types
     Language.Marlowe.FindInputs
     Language.Marlowe.Client

@@ -62,6 +62,7 @@ import Language.Marlowe.Client.History (History (..), IncludePkhTxns (IncludePkh
                                         txRoleData)
 import Language.Marlowe.Core.V1.Semantics
 import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
+import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types hiding (Contract, getAction)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 import Language.Marlowe.Scripts
@@ -1283,7 +1284,8 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                             Close -> txConstraints
                             _ -> let
                                 finalBalance = let
-                                    contractBalance = totalBalance (accounts marloweState)
+                                    contractBalance, totalIncome, totalPayouts :: Val.Value
+                                    contractBalance = moneyToValue $ totalBalance (accounts marloweState)
                                     totalIncome = P.foldMap (collectDeposits . getInputContent) inputs
                                     totalPayouts = P.foldMap snd payoutsByParty
                                     in contractBalance P.+ totalIncome P.- totalPayouts
@@ -1326,7 +1328,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
     collectDeposits _                                     = P.zero
 
     payoutByParty :: Payment -> AssocMap.Map Party Val.Value
-    payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
+    payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party (moneyToValue money)
     payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
 
     payoutConstraints :: [(Party, Val.Value)] -> TxConstraints i0 o0

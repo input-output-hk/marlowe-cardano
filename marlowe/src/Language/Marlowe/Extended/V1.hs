@@ -33,6 +33,7 @@ import qualified Data.Foldable as F
 import Data.Ratio ((%))
 import Data.Text (pack)
 import GHC.Generics
+import qualified Language.Marlowe.Core.V1.Semantics.Token as S
 import qualified Language.Marlowe.Core.V1.Semantics.Types as S
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..), pretty)

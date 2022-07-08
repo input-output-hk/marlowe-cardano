@@ -29,6 +29,7 @@
 module Language.Marlowe.Scripts where
 import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Pretty (Pretty (..))
 import Ledger
@@ -125,7 +126,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
 
     -- total balance of all accounts in State
     -- accounts must be positive, and we checked it above
-    let inputBalance = totalBalance (accounts marloweState)
+    let inputBalance = moneyToValue $ totalBalance (accounts marloweState)
 
     -- ensure that a contract TxOut has what it suppose to have
     let balancesOk = traceIfFalse "B1" $ inputBalance == scriptInValue
@@ -236,7 +237,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     collectDeposits _                                     = zero
 
     payoutByParty :: Payment -> AssocMap.Map Party Val.Value
-    payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
+    payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party (moneyToValue money)
     payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
 
     payoutConstraints :: [(Party, Val.Value)] -> Bool

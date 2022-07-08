@@ -10,6 +10,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String
 -- import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types
 import Ledger.Ada (adaSymbol, adaToken)
 import Ledger.Scripts (dataHash)
@@ -36,7 +37,7 @@ isEmptyAccountsDiff = all Val.isZero
 
 
 -- Adds a value to the map of outcomes
-addAccountsDiff :: Party -> Money -> AccountsDiff -> AccountsDiff
+addAccountsDiff :: Party -> Money Token -> AccountsDiff -> AccountsDiff
 addAccountsDiff party diffValue trOut = let
     newValue = case Map.lookup party trOut of
         Just value -> value P.+ diffValue

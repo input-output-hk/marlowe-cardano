@@ -40,7 +40,7 @@ import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
 import Ledger (POSIXTime (..), PubKeyHash (..))
-import Ledger.Value (CurrencySymbol (..), TokenName (..))
+import Ledger.Value (TokenName (..))
 import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
@@ -73,7 +73,6 @@ instance Haskell.Show Party where
 
 type AccountId = Party
 type Timeout = POSIXTime
-type Money = Val.Value
 type ChoiceName = BuiltinByteString
 type ChosenNum = Integer
 type TimeInterval = (POSIXTime, POSIXTime)
@@ -88,16 +87,6 @@ data ChoiceId = ChoiceId BuiltinByteString Party
   deriving anyclass (Pretty)
 
 
-{-| Token - represents a currency or token, it groups
-    a pair of a currency symbol and token name.
--}
-data Token = Token CurrencySymbol TokenName
-  deriving stock (Generic,Haskell.Eq,Haskell.Ord)
-  deriving anyclass (Pretty)
-
-instance Haskell.Show Token where
-  showsPrec p (Token cs tn) =
-    Haskell.showParen (p Haskell.>= 11) (Haskell.showString $ "Token \"" Haskell.++ Haskell.show cs Haskell.++ "\" " Haskell.++ Haskell.show tn)
 
 {-| Values, as defined using Let ar e identified by name,
     and can be used by 'UseValue' construct.
@@ -365,18 +354,6 @@ instance ToJSON ChoiceId where
                                         ]
 
 
-instance FromJSON Token where
-  parseJSON = withObject "Token" (\v ->
-       Token <$> (Val.currencySymbol <$> (JSON.decodeByteString =<< (v .: "currency_symbol")))
-             <*> (Val.tokenName . Text.encodeUtf8 <$> (v .: "token_name"))
-                                 )
-
-instance ToJSON Token where
-  toJSON (Token currSym tokName) = object
-      [ "currency_symbol" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin $ unCurrencySymbol currSym)
-      , "token_name" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin $ unTokenName tokName)
-      ]
-
 instance FromJSON ValueId where
     parseJSON = withText "ValueId" $ return . ValueId . toBuiltin . Text.encodeUtf8
 instance ToJSON ValueId where
@@ -621,7 +598,6 @@ instance ToJSON t => ToJSON (Contract t) where
       , "then" .= cont
       ]
 
-
 instance Eq Party where
     {-# INLINABLE (==) #-}
     (PK p1) == (PK p2)     = p1 == p2
@@ -632,10 +608,6 @@ instance Eq Party where
 instance Eq ChoiceId where
     {-# INLINABLE (==) #-}
     (ChoiceId n1 p1) == (ChoiceId n2 p2) = n1 == n2 && p1 == p2
-
-instance Eq Token where
-    {-# INLINABLE (==) #-}
-    (Token n1 p1) == (Token n2 p2) = n1 == n2 && p1 == p2
 
 instance Eq ValueId where
     {-# INLINABLE (==) #-}
@@ -729,8 +701,6 @@ makeLift ''Party
 makeIsDataIndexed ''Party [('PK,0),('Role,1)]
 makeLift ''ChoiceId
 makeIsDataIndexed ''ChoiceId [('ChoiceId,0)]
-makeLift ''Token
-makeIsDataIndexed ''Token [('Token,0)]
 makeLift ''ValueId
 makeIsDataIndexed ''ValueId [('ValueId,0)]
 makeLift ''Value

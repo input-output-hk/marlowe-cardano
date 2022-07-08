@@ -13,8 +13,10 @@ module Spec.Marlowe.Util (
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (group, sort)
+import Language.Marlowe.Core.V1.Semantics.Money (Money)
+import qualified Language.Marlowe.Core.V1.Semantics.Money as Money
+import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Util.AssocMap
 import Test.Tasty.HUnit (Assertion, assertBool)
 import Test.Tasty.QuickCheck (Gen, generate)
@@ -35,8 +37,8 @@ stateEq :: State Token -> State Token -> Bool
 stateEq = (==) `on` canonicalState
 
 
-flattenMoney :: Money -> [(Token, Integer)]
-flattenMoney = fmap (\(s, n, a) -> (Token s n, a)) .  flattenValue
+flattenMoney :: Money Token -> [(Token, Integer)]
+flattenMoney = Money.toList
 
 
 roundedDivide :: Integer

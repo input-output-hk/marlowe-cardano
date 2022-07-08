@@ -18,6 +18,7 @@ import qualified Data.SBV.Tuple as ST
 import Data.Set (Set)
 import qualified Data.Set as S
 import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types
 import Ledger (POSIXTime (..))
 import qualified PlutusTx.AssocMap as AssocMap

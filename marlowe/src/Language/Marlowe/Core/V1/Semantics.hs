@@ -52,16 +52,18 @@ import qualified Data.Foldable as F
 import Data.Scientific (Scientific)
 import Data.Text (pack)
 import Deriving.Aeson
+import Language.Marlowe.Core.V1.Semantics.Money (Money)
+import qualified Language.Marlowe.Core.V1.Semantics.Money as Money
+import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..),
                                                  Environment (..), Input (..), InputContent (..), IntervalError (..),
-                                                 IntervalResult (..), Money, Observation (..), Party, Payee (..),
-                                                 State (..), TimeInterval, Token (..), Value (..), ValueId, emptyState,
-                                                 getAction, getInputContent, inBounds)
+                                                 IntervalResult (..), Observation (..), Party, Payee (..), State (..),
+                                                 TimeInterval, Value (..), ValueId, emptyState, getAction,
+                                                 getInputContent, inBounds)
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
 import Ledger (POSIXTime (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
-import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
 import qualified PlutusTx.AssocMap as Map
 import qualified PlutusTx.Builtins as Builtins
@@ -99,7 +101,7 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
 {-| Payment occurs during 'Pay' contract evaluation, and
     when positive balances are payed out on contract closure.
 -}
-data Payment = Payment AccountId Payee Money
+data Payment = Payment AccountId Payee (Money Token)
   deriving stock (Haskell.Show)
 
 
@@ -219,7 +221,6 @@ data MarloweParams = MarloweParams {
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (FromJSON,ToJSON)
 
-
 {- Checks 'interval' and trim it if necessary. -}
 fixInterval :: TimeInterval -> State t -> IntervalResult t
 fixInterval interval state =
@@ -305,12 +306,12 @@ evalObservation env state obs = let
 
 
 -- | Pick the first account with money in it
-refundOne :: Accounts Token -> Maybe ((Party, Money), Accounts Token)
+refundOne :: Accounts Token -> Maybe ((Party, Money Token), Accounts Token)
 refundOne accounts = case Map.toList accounts of
     [] -> Nothing
-    ((accId, Token cur tok), balance) : rest ->
+    ((accId, t), balance) : rest ->
         if balance > 0
-        then Just ((accId, Val.singleton cur tok balance), Map.fromList rest)
+        then Just ((accId, Money.singleton t balance), Map.fromList rest)
         else refundOne (Map.fromList rest)
 
 
@@ -322,14 +323,14 @@ moneyInAccount accId token accounts = case Map.lookup (accId, token) accounts of
 
 
 -- | Sets the amount of money available in an account
-updateMoneyInAccount :: AccountId -> Token -> Integer -> Accounts Token -> Accounts Token
+updateMoneyInAccount :: Eq t => AccountId -> t -> Integer -> Accounts t -> Accounts t
 updateMoneyInAccount accId token amount =
     if amount <= 0 then Map.delete (accId, token) else Map.insert (accId, token) amount
 
 
 -- Add the given amount of money to an accoun (only if it is positive)
 -- Return the updated Map
-addMoneyToAccount :: AccountId -> Token -> Integer -> Accounts Token -> Accounts Token
+addMoneyToAccount :: Eq t => AccountId -> t -> Integer -> Accounts t -> Accounts t
 addMoneyToAccount accId token amount accounts = let
     balance = moneyInAccount accId token accounts
     newBalance = balance + amount
@@ -341,11 +342,11 @@ addMoneyToAccount accId token amount accounts = let
     Returns the appropriate effect and updated accounts
 -}
 giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts Token -> (ReduceEffect, Accounts Token)
-giveMoney accountId payee (Token cur tok) amount accounts = let
+giveMoney accountId payee t amount accounts = let
     newAccounts = case payee of
         Party _       -> accounts
-        Account accId -> addMoneyToAccount accId (Token cur tok) amount accounts
-    in (ReduceWithPayment (Payment accountId payee (Val.singleton cur tok amount)), newAccounts)
+        Account accId -> addMoneyToAccount accId t amount accounts
+    in (ReduceWithPayment (Payment accountId payee (Money.singleton t amount)), newAccounts)
 
 
 -- | Carry a step of the contract with no inputs
@@ -599,9 +600,9 @@ contractLifespanUpperBound contract = case contract of
     Assert _ cont -> contractLifespanUpperBound cont
 
 
-totalBalance :: Accounts Token -> Money
+totalBalance :: Accounts Token -> Money Token
 totalBalance accounts = foldMap
-    (\((_, Token cur tok), balance) -> Val.singleton cur tok balance)
+    (\((_, t), balance) -> Money.singleton t balance)
     (Map.toList accounts)
 
 

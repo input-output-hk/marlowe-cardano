@@ -56,7 +56,7 @@ import Data.Maybe (catMaybes, isJust, isNothing, mapMaybe)
 import Data.Tuple.Extra (secondM)
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
-import Language.Marlowe.Core.V1.Semantics.Types (Token)
+import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, TypedRolePayoutValidator,
                                  smallUntypedValidator)
 import Ledger (ChainIndexTxOut (..), ciTxOutAddress, toTxOut)
