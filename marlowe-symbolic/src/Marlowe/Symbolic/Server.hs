@@ -20,7 +20,7 @@ import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (Proxy))
 import Formatting (fprint, (%))
 import Formatting.Clock (timeSpecs)
-import Language.Marlowe (Contract, POSIXTime (..), State, TransactionInput, TransactionWarning)
+import Language.Marlowe (Contract, POSIXTime (..), State, Token, TransactionInput, TransactionWarning)
 import Language.Marlowe.Analysis.FSSemantics (warningsTraceCustom)
 import Marlowe.Symbolic.Types.Request (Request (..))
 import Marlowe.Symbolic.Types.Response (Response (..), Result (..))
@@ -33,7 +33,7 @@ import Text.PrettyPrint.Leijen (displayS, renderCompact)
 type API = "api" :> "marlowe-analysis" :> ReqBody '[JSON] Request :> Post '[JSON] Response
 
 makeResult ::
-  Either String (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])) ->
+  Either String (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])) ->
   Result
 makeResult (Left err) = Error (show err)
 makeResult (Right res) =
