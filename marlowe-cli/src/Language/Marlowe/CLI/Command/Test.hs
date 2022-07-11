@@ -27,7 +27,7 @@ import Cardano.Api (NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseUrl)
 import Language.Marlowe.CLI.Test (runTests)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (PabTests, ScriptTests))
+import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests))
 import Language.Marlowe.CLI.Types (CliError)
 
 import qualified Options.Applicative as O
@@ -53,7 +53,6 @@ parseTestCommand network socket=
   O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
 --  <> _scriptsCommand network socket
-    <> pabsCommand network socket
 
 
 -- | Parser for the "scripts" command.
@@ -80,26 +79,3 @@ scriptsOptions network socket =
     <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )
 
 
--- | Parser for the "contracts" command.
-pabsCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields TestCommand
-pabsCommand network socket =
-  O.command "contracts"
-    . O.info (pabsOptions network socket)
-    $ O.progDesc "Test Marlowe contracts using the Marlowe PAB."
-
-
--- | Parser for the "contracts" options.
-pabsOptions :: O.Mod O.OptionFields NetworkId
-            -> O.Mod O.OptionFields FilePath
-            -> O.Parser TestCommand
-pabsOptions network socket =
-  PabTests
-    <$> O.option parseNetworkId  (O.long "testnet-magic"  <> O.metavar "INTEGER"      <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
-    <*> O.strOption              (O.long "socket-path"    <> O.metavar "SOCKET_FILE"  <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> O.option parseUrl        (O.long "wallet-url"     <> O.metavar "URL"                     <> O.help "URL for Cardano Wallet."                                                                                         )
-    <*> O.option parseUrl        (O.long "pab-url"        <> O.metavar "URL"                     <> O.help "URL for the Marlowe PAB."                                                                                        )
-    <*> O.strOption              (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"            <> O.help "The file containing the signing key for the faucet."                                                             )
-    <*> O.option parseAddressAny (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
-    <*> O.option parseAddressAny (O.long "burn-address"   <> O.metavar "ADDRESS"                 <> O.help "Burn address for discarding used tokens."                                                                        )
-    <*> O.strOption              (O.long "passphrase"     <> O.metavar "PASSWORD"                <> O.help "The passphrase used for the Marlowe PAB."                                                                        )
-    <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )

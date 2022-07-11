@@ -20,7 +20,6 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseCurrencySymbol
 , parseInput
 , parseInputContent
-, parseMarloweClientInput
 , parseLovelaceValue
 , parseNetworkId
 , parseRole
@@ -38,7 +37,6 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseTxOut
 , parseUrl
 , parseValue
-, parseWalletId
 , readTokenName
 ) where
 
@@ -51,7 +49,6 @@ import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
 import Language.Marlowe.CLI.Types (OutputQuery (..))
-import Language.Marlowe.Client (MarloweClientInput (..))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -60,7 +57,6 @@ import Plutus.V1.Ledger.Slot (Slot (..))
 import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
-import Wallet.Emulator.Wallet (WalletId, fromBase16)
 
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
@@ -293,10 +289,6 @@ parseByteString =
         Right currency -> Right . toBuiltin $ currency
 
 
--- | Parse input to a contract.
-parseMarloweClientInput :: O.Parser MarloweClientInput
-parseMarloweClientInput = ClientInput <$> parseInputContent
-
 
 -- | Parse input to a contract.
 parseInput :: O.Parser Input
@@ -333,14 +325,6 @@ parseUrl =
   O.eitherReader
     $ either (Left . show) Right
     . parseBaseUrl
-
-
--- | Parse a WalletId.
-parseWalletId :: O.ReadM WalletId
-parseWalletId =
-  O.eitherReader
-    $ fromBase16
-    . T.pack
 
 
 -- | Read a public key hash.
