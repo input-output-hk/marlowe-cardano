@@ -18,7 +18,7 @@ import Data.Text as T hiding (reverse, takeWhile)
 import Data.Text.Read as T
 import Data.Time (Day, LocalTime)
 import GHC.Generics (Generic)
-import qualified Language.Marlowe as Marlowe (Observation, Value)
+import qualified Language.Marlowe as Marlowe (Observation, Token, Value)
 
 -- |ContractType
 data CT = PAM   -- ^ Principal at maturity
@@ -585,7 +585,7 @@ instance FromJSON ContractTerms where
   parseJSON _ = mzero
 
 type ContractTerms = ContractTermsPoly Double
-type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation)
+type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value (Marlowe.Observation Marlowe.Token) Marlowe.Token)
 
 setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues ct@ContractTermsPoly {..} =

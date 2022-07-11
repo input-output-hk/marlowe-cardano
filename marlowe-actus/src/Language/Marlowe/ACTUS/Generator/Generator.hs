@@ -11,10 +11,10 @@ where
 
 import Data.String (IsString (fromString))
 import Language.Marlowe (Action (..), Case (..), Contract (..), Observation (..), POSIXTime (..), Party (..),
-                         Payee (..), Value (..), ada)
+                         Payee (..), Token, Value (..), ada)
 import Ledger.Value (TokenName (TokenName))
 
-invoice :: String -> String -> Value Observation -> POSIXTime -> Contract -> Contract
+invoice :: String -> String -> Value (Observation Token) Token -> POSIXTime -> Contract Token -> Contract Token
 invoice from to amount timeout continue =
   let party = Role $ TokenName $ fromString from
       counterparty = Role $ TokenName $ fromString to

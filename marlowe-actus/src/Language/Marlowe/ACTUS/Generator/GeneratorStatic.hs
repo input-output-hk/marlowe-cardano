@@ -14,7 +14,7 @@ where
 import Data.List as L (foldl')
 import Data.Time (LocalTime)
 import Data.Validation (Validation (..))
-import Language.Marlowe (Contract (..), POSIXTime (..), Value (..))
+import Language.Marlowe (Contract (..), POSIXTime (..), Token, Value (..))
 import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactors)
 import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, TermValidationError (..))
 import Language.Marlowe.ACTUS.Domain.Schedule (CashFlowPoly (..))
@@ -27,16 +27,16 @@ import Language.Marlowe.ACTUS.Model.Applicability (validateTerms)
 -- Marlowe contract with risk factors known in advance. The contract therefore
 -- only consists of transactions, i.e. 'Deposit' and 'Pay'
 genStaticContract ::
-     (EventType -> LocalTime -> RiskFactors)   -- ^ Risk factors per event and time
-  -> ContractTerms                             -- ^ ACTUS contract terms
-  -> Validation [TermValidationError] Contract -- ^ Marlowe contract or applicability errors
+     (EventType -> LocalTime -> RiskFactors)           -- ^ Risk factors per event and time
+  -> ContractTerms                                     -- ^ ACTUS contract terms
+  -> Validation [TermValidationError] (Contract Token) -- ^ Marlowe contract or applicability errors
 genStaticContract rf = fmap (genStaticContract' rf) . validateTerms
 
 -- |Same as 'genStaticContract' without validation
 genStaticContract' ::
      (EventType -> LocalTime -> RiskFactors)
   -> ContractTerms
-  -> Contract
+  -> Contract Token
 genStaticContract' rf ct =
   let cfs = genProjectedCashflows rf ct
       gen CashFlowPoly {..}

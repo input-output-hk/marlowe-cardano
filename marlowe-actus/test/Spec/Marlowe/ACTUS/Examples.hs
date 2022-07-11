@@ -375,8 +375,8 @@ defaultRiskFactors _ _ =
     }
 
 -- |totalPayments calculates the sum of the payments provided as argument
-totalPayments :: Payee -> [Payment] -> Integer
+totalPayments :: Payee -> [Payment Token] -> Integer
 totalPayments payee = sum . map m . filter f
   where
-    m (Payment _ _ mon) = Val.valueOf mon "" ""
+    m (Payment _ _ mon) = Val.valueOf (moneyToValue mon) "" ""
     f (Payment _ pay _) = pay == payee

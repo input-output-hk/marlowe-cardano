@@ -7,24 +7,24 @@ module Language.Marlowe.ACTUS.Generator.MarloweCompat where
 import Data.String (IsString (fromString))
 import Data.Time (Day, LocalTime (..), UTCTime (UTCTime), timeOfDayToTime)
 import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
-import Language.Marlowe (Contract (Let), Observation, Value (Constant, UseValue), ValueId (ValueId))
+import Language.Marlowe (Contract (Let), Observation, Token, Value (Constant, UseValue), ValueId (ValueId))
 import Language.Marlowe.ACTUS.Domain.ContractTerms
 import Language.Marlowe.ACTUS.Domain.Ops (marloweFixedPoint)
 
-useval :: String -> Integer -> Value Observation
+useval :: String -> Integer -> Value (Observation t) t
 useval name t = UseValue $ ValueId $ fromString $ name ++ "_" ++ show t
 
-letval :: String -> Integer -> Value Observation -> Contract -> Contract
+letval :: String -> Integer -> Value (Observation t) t -> Contract t -> Contract t
 letval name t = Let $ ValueId $ fromString $ name ++ "_" ++ show t
 
-letval' :: String -> Integer -> Maybe (Value Observation) -> Contract -> Contract
+letval' :: String -> Integer -> Maybe (Value (Observation t) t) -> Contract t -> Contract t
 letval' name t (Just o) c = letval name t o c
 letval' _ _ Nothing c     = c
 
 toMarloweFixedPoint :: Double -> Integer
 toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint *)
 
-constnt :: Double -> Value Observation
+constnt :: Double -> Value (Observation t) t
 constnt = Constant . toMarloweFixedPoint
 
 enum :: a -> a
@@ -43,10 +43,10 @@ timeToSlotNumber LocalTime {..} =
   let (MkSystemTime secs _) = utcToSystemTime (UTCTime localDay (timeOfDayToTime localTimeOfDay))
    in fromIntegral secs - cardanoEpochStart
 
-marloweDate :: Day -> Value Observation
+marloweDate :: Day -> Value (Observation t) t
 marloweDate = Constant . fromInteger . dayToSlotNumber
 
-marloweTime :: LocalTime -> Value Observation
+marloweTime :: LocalTime -> Value (Observation t) t
 marloweTime = Constant . fromInteger . timeToSlotNumber
 
 toMarlowe :: ContractTerms -> ContractTermsMarlowe
@@ -130,7 +130,7 @@ toMarlowe ct =
       constraints = constraints ct
     }
   where
-    trans :: ContractStructure Double -> ContractStructure (Value Observation)
+    trans :: ContractStructure Double -> ContractStructure (Value (Observation Token) Token)
     trans cs = cs { reference = case reference cs of
                                   ReferenceId r    -> ReferenceId r
                                   ReferenceTerms t -> ReferenceTerms $ toMarlowe t }

@@ -9,7 +9,7 @@ module Language.Marlowe.ACTUS.Domain.ContractState where
 import Data.Aeson.Types (ToJSON)
 import Data.Time (LocalTime)
 import GHC.Generics (Generic)
-import Language.Marlowe (Observation, Value)
+import Language.Marlowe (Observation, Token, Value)
 import Language.Marlowe.ACTUS.Domain.ContractTerms (PRF)
 
 {-| ACTUS contract states are defined in
@@ -37,7 +37,7 @@ data ContractStatePoly a = ContractStatePoly
   deriving stock (Show, Eq)
 
 type ContractState = ContractStatePoly Double
-type ContractStateMarlowe = ContractStatePoly (Value Observation)
+type ContractStateMarlowe = ContractStatePoly (Value (Observation Token) Token)
 
 deriving instance Generic ContractState
 deriving instance ToJSON ContractState
