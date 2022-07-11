@@ -56,12 +56,12 @@ getAccountsDiff payments inputs =
 
 
 foldMapContract :: Monoid m
-    => (P.BuiltinByteString -> Maybe (Contract Token))
-    -> (Contract Token -> m)
-    -> (Case (Contract Token) Token -> m)
-    -> (Observation Token -> m)
-    -> (Value (Observation Token) Token -> m)
-    -> Contract Token -> m
+    => (P.BuiltinByteString -> Maybe (Contract t))
+    -> (Contract t -> m)
+    -> (Case (Contract t) t -> m)
+    -> (Observation t -> m)
+    -> (Value (Observation t) t -> m)
+    -> Contract t -> m
 foldMapContract funmerk fcont fcase fobs fvalue contract =
     fcont contract <> case contract of
         Close                -> mempty
@@ -96,15 +96,15 @@ foldMapContract funmerk fcont fcase fobs fvalue contract =
 
 
 foldMapNonMerkleizedContract :: Monoid m
-    => (Contract Token -> m)
-    -> (Case (Contract Token) Token -> m)
-    -> (Observation Token -> m)
-    -> (Value (Observation Token) Token -> m)
-    -> Contract Token -> m
+    => (Contract t -> m)
+    -> (Case (Contract t) t -> m)
+    -> (Observation t -> m)
+    -> (Value (Observation t) t -> m)
+    -> Contract t -> m
 foldMapNonMerkleizedContract = foldMapContract (const Nothing)
 
 
-extractNonMerkleizedContractRoles :: Contract Token -> Set Val.TokenName
+extractNonMerkleizedContractRoles :: Contract t -> Set Val.TokenName
 extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extractCase (const mempty) (const mempty)
   where
     extract (Pay from payee _ _ _) = fromParty from <> fromPayee payee
@@ -121,7 +121,7 @@ extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extract
     fromPayee (Account party) = fromParty party
 
 
-merkleizedCase :: Action Token -> Contract Token -> Case (Contract Token) Token
+merkleizedCase :: PlutusTx.ToData t => Action t -> Contract t -> Case (Contract t) t
 merkleizedCase action continuation = let
     hash = dataHash (PlutusTx.toBuiltinData continuation)
     in MerkleizedCase action hash
