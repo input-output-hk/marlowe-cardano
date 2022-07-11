@@ -54,7 +54,6 @@ import Data.Text (pack)
 import Deriving.Aeson
 import Language.Marlowe.Core.V1.Semantics.Money (Money)
 import qualified Language.Marlowe.Core.V1.Semantics.Money as Money
-import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..),
                                                  Environment (..), Input (..), InputContent (..), IntervalError (..),
                                                  IntervalResult (..), Observation (..), Party, Payee (..), State (..),
@@ -306,7 +305,7 @@ evalObservation env state obs = let
 
 
 -- | Pick the first account with money in it
-refundOne :: Accounts Token -> Maybe ((Party, Money Token), Accounts Token)
+refundOne :: Accounts t -> Maybe ((Party, Money t), Accounts t)
 refundOne accounts = case Map.toList accounts of
     [] -> Nothing
     ((accId, t), balance) : rest ->
@@ -341,7 +340,7 @@ addMoneyToAccount accId token amount accounts = let
 {-| Gives the given amount of money to the given payee.
     Returns the appropriate effect and updated accounts
 -}
-giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts Token -> (ReduceEffect Token, Accounts Token)
+giveMoney :: Eq t => AccountId -> Payee -> t -> Integer -> Accounts t -> (ReduceEffect t, Accounts t)
 giveMoney accountId payee t amount accounts = let
     newAccounts = case payee of
         Party _       -> accounts
@@ -350,7 +349,7 @@ giveMoney accountId payee t amount accounts = let
 
 
 -- | Carry a step of the contract with no inputs
-reduceContractStep :: Environment -> State Token -> Contract Token -> ReduceStepResult Token
+reduceContractStep :: Eq t => Environment -> State t -> Contract t -> ReduceStepResult t
 reduceContractStep env state contract = case contract of
 
     Close -> case refundOne (accounts state) of
@@ -407,10 +406,10 @@ reduceContractStep env state contract = case contract of
         in Reduced warning ReduceNoPayment state cont
 
 -- | Reduce a contract until it cannot be reduced more
-reduceContractUntilQuiescent :: Environment -> State Token -> Contract Token -> ReduceResult Token
+reduceContractUntilQuiescent :: forall t. Eq t => Environment -> State t -> Contract t -> ReduceResult t
 reduceContractUntilQuiescent env state contract = let
     reductionLoop
-      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning Token] -> [Payment Token] -> ReduceResult Token
+      :: Bool -> Environment -> State t -> Contract t -> [ReduceWarning t] -> [Payment t] -> ReduceResult t
     reductionLoop reduced env state contract warnings payments =
         case reduceContractStep env state contract of
             Reduced warning effect newState cont -> let
@@ -432,7 +431,7 @@ data ApplyAction t = AppliedAction (ApplyWarning t) (State t)
   deriving stock (Haskell.Show)
 
 -- | Try to apply a single input content to a single action
-applyAction :: Environment -> State Token -> InputContent Token -> Action Token -> ApplyAction Token
+applyAction :: Eq t => Environment -> State t -> InputContent t -> Action t -> ApplyAction t
 applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party2 tok2 val) =
     if accId1 == accId2 && party1 == party2 && tok1 == tok2 && amount == evalValue env state val
     then let warning = if amount > 0 then ApplyNoWarning
@@ -451,7 +450,7 @@ applyAction env state INotify (Notify obs)
 applyAction _ _ _ _ = NotAppliedAction
 
 -- | Try to get a continuation from a pair of Input and Case
-getContinuation :: Input Token -> Case (Contract Token) Token -> Maybe (Contract Token)
+getContinuation :: Input t -> Case (Contract t) t -> Maybe (Contract t)
 getContinuation (NormalInput _) (Case _ continuation) = Just continuation
 getContinuation (MerkleizedInput _ inputContinuationHash continuation) (MerkleizedCase _ continuationHash) =
     if inputContinuationHash == continuationHash
@@ -459,11 +458,11 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
-applyCases :: Environment -> State Token -> Input Token -> [Case (Contract Token) Token] -> ApplyResult Token
+applyCases :: forall t. Eq t => Environment -> State t -> Input t -> [Case (Contract t) t] -> ApplyResult t
 applyCases env state input (headCase : tailCase) =
-    let inputContent = getInputContent input :: InputContent Token
-        action = getAction headCase :: Action Token
-        maybeContinuation = getContinuation input headCase :: Maybe (Contract Token)
+    let inputContent = getInputContent input :: InputContent t
+        action = getAction headCase :: Action t
+        maybeContinuation = getContinuation input headCase :: Maybe (Contract t)
     in case applyAction env state inputContent action of
          AppliedAction warning newState ->
            case maybeContinuation of
@@ -473,12 +472,12 @@ applyCases env state input (headCase : tailCase) =
 applyCases _ _ _ [] = ApplyNoMatchError
 
 -- | Apply a single @Input@ to a current contract
-applyInput :: Environment -> State Token -> Input Token -> Contract Token -> ApplyResult Token
+applyInput :: Eq t => Environment -> State t -> Input t -> Contract t -> ApplyResult t
 applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
 
 -- | Propagate 'ReduceWarning' to 'TransactionWarning'
-convertReduceWarnings :: [ReduceWarning Token] -> [TransactionWarning Token]
+convertReduceWarnings :: [ReduceWarning t] -> [TransactionWarning t]
 convertReduceWarnings = foldr (\warn acc -> case warn of
     ReduceNoWarning -> acc
     ReduceNonPositivePay accId payee tok amount ->
@@ -492,17 +491,17 @@ convertReduceWarnings = foldr (\warn acc -> case warn of
     ) []
 
 -- | Apply a list of Inputs to the contract
-applyAllInputs :: Environment -> State Token -> Contract Token -> [Input Token] -> ApplyAllResult Token
+applyAllInputs :: forall t. Eq t => Environment -> State t -> Contract t -> [Input t] -> ApplyAllResult t
 applyAllInputs env state contract inputs = let
     applyAllLoop
         :: Bool
         -> Environment
-        -> State Token
-        -> Contract Token
-        -> [Input Token]
-        -> [TransactionWarning Token]
-        -> [Payment Token]
-        -> ApplyAllResult Token
+        -> State t
+        -> Contract t
+        -> [Input t]
+        -> [TransactionWarning t]
+        -> [Payment t]
+        -> ApplyAllResult t
     applyAllLoop contractChanged env state contract inputs warnings payments =
         case reduceContractUntilQuiescent env state contract of
             RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
@@ -529,19 +528,19 @@ applyAllInputs env state contract inputs = let
                     ApplyHashMismatch -> ApplyAllHashMismatch
     in applyAllLoop False env state contract inputs [] []
   where
-    convertApplyWarning :: ApplyWarning Token -> [TransactionWarning Token]
+    convertApplyWarning :: ApplyWarning t -> [TransactionWarning t]
     convertApplyWarning warn =
         case warn of
             ApplyNoWarning -> []
             ApplyNonPositiveDeposit party accId tok amount ->
                 [TransactionNonPositiveDeposit party accId tok amount]
 
-isClose :: Contract Token -> Bool
+isClose :: Contract t -> Bool
 isClose Close = True
 isClose _     = False
 
 -- | Try to compute outputs of a transaction given its inputs, a contract, and it's @State@
-computeTransaction :: TransactionInput Token -> State Token -> Contract Token -> TransactionOutput Token
+computeTransaction :: Eq t => TransactionInput t -> State t -> Contract t -> TransactionOutput t
 computeTransaction tx state contract = let
     inputs = txInputs tx
     in case fixInterval (txInterval tx) state of
@@ -558,7 +557,7 @@ computeTransaction tx state contract = let
             ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
 
-playTraceAux :: TransactionOutput Token -> [TransactionInput Token] -> TransactionOutput Token
+playTraceAux :: Eq t => TransactionOutput t -> [TransactionInput t] -> TransactionOutput t
 playTraceAux res [] = res
 playTraceAux TransactionOutput
                 { txOutWarnings = warnings
@@ -577,7 +576,7 @@ playTraceAux TransactionOutput
           Error _ -> transRes
 playTraceAux err@(Error _) _ = err
 
-playTrace :: POSIXTime -> Contract Token -> [TransactionInput Token] -> TransactionOutput Token
+playTrace :: Eq t => POSIXTime -> Contract t -> [TransactionInput t] -> TransactionOutput t
 playTrace minTime c = playTraceAux TransactionOutput
                                  { txOutWarnings = []
                                  , txOutPayments = []
@@ -587,7 +586,7 @@ playTrace minTime c = playTraceAux TransactionOutput
 
 
 -- | Calculates an upper bound for the maximum lifespan of a contract (assuming is not merkleized)
-contractLifespanUpperBound :: Contract Token -> POSIXTime
+contractLifespanUpperBound :: Contract t -> POSIXTime
 contractLifespanUpperBound contract = case contract of
     Close -> 0
     Pay _ _ _ _ cont -> contractLifespanUpperBound cont
@@ -600,7 +599,7 @@ contractLifespanUpperBound contract = case contract of
     Assert _ cont -> contractLifespanUpperBound cont
 
 
-totalBalance :: Accounts Token -> Money Token
+totalBalance :: Ord t => Accounts t -> Money t
 totalBalance accounts = foldMap
     (\((_, t), balance) -> Money.singleton t balance)
     (Map.toList accounts)
@@ -609,7 +608,7 @@ totalBalance accounts = foldMap
 {-|
     Check that all accounts have positive balance.
  -}
-validateBalances :: State Token -> Bool
+validateBalances :: State t -> Bool
 validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList accounts)
 
 

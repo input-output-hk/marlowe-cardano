@@ -434,7 +434,8 @@ checkFalseObs = do
 
 checkApplyActionMismatch :: Property
 checkApplyActionMismatch = property $ do
-  let gen = do
+  let gen :: Gen (InputContent Token, Action Token)
+      gen = do
         let
           inputs = [IDeposit undefined undefined undefined undefined, IChoice undefined undefined, INotify]
           actions = [Deposit undefined undefined undefined undefined, Choice undefined undefined, Notify undefined]
@@ -495,7 +496,8 @@ checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property 
 
 checkIChoice :: Maybe Bool -> Maybe Bool -> Property
 checkIChoice choiceMatches choiceInBounds = property $ do
-  let gen = do
+  let gen :: Gen (Environment, State Token, ChoiceId, ChosenNum, Action Token, Bool)
+      gen = do
         choiceMatches' <- maybe arbitrary pure choiceMatches
         choiceInBounds' <- maybe arbitrary pure choiceInBounds
         environment <- arbitrary
