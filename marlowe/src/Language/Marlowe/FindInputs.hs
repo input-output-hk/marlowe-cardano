@@ -5,14 +5,14 @@ import Data.Maybe (catMaybes)
 import Data.SBV (ThmResult)
 import Language.Marlowe.Analysis.FSSemantics (onlyAssertionsWithState)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput)
-import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Observation (..))
 import Plutus.V1.Ledger.Api (POSIXTime)
+import qualified PlutusTx.Prelude as P
 
 -- | Removes all the assertions from a contract
-removeAsserts :: Contract Token -> Contract Token
+removeAsserts :: Contract t -> Contract t
 removeAsserts = go
-  where go :: Contract Token -> Contract Token
+  where go :: Contract t -> Contract t
         go Close                  = Close
         go (Pay pa pa' to va con) = Pay pa pa' to va (go con)
         go (If ob con con')       = If ob (go con) (go con')
@@ -20,21 +20,21 @@ removeAsserts = go
         go (Let vi va con)        = Let vi va (go con)
         go (Assert _ con)         = con
 
-        goCase :: Case (Contract Token) Token -> Case (Contract Token) Token
+        goCase :: Case (Contract t) t -> Case (Contract t) t
         goCase (Case ac con)           = Case ac (go con)
         goCase mc@(MerkleizedCase _ _) = mc
 
-expandCase :: Case (Contract Token) Token -> [Case (Contract Token) Token]
+expandCase :: Case (Contract t) t -> [Case (Contract t) t]
 expandCase (Case ac con)        = [Case ac c | c <- expandContract con]
 expandCase (MerkleizedCase _ _) = []
 
-expandCases :: [Case (Contract Token) Token] -> [[Case (Contract Token) Token]]
+expandCases :: [Case (Contract t) t] -> [[Case (Contract t) t]]
 expandCases [] = []
 expandCases (firstCase:restOfCases) =
        [c:restOfCases | c <- expandCase firstCase]
     ++ [firstCase:ec | ec <- expandCases restOfCases]
 
-expandContract :: Contract Token -> [Contract Token]
+expandContract :: Contract t -> [Contract t]
 expandContract Close = [Assert FalseObs Close]
 expandContract (Pay pa pa' to va con) = [Pay pa pa' to va c | c <- expandContract con]
 expandContract (If ob con con') = [If ob c con' | c <- expandContract con]
@@ -44,13 +44,13 @@ expandContract (When cas sl con) = [When cas sl c | c <- expandContract con]
 expandContract (Let vi va con) = [Let vi va c | c <- expandContract con]
 expandContract (Assert _ con) = expandContract con
 
-getInputs :: Contract Token -> IO (Either (ThmResult, Contract Token) (Maybe (POSIXTime, [TransactionInput Token])))
+getInputs :: (P.Eq t, Ord t) => Contract t -> IO (Either (ThmResult, Contract t) (Maybe (POSIXTime, [TransactionInput t])))
 getInputs c = bimap (\tr -> (tr, c)) (fmap (\(s, t, _) -> (s, t))) <$> onlyAssertionsWithState c Nothing
 
 -- | Uses static analysis to obtain a list of "unit tests" (lists of transactions) that
 -- | cover the different branches of the given contract. If static analysis fails
 -- | it returns a tuple that includes the error by the solver and the offending
 -- | extension of the contract
-getAllInputs :: Contract Token -> IO (Either (ThmResult, Contract Token) [(POSIXTime, [TransactionInput Token])])
+getAllInputs :: (P.Eq t, Ord t) => Contract t -> IO (Either (ThmResult, Contract t) [(POSIXTime, [TransactionInput t])])
 getAllInputs c = second catMaybes . sequence <$> mapM getInputs (expandContract (removeAsserts c))
 
