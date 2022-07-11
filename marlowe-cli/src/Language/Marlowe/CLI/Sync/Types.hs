@@ -35,6 +35,7 @@ import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
+import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Input, TimeInterval)
 import Ledger.Address (Address)
 import Plutus.V1.Ledger.Api (TokenName)
@@ -75,8 +76,8 @@ data MarloweIn =
     -- | Input to the Marlowe application script.
   | ApplicationIn
     {
-      miTxIn   :: TxIn     -- ^ The transaction input.
-    , miInputs :: [Input]  -- ^ The Marlowe inputs.
+      miTxIn   :: TxIn           -- ^ The transaction input.
+    , miInputs :: [Input Token]  -- ^ The Marlowe inputs.
     }
   | PayoutIn
     {
@@ -98,10 +99,10 @@ data MarloweOut =
     -- | Output to the Marlowe application script.
   | ApplicationOut
     {
-      moTxIn    :: TxIn         -- ^ The transaction input being produced.
-    , moAddress :: Address      -- ^ The address receiving the output.
-    , moValue   :: Value        -- ^ The value output.
-    , moOutput  :: MarloweData  -- ^ The Marlowe data in the output.
+      moTxIn    :: TxIn               -- ^ The transaction input being produced.
+    , moAddress :: Address            -- ^ The address receiving the output.
+    , moValue   :: Value              -- ^ The value output.
+    , moOutput  :: MarloweData Token  -- ^ The Marlowe data in the output.
     }
     -- | Output to the Marlowe payout script.
   | PayoutOut

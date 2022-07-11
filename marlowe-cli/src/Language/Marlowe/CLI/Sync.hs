@@ -462,17 +462,17 @@ classifyInputs txBody@(TxBody TxBodyContent{..}) =
 
 
 -- | Classify a transaction input's Marlowe content.
-classifyInput :: [(BuiltinByteString, Contract)]  -- ^ Contract continuations and their hashes.
-              -> MarloweInput                     -- ^ The transaction input.
-              -> Maybe [Input]                    -- ^ The the Marlowe input, if any.
+classifyInput :: [(BuiltinByteString, Contract t)]  -- ^ Contract continuations and their hashes.
+              -> MarloweInput t                     -- ^ The transaction input.
+              -> Maybe [Input t]                    -- ^ The the Marlowe input, if any.
 classifyInput continuations =
   mapM $ unmerkleize continuations
 
 
 -- | Restore a contract from its merkleization.
-unmerkleize :: [(BuiltinByteString, Contract)]  -- ^ Contract continuations and their hashes.
-            -> MarloweTxInput                   -- ^ The Marlowe transaction input.
-            -> Maybe Input                      -- ^ Marlowe input, if any.
+unmerkleize :: [(BuiltinByteString, Contract t)]  -- ^ Contract continuations and their hashes.
+            -> MarloweTxInput t                   -- ^ The Marlowe transaction input.
+            -> Maybe (Input t)                    -- ^ Marlowe input, if any.
 unmerkleize _ (Input content) =
   pure $ NormalInput content
 unmerkleize continuations (MerkleizedTxInput content continuationHash) =

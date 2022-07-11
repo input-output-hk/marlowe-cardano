@@ -62,9 +62,9 @@ import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweTransac
                                    ValidatorInfo (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
                                            TransactionOutput (..), TransactionWarning, computeTransaction)
+import Language.Marlowe.Core.V1.Semantics.Token (Token (..), moneyToValue)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
-                                                 InputContent (..), Party (..), Payee (..), State (accounts),
-                                                 Token (..))
+                                                 InputContent (..), Party (..), Payee (..), State (accounts))
 import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
@@ -98,9 +98,12 @@ makeChoice :: MonadIO m
            -> Maybe FilePath  -- ^ The output JSON file representing the input.
            -> m ()            -- ^ Action to write the input to the file.
 makeChoice name party chosen outputFile =
-  maybeWriteJson outputFile
-    . NormalInput
-    $ IChoice (ChoiceId name party) chosen
+    maybeWriteJson outputFile input
+  where
+    input :: Input Token
+    input =
+        NormalInput
+      $ IChoice (ChoiceId name party) chosen
 
 
 -- | Serialise a notification input to a file.
@@ -108,8 +111,10 @@ makeNotification :: MonadIO m
                  => Maybe FilePath  -- ^ The output JSON file representing the input.
                  -> m ()            -- ^ Action to write the input to the file.
 makeNotification outputFile =
-  maybeWriteJson outputFile
-    $ NormalInput INotify
+    maybeWriteJson outputFile input
+  where
+    input :: Input Token
+    input = NormalInput INotify
 
 
 -- | Create an initial Marlowe transaction.
@@ -146,8 +151,8 @@ initializeTransactionImpl :: MonadError CliError m
                           -> CostModelParams        -- ^ The cost model parameters.
                           -> NetworkId              -- ^ The network ID.
                           -> StakeAddressReference  -- ^ The stake address.
-                          -> Contract               -- ^ The initial Marlowe contract.
-                          -> State                  -- ^ The initial Marlowe state.
+                          -> Contract Token         -- ^ The initial Marlowe contract.
+                          -> State Token            -- ^ The initial Marlowe state.
                           -> Maybe FilePath         -- ^ The output JSON file for the validator information.
                           -> Bool                   -- ^ Whether to deeply merkleize the contract.
                           -> Bool                   -- ^ Whether to print statistics about the validator.
@@ -179,7 +184,7 @@ initializeTransactionImpl marloweParams mtSlotConfig costModelParams network sta
 prepareTransaction :: MonadError CliError m
                => MonadIO m
                => FilePath        -- ^ The JSON file with the Marlowe initial state and initial contract.
-               -> [Input]         -- ^ The contract's inputs.
+               -> [Input Token]   -- ^ The contract's inputs.
                -> POSIXTime       -- ^ The first valid time for the transaction.
                -> POSIXTime       -- ^ The last valid time for the transaction.
                -> Maybe FilePath  -- ^ The output JSON file with the results of the computation.
@@ -222,15 +227,16 @@ prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile print
                 , (token, amount) <- AM.toList tokenAmounts
                 ]
           |
-            (i, Payment accountId payee money) <- zip [1..] mtPayments
+            (i, Payment accountId payee money_) <- zip [1..] mtPayments
+          , let money = moneyToValue money_
           ]
 
 
 -- | Prepare the next step in a Marlowe contract.
 makeMarlowe :: MonadError CliError m
-            => MarloweTransaction era                            -- ^ The Marlowe initial state and initial contract.
-            -> TransactionInput                                  -- ^ The transaction input.
-            -> m ([TransactionWarning], MarloweTransaction era)  -- ^ Action to compute the next step in the contract.
+            => MarloweTransaction era                                  -- ^ The Marlowe initial state and initial contract.
+            -> TransactionInput Token                                  -- ^ The transaction input.
+            -> m ([TransactionWarning Token], MarloweTransaction era)  -- ^ Action to compute the next step in the contract.
 makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
   do
     transactionInput'@TransactionInput{..} <-
@@ -355,7 +361,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
            (payee, money) <- bimap head mconcat . unzip
                                <$> (groupBy ((==) `on` fst) . sortBy (compare `on` fst))
                                [
-                                 (payee, money)
+                                 (payee, moneyToValue money)
                                | Payment _ payee money <- mtPayments marloweOut
                                ]
         ]

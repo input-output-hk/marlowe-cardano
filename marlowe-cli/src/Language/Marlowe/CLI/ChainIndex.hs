@@ -42,6 +42,7 @@ import Language.Marlowe.CLI.IO (liftCli, maybeWriteJson)
 import Language.Marlowe.CLI.Types (CliError (..), OutputQuery (..))
 import Language.Marlowe.Client.History (histories)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
+import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Scripts (smallUntypedValidator)
 import Ledger (ciTxOutDatum, ciTxOutValue, toTxOut)
 import Ledger.Scripts (validatorHash)
@@ -148,7 +149,7 @@ queryApp runApi params spent outputFile =
     let
       credential = ScriptCredential . validatorHash . validatorScript $ smallUntypedValidator params
     result <- runApi $ queryScript spent credential
-    maybeWriteJson outputFile (result :: [TxOutMarlowe MarloweData])
+    maybeWriteJson outputFile (result :: [TxOutMarlowe (MarloweData Token)])
 
 
 -- | Query state of the Marlowe payout script.

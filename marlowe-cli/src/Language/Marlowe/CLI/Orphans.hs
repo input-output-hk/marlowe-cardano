@@ -27,6 +27,8 @@ import Cardano.Api (AddressAny (..), AsType (AsAddressAny), BlockHeader (..), Bl
 import Data.Aeson (FromJSON (..), ToJSON (..), Value (Null, String), object, withObject, withText, (.:), (.=))
 import Data.ByteString.Short (ShortByteString, fromShort, toShort)
 import Language.Marlowe.Core.V1.Semantics (Payment (..), TransactionOutput (..))
+import Language.Marlowe.Core.V1.Semantics.Money (Money)
+import Language.Marlowe.Core.V1.Semantics.Token (Token, moneyFromValue, moneyToValue)
 
 import qualified Data.ByteString.Base16 as Base16 (decode, encode)
 import qualified Data.ByteString.Char8 as BS8 (pack, unpack)
@@ -45,7 +47,7 @@ instance FromJSON ShortByteString where
           Left  message -> fail message
 
 
-instance ToJSON TransactionOutput where
+instance ToJSON (TransactionOutput Token) where
   toJSON TransactionOutput{..} =
     object
       [
@@ -61,7 +63,7 @@ instance ToJSON TransactionOutput where
       ]
 
 
-instance ToJSON Payment where
+instance ToJSON (Payment Token) where
   toJSON (Payment accountId payee money) =
     object
       [
@@ -71,7 +73,7 @@ instance ToJSON Payment where
       ]
 
 
-instance FromJSON Payment where
+instance FromJSON (Payment Token) where
   parseJSON =
     withObject "Payment"
       $ \o ->
@@ -80,6 +82,11 @@ instance FromJSON Payment where
           <*> (o .: "payee"    )
           <*> (o .: "money"    )
 
+instance ToJSON (Money Token) where
+  toJSON = toJSON . moneyToValue
+
+instance FromJSON (Money Token) where
+  parseJSON = fmap moneyFromValue . parseJSON
 
 instance ToJSON AddressAny where
   toJSON = String . serialiseAddress

@@ -53,6 +53,7 @@ import Data.String (IsString)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Core.V1.Semantics (Payment)
+import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
 import Ledger.TimeSlot (SlotConfig)
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
@@ -77,7 +78,7 @@ type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentE
 
 
 -- | Continuations for contracts.
-type Continuations = M.Map DatumHash Contract
+type Continuations t = M.Map DatumHash (Contract t)
 
 
 -- | Complete description of a Marlowe transaction.
@@ -87,12 +88,12 @@ data MarloweTransaction era =
     mtValidator     :: ValidatorInfo era       -- ^ The Marlowe validator.
   , mtRoleValidator :: ValidatorInfo era       -- ^ The roles validator.
   , mtRoles         :: CurrencySymbol          -- ^ The roles currency.
-  , mtState         :: State                   -- ^ The Marlowe state after the transaction.
-  , mtContract      :: Contract                -- ^ The Marlowe contract after the transaction.
-  , mtContinuations :: Continuations           -- ^ The merkleized continuations for the contract.
+  , mtState         :: State Token             -- ^ The Marlowe state after the transaction.
+  , mtContract      :: Contract Token          -- ^ The Marlowe contract after the transaction.
+  , mtContinuations :: Continuations Token     -- ^ The merkleized continuations for the contract.
   , mtRange         :: Maybe (SlotNo, SlotNo)  -- ^ The slot range for the transaction, if any.
-  , mtInputs        :: [Input]                 -- ^ The inputs to the transaction.
-  , mtPayments      :: [Payment]               -- ^ The payments from the transaction.
+  , mtInputs        :: [Input Token]           -- ^ The inputs to the transaction.
+  , mtPayments      :: [Payment Token]         -- ^ The payments from the transaction.
   , mtSlotConfig    :: SlotConfig              -- ^ The POSIXTime-to-Slot configuration.
   }
     deriving (Generic, Show)

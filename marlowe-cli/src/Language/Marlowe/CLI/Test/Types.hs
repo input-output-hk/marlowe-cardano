@@ -67,6 +67,7 @@ import Language.Marlowe.CLI.Types (CliError, SomePaymentSigningKey)
 import Language.Marlowe.Client (MarloweClientInput, MarloweContractState)
 import Language.Marlowe.Contract (MarloweContract)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, State, TimeInterval)
 import Plutus.Contract (ContractInstanceId)
 import Plutus.PAB.Webserver.Client (PabClient)
@@ -127,8 +128,8 @@ data ScriptTest =
     stTestName         :: String             -- ^ The name of the test.
   , stSlotLength       :: Integer            -- ^ The slot length, in milliseconds.
   , stSlotZeroOffset   :: Integer            -- ^ The effective POSIX time of slot zero, in milliseconds.
-  , stInitialContract  :: Contract           -- ^ The contract.
-  , stInitialState     :: State              -- ^ The the contract's initial state.
+  , stInitialContract  :: Contract Token     -- ^ The contract.
+  , stInitialState     :: State Token        -- ^ The the contract's initial state.
   , stScriptOperations :: [ScriptOperation]  -- ^ The sequence of test operations.
   }
     deriving stock (Eq, Generic, Show)
@@ -240,7 +241,7 @@ data PabOperation =
     {
       poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
     , poOwners   :: [RoleName]        -- ^ The names of roles in the contract.
-    , poContract :: Contract          -- ^ The Marlowe contract to be created.
+    , poContract :: Contract Token    -- ^ The Marlowe contract to be created.
     }
     -- | Wait for confirmation of a call to the "create" endpoint.
   | AwaitCreate

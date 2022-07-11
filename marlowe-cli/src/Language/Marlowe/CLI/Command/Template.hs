@@ -177,7 +177,7 @@ runTemplateCommand TemplateCoveredCall{..}    = let marloweContract = makeContra
 
 
 -- | Conversion from Extended to Core Marlowe.
-makeContract :: E.Contract -> C.Contract
+makeContract :: E.Contract -> C.Contract Token
 makeContract = errorHandling . toCore
   where
     errorHandling (Just contract) = contract
@@ -185,7 +185,7 @@ makeContract = errorHandling . toCore
 
 
 -- | Build the initial Marlowe state.
-initialMarloweState :: AccountId -> Integer -> State
+initialMarloweState :: AccountId -> Integer -> State Token
 initialMarloweState party minAda =
   State
   {

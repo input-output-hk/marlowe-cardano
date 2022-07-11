@@ -52,7 +52,8 @@ import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
 import Language.Marlowe.CLI.Types (OutputQuery (..))
 import Language.Marlowe.Client (MarloweClientInput (..))
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
+import Language.Marlowe.Core.V1.Semantics.Token (Token (..))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..), TokenName (..), toBuiltin)
@@ -299,12 +300,12 @@ parseMarloweClientInput = ClientInput <$> parseInputContent
 
 
 -- | Parse input to a contract.
-parseInput :: O.Parser Input
+parseInput :: O.Parser (Input Token)
 parseInput = NormalInput <$> parseInputContent
 
 
 -- | Parse input to a contract.
-parseInputContent :: O.Parser InputContent
+parseInputContent :: O.Parser (InputContent Token)
 parseInputContent =
   parseDeposit <|> parseChoice <|> parseNotify
     where

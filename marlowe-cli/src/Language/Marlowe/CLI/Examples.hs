@@ -23,16 +23,17 @@ module Language.Marlowe.CLI.Examples (
 import Control.Monad.Except (MonadIO, liftIO)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
+import Language.Marlowe.Core.V1.Semantics.Token (Token)
 
 import qualified Data.ByteString.Lazy as LBS (writeFile)
 
 
 -- | Serialise an example contract to JSON.
 makeExample :: MonadIO m
-            => FilePath        -- ^ The output JSON file for the Marlowe contract.
-            -> FilePath        -- ^ The output JSON file for the Marlowe contract's state.
-            -> MarloweData     -- ^ The contract and state data.
-            -> m ()            -- ^ Action to serialise the Marlowe data.
+            => FilePath           -- ^ The output JSON file for the Marlowe contract.
+            -> FilePath           -- ^ The output JSON file for the Marlowe contract's state.
+            -> MarloweData Token  -- ^ The contract and state data.
+            -> m ()               -- ^ Action to serialise the Marlowe data.
 makeExample contractFile stateFile MarloweData{..} =
   liftIO
     $ do
