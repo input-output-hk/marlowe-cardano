@@ -54,10 +54,10 @@ import Data.Text (pack)
 import Deriving.Aeson
 import Language.Marlowe.Core.V1.Semantics.Money (Money)
 import qualified Language.Marlowe.Core.V1.Semantics.Money as Money
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..),
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..), Case, Case_ (..), Contract (..),
                                                  Environment (..), Input (..), InputContent (..), IntervalError (..),
                                                  IntervalResult (..), Observation (..), Party, Payee (..), State (..),
-                                                 TimeInterval, Value (..), ValueId, emptyState, getAction,
+                                                 TimeInterval, Value, ValueId, Value_ (..), emptyState, getAction,
                                                  getInputContent, inBounds)
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
@@ -241,7 +241,7 @@ fixInterval interval state =
 {-|
   Evaluates @Value@ given current @State@ and @Environment@
 -}
-evalValue :: Eq t => Environment -> State t -> Value (Observation t) t -> Integer
+evalValue :: Eq t => Environment -> State t -> Value t -> Integer
 evalValue env state value = let
     eval = evalValue env state
     in case value of
@@ -450,7 +450,7 @@ applyAction env state INotify (Notify obs)
 applyAction _ _ _ _ = NotAppliedAction
 
 -- | Try to get a continuation from a pair of Input and Case
-getContinuation :: Input t -> Case (Contract t) t -> Maybe (Contract t)
+getContinuation :: Input t -> Case t -> Maybe (Contract t)
 getContinuation (NormalInput _) (Case _ continuation) = Just continuation
 getContinuation (MerkleizedInput _ inputContinuationHash continuation) (MerkleizedCase _ continuationHash) =
     if inputContinuationHash == continuationHash
@@ -458,7 +458,7 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
-applyCases :: forall t. Eq t => Environment -> State t -> Input t -> [Case (Contract t) t] -> ApplyResult t
+applyCases :: forall t. Eq t => Environment -> State t -> Input t -> [Case t] -> ApplyResult t
 applyCases env state input (headCase : tailCase) =
     let inputContent = getInputContent input :: InputContent t
         action = getAction headCase :: Action t

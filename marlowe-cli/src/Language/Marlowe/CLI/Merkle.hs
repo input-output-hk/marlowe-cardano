@@ -44,7 +44,7 @@ import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ReduceResult (..), 
                                            TransactionOutput (..), applyInput, computeTransaction, fixInterval,
                                            reduceContractUntilQuiescent)
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
-import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Input (..), IntervalResult (..), State,
+import Language.Marlowe.Core.V1.Semantics.Types (Case_ (..), Contract (..), Input (..), IntervalResult (..), State,
                                                  TimeInterval)
 import Ledger.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltinData)

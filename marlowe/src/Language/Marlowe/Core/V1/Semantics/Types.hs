@@ -102,21 +102,23 @@ newtype ValueId = ValueId BuiltinByteString
 
     Values can also be scaled, and combined using addition, subtraction, and negation.
 -}
-data Value a t = AvailableMoney AccountId t
-               | Constant Integer
-               | NegValue (Value a t)
-               | AddValue (Value a t) (Value a t)
-               | SubValue (Value a t) (Value a t)
-               | MulValue (Value a t) (Value a t)
-               | DivValue (Value a t) (Value a t)
-               | ChoiceValue ChoiceId
-               | TimeIntervalStart
-               | TimeIntervalEnd
-               | UseValue ValueId
-               | Cond a (Value a t) (Value a t)
+data Value_ a t = AvailableMoney AccountId t
+                | Constant Integer
+                | NegValue (Value_ a t)
+                | AddValue (Value_ a t) (Value_ a t)
+                | SubValue (Value_ a t) (Value_ a t)
+                | MulValue (Value_ a t) (Value_ a t)
+                | DivValue (Value_ a t) (Value_ a t)
+                | ChoiceValue ChoiceId
+                | TimeIntervalStart
+                | TimeIntervalEnd
+                | UseValue ValueId
+                | Cond a (Value_ a t) (Value_ a t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
+
+type Value t = Value_ (Observation t) t
 
 {-| Observations are Boolean values derived by comparing values,
     and can be combined using the standard Boolean operators.
@@ -128,11 +130,11 @@ data Observation t = AndObs (Observation t) (Observation t)
                    | OrObs (Observation t) (Observation t)
                    | NotObs (Observation t)
                    | ChoseSomething ChoiceId
-                   | ValueGE (Value (Observation t) t) (Value (Observation t) t)
-                   | ValueGT (Value (Observation t) t) (Value (Observation t) t)
-                   | ValueLT (Value (Observation t) t) (Value (Observation t) t)
-                   | ValueLE (Value (Observation t) t) (Value (Observation t) t)
-                   | ValueEQ (Value (Observation t) t) (Value (Observation t) t)
+                   | ValueGE (Value t) (Value t)
+                   | ValueGT (Value t) (Value t)
+                   | ValueLT (Value t) (Value t)
+                   | ValueLE (Value t) (Value t)
+                   | ValueEQ (Value t) (Value t)
                    | TrueObs
                    | FalseObs
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
@@ -156,7 +158,7 @@ data Bound = Bound Integer Integer
       Typically this would be done by one of the parties,
       or one of their wallets acting automatically.
 -}
-data Action t = Deposit AccountId Party t (Value (Observation t) t)
+data Action t = Deposit AccountId Party t (Value t)
               | Choice ChoiceId [Bound]
               | Notify (Observation t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
@@ -176,14 +178,14 @@ data Payee = Account AccountId
 {-  Plutus doesn't support mutually recursive data types yet.
     datatype Case is mutually recurvive with @Contract@
 -}
--- TODO: @Case a t = Case (Action t) (a t)@ might make more sense, but the TH
--- code ('makeIsDataIndexed') gets confused by such higher-kinded types
-data Case a t = Case (Action t) a
-              | MerkleizedCase (Action t) BuiltinByteString
+data Case_ a t = Case (Action t) a
+               | MerkleizedCase (Action t) BuiltinByteString
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
-getAction :: Case a t -> Action t
+type Case t = Case_ (Contract t) t
+
+getAction :: Case t -> Action t
 getAction (Case action _)           = action
 getAction (MerkleizedCase action _) = action
 
@@ -195,10 +197,10 @@ getAction (MerkleizedCase action _) = action
     it is possible that effects – payments – and warnings can be generated too.
 -}
 data Contract t = Close
-                | Pay AccountId Payee t (Value (Observation t) t) (Contract t)
+                | Pay AccountId Payee t (Value t) (Contract t)
                 | If (Observation t) (Contract t) (Contract t)
-                | When [Case (Contract t) t] Timeout (Contract t)
-                | Let ValueId (Value (Observation t) t) (Contract t)
+                | When [Case t] Timeout (Contract t)
+                | Let ValueId (Value t) (Contract t)
                 | Assert (Observation t) (Contract t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
@@ -360,7 +362,7 @@ instance ToJSON ValueId where
     toJSON (ValueId x) = JSON.String (Text.decodeUtf8 $ fromBuiltin x)
 
 
-instance FromJSON t => FromJSON (Value (Observation t) t) where
+instance FromJSON t => FromJSON (Value t) where
   parseJSON (Object v) =
         (AvailableMoney <$> (v .: "in_account")
                         <*> (v .: "amount_of_token"))
@@ -382,7 +384,7 @@ instance FromJSON t => FromJSON (Value (Observation t) t) where
   parseJSON (Number n) = Constant <$> getInteger n
   parseJSON _ = Haskell.fail "Value must be either an object or an integer"
 
-instance ToJSON t => ToJSON (Value (Observation t) t) where
+instance ToJSON t => ToJSON (Value t) where
   toJSON (AvailableMoney accountId token) = object
       [ "amount_of_token" .= token
       , "in_account" .= accountId
@@ -527,14 +529,14 @@ instance ToJSON Payee where
   toJSON (Party party) = object ["party" .= party]
 
 
-instance (FromJSON a, FromJSON t) => FromJSON (Case a t) where
+instance FromJSON t => FromJSON (Case t) where
   parseJSON = withObject "Case" (\v ->
         (Case <$> (v .: "case")
               <*> (v .: "then"))
     <|> (MerkleizedCase <$> (v .: "case")
                         <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_then")))
                                 )
-instance (ToJSON a, ToJSON t) => ToJSON (Case a t) where
+instance ToJSON t => ToJSON (Case t) where
   toJSON (Case act cont) = object
       [ "case" .= act
       , "then" .= cont
@@ -623,7 +625,7 @@ instance Eq Payee where
     Party p1 == Party p2         = p1 == p2
     _ == _                       = False
 
-instance (Eq a, Eq t) => Eq (Value a t) where
+instance Eq t => Eq (Value t) where
     {-# INLINABLE (==) #-}
     AvailableMoney acc1 tok1 == AvailableMoney acc2 tok2 =
         acc1 == acc2 && tok1 == tok2
@@ -667,7 +669,7 @@ instance Eq t => Eq (Action t) where
     Notify obs1 == Notify obs2 = obs1 == obs2
     _ == _ = False
 
-instance (Eq a, Eq t) => Eq (Case a t) where
+instance Eq t => Eq (Case t) where
     {-# INLINABLE (==) #-}
     Case acl cl == Case acr cr                       = acl == acr && cl == cr
     MerkleizedCase acl bsl == MerkleizedCase acr bsr = acl == acr && bsl == bsr
@@ -703,8 +705,8 @@ makeLift ''ChoiceId
 makeIsDataIndexed ''ChoiceId [('ChoiceId,0)]
 makeLift ''ValueId
 makeIsDataIndexed ''ValueId [('ValueId,0)]
-makeLift ''Value
-makeIsDataIndexed ''Value [
+makeLift ''Value_
+makeIsDataIndexed ''Value_ [
     ('AvailableMoney,0),
     ('Constant,1),
     ('NegValue,2),
@@ -736,8 +738,8 @@ makeLift ''Bound
 makeIsDataIndexed ''Bound [('Bound,0)]
 makeLift ''Action
 makeIsDataIndexed ''Action [('Deposit,0),('Choice,1),('Notify,2)]
-makeLift ''Case
-makeIsDataIndexed ''Case [('Case,0),('MerkleizedCase,1)]
+makeLift ''Case_
+makeIsDataIndexed ''Case_ [('Case,0),('MerkleizedCase,1)]
 makeLift ''Payee
 makeIsDataIndexed ''Payee [('Account,0),('Party,1)]
 makeLift ''Contract

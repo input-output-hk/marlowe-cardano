@@ -178,7 +178,7 @@ convertToSymbolicTrace refL symL =
  else error "Provided symbolic trace is not long enough"
 
 -- Symbolic version evalValue
-symEvalVal :: Ord t => Value (Observation t) t -> SymState t -> SInteger
+symEvalVal :: Ord t => Value t -> SymState t -> SInteger
 symEvalVal (AvailableMoney accId tok) symState =
   M.findWithDefault (literal 0) (accId, tok) (symAccounts symState)
 symEvalVal (Constant inte) symState = literal inte
@@ -397,7 +397,7 @@ addFreshSlotsToState sState =
 -- to the function and pass it to the next iteration of isValidAndFailsWhen.
 -- - pos - Is the position of the current Case clause [1..], 0 means timeout branch.
 isValidAndFailsWhen :: Ord t
-                    => Bool -> SBool -> [Case (Contract t) t] -> Timeout -> Contract t -> (SymInput t -> SymState t -> SBool)
+                    => Bool -> SBool -> [Case t] -> Timeout -> Contract t -> (SymInput t -> SymState t -> SBool)
                     -> SymState t -> Integer -> Symbolic SBool
 isValidAndFailsWhen oa hasErr [] timeout cont previousMatch sState pos =
   do newLowSlot <- sInteger_
@@ -518,7 +518,7 @@ countWhens (Let va vb c)       = countWhens c
 countWhens (Assert o c)        = countWhens c
 
 -- Same as countWhens but it starts with a Case list
-countWhensCaseList :: [Case (Contract t) t] -> Integer
+countWhensCaseList :: [Case t] -> Integer
 countWhensCaseList (Case uu c : tail)           = max (countWhens c) (countWhensCaseList tail)
 countWhensCaseList (MerkleizedCase uu c : tail) = countWhensCaseList tail
 countWhensCaseList []                           = 0
@@ -578,7 +578,7 @@ groupResult _ _ = error "Wrong number of labels generated"
 
 -- Reconstructs an input from a Case list a Case position and a value (deposit amount or
 -- chosen value)
-caseToInput :: [Case a t] -> Integer -> Integer -> Input t
+caseToInput :: [Case t] -> Integer -> Integer -> Input t
 caseToInput [] _ _ = error "Wrong number of cases interpreting result"
 caseToInput (Case h _:t) c v
   | c > 1 = caseToInput t (c - 1) v

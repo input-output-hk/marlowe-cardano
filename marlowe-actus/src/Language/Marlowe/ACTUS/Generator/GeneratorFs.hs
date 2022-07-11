@@ -44,7 +44,7 @@ genFsContract' ::
 genFsContract' rf ct =
   let cfs = genProjectedCashflows rf ct
 
-      gen :: CashFlowPoly (Value (Observation Token) Token) -> Contract Token -> Contract Token
+      gen :: CashFlowPoly (Value Token) -> Contract Token -> Contract Token
       gen CashFlowPoly {..} cont =
         let t = POSIXTime $ timeToSlotNumber cashPaymentDay
             a = reduce $ DivValue amount (Constant marloweFixedPoint)
@@ -99,7 +99,7 @@ reduceObservation (ValueLT a b) = ValueLT (reduce a) (reduce b)
 reduceObservation (ValueEQ a b) = ValueEQ (reduce a) (reduce b)
 reduceObservation x             = x
 
-reduce :: Value (Observation t) t -> Value (Observation t) t
+reduce :: Value t -> Value t
 reduce (ChoiceValue i) = ChoiceValue i
 reduce (UseValue i) = UseValue i
 reduce (Constant i) = Constant i

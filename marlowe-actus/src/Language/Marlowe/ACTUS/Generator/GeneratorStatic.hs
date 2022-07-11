@@ -14,7 +14,7 @@ where
 import Data.List as L (foldl')
 import Data.Time (LocalTime)
 import Data.Validation (Validation (..))
-import Language.Marlowe (Contract (..), POSIXTime (..), Token, Value (..))
+import Language.Marlowe (Contract (..), POSIXTime (..), Token, Value_ (..))
 import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactors)
 import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, TermValidationError (..))
 import Language.Marlowe.ACTUS.Domain.Schedule (CashFlowPoly (..))

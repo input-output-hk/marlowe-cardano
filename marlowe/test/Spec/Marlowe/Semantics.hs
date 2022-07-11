@@ -171,7 +171,7 @@ checkFixInterval invalid inPast =
 
 checkValue :: Show a
            => (Environment -> State Token -> Gen a)
-           -> ((Value (Observation Token) Token -> Integer) -> (Observation Token -> Bool) -> Environment -> State Token -> a -> Bool)
+           -> ((Value Token -> Integer) -> (Observation Token -> Bool) -> Environment -> State Token -> a -> Bool)
            -> Property
 checkValue gen f =
   property $ do
@@ -241,7 +241,7 @@ checkMulValue =
 
 checkDivValueNumeratorDenominatorZero :: Assertion
 checkDivValueNumeratorDenominatorZero = do
-  let eval :: Value (Observation Token) Token -> Integer
+  let eval :: Value Token -> Integer
       eval = evalValue undefined undefined
   assertBool "DivValue 0 0 = 0"
     $ eval (DivValue (Constant 0) (Constant 0)) == 0

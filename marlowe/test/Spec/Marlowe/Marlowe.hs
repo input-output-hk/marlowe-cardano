@@ -423,7 +423,7 @@ valuesFormAbelianGroup = property $ do
 
 divisionRoundingTest :: Property
 divisionRoundingTest = property $ do
-    let eval :: Value (Observation Token) Token -> Integer
+    let eval :: Value Token -> Integer
         eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     -- test half-even rounding
     let gen = do
@@ -453,7 +453,7 @@ divZeroTest = property $ do
 valueSerialization :: Property
 valueSerialization = property $
     forAll valueGen $ \a ->
-        let decoded :: Maybe (Value (Observation Token) Token)
+        let decoded :: Maybe (Value Token)
             decoded = decode $ encode a
         in Just a === decoded
 
@@ -497,7 +497,7 @@ divAnalysisTest = do
     result <- warningsTrace (contract 9 2)
     assertBool "Analysis ok" $ isRight result && either (const False) isJust result
 
-    let eval :: Value (Observation Token) Token -> Integer
+    let eval :: Value Token -> Integer
         eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
@@ -509,7 +509,7 @@ divAnalysisTest = do
 
 divTest :: IO ()
 divTest = do
-    let eval :: Value (Observation Token) Token -> Integer
+    let eval :: Value Token -> Integer
         eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
@@ -538,7 +538,7 @@ tokenShowTest :: IO ()
 tokenShowTest = do
     -- SCP-834, CurrencySymbol is HEX encoded ByteString,
     -- and TokenSymbol as UTF8 encoded Unicode string
-    let actual :: Value (Observation Token) Token
+    let actual :: Value Token
         actual = AvailableMoney (Role "alice") (Token "00010afF" "ÚSD©")
 
     show actual @=? "AvailableMoney \"alice\" (Token \"00010aff\" \"ÚSD©\")"

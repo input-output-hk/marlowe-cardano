@@ -134,7 +134,7 @@ instance ToCore Contract (S.Contract S.Token) where
   toCore (Let varId val cont) = pure (S.Let varId) <*> toCore val <*> toCore cont
   toCore (Assert obs cont) = S.Assert <$> toCore obs <*> toCore cont
 
-instance ToCore Value (S.Value (S.Observation S.Token) S.Token) where
+instance ToCore Value (S.Value S.Token) where
   toCore (Constant c)               = Just $ S.Constant c
   toCore (ConstantParam _)          = Nothing
   toCore (AvailableMoney accId tok) = Just $ S.AvailableMoney accId tok
@@ -175,7 +175,7 @@ instance ToCore Payee S.Payee where
   toCore (Account accId)  = Just $ S.Account accId
   toCore (Party roleName) = Just $ S.Party roleName
 
-instance ToCore Case (S.Case (S.Contract S.Token) S.Token) where
+instance ToCore Case (S.Case S.Token) where
   toCore (Case act c) = S.Case <$> toCore act <*> toCore c
 
 instance FromJSON Value where

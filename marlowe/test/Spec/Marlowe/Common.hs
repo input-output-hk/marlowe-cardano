@@ -115,7 +115,7 @@ rationalGen = do
     return $ a % b
 
 
-valueGenSized :: Int -> Gen (Value (Observation Token) Token)
+valueGenSized :: Int -> Gen (Value Token)
 valueGenSized s
   | s > 0 = oneof [ AvailableMoney <$> partyGen <*> tokenGen
                   , Constant <$> simpleIntegerGen
@@ -140,11 +140,11 @@ valueGenSized s
                       ]
 
 
-valueGen ::  Gen (Value (Observation Token) Token)
+valueGen ::  Gen (Value Token)
 valueGen = sized valueGenSized
 
 
-shrinkValue :: Value (Observation Token) Token -> [Value (Observation Token) Token]
+shrinkValue :: Value Token -> [Value Token]
 shrinkValue value = case value of
     Constant x -> [Constant y | y <- shrinkSimpleInteger x]
     TimeIntervalStart -> [Constant 0]
@@ -267,12 +267,12 @@ shrinkAction action = case action of
     Notify obs -> [Notify x | x <- shrinkObservation obs]
 
 
-caseRelGenSized :: Int -> Integer -> Gen (Case (Contract Token) Token)
+caseRelGenSized :: Int -> Integer -> Gen (Case Token)
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
                                  , (1, merkleizedCase <$> actionGenSized s <*> contractRelGenSized s bn)
                                  ]
 
-shrinkCase :: Case (Contract Token) Token -> [Case (Contract Token) Token]
+shrinkCase :: Case Token -> [Case Token]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
 shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]

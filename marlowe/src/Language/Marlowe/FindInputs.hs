@@ -5,7 +5,7 @@ import Data.Maybe (catMaybes)
 import Data.SBV (ThmResult)
 import Language.Marlowe.Analysis.FSSemantics (onlyAssertionsWithState)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput)
-import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Observation (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Case, Case_ (..), Contract (..), Observation (..))
 import Plutus.V1.Ledger.Api (POSIXTime)
 import qualified PlutusTx.Prelude as P
 
@@ -20,15 +20,15 @@ removeAsserts = go
         go (Let vi va con)        = Let vi va (go con)
         go (Assert _ con)         = con
 
-        goCase :: Case (Contract t) t -> Case (Contract t) t
+        goCase :: Case t -> Case t
         goCase (Case ac con)           = Case ac (go con)
         goCase mc@(MerkleizedCase _ _) = mc
 
-expandCase :: Case (Contract t) t -> [Case (Contract t) t]
+expandCase :: Case t -> [Case t]
 expandCase (Case ac con)        = [Case ac c | c <- expandContract con]
 expandCase (MerkleizedCase _ _) = []
 
-expandCases :: [Case (Contract t) t] -> [[Case (Contract t) t]]
+expandCases :: [Case t] -> [[Case t]]
 expandCases [] = []
 expandCases (firstCase:restOfCases) =
        [c:restOfCases | c <- expandCase firstCase]

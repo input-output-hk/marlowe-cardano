@@ -38,8 +38,8 @@ import Data.Function (on)
 import Data.List (nub, nubBy)
 import Language.Marlowe.Core.V1.Semantics.Token (Token (..))
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Bound (..), Case, ChoiceId (..), ChoiceName,
-                                                 ChosenNum, Contract, Environment (..), Party (..), Payee (..),
-                                                 State (..), TimeInterval, ValueId (..))
+                                                 ChosenNum, Environment (..), Party (..), Payee (..), State (..),
+                                                 TimeInterval, ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
 import Spec.Marlowe.Common (caseRelGenSized, simpleIntegerGen)
@@ -396,5 +396,5 @@ instance Arbitrary Environment where
   shrink (Environment x) = Environment <$> shrink x
 
 
-caseGen :: Gen (Case (Contract Token) Token)
+caseGen :: Gen (Case Token)
 caseGen = sized $ (simpleIntegerGen >>=) . caseRelGenSized
