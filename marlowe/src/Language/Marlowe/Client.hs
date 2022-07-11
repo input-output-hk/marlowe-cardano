@@ -1254,7 +1254,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
     evaluateTxContstraints :: MarloweData Token
         -> Ledger.POSIXTimeRange
         -> Tx.TxOutRef
-        -> Contract w MarloweSchema MarloweError (TxConstraints [MarloweTxInput] (MarloweData Token), MarloweData Token)
+        -> Contract w MarloweSchema MarloweError (TxConstraints [MarloweTxInput Token] (MarloweData Token), MarloweData Token)
     evaluateTxContstraints MarloweData{..} times marloweTxOutRef = do
         let (inputs, inputsConstraints) = foldMap clientInputToInputAndConstraints clientInputs
         let txInput = TransactionInput {

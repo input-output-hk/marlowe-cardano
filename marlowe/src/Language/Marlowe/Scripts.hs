@@ -18,6 +18,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
@@ -46,7 +47,7 @@ import qualified Prelude as Haskell
 import Unsafe.Coerce
 
 type MarloweTimeRange = (POSIXTime, POSIXTime)
-type MarloweInput = [MarloweTxInput]
+type MarloweInput t = [MarloweTxInput t]
 
 -- Yeah, I know
 type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
@@ -56,7 +57,7 @@ data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
 instance Scripts.ValidatorTypes TypedMarloweValidator where
-    type instance RedeemerType TypedMarloweValidator = MarloweInput
+    type instance RedeemerType TypedMarloweValidator = MarloweInput Token
     type instance DatumType TypedMarloweValidator = MarloweData Token
 
 data TypedRolePayoutValidator
@@ -66,8 +67,8 @@ instance Scripts.ValidatorTypes TypedRolePayoutValidator where
   type instance DatumType TypedRolePayoutValidator = TokenName
 
 
-data MarloweTxInput = Input (InputContent Token)
-                    | MerkleizedTxInput (InputContent Token) BuiltinByteString
+data MarloweTxInput t = Input (InputContent t)
+                      | MerkleizedTxInput (InputContent t) BuiltinByteString
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
@@ -96,7 +97,7 @@ defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
 smallMarloweValidator
     :: MarloweParams
     -> MarloweData Token
-    -> MarloweInput
+    -> MarloweInput Token
     -> ScriptContext
     -> Bool
 smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
@@ -209,7 +210,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
 
-    marloweTxInputToInput :: MarloweTxInput -> Input Token
+    marloweTxInputToInput :: MarloweTxInput Token -> Input Token
     marloweTxInputToInput (MerkleizedTxInput input hash) =
         case findDatum (DatumHash hash) scriptContextTxInfo of
             Just (Datum d) -> let
@@ -271,11 +272,11 @@ smallUntypedValidator params = let
 defaultTxValidationRange :: POSIXTime
 defaultTxValidationRange = 10000
 
-marloweTxInputFromInput :: Input Token -> MarloweTxInput
+marloweTxInputFromInput :: Input t -> MarloweTxInput t
 marloweTxInputFromInput (NormalInput i)         = Input i
 marloweTxInputFromInput (MerkleizedInput i h _) = MerkleizedTxInput i h
 
-marloweTxInputsFromInputs :: [Input Token] -> [MarloweTxInput]
+marloweTxInputsFromInputs :: [Input t] -> [MarloweTxInput t]
 marloweTxInputsFromInputs = fmap marloweTxInputFromInput
 
 makeLift ''MarloweTxInput
