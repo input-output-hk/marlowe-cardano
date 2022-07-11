@@ -63,14 +63,9 @@ library
     mtl,
     newtype-generics,
     template-haskell -any,
-    plutus-chain-index-core -any,
-    plutus-contract -any,
-    plutus-core,
     plutus-ledger,
     plutus-ledger-api -any,
-    plutus-ledger-constraints,
     plutus-tx -any,
-    plutus-use-cases,
     serialise -any,
     base16-bytestring -any,
     text,
@@ -146,7 +141,6 @@ test-suite marlowe-test
     import: lang
     hs-source-dirs:
       test
-      pab
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
@@ -169,25 +163,19 @@ test-suite marlowe-test
         lens -any,
         bytestring -any,
         freer-simple -any,
-        freer-extras -any,
         tasty -any,
         tasty-hunit -any,
         tasty-quickcheck,
         text -any,
         serialise,
         cborg,
-        plutus-chain-index-core -any,
-        plutus-contract -any,
-        plutus-ledger -any,
+        plutus-ledger,
         plutus-ledger-api -any,
-        plutus-ledger-constraints -any,
-        plutus-pab-executables -any,
         marlowe,
         plutus-tx -any,
         QuickCheck,
         template-haskell -any,
         streaming -any,
-        plutus-pab -any,
         async -any,
         prettyprinter -any,
         purescript-bridge -any,
@@ -198,65 +186,3 @@ test-suite marlowe-test
         openapi3,
         uuid -any
 
--- | The PAB Specialised to the marlowe contract(s)
-executable marlowe-pab
-  import: lang
-  main-is: Main.hs
-  hs-source-dirs: pab
-  ghc-options:
-    -threaded
-  other-modules:
-    MarloweContract
-  build-depends:
-    base >= 4.9 && < 5,
-    aeson -any,
-    containers -any,
-    data-default -any,
-    freer-simple -any,
-    prettyprinter -any,
-    freer-extras -any,
-    plutus-chain-index -any,
-    plutus-chain-index-core -any,
-    plutus-contract -any,
-    plutus-ledger -any,
-    plutus-pab -any,
-    plutus-pab-executables -any,
-    plutus-tx -any,
-    purescript-bridge -any,
-    marlowe -any,
-    openapi3,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
-
--- | The PAB purescript generation specialised to the marlowe contract(s)
-executable marlowe-pab-setup
-  import: lang
-  main-is: Setup.hs
-  hs-source-dirs: pab
-  ghc-options:
-    -threaded
-  other-modules:
-    SetupParser
-  build-depends:
-    base >= 4.9 && < 5,
-    aeson -any,
-    containers -any,
-    data-default -any,
-    freer-simple -any,
-    iohk-monitoring -any,
-    monad-logger -any,
-    prettyprinter -any,
-    freer-extras -any,
-    optparse-applicative -any,
-    plutus-contract -any,
-    plutus-ledger -any,
-    plutus-pab -any,
-    plutus-pab-executables -any,
-    plutus-tx -any,
-    purescript-bridge -any,
-    marlowe -any,
-    openapi3,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any

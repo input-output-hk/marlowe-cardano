@@ -27,8 +27,10 @@ import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Bifunctor (first)
 import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
 import Language.Marlowe.CLI.Test.PAB (pabTest)
+import Control.Monad.Except (MonadError, MonadIO)
+import Language.Marlowe.CLI.IO (decodeFileStrict)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (..), PabAccess (..))
+import Language.Marlowe.CLI.Test.Types (MarloweTests (..))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliError (..))
 import Network.HTTP.Client (defaultManagerSettings, newManager)
@@ -63,34 +65,3 @@ runTests ScriptTests{..} =
     slotConfig <- querySlotConfig connection
     tests' <- mapM decodeFileStrict tests
     mapM_ (scriptTest costModel network connection slotConfig) tests'
-runTests PabTests{..} =
-  do
-    manager <- liftIO $ newManager defaultManagerSettings
-    let
-      network' = network
-      localConnection =
-        LocalNodeConnectInfo
-        {
-          localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-        , localNodeNetworkId       = network'
-        , localNodeSocketPath      = socketPath
-        }
-      BaseUrl{..} = pabUrl
-      client = pabClient
-      runHttp url f =
-        first (CliError . show)
-          <$> runClientM f (mkClientEnv manager url)
-      runWallet = runHttp walletUrl
-      runApi = runHttp pabUrl
-      runWs ContractInstanceId{..} f =
-        do
-          result <-
-            withSocketsDo
-              . runClient baseUrlHost baseUrlPort ("/ws/" <> show unContractInstanceId)
-              $ runExceptT . f
-          case result of
-            Right () -> pure ()
-            Left  e  -> print e
-    tests' <- mapM decodeFileStrict tests
-    faucetKey <- readSigningKey faucetFile
-    mapM_ (pabTest PabAccess{..} faucetKey faucetAddress burnAddress passphrase) tests'

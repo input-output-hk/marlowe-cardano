@@ -45,14 +45,11 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
-    Language.Marlowe.CLI.ChainIndex
     Language.Marlowe.CLI.Codec
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
     Language.Marlowe.CLI.Command.Input
     Language.Marlowe.CLI.Command.Parse
-    Language.Marlowe.CLI.Command.PAB
-    Language.Marlowe.CLI.Command.Query
     Language.Marlowe.CLI.Command.Role
     Language.Marlowe.CLI.Command.Run
     Language.Marlowe.CLI.Command.Template
@@ -64,17 +61,14 @@ library
     Language.Marlowe.CLI.Merkle
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans
-    Language.Marlowe.CLI.PAB
     Language.Marlowe.CLI.Run
     Language.Marlowe.CLI.Sync
     Language.Marlowe.CLI.Sync.Types
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Test
-    Language.Marlowe.CLI.Test.PAB
     Language.Marlowe.CLI.Test.Script
     Language.Marlowe.CLI.Test.Types
     Language.Marlowe.CLI.Types
-    Language.Marlowe.Contract
     Paths_marlowe_cli
   build-depends:
     base >= 4.9 && < 5,
@@ -109,12 +103,8 @@ library
     optparse-applicative,
     ouroboros-consensus,
     ouroboros-network,
-    playground-common,
-    plutus-chain-index-core,
-    plutus-contract,
     plutus-ledger,
     plutus-ledger-api,
-    plutus-pab,
     plutus-tx,
     prettyprinter,
     QuickCheck,
