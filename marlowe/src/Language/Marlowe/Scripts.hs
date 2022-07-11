@@ -236,7 +236,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
     collectDeposits _                                     = zero
 
-    payoutByParty :: Payment -> AssocMap.Map Party Val.Value
+    payoutByParty :: Payment Token -> AssocMap.Map Party Val.Value
     payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party (moneyToValue money)
     payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
 

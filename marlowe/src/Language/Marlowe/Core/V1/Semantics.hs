@@ -101,13 +101,13 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
 {-| Payment occurs during 'Pay' contract evaluation, and
     when positive balances are payed out on contract closure.
 -}
-data Payment = Payment AccountId Payee (Money Token)
+data Payment t = Payment AccountId Payee (Money t)
   deriving stock (Haskell.Show)
 
 
 -- | Effect of 'reduceContractStep' computation
-data ReduceEffect = ReduceWithPayment Payment
-                  | ReduceNoPayment
+data ReduceEffect t = ReduceWithPayment (Payment t)
+                    | ReduceNoPayment
   deriving stock (Haskell.Show)
 
 
@@ -123,14 +123,14 @@ data ReduceWarning t = ReduceNoWarning
 
 
 -- | Result of 'reduceContractStep'
-data ReduceStepResult t = Reduced (ReduceWarning t) ReduceEffect (State t) (Contract t)
+data ReduceStepResult t = Reduced (ReduceWarning t) (ReduceEffect t) (State t) (Contract t)
                         | NotReduced
                         | AmbiguousTimeIntervalReductionError
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'reduceContractUntilQuiescent'
-data ReduceResult t = ContractQuiescent Bool [ReduceWarning t] [Payment] (State t) (Contract t)
+data ReduceResult t = ContractQuiescent Bool [ReduceWarning t] [Payment t] (State t) (Contract t)
                     | RRAmbiguousTimeIntervalError
   deriving stock (Haskell.Show)
 
@@ -149,7 +149,7 @@ data ApplyResult t = Applied (ApplyWarning t) (State t) (Contract t)
 
 
 -- | Result of 'applyAllInputs'
-data ApplyAllResult t = ApplyAllSuccess Bool [TransactionWarning t] [Payment] (State t) (Contract t)
+data ApplyAllResult t = ApplyAllSuccess Bool [TransactionWarning t] [Payment t] (State t) (Contract t)
                       | ApplyAllNoMatchError
                       | ApplyAllAmbiguousTimeIntervalError
                       | ApplyAllHashMismatch
@@ -197,7 +197,7 @@ instance Pretty t => Pretty (TransactionInput t) where
 data TransactionOutput t =
     TransactionOutput
         { txOutWarnings :: [TransactionWarning t]
-        , txOutPayments :: [Payment]
+        , txOutPayments :: [Payment t]
         , txOutState    :: State t
         , txOutContract :: Contract t }
     | Error TransactionError
@@ -341,7 +341,7 @@ addMoneyToAccount accId token amount accounts = let
 {-| Gives the given amount of money to the given payee.
     Returns the appropriate effect and updated accounts
 -}
-giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts Token -> (ReduceEffect, Accounts Token)
+giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts Token -> (ReduceEffect Token, Accounts Token)
 giveMoney accountId payee t amount accounts = let
     newAccounts = case payee of
         Party _       -> accounts
@@ -410,7 +410,7 @@ reduceContractStep env state contract = case contract of
 reduceContractUntilQuiescent :: Environment -> State Token -> Contract Token -> ReduceResult Token
 reduceContractUntilQuiescent env state contract = let
     reductionLoop
-      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning Token] -> [Payment] -> ReduceResult Token
+      :: Bool -> Environment -> State Token -> Contract Token -> [ReduceWarning Token] -> [Payment Token] -> ReduceResult Token
     reductionLoop reduced env state contract warnings payments =
         case reduceContractStep env state contract of
             Reduced warning effect newState cont -> let
@@ -501,7 +501,7 @@ applyAllInputs env state contract inputs = let
         -> Contract Token
         -> [Input Token]
         -> [TransactionWarning Token]
-        -> [Payment]
+        -> [Payment Token]
         -> ApplyAllResult Token
     applyAllLoop contractChanged env state contract inputs warnings payments =
         case reduceContractUntilQuiescent env state contract of
@@ -689,7 +689,7 @@ instance ToJSON t => ToJSON (TransactionWarning t) where
   toJSON TransactionAssertionFailed = JSON.String $ pack "assertion_failed"
 
 
-instance Eq Payment where
+instance Ord t => Eq (Payment t) where
     {-# INLINABLE (==) #-}
     Payment a1 p1 m1 == Payment a2 p2 m2 = a1 == a2 && p1 == p2 && m1 == m2
 
@@ -706,7 +706,7 @@ instance Eq t => Eq (ReduceWarning t) where
     _ == _ = False
 
 
-instance Eq ReduceEffect where
+instance Ord t => Eq (ReduceEffect t) where
     {-# INLINABLE (==) #-}
     ReduceNoPayment == ReduceNoPayment           = True
     ReduceWithPayment p1 == ReduceWithPayment p2 = p1 == p2
