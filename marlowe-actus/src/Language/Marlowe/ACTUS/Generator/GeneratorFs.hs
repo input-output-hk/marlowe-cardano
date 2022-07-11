@@ -32,19 +32,19 @@ import Language.Marlowe.ACTUS.Model.Applicability (validateTerms)
 -- to genereate a Marlowe contract with risk factors observed at a given point
 -- in time
 genFsContract ::
-     (EventType -> LocalTime -> RiskFactorsMarlowe)     -- ^ Risk factors per event and time
-  -> ContractTermsMarlowe                               -- ^ ACTUS contract terms
-  -> Validation [TermValidationError] (Contract Token)  -- ^ Marlowe contract or applicabilty errors
+     (EventType -> LocalTime -> RiskFactorsMarlowe)                -- ^ Risk factors per event and time
+  -> ContractTermsMarlowe                                          -- ^ ACTUS contract terms
+  -> Validation [TermValidationError] (Contract PubKeyHash Token)  -- ^ Marlowe contract or applicabilty errors
 genFsContract rf = fmap (genFsContract' rf) . validateTerms
 
 genFsContract' ::
   (EventType -> LocalTime -> RiskFactorsMarlowe) ->
   ContractTermsMarlowe ->
-  Contract Token
+  Contract PubKeyHash Token
 genFsContract' rf ct =
   let cfs = genProjectedCashflows rf ct
 
-      gen :: CashFlowPoly (Value Token) -> Contract Token -> Contract Token
+      gen :: CashFlowPoly (Value PubKeyHash Token) -> Contract PubKeyHash Token -> Contract PubKeyHash Token
       gen CashFlowPoly {..} cont =
         let t = POSIXTime $ timeToSlotNumber cashPaymentDay
             a = reduce $ DivValue amount (Constant marloweFixedPoint)
@@ -88,7 +88,7 @@ genFsContract' rf ct =
                   )
    in foldl' (flip gen) Close $ reverse cfs
 
-reduceObservation :: Observation t -> Observation t
+reduceObservation :: Observation i t -> Observation i t
 reduceObservation (AndObs a b)  = AndObs (reduceObservation a) (reduceObservation b)
 reduceObservation (OrObs a b)   = OrObs (reduceObservation a) (reduceObservation b)
 reduceObservation (NotObs a)    = NotObs (reduceObservation a)
@@ -99,7 +99,7 @@ reduceObservation (ValueLT a b) = ValueLT (reduce a) (reduce b)
 reduceObservation (ValueEQ a b) = ValueEQ (reduce a) (reduce b)
 reduceObservation x             = x
 
-reduce :: Value t -> Value t
+reduce :: Value i t -> Value i t
 reduce (ChoiceValue i) = ChoiceValue i
 reduce (UseValue i) = UseValue i
 reduce (Constant i) = Constant i

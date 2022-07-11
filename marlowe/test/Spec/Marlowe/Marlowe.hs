@@ -330,7 +330,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
         roles = Set.fromList ["alice", "bob"]
 
-        (params, _ :: TxConstraints (MarloweInput Token) (MarloweData Token), _) =
+        (params, _ :: TxConstraints (MarloweInput PubKeyHash Token) (MarloweData PubKeyHash Token), _) =
             let con = setupMarloweParams @MarloweSchema @MarloweError
                         (AssocMap.fromList [("alice", walletAddress alice), ("bob", walletAddress bob)])
                         roles
@@ -423,7 +423,7 @@ valuesFormAbelianGroup = property $ do
 
 divisionRoundingTest :: Property
 divisionRoundingTest = property $ do
-    let eval :: Value Token -> Integer
+    let eval :: Value PubKeyHash Token -> Integer
         eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     -- test half-even rounding
     let gen = do
@@ -453,7 +453,7 @@ divZeroTest = property $ do
 valueSerialization :: Property
 valueSerialization = property $
     forAll valueGen $ \a ->
-        let decoded :: Maybe (Value Token)
+        let decoded :: Maybe (Value PubKeyHash Token)
             decoded = decode $ encode a
         in Just a === decoded
 
@@ -479,7 +479,9 @@ transferBetweenAccountsTest = do
     let txInput = TransactionInput {
                     txInterval = (20, 30),
                     txInputs = [] }
-    case computeTransaction txInput state contract of
+    let tx :: TransactionOutput PubKeyHash Token
+        tx = computeTransaction txInput state contract
+    case tx of
         TransactionOutput {txOutPayments, txOutState = State{accounts}, txOutContract} -> do
             assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
         e -> fail $ show e
@@ -497,7 +499,7 @@ divAnalysisTest = do
     result <- warningsTrace (contract 9 2)
     assertBool "Analysis ok" $ isRight result && either (const False) isJust result
 
-    let eval :: Value Token -> Integer
+    let eval :: Value PubKeyHash Token -> Integer
         eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
@@ -509,7 +511,7 @@ divAnalysisTest = do
 
 divTest :: IO ()
 divTest = do
-    let eval :: Value Token -> Integer
+    let eval :: Value PubKeyHash Token -> Integer
         eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
@@ -527,7 +529,7 @@ pangramContractSerialization = do
     -- T.putStrLn json
     Just pangramContract @=? (decode $ encode pangramContract)
     contract <- readFile "test/contract.json"
-    let decoded :: Maybe (Contract Token)
+    let decoded :: Maybe (Contract PubKeyHash Token)
         decoded = decode (fromString contract)
     case decoded of
         Just cont -> cont @=? pangramContract
@@ -538,7 +540,7 @@ tokenShowTest :: IO ()
 tokenShowTest = do
     -- SCP-834, CurrencySymbol is HEX encoded ByteString,
     -- and TokenSymbol as UTF8 encoded Unicode string
-    let actual :: Value Token
+    let actual :: Value PubKeyHash Token
         actual = AvailableMoney (Role "alice") (Token "00010afF" "ÚSD©")
 
     show actual @=? "AvailableMoney \"alice\" (Token \"00010aff\" \"ÚSD©\")"
@@ -559,7 +561,7 @@ inputSerialization = do
 stateSerialization :: IO ()
 stateSerialization = do
     state <- readFile "test/state.json"
-    let decoded :: Maybe (State Token)
+    let decoded :: Maybe (State PubKeyHash Token)
         decoded = decode (fromString state)
     case decoded of
         Just st ->
@@ -572,7 +574,7 @@ prop_showWorksForContracts :: Property
 prop_showWorksForContracts = forAllShrink contractGen shrinkContract showWorksForContract
 
 
-showWorksForContract :: Contract Token -> Property
+showWorksForContract :: Contract PubKeyHash Token -> Property
 showWorksForContract contract = unsafePerformIO $ do
   res <- runInterpreter $ setImports ["Language.Marlowe"]
                         >> set [ languageExtensions := [ OverloadedStrings ] ]
@@ -582,11 +584,11 @@ showWorksForContract contract = unsafePerformIO $ do
             Left err -> counterexample (show err) False)
 
 
-interpretContractString :: MonadInterpreter m => String -> m (Contract Token)
-interpretContractString contractStr = interpret contractStr (as :: Contract Token)
+interpretContractString :: MonadInterpreter m => String -> m (Contract PubKeyHash Token)
+interpretContractString contractStr = interpret contractStr (as :: Contract PubKeyHash Token)
 
 
-noFalsePositivesForContract :: Contract Token -> Property
+noFalsePositivesForContract :: Contract PubKeyHash Token -> Property
 noFalsePositivesForContract cont =
   unsafePerformIO (do res <- catch (wrapLeft $ warningsTrace cont)
                                    (\exc -> return $ Left (Left (exc :: SomeException)))
@@ -614,7 +616,7 @@ wrapLeft r = do tempRes <- r
 prop_noFalsePositives :: Property
 prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
 
-jsonLoops :: Contract Token -> Property
+jsonLoops :: Contract PubKeyHash Token -> Property
 jsonLoops cont = decode (encode cont) === Just cont
 
 prop_jsonLoops :: Property

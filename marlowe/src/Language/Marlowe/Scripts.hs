@@ -47,7 +47,7 @@ import qualified Prelude as Haskell
 import Unsafe.Coerce
 
 type MarloweTimeRange = (POSIXTime, POSIXTime)
-type MarloweInput t = [MarloweTxInput t]
+type MarloweInput i t = [MarloweTxInput i t]
 
 -- Yeah, I know
 type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
@@ -57,8 +57,8 @@ data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
 instance Scripts.ValidatorTypes TypedMarloweValidator where
-    type instance RedeemerType TypedMarloweValidator = MarloweInput Token
-    type instance DatumType TypedMarloweValidator = MarloweData Token
+    type instance RedeemerType TypedMarloweValidator = MarloweInput PubKeyHash Token
+    type instance DatumType TypedMarloweValidator = MarloweData PubKeyHash Token
 
 data TypedRolePayoutValidator
 
@@ -67,8 +67,8 @@ instance Scripts.ValidatorTypes TypedRolePayoutValidator where
   type instance DatumType TypedRolePayoutValidator = TokenName
 
 
-data MarloweTxInput t = Input (InputContent t)
-                      | MerkleizedTxInput (InputContent t) BuiltinByteString
+data MarloweTxInput i t = Input (InputContent i t)
+                      | MerkleizedTxInput (InputContent i t) BuiltinByteString
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
@@ -96,8 +96,8 @@ defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
 {-# INLINABLE smallMarloweValidator #-}
 smallMarloweValidator
     :: MarloweParams
-    -> MarloweData Token
-    -> MarloweInput Token
+    -> MarloweData PubKeyHash Token
+    -> MarloweInput PubKeyHash Token
     -> ScriptContext
     -> Bool
 smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
@@ -188,7 +188,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     findDatumHash' :: PlutusTx.ToData o => o -> Maybe DatumHash
     findDatumHash' datum = findDatumHash (Datum $ PlutusTx.toBuiltinData datum) scriptContextTxInfo
 
-    checkOwnOutputConstraint :: MarloweData Token -> Val.Value -> Bool
+    checkOwnOutputConstraint :: MarloweData PubKeyHash Token -> Val.Value -> Bool
     checkOwnOutputConstraint ocDatum ocValue =
         let hsh = findDatumHash' ocDatum
         in traceIfFalse "L1" -- "Output constraint"
@@ -210,7 +210,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
 
-    marloweTxInputToInput :: MarloweTxInput Token -> Input Token
+    marloweTxInputToInput :: MarloweTxInput PubKeyHash Token -> Input PubKeyHash Token
     marloweTxInputToInput (MerkleizedTxInput input hash) =
         case findDatum (DatumHash hash) scriptContextTxInfo of
             Just (Datum d) -> let
@@ -219,10 +219,10 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
             Nothing -> traceError "H"
     marloweTxInputToInput (Input input) = NormalInput input
 
-    validateInputs :: [Input Token] -> Bool
+    validateInputs :: [Input PubKeyHash Token] -> Bool
     validateInputs inputs = all (validateInputWitness . getInputContent) inputs
       where
-        validateInputWitness :: InputContent Token -> Bool
+        validateInputWitness :: InputContent PubKeyHash Token -> Bool
         validateInputWitness input =
             case input of
                 IDeposit _ party _ _         -> validatePartyWitness party
@@ -233,15 +233,15 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
             validatePartyWitness (Role role) = traceIfFalse "T" -- "Spent value not OK"
                                                $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
-    collectDeposits :: InputContent Token -> Val.Value
+    collectDeposits :: InputContent PubKeyHash Token -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
     collectDeposits _                                     = zero
 
-    payoutByParty :: Payment Token -> AssocMap.Map Party Val.Value
+    payoutByParty :: Payment PubKeyHash Token -> AssocMap.Map (Party PubKeyHash) Val.Value
     payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party (moneyToValue money)
     payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
 
-    payoutConstraints :: [(Party, Val.Value)] -> Bool
+    payoutConstraints :: [(Party PubKeyHash, Val.Value)] -> Bool
     payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
@@ -272,11 +272,11 @@ smallUntypedValidator params = let
 defaultTxValidationRange :: POSIXTime
 defaultTxValidationRange = 10000
 
-marloweTxInputFromInput :: Input t -> MarloweTxInput t
+marloweTxInputFromInput :: Input i t -> MarloweTxInput i t
 marloweTxInputFromInput (NormalInput i)         = Input i
 marloweTxInputFromInput (MerkleizedInput i h _) = MerkleizedTxInput i h
 
-marloweTxInputsFromInputs :: [Input t] -> [MarloweTxInput t]
+marloweTxInputsFromInputs :: [Input i t] -> [MarloweTxInput i t]
 marloweTxInputsFromInputs = fmap marloweTxInputFromInput
 
 makeLift ''MarloweTxInput

@@ -29,6 +29,7 @@ import Data.ByteString.Short (ShortByteString, fromShort, toShort)
 import Language.Marlowe.Core.V1.Semantics (Payment (..), TransactionOutput (..))
 import Language.Marlowe.Core.V1.Semantics.Money (Money)
 import Language.Marlowe.Core.V1.Semantics.Token (Token, moneyFromValue, moneyToValue)
+import Ledger.Crypto (PubKeyHash)
 
 import qualified Data.ByteString.Base16 as Base16 (decode, encode)
 import qualified Data.ByteString.Char8 as BS8 (pack, unpack)
@@ -47,7 +48,7 @@ instance FromJSON ShortByteString where
           Left  message -> fail message
 
 
-instance ToJSON (TransactionOutput Token) where
+instance ToJSON (TransactionOutput PubKeyHash Token) where
   toJSON TransactionOutput{..} =
     object
       [
@@ -63,7 +64,7 @@ instance ToJSON (TransactionOutput Token) where
       ]
 
 
-instance ToJSON (Payment Token) where
+instance ToJSON (Payment PubKeyHash Token) where
   toJSON (Payment accountId payee money) =
     object
       [
@@ -73,7 +74,7 @@ instance ToJSON (Payment Token) where
       ]
 
 
-instance FromJSON (Payment Token) where
+instance FromJSON (Payment PubKeyHash Token) where
   parseJSON =
     withObject "Payment"
       $ \o ->

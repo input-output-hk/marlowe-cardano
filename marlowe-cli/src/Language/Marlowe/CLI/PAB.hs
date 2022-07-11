@@ -57,6 +57,7 @@ import Language.Marlowe.Contract (MarloweContract (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
+import Ledger.Crypto (PubKeyHash)
 import Network.WebSockets (Connection, receiveData)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (..))
@@ -257,7 +258,7 @@ callCreate pabClient runApi instanceFile contractFile owners =
     call pabClient runApi instanceFile "create"
       ((
       , AM.fromList $ second anyAddressInShelleyBasedEra <$> owners :: AM.Map TokenName (AddressInEra ShelleyEra)
-      , contract :: Contract Token
+      , contract :: Contract PubKeyHash Token
       ) :: UUID -> CreateEndpointSchema)
 
 

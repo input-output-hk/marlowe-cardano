@@ -7,24 +7,24 @@ module Language.Marlowe.ACTUS.Generator.MarloweCompat where
 import Data.String (IsString (fromString))
 import Data.Time (Day, LocalTime (..), UTCTime (UTCTime), timeOfDayToTime)
 import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
-import Language.Marlowe (Contract (Let), Token, Value, ValueId (ValueId), Value_ (Constant, UseValue))
+import Language.Marlowe (Contract (Let), PubKeyHash, Token, Value, ValueId (ValueId), Value_ (Constant, UseValue))
 import Language.Marlowe.ACTUS.Domain.ContractTerms
 import Language.Marlowe.ACTUS.Domain.Ops (marloweFixedPoint)
 
-useval :: String -> Integer -> Value t
+useval :: String -> Integer -> Value i t
 useval name t = UseValue $ ValueId $ fromString $ name ++ "_" ++ show t
 
-letval :: String -> Integer -> Value t -> Contract t -> Contract t
+letval :: String -> Integer -> Value i t -> Contract i t -> Contract i t
 letval name t = Let $ ValueId $ fromString $ name ++ "_" ++ show t
 
-letval' :: String -> Integer -> Maybe (Value t) -> Contract t -> Contract t
+letval' :: String -> Integer -> Maybe (Value i t) -> Contract i t -> Contract i t
 letval' name t (Just o) c = letval name t o c
 letval' _ _ Nothing c     = c
 
 toMarloweFixedPoint :: Double -> Integer
 toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint *)
 
-constnt :: Double -> Value t
+constnt :: Double -> Value i t
 constnt = Constant . toMarloweFixedPoint
 
 enum :: a -> a
@@ -43,10 +43,10 @@ timeToSlotNumber LocalTime {..} =
   let (MkSystemTime secs _) = utcToSystemTime (UTCTime localDay (timeOfDayToTime localTimeOfDay))
    in fromIntegral secs - cardanoEpochStart
 
-marloweDate :: Day -> Value t
+marloweDate :: Day -> Value i t
 marloweDate = Constant . fromInteger . dayToSlotNumber
 
-marloweTime :: LocalTime -> Value t
+marloweTime :: LocalTime -> Value i t
 marloweTime = Constant . fromInteger . timeToSlotNumber
 
 toMarlowe :: ContractTerms -> ContractTermsMarlowe
@@ -130,7 +130,7 @@ toMarlowe ct =
       constraints = constraints ct
     }
   where
-    trans :: ContractStructure Double -> ContractStructure (Value Token)
+    trans :: ContractStructure Double -> ContractStructure (Value PubKeyHash Token)
     trans cs = cs { reference = case reference cs of
                                   ReferenceId r    -> ReferenceId r
                                   ReferenceTerms t -> ReferenceTerms $ toMarlowe t }

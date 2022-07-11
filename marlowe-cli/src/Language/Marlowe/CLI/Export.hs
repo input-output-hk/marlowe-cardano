@@ -63,6 +63,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..))
 import Language.Marlowe.Scripts (marloweTxInputsFromInputs, rolePayoutScript, smallUntypedValidator)
+import Ledger.Crypto (PubKeyHash)
 import Ledger.Scripts (datumHash, toCardanoApiScript, validatorHash)
 import Ledger.Typed.Scripts (validatorScript)
 import Plutus.V1.Ledger.Api (BuiltinData, CostModelParams, CurrencySymbol, Datum (..), Redeemer (..), TokenName,
@@ -82,9 +83,9 @@ buildMarlowe :: IsShelleyBasedEra era
              -> CostModelParams                    -- ^ The cost model parameters.
              -> NetworkId                          -- ^ The network ID.
              -> StakeAddressReference              -- ^ The stake address.
-             -> Contract Token                     -- ^ The contract.
-             -> State Token                        -- ^ The contract's state.
-             -> [Input Token]                      -- ^ The contract's input,
+             -> Contract PubKeyHash Token          -- ^ The contract.
+             -> State PubKeyHash Token             -- ^ The contract's state.
+             -> [Input PubKeyHash Token]           -- ^ The contract's input,
              -> Either CliError (MarloweInfo era)  -- ^ The contract and transaction information, or an error message.
 buildMarlowe marloweParams costModel network stake contract state inputs =
   do
@@ -138,14 +139,14 @@ exportMarlowe marloweParams costModel network stake contractFile stateFile input
 -- | Print information about a Marlowe contract and transaction.
 printMarlowe :: MonadError CliError m
               => MonadIO m
-              => MarloweParams          -- ^ The Marlowe contract parameters.
-              -> CostModelParams        -- ^ The cost model parameters.
-              -> NetworkId              -- ^ The network ID.
-              -> StakeAddressReference  -- ^ The stake address.
-              -> Contract Token         -- ^ The contract.
-              -> State Token            -- ^ The contract's state.
-              -> [Input Token]          -- ^ The contract's input,
-              -> m ()                   -- ^ Action to print the contract and transaction information.
+              => MarloweParams              -- ^ The Marlowe contract parameters.
+              -> CostModelParams            -- ^ The cost model parameters.
+              -> NetworkId                  -- ^ The network ID.
+              -> StakeAddressReference      -- ^ The stake address.
+              -> Contract PubKeyHash Token  -- ^ The contract.
+              -> State PubKeyHash Token     -- ^ The contract's state.
+              -> [Input PubKeyHash Token]   -- ^ The contract's input,
+              -> m ()                       -- ^ Action to print the contract and transaction information.
 printMarlowe marloweParams costModel network stake contract state inputs =
   do
     MarloweInfo{..} <-
@@ -339,9 +340,9 @@ buildDatumImpl datum =
 
 
 -- | Build the datum information about a Marlowe transaction.
-buildDatum :: Contract Token  -- ^ The contract.
-           -> State Token     -- ^ The contract's state.
-           -> DatumInfo       -- ^ Information about the transaction datum.
+buildDatum :: Contract PubKeyHash Token  -- ^ The contract.
+           -> State PubKeyHash Token     -- ^ The contract's state.
+           -> DatumInfo                  -- ^ Information about the transaction datum.
 buildDatum marloweContract marloweState =
   let
     marloweData = MarloweData{..}
@@ -384,7 +385,7 @@ exportDatum contractFile stateFile outputFile printStats =
     marloweContract <- decodeFileStrict contractFile
     marloweState    <- decodeFileStrict stateFile
     let
-      marloweData :: MarloweData Token
+      marloweData :: MarloweData PubKeyHash Token
       marloweData = MarloweData{..}
       marloweDatum = PlutusTx.toBuiltinData marloweData
     exportDatumImpl marloweDatum outputFile printStats
@@ -407,8 +408,8 @@ buildRedeemerImpl redeemer =
 
 
 -- | Build the redeemer information about a Marlowe transaction.
-buildRedeemer :: [Input Token]  -- ^ The contract's input,
-              -> RedeemerInfo   -- ^ Information about the transaction redeemer.
+buildRedeemer :: [Input PubKeyHash Token]  -- ^ The contract's input,
+              -> RedeemerInfo              -- ^ Information about the transaction redeemer.
 buildRedeemer = buildRedeemerImpl . PlutusTx.toBuiltinData . marloweTxInputsFromInputs
 
 
@@ -441,7 +442,7 @@ exportRedeemer :: MonadError CliError m
 exportRedeemer inputFiles outputFile printStats =
   do
     inputs <- mapM decodeFileStrict inputFiles
-    exportRedeemerImpl (PlutusTx.toBuiltinData (inputs :: [Input Token])) outputFile printStats
+    exportRedeemerImpl (PlutusTx.toBuiltinData (inputs :: [Input PubKeyHash Token])) outputFile printStats
 
 
 -- | Compute the role address of a Marlowe contract.

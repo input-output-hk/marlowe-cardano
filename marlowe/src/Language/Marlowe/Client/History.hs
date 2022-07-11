@@ -59,7 +59,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (..), Tran
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, TypedRolePayoutValidator,
                                  smallUntypedValidator)
-import Ledger (ChainIndexTxOut (..), ciTxOutAddress, toTxOut)
+import Ledger (ChainIndexTxOut (..), PubKeyHash, ciTxOutAddress, toTxOut)
 import Ledger.TimeSlot (SlotConfig, slotRangeToPOSIXTimeRange)
 import Ledger.Tx.CardanoAPI (SomeCardanoApiTx (SomeTx))
 import Ledger.Typed.Scripts (DatumType, validatorAddress)
@@ -103,23 +103,23 @@ data History =
     -- | The contract was created.
     Created
     {
-      historyTxOutRef :: TxOutRef          -- ^ The UTxO that created the contract.
-    , historyData     :: MarloweData Token -- ^ The Marlowe data attached to the UTxO.
-    , historyNext     :: Maybe History     -- ^ The next step in the history, if known.
+      historyTxOutRef :: TxOutRef                      -- ^ The UTxO that created the contract.
+    , historyData     :: MarloweData PubKeyHash Token  -- ^ The Marlowe data attached to the UTxO.
+    , historyNext     :: Maybe History                 -- ^ The next step in the history, if known.
     }
     -- | Input was applied to the contract.
   | InputApplied
     {
-      historyInput    :: TransactionInput Token  -- ^ The Marlowe input that was applied.
-    , historyTxOutRef :: TxOutRef                -- ^ The UTxO that resulted from the input being applied.
-    , historyData     :: MarloweData Token       -- ^ The Marlowe data attached to the UTxO.
-    , historyNext     :: Maybe History           -- ^ The next step in the history, if known.
+      historyInput    :: TransactionInput PubKeyHash Token  -- ^ The Marlowe input that was applied.
+    , historyTxOutRef :: TxOutRef                           -- ^ The UTxO that resulted from the input being applied.
+    , historyData     :: MarloweData PubKeyHash Token       -- ^ The Marlowe data attached to the UTxO.
+    , historyNext     :: Maybe History                      -- ^ The next step in the history, if known.
     }
     -- | The contract was closed.
   | Closed
     {
-      historyInput :: TransactionInput Token  -- ^ The Marlowe input that was applied.
-    , historyTxId  :: TxId                    -- ^ The transaction that resulted from the input being applied.
+      historyInput :: TransactionInput PubKeyHash Token  -- ^ The Marlowe input that was applied.
+    , historyTxId  :: TxId                               -- ^ The transaction that resulted from the input being applied.
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON, FromJSON)
@@ -334,8 +334,8 @@ marloweStatesFrom validator citx =
 
 
 -- | Extract the Marlowe state from a Marlowe-specific output.
-toMarloweState :: MarloweTxOutRef    -- ^ The Marlowe-specific output.
-               -> MarloweData Token  -- ^ The Marlowe data.
+toMarloweState :: MarloweTxOutRef               -- ^ The Marlowe-specific output.
+               -> MarloweData PubKeyHash Token  -- ^ The Marlowe data.
 toMarloweState = tyTxOutData . tyTxOutRefOut
 
 toRolePayout :: RolePayoutTxOutRef  -- ^ Role payout specific output
@@ -430,9 +430,9 @@ txDatums citx =
 
 
 -- | Extract Marlowe input from a transaction.
-txInputs :: SlotConfig                            -- ^ The slot configuration.
-         -> ChainIndexTx                          -- ^ The transaction.
-         -> [(TxOutRef, TransactionInput Token)]  -- ^ The inputs that have Marlowe inputs.
+txInputs :: SlotConfig                                       -- ^ The slot configuration.
+         -> ChainIndexTx                                     -- ^ The transaction.
+         -> [(TxOutRef, TransactionInput PubKeyHash Token)]  -- ^ The inputs that have Marlowe inputs.
 txInputs slotConfig citx =
   case slotRangeToPOSIXTimeRange slotConfig $ citx ^. citxValidRange of
     Interval (LowerBound (Finite l) True) (UpperBound (Finite h) False) ->

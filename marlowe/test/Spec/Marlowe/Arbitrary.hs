@@ -186,7 +186,7 @@ randomRoleNames =
   , "Urbanus Roland Alison Ty Ryoichi"
   ]
 
-instance Arbitrary Party where
+instance Arbitrary (Party PubKeyHash) where
   arbitrary =
     do
        isPubKeyHash <- frequency [(2, pure True), (8, pure False)]
@@ -197,7 +197,7 @@ instance Arbitrary Party where
   shrink (Role x) = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
 
 
-instance Arbitrary Payee where
+instance Arbitrary (Payee PubKeyHash) where
   arbitrary =
     do
       isParty <- arbitrary
@@ -236,7 +236,7 @@ shrinkChoiceName :: ChoiceName -> [ChoiceName]
 shrinkChoiceName = shrinkByteString id randomChoiceNames
 
 
-instance Arbitrary ChoiceId where
+instance Arbitrary (ChoiceId PubKeyHash) where
   arbitrary = ChoiceId <$> arbitraryChoiceName <*> arbitrary
   shrink (ChoiceId n p) = [ChoiceId n' p' | n' <- shrinkChoiceName n, p' <- shrink p]
 
@@ -329,16 +329,16 @@ shrinkAssocMap am =
   ]
 
 
-arbitraryAccounts :: Gen (Accounts Token)
+arbitraryAccounts :: Gen (Accounts PubKeyHash Token)
 arbitraryAccounts =
   arbitraryAssocMap
     ((,) <$> arbitrary <*> arbitrary)
     arbitraryPositiveAmount
 
-shrinkAccounts :: Accounts Token -> [Accounts Token]
+shrinkAccounts :: Accounts PubKeyHash Token -> [Accounts PubKeyHash Token]
 shrinkAccounts = shrinkAssocMap
 
-arbitraryFromAccounts :: Accounts Token -> Gen ((AccountId, Token), Integer)
+arbitraryFromAccounts :: Accounts PubKeyHash Token -> Gen ((AccountId PubKeyHash, Token), Integer)
 arbitraryFromAccounts accounts'
   | AM.null accounts' = (,) <$> ((,) <$> arbitrary <*> arbitrary) <*> arbitrary
   | otherwise =
@@ -359,13 +359,13 @@ arbitraryFromAccounts accounts'
         (False, False) -> (,) <$> ((,) <$> chooseAccountId <*> chooseToken) <*> chooseAmount
 
 
-arbitraryChoices :: Gen (AM.Map ChoiceId ChosenNum)
+arbitraryChoices :: Gen (AM.Map (ChoiceId PubKeyHash) ChosenNum)
 arbitraryChoices = arbitraryAssocMap arbitrary arbitrary
 
-shrinkChoices :: AM.Map ChoiceId ChosenNum -> [AM.Map ChoiceId ChosenNum]
+shrinkChoices :: AM.Map (ChoiceId PubKeyHash) ChosenNum -> [AM.Map (ChoiceId PubKeyHash) ChosenNum]
 shrinkChoices = shrinkAssocMap
 
-arbitraryChoiceIdFromParty :: Gen Party -> Gen ChoiceId
+arbitraryChoiceIdFromParty :: Gen (Party PubKeyHash) -> Gen (ChoiceId PubKeyHash)
 arbitraryChoiceIdFromParty party = ChoiceId <$> arbitraryChoiceName <*> party
 
 arbitraryBoundValues :: Gen (AM.Map ValueId Integer)
@@ -375,7 +375,7 @@ shrinkBoundValues :: AM.Map ValueId Integer -> [AM.Map ValueId Integer]
 shrinkBoundValues = shrinkAssocMap
 
 
-instance Arbitrary (State Token) where
+instance Arbitrary (State PubKeyHash Token) where
   arbitrary =
     do
       accounts' <- arbitraryAccounts
@@ -396,5 +396,5 @@ instance Arbitrary Environment where
   shrink (Environment x) = Environment <$> shrink x
 
 
-caseGen :: Gen (Case Token)
+caseGen :: Gen (Case PubKeyHash Token)
 caseGen = sized $ (simpleIntegerGen >>=) . caseRelGenSized

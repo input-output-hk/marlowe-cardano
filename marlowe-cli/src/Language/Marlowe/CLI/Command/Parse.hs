@@ -228,7 +228,7 @@ readAddressAnyEither s =
 
 
 -- | Parser for `Party`.
-parseParty :: O.ReadM Party
+parseParty :: O.ReadM (Party PubKeyHash)
 parseParty =
         O.eitherReader readPartyPkEither
     <|> O.eitherReader readPartyRoleEither
@@ -236,8 +236,8 @@ parseParty =
 
 
 -- | Reader for `Party` `PK`.
-readPartyPkEither :: String               -- ^ The string to be read.
-                  -> Either String Party  -- ^ Either the public key hash role or an error message.
+readPartyPkEither :: String                            -- ^ The string to be read.
+                  -> Either String (Party PubKeyHash)  -- ^ Either the public key hash role or an error message.
 readPartyPkEither s =
   case s =~ "^PK=([[:xdigit:]]{56})$" of
     [[_, pubKeyHash]] -> PK <$> readPubKeyHashEither pubKeyHash
@@ -245,8 +245,8 @@ readPartyPkEither s =
 
 
 -- | Reader for `Party` `Role`.
-readPartyRoleEither :: String               -- ^ The string to be read.
-                    -> Either String Party  -- ^ Either the party role or an error message.
+readPartyRoleEither :: String                            -- ^ The string to be read.
+                    -> Either String (Party PubKeyHash)  -- ^ Either the party role or an error message.
 readPartyRoleEither s =
   case s =~ "^Role=(.+)$" of
     [[_, role]] -> Right . Role . TokenName . toBuiltin . BS8.pack $ role
@@ -300,12 +300,12 @@ parseMarloweClientInput = ClientInput <$> parseInputContent
 
 
 -- | Parse input to a contract.
-parseInput :: O.Parser (Input Token)
+parseInput :: O.Parser (Input PubKeyHash Token)
 parseInput = NormalInput <$> parseInputContent
 
 
 -- | Parse input to a contract.
-parseInputContent :: O.Parser (InputContent Token)
+parseInputContent :: O.Parser (InputContent PubKeyHash Token)
 parseInputContent =
   parseDeposit <|> parseChoice <|> parseNotify
     where

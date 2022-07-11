@@ -40,10 +40,9 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as S
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..), pretty)
 import Language.Marlowe.Util (ada)
+import Ledger (PubKeyHash (..), TokenName)
 import qualified Ledger as L (POSIXTime (..))
 import Ledger.Ada (adaSymbol, adaToken)
-import Ledger.Crypto (PubKeyHash (PubKeyHash, getPubKeyHash))
-import Ledger.Value (TokenName)
 import qualified Ledger.Value as Val
 import PlutusTx.Prelude (BuiltinByteString, fromBuiltin, toBuiltin)
 import Text.PrettyPrint.Leijen (parens, text)
@@ -146,7 +145,7 @@ class ToCore a b where
 class ToCore' a b where
   toCore' :: a -> b
 
-instance ToCore Contract (S.Contract S.Token) where
+instance ToCore Contract (S.Contract PubKeyHash S.Token) where
   toCore Close                          = Just S.Close
   toCore (Pay accId payee tok val cont) = S.Pay (toCore' accId) (toCore' payee) tok <$> toCore val <*> toCore cont
   toCore (If obs cont1 cont2)           = S.If <$> toCore obs <*> toCore cont1 <*> toCore cont2
@@ -154,7 +153,7 @@ instance ToCore Contract (S.Contract S.Token) where
   toCore (Let varId val cont)           = pure (S.Let varId) <*> toCore val <*> toCore cont
   toCore (Assert obs cont)              = S.Assert <$> toCore obs <*> toCore cont
 
-instance ToCore Value (S.Value S.Token) where
+instance ToCore Value (S.Value PubKeyHash S.Token) where
   toCore (Constant c)               = Just $ S.Constant c
   toCore (ConstantParam _)          = Nothing
   toCore (AvailableMoney accId tok) = Just $ S.AvailableMoney (toCore' accId) tok
@@ -169,7 +168,7 @@ instance ToCore Value (S.Value S.Token) where
   toCore (UseValue vId)             = Just $ S.UseValue vId
   toCore (Cond obs lhs rhs)         = S.Cond <$> toCore obs <*> toCore lhs <*> toCore rhs
 
-instance ToCore Observation (S.Observation S.Token) where
+instance ToCore Observation (S.Observation PubKeyHash S.Token) where
   toCore (AndObs lhs rhs)       = S.AndObs <$> toCore lhs <*> toCore rhs
   toCore (OrObs lhs rhs)        = S.OrObs <$> toCore lhs <*> toCore rhs
   toCore (NotObs v)             = S.NotObs <$> toCore v
@@ -182,7 +181,7 @@ instance ToCore Observation (S.Observation S.Token) where
   toCore TrueObs                = Just S.TrueObs
   toCore FalseObs               = Just S.FalseObs
 
-instance ToCore Action (S.Action S.Token) where
+instance ToCore Action (S.Action PubKeyHash S.Token) where
   toCore (Deposit accId party tok val) = S.Deposit (toCore' accId) (toCore' party) tok <$> toCore val
   toCore (Choice choId bounds)         = Just $ S.Choice (toCore' choId) bounds
   toCore (Notify obs)                  = S.Notify <$> toCore obs
@@ -191,18 +190,18 @@ instance ToCore Timeout L.POSIXTime where
   toCore (TimeParam _) = Nothing
   toCore (POSIXTime x) = Just (L.POSIXTime x)
 
-instance ToCore' Party S.Party where
+instance ToCore' Party (S.Party PubKeyHash) where
   toCore' (PK pk)     = S.PK pk
   toCore' (Role name) = S.Role name
 
-instance ToCore' ChoiceId S.ChoiceId where
+instance ToCore' ChoiceId (S.ChoiceId PubKeyHash) where
   toCore' (ChoiceId bs party) = S.ChoiceId bs $ toCore' party
 
-instance ToCore' Payee S.Payee where
+instance ToCore' Payee (S.Payee PubKeyHash) where
   toCore' (Account accId)  = S.Account (toCore' accId)
   toCore' (Party roleName) = S.Party (toCore' roleName)
 
-instance ToCore Case (S.Case S.Token) where
+instance ToCore Case (S.Case PubKeyHash S.Token) where
   toCore (Case act c) = S.Case <$> toCore act <*> toCore c
 
 instance FromJSON Value where
@@ -227,6 +226,7 @@ instance FromJSON Value where
   parseJSON (String "time_interval_end") = return TimeIntervalEnd
   parseJSON (Number n) = Constant <$> getInteger n
   parseJSON _ = fail "Value must be either an object or an integer"
+
 instance ToJSON Value where
   toJSON (AvailableMoney accountId token) = object
       [ "amount_of_token" .= token
@@ -264,7 +264,6 @@ instance ToJSON Value where
       , "then" .= tv
       , "else" .= ev
       ]
-
 
 instance FromJSON Observation where
   parseJSON (Bool True) = return TrueObs

@@ -125,12 +125,12 @@ type InstanceNickname = String
 data ScriptTest =
   ScriptTest
   {
-    stTestName         :: String             -- ^ The name of the test.
-  , stSlotLength       :: Integer            -- ^ The slot length, in milliseconds.
-  , stSlotZeroOffset   :: Integer            -- ^ The effective POSIX time of slot zero, in milliseconds.
-  , stInitialContract  :: Contract Token     -- ^ The contract.
-  , stInitialState     :: State Token        -- ^ The the contract's initial state.
-  , stScriptOperations :: [ScriptOperation]  -- ^ The sequence of test operations.
+    stTestName         :: String                     -- ^ The name of the test.
+  , stSlotLength       :: Integer                    -- ^ The slot length, in milliseconds.
+  , stSlotZeroOffset   :: Integer                    -- ^ The effective POSIX time of slot zero, in milliseconds.
+  , stInitialContract  :: Contract PubKeyHash Token  -- ^ The contract.
+  , stInitialState     :: State PubKeyHash Token     -- ^ The the contract's initial state.
+  , stScriptOperations :: [ScriptOperation]          -- ^ The sequence of test operations.
   }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
@@ -239,9 +239,9 @@ data PabOperation =
     -- | Call the "create" endpoint of `WalletApp`.
   | CallCreate
     {
-      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
-    , poOwners   :: [RoleName]        -- ^ The names of roles in the contract.
-    , poContract :: Contract Token    -- ^ The Marlowe contract to be created.
+      poInstance :: InstanceNickname           -- ^ The nickname of the PAB contract instance.
+    , poOwners   :: [RoleName]                 -- ^ The names of roles in the contract.
+    , poContract :: Contract PubKeyHash Token  -- ^ The Marlowe contract to be created.
     }
     -- | Wait for confirmation of a call to the "create" endpoint.
   | AwaitCreate

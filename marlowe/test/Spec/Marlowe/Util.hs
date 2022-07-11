@@ -17,6 +17,7 @@ import Language.Marlowe.Core.V1.Semantics.Money (Money)
 import qualified Language.Marlowe.Core.V1.Semantics.Money as Money
 import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types
+import Ledger (PubKeyHash)
 import Spec.Marlowe.Util.AssocMap
 import Test.Tasty.HUnit (Assertion, assertBool)
 import Test.Tasty.QuickCheck (Gen, generate)
@@ -24,7 +25,7 @@ import Test.Tasty.QuickCheck (Gen, generate)
 import qualified PlutusTx.Prelude as P
 
 
-canonicalState :: State Token -> State Token
+canonicalState :: State PubKeyHash Token -> State PubKeyHash Token
 canonicalState State{..} =
   State
     (assocMapSort accounts)
@@ -33,7 +34,7 @@ canonicalState State{..} =
     minTime
 
 
-stateEq :: State Token -> State Token -> Bool
+stateEq :: State PubKeyHash Token -> State PubKeyHash Token -> Bool
 stateEq = (==) `on` canonicalState
 
 

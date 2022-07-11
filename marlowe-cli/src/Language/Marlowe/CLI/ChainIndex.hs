@@ -45,6 +45,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Scripts (smallUntypedValidator)
 import Ledger (ciTxOutDatum, ciTxOutValue, toTxOut)
+import Ledger.Crypto (PubKeyHash)
 import Ledger.Scripts (validatorHash)
 import Ledger.TimeSlot (SlotConfig)
 import Ledger.Tx.CardanoAPI (fromCardanoAddress, fromCardanoTxId, fromCardanoValue)
@@ -149,7 +150,7 @@ queryApp runApi params spent outputFile =
     let
       credential = ScriptCredential . validatorHash . validatorScript $ smallUntypedValidator params
     result <- runApi $ queryScript spent credential
-    maybeWriteJson outputFile (result :: [TxOutMarlowe (MarloweData Token)])
+    maybeWriteJson outputFile (result :: [TxOutMarlowe (MarloweData PubKeyHash Token)])
 
 
 -- | Query state of the Marlowe payout script.

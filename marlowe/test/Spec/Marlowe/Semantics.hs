@@ -36,17 +36,17 @@ tests =
       [
         testGroup "Entropy"
           [
-            testCase "PubKeyHash"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen PubKeyHash     )
-          , testCase "CurrencySymbol" $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen CurrencySymbol )
-          , testCase "TokenName"      $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen TokenName      )
-          , testCase "Token"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Token          )
-          , testCase "Party"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Party          )
+            testCase "PubKeyHash"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen PubKeyHash           )
+          , testCase "CurrencySymbol" $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen CurrencySymbol       )
+          , testCase "TokenName"      $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen TokenName            )
+          , testCase "Token"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Token                )
+          , testCase "Party"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen (Party PubKeyHash)   )
           , testCase "ChoiceName"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100)  arbitraryChoiceName
-          , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ChoiceId       )
-          , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId        )
-          , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryAccounts   )
-          , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryChoices    )
-          , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryBoundValues)
+          , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen (ChoiceId PubKeyHash))
+          , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId              )
+          , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryAccounts         )
+          , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryChoices          )
+          , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryBoundValues      )
           ]
       ]
   , testGroup "Semantics"
@@ -154,7 +154,7 @@ tests =
 checkFixInterval :: Bool -> Bool -> Property
 checkFixInterval invalid inPast =
   property $ do
-  let gen :: Gen ((POSIXTime, POSIXTime), State Token)
+  let gen :: Gen ((POSIXTime, POSIXTime), State PubKeyHash Token)
       gen = do
         state <- arbitrary
         end   <- arbitrary `suchThat` (\t -> (t < minTime state) == inPast)
@@ -170,8 +170,8 @@ checkFixInterval invalid inPast =
 
 
 checkValue :: Show a
-           => (Environment -> State Token -> Gen a)
-           -> ((Value Token -> Integer) -> (Observation Token -> Bool) -> Environment -> State Token -> a -> Bool)
+           => (Environment -> State PubKeyHash Token -> Gen a)
+           -> ((Value PubKeyHash Token -> Integer) -> (Observation PubKeyHash Token -> Bool) -> Environment -> State PubKeyHash Token -> a -> Bool)
            -> Property
 checkValue gen f =
   property $ do
@@ -187,6 +187,7 @@ checkValue gen f =
 checkAvailableMoney :: Bool -> Property
 checkAvailableMoney isElement =
   let
+     gen :: a -> State PubKeyHash Token -> Gen (AccountId PubKeyHash, Token)
      gen _ State{accounts} =
        if isElement && not (AM.null accounts)
          then elements $ AM.keys accounts
@@ -241,7 +242,7 @@ checkMulValue =
 
 checkDivValueNumeratorDenominatorZero :: Assertion
 checkDivValueNumeratorDenominatorZero = do
-  let eval :: Value Token -> Integer
+  let eval :: Value PubKeyHash Token -> Integer
       eval = evalValue undefined undefined
   assertBool "DivValue 0 0 = 0"
     $ eval (DivValue (Constant 0) (Constant 0)) == 0
@@ -280,6 +281,7 @@ checkDivValueRounding =
 checkChoiceValue :: Bool -> Property
 checkChoiceValue isElement =
   let
+     gen :: a -> State PubKeyHash Token -> Gen (ChoiceId PubKeyHash)
      gen _ State{choices} =
        if isElement && not (AM.null choices)
          then elements $ AM.keys choices
@@ -359,6 +361,7 @@ checkNotObs =
 checkChoseSomething :: Bool -> Property
 checkChoseSomething isElement =
   let
+     gen :: a -> State PubKeyHash Token -> Gen (ChoiceId PubKeyHash)
      gen _ State{choices} =
        if isElement && not (AM.null choices)
          then elements $ AM.keys choices
@@ -418,7 +421,7 @@ checkValueEQ =
 
 checkTrueObs :: Assertion
 checkTrueObs = do
-  let eval :: Observation Token -> Bool
+  let eval :: Observation PubKeyHash Token -> Bool
       eval = evalObservation undefined undefined
   assertBool "TrueObs is true."
     $ eval TrueObs
@@ -426,7 +429,7 @@ checkTrueObs = do
 
 checkFalseObs :: Assertion
 checkFalseObs = do
-  let eval :: Observation Token -> Bool
+  let eval :: Observation PubKeyHash Token -> Bool
       eval = evalObservation undefined undefined
   assertBool "FalseObs is false."
     . not $ eval FalseObs
@@ -434,7 +437,7 @@ checkFalseObs = do
 
 checkApplyActionMismatch :: Property
 checkApplyActionMismatch = property $ do
-  let gen :: Gen (InputContent Token, Action Token)
+  let gen :: Gen (InputContent PubKeyHash Token, Action PubKeyHash Token)
       gen = do
         let
           inputs = [IDeposit undefined undefined undefined undefined, IChoice undefined undefined, INotify]
@@ -496,7 +499,7 @@ checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property 
 
 checkIChoice :: Maybe Bool -> Maybe Bool -> Property
 checkIChoice choiceMatches choiceInBounds = property $ do
-  let gen :: Gen (Environment, State Token, ChoiceId, ChosenNum, Action Token, Bool)
+  let gen :: Gen (Environment, State PubKeyHash Token, ChoiceId PubKeyHash, ChosenNum, Action PubKeyHash Token, Bool)
       gen = do
         choiceMatches' <- maybe arbitrary pure choiceMatches
         choiceInBounds' <- maybe arbitrary pure choiceInBounds
@@ -621,6 +624,7 @@ checkReduceContractStepClose =
   property $ do
   forAll ((,) <$> arbitrary <*> arbitrary) $ \(environment, state) ->
     let
+      checkPayment :: Payment PubKeyHash Token -> State PubKeyHash Token -> Contract PubKeyHash Token -> Bool
       checkPayment (Payment payee (Party payee') money) state' Close =
         payee == payee'
           && case flattenMoney money of

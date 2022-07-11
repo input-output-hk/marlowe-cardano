@@ -29,7 +29,7 @@ tests = testGroup "Marlowe Contract"
     , testCase "Option test" optionTest
     ]
 
-hasWarnings :: Maybe (C.Contract Token) -> IO Bool
+hasWarnings :: Maybe (C.Contract C.PubKeyHash Token) -> IO Bool
 hasWarnings (Just contract) = do
   result <- warningsTrace contract
   case result of

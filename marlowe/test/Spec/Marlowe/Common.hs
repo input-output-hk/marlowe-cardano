@@ -26,14 +26,14 @@ positiveAmount :: Gen Integer
 positiveAmount = choose (1, 100)
 
 
-partyGen :: Gen Party
+partyGen :: Gen (Party PubKeyHash)
 partyGen = oneof [ return $ Role "alice"
                  , return $ Role "bob"
                  , return $ PK (pubKeyHash "6361726f6c")
                  ]
 
 
-shrinkParty :: Party -> [Party]
+shrinkParty :: Party PubKeyHash -> [Party PubKeyHash]
 shrinkParty party = case party of
     PK _         -> [Role "alice", Role "bob"]
     Role "bob"   -> [Role "alice"]
@@ -41,13 +41,13 @@ shrinkParty party = case party of
     _            -> []
 
 
-payeeGen :: Gen Payee
+payeeGen :: Gen (Payee PubKeyHash)
 payeeGen = oneof [ Account <$> partyGen
                  , Party <$> partyGen
                  ]
 
 
-shrinkPayee :: Payee -> [Payee]
+shrinkPayee :: Payee PubKeyHash -> [Payee PubKeyHash]
 shrinkPayee (Account accId) = [Account x | x <- shrinkParty accId]
 shrinkPayee (Party party)   = [Party x | x <- shrinkParty party]
 
@@ -81,7 +81,7 @@ shrinkSimpleInteger 0 = []
 shrinkSimpleInteger v = [0, v `quot` 2]
 
 
-choiceIdGen :: Gen ChoiceId
+choiceIdGen :: Gen (ChoiceId PubKeyHash)
 choiceIdGen = do choName <- oneof [ return "first"
                                   , return "second"
                                   ]
@@ -89,7 +89,7 @@ choiceIdGen = do choName <- oneof [ return "first"
                  return $ ChoiceId choName chooser
 
 
-shrinkChoiceId :: ChoiceId -> [ChoiceId]
+shrinkChoiceId :: ChoiceId PubKeyHash -> [ChoiceId PubKeyHash]
 shrinkChoiceId (ChoiceId "second" chooser) = ChoiceId "first" chooser
                                             :[ChoiceId "second" x | x <- shrinkParty chooser]
 shrinkChoiceId (ChoiceId "first" chooser) = [ChoiceId "first" x | x <- shrinkParty chooser]
@@ -115,7 +115,7 @@ rationalGen = do
     return $ a % b
 
 
-valueGenSized :: Int -> Gen (Value Token)
+valueGenSized :: Int -> Gen (Value PubKeyHash Token)
 valueGenSized s
   | s > 0 = oneof [ AvailableMoney <$> partyGen <*> tokenGen
                   , Constant <$> simpleIntegerGen
@@ -140,11 +140,11 @@ valueGenSized s
                       ]
 
 
-valueGen ::  Gen (Value Token)
+valueGen ::  Gen (Value PubKeyHash Token)
 valueGen = sized valueGenSized
 
 
-shrinkValue :: Value Token -> [Value Token]
+shrinkValue :: Value PubKeyHash Token -> [Value PubKeyHash Token]
 shrinkValue value = case value of
     Constant x -> [Constant y | y <- shrinkSimpleInteger x]
     TimeIntervalStart -> [Constant 0]
@@ -167,7 +167,7 @@ shrinkValue value = case value of
                          ++ [Cond b val1 y | y <- shrinkValue val2])
 
 
-observationGenSized :: Int -> Gen (Observation Token)
+observationGenSized :: Int -> Gen (Observation PubKeyHash Token)
 observationGenSized s
   | s > 0 = oneof [ AndObs <$> observationGenSized (s `quot` 2)
                            <*> observationGenSized (s `quot` 2)
@@ -193,11 +193,11 @@ observationGenSized s
                       , return FalseObs
                       ]
 
-observationGen :: Gen (Observation Token)
+observationGen :: Gen (Observation PubKeyHash Token)
 observationGen = sized observationGenSized
 
 
-shrinkObservation :: Observation Token -> [Observation Token]
+shrinkObservation :: Observation PubKeyHash Token -> [Observation PubKeyHash Token]
 shrinkObservation obs = case obs of
     FalseObs -> []
     TrueObs  -> [FalseObs]
@@ -244,18 +244,18 @@ boundListGen = do len <- listLengthGen
                   boundListGenAux len firstBound
 
 
-actionGenSized :: Int -> Gen (Action Token)
+actionGenSized :: Int -> Gen (Action PubKeyHash Token)
 actionGenSized s =
   oneof [ Deposit <$> partyGen <*> partyGen <*> tokenGen <*> valueGenSized (s - 1)
         , Choice <$> choiceIdGen <*> boundListGen
         , Notify <$> observationGenSized (s - 1)
         ]
 
-actionGen :: Gen (Action Token)
+actionGen :: Gen (Action PubKeyHash Token)
 actionGen = sized actionGenSized
 
 
-shrinkAction :: Action Token -> [Action Token]
+shrinkAction :: Action PubKeyHash Token -> [Action PubKeyHash Token]
 shrinkAction action = case action of
     Deposit accId party tok val -> Notify FalseObs : [Deposit accId party tok v | v <- shrinkValue val]
         ++ [Deposit x party tok val | x <- shrinkParty accId]
@@ -267,18 +267,18 @@ shrinkAction action = case action of
     Notify obs -> [Notify x | x <- shrinkObservation obs]
 
 
-caseRelGenSized :: Int -> Integer -> Gen (Case Token)
+caseRelGenSized :: Int -> Integer -> Gen (Case PubKeyHash Token)
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
                                  , (1, merkleizedCase <$> actionGenSized s <*> contractRelGenSized s bn)
                                  ]
 
-shrinkCase :: Case Token -> [Case Token]
+shrinkCase :: Case PubKeyHash Token -> [Case PubKeyHash Token]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
 shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]
 
 
-contractRelGenSized :: Int -> Integer -> Gen (Contract Token)
+contractRelGenSized :: Int -> Integer -> Gen (Contract PubKeyHash Token)
 contractRelGenSized s bn
   | s > 0 = oneof [ return Close
                   , Pay <$> partyGen <*> payeeGen <*> tokenGen
@@ -301,15 +301,15 @@ contractRelGenSized s bn
   | otherwise = return Close
 
 
-contractGenSized :: Int -> Gen (Contract Token)
+contractGenSized :: Int -> Gen (Contract PubKeyHash Token)
 contractGenSized s = do iniBn <- simpleIntegerGen
                         contractRelGenSized s iniBn
 
-contractGen :: Gen (Contract Token)
+contractGen :: Gen (Contract PubKeyHash Token)
 contractGen = sized contractGenSized
 
 
-shrinkContract :: Contract Token -> [Contract Token]
+shrinkContract :: Contract PubKeyHash Token -> [Contract PubKeyHash Token]
 shrinkContract cont = case cont of
     Close -> []
     Let vid val cont -> Close : cont : ([Let vid v cont | v <- shrinkValue val]
@@ -336,7 +336,7 @@ shrinkContract cont = case cont of
               ++ [Assert obs y | y <- shrinkContract cont])
 
 
-pangramContract :: Contract Token
+pangramContract :: Contract PubKeyHash Token
 pangramContract = let
     alicePk = PK . unPaymentPubKeyHash . mockWalletPaymentPubKeyHash $ knownWallet 1
     aliceAcc = alicePk

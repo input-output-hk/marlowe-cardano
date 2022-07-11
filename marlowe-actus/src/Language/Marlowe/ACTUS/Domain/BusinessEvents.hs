@@ -6,7 +6,7 @@ module Language.Marlowe.ACTUS.Domain.BusinessEvents where
 
 import Data.Aeson.Types (FromJSON, ToJSON)
 import GHC.Generics (Generic)
-import Language.Marlowe (Token, Value)
+import Language.Marlowe (PubKeyHash, Token, Value)
 
 {-| ACTUS event types
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json
@@ -54,4 +54,4 @@ data RiskFactorsPoly a = RiskFactorsPoly
     deriving anyclass (FromJSON, ToJSON)
 
 type RiskFactors = RiskFactorsPoly Double
-type RiskFactorsMarlowe = RiskFactorsPoly (Value Token)
+type RiskFactorsMarlowe = RiskFactorsPoly (Value PubKeyHash Token)

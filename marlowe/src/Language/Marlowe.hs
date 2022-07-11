@@ -7,6 +7,7 @@ module Language.Marlowe
     , module Language.Marlowe.Util
     , module Language.Marlowe.Pretty
     , POSIXTime (..)
+    , PubKeyHash (..)
     , adaSymbol
     , adaToken
     , (%)
@@ -20,7 +21,7 @@ import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types hiding (getAction)
 import Language.Marlowe.Pretty
 import Language.Marlowe.Util
-import Ledger (POSIXTime (..))
+import Ledger (POSIXTime (..), PubKeyHash (..))
 import Ledger.Ada (adaSymbol, adaToken)
 import PlutusTx.Ratio as P
 

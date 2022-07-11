@@ -65,6 +65,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Paymen
 import Language.Marlowe.Core.V1.Semantics.Token (Token (..), moneyToValue)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                                  InputContent (..), Party (..), Payee (..), State (accounts))
+import Ledger.Crypto (PubKeyHash)
 import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
@@ -78,12 +79,12 @@ import System.IO (hPutStrLn, stderr)
 
 -- | Serialise a deposit input to a file.
 makeDeposit :: MonadIO m
-            => AccountId       -- ^ The account for the deposit.
-            -> Party           -- ^ The party making the deposit.
-            -> Maybe Token     -- ^ The token being deposited.
-            -> Integer         -- ^ The amount of the token deposited.
-            -> Maybe FilePath  -- ^ The output JSON file representing the input.
-            -> m ()            -- ^ Action to write the input to the file.
+            => AccountId PubKeyHash  -- ^ The account for the deposit.
+            -> Party PubKeyHash      -- ^ The party making the deposit.
+            -> Maybe Token           -- ^ The token being deposited.
+            -> Integer               -- ^ The amount of the token deposited.
+            -> Maybe FilePath        -- ^ The output JSON file representing the input.
+            -> m ()                  -- ^ Action to write the input to the file.
 makeDeposit accountId party token amount outputFile =
   maybeWriteJson outputFile
     . NormalInput
@@ -92,15 +93,15 @@ makeDeposit accountId party token amount outputFile =
 
 -- | Serialise a choice input to a file.
 makeChoice :: MonadIO m
-           => ChoiceName      -- ^ The name of the choice made.
-           -> Party           -- ^ The party making the choice.
-           -> ChosenNum       -- ^ The number chosen.
-           -> Maybe FilePath  -- ^ The output JSON file representing the input.
-           -> m ()            -- ^ Action to write the input to the file.
+           => ChoiceName        -- ^ The name of the choice made.
+           -> Party PubKeyHash  -- ^ The party making the choice.
+           -> ChosenNum         -- ^ The number chosen.
+           -> Maybe FilePath    -- ^ The output JSON file representing the input.
+           -> m ()              -- ^ Action to write the input to the file.
 makeChoice name party chosen outputFile =
     maybeWriteJson outputFile input
   where
-    input :: Input Token
+    input :: Input PubKeyHash Token
     input =
         NormalInput
       $ IChoice (ChoiceId name party) chosen
@@ -113,7 +114,7 @@ makeNotification :: MonadIO m
 makeNotification outputFile =
     maybeWriteJson outputFile input
   where
-    input :: Input Token
+    input :: Input PubKeyHash Token
     input = NormalInput INotify
 
 
@@ -146,17 +147,17 @@ initializeTransaction marloweParams slotConfig costModelParams network stake con
 -- | Create an initial Marlowe transaction.
 initializeTransactionImpl :: MonadError CliError m
                           => MonadIO m
-                          => MarloweParams          -- ^ The Marlowe contract parameters.
-                          -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
-                          -> CostModelParams        -- ^ The cost model parameters.
-                          -> NetworkId              -- ^ The network ID.
-                          -> StakeAddressReference  -- ^ The stake address.
-                          -> Contract Token         -- ^ The initial Marlowe contract.
-                          -> State Token            -- ^ The initial Marlowe state.
-                          -> Maybe FilePath         -- ^ The output JSON file for the validator information.
-                          -> Bool                   -- ^ Whether to deeply merkleize the contract.
-                          -> Bool                   -- ^ Whether to print statistics about the validator.
-                          -> m ()                   -- ^ Action to export the validator information to a file.
+                          => MarloweParams              -- ^ The Marlowe contract parameters.
+                          -> SlotConfig                 -- ^ The POSIXTime-to-slot configuration.
+                          -> CostModelParams            -- ^ The cost model parameters.
+                          -> NetworkId                  -- ^ The network ID.
+                          -> StakeAddressReference      -- ^ The stake address.
+                          -> Contract PubKeyHash Token  -- ^ The initial Marlowe contract.
+                          -> State PubKeyHash Token     -- ^ The initial Marlowe state.
+                          -> Maybe FilePath             -- ^ The output JSON file for the validator information.
+                          -> Bool                       -- ^ Whether to deeply merkleize the contract.
+                          -> Bool                       -- ^ Whether to print statistics about the validator.
+                          -> m ()                       -- ^ Action to export the validator information to a file.
 initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState outputFile merkleize printStats =
   do
      let
@@ -183,13 +184,13 @@ initializeTransactionImpl marloweParams mtSlotConfig costModelParams network sta
 -- | Prepare the next step in a Marlowe contract.
 prepareTransaction :: MonadError CliError m
                => MonadIO m
-               => FilePath        -- ^ The JSON file with the Marlowe initial state and initial contract.
-               -> [Input Token]   -- ^ The contract's inputs.
-               -> POSIXTime       -- ^ The first valid time for the transaction.
-               -> POSIXTime       -- ^ The last valid time for the transaction.
-               -> Maybe FilePath  -- ^ The output JSON file with the results of the computation.
-               -> Bool            -- ^ Whether to print statistics about the result.
-               -> m ()            -- ^ Action to compute the next step in the contract.
+               => FilePath                  -- ^ The JSON file with the Marlowe initial state and initial contract.
+               -> [Input PubKeyHash Token]  -- ^ The contract's inputs.
+               -> POSIXTime                 -- ^ The first valid time for the transaction.
+               -> POSIXTime                 -- ^ The last valid time for the transaction.
+               -> Maybe FilePath            -- ^ The output JSON file with the results of the computation.
+               -> Bool                      -- ^ Whether to print statistics about the result.
+               -> m ()                      -- ^ Action to compute the next step in the contract.
 prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile printStats =
   do
     marloweIn <- decodeFileStrict marloweFile
@@ -234,9 +235,9 @@ prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile print
 
 -- | Prepare the next step in a Marlowe contract.
 makeMarlowe :: MonadError CliError m
-            => MarloweTransaction era                                  -- ^ The Marlowe initial state and initial contract.
-            -> TransactionInput Token                                  -- ^ The transaction input.
-            -> m ([TransactionWarning Token], MarloweTransaction era)  -- ^ Action to compute the next step in the contract.
+            => MarloweTransaction era                                             -- ^ The Marlowe initial state and initial contract.
+            -> TransactionInput PubKeyHash Token                                  -- ^ The transaction input.
+            -> m ([TransactionWarning PubKeyHash Token], MarloweTransaction era)  -- ^ Action to compute the next step in the contract.
 makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
   do
     transactionInput'@TransactionInput{..} <-

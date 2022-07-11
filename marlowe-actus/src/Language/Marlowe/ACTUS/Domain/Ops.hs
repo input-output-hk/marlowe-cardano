@@ -4,7 +4,7 @@
 module Language.Marlowe.ACTUS.Domain.Ops where
 
 import Data.Time (LocalTime)
-import Language.Marlowe (Observation (..), Token, Value, Value_ (..))
+import Language.Marlowe (Observation (..), PubKeyHash, Token, Value, Value_ (..))
 import Language.Marlowe.ACTUS.Domain.ContractTerms (CR (..), DCC (..))
 import Language.Marlowe.ACTUS.Utility.YearFraction (yearFraction)
 
@@ -49,7 +49,7 @@ class (ActusNum a, ActusOps a) => RoleSignOps a where
     _r CR_PF  = _negate _one
 
 instance RoleSignOps Double
-instance RoleSignOps (Value Token)
+instance RoleSignOps (Value PubKeyHash Token)
 
 instance ActusOps Double where
     _min  = min
@@ -72,12 +72,12 @@ instance YearFractionOps Double where
 instance ScheduleOps Double where
     _ceiling = ceiling
 
-instance YearFractionOps (Value Token) where
+instance YearFractionOps (Value PubKeyHash Token) where
     _y a b c d = Constant . toMarloweFixedPoint $ yearFraction a b c d
       where
         toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint Prelude.*)
 
-instance ScheduleOps (Value Token) where
+instance ScheduleOps (Value PubKeyHash Token) where
     _ceiling (Constant a) = a `div` marloweFixedPoint
     -- ACTUS is implemented only for Fixed Schedules
     -- that means schedules are known before the contract
@@ -85,7 +85,7 @@ instance ScheduleOps (Value Token) where
     -- riskfactors
     _ceiling _            = error "Precondition: Fixed schedules"
 
-instance ActusOps (Value Token) where
+instance ActusOps (Value PubKeyHash Token) where
     _min a b = Cond (ValueLT a b) a b
     _max a b = Cond (ValueGT a b) a b
     _abs a = _max a (SubValue _zero a)
@@ -97,7 +97,7 @@ instance ActusOps (Value Token) where
 infixl 7  *, /
 infixl 6  +, -
 
-instance ActusNum (Value Token) where
+instance ActusNum (Value PubKeyHash Token) where
   -- add
   x + (Constant 0)            = x
   (Constant 0) + y            = y

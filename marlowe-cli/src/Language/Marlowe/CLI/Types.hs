@@ -55,6 +55,7 @@ import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Core.V1.Semantics (Payment)
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
+import Ledger.Crypto (PubKeyHash)
 import Ledger.TimeSlot (SlotConfig)
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
@@ -78,23 +79,23 @@ type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentE
 
 
 -- | Continuations for contracts.
-type Continuations t = M.Map DatumHash (Contract t)
+type Continuations i t = M.Map DatumHash (Contract i t)
 
 
 -- | Complete description of a Marlowe transaction.
 data MarloweTransaction era =
   MarloweTransaction
   {
-    mtValidator     :: ValidatorInfo era       -- ^ The Marlowe validator.
-  , mtRoleValidator :: ValidatorInfo era       -- ^ The roles validator.
-  , mtRoles         :: CurrencySymbol          -- ^ The roles currency.
-  , mtState         :: State Token             -- ^ The Marlowe state after the transaction.
-  , mtContract      :: Contract Token          -- ^ The Marlowe contract after the transaction.
-  , mtContinuations :: Continuations Token     -- ^ The merkleized continuations for the contract.
-  , mtRange         :: Maybe (SlotNo, SlotNo)  -- ^ The slot range for the transaction, if any.
-  , mtInputs        :: [Input Token]           -- ^ The inputs to the transaction.
-  , mtPayments      :: [Payment Token]         -- ^ The payments from the transaction.
-  , mtSlotConfig    :: SlotConfig              -- ^ The POSIXTime-to-Slot configuration.
+    mtValidator     :: ValidatorInfo era               -- ^ The Marlowe validator.
+  , mtRoleValidator :: ValidatorInfo era               -- ^ The roles validator.
+  , mtRoles         :: CurrencySymbol                  -- ^ The roles currency.
+  , mtState         :: State PubKeyHash Token          -- ^ The Marlowe state after the transaction.
+  , mtContract      :: Contract PubKeyHash Token       -- ^ The Marlowe contract after the transaction.
+  , mtContinuations :: Continuations PubKeyHash Token  -- ^ The merkleized continuations for the contract.
+  , mtRange         :: Maybe (SlotNo, SlotNo)          -- ^ The slot range for the transaction, if any.
+  , mtInputs        :: [Input PubKeyHash Token]        -- ^ The inputs to the transaction.
+  , mtPayments      :: [Payment PubKeyHash Token]      -- ^ The payments from the transaction.
+  , mtSlotConfig    :: SlotConfig                      -- ^ The POSIXTime-to-Slot configuration.
   }
     deriving (Generic, Show)
 

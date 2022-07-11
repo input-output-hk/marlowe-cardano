@@ -18,7 +18,7 @@ import qualified Ledger.Value as Val
 import qualified PlutusTx
 import qualified PlutusTx.Prelude as P
 
-instance IsString Party where
+instance IsString (Party i) where
     fromString s = Role (fromString s)
 
 
@@ -56,12 +56,12 @@ getAccountsDiff payments inputs =
 
 
 foldMapContract :: Monoid m
-    => (P.BuiltinByteString -> Maybe (Contract t))
-    -> (Contract t -> m)
-    -> (Case t -> m)
-    -> (Observation t -> m)
-    -> (Value t -> m)
-    -> Contract t -> m
+    => (P.BuiltinByteString -> Maybe (Contract i t))
+    -> (Contract i t -> m)
+    -> (Case i t -> m)
+    -> (Observation i t -> m)
+    -> (Value i t -> m)
+    -> Contract i t -> m
 foldMapContract funmerk fcont fcase fobs fvalue contract =
     fcont contract <> case contract of
         Close                -> mempty
@@ -96,15 +96,15 @@ foldMapContract funmerk fcont fcase fobs fvalue contract =
 
 
 foldMapNonMerkleizedContract :: Monoid m
-    => (Contract t -> m)
-    -> (Case t -> m)
-    -> (Observation t -> m)
-    -> (Value t -> m)
-    -> Contract t -> m
+    => (Contract i t -> m)
+    -> (Case i t -> m)
+    -> (Observation i t -> m)
+    -> (Value i t -> m)
+    -> Contract i t -> m
 foldMapNonMerkleizedContract = foldMapContract (const Nothing)
 
 
-extractNonMerkleizedContractRoles :: Contract t -> Set Val.TokenName
+extractNonMerkleizedContractRoles :: Contract i t -> Set Val.TokenName
 extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extractCase (const mempty) (const mempty)
   where
     extract (Pay from payee _ _ _) = fromParty from <> fromPayee payee
@@ -121,7 +121,7 @@ extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extract
     fromPayee (Account party) = fromParty party
 
 
-merkleizedCase :: PlutusTx.ToData t => Action t -> Contract t -> Case t
+merkleizedCase :: (PlutusTx.ToData t, PlutusTx.ToData i) => Action i t -> Contract i t -> Case i t
 merkleizedCase action continuation = let
     hash = dataHash (PlutusTx.toBuiltinData continuation)
     in MerkleizedCase action hash

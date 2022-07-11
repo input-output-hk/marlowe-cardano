@@ -307,6 +307,8 @@ writePangramJson outputDir = do
                     S.Close
                 )
         encodedPangram = BS8.pack . Char8.unpack $ encode pangram
+
+        state :: State S.PubKeyHash Token
         state =
             State
             { accounts = Map.singleton (alicePk, token) 12

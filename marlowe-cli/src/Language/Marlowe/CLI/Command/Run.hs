@@ -38,6 +38,7 @@ import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Input)
+import Ledger.Crypto (PubKeyHash)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName, defaultCostModelParams)
 
 import qualified Cardano.Api as Api (Value)
@@ -62,12 +63,12 @@ data RunCommand =
     -- | Prepare a Marlowe transaction for execution.
   | Prepare
     {
-      marloweInFile :: FilePath        -- ^ The JSON file with Marlowe initial state and initial contract.
-    , inputs'       :: [Input Token]   -- ^ The contract's inputs.
-    , minimumTime   :: POSIXTime       -- ^ The first valid time for the transaction.
-    , maximumTime   :: POSIXTime       -- ^ The last valid time for the transaction.
-    , outputFile    :: Maybe FilePath  -- ^ The output JSON file with the results of the computation.
-    , printStats    :: Bool            -- ^ Whether to print statistics about the redeemer.
+      marloweInFile :: FilePath                  -- ^ The JSON file with Marlowe initial state and initial contract.
+    , inputs'       :: [Input PubKeyHash Token]  -- ^ The contract's inputs.
+    , minimumTime   :: POSIXTime                 -- ^ The first valid time for the transaction.
+    , maximumTime   :: POSIXTime                 -- ^ The last valid time for the transaction.
+    , outputFile    :: Maybe FilePath            -- ^ The output JSON file with the results of the computation.
+    , printStats    :: Bool                      -- ^ Whether to print statistics about the redeemer.
     }
     -- | Run a Marlowe transaction.
   | Run

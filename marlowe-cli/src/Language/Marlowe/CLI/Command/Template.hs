@@ -33,6 +33,7 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as C
 import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party (..), Timeout, Token, Value (..), toCore,
                                           toCore')
 import Language.Marlowe.Util (ada)
+import Ledger.Crypto (PubKeyHash)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
 import qualified Options.Applicative as O
@@ -180,7 +181,7 @@ runTemplateCommand TemplateCoveredCall{..}    = let marloweContract = makeContra
 
 
 -- | Conversion from Extended to Core Marlowe.
-makeContract :: E.Contract -> C.Contract Token
+makeContract :: E.Contract -> C.Contract PubKeyHash Token
 makeContract = errorHandling . toCore
   where
     errorHandling (Just contract) = contract
@@ -188,7 +189,7 @@ makeContract = errorHandling . toCore
 
 
 -- | Build the initial Marlowe state.
-initialMarloweState :: AccountId -> Integer -> State Token
+initialMarloweState :: AccountId -> Integer -> State PubKeyHash Token
 initialMarloweState party minAda =
   State
   {
@@ -334,6 +335,6 @@ templateCoveredCallOptions =
 parseParty :: O.ReadM Party
 parseParty = aux <$> P.parseParty
   where
-    aux :: C.Party -> Party
+    aux :: C.Party PubKeyHash -> Party
     aux (C.PK pk)     = PK pk
     aux (C.Role name) = Role name

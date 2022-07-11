@@ -5,12 +5,13 @@ import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionWarning)
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
+import Ledger (PubKeyHash)
 
 data Result = Valid
             | CounterExample
                 { initialSlot        :: Integer
-                , transactionList    :: [TransactionInput Token]
-                , transactionWarning :: [TransactionWarning Token]
+                , transactionList    :: [TransactionInput PubKeyHash Token]
+                , transactionWarning :: [TransactionWarning PubKeyHash Token]
                 }
             | Error String
   deriving (Generic)

@@ -46,6 +46,7 @@ import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ReduceResult (..), 
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (Case_ (..), Contract (..), Input (..), IntervalResult (..), State,
                                                  TimeInterval)
+import Ledger.Crypto (PubKeyHash)
 import Ledger.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltinData)
 import PlutusTx (ToData)
@@ -85,24 +86,24 @@ merkleizeMarlowe marlowe =
 
 
 -- | Merkleize any top-level case statements in a contract.
-shallowMerkleize :: ToData t
-                 => Contract t                             -- ^ The contract.
-                 -> Writer (Continuations t) (Contract t)  -- ^ Action for the merkleized contract.
+shallowMerkleize :: (ToData i, ToData t)
+                 => Contract i t                               -- ^ The contract.
+                 -> Writer (Continuations i t) (Contract i t)  -- ^ Action for the merkleized contract.
 shallowMerkleize = merkleize' pure
 
 
 -- | Merkleize all case statements in a contract.
-deepMerkleize :: ToData t
-              => Contract t                             -- ^ The contract.
-              -> Writer (Continuations t) (Contract t)  -- ^ Action for the merkleized contract.
+deepMerkleize :: (ToData i, ToData t)
+              => Contract i t                               -- ^ The contract.
+              -> Writer (Continuations i t) (Contract i t)  -- ^ Action for the merkleized contract.
 deepMerkleize = fix merkleize'
 
 
 -- | Merkleize selected case statements in a contract.
-merkleize' :: ToData t
-           => (Contract t -> Writer (Continuations t) (Contract t))  -- ^ Action to continue merkleization.
-           -> Contract t                                             -- ^ The contract.
-           -> Writer (Continuations t) (Contract t)                  -- ^ Action for merkleizing the selected case statements.
+merkleize' :: (ToData i, ToData t)
+           => (Contract i t -> Writer (Continuations i t) (Contract i t))  -- ^ Action to continue merkleization.
+           -> Contract i t                                                 -- ^ The contract.
+           -> Writer (Continuations i t) (Contract i t)                    -- ^ Action for merkleizing the selected case statements.
 merkleize' _ Close = pure Close
 merkleize' f (Pay accountId payee token value contract) = Pay accountId payee token value <$> merkleize' f contract
 merkleize' f (If observation thenContract elseContract) = If observation <$> merkleize' f thenContract <*> merkleize' f elseContract
@@ -147,23 +148,23 @@ demerkleize contractFile outputFile =
 
 -- | Demerkleize any top-level case statements in a contract.
 shallowDemerkleize :: MonadError CliError m
-                   => Contract t                                -- ^ The contract.
-                   -> ReaderT (Continuations t) m (Contract t)  -- ^ Action for the demerkleized contract.
+                   => Contract i t                                  -- ^ The contract.
+                   -> ReaderT (Continuations i t) m (Contract i t)  -- ^ Action for the demerkleized contract.
 shallowDemerkleize = demerkleize' pure
 
 
 -- | Demerkleize all case statements in a contract.
 deepDemerkleize :: MonadError CliError m
-                => Contract t                               -- ^ The contract.
-                -> ReaderT (Continuations t) m (Contract t)  -- ^ Action for the demerkleized contract.
+                => Contract i t                                  -- ^ The contract.
+                -> ReaderT (Continuations i t) m (Contract i t)  -- ^ Action for the demerkleized contract.
 deepDemerkleize = fix demerkleize'
 
 
 -- | Demerkleize selected case statements in a contract.
 demerkleize' :: MonadError CliError m
-             => (Contract t -> ReaderT (Continuations t) m (Contract t))  -- ^ Action to continue demerkleization.
-             -> Contract t                                                -- ^ The contract.
-             -> ReaderT (Continuations t) m (Contract t)                  -- ^ Action for demerkleized the selected case statements.
+             => (Contract i t -> ReaderT (Continuations i t) m (Contract i t))  -- ^ Action to continue demerkleization.
+             -> Contract i t                                                    -- ^ The contract.
+             -> ReaderT (Continuations i t) m (Contract i t)                    -- ^ Action for demerkleized the selected case statements.
 demerkleize' _ Close = pure Close
 demerkleize' f (Pay accountId payee token value contract) = Pay accountId payee token value <$> demerkleize' f contract
 demerkleize' f (If observation thenContract elseContract) = If observation <$> demerkleize' f thenContract <*> demerkleize' f elseContract
@@ -181,9 +182,9 @@ demerkleize' f (When cases timeout contract) = When <$> mapM demerkleizeCase cas
 
 -- | Merkleize whatever inputs need merkleization before application to a contract.
 merkleizeInputs :: MonadError CliError m
-                => MarloweTransaction era      -- ^ The transaction information.
-                -> TransactionInput Token      -- ^ The input to the contract.
-                -> m (TransactionInput Token)  -- ^ Action for the merkleized input to the contract.
+                => MarloweTransaction era                 -- ^ The transaction information.
+                -> TransactionInput PubKeyHash Token      -- ^ The input to the contract.
+                -> m (TransactionInput PubKeyHash Token)  -- ^ Action for the merkleized input to the contract.
 merkleizeInputs MarloweTransaction{..} TransactionInput{..} =
   TransactionInput txInterval
     . snd
@@ -191,12 +192,12 @@ merkleizeInputs MarloweTransaction{..} TransactionInput{..} =
 
 
 -- | Merkleize an input if needed before application to a contract.
-merkleizeInput :: (MonadError CliError m, P.Eq t, ToData t)
-               => TimeInterval                         -- ^ The validity interval.
-               -> Continuations t                      -- ^ The available continuations.
-               -> ((State t, Contract t), [Input t])   -- ^ The current state and contract, along with the prior inputs.
-               -> Input t                              -- ^ The input.
-               -> m ((State t, Contract t), [Input t]) -- ^ The new state and contract, along with the prior inputs.
+merkleizeInput :: (MonadError CliError m, P.Eq i, P.Eq t, ToData i, ToData t)
+               => TimeInterval                               -- ^ The validity interval.
+               -> Continuations i t                          -- ^ The available continuations.
+               -> ((State i t, Contract i t), [Input i t])   -- ^ The current state and contract, along with the prior inputs.
+               -> Input i t                                  -- ^ The input.
+               -> m ((State i t, Contract i t), [Input i t]) -- ^ The new state and contract, along with the prior inputs.
 merkleizeInput txInterval continuations ((state, contract), inputs) input =
   do
     -- Apply input as it is.
@@ -229,12 +230,12 @@ merkleizeInput txInterval continuations ((state, contract), inputs) input =
 
 
 -- | Compute one step in a transaction without reducing the quiescent state after the input is applied.
-computeTransaction' :: P.Eq t
-                    => TimeInterval                 -- ^ The validity interval.
-                    -> Input t                      -- ^ The input to the contract.
-                    -> State t                      -- ^ The current state of the contract.
-                    -> Contract t                   -- ^ The current contract.
-                    -> Maybe (State t, Contract t)  -- ^ The new state and contract, if the input could be applied.
+computeTransaction' :: (P.Eq i, P.Eq t)
+                    => TimeInterval                     -- ^ The validity interval.
+                    -> Input i t                        -- ^ The input to the contract.
+                    -> State i t                        -- ^ The current state of the contract.
+                    -> Contract i t                     -- ^ The current contract.
+                    -> Maybe (State i t, Contract i t)  -- ^ The new state and contract, if the input could be applied.
 computeTransaction' txInterval input state contract =
   case fixInterval txInterval state of
     IntervalTrimmed env fixState ->

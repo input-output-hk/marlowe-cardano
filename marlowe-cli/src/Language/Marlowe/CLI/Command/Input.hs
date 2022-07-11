@@ -27,6 +27,7 @@ import Language.Marlowe.CLI.Command.Parse (parseParty, parseToken)
 import Language.Marlowe.CLI.Run (makeChoice, makeDeposit, makeNotification)
 import Language.Marlowe.Core.V1.Semantics.Token (Token)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceName, ChosenNum, Party)
+import Ledger.Crypto (PubKeyHash)
 
 import qualified Options.Applicative as O
 
@@ -36,19 +37,19 @@ data InputCommand =
     -- | Input a deposit to a contract.
     InputDeposit
     {
-      account    :: AccountId       -- ^ The account for the deposit.
-    , party      :: Party           -- ^ The party making the deposit.
-    , token      :: Maybe Token     -- ^ The token being deposited, if not Ada.
-    , amount     :: Integer         -- ^ The amount of the token deposited.
-    , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
+      account    :: AccountId PubKeyHash  -- ^ The account for the deposit.
+    , party      :: Party PubKeyHash      -- ^ The party making the deposit.
+    , token      :: Maybe Token           -- ^ The token being deposited, if not Ada.
+    , amount     :: Integer               -- ^ The amount of the token deposited.
+    , outputFile :: Maybe FilePath        -- ^ The output JSON file representing the input.
     }
     -- | Input a choice to a contract.
   | InputChoice
     {
-      choiceName  :: ChoiceName      -- ^ The name of the choice made.
-    , choiceParty :: Party           -- ^ The party making the choice.
-    , chosen      :: ChosenNum       -- ^ The number chosen.
-    , outputFile  :: Maybe FilePath  -- ^ The output JSON file representing the input.
+      choiceName  :: ChoiceName        -- ^ The name of the choice made.
+    , choiceParty :: Party PubKeyHash  -- ^ The party making the choice.
+    , chosen      :: ChosenNum         -- ^ The number chosen.
+    , outputFile  :: Maybe FilePath    -- ^ The output JSON file representing the input.
     }
     -- | Input a notification to a contract.
   | InputNotify

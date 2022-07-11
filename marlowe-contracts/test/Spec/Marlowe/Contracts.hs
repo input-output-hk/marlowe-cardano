@@ -56,16 +56,16 @@ tok = Token tokSymbol tokName
 tokValueOf :: Integer -> C.Money Token
 tokValueOf = C.moneyFromValue . singleton tokSymbol tokName
 
-assertTotalPayments :: Party -> [C.Payment Token] -> C.Money Token -> Assertion
+assertTotalPayments :: C.Party C.PubKeyHash -> [C.Payment C.PubKeyHash Token] -> C.Money Token -> Assertion
 assertTotalPayments p t x = assertBool "total payments to party" (totalPayments t == x)
   where
-    totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party (toCore' p))
+    totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party p)
 
 assertNoWarnings :: [a] -> Assertion
 assertNoWarnings [] = pure ()
 assertNoWarnings t  = assertBool "Assert no warnings" $ null t
 
-assertClose :: C.Contract Token -> Assertion
+assertClose :: C.Contract C.PubKeyHash Token -> Assertion
 assertClose = assertBool "Contract is in Close" . (C.Close==)
 
 assertNoFailedTransactions :: C.TransactionError -> Assertion
@@ -95,7 +95,7 @@ zeroCouponBondTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 90_000_000)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 90_000_000)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -124,7 +124,7 @@ couponBondTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 92_000_000)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 92_000_000)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -148,8 +148,8 @@ swapContractTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (C.moneyFromValue (lovelaceValueOf 10_000_000) <> tokValueOf 30)
-          assertTotalPayments w2Pk txOutPayments (C.moneyFromValue (lovelaceValueOf 10_000_000) <> tokValueOf 30)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (C.moneyFromValue (lovelaceValueOf 10_000_000) <> tokValueOf 30)
+          assertTotalPayments (toCore' w2Pk) txOutPayments (C.moneyFromValue (lovelaceValueOf 10_000_000) <> tokValueOf 30)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -173,8 +173,8 @@ americanCallOptionTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments mempty
-          assertTotalPayments w2Pk txOutPayments mempty
+          assertTotalPayments (toCore' w1Pk) txOutPayments mempty
+          assertTotalPayments (toCore' w2Pk) txOutPayments mempty
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -214,8 +214,8 @@ americanCallOptionExercisedTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
-          assertTotalPayments w2Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 10_000_000)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (tokValueOf 30)
+          assertTotalPayments (toCore' w2Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 10_000_000)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -240,8 +240,8 @@ europeanCallOptionTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments mempty
-          assertTotalPayments w2Pk txOutPayments mempty
+          assertTotalPayments (toCore' w1Pk) txOutPayments mempty
+          assertTotalPayments (toCore' w2Pk) txOutPayments mempty
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -280,8 +280,8 @@ europeanCallOptionExercisedTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
-          assertTotalPayments w2Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 10_000_000)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (tokValueOf 30)
+          assertTotalPayments (toCore' w2Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 10_000_000)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -319,8 +319,8 @@ futureNoChange =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings $ filter nonZeroPay txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 8_000_000)
-          assertTotalPayments w2Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 8_000_000)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 8_000_000)
+          assertTotalPayments (toCore' w2Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 8_000_000)
         C.Error err ->
           assertNoFailedTransactions err
   where
@@ -355,8 +355,8 @@ futureNoMarginCall =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 1_333_333)
-          assertTotalPayments w2Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 14_666_667)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 1_333_333)
+          assertTotalPayments (toCore' w2Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 14_666_667)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -395,8 +395,8 @@ futureWithMarginCall =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 61_333_333)
-          assertTotalPayments w2Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 14_666_667)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 61_333_333)
+          assertTotalPayments (toCore' w2Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 14_666_667)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -428,7 +428,7 @@ reverseConvertibleExercisedTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (tokValueOf 30)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -458,6 +458,6 @@ reverseConvertibleTest =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (C.moneyFromValue $ lovelaceValueOf 10_000_000)
+          assertTotalPayments (toCore' w1Pk) txOutPayments (C.moneyFromValue $ lovelaceValueOf 10_000_000)
         C.Error err ->
           assertNoFailedTransactions err

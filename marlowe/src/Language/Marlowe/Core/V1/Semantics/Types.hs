@@ -61,11 +61,11 @@ import qualified Prelude as Haskell
 {-| = Type definitions for Marlowe's seamntics
 -}
 
-data Party = PK PubKeyHash | Role TokenName
+data Party i = PK i | Role TokenName
   deriving stock (Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
-instance Haskell.Show Party where
+instance Haskell.Show i => Haskell.Show (Party i) where
   showsPrec p (PK pk) = Haskell.showParen (p Haskell.>= 11) $ Haskell.showString "PK \""
                                               . Haskell.showsPrec 11 pk
                                               . Haskell.showString "\""
@@ -76,13 +76,13 @@ type Timeout = POSIXTime
 type ChoiceName = BuiltinByteString
 type ChosenNum = Integer
 type TimeInterval = (POSIXTime, POSIXTime)
-type Accounts t = Map (AccountId, t) Integer
+type Accounts i t = Map (AccountId i, t) Integer
 
 -- * Data Types
 {-| Choices – of integers – are identified by ChoiceId
     which combines a name for the choice with the Party who had made the choice.
 -}
-data ChoiceId = ChoiceId BuiltinByteString Party
+data ChoiceId i = ChoiceId BuiltinByteString (Party i)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -102,23 +102,22 @@ newtype ValueId = ValueId BuiltinByteString
 
     Values can also be scaled, and combined using addition, subtraction, and negation.
 -}
-data Value_ a t = AvailableMoney AccountId t
+data Value_ a i t = AvailableMoney (AccountId i) t
                 | Constant Integer
-                | NegValue (Value_ a t)
-                | AddValue (Value_ a t) (Value_ a t)
-                | SubValue (Value_ a t) (Value_ a t)
-                | MulValue (Value_ a t) (Value_ a t)
-                | DivValue (Value_ a t) (Value_ a t)
-                | ChoiceValue ChoiceId
+                | NegValue (Value_ a i t)
+                | AddValue (Value_ a i t) (Value_ a i t)
+                | SubValue (Value_ a i t) (Value_ a i t)
+                | MulValue (Value_ a i t) (Value_ a i t)
+                | DivValue (Value_ a i t) (Value_ a i t)
+                | ChoiceValue (ChoiceId i)
                 | TimeIntervalStart
                 | TimeIntervalEnd
                 | UseValue ValueId
-                | Cond a (Value_ a t) (Value_ a t)
+                | Cond a (Value_ a i t) (Value_ a i t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
-
-type Value t = Value_ (Observation t) t
+type Value i t = Value_ (Observation i t) i t
 
 {-| Observations are Boolean values derived by comparing values,
     and can be combined using the standard Boolean operators.
@@ -126,17 +125,17 @@ type Value t = Value_ (Observation t) t
     It is also possible to observe whether any choice has been made
     (for a particular identified choice).
 -}
-data Observation t = AndObs (Observation t) (Observation t)
-                   | OrObs (Observation t) (Observation t)
-                   | NotObs (Observation t)
-                   | ChoseSomething ChoiceId
-                   | ValueGE (Value t) (Value t)
-                   | ValueGT (Value t) (Value t)
-                   | ValueLT (Value t) (Value t)
-                   | ValueLE (Value t) (Value t)
-                   | ValueEQ (Value t) (Value t)
-                   | TrueObs
-                   | FalseObs
+data Observation i t = AndObs (Observation i t) (Observation i t)
+                     | OrObs (Observation i t) (Observation i t)
+                     | NotObs (Observation i t)
+                     | ChoseSomething (ChoiceId i)
+                     | ValueGE (Value i t) (Value i t)
+                     | ValueGT (Value i t) (Value i t)
+                     | ValueLT (Value i t) (Value i t)
+                     | ValueLE (Value i t) (Value i t)
+                     | ValueEQ (Value i t) (Value i t)
+                     | TrueObs
+                     | FalseObs
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -158,9 +157,9 @@ data Bound = Bound Integer Integer
       Typically this would be done by one of the parties,
       or one of their wallets acting automatically.
 -}
-data Action t = Deposit AccountId Party t (Value t)
-              | Choice ChoiceId [Bound]
-              | Notify (Observation t)
+data Action i t = Deposit (AccountId i) (Party i) t (Value i t)
+                | Choice (ChoiceId i) [Bound]
+                | Notify (Observation i t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -169,8 +168,8 @@ data Action t = Deposit AccountId Party t (Value t)
     or to one of the accounts of the contract,
     and this is reflected in the definition.
 -}
-data Payee = Account AccountId
-           | Party Party
+data Payee i = Account (AccountId i)
+             | Party (Party i)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
@@ -178,14 +177,14 @@ data Payee = Account AccountId
 {-  Plutus doesn't support mutually recursive data types yet.
     datatype Case is mutually recurvive with @Contract@
 -}
-data Case_ a t = Case (Action t) a
-               | MerkleizedCase (Action t) BuiltinByteString
+data Case_ a i t = Case (Action i t) a
+                 | MerkleizedCase (Action i t) BuiltinByteString
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
-type Case t = Case_ (Contract t) t
+type Case i t = Case_ (Contract i t) i t
 
-getAction :: Case t -> Action t
+getAction :: Case i t -> Action i t
 getAction (Case action _)           = action
 getAction (MerkleizedCase action _) = action
 
@@ -196,21 +195,21 @@ getAction (MerkleizedCase action _) = action
     At each step of execution, as well as returning a new state and continuation contract,
     it is possible that effects – payments – and warnings can be generated too.
 -}
-data Contract t = Close
-                | Pay AccountId Payee t (Value t) (Contract t)
-                | If (Observation t) (Contract t) (Contract t)
-                | When [Case t] Timeout (Contract t)
-                | Let ValueId (Value t) (Contract t)
-                | Assert (Observation t) (Contract t)
+data Contract i t = Close
+                  | Pay (AccountId i) (Payee i) t (Value i t) (Contract i t)
+                  | If (Observation i t) (Contract i t) (Contract i t)
+                  | When [Case i t] Timeout (Contract i t)
+                  | Let ValueId (Value i t) (Contract i t)
+                  | Assert (Observation i t) (Contract i t)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
 {-| Marlowe contract internal state. Stored in a /Datum/ of a transaction output.
 -}
-data State t = State { accounts    :: Accounts t
-                     , choices     :: Map ChoiceId ChosenNum
-                     , boundValues :: Map ValueId Integer
-                     , minTime     :: POSIXTime }
+data State i t = State { accounts    :: Accounts i t
+                       , choices     :: Map (ChoiceId i) ChosenNum
+                       , boundValues :: Map ValueId Integer
+                       , minTime     :: POSIXTime }
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
 
 {-| Execution environment. Contains a time interval of a transaction.
@@ -221,13 +220,13 @@ newtype Environment = Environment { timeInterval :: TimeInterval }
 
 {-| Input for a Marlowe contract. Correspond to expected 'Action's.
 -}
-data InputContent t = IDeposit AccountId Party t Integer
-                    | IChoice ChoiceId ChosenNum
-                    | INotify
+data InputContent i t = IDeposit (AccountId i) (Party i) t Integer
+                      | IChoice (ChoiceId i) ChosenNum
+                      | INotify
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
-instance FromJSON t => FromJSON (InputContent t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (InputContent i t) where
   parseJSON (String "input_notify") = return INotify
   parseJSON (Object v) =
     IChoice <$> v .: "for_choice_id"
@@ -238,7 +237,7 @@ instance FromJSON t => FromJSON (InputContent t) where
               <*> v .: "that_deposits"
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
-instance ToJSON t => ToJSON (InputContent t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (InputContent i t) where
   toJSON (IDeposit accId party tok amount) = object
       [ "input_from_party" .= party
       , "that_deposits" .= amount
@@ -251,12 +250,12 @@ instance ToJSON t => ToJSON (InputContent t) where
       ]
   toJSON INotify = JSON.String $ pack "input_notify"
 
-data Input t = NormalInput (InputContent t)
-             | MerkleizedInput (InputContent t) BuiltinByteString (Contract t)
+data Input i t = NormalInput (InputContent i t)
+               | MerkleizedInput (InputContent i t) BuiltinByteString (Contract i t)
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
-instance FromJSON t => FromJSON (Input t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (Input i t) where
   parseJSON (String s) = NormalInput <$> parseJSON (String s)
   parseJSON (Object v) = do
     MerkleizedInput <$> parseJSON (Object v) <*> v .: "continuation_hash" <*> v .: "merkleized_continuation"
@@ -264,7 +263,7 @@ instance FromJSON t => FromJSON (Input t) where
       <|> NormalInput <$> parseJSON (Object v)
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
-instance ToJSON t => ToJSON (Input t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (Input i t) where
   toJSON (NormalInput content) = toJSON content
   toJSON (MerkleizedInput content hash continuation) =
     let
@@ -278,7 +277,7 @@ instance ToJSON t => ToJSON (Input t) where
           ]
 
 
-getInputContent :: Input t -> InputContent t
+getInputContent :: Input i t -> InputContent i t
 getInputContent (NormalInput inputContent)         = inputContent
 getInputContent (MerkleizedInput inputContent _ _) = inputContent
 
@@ -295,13 +294,13 @@ data IntervalError = InvalidInterval TimeInterval
 
 
 -- | Result of 'fixInterval'
-data IntervalResult t = IntervalTrimmed Environment (State t)
-                      | IntervalError IntervalError
+data IntervalResult i t = IntervalTrimmed Environment (State i t)
+                        | IntervalError IntervalError
   deriving stock (Haskell.Show)
 
 
 -- | Empty State for a given minimal 'POSIXTime'
-emptyState :: POSIXTime -> State t
+emptyState :: POSIXTime -> State i t
 emptyState sn = State
     { accounts = Map.empty
     , choices  = Map.empty
@@ -314,7 +313,7 @@ inBounds :: ChosenNum -> [Bound] -> Bool
 inBounds num = any (\(Bound l u) -> num >= l && num <= u)
 
 
-instance FromJSON t => FromJSON (State t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (State i t) where
   parseJSON = withObject "State" (\v ->
          State <$> (v .: "accounts")
                <*> (v .: "choices")
@@ -322,7 +321,7 @@ instance FromJSON t => FromJSON (State t) where
                <*> (POSIXTime <$> (withInteger =<< (v .: "minTime")))
                                  )
 
-instance ToJSON t => ToJSON (State t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (State i t) where
   toJSON State { accounts = a
                , choices = c
                , boundValues = bv
@@ -332,25 +331,27 @@ instance ToJSON t => ToJSON (State t) where
         , "boundValues" .= bv
         , "minTime" .= ms ]
 
-instance FromJSON Party where
+instance FromJSON (Party PubKeyHash) where
   parseJSON = withObject "Party" (\v ->
         (PK . PubKeyHash . toBuiltin <$> (JSON.decodeByteString =<< (v .: "pk_hash")))
     <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
                                  )
-instance ToJSON Party where
+
+-- | ToJSON instance for 'Party' refers specifically to @pk_hash@ so not generalized
+instance ToJSON (Party PubKeyHash) where
     toJSON (PK pkh) = object
         [ "pk_hash" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin $ getPubKeyHash pkh) ]
     toJSON (Role (Val.TokenName name)) = object
         [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
 
 
-instance FromJSON ChoiceId where
+instance FromJSON (Party i) => FromJSON (ChoiceId i) where
   parseJSON = withObject "ChoiceId" (\v ->
        ChoiceId <$> (toBuiltin . Text.encodeUtf8 <$> (v .: "choice_name"))
                 <*> (v .: "choice_owner")
                                     )
 
-instance ToJSON ChoiceId where
+instance ToJSON (Party i) => ToJSON (ChoiceId i) where
   toJSON (ChoiceId name party) = object [ "choice_name" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name)
                                         , "choice_owner" .= party
                                         ]
@@ -362,7 +363,7 @@ instance ToJSON ValueId where
     toJSON (ValueId x) = JSON.String (Text.decodeUtf8 $ fromBuiltin x)
 
 
-instance FromJSON t => FromJSON (Value t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (Value i t) where
   parseJSON (Object v) =
         (AvailableMoney <$> (v .: "in_account")
                         <*> (v .: "amount_of_token"))
@@ -384,7 +385,7 @@ instance FromJSON t => FromJSON (Value t) where
   parseJSON (Number n) = Constant <$> getInteger n
   parseJSON _ = Haskell.fail "Value must be either an object or an integer"
 
-instance ToJSON t => ToJSON (Value t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (Value i t) where
   toJSON (AvailableMoney accountId token) = object
       [ "amount_of_token" .= token
       , "in_account" .= accountId
@@ -421,7 +422,7 @@ instance ToJSON t => ToJSON (Value t) where
       ]
 
 
-instance FromJSON t => FromJSON (Observation t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (Observation i t) where
   parseJSON (Bool True) = return TrueObs
   parseJSON (Bool False) = return FalseObs
   parseJSON (Object v) =
@@ -443,7 +444,7 @@ instance FromJSON t => FromJSON (Observation t) where
                  <*> (v .: "equal_to"))
   parseJSON _ = Haskell.fail "Observation must be either an object or a boolean"
 
-instance ToJSON t => ToJSON (Observation t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (Observation i t) where
   toJSON (AndObs lhs rhs) = object
       [ "both" .= lhs
       , "and" .= rhs
@@ -491,7 +492,7 @@ instance ToJSON Bound where
       , "to" .= to
       ]
 
-instance FromJSON t => FromJSON (Action t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (Action i t) where
   parseJSON = withObject "Action" (\v ->
        (Deposit <$> (v .: "into_account")
                 <*> (v .: "party")
@@ -504,7 +505,7 @@ instance FromJSON t => FromJSON (Action t) where
                                             )))
    <|> (Notify <$> (v .: "notify_if"))
                                   )
-instance ToJSON t => ToJSON (Action t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (Action i t) where
   toJSON (Deposit accountId party token val) = object
       [ "into_account" .= accountId
       , "party" .= party
@@ -519,24 +520,24 @@ instance ToJSON t => ToJSON (Action t) where
       [ "notify_if" .= obs ]
 
 
-instance FromJSON Payee where
+instance FromJSON (Party i) => FromJSON (Payee i) where
   parseJSON = withObject "Payee" (\v ->
                 (Account <$> (v .: "account"))
             <|> (Party <$> (v .: "party")))
 
-instance ToJSON Payee where
+instance ToJSON (Party i) => ToJSON (Payee i) where
   toJSON (Account acc) = object ["account" .= acc]
   toJSON (Party party) = object ["party" .= party]
 
 
-instance FromJSON t => FromJSON (Case t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (Case i t) where
   parseJSON = withObject "Case" (\v ->
         (Case <$> (v .: "case")
               <*> (v .: "then"))
     <|> (MerkleizedCase <$> (v .: "case")
                         <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_then")))
                                 )
-instance ToJSON t => ToJSON (Case t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (Case i t) where
   toJSON (Case act cont) = object
       [ "case" .= act
       , "then" .= cont
@@ -547,7 +548,7 @@ instance ToJSON t => ToJSON (Case t) where
       ]
 
 
-instance FromJSON t => FromJSON (Contract t) where
+instance (FromJSON (Party i), FromJSON t) => FromJSON (Contract i t) where
   parseJSON (String "close") = return Close
   parseJSON (Object v) =
         (Pay <$> (v .: "from_account")
@@ -571,7 +572,7 @@ instance FromJSON t => FromJSON (Contract t) where
                 <*> (v .: "then"))
   parseJSON _ = Haskell.fail "Contract must be either an object or a the string \"close\""
 
-instance ToJSON t => ToJSON (Contract t) where
+instance (ToJSON (Party i), ToJSON t) => ToJSON (Contract i t) where
   toJSON Close = JSON.String $ pack "close"
   toJSON (Pay accountId payee token value contract) = object
       [ "from_account" .= accountId
@@ -600,14 +601,14 @@ instance ToJSON t => ToJSON (Contract t) where
       , "then" .= cont
       ]
 
-instance Eq Party where
+instance Eq i => Eq (Party i) where
     {-# INLINABLE (==) #-}
     (PK p1) == (PK p2)     = p1 == p2
     (Role r1) == (Role r2) = r1 == r2
     _ == _                 = False
 
 
-instance Eq ChoiceId where
+instance Eq i => Eq (ChoiceId i) where
     {-# INLINABLE (==) #-}
     (ChoiceId n1 p1) == (ChoiceId n2 p2) = n1 == n2 && p1 == p2
 
@@ -619,13 +620,13 @@ instance Eq ValueId where
 instance Pretty ValueId where
     prettyFragment (ValueId n) = prettyFragment n
 
-instance Eq Payee where
+instance Eq i => Eq (Payee i) where
     {-# INLINABLE (==) #-}
     Account acc1 == Account acc2 = acc1 == acc2
     Party p1 == Party p2         = p1 == p2
     _ == _                       = False
 
-instance Eq t => Eq (Value t) where
+instance (Eq i, Eq t) => Eq (Value i t) where
     {-# INLINABLE (==) #-}
     AvailableMoney acc1 tok1 == AvailableMoney acc2 tok2 =
         acc1 == acc2 && tok1 == tok2
@@ -642,7 +643,7 @@ instance Eq t => Eq (Value t) where
     Cond obs1 thn1 els1 == Cond obs2 thn2 els2 =  obs1 == obs2 && thn1 == thn2 && els1 == els2
     _ == _ = False
 
-instance Eq t => Eq (Observation t) where
+instance (Eq i, Eq t) => Eq (Observation i t) where
     {-# INLINABLE (==) #-}
     AndObs o1l o2l == AndObs o1r o2r           = o1l == o1r && o2l == o2r
     OrObs  o1l o2l == OrObs  o1r o2r           = o1l == o1r && o2l == o2r
@@ -657,7 +658,7 @@ instance Eq t => Eq (Observation t) where
     FalseObs == FalseObs                       = True
     _ == _                                     = False
 
-instance Eq t => Eq (Action t) where
+instance (Eq i, Eq t) => Eq (Action i t) where
     {-# INLINABLE (==) #-}
     Deposit acc1 party1 tok1 val1 == Deposit acc2 party2 tok2 val2 =
         acc1 == acc2 && party1 == party2 && tok1 == tok2 && val1 == val2
@@ -669,13 +670,13 @@ instance Eq t => Eq (Action t) where
     Notify obs1 == Notify obs2 = obs1 == obs2
     _ == _ = False
 
-instance Eq t => Eq (Case t) where
+instance (Eq i, Eq t) => Eq (Case i t) where
     {-# INLINABLE (==) #-}
     Case acl cl == Case acr cr                       = acl == acr && cl == cr
     MerkleizedCase acl bsl == MerkleizedCase acr bsr = acl == acr && bsl == bsr
     _ == _                                           = False
 
-instance Eq t => Eq (Contract t) where
+instance (Eq i, Eq t) => Eq (Contract i t) where
     {-# INLINABLE (==) #-}
     Close == Close = True
     Pay acc1 payee1 tok1 value1 cont1 == Pay acc2 payee2 tok2 value2 cont2 =
@@ -691,7 +692,7 @@ instance Eq t => Eq (Contract t) where
     Assert obs1 cont1 == Assert obs2 cont2 = obs1 == obs2 && cont1 == cont2
     _ == _ = False
 
-instance Eq t => Eq (State t) where
+instance (Eq i, Eq t) => Eq (State i t) where
     {-# INLINABLE (==) #-}
     l == r = minTime l == minTime r
         && accounts l == accounts r
