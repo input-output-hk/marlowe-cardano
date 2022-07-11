@@ -18,7 +18,6 @@ import qualified Data.SBV.Tuple as ST
 import Data.Set (Set)
 import qualified Data.Set as S
 import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Token
 import Language.Marlowe.Core.V1.Semantics.Types
 import Ledger (POSIXTime (..))
 import qualified PlutusTx.AssocMap as AssocMap
@@ -30,9 +29,9 @@ import qualified PlutusTx.Ratio as P
 ---------------------------------------------------
 
 -- Symbolic version of Input (with symbolic value but concrete identifiers)
-data SymInput = SymDeposit AccountId Party Token SInteger
-              | SymChoice ChoiceId SInteger
-              | SymNotify
+data SymInput t = SymDeposit AccountId Party t SInteger
+                | SymChoice ChoiceId SInteger
+                | SymNotify
 
 -- Symbolic version of State:
 -- We keep as much things concrete as possible.
@@ -66,16 +65,16 @@ data SymInput = SymDeposit AccountId Party Token SInteger
 --
 -- minTime just corresponds to lowTime, because it is just a lower bound for the minimum
 -- time, and it gets updated with the minimum time.
-data SymState = SymState { lowTime        :: SInteger
-                         , highTime       :: SInteger
-                         , traces         :: [(SInteger, SInteger, Maybe SymInput, Integer)]
-                         , paramTrace     :: [(SInteger, SInteger, SInteger, SInteger)]
-                         , symInput       :: Maybe SymInput
-                         , whenPos        :: Integer
-                         , symAccounts    :: Map (AccountId, Token) SInteger
-                         , symChoices     :: Map ChoiceId SInteger
-                         , symBoundValues :: Map ValueId SInteger
-                         }
+data SymState t = SymState { lowTime        :: SInteger
+                           , highTime       :: SInteger
+                           , traces         :: [(SInteger, SInteger, Maybe (SymInput t), Integer)]
+                           , paramTrace     :: [(SInteger, SInteger, SInteger, SInteger)]
+                           , symInput       :: Maybe (SymInput t)
+                           , whenPos        :: Integer
+                           , symAccounts    :: Map (AccountId, t) SInteger
+                           , symChoices     :: Map ChoiceId SInteger
+                           , symBoundValues :: Map ValueId SInteger
+                           }
 
 -- It generates a valid symbolic interval with lower bound ms (if provided)
 generateSymbolicInterval :: Maybe Integer -> Symbolic (SInteger, SInteger)
@@ -106,8 +105,9 @@ toSymMap = foldAssocMapWithKey toSymItem mempty
 -- First parameter (pt) is the input parameter trace, which is just a fixed length
 -- list of symbolic integers that are matched to trace.
 -- When Nothing is passed as second parameter it acts like emptyState.
-mkInitialSymState :: [(SInteger, SInteger, SInteger, SInteger)] -> Maybe (State Token)
-                  -> Symbolic SymState
+mkInitialSymState :: Ord t
+                  => [(SInteger, SInteger, SInteger, SInteger)] -> Maybe (State t)
+                  -> Symbolic (SymState t)
 mkInitialSymState pt Nothing = do (ls, hs) <- generateSymbolicInterval Nothing
                                   return $ SymState { lowTime = ls
                                                     , highTime = hs
@@ -148,14 +148,14 @@ mkInitialSymState pt (Just State { accounts = accs
 -- The identifiers for Deposit and Choice are calculated using the When clause and
 -- the contract (which is concrete), and using the semantics after a counter example is
 -- found.
-convertRestToSymbolicTrace :: [(SInteger, SInteger, Maybe SymInput, Integer)] ->
+convertRestToSymbolicTrace :: [(SInteger, SInteger, Maybe (SymInput t), Integer)] ->
                               [(SInteger, SInteger, SInteger, SInteger)] -> SBool
 convertRestToSymbolicTrace [] [] = sTrue
 convertRestToSymbolicTrace ((lowS, highS, inp, pos):t) ((a, b, c, d):t2) =
   (lowS .== a) .&& (highS .== b) .&& (getSymValFrom inp .== c) .&& (literal pos .== d) .&&
   convertRestToSymbolicTrace t t2
   where
-    getSymValFrom :: Maybe SymInput -> SInteger
+    getSymValFrom :: Maybe (SymInput t) -> SInteger
     getSymValFrom Nothing                       = 0
     getSymValFrom (Just (SymDeposit _ _ _ val)) = val
     getSymValFrom (Just (SymChoice _ val))      = val
@@ -167,7 +167,7 @@ isPadding ((a, b, c, d):t) = (a .== -1) .&& (b .== -1) .&& (c .== -1) .&&
                              (d .== -1) .&& isPadding t
 isPadding [] = sTrue
 
-convertToSymbolicTrace :: [(SInteger, SInteger, Maybe SymInput, Integer)] ->
+convertToSymbolicTrace :: [(SInteger, SInteger, Maybe (SymInput t), Integer)] ->
                           [(SInteger, SInteger, SInteger, SInteger)] -> SBool
 convertToSymbolicTrace refL symL =
  let lenRefL = length refL
@@ -178,7 +178,7 @@ convertToSymbolicTrace refL symL =
  else error "Provided symbolic trace is not long enough"
 
 -- Symbolic version evalValue
-symEvalVal :: Value (Observation Token) Token -> SymState -> SInteger
+symEvalVal :: Ord t => Value (Observation t) t -> SymState t -> SInteger
 symEvalVal (AvailableMoney accId tok) symState =
   M.findWithDefault (literal 0) (accId, tok) (symAccounts symState)
 symEvalVal (Constant inte) symState = literal inte
@@ -212,7 +212,7 @@ symEvalVal (Cond cond v1 v2) symState = ite (symEvalObs cond symState)
                                             (symEvalVal v2 symState)
 
 -- Symbolic version evalObservation
-symEvalObs :: Observation Token -> SymState -> SBool
+symEvalObs :: Ord t => Observation t -> SymState t -> SBool
 symEvalObs (AndObs obs1 obs2) symState = symEvalObs obs1 symState .&&
                                          symEvalObs obs2 symState
 symEvalObs (OrObs obs1 obs2) symState = symEvalObs obs1 symState .||
@@ -234,7 +234,7 @@ symEvalObs TrueObs _ = sTrue
 symEvalObs FalseObs _ = sFalse
 
 -- Update the symbolic state given a symbolic input (just the maps)
-updateSymInput :: Maybe SymInput -> SymState -> Symbolic SymState
+updateSymInput :: Ord t => Maybe (SymInput t) -> SymState t -> Symbolic (SymState t)
 updateSymInput Nothing symState = return symState
 updateSymInput (Just (SymDeposit accId _ tok val)) symState =
   let resultVal = M.findWithDefault 0 (accId, tok) (symAccounts symState)
@@ -260,8 +260,9 @@ updateSymInput (Just SymNotify) symState = return symState
 -- time to be equal to the ones of the previous transaction. That will typically make one
 -- of the transactions useless, but we discard useless transactions by the end so that
 -- is fine.
-addTransaction :: SInteger -> SInteger -> Maybe SymInput -> Timeout -> SymState -> Integer
-               -> Symbolic (SBool, SymState)
+addTransaction :: Ord t
+               => SInteger -> SInteger -> Maybe (SymInput t) -> Timeout -> SymState t -> Integer
+               -> Symbolic (SBool, SymState t)
 addTransaction newLowSlot newHighSlot Nothing slotTim
                symState@SymState { lowTime = oldLowSlot
                                  , highTime = oldHighSlot
@@ -320,7 +321,8 @@ onlyAssertionsPatch b p1 p2
 -- The result of this function is a boolean that indicates whether:
 -- 1. The transaction is valid (according to the semantics)
 -- 2. It has issued a warning (as indicated by hasErr)
-isValidAndFailsAux :: Bool -> SBool -> Contract Token -> SymState
+isValidAndFailsAux :: Ord t
+                   => Bool -> SBool -> Contract t -> SymState t
                    -> Symbolic SBool
 isValidAndFailsAux oa hasErr Close sState =
   return (hasErr .&& convertToSymbolicTrace ((lowTime sState, highTime sState,
@@ -371,8 +373,9 @@ ensureBounds cho (Bound lowBnd hiBnd:t) =
     ((cho .>= literal lowBnd) .&& (cho .<= literal hiBnd)) .|| ensureBounds cho t
 
 -- Just combines addTransaction and isValidAndFailsAux
-applyInputConditions :: Bool -> SInteger -> SInteger -> SBool -> Maybe SymInput -> Timeout
-                     -> SymState -> Integer -> Contract Token
+applyInputConditions :: Ord t
+                     => Bool -> SInteger -> SInteger -> SBool -> Maybe (SymInput t) -> Timeout
+                     -> SymState t -> Integer -> Contract t
                      -> Symbolic (SBool, SBool)
 applyInputConditions oa ls hs hasErr maybeSymInput timeout sState pos cont =
   do (newCond, newSState) <- addTransaction ls hs maybeSymInput timeout sState pos
@@ -380,7 +383,7 @@ applyInputConditions oa ls hs hasErr maybeSymInput timeout sState pos cont =
      return (newCond, newTrace)
 
 -- Generates two new slot numbers and puts them in the symbolic state
-addFreshSlotsToState :: SymState -> Symbolic (SInteger, SInteger, SymState)
+addFreshSlotsToState :: SymState t -> Symbolic (SInteger, SInteger, SymState t)
 addFreshSlotsToState sState =
   do newLowSlot <- sInteger_
      newHighSlot <- sInteger_
@@ -393,8 +396,9 @@ addFreshSlotsToState sState =
 -- that happened then the current case would never be reached, we keep adding conditions
 -- to the function and pass it to the next iteration of isValidAndFailsWhen.
 -- - pos - Is the position of the current Case clause [1..], 0 means timeout branch.
-isValidAndFailsWhen :: Bool -> SBool -> [Case (Contract Token) Token] -> Timeout -> Contract Token -> (SymInput -> SymState -> SBool)
-                    -> SymState -> Integer -> Symbolic SBool
+isValidAndFailsWhen :: Ord t
+                    => Bool -> SBool -> [Case (Contract t) t] -> Timeout -> Contract t -> (SymInput t -> SymState t -> SBool)
+                    -> SymState t -> Integer -> Symbolic SBool
 isValidAndFailsWhen oa hasErr [] timeout cont previousMatch sState pos =
   do newLowSlot <- sInteger_
      newHighSlot <- sInteger_
@@ -505,7 +509,7 @@ isValidAndFailsWhen oa hasErr (MerkleizedCase (Notify obs) _:rest)
 -- Counts the maximum number of nested Whens. This acts as a bound for the maximum
 -- necessary number of transactions for exploring the whole contract. This bound
 -- has been proven in TransactionBound.thy
-countWhens :: Contract Token -> Integer
+countWhens :: Contract t -> Integer
 countWhens Close               = 0
 countWhens (Pay uv uw ux uy c) = countWhens c
 countWhens (If uz c c2)        = max (countWhens c) (countWhens c2)
@@ -514,7 +518,7 @@ countWhens (Let va vb c)       = countWhens c
 countWhens (Assert o c)        = countWhens c
 
 -- Same as countWhens but it starts with a Case list
-countWhensCaseList :: [Case (Contract Token) Token] -> Integer
+countWhensCaseList :: [Case (Contract t) t] -> Integer
 countWhensCaseList (Case uu c : tail)           = max (countWhens c) (countWhensCaseList tail)
 countWhensCaseList (MerkleizedCase uu c : tail) = countWhensCaseList tail
 countWhensCaseList []                           = 0
@@ -525,7 +529,8 @@ countWhensCaseList []                           = 0
 -- this function because then we would have to return a symbolic list that would make
 -- the whole process slower. It is meant to be used just with SBV, with a symbolic
 -- paramTrace, and we use the symbolic paramTrace to know which is the counterexample.
-wrapper :: Bool -> Contract Token -> [(SInteger, SInteger, SInteger, SInteger)] -> Maybe (State Token)
+wrapper :: Ord t
+        => Bool -> Contract t -> [(SInteger, SInteger, SInteger, SInteger)] -> Maybe (State t)
         -> Symbolic SBool
 wrapper oa c st maybeState = do ess <- mkInitialSymState st maybeState
                                 isValidAndFailsAux oa sFalse c ess
@@ -573,7 +578,7 @@ groupResult _ _ = error "Wrong number of labels generated"
 
 -- Reconstructs an input from a Case list a Case position and a value (deposit amount or
 -- chosen value)
-caseToInput :: [Case a Token] -> Integer -> Integer -> Input Token
+caseToInput :: [Case a t] -> Integer -> Integer -> Input t
 caseToInput [] _ _ = error "Wrong number of cases interpreting result"
 caseToInput (Case h _:t) c v
   | c > 1 = caseToInput t (c - 1) v
@@ -594,9 +599,10 @@ caseToInput (MerkleizedCase _ _:t) c v
 -- Input is passed as a combination and function from input list to transaction input and
 -- input list for convenience. The list of 4-uples is passed through because it is used
 -- to recursively call executeAndInterpret (co-recursive funtion).
-computeAndContinue :: ([Input Token] -> TransactionInput Token) -> [Input Token] -> State Token -> Contract Token
+computeAndContinue :: P.Eq t
+                   => ([Input t] -> TransactionInput t) -> [Input t] -> State t -> Contract t
                    -> [(Integer, Integer, Integer, Integer)]
-                   -> [([TransactionInput Token], [TransactionWarning Token])]
+                   -> [([TransactionInput t], [TransactionWarning t])]
 computeAndContinue transaction inps sta cont t =
   case computeTransaction (transaction inps) sta cont of
     Error TEUselessTransaction -> executeAndInterpret sta t cont
@@ -608,8 +614,9 @@ computeAndContinue transaction inps sta cont t =
 
 -- Takes a list of 4-uples (and state and contract) and interprets it as a list of
 -- transactions and also computes the resulting list of warnings.
-executeAndInterpret :: State Token -> [(Integer, Integer, Integer, Integer)] -> Contract Token
-                    -> [([TransactionInput Token], [TransactionWarning Token])]
+executeAndInterpret :: P.Eq t
+                    => State t -> [(Integer, Integer, Integer, Integer)] -> Contract t
+                    -> [([TransactionInput t], [TransactionWarning t])]
 executeAndInterpret _ [] _ = []
 executeAndInterpret sta ((l, h, v, b):t) cont
   | b == 0 = computeAndContinue transaction [] sta cont t
@@ -629,8 +636,9 @@ executeAndInterpret sta ((l, h, v, b):t) cont
 
 -- It wraps executeAndInterpret so that it takes an optional State, and also
 -- combines the results of executeAndInterpret in one single tuple.
-interpretResult :: [(Integer, Integer, Integer, Integer)] -> Contract Token -> Maybe (State Token)
-                -> (POSIXTime, [TransactionInput Token], [TransactionWarning Token])
+interpretResult :: P.Eq t
+                => [(Integer, Integer, Integer, Integer)] -> Contract t -> Maybe (State t)
+                -> (POSIXTime, [TransactionInput t], [TransactionWarning t])
 interpretResult [] _ _ = error "Empty result"
 interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
    where (tin, twa) = foldl' (\(accInp, accWarn) (elemInp, elemWarn) ->
@@ -642,8 +650,9 @@ interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
 
 -- It interprets the counter example found by SBV (SMTModel), given the contract,
 -- and initial state (optional), and the list of variables used.
-extractCounterExample :: SMTModel -> Contract Token -> Maybe (State Token) -> [String]
-                      -> (POSIXTime, [TransactionInput Token], [TransactionWarning Token])
+extractCounterExample :: P.Eq t
+                      => SMTModel -> Contract t -> Maybe (State t) -> [String]
+                      -> (POSIXTime, [TransactionInput t], [TransactionWarning t])
 extractCounterExample smtModel cont maybeState maps = interpretedResult
   where assocs = map (\(a, b) -> (a, fromCV b :: Integer)) $ modelAssocs smtModel
         counterExample = groupResult maps (M.fromList assocs)
@@ -651,11 +660,12 @@ extractCounterExample smtModel cont maybeState maps = interpretedResult
 
 -- Wrapper function that carries the static analysis and interprets the result.
 -- It generates variables, runs SBV, and it interprets the result in Marlow terms.
-warningsTraceCustom :: Bool
-              -> Contract Token
-              -> Maybe (State Token)
+warningsTraceCustom :: (P.Eq t, Ord t)
+              => Bool
+              -> Contract t
+              -> Maybe (State t)
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
+                            (Maybe (POSIXTime, [TransactionInput t], [TransactionWarning t])))
 warningsTraceCustom onlyAssertions con maybeState =
     do thmRes@(ThmResult result) <- satCommand
        return (case result of
@@ -671,23 +681,26 @@ warningsTraceCustom onlyAssertions con maybeState =
         satCommand = proveWith z3 property
 
 -- Like warningsTraceCustom but checks all warnings (including assertions)
-warningsTraceWithState :: Contract Token
-              -> Maybe (State Token)
+warningsTraceWithState :: (P.Eq t, Ord t)
+              => Contract t
+              -> Maybe (State t)
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
+                            (Maybe (POSIXTime, [TransactionInput t], [TransactionWarning t])))
 warningsTraceWithState = warningsTraceCustom False
 
 -- Like warningsTraceCustom but only checks assertions.
-onlyAssertionsWithState :: Contract Token
-              -> Maybe (State Token)
+onlyAssertionsWithState :: (P.Eq t, Ord t)
+              => Contract t
+              -> Maybe (State t)
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
+                            (Maybe (POSIXTime, [TransactionInput t], [TransactionWarning t])))
 onlyAssertionsWithState = warningsTraceCustom True
 
 -- Like warningsTraceWithState but without initialState.
-warningsTrace :: Contract Token
+warningsTrace :: (P.Eq t, Ord t)
+              => Contract t
               -> IO (Either ThmResult
-                            (Maybe (POSIXTime, [TransactionInput Token], [TransactionWarning Token])))
+                            (Maybe (POSIXTime, [TransactionInput t], [TransactionWarning t])))
 warningsTrace con = warningsTraceWithState con Nothing
 
 
