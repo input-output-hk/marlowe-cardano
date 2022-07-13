@@ -92,51 +92,6 @@ library
     Plutus.Debug
   other-modules:
 
-----test-suite marlowe-test-long-running
-----    import: lang
-----    hs-source-dirs:
-----      test
-----      pab
-----    type: exitcode-stdio-1.0
-----    main-is: SpecLongRunning.hs
-----    other-modules:
-----        Spec.PAB.Workflow
-----        MarloweContract
-----    build-depends:
-----        aeson -any,
-----        base >=4.9 && <5,
-----        containers -any,
-----        data-default  -any,
-----        hint -any,
-----        lens -any,
-----        bytestring -any,
-----        freer-simple -any,
-----        tasty -any,
-----        tasty-hunit -any,
-----        tasty-quickcheck,
-----        text -any,
-----        serialise,
-----        cborg,
-----        plutus-chain-index-core -any,
-----        plutus-contract -any,
-----        plutus-ledger -any,
-----        plutus-pab-executables -any,
-----        marlowe,
-----        plutus-tx -any,
-----        QuickCheck,
-----        template-haskell -any,
-----        streaming -any,
-----        plutus-pab -any,
-----        async -any,
-----        prettyprinter -any,
-----        purescript-bridge -any,
-----        servant-client -any,
-----        http-client -any,
-----        websockets -any,
-----        network -any,
-----        openapi3 -any,
-----        uuid -any,
-
 test-suite marlowe-test
     import: lang
     hs-source-dirs:
@@ -152,7 +107,6 @@ test-suite marlowe-test
         Spec.Marlowe.Semantics
         Spec.Marlowe.Util
         Spec.Marlowe.Util.AssocMap
-        MarloweContract
     build-depends:
         aeson -any,
         cardano-api -any,
