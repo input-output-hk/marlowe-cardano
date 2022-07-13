@@ -75,7 +75,6 @@
           (hsPkgs."http-api-data" or (errorHandler.buildDepError "http-api-data"))
           (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
           (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
-          (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
           ];
         buildable = true;
         modules = [
@@ -131,15 +130,4 @@
           };
         };
       };
-    } // {
-    src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "0";
-      rev = "minimal";
-      sha256 = "";
-      }) // {
-      url = "0";
-      rev = "minimal";
-      sha256 = "";
-      };
-    postUnpack = "sourceRoot+=/plutus-ledger; echo source root reset to $sourceRoot";
-    }
+    } // rec { src = (pkgs.lib).mkDefault ../plutus-ledger; }
