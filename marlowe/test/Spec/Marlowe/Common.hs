@@ -8,13 +8,15 @@ module Spec.Marlowe.Common where
 import Data.Map.Strict (Map)
 
 import Language.Marlowe
-import Ledger (PaymentPubKeyHash (..), pubKeyHash)
+import Ledger (pubKeyHash)
 import qualified Ledger
 import Ledger.TimeSlot (SlotConfig (..))
 import qualified PlutusTx.Ratio as P
 import Test.QuickCheck
-import Wallet (PubKey (..))
-import Wallet.Emulator
+-- import Wallet (PubKey (..))
+-- import Wallet.Emulator
+
+newtype PubKey = PubKey String
 
 newtype MarloweScenario = MarloweScenario { mlInitialBalances :: Map PubKey Ledger.Value }
 
@@ -338,7 +340,7 @@ shrinkContract cont = case cont of
 
 pangramContract :: Contract
 pangramContract = let
-    alicePk = PK . unPaymentPubKeyHash . mockWalletPaymentPubKeyHash $ knownWallet 1
+    alicePk = PK (pubKeyHash "8361726f6c")
     aliceAcc = alicePk
     bobRole = Role "Bob"
     constant = Constant 100
