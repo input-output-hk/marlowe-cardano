@@ -65,12 +65,8 @@
           (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
           (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
-          (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
-          (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
-          (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-          (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
           (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
@@ -89,14 +85,11 @@
           ];
         buildable = true;
         modules = [
-          "Language/Marlowe/CLI/ChainIndex"
           "Language/Marlowe/CLI/Codec"
           "Language/Marlowe/CLI/Command"
           "Language/Marlowe/CLI/Command/Contract"
           "Language/Marlowe/CLI/Command/Input"
           "Language/Marlowe/CLI/Command/Parse"
-          "Language/Marlowe/CLI/Command/PAB"
-          "Language/Marlowe/CLI/Command/Query"
           "Language/Marlowe/CLI/Command/Role"
           "Language/Marlowe/CLI/Command/Run"
           "Language/Marlowe/CLI/Command/Template"
@@ -108,17 +101,14 @@
           "Language/Marlowe/CLI/Merkle"
           "Language/Marlowe/CLI/IO"
           "Language/Marlowe/CLI/Orphans"
-          "Language/Marlowe/CLI/PAB"
           "Language/Marlowe/CLI/Run"
           "Language/Marlowe/CLI/Sync"
           "Language/Marlowe/CLI/Sync/Types"
           "Language/Marlowe/CLI/Transaction"
           "Language/Marlowe/CLI/Test"
-          "Language/Marlowe/CLI/Test/PAB"
           "Language/Marlowe/CLI/Test/Script"
           "Language/Marlowe/CLI/Test/Types"
           "Language/Marlowe/CLI/Types"
-          "Language/Marlowe/Contract"
           "Paths_marlowe_cli"
           ];
         hsSourceDirs = [ "src" ];
