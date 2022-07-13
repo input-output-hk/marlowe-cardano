@@ -59,7 +59,7 @@ tokValueOf = C.moneyFromValue . singleton tokSymbol tokName
 assertTotalPayments :: Party -> [C.Payment Token] -> C.Money Token -> Assertion
 assertTotalPayments p t x = assertBool "total payments to party" (totalPayments t == x)
   where
-    totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party p)
+    totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party (toCore' p))
 
 assertNoWarnings :: [a] -> Assertion
 assertNoWarnings [] = pure ()
@@ -88,8 +88,8 @@ zeroCouponBondTest =
           ada
           Close
       txIn =
-        [ C.TransactionInput (toPOSIX "2021-12-31 00:00:00.000000 UTC", toPOSIX "2021-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 75_000_000]
-        , C.TransactionInput (toPOSIX "2022-12-31 00:00:00.000000 UTC", toPOSIX "2022-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit w2Pk w2Pk ada 90_000_000]
+        [ C.TransactionInput (toPOSIX "2021-12-31 00:00:00.000000 UTC", toPOSIX "2021-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 75_000_000]
+        , C.TransactionInput (toPOSIX "2022-12-31 00:00:00.000000 UTC", toPOSIX "2022-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 90_000_000]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -115,10 +115,10 @@ couponBondTest =
           ada
           Close
       txIn =
-        [ C.TransactionInput (toPOSIX "2021-12-31 00:00:00.000000 UTC", toPOSIX "2021-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 75_000_000]
-        , C.TransactionInput (toPOSIX "2022-06-30 00:00:00.000000 UTC", toPOSIX "2022-06-30 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit w2Pk w2Pk ada 1_000_000]
-        , C.TransactionInput (toPOSIX "2022-12-31 00:00:00.000000 UTC", toPOSIX "2022-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit w2Pk w2Pk ada 1_000_000]
-        , C.TransactionInput (toPOSIX "2022-12-31 00:00:00.000000 UTC", toPOSIX "2022-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit w2Pk w2Pk ada 90_000_000]
+        [ C.TransactionInput (toPOSIX "2021-12-31 00:00:00.000000 UTC", toPOSIX "2021-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 75_000_000]
+        , C.TransactionInput (toPOSIX "2022-06-30 00:00:00.000000 UTC", toPOSIX "2022-06-30 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 1_000_000]
+        , C.TransactionInput (toPOSIX "2022-12-31 00:00:00.000000 UTC", toPOSIX "2022-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 1_000_000]
+        , C.TransactionInput (toPOSIX "2022-12-31 00:00:00.000000 UTC", toPOSIX "2022-12-31 23:59:59.999999 UTC") [C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 90_000_000]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -138,10 +138,10 @@ swapContractTest =
       timestamp = read "2022-01-01 00:00:00.000000 UTC"
       txIn =
         [ C.TransactionInput (0, 0)
-            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000
-            , C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30
-            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 10_000_000
-            , C.NormalInput $ C.IDeposit w1Pk w1Pk tok 30
+            [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 10_000_000
+            , C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) tok 30
+            , C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 10_000_000
+            , C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) tok 30
             ]
         ]
    in case C.playTrace 0 contract txIn of
@@ -168,7 +168,7 @@ americanCallOptionTest =
           (read "2022-03-01 09:00:00.000000 UTC")
           (read "2022-03-31 17:30:00.000000 UTC")
       txIn =
-        [ C.TransactionInput (0, 0) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
+        [ C.TransactionInput (0, 0) [C.NormalInput $ C.IChoice (C.ChoiceId "Exercise Call" (toCore' w1Pk)) 0] ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
           assertClose txOutContract
@@ -206,9 +206,9 @@ americanCallOptionExercisedTest =
       t2 = toPOSIX "2022-03-15 08:00:00.000000 UTC"
 
       txIn =
-        [ C.TransactionInput (t0, t0) [C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30]
-        , C.TransactionInput (t1, t1) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 1]
-        , C.TransactionInput (t2, t2) [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000]
+        [ C.TransactionInput (t0, t0) [C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) tok 30]
+        , C.TransactionInput (t1, t1) [C.NormalInput $ C.IChoice (C.ChoiceId "Exercise Call" (toCore' w1Pk)) 1]
+        , C.TransactionInput (t2, t2) [C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 10_000_000]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -235,7 +235,7 @@ europeanCallOptionTest =
           (read "2022-03-20 17:30:00.000000 UTC")
       exerciseTime = toPOSIX "2022-03-19 17:31:00.000000 UTC"
       txIn =
-        [ C.TransactionInput (exerciseTime, exerciseTime) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
+        [ C.TransactionInput (exerciseTime, exerciseTime) [C.NormalInput $ C.IChoice (C.ChoiceId "Exercise Call" (toCore' w1Pk)) 0] ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
           assertClose txOutContract
@@ -272,9 +272,9 @@ europeanCallOptionExercisedTest =
       exerciseTime = toPOSIX "2022-03-19 17:31:00.000000 UTC"
       depositTime = toPOSIX "2022-03-19 17:32:00.000000 UTC"
       txIn =
-        [ C.TransactionInput (0, 0)                       [C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30]
-        , C.TransactionInput (exerciseTime, exerciseTime) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 1]
-        , C.TransactionInput (depositTime, depositTime)   [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000]
+        [ C.TransactionInput (0, 0)                       [C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) tok 30]
+        , C.TransactionInput (exerciseTime, exerciseTime) [C.NormalInput $ C.IChoice (C.ChoiceId "Exercise Call" (toCore' w1Pk)) 1]
+        , C.TransactionInput (depositTime, depositTime)   [C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 10_000_000]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -309,11 +309,11 @@ futureNoChange =
 
       txIn =
         [ C.TransactionInput (t0, t0)
-            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
-            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
+            [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 8_000_000
+            , C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 8_000_000 ]
         , C.TransactionInput (t1, t1)
-            [ C.NormalInput $ C.IChoice dirRate 125_000_000
-            , C.NormalInput $ C.IChoice invRate 80_000_000 ]
+            [ C.NormalInput $ C.IChoice (toCore' dirRate) 125_000_000
+            , C.NormalInput $ C.IChoice (toCore' invRate) 80_000_000 ]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -345,11 +345,11 @@ futureNoMarginCall =
 
       txIn =
         [ C.TransactionInput (t0, t0)
-            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
-            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
+            [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 8_000_000
+            , C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 8_000_000 ]
         , C.TransactionInput (t1, t1)
-            [ C.NormalInput $ C.IChoice dirRate 133_333_333
-            , C.NormalInput $ C.IChoice invRate 75_000_000 ]
+            [ C.NormalInput $ C.IChoice (toCore' dirRate) 133_333_333
+            , C.NormalInput $ C.IChoice (toCore' invRate) 75_000_000 ]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -380,16 +380,16 @@ futureWithMarginCall =
 
       txIn =
         [ C.TransactionInput (t0, t0)
-            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
-            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
+            [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 8_000_000
+            , C.NormalInput $ C.IDeposit (toCore' w2Pk) (toCore' w2Pk) ada 8_000_000 ]
         , C.TransactionInput (t1, t1)
-            [ C.NormalInput $ C.IChoice dirRate 200_000_000
-            , C.NormalInput $ C.IChoice invRate 50_000_000 ]
+            [ C.NormalInput $ C.IChoice (toCore' dirRate) 200_000_000
+            , C.NormalInput $ C.IChoice (toCore' invRate) 50_000_000 ]
         , C.TransactionInput (t2, t2)
-            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 60_000_000 ]
+            [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 60_000_000 ]
         , C.TransactionInput (t3, t3)
-            [ C.NormalInput $ C.IChoice dirRate 133_333_333
-            , C.NormalInput $ C.IChoice invRate 75_000_000 ]
+            [ C.NormalInput $ C.IChoice (toCore' dirRate) 133_333_333
+            , C.NormalInput $ C.IChoice (toCore' invRate) 75_000_000 ]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -418,11 +418,11 @@ reverseConvertibleExercisedTest =
       repaymentTime = toPOSIX "2022-03-19 17:29:59.000000 UTC"
       exerciseTime = toPOSIX "2022-03-19 17:30:00.000000 UTC"
       txIn =
-        [ C.TransactionInput (0, 0)   [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 9_000_000 ]
-        , C.TransactionInput (repaymentTime, repaymentTime) [ C.NormalInput $ C.IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
+        [ C.TransactionInput (0, 0)   [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 9_000_000 ]
+        , C.TransactionInput (repaymentTime, repaymentTime) [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (C.Role "BondProvider") ada 10_000_000 ]
         , C.TransactionInput (exerciseTime, exerciseTime)
-            [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Put" (Role "OptionCounterparty")) 1
-            , C.NormalInput $ C.IDeposit (Role "OptionCounterparty") (Role "OptionCounterparty") tok 30 ]
+            [ C.NormalInput $ C.IChoice (C.ChoiceId "Exercise Put" (C.Role "OptionCounterparty")) 1
+            , C.NormalInput $ C.IDeposit (C.Role "OptionCounterparty") (C.Role "OptionCounterparty") tok 30 ]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -450,9 +450,9 @@ reverseConvertibleTest =
       repaymentTime = toPOSIX "2022-03-19 17:29:59.000000 UTC"
       exerciseTime = toPOSIX "2022-03-19 17:30:00.000000 UTC"
       txIn =
-        [ C.TransactionInput (0, 0)                         [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 9_000_000 ]
-        , C.TransactionInput (repaymentTime, repaymentTime) [ C.NormalInput $ C.IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
-        , C.TransactionInput (exerciseTime, exerciseTime)   [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Put" (Role "OptionCounterparty")) 0 ]
+        [ C.TransactionInput (0, 0)                         [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (toCore' w1Pk) ada 9_000_000 ]
+        , C.TransactionInput (repaymentTime, repaymentTime) [ C.NormalInput $ C.IDeposit (toCore' w1Pk) (C.Role "BondProvider") ada 10_000_000 ]
+        , C.TransactionInput (exerciseTime, exerciseTime)   [ C.NormalInput $ C.IChoice (C.ChoiceId "Exercise Put" (C.Role "OptionCounterparty")) 0 ]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do

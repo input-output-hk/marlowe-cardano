@@ -24,11 +24,14 @@ module Language.Marlowe.CLI.Command.Template (
 
 
 import Control.Monad.Except (MonadIO)
-import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken)
+import Language.Marlowe.CLI.Command.Parse (parseTimeout, parseToken)
+import qualified Language.Marlowe.CLI.Command.Parse as P
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
 import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
-import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as C
+import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party (..), Timeout, Token, Value (..), toCore,
+                                          toCore')
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
@@ -189,7 +192,7 @@ initialMarloweState :: AccountId -> Integer -> State Token
 initialMarloweState party minAda =
   State
   {
-    accounts    = AM.singleton (party, ada) minAda
+    accounts    = AM.singleton (toCore' party, ada) minAda
   , choices     = AM.empty
   , boundValues = AM.empty
   , minTime     = 1
@@ -327,3 +330,10 @@ templateCoveredCallOptions =
     <*> O.option parseTimeout (O.long "settlement-date"   <> O.metavar "POSIX_TIME"    <> O.help "The settlement date, in POSIX milliseconds."                )
     <*> O.strOption           (O.long "out-contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."                         )
     <*> O.strOption           (O.long "out-state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state."                 )
+
+parseParty :: O.ReadM Party
+parseParty = aux <$> P.parseParty
+  where
+    aux :: C.Party -> Party
+    aux (C.PK pk)     = PK pk
+    aux (C.Role name) = Role name

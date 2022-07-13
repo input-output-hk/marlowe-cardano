@@ -18,8 +18,8 @@ in different situations without cluttering the code that goes on-chain
 module Language.Marlowe.Extended.V1 ( module Language.Marlowe.Extended.V1
                                  , module Language.Marlowe.Pretty
                                  , ada, adaSymbol, adaToken
-                                 , S.AccountId, S.Bound(..), S.ChoiceId(..)
-                                 , S.ChoiceName, S.ChosenNum, S.Party(..)
+                                 , S.Bound(..)
+                                 , S.ChoiceName, S.ChosenNum
                                  , S.TimeInterval, S.Token(..), S.ValueId(..)
                                  , ToCore (..)
                                  , (%)
@@ -27,11 +27,13 @@ module Language.Marlowe.Extended.V1 ( module Language.Marlowe.Extended.V1
 
 import Control.Applicative ((<|>))
 import qualified Data.Aeson as JSON
+import qualified Data.Aeson.Extras as JSON
 import Data.Aeson.Types hiding (Error, Value)
 import Data.ByteString.Lazy.Char8 as C (putStr)
 import qualified Data.Foldable as F
 import Data.Ratio ((%))
 import Data.Text (pack)
+import qualified Data.Text.Encoding as Text
 import GHC.Generics
 import qualified Language.Marlowe.Core.V1.Semantics.Token as S
 import qualified Language.Marlowe.Core.V1.Semantics.Types as S
@@ -40,6 +42,10 @@ import Language.Marlowe.Pretty (Pretty (..), pretty)
 import Language.Marlowe.Util (ada)
 import qualified Ledger as L (POSIXTime (..))
 import Ledger.Ada (adaSymbol, adaToken)
+import Ledger.Crypto (PubKeyHash (PubKeyHash, getPubKeyHash))
+import Ledger.Value (TokenName)
+import qualified Ledger.Value as Val
+import PlutusTx.Prelude (BuiltinByteString, fromBuiltin, toBuiltin)
 import Text.PrettyPrint.Leijen (parens, text)
 
 
@@ -69,7 +75,17 @@ instance Num Timeout where
 instance Pretty Rational where
     prettyFragment r = text $ "(" ++ show r ++ ")"
 
-data Value = AvailableMoney S.AccountId S.Token
+type AccountId = Party
+
+data Party = PK PubKeyHash | Role TokenName
+  deriving stock (Show,Generic)
+  deriving anyclass (Pretty)
+
+data ChoiceId = ChoiceId BuiltinByteString Party
+  deriving stock (Show,Generic)
+  deriving anyclass (Pretty)
+
+data Value = AvailableMoney AccountId S.Token
            | Constant Integer
            | ConstantParam String
            | NegValue Value
@@ -77,7 +93,7 @@ data Value = AvailableMoney S.AccountId S.Token
            | SubValue Value Value
            | MulValue Value Value
            | DivValue Value Value
-           | ChoiceValue S.ChoiceId
+           | ChoiceValue ChoiceId
            | TimeIntervalStart
            | TimeIntervalEnd
            | UseValue S.ValueId
@@ -88,7 +104,7 @@ data Value = AvailableMoney S.AccountId S.Token
 data Observation = AndObs Observation Observation
                  | OrObs Observation Observation
                  | NotObs Observation
-                 | ChoseSomething S.ChoiceId
+                 | ChoseSomething ChoiceId
                  | ValueGE Value Value
                  | ValueGT Value Value
                  | ValueLT Value Value
@@ -99,14 +115,14 @@ data Observation = AndObs Observation Observation
   deriving stock (Show,Generic)
   deriving anyclass (Pretty)
 
-data Action = Deposit S.AccountId S.Party S.Token Value
-            | Choice S.ChoiceId [S.Bound]
+data Action = Deposit AccountId Party S.Token Value
+            | Choice ChoiceId [S.Bound]
             | Notify Observation
   deriving stock (Show,Generic)
   deriving anyclass (Pretty)
 
-data Payee = Account S.AccountId
-           | Party S.Party
+data Payee = Account AccountId
+           | Party Party
   deriving stock (Show,Generic)
   deriving anyclass (Pretty)
 
@@ -115,7 +131,7 @@ data Case = Case Action Contract
   deriving anyclass (Pretty)
 
 data Contract = Close
-              | Pay S.AccountId Payee S.Token Value Contract
+              | Pay AccountId Payee S.Token Value Contract
               | If Observation Contract Contract
               | When [Case] Timeout Contract
               | Let S.ValueId Value Contract
@@ -126,24 +142,28 @@ data Contract = Close
 class ToCore a b where
   toCore :: a -> Maybe b
 
+-- | Injection for types where this is total
+class ToCore' a b where
+  toCore' :: a -> b
+
 instance ToCore Contract (S.Contract S.Token) where
-  toCore Close = Just S.Close
-  toCore (Pay accId payee tok val cont) = pure (S.Pay accId) <*> toCore payee <*> pure tok <*> toCore val <*> toCore cont
-  toCore (If obs cont1 cont2) = S.If <$> toCore obs <*> toCore cont1 <*> toCore cont2
-  toCore (When cases tim cont) = S.When <$> traverse toCore cases <*> toCore tim <*> toCore cont
-  toCore (Let varId val cont) = pure (S.Let varId) <*> toCore val <*> toCore cont
-  toCore (Assert obs cont) = S.Assert <$> toCore obs <*> toCore cont
+  toCore Close                          = Just S.Close
+  toCore (Pay accId payee tok val cont) = S.Pay (toCore' accId) (toCore' payee) tok <$> toCore val <*> toCore cont
+  toCore (If obs cont1 cont2)           = S.If <$> toCore obs <*> toCore cont1 <*> toCore cont2
+  toCore (When cases tim cont)          = S.When <$> traverse toCore cases <*> toCore tim <*> toCore cont
+  toCore (Let varId val cont)           = pure (S.Let varId) <*> toCore val <*> toCore cont
+  toCore (Assert obs cont)              = S.Assert <$> toCore obs <*> toCore cont
 
 instance ToCore Value (S.Value S.Token) where
   toCore (Constant c)               = Just $ S.Constant c
   toCore (ConstantParam _)          = Nothing
-  toCore (AvailableMoney accId tok) = Just $ S.AvailableMoney accId tok
+  toCore (AvailableMoney accId tok) = Just $ S.AvailableMoney (toCore' accId) tok
   toCore (NegValue v)               = S.NegValue <$> toCore v
   toCore (AddValue lhs rhs)         = S.AddValue <$> toCore lhs <*> toCore rhs
   toCore (SubValue lhs rhs)         = S.SubValue <$> toCore lhs <*> toCore rhs
   toCore (MulValue lhs rhs)         = S.MulValue <$> toCore lhs <*> toCore rhs
   toCore (DivValue lhs rhs)         = S.DivValue <$> toCore lhs <*> toCore rhs
-  toCore (ChoiceValue choId)        = Just $ S.ChoiceValue choId
+  toCore (ChoiceValue choId)        = Just $ S.ChoiceValue (toCore' choId)
   toCore TimeIntervalStart          = Just S.TimeIntervalStart
   toCore TimeIntervalEnd            = Just S.TimeIntervalEnd
   toCore (UseValue vId)             = Just $ S.UseValue vId
@@ -153,7 +173,7 @@ instance ToCore Observation (S.Observation S.Token) where
   toCore (AndObs lhs rhs)       = S.AndObs <$> toCore lhs <*> toCore rhs
   toCore (OrObs lhs rhs)        = S.OrObs <$> toCore lhs <*> toCore rhs
   toCore (NotObs v)             = S.NotObs <$> toCore v
-  toCore (ChoseSomething choId) = Just $ S.ChoseSomething choId
+  toCore (ChoseSomething choId) = Just $ S.ChoseSomething (toCore' choId)
   toCore (ValueGE lhs rhs)      = S.ValueGE <$> toCore lhs <*> toCore rhs
   toCore (ValueGT lhs rhs)      = S.ValueGT <$> toCore lhs <*> toCore rhs
   toCore (ValueLT lhs rhs)      = S.ValueLT <$> toCore lhs <*> toCore rhs
@@ -163,17 +183,24 @@ instance ToCore Observation (S.Observation S.Token) where
   toCore FalseObs               = Just S.FalseObs
 
 instance ToCore Action (S.Action S.Token) where
-  toCore (Deposit accId party tok val) = pure (S.Deposit accId party tok) <*> toCore val
-  toCore (Choice choId bounds)         = Just $ S.Choice choId bounds
+  toCore (Deposit accId party tok val) = S.Deposit (toCore' accId) (toCore' party) tok <$> toCore val
+  toCore (Choice choId bounds)         = Just $ S.Choice (toCore' choId) bounds
   toCore (Notify obs)                  = S.Notify <$> toCore obs
 
 instance ToCore Timeout L.POSIXTime where
   toCore (TimeParam _) = Nothing
   toCore (POSIXTime x) = Just (L.POSIXTime x)
 
-instance ToCore Payee S.Payee where
-  toCore (Account accId)  = Just $ S.Account accId
-  toCore (Party roleName) = Just $ S.Party roleName
+instance ToCore' Party S.Party where
+  toCore' (PK pk)     = S.PK pk
+  toCore' (Role name) = S.Role name
+
+instance ToCore' ChoiceId S.ChoiceId where
+  toCore' (ChoiceId bs party) = S.ChoiceId bs $ toCore' party
+
+instance ToCore' Payee S.Payee where
+  toCore' (Account accId)  = S.Account (toCore' accId)
+  toCore' (Party roleName) = S.Party (toCore' roleName)
 
 instance ToCore Case (S.Case S.Token) where
   toCore (Case act c) = S.Case <$> toCore act <*> toCore c
@@ -333,6 +360,27 @@ instance ToJSON Case where
       [ "case" .= act
       , "then" .= cont
       ]
+
+instance FromJSON Party where
+  parseJSON = withObject "Party" (\v ->
+        (PK . PubKeyHash . toBuiltin <$> (JSON.decodeByteString =<< (v .: "pk_hash")))
+    <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
+                                 )
+instance ToJSON Party where
+    toJSON (PK pkh) = object
+        [ "pk_hash" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin $ getPubKeyHash pkh) ]
+    toJSON (Role (Val.TokenName name)) = object
+        [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
+
+instance FromJSON ChoiceId where
+  parseJSON = withObject "ChoiceId" (\v ->
+       ChoiceId <$> (toBuiltin . Text.encodeUtf8 <$> (v .: "choice_name"))
+                <*> (v .: "choice_owner")
+                                    )
+instance ToJSON ChoiceId where
+  toJSON (ChoiceId name party) = object [ "choice_name" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name)
+                                        , "choice_owner" .= party
+                                        ]
 
 instance FromJSON Payee where
   parseJSON = withObject "Payee" (\v ->
