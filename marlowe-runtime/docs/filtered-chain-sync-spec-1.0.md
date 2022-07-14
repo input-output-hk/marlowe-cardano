@@ -364,7 +364,7 @@ stateDiagram-v2
   Done --> [*]
   state Next {
     [*] --> CanAwait
-    CanAwait --> MustAwait : AwaitReply
+    CanAwait --> MustAwait : Wait
     CanAwait --> [*] : RollForward
     CanAwait --> [*] : RollBackward
     MustAwait --> [*] : RollForward
