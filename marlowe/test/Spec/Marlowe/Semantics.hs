@@ -128,6 +128,7 @@ tests =
         , testProperty "Let" checkReduceContractStepLet
         , testProperty "Assert" checkReduceContractStepAssert
         ]
+      , testProperty "reduceContractUntilQuiescent" checkReduceContractUntilQuiescent
       , testGroup "applyAction"
         [
           testProperty "Input does not match action" checkApplyActionMismatch
@@ -747,6 +748,17 @@ checkReduceContractStepAssert =
         _                                                              -> False
 
 
+checkReduceContractUntilQuiescent :: Property
+checkReduceContractUntilQuiescent =
+  property $ do
+    forAll ((,,) <$> arbitrary <*> arbitrary <*> contractGen) $ \(environment, state, contract) ->
+      case reduceContractUntilQuiescent environment state contract of
+        ContractQuiescent _ _ _ _ Close              -> True
+        ContractQuiescent _ _ _ _ (When _ timeout _) -> snd (timeInterval environment) < timeout
+        ContractQuiescent{}                          -> False
+        RRAmbiguousTimeIntervalError                 -> True
+
+
 checkGetContinuation :: Property
 checkGetContinuation =
   property $ do
@@ -768,7 +780,6 @@ checkGetContinuation =
         (MerkleizedInput{}, MerkleizedCase{}, contract') -> (Just contract == contract') == hashesMatch
         (_                , _               , Nothing  ) -> True
         _                                                -> False
-
 
 
 checkIsClose :: Assertion
