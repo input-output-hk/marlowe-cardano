@@ -17,7 +17,7 @@ only needs to process a tiny fraction of the full blockchain.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
 "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
-interpreted as described in RFC 2119.
+interpreted as described in [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119).
 
 An implementation is not compliant if it fails to satisfy one or more of the
 MUST or REQUIRED level requirements for the protocols it implements. An
@@ -40,13 +40,13 @@ objects of, the protocol.
 - query: Part of the payload of a query next message which the client sends to the server to tell it what to send next.
 - error: A protocol level error which is triggered when one party sends an invalid message. Results in the termination of the connection.
 - rejection: An application level error which is triggered when the server rejects a syntactically valid, semantically invalid query sent by the client. Does not result in the termination of the connection.
-- roll forward: A message sent by the server to the client in response to a query.
+- roll forward: A message sent by the server to the client to advance its position forward to a new block. One possible response to a query.
 - result: Part of the payload of a roll forward message which contains the result of a query.
-- roll backward: A messagge sent by the server to the client when the client's position has been rolled back.
-- tip: The latest chronological point in the blockchain
-- point: A point in the blockchain up to and including the tip
+- roll backward: A messagge sent by the server to the client to revert its position to a previous block. One possible response to a query.
+- tip: The latest chronological point in the blockchain that the connected node has recorded.
+- point: A point in the blockchain up to and including the tip. The precise representation is implementation-specific.
 - position: The point where a client is currently "focused."
-- schema version: A named and numberedversion of the query schema supported by the parties of the protocol. Used in the handshake to verify that the server supports the query schema supported by the client.
+- schema version: The version of the query schema supported by the participants in the protocol. Used in the handshake to verify that the server supports the query schema supported by the client.
 - handshake: A proceedure used to establish a connection which ensures the client and server understand the same queeries.
 - agency: Used to describe which role is permited to send a message in a given state.
 
@@ -69,6 +69,18 @@ result of the query. If the response is a roll backward message, the payload
 will include the new position of the client, and the new tip of the blockchain.
 The position will be the most recent common ancestor point of the client's
 previous position and the new tip.
+
+### A Note on Intersections
+
+The original Chain Sync Protocol provides a way to fast forward the client to
+an "intersection point" - that is, a point which intersects with the set of
+blocks the client may have already visited during a previous session. This
+mechanism allows clients to connect without having to start from the genesis
+block each time.
+
+The Filtered Chain Sync Protocol does not provide such a mechanism, because the
+query mechanism provides a much more flexible way to acheive the same result,
+making intersection points redundant.
 
 ## State Machine
 
@@ -106,7 +118,7 @@ its position to `Genesis` when it receives a `ConfirmHandshake` message.
 The `Idle` state is the state from which a client MAY send a query to the
 server. It does so by sending a `QueryNext` message. The payload of the
 `QueryNext` MUST include the position of the client, and a query. The
-`QueryNext` message transitions the state machine to the `Next CanWait` state.
+`QueryNext` message transitions the state machine to the `Next CanAwait` state.
 The client MAY request the server terminates the connection by sending a `Done`
 message. The `Done` message transitions the state machine to the `Done` state.
 
@@ -133,9 +145,9 @@ tip.
   - `RollForward` to client
   - `RollBackward` to client
 
-##### Next CanWait state
+##### Next CanAwait state
 
-The `Next CanWait` state is a sub-state of `Next wait` in which the server MUST
+The `Next CanAwait` state is a sub-state of `Next wait` in which the server MUST
 decode and decide how to handle the query receved in the `QueryNext` message.
 If the server cannot decode the query, it MUST reject the query with a
 `QueryRejected` message. The payload of the message SHOULD indicate that the
@@ -197,8 +209,8 @@ The `RequestHandshake` is sent by the client to initiate the handshake.
 The `RequestHandshake` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x01`
-- 4 octets representing a 4-byte integer length that describes the length of
-  the following string.
+- 4 octets containing the length of the following string as a big-endian 32-bit
+  integer.
 - A UTF-8 encoded string of octets containing the schema version.
 
 #### ConfirmHandshake message
@@ -240,7 +252,7 @@ The `RejectHandshake` message is encoded as follows, in the following order:
 The `QueryNext` is sent by the client to request more data from the blockchain.
 
 - Origin State: `Idle`
-- Target State: `Next CanWait`
+- Target State: `Next CanAwait`
 - Payload: current position, query
 - Sender: client
 - Receiver: server
@@ -260,7 +272,7 @@ The `QueryNext` message is encoded as follows, in the following order:
 The `QueryRejected` is sent by the server to indicate that the query has been
 rejected.
 
-- Origin State: `Next CanWait`
+- Origin State: `Next CanAwait`
 - Target State: `Idle`
 - Payload: rejection reason
 - Sender: server
@@ -278,7 +290,7 @@ The `QueryRejected` message is encoded as follows, in the following order:
 
 The `RollForward` is sent by the server with a query result.
 
-- Origin State: `Next (CanWait | MustWait)`
+- Origin State: `Next (CanAwait | MustAwait)`
 - Target State: `Idle`
 - Payload: new position, result
 - Sender: server
@@ -299,7 +311,7 @@ The `RollForward` message is encoded as follows, in the following order:
 The `RollBackward` is sent by the server to indicate that the client's position
 has been rolled back.
 
-- Origin State: `Next (CanWait | MustWait)`
+- Origin State: `Next (CanAwait | MustAwait)`
 - Target State: `Idle`
 - Payload: new position, new tip
 - Sender: server
@@ -319,8 +331,8 @@ The `RollBackward` message is encoded as follows, in the following order:
 The `Wait` is sent by the server to indicate that the client must wait for a
 query result.
 
-- Origin State: `Next CanWait`
-- Target State: `Next MustWait`
+- Origin State: `Next CanAwait`
+- Target State: `Next MustAwait`
 - Payload: None
 - Sender: server
 - Receiver: client
@@ -365,6 +377,7 @@ stateDiagram-v2
   state Next {
     [*] --> CanAwait
     CanAwait --> MustAwait : Wait
+    CanAwait --> [*] : QueryRejected
     CanAwait --> [*] : RollForward
     CanAwait --> [*] : RollBackward
     MustAwait --> [*] : RollForward
