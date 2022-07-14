@@ -50,6 +50,18 @@
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
           };
+        "chain-sync" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            ];
+          buildable = true;
+          modules = [ "Paths_marlowe_runtime" ];
+          hsSourceDirs = [ "chain-sync" ];
+          mainPath = [
+            "Main.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
+          };
         };
       };
     } // rec { src = (pkgs.lib).mkDefault ../marlowe-runtime; }
