@@ -11,7 +11,7 @@ where
 import Actus.Domain (ActusNum (..), ActusOps (..), CEGE (..), CT (..), ContractState (..), ContractTerms (..),
                      EventType (..), FEB (..), IPCB (..), OPTP (..), RiskFactors (..), RoleSignOps (..), SCEF (..),
                      ShiftedDay (..), YearFractionOps (..))
-import Actus.Utility (annuity, inf, sup)
+import Actus.Utility (annuity, inf, sup, (<+>))
 import Control.Monad.Reader (Reader, reader)
 import Data.Maybe (fromMaybe, maybeToList)
 import Data.Time.LocalTime (LocalTime)
@@ -435,7 +435,7 @@ stateTransition ev t sn = reader stateTransition'
           st@ContractState
             { ..
             }
-            | contractType `elem` [LAM, NAM, ANN] =
+            | contractType `elem` [LAM, NAM, ANN, CEG] =
               let y_sd_t = _y dcc sd t maturityDate
                in st
                     { ipac = ipac + y_sd_t * ipnr * ipcb,
@@ -1031,6 +1031,100 @@ stateTransition ev t sn = reader stateTransition'
             { contractType = CEG,
               coverageOfCreditEnhancement = Just cecv,
               guaranteedExposure = Just CEGE_NO,
+              feeRate = Just fer,
+              feeBasis = Just FEB_A,
+              dayCountConvention = Just dcc,
+              cycleOfFee = Just cef,
+              maturityDate,
+              contractRole
+            }
+          st@ContractState
+            { sd,
+              feac
+            } =
+            let nt' = cecv * _r contractRole * (foldl (+) _zero $ map f referenceStates)
+                f cs =
+                  let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
+                   in nt c
+                timeFromLastEvent = _y dcc sd t maturityDate
+                timeFullFeeCycle = _y dcc sd (sd <+> cef) maturityDate
+             in st
+                  { xa = Just nt',
+                    nt = nt',
+                    feac = feac + timeFromLastEvent / timeFullFeeCycle * fer,
+                    sd = t
+                  }
+        stf
+          XD
+          RiskFactors
+            {
+            }
+          ContractTerms
+            { contractType = CEG,
+              coverageOfCreditEnhancement = Just cecv,
+              guaranteedExposure = Just CEGE_NO,
+              contractRole
+            }
+          st@ContractState
+            {
+            } =
+            let nt' = cecv * _r contractRole * (foldl (+) _zero $ map f referenceStates)
+                f cs =
+                  let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
+                   in nt c
+             in st
+                  { xa = Just nt',
+                    nt = nt',
+                    sd = t
+                  }
+        stf
+          XD
+          RiskFactors
+            {
+            }
+          ContractTerms
+            { contractType = CEG,
+              coverageOfCreditEnhancement = Just cecv,
+              guaranteedExposure = Just CEGE_NI,
+              contractRole
+            }
+          st@ContractState
+            {
+            } =
+            let nt' = cecv * _r contractRole * (foldl (+) _zero $ map f referenceStates)
+                f cs =
+                  let (_, _, c) = last $ takeWhile (\(_, _, x) -> sd x <= t) cs
+                   in nt c + ipac c
+             in st
+                  { xa = Just nt',
+                    nt = nt',
+                    sd = t
+                  }
+        stf
+          XD
+          RiskFactors
+            {
+            }
+          ContractTerms
+            { contractType = CEG
+            }
+          st@ContractState
+            { nt
+            } =
+              st
+                { xa = Just nt,
+                  sd = t
+                }
+        -- STF_XD_CEC
+        stf
+          XD
+          RiskFactors
+            {
+            }
+          ContractTerms
+            { contractType = CEC,
+              coverageOfCreditEnhancement = Just cecv,
+              guaranteedExposure = Just CEGE_NO,
               contractRole
             }
           st@ContractState
@@ -1050,7 +1144,7 @@ stateTransition ev t sn = reader stateTransition'
             {
             }
           ContractTerms
-            { contractType = CEG,
+            { contractType = CEC,
               coverageOfCreditEnhancement = Just cecv,
               guaranteedExposure = Just CEGE_NI,
               contractRole
@@ -1072,7 +1166,7 @@ stateTransition ev t sn = reader stateTransition'
             {
             }
           ContractTerms
-            { contractType = CEG
+            { contractType = CEC
             }
           st@ContractState
             { nt

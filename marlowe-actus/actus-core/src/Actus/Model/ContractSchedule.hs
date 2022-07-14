@@ -8,8 +8,9 @@ module Actus.Model.ContractSchedule
   )
 where
 
-import Actus.Domain (CT (..), ContractTerms (..), Cycle (..), DS (..), EventType (..), IPCB (..), PPEF (..), PYTP (..),
-                     SCEF (..), ScheduleConfig (..), ShiftedDay (..), mkShiftedDay)
+import Actus.Domain (CT (..), ContractStructure (..), ContractTerms (..), Cycle (..), DS (..), EventType (..),
+                     IPCB (..), PPEF (..), PYTP (..), Reference (..), ReferenceRole (..), SCEF (..),
+                     ScheduleConfig (..), ShiftedDay (..), mkShiftedDay)
 import Actus.Domain as O (ActusNum (..), ActusOps (..), ScheduleOps (..), YearFractionOps (..))
 import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, (<+>), (<->))
 import Control.Applicative ((<|>))
@@ -105,13 +106,14 @@ schedule IPFX ct@ContractTerms{ contractType = SWPPV } = _SCHED_IPFX_SWPPV ct
 schedule IPFL ct@ContractTerms{ contractType = SWPPV } = _SCHED_IPFL_SWPPV ct
 schedule MD   ct@ContractTerms{ contractType = SWPPV } = _SCHED_MD_PAM ct
 schedule PRD  ct@ContractTerms{ contractType = CEG }   = _SCHED_PRD_PAM ct
-schedule MD   ct@ContractTerms{ contractType = CEG }   = _SCHED_MD_PAM ct
-schedule XD   ct@ContractTerms{ contractType = CEG }   = _SCHED_XD_CEG ct
+schedule MD   ct@ContractTerms{ contractType = CEG }   = _SCHED_MD_CEG ct
+schedule XD   ct@ContractTerms{ contractType = CEG }   = _SCHED_XD_CEG ct -- added as unscheduled events
+schedule FP   ct@ContractTerms{ contractType = CEG }   = _SCHED_FP_CEG ct
 schedule PRD  ct@ContractTerms{ contractType = CEC }   = _SCHED_PRD_PAM ct
-schedule MD   ct@ContractTerms{ contractType = CEC }   = _SCHED_MD_PAM ct
+schedule MD   ct@ContractTerms{ contractType = CEC }   = _SCHED_MD_CEC ct
+schedule XD   ct@ContractTerms{ contractType = CEC }   = _SCHED_XD_CEG ct -- added as unscheduled events
 schedule PRD  ct@ContractTerms{ contractType = COM }   = _SCHED_PRD_PAM ct
 schedule TD   ct@ContractTerms{ contractType = COM }   = _SCHED_TD_PAM ct
-
 schedule IED  ct@ContractTerms{ contractType = CLM }   = _SCHED_IED_PAM ct
 schedule MD   ct@ContractTerms{ contractType = CLM }   = _SCHED_MD_PAM ct
 schedule FP   ct@ContractTerms{ contractType = CLM }   = _SCHED_FP_PAM ct
@@ -234,7 +236,7 @@ _SCHED_MD_PAM
     { maturityDate,
       scheduleConfig
     } = case maturityDate <|> maturity ct of
-    Just m  -> [let d = applyBDCWithCfg scheduleConfig m in d { paymentDay = m }]
+    Just m  -> [let d = applyBDCWithCfg scheduleConfig m in d {paymentDay = m}]
     Nothing -> []
 
 _SCHED_PP_PAM :: ContractTerms a -> [ShiftedDay]
@@ -805,6 +807,53 @@ _SCHED_RR_SWPPV _ = []
 
 _SCHED_XD_CEG :: ContractTerms a -> [ShiftedDay]
 _SCHED_XD_CEG _ = []
+
+_SCHED_MD_CEG :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) => ContractTerms a -> [ShiftedDay]
+_SCHED_MD_CEG
+  ct@ContractTerms
+    { maturityDate = md
+    } =
+    let refs = maximum <$> mapM f (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct)
+     in case md <|> maturity ct <|> refs of
+          Just m  -> [mkShiftedDay m]
+          Nothing -> []
+    where
+      f cs = case reference cs of
+        ReferenceTerms rt -> maturityDate rt
+        ReferenceId _     -> undefined
+
+_SCHED_FP_CEG ::
+  (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) =>
+  ContractTerms a ->
+  [ShiftedDay]
+_SCHED_FP_CEG
+  ct@ContractTerms
+    { cycleAnchorDateOfFee = Just feanx,
+      cycleOfFee = Just fecl,
+      maturityDate = md,
+      scheduleConfig
+    } =
+    let refs = maximum <$> mapM f (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct)
+     in case md <|> maturity ct <|> refs of
+          Just m  -> generateRecurrentSchedule feanx fecl {includeEndDay = True} m scheduleConfig
+          Nothing -> []
+    where
+      f cs = case reference cs of
+        ReferenceTerms rt -> maturityDate rt
+        ReferenceId _     -> undefined
+_SCHED_FP_CEG _ = []
+
+_SCHED_MD_CEC :: ContractTerms a -> [ShiftedDay]
+_SCHED_MD_CEC
+  ct@ContractTerms
+    {
+    } = case mapM f (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct) of
+    Just m  -> [mkShiftedDay $ maximum m]
+    Nothing -> []
+    where
+      f cs = case reference cs of
+        ReferenceTerms rt -> maturityDate rt
+        ReferenceId _     -> undefined
 
 _SCHED_IP_CLM :: ContractTerms a -> [ShiftedDay]
 _SCHED_IP_CLM

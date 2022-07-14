@@ -60,10 +60,9 @@ buildCtx rf ct us =
         runReader states $ buildCtx rf rt us
         where
           -- monitor underlying at unscheduled events
-          unscheduledEvents = removeDuplicates $ map modifyType us
+          unscheduledEvents = removeDuplicates $ map monitorEvent us
             where
-              modifyType (x, _, sd) | x /= contractId rt = (contractId rt, AD, sd)
-              modifyType (x, ev, sd) = (x, ev, sd)
+              monitorEvent (_, _, sd) = (contractId rt, AD, sd)
 
           states = initializeState >>= genStates (genSchedule rt $ map dropFst unscheduledEvents)
       ReferenceId _ -> undefined
@@ -102,8 +101,10 @@ genProjectedPayoffs ::
 genProjectedPayoffs us =
   do
     ct <- contractTerms <$> ask
+    let sched = genSchedule ct us
+
     st0 <- initializeState
-    states <- genStates (genSchedule ct us) st0
+    states <- genStates sched st0
     payoffs <- trans $ genPayoffs states
 
     return $

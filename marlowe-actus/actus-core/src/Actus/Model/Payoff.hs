@@ -541,6 +541,19 @@ payoff ev t st = reader payoff'
             { xa = Just exerciseAmount,
               feac
             } = o_rf_CURS * (exerciseAmount + feac)
+        -- POF_STD_CEC
+        pof
+          STD
+          RiskFactors
+            { o_rf_CURS
+            }
+          ContractTerms
+            { contractType = CEC
+            }
+          ContractState
+            { xa = Just exerciseAmount,
+              feac
+            } = o_rf_CURS * (exerciseAmount + feac)
         -------------------------------
         -- Rate Reset (RR) --
         -------------------------------

@@ -16,8 +16,8 @@ module Actus.Model.StateInitialization
 where
 
 import Actus.Domain (ActusNum (..), ActusOps (..), CEGE (..), CT (..), ContractState (..), ContractStructure (..),
-                     ContractTerms (..), Cycle (..), FEB (..), IPCB (..), Reference (..), RoleSignOps (..), SCEF (..),
-                     YearFractionOps (..))
+                     ContractTerms (..), Cycle (..), FEB (..), IPCB (..), PRF (..), Reference (..), RoleSignOps (..),
+                     SCEF (..), YearFractionOps (..))
 import Actus.Model.StateTransition (CtxSTF (..))
 import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup)
 import Control.Applicative ((<|>))
@@ -262,7 +262,7 @@ initializeState = reader initializeState'
         feeAccrued _ = _zero
 
         contractPerformance ContractTerms {contractPerformance = Just prf} = prf
-        contractPerformance _                                              = error "PRF is not set in ContractTerms"
+        contractPerformance _                                              = PRF_PF
 
         referenceContractTerms :: ContractStructure a -> Maybe (ContractTerms a)
         referenceContractTerms ContractStructure {..} =

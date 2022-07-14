@@ -33,18 +33,9 @@ main = do
   swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
   cegTests <-
     testCasesFromFile
-      [ "guarantee10",
-        "guarantee11",
-        "guarantee12",
-        "guarantee13",
-        "guarantee14"
-      ]
-      $ p ++ "actus-tests-ceg.json"
-  {-
-  cecTests <-
-    testCasesFromFile
-      [ ] $ p ++ "actus-tests-cec.json"
-  -}
+      [ "guarantee14" -- result in reference test is not precise: 3508695 but should be 3508695.652174
+      ] $ p ++ "actus-tests-ceg.json"
+  -- cecTests <- testCasesFromFile [] $ p ++ "actus-tests-cec.json"
 
   defaultMain $
     testGroup
@@ -63,6 +54,5 @@ main = do
             tests "CLM" clmTests,
             tests "SWPPV" swppvTests,
             tests "CEG" cegTests
-            -- tests "CEC" cecTests
           ]
       ]

@@ -17,7 +17,7 @@ module Spec.TestFramework
 
 import Actus.Core
 import Actus.Domain hiding (Assertion)
-import Actus.Utility (applyBDCWithCfg)
+import Actus.Utility (applyBDCWithCfg, (<+>))
 import Control.Applicative ((<|>))
 import Control.Monad (join, mzero)
 import Data.Aeson
@@ -95,6 +95,7 @@ unSchedEv
       contractStructure,
       creditEventTypeCovered = Just CETC_DF,
       maturityDate = Just mat,
+      settlementPeriod,
       scheduleConfig
     }
   EventObserved
@@ -106,13 +107,14 @@ unSchedEv
     | contractType `elem` [CEG, CEC]
         && (time <= mat)
         && Just cid `elem` map (getContractIdentifier . reference) contractStructure =
-      [(cid, XD, applyBDCWithCfg scheduleConfig time), (cid, STD, applyBDCWithCfg scheduleConfig time)]
+      [(cid, XD, applyBDCWithCfg scheduleConfig time), (cid, STD, applyBDCWithCfg scheduleConfig $ applySettlementPeriod settlementPeriod time)]
 unSchedEv
   ContractTerms
     { contractType,
       contractStructure,
       creditEventTypeCovered = Just CETC_DF,
       scheduleConfig,
+      settlementPeriod,
       maturityDate = Nothing
     }
   EventObserved
@@ -123,7 +125,16 @@ unSchedEv
     }
     | contractType `elem` [CEG, CEC]
         && Just cid `elem` map (getContractIdentifier . reference) contractStructure =
-      [(cid, XD, applyBDCWithCfg scheduleConfig time), (cid, STD, applyBDCWithCfg scheduleConfig time)]
+      case mapM f (filter (\cs -> referenceRole cs == COVE) contractStructure) of
+        Just m ->
+          if time < maximum m
+            then [(cid, XD, mkShiftedDay time), (cid, STD, applyBDCWithCfg scheduleConfig $ applySettlementPeriod settlementPeriod time)]
+            else []
+        Nothing -> []
+    where
+      f cs = case reference cs of
+        ReferenceTerms rt -> maturityDate rt
+        ReferenceId _     -> undefined
 unSchedEv
   ContractTerms
     { contractType,
@@ -148,6 +159,10 @@ unSchedEv
       time
     } = [(contractId, AD, ShiftedDay time time)]
 unSchedEv _ _ = []
+
+applySettlementPeriod :: Maybe Cycle -> LocalTime -> LocalTime
+applySettlementPeriod (Just c) s = s <+> c
+applySettlementPeriod Nothing s  = s
 
 defaultRiskFactors :: RiskFactors Double
 defaultRiskFactors =
