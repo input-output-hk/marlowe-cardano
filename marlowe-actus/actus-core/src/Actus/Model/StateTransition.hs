@@ -1163,16 +1163,19 @@ stateTransition ev t sn = reader stateTransition'
         stf
           XD
           RiskFactors
-            {
+            { xd_payoff
             }
           ContractTerms
-            { contractType = CEC
+            { contractType = CEC,
+              contractRole
             }
           st@ContractState
-            { nt
-            } =
-              st
-                { xa = Just nt,
+            {
+            } = let nt' = _r contractRole * (foldl (+) _zero $ map f referenceStates)
+                    f cs = let (_,_,c) = last $ takeWhile (\(_,d,_) -> calculationDay d <= t) cs
+                            in nt c
+                 in st
+                { xa = Just $ _min xd_payoff nt',
                   sd = t
                 }
         -----------------------

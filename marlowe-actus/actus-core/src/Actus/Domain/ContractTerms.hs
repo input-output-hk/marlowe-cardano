@@ -372,6 +372,14 @@ instance ToJSON a => ToJSON (ContractStructure a) where
       , "referenceRole" .= toJSON referenceRole
       ]
 
+getMarketObjectCode :: Reference a -> Maybe String
+getMarketObjectCode (ReferenceId i)    = marketObjectCode i
+getMarketObjectCode (ReferenceTerms t) = marketObjectCodeRef t
+
+getContractIdentifier :: Reference a -> Maybe String
+getContractIdentifier (ReferenceId i)                     = contractIdentifier i
+getContractIdentifier (ReferenceTerms ContractTerms {..}) = Just contractId
+
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
@@ -390,6 +398,7 @@ data ContractTerms a = ContractTerms
 
   -- Contract Identification
   , statusDate                               :: LocalTime        -- ^ Status Date
+  , marketObjectCodeRef                      :: Maybe String     -- ^ Market Object Code
 
   -- Counterparty
   , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
@@ -514,6 +523,7 @@ instance FromJSON (ContractTerms Double) where
                <*> (v .: "businessDayConvention" <|> return (Just BDC_NULL))
            )
       <*> v .:  "statusDate"
+      <*> v .:? "marketObjectCode"
       <*> v .:? "contractPerformance"
       <*> v .:? "creditEventTypeCovered"
       <*> v .!? "coverageOfCreditEnhancement"
