@@ -383,6 +383,7 @@ stateDiagram-v2
     MustAwait --> [*] : RollForward
     MustAwait --> [*] : RollBackward
   }
+  Next --> Idle : QueryRejected
   Next --> Idle : RollForward
   Next --> Idle : RollBackward
 ```
