@@ -32,16 +32,18 @@ common lang
   default-language: Haskell2010
   default-extensions:
     BlockArguments
+    DeriveAnyClass
     DeriveFoldable
     DeriveFunctor
     DeriveGeneric
     DeriveLift
     DeriveTraversable
+    DerivingStrategies
+    DerivingVia
     ExplicitForAll
     GeneralizedNewtypeDeriving
-    DeriveAnyClass
-    DerivingVia
-    DerivingStrategies
+    LambdaCase
+    OverloadedStrings
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
@@ -56,9 +58,15 @@ common lang
 library
   import: lang
   hs-source-dirs:   src
-  exposed-modules:  MyLib
+  exposed-modules:
+    Language.Marlowe.Runtime.ChainSync.NodeClient
+  other-modules:
   build-depends:
       base >= 4.9 && < 5
+    , cardano-api
+    , containers
+    , stm
+    , ouroboros-network
 
 executable marlowe-chain-sync
   import: lang
@@ -70,6 +78,10 @@ executable marlowe-chain-sync
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
+    , async
+    , cardano-api
     , marlowe-chain-sync
+    , ouroboros-network
+    , stm
   ghc-options:
     -threaded
