@@ -11,15 +11,15 @@
     flags = { defer-plugin-errors = false; };
     package = {
       specVersion = "2.4";
-      identifier = { name = "marlowe-runtime"; version = "0.0.0.0"; };
+      identifier = { name = "marlowe-chain-sync"; version = "0.0.0.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "jamie.bertram@iohk.io";
       author = "Jamie Bertram";
       homepage = "";
       url = "";
-      synopsis = "Runtime system for running Marlowe financial contracts on the Cardano Computation Layer";
-      description = "Runtime system for running and monitoring Marlowe financial contracts on\nCardano. It provides query access to search for and inspect contracts,\ncommand access for creating and interacting with contracts, and streaming\naccess for real-time updates to contracts.";
+      synopsis = "Cardano chain sync system for thee Marlowe Runtime";
+      description = "Marlowe runtime component for Cardano node synchronization. Communicates with\ndownstream compoents using the Filtered Chain Sync protocol, which provides\nefficient push and pull-based traversal of the cardano blockchain.";
       buildType = "Simple";
       isLocal = true;
       detailLevel = "FullDetails";
@@ -38,13 +38,13 @@
         hsSourceDirs = [ "src" ];
         };
       exes = {
-        "marlowe-runtime" = {
+        "marlowe-chain-sync" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             ];
           buildable = true;
-          modules = [ "Paths_marlowe_runtime" ];
+          modules = [ "Paths_marlowe_chain_sync" ];
           hsSourceDirs = [ "app" ];
           mainPath = [
             "Main.hs"
@@ -52,4 +52,4 @@
           };
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../marlowe-runtime; }
+    } // rec { src = (pkgs.lib).mkDefault ../marlowe-chain-sync; }

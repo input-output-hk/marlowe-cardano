@@ -847,6 +847,7 @@
         ouroboros-network-framework = ./.plan.nix/ouroboros-network-framework.nix;
         orphans-deriving-via = ./.plan.nix/orphans-deriving-via.nix;
         cardano-numeric = ./.plan.nix/cardano-numeric.nix;
+        marlowe-chain-sync = ./.plan.nix/marlowe-chain-sync.nix;
         cardano-wallet-cli = ./.plan.nix/cardano-wallet-cli.nix;
         word-array = ./.plan.nix/word-array.nix;
         ouroboros-consensus-shelley = ./.plan.nix/ouroboros-consensus-shelley.nix;
@@ -1031,6 +1032,9 @@
           "cardano-numeric" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
+          "marlowe-chain-sync" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "cardano-wallet-cli" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
@@ -1195,6 +1199,7 @@
           "lazy-search".components.library.planned = lib.mkOverride 900 true;
           "lzma-clib".components.library.planned = lib.mkOverride 900 true;
           "plutus-chain-index".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.exes."marlowe-chain-sync".planned = lib.mkOverride 900 true;
           "groups".components.library.planned = lib.mkOverride 900 true;
           "servant".components.library.planned = lib.mkOverride 900 true;
           "bin".components.library.planned = lib.mkOverride 900 true;
@@ -1541,7 +1546,6 @@
           "Stream".components.library.planned = lib.mkOverride 900 true;
           "katip".components.library.planned = lib.mkOverride 900 true;
           "cardano-wallet".components.exes."cardano-wallet".planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."chain-sync".planned = lib.mkOverride 900 true;
           "cardano-submit-api".components.library.planned = lib.mkOverride 900 true;
           "lzma".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.setup.planned = lib.mkOverride 900 true;
@@ -1569,6 +1573,7 @@
           "pqueue".components.library.planned = lib.mkOverride 900 true;
           "contravariant".components.library.planned = lib.mkOverride 900 true;
           "appar".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.library.planned = lib.mkOverride 900 true;
           "optparse-applicative-fork".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-cardano".components.exes."db-analyser".planned = lib.mkOverride 900 true;
           "servant-docs".components.library.planned = lib.mkOverride 900 true;
