@@ -8,6 +8,7 @@ packages: marlowe
           marlowe-symbolic
           marlowe-cli
           marlowe-contracts
+          marlowe-chain-sync
           marlowe-runtime
 
 -- We never, ever, want this.

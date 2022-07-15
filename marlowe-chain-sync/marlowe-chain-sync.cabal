@@ -1,13 +1,12 @@
 cabal-version: 2.4
-name: marlowe-runtime
+name: marlowe-chain-sync
 version: 0.0.0.0
 synopsis:
-  Runtime system for running Marlowe financial contracts on the Cardano Computation Layer
+  Cardano chain sync system for thee Marlowe Runtime
 description:
-  Runtime system for running and monitoring Marlowe financial contracts on
-  Cardano. It provides query access to search for and inspect contracts,
-  command access for creating and interacting with contracts, and streaming
-  access for real-time updates to contracts.
+  Marlowe runtime component for Cardano node synchronization. Communicates with
+  downstream compoents using the Filtered Chain Sync protocol, which provides
+  efficient push and pull-based traversal of the cardano blockchain.
 bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
 license: Apache-2.0
 author: Jamie Bertram
@@ -21,7 +20,7 @@ license-files:
 source-repository head
   type: git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir: marlowe-runtime
+  subdir: marlowe-chain-sync
 
 flag defer-plugin-errors
     description:
@@ -61,16 +60,16 @@ library
   build-depends:
       base >= 4.9 && < 5
 
-executable marlowe-runtime
+executable marlowe-chain-sync
   import: lang
   hs-source-dirs:   app
   main-is: Main.hs
   other-modules:
-    Paths_marlowe_runtime
+    Paths_marlowe_chain_sync
   autogen-modules:
-    Paths_marlowe_runtime
+    Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
-    , marlowe-runtime
+    , marlowe-chain-sync
   ghc-options:
     -threaded
