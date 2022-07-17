@@ -1,4 +1,5 @@
 
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -6,53 +7,25 @@
 
 
 module Spec.Marlowe.Arbitrary (
-
-  caseGen
-
-, arbitraryPositiveAmount
-, shrinkPositiveAmount
-
+  ContextuallyArbitrary(..)
+, IsValid(..)
 , arbitraryChoiceName
-, shrinkChoiceName
-
-, arbitraryTimeInterval
-, shrinkTimeInterval
-
-, arbitraryAccounts
-, shrinkAccounts
-, arbitraryFromAccounts
-
-, arbitraryChoices
-, shrinkChoices
-, arbitraryChoiceIdFromParty
-
-, arbitraryBoundValues
-, shrinkBoundValues
-
 ) where
 
 
 import Control.Monad (replicateM)
 import Data.Function (on)
-import Data.List (nub, nubBy)
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Bound (..), Case, ChoiceId (..), ChoiceName,
-                                                 ChosenNum, Contract, Environment (..), Input (..), InputContent (..),
-                                                 Party (..), Payee (..), State (..), TimeInterval, Token (..),
-                                                 ValueId (..))
+import Data.List (nubBy)
+import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (..), Case (..), ChoiceId (..),
+                                                 ChoiceName, ChosenNum, Contract (..), Environment (..), Input (..),
+                                                 InputContent (..), Observation (..), Party (..), Payee (..),
+                                                 State (..), TimeInterval, Token (..), Value (..), ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Spec.Marlowe.Common (caseRelGenSized, simpleIntegerGen)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, sized, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, listOf, suchThat)
 
-import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, null, toList)
+import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
-
-
-arbitraryPositiveAmount :: Gen Integer
-arbitraryPositiveAmount = arbitrary `suchThat` (> 0)
-
-shrinkPositiveAmount :: Integer -> [Integer]
-shrinkPositiveAmount x = nub [1, x `div` 2, x-1]
 
 
 fibonaccis :: Num a => [a]
@@ -74,6 +47,123 @@ shrinkByteString f universe selected =
     universe
 
 
+perturb :: Gen a -> [a] -> Gen a
+perturb gen [] = gen
+perturb gen xs = frequency [(20, gen), (80, elements xs)]
+
+
+data Context =
+  Context
+  {
+    parties      :: [Party]
+  , tokens       :: [Token]
+  , amounts      :: [Integer]
+  , choiceNames  :: [ChoiceName]
+  , chosenNums   :: [ChosenNum]
+  , choiceIds    :: [ChoiceId]
+  , valueIds     :: [ValueId]
+  , values       :: [Integer]
+  , times        :: [POSIXTime]
+  , caccounts    :: Accounts
+  , cchoices     :: AM.Map ChoiceId ChosenNum
+  , cboundValues :: AM.Map ValueId Integer
+  }
+
+instance Arbitrary Context where
+  arbitrary =
+    do
+      parties <- arbitrary
+      tokens <- arbitrary
+      amounts <- listOf arbitraryPositiveInteger
+      choiceNames <- listOf arbitraryChoiceName
+      chosenNums <- listOf arbitraryInteger
+      valueIds <- arbitrary
+      values <- listOf arbitraryInteger
+      times <- listOf arbitrary
+      choiceIds <- listOf $ ChoiceId <$> perturb arbitraryChoiceName choiceNames <*> perturb arbitrary parties
+      caccounts <- AM.fromList . nubBy ((==) `on` fst) <$> listOf ((,) <$> ((,) <$> perturb arbitrary parties <*> perturb arbitrary tokens) <*> perturb arbitraryPositiveInteger amounts)
+      cchoices <- AM.fromList . nubBy ((==) `on` fst) <$> listOf ((,) <$> perturb arbitrary choiceIds <*> perturb arbitraryInteger chosenNums)
+      cboundValues <- AM.fromList . nubBy ((==) `on` fst) <$> listOf ((,) <$> perturb arbitrary valueIds <*> perturb arbitraryInteger values)
+      pure Context{..}
+  shrink context@Context{..} =
+    [context {parties = parties'} | parties' <- shrink parties]
+      ++ [context {tokens = tokens'} | tokens' <- shrink tokens]
+      ++ [context {amounts = amounts'} | amounts' <- shrink amounts]
+--    ++ [context {choiceNames = choiceNames'} | choiceNames' <- shrink choiceNames]  -- TODO: Implement `shrink`.
+      ++ [context {chosenNums = chosenNums'} | chosenNums' <- shrink chosenNums]
+      ++ [context {valueIds = valueIds'} | valueIds' <- shrink valueIds]
+      ++ [context {values = values'} | values' <- shrink values]
+      ++ [context {times = times'} | times' <- shrink times]
+      ++ [context {choiceIds = choiceIds'} | choiceIds' <- shrink choiceIds]
+      ++ [context {caccounts = caccounts'} | caccounts' <- shrink caccounts]
+      ++ [context {cchoices = cchoices'} | cchoices' <- shrink cchoices]
+      ++ [context {cboundValues = cboundValues'} | cboundValues' <- shrink cboundValues]
+
+
+
+class Arbitrary a => ContextuallyArbitrary a where
+  arbitrary' :: Context -> Gen a
+  arbitrary' context =
+     case fromContext context of
+       [] -> arbitrary
+       xs -> perturb arbitrary xs
+  shrink' :: [a] -> [[a]]
+  shrink' = shrink
+  fromContext :: Context -> [a]
+  fromContext _ = []
+
+
+class IsValid a where
+  isValid :: a -> Bool
+
+instance IsValid Accounts where
+  isValid am =
+    let
+      am' = AM.toList am
+      am'' = nubBy ((==) `on` fst) $ filter ((> 0) . snd) am'
+    in
+      ((==) `on` length) am' am''
+
+instance IsValid (AM.Map ChoiceId ChosenNum) where
+  isValid am =
+    let
+      am' = AM.toList am
+      am'' = nubBy ((==) `on` fst) am'
+    in
+      ((==) `on` length) am' am''
+
+instance IsValid (AM.Map ValueId Integer) where
+  isValid am =
+    let
+      am' = AM.toList am
+      am'' = nubBy ((==) `on` fst) am'
+    in
+      ((==) `on` length) am' am''
+
+instance IsValid Context where
+  isValid Context{..} = isValid caccounts && isValid cchoices && isValid cboundValues
+
+
+arbitraryPositiveInteger :: Gen Integer
+arbitraryPositiveInteger =
+  frequency
+    [
+      (60, arbitrary `suchThat` (> 0))
+    , (30, arbitraryFibonacci fibonaccis)
+    ]
+
+
+arbitraryInteger :: Gen Integer
+arbitraryInteger =
+  frequency
+    [
+      ( 5, arbitrary `suchThat` (< 0))
+    , (60, arbitrary `suchThat` (> 0))
+    , ( 5, pure 0)
+    , (30, arbitraryFibonacci fibonaccis)
+    ]
+
+
 randomPubKeyHashes :: [PubKeyHash]
 randomPubKeyHashes =
   [
@@ -91,9 +181,10 @@ randomPubKeyHashes =
   , "a2bd7dd7f41c2781d1d11c7f4994fac750525705f9c259f97cb27d0e"
   , "c5b4c543a0d0d181ec387ad8250b18617bb18bcf2eccc0f27fe7aa23"
   , "d877b83ece77d785fee4a52bd7226949fa64e111aa0e20cd4a1c471b"
-  , "e14025a93f867851b9bb3c48601d1845bcbe9e2e1856c16cfc052242"
-  , "e3351d289f3eaa66e500f17b91a74e492193f4485c32e5ad606da835"
+  , "e14025a93f867851b9bb3c48601d1845bcbe9e2e1856c16cfc0522"      -- NB: Too short for ledger.
+  , "e3351d289f3eaa66e500f17b91a74e492193f4485c32e5ad606da83542"  -- NB: Too long for ledger.
   ]
+
 
 instance Arbitrary PubKeyHash where
   arbitrary = arbitraryFibonacci randomPubKeyHashes
@@ -117,8 +208,8 @@ randomCurrencySymbols =
   , "9f92753881b398a247e53b6cad08eab0e158cf1ef5df84c7f5766041"
   , "c1f46ec0147542f9bc155805993497ed44150687a41d0a63af3be466"
   , "cc2189d7adde0ed26355fd03e134feb508e5924959b07a53557f285e"
-  , "df97bf95b2d21327731329d94173344ff4db5ac16f92250d9cab00a0"
-  , "ead659651c55f5481dbc7038a7c096fd7616d2f86471bd9d46de742e"
+  , "df97bf95b2d21327731329d94173344ff4db5ac16f92250d9cab00"      -- NB: Too short for ledger.
+  , "ead659651c55f5481dbc7038a7c096fd7616d2f86471bd9d46de742ea0"  -- NB: Too long for ledger.
  ]
 
 instance Arbitrary CurrencySymbol where
@@ -139,12 +230,12 @@ randomTokenNames =
   , ""
   , "POSSIBILITY"
   , "SATISFACTION"
-  , "RELATIONSHIPS"
   , "PAYMENT CONCEPT"
   , "OFFICE DEFINITION"
   , "ARTISAN CONVERSATION"
   , "SOFTWARE FEEDBACK METHOD"
   , "INDEPENDENCE EXPLANATION REVENUE"
+  , "RELATIONSHIPS FEEDBACK CONCEPT METHOD"  -- NB: Too long for ledger.
   ]
 
 instance Arbitrary TokenName where
@@ -164,6 +255,10 @@ instance Arbitrary Token where
     | otherwise                       = Token adaSymbol adaToken : [Token c' n' | c' <- shrink c, n' <- shrink n]
 
 
+instance ContextuallyArbitrary Token where
+  fromContext = tokens
+
+
 randomRoleNames :: [TokenName]
 randomRoleNames =
   [
@@ -177,12 +272,12 @@ randomRoleNames =
   , "I"
   , "Zakkai"
   , "Laurent"
-  , "Alcippe"
   , "Prosenjit"
   , "Dafne Helge Mose"
   , "Nonso Ernie Blanka"
   , "Umukoro Alexander Columb"
   , "Urbanus Roland Alison Ty Ryoichi"
+  , "Alcippe Alende Blanka Roland Dafne"  -- NB: Too long for ledger.
   ]
 
 instance Arbitrary Party where
@@ -195,16 +290,16 @@ instance Arbitrary Party where
   shrink (PK x)   = (Role <$> randomRoleNames) <> (PK <$> filter (< x) randomPubKeyHashes)
   shrink (Role x) = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
 
+instance ContextuallyArbitrary Party where
+  fromContext = parties
 
-instance Arbitrary Payee where
-  arbitrary =
-    do
-      isParty <- arbitrary
-      if isParty
-        then Party <$> arbitrary
-        else Account <$> arbitrary
-  shrink (Party x)   = Party <$> shrink x
-  shrink (Account x) = Account <$> shrink x
+
+instance Arbitrary POSIXTime where
+  arbitrary = POSIXTime <$> arbitraryInteger
+  shrink x = filter (< x) fibonaccis
+
+instance ContextuallyArbitrary POSIXTime where
+  fromContext = times
 
 
 randomChoiceNames :: [ChoiceName]
@@ -219,13 +314,13 @@ randomChoiceNames =
   , "allocate"
   , ""
   , "originate"
-  , "understand"
   , "characterize"
   , "derive witness"
   , "envisage software"
   , "attend unknown animals"
   , "position increated radiation"
   , "proclaim endless sordid figments"
+  , "understand weigh originate envisage"  -- NB: Too long for ledger.
   ]
 
 arbitraryChoiceName :: Gen ChoiceName
@@ -235,9 +330,41 @@ shrinkChoiceName :: ChoiceName -> [ChoiceName]
 shrinkChoiceName = shrinkByteString id randomChoiceNames
 
 
+arbitraryTimeInterval :: Gen TimeInterval
+arbitraryTimeInterval =
+  do
+    start <- arbitraryInteger
+    duration <- arbitraryPositiveInteger
+    pure (POSIXTime start, POSIXTime $ start + duration)
+
+shrinkTimeInterval :: TimeInterval -> [TimeInterval]
+shrinkTimeInterval (start, end) =
+  let
+    mid = (start + end) `div` 2
+  in
+    [
+      (start, start)
+    , (start, mid  )
+    , (mid  , mid  )
+    , (mid  , end  )
+    , (end  , end  )
+    ]
+
+instance ContextuallyArbitrary TimeInterval where
+  arbitrary' context =
+    do
+      POSIXTime start <- arbitrary' context
+      duration <- arbitraryPositiveInteger
+      pure (POSIXTime start, POSIXTime $ start + duration)
+  shrink' = fmap shrinkTimeInterval
+
+
 instance Arbitrary ChoiceId where
   arbitrary = ChoiceId <$> arbitraryChoiceName <*> arbitrary
   shrink (ChoiceId n p) = [ChoiceId n' p' | n' <- shrinkChoiceName n, p' <- shrink p]
+
+instance ContextuallyArbitrary ChoiceId where
+  fromContext = choiceIds
 
 
 randomValueIds :: [ValueId]
@@ -253,51 +380,144 @@ randomValueIds =
   , ""
   , "drawing"
   , "reaction"
-  , "candidate"
   , "difference"
   , "replacement"
   , "paper apartment"
   , "leadership information"
   , "entertainment region assumptions"
+  , "candidate apartment reaction replacement"  -- NB: Too long for ledger.
   ]
 
 instance Arbitrary ValueId where
   arbitrary = arbitraryFibonacci randomValueIds
   shrink = shrinkByteString (\(ValueId x) -> x) randomValueIds
 
-
-instance Arbitrary POSIXTime where
-  arbitrary = POSIXTime <$> arbitrary
-  shrink x = filter (< x) fibonaccis
+instance ContextuallyArbitrary ValueId where
+  fromContext = valueIds
 
 
-arbitraryTimeInterval :: Gen TimeInterval
-arbitraryTimeInterval =
-  do
-    start <- arbitrary
-    end <- arbitrary `suchThat` (>= start)
-    pure (start, end)
+arbitraryNumber :: (Context -> [Integer]) -> Context -> Gen Integer
+arbitraryNumber = (perturb arbitraryInteger .)
 
-shrinkTimeInterval :: TimeInterval -> [TimeInterval]
-shrinkTimeInterval (start, end) =
-  let
-    mid = (start + end) `div` 2
-  in
-    [
-      (start, start)
-    , (start, mid  )
-    , (mid  , mid  )
-    , (mid  , end  )
-    , (end  , end  )
-    ]
+arbitraryAmount :: Context -> Gen Integer
+arbitraryAmount = arbitraryNumber amounts
+
+arbitraryChosenNum :: Context -> Gen Integer
+arbitraryChosenNum = arbitraryNumber chosenNums
+
+arbitraryValueNum :: Context -> Gen Integer
+arbitraryValueNum = arbitraryNumber values
+
+
+instance ContextuallyArbitrary Integer where
+  arbitrary' context =
+    frequency
+      [
+        (1, arbitraryAmount    context)
+      , (1, arbitraryChosenNum context)
+      , (1, arbitraryValueNum  context)
+      ]
+
+
+instance Arbitrary (Value Observation) where
+  arbitrary =
+    frequency
+      [
+        ( 8, AvailableMoney <$> arbitrary <*> arbitrary)
+      , (14, Constant <$> arbitrary)
+      , ( 8, NegValue <$> arbitrary)
+      , ( 8, AddValue <$> arbitrary <*> arbitrary)
+      , ( 8, SubValue <$> arbitrary <*> arbitrary)
+      , ( 8, MulValue <$> arbitrary <*> arbitrary)
+      , ( 8, DivValue <$> arbitrary <*> arbitrary)
+      , (10, ChoiceValue <$> arbitrary)
+      , ( 6, pure TimeIntervalStart)
+      , ( 6, pure TimeIntervalEnd)
+      , ( 8, UseValue <$> arbitrary)
+      , ( 8, Cond <$> arbitrary <*> arbitrary <*> arbitrary)
+      ]
+  shrink (AvailableMoney a t) = [AvailableMoney a' t | a' <- shrink a] ++ [AvailableMoney a t' | t' <- shrink t]
+  shrink (Constant x) = Constant <$> shrink x
+  shrink (NegValue x) = NegValue <$> shrink x
+  shrink (AddValue x y) = [AddValue x' y | x' <- shrink x] ++ [AddValue x y' | y' <- shrink y]
+  shrink (SubValue x y) = [SubValue x' y | x' <- shrink x] ++ [SubValue x y' | y' <- shrink y]
+  shrink (MulValue x y) = [MulValue x' y | x' <- shrink x] ++ [MulValue x y' | y' <- shrink y]
+  shrink (DivValue x y) = [DivValue x' y | x' <- shrink x] ++ [DivValue x y' | y' <- shrink y]
+  shrink (ChoiceValue c) = ChoiceValue <$> shrink c
+  shrink (UseValue v) = UseValue <$> shrink v
+  shrink (Cond o x y) = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
+  shrink x = [x]
+
+instance ContextuallyArbitrary (Value Observation) where
+  arbitrary' context =
+    frequency
+      [
+        ( 8, uncurry AvailableMoney <$> perturb ((,) <$> arbitrary <*> arbitrary) (AM.keys $ caccounts context))
+      , (14, Constant <$> arbitrary' context)
+      , ( 8, NegValue <$> arbitrary' context)
+      , ( 8, AddValue <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, SubValue <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, MulValue <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, DivValue <$> arbitrary' context <*> arbitrary' context)
+      , (10, ChoiceValue <$> arbitrary' context)
+      , ( 6, pure TimeIntervalStart)
+      , ( 6, pure TimeIntervalEnd)
+      , ( 8, UseValue <$> arbitrary' context)
+      , ( 8, Cond <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context)
+      ]
+
+
+instance Arbitrary Observation where
+  arbitrary =
+    frequency
+      [
+        ( 8, AndObs <$> arbitrary <*> arbitrary)
+      , ( 8, OrObs <$> arbitrary <*> arbitrary)
+      , ( 8, NotObs <$> arbitrary)
+      , (16, ChoseSomething <$> arbitrary)
+      , ( 8, ValueGE <$> arbitrary <*> arbitrary)
+      , ( 8, ValueGT <$> arbitrary <*> arbitrary)
+      , ( 8, ValueLT <$> arbitrary <*> arbitrary)
+      , ( 8, ValueLE <$> arbitrary <*> arbitrary)
+      , ( 8, ValueEQ <$> arbitrary <*> arbitrary)
+      , (10, pure TrueObs)
+      , (10, pure FalseObs)
+      ]
+  shrink (AndObs x y)       = [AndObs x' y | x' <- shrink x] ++ [AndObs x y' | y' <- shrink y]
+  shrink (OrObs x y)        = [OrObs x' y | x' <- shrink x] ++ [OrObs x y' | y' <- shrink y]
+  shrink (NotObs x)         = NotObs <$> shrink x
+  shrink (ChoseSomething c) = ChoseSomething <$> shrink c
+  shrink (ValueGE x y)      = [ValueGE x' y | x' <- shrink x] ++ [ValueGE x y' | y' <- shrink y]
+  shrink (ValueGT x y)      = [ValueGT x' y | x' <- shrink x] ++ [ValueGT x y' | y' <- shrink y]
+  shrink (ValueLT x y)      = [ValueLT x' y | x' <- shrink x] ++ [ValueLT x y' | y' <- shrink y]
+  shrink (ValueLE x y)      = [ValueLE x' y | x' <- shrink x] ++ [ValueLE x y' | y' <- shrink y]
+  shrink (ValueEQ x y)      = [ValueEQ x' y | x' <- shrink x] ++ [ValueEQ x y' | y' <- shrink y]
+  shrink x                  = [x]
+
+instance ContextuallyArbitrary Observation where
+  arbitrary' context =
+    frequency
+      [
+        ( 8, AndObs <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, OrObs <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, NotObs <$> arbitrary' context)
+      , (16, ChoseSomething <$> arbitrary' context)
+      , ( 8, ValueGE <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, ValueGT <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, ValueLT <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, ValueLE <$> arbitrary' context <*> arbitrary' context)
+      , ( 8, ValueEQ <$> arbitrary' context <*> arbitrary' context)
+      , (10, pure TrueObs)
+      , (10, pure FalseObs)
+      ]
 
 
 instance Arbitrary Bound where
   arbitrary =
     do
-      lower <- arbitrary
-      upper <- arbitrary `suchThat` (>= lower)
-      pure $ Bound lower upper
+      lower <- arbitraryInteger
+      extent <- arbitraryPositiveInteger `suchThat` (>= 0)
+      pure $ Bound lower (lower + extent)
   shrink (Bound lower upper) =
     let
       mid = (lower + upper) `div` 2
@@ -310,6 +530,107 @@ instance Arbitrary Bound where
       , Bound upper upper
       ]
 
+instance ContextuallyArbitrary Bound where
+  arbitrary' context =
+      do
+        lower <- arbitrary' context
+        extent <- arbitraryPositiveInteger `suchThat` (>= 0)
+        pure $ Bound lower (lower + extent)
+
+
+instance ContextuallyArbitrary [Bound] where
+  arbitrary' context = listOf $ arbitrary' context
+
+
+instance Arbitrary Action where
+  arbitrary =
+    frequency
+      [
+        (3, Deposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary)
+      , (6, Choice <$> arbitrary <*> arbitrary)
+      , (1, Notify <$> arbitrary)
+      ]
+  shrink (Deposit a p t x) = [Deposit a' p t x | a' <- shrink a] ++ [Deposit a p' t x | p' <- shrink p] ++ [Deposit a p t' x | t' <- shrink t] ++ [Deposit a p t x' | x' <- shrink x]
+  shrink (Choice c b) = [Choice c' b | c' <- shrink c] ++ [Choice c b' | b' <- shrink b]
+  shrink (Notify o) = Notify <$> shrink o
+
+instance ContextuallyArbitrary Action where
+  arbitrary' context@Context{..} =
+    let
+      arbitraryDeposit =
+        do
+          (account, token) <- perturb ((,) <$> arbitrary <*> arbitrary) $ AM.keys caccounts
+          party <- arbitrary' context
+          Deposit account party token <$> arbitrary' context
+      arbitraryChoice = Choice <$> arbitrary' context <*> arbitrary' context
+    in
+      frequency
+        [
+          (3, arbitraryDeposit)
+        , (6, arbitraryChoice)
+        , (1, Notify <$> arbitrary' context)
+        ]
+
+
+instance Arbitrary Payee where
+  arbitrary =
+    do
+      isParty <- arbitrary
+      if isParty
+        then Party <$> arbitrary
+        else Account <$> arbitrary
+  shrink (Party x)   = Party <$> shrink x
+  shrink (Account x) = Account <$> shrink x
+
+
+instance ContextuallyArbitrary Payee where
+  arbitrary' context =
+      do
+        party <- arbitrary' context
+        isParty <- arbitrary
+        pure
+          $ if isParty
+              then Party party
+              else Account party
+
+
+instance Arbitrary (Case Contract) where
+  arbitrary = arbitrary' =<< arbitrary
+  shrink (Case a c)           = [Case a' c | a' <- shrink a] ++ [Case a c' | c' <- shrink c]
+  shrink (MerkleizedCase a c) = (`MerkleizedCase` c) <$> shrink a
+
+instance ContextuallyArbitrary (Case Contract) where
+  arbitrary' context = Case <$> arbitrary' context <*> arbitrary' context
+
+
+instance Arbitrary Contract where
+  arbitrary = arbitrary' =<< arbitrary
+  shrink (Pay a p t x c) = [Pay a' p t x c | a' <- shrink a] ++ [Pay a p' t x c | p' <- shrink p] ++ [Pay a p t' x c | t' <- shrink t] ++ [Pay a p t x' c | x' <- shrink x] ++ [Pay a p t x c' | c' <- shrink c]
+  shrink (If o x y) = [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
+  shrink (When a t c) = [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
+  shrink (Let v x c) = [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
+  shrink (Assert o c) = [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
+  shrink x = [x]
+
+
+arbitraryContractSized :: Int -> Context -> Gen Contract
+arbitraryContractSized n context =
+  let
+    n' = maximum [1, n - 1]
+  in
+    frequency
+      [
+        (35, pure Close)
+      , (20, Pay <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitraryContractSized n' context)
+      , (10, If <$> arbitrary' context <*> arbitrary' context <*> arbitraryContractSized n' context)
+      , (15, When <$> listOf (arbitrary' context) `suchThat` ((< n) . length) <*> arbitrary' context <*> arbitraryContractSized n' context)
+      , (20, Let <$> arbitrary' context <*> arbitrary' context <*> arbitraryContractSized n' context)
+      , ( 5, Assert <$> arbitrary' context <*> arbitraryContractSized n' context)
+      ]
+
+instance ContextuallyArbitrary Contract where
+  arbitrary' = arbitraryContractSized 5
+
 
 arbitraryAssocMap :: Eq k => Gen k -> Gen v -> Gen (AM.Map k v)
 arbitraryAssocMap arbitraryKey arbitraryValue =
@@ -318,6 +639,7 @@ arbitraryAssocMap arbitraryKey arbitraryValue =
     fmap (AM.fromList . nubBy ((==) `on` fst))
       . replicateM entries
       $ (,) <$> arbitraryKey <*> arbitraryValue
+
 
 shrinkAssocMap :: P.Eq k => AM.Map k v -> [AM.Map k v]
 shrinkAssocMap am =
@@ -328,86 +650,84 @@ shrinkAssocMap am =
   ]
 
 
-arbitraryAccounts :: Gen Accounts
-arbitraryAccounts =
-  arbitraryAssocMap
-    ((,) <$> arbitrary <*> arbitrary)
-    arbitraryPositiveAmount
+instance Arbitrary Accounts where
+  arbitrary = arbitraryAssocMap ((,) <$> arbitrary <*> arbitrary) arbitraryPositiveInteger
+  shrink = shrinkAssocMap
 
-shrinkAccounts :: Accounts -> [Accounts]
-shrinkAccounts = shrinkAssocMap
 
-arbitraryFromAccounts :: Accounts -> Gen ((AccountId, Token), Integer)
-arbitraryFromAccounts accounts'
-  | AM.null accounts' = (,) <$> ((,) <$> arbitrary <*> arbitrary) <*> arbitrary
-  | otherwise =
+instance ContextuallyArbitrary Accounts where
+  arbitrary' context =
     do
-      let entries = AM.toList accounts'
-      exact <- arbitrary
-      exactKey <- arbitrary
-      exactAccountId <- arbitrary
-      exactToken <- arbitrary
-      exactAmount <- arbitrary
-      let chooseKey = elements $ fst <$> entries
-          chooseAccountId = if exactAccountId then elements $ fst . fst <$> entries else arbitrary
-          chooseToken = if exactToken then elements $ snd . fst <$> entries else arbitrary
-          chooseAmount = if exactAmount then elements $ snd <$> entries else arbitrary
-      case (exact, exactKey) of
-        (True , _    ) -> elements entries
-        (False, True ) -> (,) <$> chooseKey <*> chooseAmount
-        (False, False) -> (,) <$> ((,) <$> chooseAccountId <*> chooseToken) <*> chooseAmount
+      entries <- arbitraryFibonacci [0..]
+      fmap (AM.fromList . nubBy ((==) `on` fst))
+        . replicateM entries
+        $ (,) <$> arbitrary' context <*> (arbitrary' context `suchThat` (> 0))
+
+instance ContextuallyArbitrary (Party, Token) where
+  arbitrary' context = (,) <$> arbitrary' context <*> arbitrary' context
+
+instance Arbitrary (AM.Map ChoiceId ChosenNum) where
+  arbitrary = arbitraryAssocMap arbitrary arbitraryInteger
+  shrink = shrinkAssocMap
 
 
-arbitraryChoices :: Gen (AM.Map ChoiceId ChosenNum)
-arbitraryChoices = arbitraryAssocMap arbitrary arbitrary
+instance ContextuallyArbitrary (AM.Map ChoiceId ChosenNum) where
+  arbitrary' context = arbitraryAssocMap (arbitrary' context) (arbitrary' context)
 
-shrinkChoices :: AM.Map ChoiceId ChosenNum -> [AM.Map ChoiceId ChosenNum]
-shrinkChoices = shrinkAssocMap
 
-arbitraryChoiceIdFromParty :: Gen Party -> Gen ChoiceId
-arbitraryChoiceIdFromParty party = ChoiceId <$> arbitraryChoiceName <*> party
+instance Arbitrary (AM.Map ValueId Integer) where
+  arbitrary = arbitraryAssocMap arbitrary arbitraryInteger
+  shrink = shrinkAssocMap
 
-arbitraryBoundValues :: Gen (AM.Map ValueId Integer)
-arbitraryBoundValues = arbitraryAssocMap arbitrary arbitrary
 
-shrinkBoundValues :: AM.Map ValueId Integer -> [AM.Map ValueId Integer]
-shrinkBoundValues = shrinkAssocMap
+instance ContextuallyArbitrary (AM.Map ValueId Integer) where
+  arbitrary' context = arbitraryAssocMap (arbitrary' context) (arbitrary' context)
 
 
 instance Arbitrary State where
-  arbitrary =
-    do
-      accounts' <- arbitraryAccounts
-      let party = fst . fst <$> arbitraryFromAccounts accounts'
-      State accounts'
-        <$> arbitraryAssocMap (arbitraryChoiceIdFromParty party) arbitrary
-        <*> arbitraryBoundValues
-        <*> arbitrary
+  arbitrary = arbitrary' =<< arbitrary
   shrink s@State{..} =
-    [s {accounts = accounts'} | accounts' <- shrinkAccounts accounts]
-      <> [s {choices = choices'} | choices' <- shrinkChoices choices]
-      <> [s {boundValues = boundValues'} | boundValues' <- shrinkBoundValues boundValues]
+    [s {accounts = accounts'} | accounts' <- shrinkAssocMap accounts]
+      <> [s {choices = choices'} | choices' <- shrinkAssocMap choices]
+      <> [s {boundValues = boundValues'} | boundValues' <- shrinkAssocMap boundValues]
       <> [s {minTime = minTime'} | minTime' <- shrink minTime]
+
+instance ContextuallyArbitrary State where
+  arbitrary' context =
+    do
+      accounts <- arbitrary' context
+      choices <- arbitrary' context
+      boundValues <- arbitrary' context
+      minTime <- arbitrary' context
+      pure State{..}
 
 
 instance Arbitrary Environment where
   arbitrary = Environment <$> arbitraryTimeInterval
   shrink (Environment x) = Environment <$> shrink x
 
+instance ContextuallyArbitrary Environment where
+  arbitrary' context = Environment <$> arbitrary' context
+
 
 instance Arbitrary InputContent where
-  arbitrary =
+  arbitrary = arbitrary' =<< arbitrary
+  shrink (IDeposit a p t x) = [IDeposit a' p t x | a' <- shrink a] ++ [IDeposit a p' t x | p' <- shrink p] ++ [IDeposit a p t' x | t' <- shrink t] ++ [IDeposit a p t x' | x' <- shrink x]
+  shrink (IChoice c x) = [IChoice c' x | c' <- shrink c] ++ [IChoice c x' | x' <- shrink x]
+  shrink x = [x]
+
+instance ContextuallyArbitrary InputContent where
+  arbitrary' context =
     do
-      deposit <- IDeposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-      choice <- IChoice <$> arbitrary <*> arbitrary
+      deposit <- IDeposit <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary
+      choice <- IChoice <$> arbitrary' context <*> arbitrary' context
       elements [deposit, choice, INotify]
-  -- FIXME: Revise.
 
 
 instance Arbitrary Input where
   arbitrary = NormalInput <$> arbitrary
-  -- FIXME: Revise.
+  shrink (NormalInput i)         = NormalInput <$> shrink i
+  shrink (MerkleizedInput i b c) = [MerkleizedInput i' b c | i' <- shrink i]
 
-
-caseGen :: Gen (Case Contract)
-caseGen = sized $ (simpleIntegerGen >>=) . caseRelGenSized
+instance ContextuallyArbitrary Input where
+  arbitrary' context = NormalInput <$> arbitrary' context

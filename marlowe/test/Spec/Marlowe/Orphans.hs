@@ -1,11 +1,12 @@
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 
 module Spec.Marlowe.Orphans (
 ) where
 
 
 import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Types
 
 
 deriving instance Eq Payment
