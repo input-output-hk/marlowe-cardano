@@ -189,6 +189,7 @@
             "Spec/Marlowe/AutoExecute"
             "Spec/Marlowe/Common"
             "Spec/Marlowe/Marlowe"
+            "Spec/Marlowe/Orphans"
             "Spec/Marlowe/Semantics"
             "Spec/Marlowe/Util"
             "Spec/Marlowe/Util/AssocMap"
