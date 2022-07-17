@@ -15,6 +15,7 @@ import Ledger.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
 import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Common (contractGen, observationGen, valueGen)
+import Spec.Marlowe.Orphans ()
 import Spec.Marlowe.Util
 import Spec.Marlowe.Util.AssocMap
 import Test.Tasty
@@ -149,7 +150,11 @@ tests =
         , testProperty "INotify" checkINotify
         ]
       , testProperty "getContinuation" checkGetContinuation
+--applyCases
+      , testProperty "applyInput" checkApplyInput
+--applyAllInputs
       , testCase "isClose" checkIsClose
+--computeTransaction
       ]
     ]
 
@@ -781,6 +786,15 @@ checkGetContinuation =
         (_                , _               , Nothing  ) -> True
         _                                                -> False
 
+
+checkApplyInput :: Property
+checkApplyInput =
+  property $ do
+    forAll ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> contractGen) $ \(environment, state, input, contract) ->
+      case (contract, applyInput environment state input contract) of
+        (When cases _ _, result           ) -> result == applyCases environment state input cases
+        (_             , ApplyNoMatchError) -> True
+        _                                   -> False
 
 checkIsClose :: Assertion
 checkIsClose =

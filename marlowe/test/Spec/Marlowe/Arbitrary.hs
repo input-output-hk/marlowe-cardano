@@ -36,8 +36,9 @@ import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Bound (..), Case, ChoiceId (..), ChoiceName,
-                                                 ChosenNum, Contract, Environment (..), Party (..), Payee (..),
-                                                 State (..), TimeInterval, Token (..), ValueId (..))
+                                                 ChosenNum, Contract, Environment (..), Input (..), InputContent (..),
+                                                 Party (..), Payee (..), State (..), TimeInterval, Token (..),
+                                                 ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
 import Spec.Marlowe.Common (caseRelGenSized, simpleIntegerGen)
@@ -392,6 +393,20 @@ instance Arbitrary State where
 instance Arbitrary Environment where
   arbitrary = Environment <$> arbitraryTimeInterval
   shrink (Environment x) = Environment <$> shrink x
+
+
+instance Arbitrary InputContent where
+  arbitrary =
+    do
+      deposit <- IDeposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+      choice <- IChoice <$> arbitrary <*> arbitrary
+      elements [deposit, choice, INotify]
+  -- FIXME: Revise.
+
+
+instance Arbitrary Input where
+  arbitrary = NormalInput <$> arbitrary
+  -- FIXME: Revise.
 
 
 caseGen :: Gen (Case Contract)
