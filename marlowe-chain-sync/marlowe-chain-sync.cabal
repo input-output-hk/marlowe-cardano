@@ -72,6 +72,7 @@ executable marlowe-chain-sync
   hs-source-dirs:   app
   main-is: Main.hs
   other-modules:
+    Options
     Paths_marlowe_chain_sync
   autogen-modules:
     Paths_marlowe_chain_sync
@@ -80,6 +81,7 @@ executable marlowe-chain-sync
     , async
     , cardano-api
     , marlowe-chain-sync
+    , optparse-applicative
     , ouroboros-network
     , stm
   ghc-options:
