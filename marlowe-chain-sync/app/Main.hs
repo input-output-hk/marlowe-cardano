@@ -1,36 +1,68 @@
 module Main where
 
 import Cardano.Api (Block (Block), BlockHeader (..), BlockInMode (BlockInMode), ChainPoint (..), ChainTip (..),
-                    ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..), NetworkId (..),
-                    NetworkMagic (..))
+                    ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.Async (concurrently)
+import Control.Concurrent.Async (concurrently, waitCatch, withAsync)
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar)
+import Control.Exception (Exception (displayException))
 import Control.Monad (guard)
 import Control.Monad.STM (STM)
 import Data.Functor (void)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (ChainSyncEvent (..), runNodeClient)
+import Options (Options (..), getOptions)
 import Ouroboros.Network.Point (WithOrigin (..))
+import System.IO (hPutStrLn, stderr)
 
 main :: IO ()
 main = do
+  options <- getOptions "0.0.0.0"
+  runChainSync options
+
+runChainSync :: Options -> IO ()
+runChainSync Options{..} = do
   tpoint <- newTVarIO ChainPointAtGenesis
   ttip <- newTVarIO ChainTipAtGenesis
+  tConnectionAttempts <- newTVarIO @Int 0
   let
+    runNodeClientSupervised :: IO ()
+    runNodeClientSupervised = withAsync runNodeClient' \a -> do
+      result <- waitCatch a
+      case result of
+        Right _ -> pure ()
+        Left exception -> do
+          connectionAttempts <- atomically do
+            connectionAttempts <- readTVar tConnectionAttempts
+            writeTVar tConnectionAttempts $ connectionAttempts + 1
+            pure connectionAttempts
+          let
+            timeoutSeconds :: Int
+            timeoutSeconds = min 15 $ floor @Double $ exp $ fromIntegral connectionAttempts
+          let
+            msg = if connectionAttempts == 0
+              then "Connection to local node lost."
+              else "Connection attempt #" <> show connectionAttempts <> " failed."
+          hPutStrLn stderr $ msg <> " Attempting to reconnect in " <> show timeoutSeconds <> "s."
+          hPutStrLn stderr $ "Message: " <> displayException exception
+          threadDelay $ 1_000_000 * timeoutSeconds
+          runNodeClientSupervised
+
     runNodeClient' :: IO ()
     runNodeClient' =
-      runNodeClient connectionInfo getHeaderAtPoint getIntersectionPoints $ atomically . \case
-        RollForward (BlockInMode (Block (BlockHeader slotNo hash _) _) _) tip -> do
-          writeTVar tpoint $ ChainPoint slotNo hash
-          writeTVar ttip tip
-        RollBackward point tip                                                -> do
-          writeTVar tpoint point
-          writeTVar ttip tip
+      runNodeClient connectionInfo getHeaderAtPoint getIntersectionPoints \event -> atomically do
+        writeTVar tConnectionAttempts 0
+        case event of
+          RollForward (BlockInMode (Block (BlockHeader slotNo hash _) _) _) tip -> do
+            writeTVar tpoint $ ChainPoint slotNo hash
+            writeTVar ttip tip
+          RollBackward point tip                                                -> do
+            writeTVar tpoint point
+            writeTVar ttip tip
       where
         connectionInfo = LocalNodeConnectInfo
           { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-          , localNodeNetworkId = Testnet $ NetworkMagic 1566
-          , localNodeSocketPath = "/var/lib/containers/storage/volumes/marlowe-dashboard-client_cardano-ipc/_data/node.socket"
+          , localNodeNetworkId = networkId
+          , localNodeSocketPath = nodeSocket
           }
         getHeaderAtPoint _ = pure Origin
         getIntersectionPoints _ _ = pure []
@@ -51,4 +83,4 @@ main = do
 
   point <- readTVarIO tpoint
   tip <- readTVarIO ttip
-  void $ concurrently runNodeClient' (writeStats point tip)
+  void $ concurrently runNodeClientSupervised (writeStats point tip)
