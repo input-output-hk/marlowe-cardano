@@ -133,7 +133,6 @@ initializeTransaction marloweParams slotConfig costModelParams network stake con
     marloweTransaction <- initializeTransactionImpl
       marloweParams slotConfig costModelParams network stake
       contract state
-      outputFile
       merkleize
       printStats
     maybeWriteJson outputFile
@@ -153,7 +152,7 @@ initializeTransactionImpl :: MonadError CliError m
                           -> State                  -- ^ The initial Marlowe state.
                           -> Bool                   -- ^ Whether to deeply merkleize the contract.
                           -> Bool                   -- ^ Whether to print statistics about the validator.
-                          -> m MarloweTransaction
+                          -> m (MarloweTransaction AlonzoEra)
 initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState merkleize printStats =
   do
     let

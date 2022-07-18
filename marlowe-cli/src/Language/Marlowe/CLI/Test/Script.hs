@@ -25,10 +25,10 @@
 {-# LANGUAGE TypeOperators      #-}
 
 
-module Language.Marlowe.CLI.Test.Script (
--- * Testing
-  scriptTest
-) where
+module Language.Marlowe.CLI.Test.Script where --(
+-- -- * Testing
+--   scriptTest
+-- ) where
 
 import Cardano.Api (AddressAny (..), AddressInEra (..), AlonzoEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr),
                     AssetId (..), AssetName (..), CardanoMode, LocalNodeConnectInfo (..), NetworkId, PolicyId (..),
@@ -101,6 +101,8 @@ import qualified Cardano.Wallet.Primitive.Types.TokenMap as W (AssetId (AssetId)
 import Cardano.Wallet.Shelley.Network.Node (Log (MsgAccountDelegationAndRewards))
 import Control.Arrow ((<<<))
 import Control.Monad.Error (MonadError (catchError))
+import Control.Monad.RWS.Class (MonadReader)
+import Control.Monad.Reader.Class (MonadReader (ask))
 import Control.Monad.State (modify)
 import qualified Data.Aeson as A (Value (..), object)
 import qualified Data.ByteArray as BA (pack)
@@ -125,34 +127,73 @@ import qualified Servant.Client as Servant (client)
 -- Script state is a placeholder
 newtype ScriptState = ScriptState [String]
 
+
+data ScriptContext = ScriptContext
+  { networkId  :: NetworkId
+  , slotConfig :: SlotConfig
+  }
+
 -- Next Tasks:
 -- 1. Try to use initializeTransaction (Language.MArlowe.CLI.Run.hs) and prepareTransction
 -- We'd need to change those functions to give us the result instead of storing it in a file.
+--
+--
+-- initializeTransactionImpl :: MonadError CliError m
+--                           => MonadIO m
+--                           => MarloweParams          -- ^ The Marlowe contract parameters.
+--                           -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
+--                           -> CostModelParams        -- ^ The cost model parameters.
+--                           -> NetworkId              -- ^ The network ID.
+--                           -> StakeAddressReference  -- ^ The stake address.
+--                           -> Contract               -- ^ The initial Marlowe contract.
+--                           -> State                  -- ^ The initial Marlowe state.
+--                           -> Bool                   -- ^ Whether to deeply merkleize the contract.
+--                           -> Bool                   -- ^ Whether to print statistics about the validator.
+--                           -> m (MarloweTransaction AlonzoEra)
 
-interpret :: MonadError CliError m => MonadState ScriptState m => MonadIO m => ScriptOperation -> m ()
+
+interpret :: MonadError CliError m
+          => MonadState ScriptState m
+          => MonadReader ScriptContext m
+          => MonadIO m
+          => ScriptOperation
+          -> m ()
+interpret (Initialize _) = do
+  -- x <- get
+  -- modify \(ScriptState lst) -> ScriptState ("newValue" : lst)
+  -- put (ScriptState [])
+  -- ctx <- ask
+  -- x <- get
+  modify $ \(ScriptState state) -> ScriptState (state ++ ["Initialize"])
 interpret (Fail message) = throwError $ CliError message
-interpret (Initialize _) = modify $ \(ScriptState state) -> ScriptState (state ++ ["Initialize"])
 interpret (Prepare _)    = modify $ \(ScriptState state) -> ScriptState (state ++ ["Prepare"])
 
-runOperation :: ScriptOperation -> ()
-runOperation Initialize = initializeTransaction
-runOperation Prepare    = prepareTransaction
+--runOperation :: ScriptOperation -> ()
+--runOperation (Initialize {}) = initializeTransaction
+--runOperation Prepare    = prepareTransaction
 
 -- | Test a Marlowe contract.
 scriptTest  :: MonadError CliError m
             => MonadIO m
-            => NetworkId                         -- ^ The network magic.
+            => CostModelParams
+            -> NetworkId                         -- ^ The network magic.
             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest _network _connection _slotConfig ScriptTest{..} =
+scriptTest _costModel _network _connection _slotConfig ScriptTest{..} =
   do
+    -- putStrLn :: String -> IO ()
+    -- liftIO :: IO a -> m a
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
 
     let
-      interpretLoop :: String -- MonadError CliError m => MonadIO m =>
+      interpretLoop :: MonadError CliError m
+                    => MonadState ScriptState m
+                    => MonadReader ScriptContext m
+                    => MonadIO m
+                    => m ()
       interpretLoop = for_ stScriptOperations \operation -> do
         interpret operation
     catchError
