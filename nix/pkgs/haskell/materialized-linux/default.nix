@@ -1216,7 +1216,6 @@
           "aeson-casing".components.library.planned = lib.mkOverride 900 true;
           "lazy-search".components.library.planned = lib.mkOverride 900 true;
           "plutus-chain-index".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-chain-sync".components.exes."marlowe-chain-sync".planned = lib.mkOverride 900 true;
           "groups".components.library.planned = lib.mkOverride 900 true;
           "servant".components.library.planned = lib.mkOverride 900 true;
           "bin".components.library.planned = lib.mkOverride 900 true;
@@ -1477,6 +1476,7 @@
           "network".components.library.planned = lib.mkOverride 900 true;
           "psqueues".components.library.planned = lib.mkOverride 900 true;
           "show-combinators".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.exes."marlowesyncd".planned = lib.mkOverride 900 true;
           "ListLike".components.library.planned = lib.mkOverride 900 true;
           "string-interpolate".components.library.planned = lib.mkOverride 900 true;
           "bsb-http-chunked".components.library.planned = lib.mkOverride 900 true;

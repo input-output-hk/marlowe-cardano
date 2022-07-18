@@ -11,12 +11,12 @@ import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), BlockNo, Car
                     ChainSyncClientPipelined (..), ChainTip (..), LocalChainSyncClient (..),
                     LocalNodeClientProtocols (..), LocalNodeConnectInfo, chainPointToSlotNo, connectToLocalNode)
 import Cardano.Api.ChainSync.ClientPipelined (ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..),
-                                              ClientStNext (..), MkPipelineDecision, N (Z), Nat (..),
+                                              ClientStNext (..), MkPipelineDecision, N (..), Nat (..),
                                               PipelineDecision (..), mapChainSyncClientPipelined,
                                               pipelineDecisionLowHighMark, runPipelineDecision)
 import Control.Arrow ((&&&))
 import Data.List (sortOn)
-import Data.Ord (Down (Down))
+import Data.Ord (Down (..))
 import Ouroboros.Network.Point (WithOrigin (..))
 
 type CardanoBlock = BlockInMode CardanoMode

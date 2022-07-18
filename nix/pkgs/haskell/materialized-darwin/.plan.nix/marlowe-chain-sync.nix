@@ -32,19 +32,28 @@
       };
     components = {
       "library" = {
-        depends = [ (hsPkgs."base" or (errorHandler.buildDepError "base")) ];
+        depends = [
+          (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+          (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
+          ];
         buildable = true;
-        modules = [ "MyLib" ];
+        modules = [ "Language/Marlowe/Runtime/ChainSync/NodeClient" ];
         hsSourceDirs = [ "src" ];
         };
       exes = {
-        "marlowe-chain-sync" = {
+        "marlowesyncd" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
+            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             ];
           buildable = true;
-          modules = [ "Paths_marlowe_chain_sync" ];
+          modules = [ "Options" "Paths_marlowe_chain_sync" ];
           hsSourceDirs = [ "app" ];
           mainPath = [
             "Main.hs"
