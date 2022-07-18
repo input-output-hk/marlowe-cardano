@@ -52,7 +52,7 @@ parseTestCommand :: O.Mod O.OptionFields NetworkId
 parseTestCommand network socket=
   O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
---  <> _scriptsCommand network socket
+    <> _scriptsCommand network socket
     <> pabsCommand network socket
 
 

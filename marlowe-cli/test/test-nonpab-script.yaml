@@ -1,0 +1,8 @@
+stTestName: Sample Test
+stScriptOperations:
+  - tag: Initialize
+    soOwner: "Someone"
+  - tag: Prepare
+    soOwner: "Another Someone"
+  - tag: Fail
+    soFailureMessage: "Failure Invoked"

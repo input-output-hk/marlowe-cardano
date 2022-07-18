@@ -125,10 +125,10 @@ data ScriptTest =
   ScriptTest
   {
     stTestName         :: String             -- ^ The name of the test.
-  , stSlotLength       :: Integer            -- ^ The slot length, in milliseconds.
-  , stSlotZeroOffset   :: Integer            -- ^ The effective POSIX time of slot zero, in milliseconds.
-  , stInitialContract  :: Contract           -- ^ The contract.
-  , stInitialState     :: State              -- ^ The the contract's initial state.
+  -- , stSlotLength       :: Integer            -- ^ The slot length, in milliseconds.
+  -- , stSlotZeroOffset   :: Integer            -- ^ The effective POSIX time of slot zero, in milliseconds.
+  -- , stInitialContract  :: Contract           -- ^ The contract.
+  -- , stInitialState     :: State              -- ^ The the contract's initial state.
   , stScriptOperations :: [ScriptOperation]  -- ^ The sequence of test operations.
   }
     deriving stock (Eq, Generic, Show)
@@ -148,7 +148,18 @@ data PabTest =
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
-  ScriptOperation
+  Initialize
+    {
+      soOwner :: RoleName  -- ^ The name of the wallet's owner.
+    }
+  | Prepare
+    {
+      soOwner :: RoleName  -- ^ The name of the wallet's owner.
+    }
+  | Fail
+    {
+      soFailureMessage :: String
+    }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 

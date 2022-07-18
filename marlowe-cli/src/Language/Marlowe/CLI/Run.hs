@@ -130,12 +130,15 @@ initializeTransaction marloweParams slotConfig costModelParams network stake con
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
-    initializeTransactionImpl
+    marloweTransaction <- initializeTransactionImpl
       marloweParams slotConfig costModelParams network stake
       contract state
       outputFile
       merkleize
       printStats
+    maybeWriteJson outputFile
+          . (if merkleize then merkleizeMarlowe else id)
+          $ marloweTransaction
 
 
 -- | Create an initial Marlowe transaction.
@@ -148,31 +151,28 @@ initializeTransactionImpl :: MonadError CliError m
                           -> StakeAddressReference  -- ^ The stake address.
                           -> Contract               -- ^ The initial Marlowe contract.
                           -> State                  -- ^ The initial Marlowe state.
-                          -> Maybe FilePath         -- ^ The output JSON file for the validator information.
                           -> Bool                   -- ^ Whether to deeply merkleize the contract.
                           -> Bool                   -- ^ Whether to print statistics about the validator.
-                          -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState outputFile merkleize printStats =
+                          -> m MarloweTransaction
+initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState merkleize printStats =
   do
-     let
-       mtRoles = rolesCurrency marloweParams
-     mtValidator <- liftCli $ buildValidator marloweParams costModelParams network stake
-     mtRoleValidator <- liftCli $ buildRoleValidator mtRoles costModelParams network stake
-     let
-       ValidatorInfo{..} = mtValidator :: ValidatorInfo AlonzoEra  -- FIXME: Generalize eras.
-       mtContinuations = mempty
-       mtRange         = Nothing
-       mtInputs        = []
-       mtPayments      = []
-     maybeWriteJson outputFile
-       . (if merkleize then merkleizeMarlowe else id)
-       $ MarloweTransaction{..}
-     liftIO
-       $ when printStats
-         $ do
-           hPutStrLn stderr ""
-           hPutStrLn stderr $ "Validator size: " <> show viSize
-           hPutStrLn stderr $ "Base-validator cost: " <> show viCost
+    let
+      mtRoles = rolesCurrency marloweParams
+    mtValidator <- liftCli $ buildValidator marloweParams costModelParams network stake
+    mtRoleValidator <- liftCli $ buildRoleValidator mtRoles costModelParams network stake
+    let
+      ValidatorInfo{..} = mtValidator :: ValidatorInfo AlonzoEra  -- FIXME: Generalize eras.
+      mtContinuations = mempty
+      mtRange         = Nothing
+      mtInputs        = []
+      mtPayments      = []
+    liftIO
+      $ when printStats
+        $ do
+          hPutStrLn stderr ""
+          hPutStrLn stderr $ "Validator size: " <> show viSize
+          hPutStrLn stderr $ "Base-validator cost: " <> show viCost
+    pure MarloweTransaction{..}
 
 
 -- | Prepare the next step in a Marlowe contract.
