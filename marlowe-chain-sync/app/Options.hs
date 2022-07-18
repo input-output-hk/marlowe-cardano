@@ -44,7 +44,7 @@ parseOptions defaultNetworkId defaultSocketPath version = O.info parser infoMod
       where
         versionOption :: O.Parser (a -> a)
         versionOption = O.infoOption
-          ("marlowe-chain-sync " <> version)
+          ("marlowesyncd " <> version)
           (O.long "version" <> O.help "Show version.")
 
         socketPathOption :: O.Parser FilePath
@@ -76,5 +76,5 @@ parseOptions defaultNetworkId defaultSocketPath version = O.info parser infoMod
     infoMod = mconcat
       [ O.fullDesc
       , O.progDesc "Chain sync client for Marlowe Runtime."
-      , O.header "marlowe-chain-sync : a chain sync client for the Marlowe Runtime."
+      , O.header "marlowesyncd : a chain sync client for the Marlowe Runtime."
       ]

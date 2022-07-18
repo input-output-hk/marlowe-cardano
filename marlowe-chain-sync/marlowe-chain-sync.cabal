@@ -67,7 +67,7 @@ library
     , cardano-api
     , ouroboros-network
 
-executable marlowe-chain-sync
+executable marlowesyncd
   import: lang
   hs-source-dirs:   app
   main-is: Main.hs
