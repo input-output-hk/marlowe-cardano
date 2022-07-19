@@ -101,6 +101,7 @@
               run-node
               docker-compose
               postgresql
+              sqitchPg
               hie-bios.components.exes.hie-bios
               haskell-language-server.components.exes.haskell-language-server
               hlint.components.exes.hlint
