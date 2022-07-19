@@ -1,10 +1,7 @@
 { pkgs
 , network
-, marlowe-dashboard
 , cardano-cli
-, marlowe-pab
 , cardano-node
-, plutus-chain-index
 }:
 let
   # FIXME: This was copied in anger from marlowe-dashboard-client/dev - cleanup this stuff when needed.
