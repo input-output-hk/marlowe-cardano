@@ -39,6 +39,7 @@ runNodeClient nodeConnectInfo getHeaderAtPoint getIntersectionPoints onEvent =
         $ mapChainSyncClientPipelined id id (blockToBlockNo &&& id) (chainTipToBlockNo &&& id)
         $ pipelinedClient onEvent getBlockNoAtPoint getIntersectionPoints
     , localTxSubmissionClient = Nothing
+    , localTxMonitoringClient = Nothing
     , localStateQueryClient   = Nothing
     }
   where
