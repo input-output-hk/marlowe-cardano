@@ -99,6 +99,8 @@
             buildInputs = with pkgs; [
               nixpkgs-fmt
               run-node
+              docker-compose
+              postgresql
               hie-bios.components.exes.hie-bios
               haskell-language-server.components.exes.haskell-language-server
               hlint.components.exes.hlint
