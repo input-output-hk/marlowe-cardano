@@ -203,14 +203,6 @@ testCasesFromFile excluded testfile =
     load f = eitherDecode <$> B.readFile f
     msg err = putStr ("Cannot parse test specification from file: " ++ testfile ++ "\nError: " ++ err) >> return []
 
-getMarketObjectCode :: Reference Double -> Maybe String
-getMarketObjectCode (ReferenceId i)    = marketObjectCode i
-getMarketObjectCode (ReferenceTerms _) = Nothing
-
-getContractIdentifier :: Reference Double -> Maybe String
-getContractIdentifier (ReferenceId i)                     = contractIdentifier i
-getContractIdentifier (ReferenceTerms ContractTerms {..}) = Just contractId
-
 data DataObserved = DataObserved
   { identifier :: String
   , values     :: [ValueObserved]

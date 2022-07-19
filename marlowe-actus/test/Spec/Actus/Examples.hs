@@ -1,5 +1,7 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 module Spec.Actus.Examples
     (tests)
@@ -55,7 +57,7 @@ ex_pam1 =
                   calendar = Just CLDR_NC
                 },
             maturityDate = Just $ read "2030-01-01 00:00:00",
-            contractId = "0",
+            contractId = "pam01",
             enableSettlement = False,
             initialExchangeDate = Just $ read "2020-01-01 00:00:00",
             contractRole = CR_RPA,
@@ -80,9 +82,9 @@ ex_pam1 =
             interestCalculationBase = Just IPCB_NT
           }
       contract = genContract' defaultRiskFactors terms
-      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
-      ip = NormalInput $ IDeposit (Role "party") "party" ada 200
-      redemption = NormalInput $ IDeposit (Role "party") "party" ada 10000
+      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10_000_000_000
+      ip = NormalInput $ IDeposit (Role "party") "party" ada 200_000_000
+      redemption = NormalInput $ IDeposit (Role "party") "party" ada 10_000_000_000
    in case computeTransaction
         ( TransactionInput
             (0, 0)
@@ -107,8 +109,8 @@ ex_pam1 =
           assertBool "Contract is in Close" $ con == Close
           assertBool "No warnings" $ null txWarn
 
-          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000)
-          assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 12000)
+          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000_000_000)
+          assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 12_000_000_000)
 
 -- |ex_lam1 defines a contract of type LAM
 --
@@ -140,7 +142,7 @@ ex_lam1 =
                   calendar = Just CLDR_NC
                 },
             maturityDate = Just $ read "2030-01-01 00:00:00",
-            contractId = "0",
+            contractId = "lam01",
             enableSettlement = False,
             initialExchangeDate = Just $ read "2020-01-01 00:00:00",
             contractRole = CR_RPA,
@@ -175,45 +177,45 @@ ex_lam1 =
             interestCalculationBase = Just IPCB_NT
           }
       contract = genContract' defaultRiskFactors terms
-      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
+      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10_000_000_000
       pr i = NormalInput $ IDeposit (Role "party") "party" ada i
       ip i = NormalInput $ IDeposit (Role "party") "party" ada i
    in case computeTransaction
         ( TransactionInput
             (0, 0)
             [ principal,
-              pr 1000,
-              ip 200,
-              pr 1000,
-              ip 180,
-              pr 1000,
-              ip 160,
-              pr 1000,
-              ip 140,
-              pr 1000,
-              ip 120,
-              pr 1000,
-              ip 100,
-              pr 1000,
-              ip 80,
-              pr 1000,
-              ip 60,
-              pr 1000,
-              ip 40,
-              ip 20,
-              pr 1000
+              pr 1000_000_000,
+              ip 200_000_000,
+              pr 1000_000_000,
+              ip 180_000_000,
+              pr 1000_000_000,
+              ip 160_000_000,
+              pr 1000_000_000,
+              ip 140_000_000,
+              pr 1000_000_000,
+              ip 120_000_000,
+              pr 1000_000_000,
+              ip 100_000_000,
+              pr 1000_000_000,
+              ip 80_000_000,
+              pr 1000_000_000,
+              ip 60_000_000,
+              pr 1000_000_000,
+              ip 40_000_000,
+              ip 20_000_000,
+              pr 1000_000_000
             ]
         )
         (emptyState 0)
         contract of
-        Error _ -> assertFailure "Transactions are not expected to fail"
+        Error err -> assertFailure $ "Transactions are not expected to fail: " ++ show err
         TransactionOutput txWarn txPay _ con -> do
           assertBool "Contract is in Close" $ con == Close
           assertBool "No warnings" $ null txWarn
 
-          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000)
+          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000_000_000)
           let tc = totalPayments (Party "counterparty") txPay
-          assertBool ("total payments to counterparty: " ++ show tc) (tc == 11100)
+          assertBool ("total payments to counterparty: " ++ show tc) (tc == 11100_000_000)
 
 -- |ex_nam1 defines a contract of type NAM
 --
@@ -245,7 +247,7 @@ ex_nam1 =
                   calendar = Just CLDR_NC
                 },
             maturityDate = Just $ read "2030-01-01 00:00:00",
-            contractId = "0",
+            contractId = "nam01",
             enableSettlement = False,
             initialExchangeDate = Just $ read "2020-01-01 00:00:00",
             contractRole = CR_RPA,
@@ -290,33 +292,33 @@ ex_nam1 =
             interestCalculationBase = Just IPCB_NT
           }
       contract = genContract' defaultRiskFactors terms
-      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
+      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000_000_000
       pr i = NormalInput $ IDeposit (Role "party") "party" ada i
       ip i = NormalInput $ IDeposit (Role "party") "party" ada i
    in case computeTransaction
         ( TransactionInput
             (0, 0)
             [ principal,
-              pr 800,
-              ip 200,
-              pr 816,
-              ip 184,
-              pr 832,
-              ip 168,
-              pr 849,
-              ip 151,
-              pr 866,
-              ip 134,
-              pr 883,
-              ip 117,
-              pr 901,
-              ip 99,
-              pr 919,
-              ip 81,
-              pr 937,
-              ip 63,
-              ip 44,
-              pr 2196
+              pr 800_000_000,
+              ip 200_000_000,
+              pr 816_000_000,
+              ip 184_000_000,
+              pr 832_320_000,
+              ip 167_680_000,
+              pr 848_966_400,
+              ip 151_033_600,
+              pr 865_945_728,
+              ip 134_054_272,
+              pr 883_264_643,
+              ip 116_735_357,
+              pr 900_929_935,
+              ip 99_070_065,
+              pr 918_948_534,
+              ip 81_051_466,
+              pr 937_327_505,
+              ip 62_672_495,
+              ip 43_925_945,
+              pr 2196_297_255
             ]
         )
         (emptyState 0)
@@ -326,9 +328,10 @@ ex_nam1 =
           assertBool "Contract is in Close" $ con == Close
           assertBool "No warnings" $ null txWarn
 
-          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000)
+          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000_000_000)
           let tc = totalPayments (Party "counterparty") txPay
-          assertBool ("total payments to counterparty: " ++ show tc) (tc == 11240)
+          assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_200)
+
 
 -- |ex_ann1 defines a contract of type ANN
 --
@@ -360,7 +363,7 @@ ex_ann1 =
                   calendar = Just CLDR_NC
                 },
             maturityDate = Just $ read "2030-01-01 00:00:00",
-            contractId = "0",
+            contractId = "ann01",
             enableSettlement = False,
             initialExchangeDate = Just $ read "2020-01-01 00:00:00",
             contractRole = CR_RPA,
@@ -395,33 +398,33 @@ ex_ann1 =
             interestCalculationBase = Just IPCB_NT
           }
       contract = genContract' defaultRiskFactors terms
-      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
+      principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000_000_000
       pr i = NormalInput $ IDeposit (Role "party") "party" ada i
       ip i = NormalInput $ IDeposit (Role "party") "party" ada i
    in case computeTransaction
         ( TransactionInput
             (0, 0)
             [ principal,
-              pr 800,
-              ip 200,
-              pr 816,
-              ip 184,
-              pr 832,
-              ip 168,
-              pr 849,
-              ip 151,
-              pr 866,
-              ip 134,
-              pr 883,
-              ip 117,
-              pr 901,
-              ip 99,
-              pr 919,
-              ip 81,
-              pr 937,
-              ip 63,
-              ip 44,
-              pr 2196
+              pr 800_000_000,
+              ip 200_000_000,
+              pr 816_000_000,
+              ip 184_000_000,
+              pr 832_320_000,
+              ip 167_680_000,
+              pr 848_966_400,
+              ip 151_033_600,
+              pr 865_945_728,
+              ip 134_054_272,
+              pr 883_264_643,
+              ip 116_735_357,
+              pr 900_929_935,
+              ip 99_070_065,
+              pr 918_948_534,
+              ip 81_051_466,
+              pr 937_327_505,
+              ip 62_672_495,
+              ip 43_925_945,
+              pr 2196_297_255
             ]
         )
         (emptyState 0)
@@ -431,9 +434,9 @@ ex_ann1 =
           assertBool "Contract is in Close" $ con == Close
           assertBool "No warnings" $ null txWarn
 
-          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000)
+          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000_000_000)
           let tc = totalPayments (Party "counterparty") txPay
-          assertBool ("total payments to counterparty: " ++ show tc) (tc == 11240)
+          assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_200)
 
 -- |ex_optns1 defines a contract of type OPTNS
 ex_optns1 :: IO ()
@@ -485,27 +488,27 @@ ex_optns1 =
       rf XD d
         | d == (fromJust $ maturityDate terms) =
           RiskFactors
-            { o_rf_CURS = _one,
-              o_rf_RRMO = _one,
-              o_rf_SCMO = _one,
-              pp_payoff = _zero,
-              xd_payoff = constant 120,
-              dv_payoff = _zero
+            { o_rf_CURS = 1,
+              o_rf_RRMO = 1,
+              o_rf_SCMO = 1,
+              pp_payoff = 0,
+              xd_payoff = 120,
+              dv_payoff = 0
             }
       rf _ _ =
         RiskFactors
-          { o_rf_CURS = _one,
-            o_rf_RRMO = _one,
-            o_rf_SCMO = _one,
-            pp_payoff = _zero,
-            xd_payoff = _zero,
-            dv_payoff = _zero
+          { o_rf_CURS = 1,
+            o_rf_RRMO = 1,
+            o_rf_SCMO = 1,
+            pp_payoff = 0,
+            xd_payoff = 0,
+            dv_payoff = 0
           }
    in case computeTransaction
         ( TransactionInput
             (0, 0)
-            [ principal 10,
-              ex 40
+            [ principal 10_000_000,
+              ex 40_000_000
             ]
         )
         (emptyState 0)
@@ -515,9 +518,9 @@ ex_optns1 =
           assertBool "Contract is in Close" $ con == Close
           assertBool "No warnings" $ null txWarn
 
-          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10)
+          assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000_000)
           let tc = totalPayments (Party "counterparty") txPay
-          assertBool ("total payments to counterparty: " ++ show tc) (tc == 40)
+          assertBool ("total payments to counterparty: " ++ show tc) (tc == 40_000_000)
 
 -- |ex_com1 defines a contract of type COM
 ex_com1 :: IO ()
@@ -540,7 +543,7 @@ ex_com1 =
    in case computeTransaction
         ( TransactionInput
             (0, 0)
-            [ principal 1400
+            [ principal 1400_000_000
             ]
         )
         (emptyState 0)
@@ -552,17 +555,17 @@ ex_com1 =
 
           assertBool "total payments to party" (totalPayments (Party "party") txPay == 0)
           let tc = totalPayments (Party "counterparty") txPay
-          assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400)
+          assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400_000_000)
 
-defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactors a
+defaultRiskFactors :: EventType -> LocalTime -> RiskFactors (Value Observation)
 defaultRiskFactors _ _ =
   RiskFactors
-    { o_rf_CURS = _one,
-      o_rf_RRMO = _one,
-      o_rf_SCMO = _one,
-      pp_payoff = _zero,
-      xd_payoff = _zero,
-      dv_payoff = _zero
+    { o_rf_CURS = 1,
+      o_rf_RRMO = 1,
+      o_rf_SCMO = 1,
+      pp_payoff = 0,
+      xd_payoff = 0,
+      dv_payoff = 0
     }
 
 -- |totalPayments calculates the sum of the payments provided as argument
@@ -584,6 +587,7 @@ nullContract =
       dayCountConvention = Nothing,
       scheduleConfig = ScheduleConfig Nothing Nothing Nothing,
       statusDate = LocalTime (ModifiedJulianDay 0) (TimeOfDay 0 0 0),
+      marketObjectCodeRef = Nothing,
       contractPerformance = Nothing,
       creditEventTypeCovered = Nothing,
       coverageOfCreditEnhancement = Nothing,

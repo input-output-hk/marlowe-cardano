@@ -11,18 +11,15 @@ module Actus.Domain
   , module Actus.Domain.Schedule
   , RiskFactors (..)
   , CashFlow (..)
-  , ActusOps (..)
-  , ActusNum (..)
-  , RoleSignOps (..)
-  , ScheduleOps (..)
-  , YearFractionOps (..)
+  , _r
+  , _y
   , marloweFixedPoint
   , setDefaultContractTermValues
   )
   where
 
 import Actus.Domain.BusinessEvents
-import Actus.Domain.ContractState
+import Actus.Domain.ContractState (ContractState (..))
 import Actus.Domain.ContractTerms
 import Actus.Domain.Schedule
 import Actus.Utility.YearFraction (yearFraction)
@@ -65,45 +62,23 @@ data CashFlow a = CashFlow
 marloweFixedPoint :: Integer
 marloweFixedPoint = 1000000
 
-class ActusOps a where
-    _min  :: a -> a -> a
-    _max  :: a -> a -> a
-    _abs  :: a -> a
-    _zero :: a
-    _one  :: a
-    _fromInteger :: Integer -> a
-    _negate :: a -> a
+_r :: Num a => CR -> a
+_r CR_RPA = 1
+_r CR_RPL = negate 1
+_r CR_CLO = 1
+_r CR_CNO = 1
+_r CR_COL = 1
+_r CR_LG  = 1
+_r CR_ST  = negate 1
+_r CR_BUY = 1
+_r CR_SEL = negate 1
+_r CR_RFL = 1
+_r CR_PFL = negate 1
+_r CR_RF  = 1
+_r CR_PF  = negate 1
 
-class Eq a => ActusNum a where
-    (+) :: a -> a -> a
-    (-) :: a -> a -> a
-    (*) :: a -> a -> a
-    (/) :: a -> a -> a
-
-infixl 7  *, /
-infixl 6  +, -
-
-class YearFractionOps b where
-    _y :: DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> b
-
-class ScheduleOps b where
-    _ceiling :: b -> Integer
-
-class (ActusNum a, ActusOps a) => RoleSignOps a where
-    _r :: CR -> a
-    _r CR_RPA = _one
-    _r CR_RPL = _negate _one
-    _r CR_CLO = _one
-    _r CR_CNO = _one
-    _r CR_COL = _one
-    _r CR_LG  = _one
-    _r CR_ST  = _negate _one
-    _r CR_BUY = _one
-    _r CR_SEL = _negate _one
-    _r CR_RFL = _one
-    _r CR_PFL = _negate _one
-    _r CR_RF  = _one
-    _r CR_PF  = _negate _one
+_y :: RealFrac a => DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> a
+_y = yearFraction
 
 -- == Default instance (Double)
 
@@ -143,31 +118,7 @@ setDefaultContractTermValues ct@ContractTerms {..} =
     }
   where
     infinity :: Double
-    infinity = 1 Prelude./ 0 :: Double
+    infinity = 1 / 0 :: Double
 
     applyDefault :: a -> Maybe a -> Maybe a
     applyDefault v o = o <|> Just v
-
-
-instance RoleSignOps Double
-
-instance ActusOps Double where
-    _min  = min
-    _max  = max
-    _abs  = abs
-    _zero = 0.0
-    _one  = 1.0
-    _fromInteger = fromInteger
-    _negate = negate
-
-instance ActusNum Double where
-    a + b       = a Prelude.+ b
-    a - b       = a Prelude.- b
-    a * b       = a Prelude.* b
-    a / b       = a Prelude./ b
-
-instance YearFractionOps Double where
-    _y = yearFraction
-
-instance ScheduleOps Double where
-    _ceiling = ceiling

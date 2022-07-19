@@ -65,27 +65,27 @@ genContract' rf ct =
     gen :: Contract -> CashFlow (Value Observation) -> Contract
     gen cont CashFlow {..} =
       let t = POSIXTime $ timeToSlotNumber cashPaymentDay
-          a = DivValue amount (Constant marloweFixedPoint)
+          c = reduceContract cont
        in reduceContract $
             If
-              (_zero `ValueLT` a)
+              (0 `ValueLT` amount)
               ( invoice
                   "party"
                   "counterparty"
-                  a
+                  amount
                   t
-                  cont
+                  c
               )
               ( If
-                  (a `ValueLT` _zero)
+                  (amount `ValueLT` 0)
                   ( invoice
                       "counterparty"
                       "party"
-                      (NegValue a)
+                      (NegValue amount)
                       t
-                      cont
+                      c
                   )
-                  cont
+                  c
               )
 
     invoice :: String -> String -> Value Observation -> POSIXTime -> Contract -> Contract

@@ -9,22 +9,22 @@ import Actus.Domain.ContractTerms (DCC (..))
 import Data.Time (Day, LocalTime (..), TimeOfDay (..), addLocalTime, diffDays, fromGregorian, gregorianMonthLength,
                   isLeapYear, toGregorian)
 
-yearFraction :: DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> Double
+yearFraction :: RealFrac a => DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> a
 yearFraction dcc x y o = yearFraction' dcc (localDay x) (localDay $ clipToMidnight y) (localDay <$> o)
 
-yearFraction' :: DCC -> Day -> Day -> Maybe Day -> Double
+yearFraction' :: RealFrac a => DCC -> Day -> Day -> Maybe Day -> a
 yearFraction' DCC_A_AISDA startDay endDay _
   | startDay <= endDay
   = let
       (d1Year, _, _) = toGregorian startDay
       (d2Year, _, _) = toGregorian endDay
-      d1YearFraction = (if isLeapYear d1Year then 366 else 365) :: Double
+      d1YearFraction = (if isLeapYear d1Year then 366 else 365)
     in
       if d1Year == d2Year
         then fromIntegral (diffDays endDay startDay) / d1YearFraction
         else
           let
-            d2YearFraction = (if isLeapYear d2Year then 366 else 365) :: Double
+            d2YearFraction = (if isLeapYear d2Year then 366 else 365)
             d1YearLastDay      = fromGregorian (d1Year + 1) 1 1
             d2YearLastDay      = fromGregorian d2Year 1 1
             firstFractionDays  = fromIntegral (diffDays d1YearLastDay startDay)

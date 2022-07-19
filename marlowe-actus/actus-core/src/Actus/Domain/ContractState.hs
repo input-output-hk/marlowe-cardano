@@ -1,8 +1,12 @@
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE TemplateHaskell    #-}
 
 module Actus.Domain.ContractState where
 
 import Actus.Domain.ContractTerms (PRF)
+import Control.Lens
 import Data.Time (LocalTime)
 
 {-| ACTUS contract states are defined in
@@ -28,3 +32,19 @@ data ContractState a = ContractState
   , xa    :: Maybe a         -- ^ Exercise Amount (XA)
   }
   deriving stock (Show, Eq)
+
+makeLensesFor
+  [ ("sd", "statusDate")
+  , ("nt", "notionalPrincipal")
+  , ("ipnr", "nominalInterest")
+  , ("ipac", "accruedInterest")
+  , ("ipac1", "accruedInterestFirstLeg")
+  , ("ipac2", "accruedInterestSecondLeg")
+  , ("ipla", "lastInterestPeriod")
+  , ("ipcb", "interestCalculationBase")
+  , ("feac", "accruedFees")
+  , ("nsc", "notionalScalingMultiplier")
+  , ("isc", "interestScalingMultiplier")
+  , ("prnxt", "nextPrincipalRedemptionPayment")
+  , ("xa", "exerciseAmount")
+  ] ''ContractState

@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns     #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE TupleSections    #-}
@@ -14,8 +15,7 @@ module Actus.Core
 where
 
 import Actus.Domain (CT (..), CashFlow (..), ContractState (..), ContractStructure (..), ContractTerms (..),
-                     EventType (..), Reference (..), RiskFactors (..), RoleSignOps (..), ScheduleOps (..),
-                     ShiftedDay (..), YearFractionOps (..))
+                     EventType (..), Reference (..), RiskFactors (..), ShiftedDay (..))
 import Actus.Model (CtxPOF (CtxPOF), CtxSTF (..), initializeState, maturity, payoff, schedule, stateTransition)
 import Control.Applicative ((<|>))
 import Control.Monad (filterM)
@@ -29,7 +29,7 @@ import Data.Time (LocalTime)
 -- given contract terms and provided risk factors. The function returns
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
-genProjectedCashflows :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
+genProjectedCashflows :: RealFrac a =>
   (EventType -> LocalTime -> RiskFactors a) -- ^ Risk factors as a function of event type and time
   -> ContractTerms a                        -- ^ Contract terms
   -> [(String, EventType, ShiftedDay)]      -- ^ Unscheduled events
@@ -40,7 +40,7 @@ genProjectedCashflows rf ct us =
    in genCashflow ct <$> runReader (genProjectedPayoffs unscheduled) ctx
 
 -- |Bulid the context allowing the perform state transitions
-buildCtx :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
+buildCtx :: RealFrac a =>
   (EventType -> LocalTime -> RiskFactors a) -- ^ Risk factors as a function of event type and time
   -> ContractTerms a                        -- ^ Contract terms
   -> [(String, EventType, ShiftedDay)]      -- ^ Unscheduled events
@@ -94,8 +94,7 @@ genCashflow ct (ev, t, ContractState {..}, am) =
     }
 
 -- |Generate projected cash flows
-genProjectedPayoffs ::
-  (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
+genProjectedPayoffs :: RealFrac a =>
   [(EventType, ShiftedDay)]              -- ^ Unscheduled events
   -> Reader (CtxSTF a) [(EventType, ShiftedDay, ContractState a, a)]
 genProjectedPayoffs us =
@@ -115,13 +114,13 @@ genProjectedPayoffs us =
     trans = withReader (\c -> CtxPOF (contractTerms c) (riskFactors c))
 
 -- |Generate schedules
-genSchedule :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
+genSchedule :: RealFrac a =>
      ContractTerms a           -- ^ Contract terms
   -> [(EventType, ShiftedDay)] -- ^ Schedule
   -> [(EventType, ShiftedDay)] -- ^ Schedule
 genSchedule ct us = sortOn snd $ genFixedSchedule ct <> us
 
-genFixedSchedule :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
+genFixedSchedule :: RealFrac a =>
      ContractTerms a           -- ^ Contract terms
   -> [(EventType, ShiftedDay)] -- ^ Schedule
 genFixedSchedule ct@ContractTerms {..} =
@@ -144,43 +143,56 @@ genFixedSchedule ct@ContractTerms {..} =
           overwrite = map (sortOn (\(ev, _) -> fromEnum ev)) . regroup
        in concat . overwrite . trim
 
--- |Generate states
-genStates :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
-  [(EventType, ShiftedDay)]                                       -- ^ Schedules
-  -> ContractState a                                              -- ^ Initial state
-  -> Reader (CtxSTF a) [(EventType, ShiftedDay, ContractState a)] -- ^ New states
-genStates scs stn =
-  let l = scanl apply st0 scs in sequence l >>= filterM filtersStates . tail
+mapAccumLM' :: Monad m => (acc -> x -> m (acc, y)) -> acc -> [x] -> m (acc, [y])
+mapAccumLM' f = go
   where
-    apply prev (ev', t') =
-      prev >>= \(ev, ShiftedDay {..}, st) ->
-        do prev_st <- stateTransition ev calculationDay st
-           return (ev',t',prev_st)
+    go s (x : xs) = do
+      (!s1, !x') <- f s x
+      (s2, xs') <- go s1 xs
+      return (s2, x' : xs')
+    go s [] = return (s, [])
 
-    st0 = return (AD,ShiftedDay (sd stn) (sd stn),stn)
+-- |Generate states
+genStates ::
+  RealFrac a =>
+  -- | Schedules
+  [(EventType, ShiftedDay)] ->
+  -- | Initial state
+  ContractState a ->
+  -- | New states
+  Reader (CtxSTF a) [(EventType, ShiftedDay, ContractState a)]
+genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
+  where
+    apply (ev, ShiftedDay {..}, st) (ev', t') =
+      do
+        newState <- stateTransition ev calculationDay st
+        return ((ev', t', newState), (ev', t', newState))
+
+    st0 = (AD, ShiftedDay (sd stn) (sd stn), stn)
 
     filtersStates ::
-      (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
+      RealFrac a =>
       (EventType, ShiftedDay, ContractState a) ->
       Reader (CtxSTF a) Bool
     filtersStates (ev, ShiftedDay {..}, _) =
-      do ct@ContractTerms {..} <- contractTerms <$> ask
-         return $ case contractType of
-                    PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
-                    LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-                    NAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-                    ANN ->
-                      let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-                          b2 = let m = maturityDate <|> amortizationDate <|> maturity ct in isNothing m || Just calculationDay <= m
-                       in b1 && b2
-                    SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-                    CLM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-                    _ -> True
+      do
+        ct@ContractTerms {..} <- contractTerms <$> ask
+        return $ case contractType of
+          PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
+          LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+          NAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+          ANN ->
+            let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                b2 = let m = maturityDate <|> amortizationDate <|> maturity ct in isNothing m || Just calculationDay <= m
+             in b1 && b2
+          SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+          CLM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+          _ -> True
 
 -- |Generate payoffs
-genPayoffs :: (RoleSignOps a, YearFractionOps a) =>
+genPayoffs :: RealFrac a =>
   [(EventType, ShiftedDay, ContractState a)] -- ^ States with schedule
-  -> Reader (CtxPOF a) [a]                       -- ^ Payoffs
+  -> Reader (CtxPOF a) [a]                   -- ^ Payoffs
 genPayoffs = mapM calculatePayoff
   where
     calculatePayoff (ev, ShiftedDay {..}, st) = payoff ev calculationDay st

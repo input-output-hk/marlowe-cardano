@@ -3,25 +3,23 @@ module Actus.Utility.ANN.Annuity
   (annuity)
 where
 
-import Actus.Domain (ActusNum (..), ActusOps (..))
 import Data.List (foldl', tails)
-import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |annuity amount function (A), as described in section 3.8 in the
 -- ACTUS reference v1.1
-annuity :: (ActusOps a, ActusNum a) =>
+annuity :: Fractional a =>
      a   -- ^ actual interest rate
   -> [a] -- ^ ti
   -> a
 annuity r ti = numerator / denominator
 
   where
-    numerator   = _product $ map ((+_one).(*r)) ti
-    denominator = _sum (map _product $ tails $ map ((+_one).(*r)) ti)
+    numerator   = _product $ map ((+1).(*r)) ti
+    denominator = _sum (map _product $ tails $ map ((+1).(*r)) ti)
 
     -- note that _product [] == 1
-    _product :: (ActusNum a, ActusOps a) => [a] -> a
-    _product = foldl' (*) _one
+    _product :: Num a => [a] -> a
+    _product = foldl' (*) 1
 
-    _sum :: (ActusNum a, ActusOps a) => [a] -> a
-    _sum = foldl' (+) _zero
+    _sum :: Num a => [a] -> a
+    _sum = foldl' (+) 0

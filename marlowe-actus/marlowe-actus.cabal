@@ -46,6 +46,7 @@ library actus-core
     base -any,
     mtl -any,
     sort -any,
+    lens -any,
     text -any,
     time -any,
     validation -any
