@@ -11,8 +11,7 @@ module Actus.Domain
   , module Actus.Domain.Schedule
   , RiskFactors (..)
   , CashFlow (..)
-  , _r
-  , _y
+  , sign
   , marloweFixedPoint
   , setDefaultContractTermValues
   )
@@ -22,7 +21,6 @@ import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractState (ContractState (..))
 import Actus.Domain.ContractTerms
 import Actus.Domain.Schedule
-import Actus.Utility.YearFraction (yearFraction)
 import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Data.Aeson.Types (FromJSON, ToJSON)
@@ -62,23 +60,20 @@ data CashFlow a = CashFlow
 marloweFixedPoint :: Integer
 marloweFixedPoint = 1000000
 
-_r :: Num a => CR -> a
-_r CR_RPA = 1
-_r CR_RPL = negate 1
-_r CR_CLO = 1
-_r CR_CNO = 1
-_r CR_COL = 1
-_r CR_LG  = 1
-_r CR_ST  = negate 1
-_r CR_BUY = 1
-_r CR_SEL = negate 1
-_r CR_RFL = 1
-_r CR_PFL = negate 1
-_r CR_RF  = 1
-_r CR_PF  = negate 1
-
-_y :: RealFrac a => DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> a
-_y = yearFraction
+sign :: Num a => CR -> a
+sign CR_RPA = 1
+sign CR_RPL = negate 1
+sign CR_CLO = 1
+sign CR_CNO = 1
+sign CR_COL = 1
+sign CR_LG  = 1
+sign CR_ST  = negate 1
+sign CR_BUY = 1
+sign CR_SEL = negate 1
+sign CR_RFL = 1
+sign CR_PFL = negate 1
+sign CR_RF  = 1
+sign CR_PF  = negate 1
 
 -- == Default instance (Double)
 

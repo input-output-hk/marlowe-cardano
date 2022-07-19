@@ -10,8 +10,8 @@ where
 
 import Actus.Domain (CT (..), ContractStructure (..), ContractTerms (..), Cycle (..), DS (..), EventType (..),
                      IPCB (..), PPEF (..), PYTP (..), Reference (..), ReferenceRole (..), SCEF (..),
-                     ScheduleConfig (..), ShiftedDay (..), _y, mkShiftedDay)
-import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, (<+>), (<->))
+                     ScheduleConfig (..), ShiftedDay (..), mkShiftedDay)
+import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, yearFraction, (<+>), (<->))
 import Control.Applicative ((<|>))
 import Control.Monad (liftM2, liftM4)
 import Data.Functor ((<&>))
@@ -175,7 +175,7 @@ maturity
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f $ previousEvents
              in lastEventCalcDay
 
-        yLastEventPlusPRCL = _y dcc lastEvent (lastEvent <+> prcl) Nothing
+        yLastEventPlusPRCL = yearFraction dcc lastEvent (lastEvent <+> prcl) Nothing
         redemptionPerCycle = prnxt - (yLastEventPlusPRCL * ipnr * nt)
         remainingPeriods = ceiling $ (nt / redemptionPerCycle) - 1
         m = lastEvent <+> prcl {n = n prcl Prelude.* remainingPeriods}
@@ -202,7 +202,7 @@ maturity
           | otherwise =
             let previousEvents = generateRecurrentSchedule statusDate prcl pranx scheduleConfig
              in calculationDay . head . sortOn (Down . calculationDay) . filter (\ShiftedDay {..} -> calculationDay > statusDate) $ previousEvents
-        timeFromLastEventPlusOneCycle = _y dcc lastEvent (lastEvent <+> prcl) Nothing
+        timeFromLastEventPlusOneCycle = yearFraction dcc lastEvent (lastEvent <+> prcl) Nothing
         redemptionPerCycle = prnxt - timeFromLastEventPlusOneCycle * ipnr * nt
         remainingPeriods = ceiling $ (nt / redemptionPerCycle) - 1
     in Just . calculationDay . applyBDCWithCfg scheduleConfig $ lastEvent <+> prcl { n = remainingPeriods }

@@ -16,9 +16,9 @@ module Actus.Model.StateInitialization
 where
 
 import Actus.Domain (CEGE (..), CT (..), ContractState (..), ContractStructure (..), ContractTerms (..), Cycle (..),
-                     FEB (..), IPCB (..), PRF (..), Reference (..), SCEF (..), _r, _y)
+                     FEB (..), IPCB (..), PRF (..), Reference (..), SCEF (..), sign)
 import Actus.Model.StateTransition (CtxSTF (..))
-import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup)
+import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup, yearFraction)
 import Control.Applicative ((<|>))
 import Control.Monad.Reader (Reader, reader)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
@@ -96,7 +96,7 @@ initializeState = reader initializeState'
               notionalPrincipal = Just nt,
               coverageOfCreditEnhancement = Just cecv,
               contractRole
-            } = _r contractRole * nt * cecv
+            } = sign contractRole * nt * cecv
         notionalPrincipal
           ContractTerms
             { contractType = CEG,
@@ -106,8 +106,8 @@ initializeState = reader initializeState'
               contractRole
             } | not (null contractStructure) =
               let cts = mapMaybe referenceContractTerms contractStructure
-                  s = foldr (+) 0 $ mapMaybe (getField @"notionalPrincipal") cts
-               in _r contractRole * cecv * s
+                  s = sum $ mapMaybe (getField @"notionalPrincipal") cts
+               in sign contractRole * cecv * s
         notionalPrincipal
           ContractTerms
             { contractType = CEG,
@@ -117,13 +117,13 @@ initializeState = reader initializeState'
               contractRole
             } | not (null contractStructure) =
               let cts = mapMaybe referenceContractTerms contractStructure
-                  s = foldr (+) 0 $ mapMaybe (getField @"notionalPrincipal") cts
-                  i = foldr (+) 0 $ mapMaybe (getField @"accruedInterest") cts
-               in _r contractRole * cecv * s * i
+                  s = sum $ mapMaybe (getField @"notionalPrincipal") cts
+                  i = sum $ mapMaybe (getField @"accruedInterest") cts
+               in sign contractRole * cecv * s * i
         notionalPrincipal
           ct@ContractTerms
             { notionalPrincipal = Just nt
-            } = _r (contractRole ct) * nt
+            } = sign (contractRole ct) * nt
         notionalPrincipal _ = 0
 
         nominalInterestRate
@@ -151,7 +151,7 @@ initializeState = reader initializeState'
             } =
             let nt = notionalPrincipal contractTerms
                 ipnr = nominalInterestRate contractTerms
-             in _y dcc tMinusIP t0 maturity * nt * (ipnr' - ipnr)
+             in yearFraction dcc tMinusIP t0 maturity * nt * (ipnr' - ipnr)
         interestAccrued
           ContractTerms
             { nominalInterestRate = Nothing
@@ -166,7 +166,7 @@ initializeState = reader initializeState'
             } =
             let nt = notionalPrincipal contractTerms
                 ipnr = nominalInterestRate contractTerms
-             in _y dcc tMinusIP t0 maturity * nt * ipnr
+             in yearFraction dcc tMinusIP t0 maturity * nt * ipnr
         interestAccrued _ = 0
 
         interestAccrued1
@@ -176,7 +176,7 @@ initializeState = reader initializeState'
             , nominalInterestRate = Just ipnr'
             } =
             let nt = notionalPrincipal contractTerms
-             in Just $ _y dcc tMinusIP t0 maturity * nt * ipnr'
+             in Just $ yearFraction dcc tMinusIP t0 maturity * nt * ipnr'
         interestAccrued1 _ = Nothing
 
         interestAccrued2
@@ -186,7 +186,7 @@ initializeState = reader initializeState'
             } =
             let nt = notionalPrincipal contractTerms
                 ipnr = nominalInterestRate contractTerms
-             in Just $ _y dcc tMinusIP t0 maturity * nt * ipnr
+             in Just $ yearFraction dcc tMinusIP t0 maturity * nt * ipnr
         interestAccrued2 _ = Nothing
 
         nextPrincipalRedemptionPayment ContractTerms {contractType = PAM} = 0
@@ -216,7 +216,7 @@ initializeState = reader initializeState'
              in frac * scale
             where
               prDates = prSchedule ++ maybeToList maturity
-              ti = zipWith (\tn tm -> _y dcc tn tm md) prDates (tail prDates)
+              ti = zipWith (\tn tm -> yearFraction dcc tn tm md) prDates (tail prDates)
         nextPrincipalRedemptionPayment _ = 0
 
         interestPaymentCalculationBase
@@ -228,11 +228,11 @@ initializeState = reader initializeState'
           ct@ContractTerms
             { notionalPrincipal = Just nt,
               interestCalculationBase = Just ipcb
-            } | ipcb == IPCB_NT = _r (contractRole ct) * nt
+            } | ipcb == IPCB_NT = sign (contractRole ct) * nt
         interestPaymentCalculationBase
           ct@ContractTerms
             { interestCalculationBaseA = Just ipcba
-            } = _r (contractRole ct) * ipcba
+            } = sign (contractRole ct) * ipcba
         interestPaymentCalculationBase _ = 0
 
         feeAccrued
@@ -250,13 +250,13 @@ initializeState = reader initializeState'
               feeRate = Just fer,
               notionalPrincipal = Just nt,
               maturityDate = md
-            } = _y dcc tMinusFP t0 md * nt * fer
+            } = yearFraction dcc tMinusFP t0 md * nt * fer
         feeAccrued
           ContractTerms
             { dayCountConvention = Just dcc,
               feeRate = Just fer,
               maturityDate = md
-            } = _y dcc tMinusFP t0 md / _y dcc tMinusFP tPlusFP md * fer
+            } = yearFraction dcc tMinusFP t0 md / yearFraction dcc tMinusFP tPlusFP md * fer
         feeAccrued _ = 0
 
         contractPerformance ContractTerms {contractPerformance = Just prf} = prf

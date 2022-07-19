@@ -9,7 +9,7 @@ module Actus.Model.StateTransition
 where
 
 import Actus.Domain (CEGE (..), CT (..), ContractState (..), ContractTerms (..), EventType (..), FEB (..), IPCB (..),
-                     OPTP (..), RiskFactors (..), SCEF (..), ShiftedDay (..), _r)
+                     OPTP (..), RiskFactors (..), SCEF (..), ShiftedDay (..), sign)
 import qualified Actus.Domain.ContractState as L (accruedFees, accruedInterest, accruedInterestFirstLeg,
                                                   accruedInterestSecondLeg, exerciseAmount, interestCalculationBase,
                                                   interestScalingMultiplier, lastInterestPeriod,
@@ -178,7 +178,7 @@ _STF_IED_PAM
     }
   s
   t =
-    s & L.notionalPrincipal .~ _r contractRole * nt
+    s & L.notionalPrincipal .~ sign contractRole * nt
       & L.nominalInterest .~ thisOr0 nominalInterestRate
       & L.accruedInterest .~ ipac
       & L.statusDate .~ t
@@ -193,7 +193,7 @@ _STF_IED_PAM
     }
   s
   t =
-    let nt' = _r contractRole * nt
+    let nt' = sign contractRole * nt
         timeFromInterestPaymentAnchorToNow = yearFraction dcc ipanx t maturityDate
         timeFromInterestPaymentAnchorToNow' = yearFraction dcc ipanx t Nothing
         ipnr' = ipnr
@@ -209,7 +209,7 @@ _STF_IED_PAM
     }
   s
   t =
-    s & L.notionalPrincipal .~ _r contractRole * nt
+    s & L.notionalPrincipal .~ sign contractRole * nt
       & L.accruedInterest .~ 0
       & L.statusDate .~ t
 _STF_IED_PAM _ s _ = s
@@ -223,7 +223,7 @@ _STF_IED_SWPPV
     }
   s
   t =
-    s & L.notionalPrincipal .~ _r contractRole * nt
+    s & L.notionalPrincipal .~ sign contractRole * nt
       & L.nominalInterest .~ ipnr2
       & L.accruedInterest .~ 0
       & L.accruedInterestFirstLeg ?~ 0
@@ -242,15 +242,15 @@ _STF_IED_LAM
     }
   s
   t =
-    let nt' = _r contractRole * nt
+    let nt' = sign contractRole * nt
         ipcb' = interestCalculationBase' ct
           where
             interestCalculationBase' ContractTerms {interestCalculationBase = Just IPCB_NT} = nt'
-            interestCalculationBase' ContractTerms {interestCalculationBaseA = Just ipcba}  = _r contractRole * ipcba
+            interestCalculationBase' ContractTerms {interestCalculationBaseA = Just ipcba}  = sign contractRole * ipcba
             interestCalculationBase' _                                                      = 0
         ipac' = interestAccrued' ct
           where
-            interestAccrued' ContractTerms {accruedInterest = Just ipac} = _r contractRole * ipac
+            interestAccrued' ContractTerms {accruedInterest = Just ipac} = sign contractRole * ipac
             interestAccrued' ContractTerms {cycleAnchorDateOfInterestPayment = Just ipanx}
               | ipanx < t =
                 let timeFromInterestPaymentAnchorToNow = yearFraction dcc ipanx t maturityDate
@@ -279,8 +279,8 @@ _STF_PR_LAM
   t =
     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
         nt' = (s ^. L.notionalPrincipal)
-                  - _r contractRole * ((s ^. L.nextPrincipalRedemptionPayment)
-                  - _r contractRole * max 0 (abs (s ^. L.nextPrincipalRedemptionPayment) - abs (s ^. L.notionalPrincipal)))
+                  - sign contractRole * ((s ^. L.nextPrincipalRedemptionPayment)
+                  - sign contractRole * max 0 (abs (s ^. L.nextPrincipalRedemptionPayment) - abs (s ^. L.notionalPrincipal)))
         ipcb' = interestCalculationBase' ct
           where
             interestCalculationBase' ContractTerms {interestCalculationBase = Just IPCB_NTL} = s ^. L.interestCalculationBase
@@ -304,10 +304,10 @@ _STF_PR_NAM
   t =
     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
         ipac' = (s ^. L.accruedInterest) + (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase) * timeFromLastEvent
-        nt' = (s ^. L.notionalPrincipal) - _r contractRole * r
+        nt' = (s ^. L.notionalPrincipal) - sign contractRole * r
           where
             r = ra - max 0 (ra - abs (s ^. L.notionalPrincipal))
-            ra = (s ^. L.nextPrincipalRedemptionPayment) - _r contractRole * ipac'
+            ra = (s ^. L.nextPrincipalRedemptionPayment) - sign contractRole * ipac'
         ipcb' = interestCalculationBase' ct
           where
             interestCalculationBase' ContractTerms {interestCalculationBase = Just IPCB_NT} = nt'
@@ -402,7 +402,7 @@ _STF_PY_PAM
         timeFromLatestFeePayment = yearFraction dcc latestFeePayment t maturityDate
         timeFromLatestToNextFeePayment = yearFraction dcc latestFeePayment nextFeePayment maturityDate
      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
-          & L.accruedFees .~ max 0 (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * _r contractRole * fer
+          & L.accruedFees .~ max 0 (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
           & L.statusDate .~ t
 _STF_PY_PAM _ _ s _ = s
 
@@ -421,7 +421,7 @@ _STF_PY_LAM
         feac' = feeAccrued' ct
           where
             feeAccrued' ContractTerms {feeBasis = Just FEB_N} = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * fer
-            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * _r contractRole * fer
+            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
               where
                 timeFromLatestFeePayment = yearFraction dcc latestFeePayment t maturityDate
                 timeFromLatestToNextFeePayment = yearFraction dcc latestFeePayment nextFeePayment maturityDate
@@ -670,7 +670,7 @@ _STF_RR_PAM
         ipnr' = min (max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
      in _STF_PY_PAM fs ct s t
           & L.accruedInterest .~ (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
-          & L.accruedFees .~ (if timeFromLatestToNextFeePayment == 0 then 0 else (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * _r contractRole * fer)
+          & L.accruedFees .~ (if timeFromLatestToNextFeePayment == 0 then 0 else (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer)
           & L.nominalInterest .~ ipnr'
           & L.statusDate .~ t
 _STF_RR_PAM _ _ _ s _ = s
@@ -728,7 +728,7 @@ _STF_RR_ANN
         feac' = feeAccrued' ct
           where
             feeAccrued' ContractTerms {feeBasis = Just FEB_N} = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
-            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * _r contractRole * thisOr0 feeRate
+            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 feeRate
 
         ipnr' = min (max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
           where
@@ -814,7 +814,7 @@ _STF_RRF_ANN
         feac' = feeAccrued' ct
           where
             feeAccrued' ContractTerms {feeBasis = Just FEB_N} = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 (feeRate ct)
-            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * _r contractRole * thisOr0 (feeRate ct)
+            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 (feeRate ct)
 
         ipnr' = rrnxt
         prnxt' = annuity ipnr' ti
@@ -850,9 +850,9 @@ _STF_PRF_ANN
         feac' = feeAccrued' ct
           where
             feeAccrued' ContractTerms {feeBasis = Just FEB_N} = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 (feeRate ct)
-            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * _r contractRole * thisOr0 (feeRate ct)
+            feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 (feeRate ct)
 
-        prnxt' = _r contractRole * frac * scale
+        prnxt' = sign contractRole * frac * scale
           where
             scale = (s ^. L.notionalPrincipal) + ipac' + timeToNextPrincipalRedemption * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
             frac = annuity (s ^. L.nominalInterest) ti
@@ -985,7 +985,7 @@ _STF_XD_CEG
     }
   s
   t =
-    let nt' = cecv * _r contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c
@@ -1004,7 +1004,7 @@ _STF_XD_CEG
     }
   s
   t =
-    let nt' = cecv * _r contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c
@@ -1020,7 +1020,7 @@ _STF_XD_CEG
     }
   s
   t =
-    let nt' = cecv * _r contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, _, x) -> sd x <= t) cs
            in nt c + ipac c
@@ -1046,7 +1046,7 @@ _STF_XD_CEC
     }
   s
   t =
-    let nt' = cecv * _r contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c
@@ -1063,7 +1063,7 @@ _STF_XD_CEC
     }
   s
   t =
-    let nt' = cecv * _r contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c + ipac c
@@ -1080,7 +1080,7 @@ _STF_XD_CEC
     }
   s
   t =
-    let nt' = _r contractRole * (sum $ map f referenceStates)
+    let nt' = sign contractRole * (sum $ map f referenceStates)
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c

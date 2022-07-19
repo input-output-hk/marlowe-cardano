@@ -9,7 +9,7 @@ module Actus.Model.Payoff
 where
 
 import Actus.Domain (CT (..), ContractState (..), ContractTerms (..), EventType (..), FEB (..), PYTP (..),
-                     RiskFactors (..), _r)
+                     RiskFactors (..), sign)
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Monad.Reader (Reader, reader)
 import Data.Time.LocalTime (LocalTime)
@@ -55,7 +55,7 @@ payoff ev t st = reader payoff'
               contractRole,
               notionalPrincipal = Just nt
             }
-          _ = negate $ o_rf_CURS * _r contractRole * nt
+          _ = negate $ o_rf_CURS * sign contractRole * nt
         -- POF_IED_*
         pof
           IED
@@ -67,7 +67,7 @@ payoff ev t st = reader payoff'
               premiumDiscountAtIED = Just pdied,
               contractRole
             }
-          _ = negate $ o_rf_CURS * _r contractRole * (nt + pdied)
+          _ = negate $ o_rf_CURS * sign contractRole * (nt + pdied)
         -- POF_IED_*
         pof
           IED
@@ -78,7 +78,7 @@ payoff ev t st = reader payoff'
             { notionalPrincipal = Just nt,
               contractRole
             }
-          _ = negate $ o_rf_CURS * _r contractRole * nt
+          _ = negate $ o_rf_CURS * sign contractRole * nt
         -------------------------------
         -- Principal Redemption (PR) --
         -------------------------------
@@ -97,8 +97,8 @@ payoff ev t st = reader payoff'
               nsc,
               prnxt
             } =
-            let redemption = prnxt - _r contractRole * max 0 (abs prnxt - abs nt)
-             in o_rf_CURS * _r contractRole * nsc * redemption
+            let redemption = prnxt - sign contractRole * max 0 (abs prnxt - abs nt)
+             in o_rf_CURS * sign contractRole * nsc * redemption
         -- POF_PR_NAM
         -- POF_PR_ANN
         pof
@@ -123,9 +123,9 @@ payoff ev t st = reader payoff'
             }
             | contractType `elem` [NAM, ANN] =
               let timeFromLastEvent = yearFraction dcc sd t maturityDate
-                  ra = prnxt - _r contractRole * (ipac + timeFromLastEvent * ipnr * ipcb)
+                  ra = prnxt - sign contractRole * (ipac + timeFromLastEvent * ipnr * ipcb)
                   r = ra - max 0 (ra - abs nt)
-               in o_rf_CURS * _r contractRole * nsc * r
+               in o_rf_CURS * sign contractRole * nsc * r
         -- POF_PR_SWPPV
         pof
           PR
@@ -197,9 +197,9 @@ payoff ev t st = reader payoff'
             } =
             let timeFromLastEvent = yearFraction dcc sd t maturityDate
              in case pytp of
-                  PYTP_A -> o_rf_CURS * _r contractRole * pyrt
-                  PYTP_N -> let c = o_rf_CURS * _r contractRole * timeFromLastEvent * nt in c * pyrt
-                  PYTP_I -> let c = o_rf_CURS * _r contractRole * timeFromLastEvent * nt in c * max 0 (ipnr - o_rf_RRMO)
+                  PYTP_A -> o_rf_CURS * sign contractRole * pyrt
+                  PYTP_N -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * pyrt
+                  PYTP_I -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * max 0 (ipnr - o_rf_RRMO)
                   PYTP_O -> undefined
         ----------------------
         -- Fee Payment (FP) --
@@ -224,7 +224,7 @@ payoff ev t st = reader payoff'
             } =
             let timeFromLastEvent = yearFraction dcc sd t maturityDate
              in case feb of
-                  FEB_A -> _r contractRole * o_rf_CURS * fer
+                  FEB_A -> sign contractRole * o_rf_CURS * fer
                   FEB_N -> o_rf_CURS * fer * timeFromLastEvent * nt * feac
         --------------------
         -- Purchase (PRD) --
@@ -249,7 +249,7 @@ payoff ev t st = reader payoff'
               sd
             } =
             let timeFromLastEvent = yearFraction dcc sd t maturityDate
-             in negate $ o_rf_CURS * _r contractRole * (pprd + ipac + timeFromLastEvent * ipnr * nt)
+             in negate $ o_rf_CURS * sign contractRole * (pprd + ipac + timeFromLastEvent * ipnr * nt)
         -- POF_PRD_LAM
         -- POF_PRD_NAM
         -- POF_PRD_ANN
@@ -272,7 +272,7 @@ payoff ev t st = reader payoff'
               sd
             } | contractType `elem` [LAM, NAM, ANN] =
               let timeFromLastEvent = yearFraction dcc sd t maturityDate
-               in negate $ o_rf_CURS * _r contractRole * (pprd + ipac + timeFromLastEvent * ipnr * ipcb)
+               in negate $ o_rf_CURS * sign contractRole * (pprd + ipac + timeFromLastEvent * ipnr * ipcb)
         -- POF_PRD_STK
         -- POF_PRD_OPTNS
         -- POF_PRD_FUTUR
@@ -286,7 +286,7 @@ payoff ev t st = reader payoff'
               priceAtPurchaseDate = Just pprd,
               contractRole
             }
-          _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV, CEG] = negate $ _r contractRole * pprd
+          _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV, CEG] = negate $ sign contractRole * pprd
         -- POF_PRD_COM
         pof
           PRD
@@ -297,7 +297,7 @@ payoff ev t st = reader payoff'
               quantity = Just qt,
               contractRole
             }
-          _ = negate $ _r contractRole * pprd * qt
+          _ = negate $ sign contractRole * pprd * qt
         ----------------------
         -- Termination (TD) --
         ----------------------
@@ -321,7 +321,7 @@ payoff ev t st = reader payoff'
               sd
             } =
             let timeFromLastEvent = yearFraction dcc sd t maturityDate
-             in o_rf_CURS * _r contractRole * (ptd + ipac + timeFromLastEvent * ipnr * nt)
+             in o_rf_CURS * sign contractRole * (ptd + ipac + timeFromLastEvent * ipnr * nt)
         -- POF_TD_STK
         pof
           TD
@@ -331,7 +331,7 @@ payoff ev t st = reader payoff'
               priceAtTerminationDate = Just ptd,
               contractRole
             }
-          _ = _r contractRole * ptd
+          _ = sign contractRole * ptd
         -- POF_TD_SWPPV
         pof
           TD
@@ -353,7 +353,7 @@ payoff ev t st = reader payoff'
               contractRole,
               quantity = Just qt
             }
-          _ = _r contractRole * ptd * qt
+          _ = sign contractRole * ptd * qt
         -- POF_TD_*
         pof
           TD
@@ -373,7 +373,7 @@ payoff ev t st = reader payoff'
               sd
             } =
             let timeFromLastEvent = yearFraction dcc sd t maturityDate
-             in o_rf_CURS * _r contractRole * (ptd + ipac + timeFromLastEvent * ipnr * ipcb)
+             in o_rf_CURS * sign contractRole * (ptd + ipac + timeFromLastEvent * ipnr * ipcb)
         ---------------------------
         -- Interest Payment (IP) --
         ---------------------------
@@ -510,7 +510,7 @@ payoff ev t st = reader payoff'
             { contractType = STK,
               contractRole
             }
-          _ = o_rf_CURS * _r contractRole * dv_payoff
+          _ = o_rf_CURS * sign contractRole * dv_payoff
         ----------------------
         -- Settlement (STD) --
         ----------------------
@@ -527,7 +527,7 @@ payoff ev t st = reader payoff'
             }
           ContractState
             { xa = Just exerciseAmount
-            } | contractType `elem` [OPTNS, FUTUR] = o_rf_CURS * _r contractRole * exerciseAmount
+            } | contractType `elem` [OPTNS, FUTUR] = o_rf_CURS * sign contractRole * exerciseAmount
         -- POF_STD_CEG
         pof
           STD
