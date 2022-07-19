@@ -105,7 +105,6 @@
             (hsPkgs."streaming" or (errorHandler.buildDepError "streaming"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
             (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
-            (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))
             (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."websockets" or (errorHandler.buildDepError "websockets"))
@@ -122,7 +121,6 @@
             "Spec/Marlowe/Semantics"
             "Spec/Marlowe/Util"
             "Spec/Marlowe/Util/AssocMap"
-            "MarloweContract"
             ];
           hsSourceDirs = [ "test" ];
           mainPath = [ "Spec.hs" ];

@@ -3,8 +3,8 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli marlowe-pab plutus-chain-index cardano-wallet dev-scripts;
-  inherit (dev-scripts) start-marlowe-run start-cardano-node start-wallet start-chain-index start-marlowe-pab start-dashboard-server;
+  inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli cardano-wallet dev-scripts;
+  inherit (dev-scripts) start-cardano-node start-wallet;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
@@ -14,15 +14,6 @@ let
     mkdir -p "''${XDG_DATA_HOME}"
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-''${HOME}/.local/run}"
     mkdir -p "''${XDG_RUNTIME_DIR}"
-  '';
-
-  start-marlowe-run-with-arion = writeShellScriptBinInRepoRoot "start-marlowe-run-with-arion" ''
-    cd marlowe-dashboard-client
-    ${pkgs.arion}/bin/arion --nix-arg --system --nix-arg x86_64-linux "$@" up --force-recreate
-  '';
-
-  generate-purescript = writeShellScriptBinInRepoRoot "generate-purescript" ''
-    marlowe-run-generate-purs; marlowe-playground-generate-purs
   '';
 
   # For Sphinx, and ad-hoc usage
@@ -109,11 +100,6 @@ let
     easyPS.purescript-language-server
     start-cardano-node
     start-wallet
-    start-chain-index
-    start-marlowe-pab
-    start-dashboard-server
-    start-marlowe-run
-    start-marlowe-run-with-arion
     cardano-repo-tool
     cardano-wallet
     fixPngOptimization
@@ -125,16 +111,6 @@ let
     haskell-language-server-wrapper
     hie-bios
     hlint
-    marlowe-dashboard.build-client
-    marlowe-dashboard.test-client
-    marlowe-dashboard.generate-purescript
-    marlowe-dashboard.start-backend
-    marlowe-pab
-    marlowe-playground.build-client
-    marlowe-playground.generate-purescript
-    marlowe-playground.start-backend
-    generate-purescript
-    plutus-chain-index
     stylish-haskell
     updateMaterialized
     updateClientDeps

@@ -32,7 +32,7 @@ module Language.Marlowe.CLI.Test.Types (
 
 
 import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, Value)
-import Cardano.Wallet.Primitive.AddressDerivation (Passphrase)
+import Cardano.Wallet.Primitive.Passphrase (Passphrase)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Chan (Chan)
 import Control.Lens (makeLenses)
