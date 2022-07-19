@@ -132,7 +132,6 @@ test-suite marlowe-test
         streaming -any,
         async -any,
         prettyprinter -any,
-        purescript-bridge -any,
         servant-client -any,
         http-client -any,
         websockets -any,

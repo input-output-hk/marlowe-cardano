@@ -12,11 +12,8 @@
   "https://github.com/input-output-hk/iohk-monitoring-framework"."46f994e216a1f8b36fe4669b47b2a7011b0e153c" = "1il8fx3misp3650ryj368b3x95ksz01zz3x0z9k00807j93d0ka0";
   "https://github.com/input-output-hk/ouroboros-network"."4fac197b6f0d2ff60dc3486c593b68dc00969fbf" = "1b43vbdsr9m3ry1kgag2p2ixpv54gw7a4vvmndxl6knqg8qbsb8b";
   "https://github.com/input-output-hk/plutus"."4127e9cd6e889824d724c30eae55033cb50cbf3e" = "186w0x7vk8m8npmsfg9pdkxds0rlj6bmhr8nkgn96rkvaz5azjsb";
-  "https://github.com/input-output-hk/purescript-bridge"."47a1f11825a0f9445e0f98792f79172efef66c00" = "0da1vn2l6iyfxcjk58qal1l4755v92zi6yppmjmqvxf1gacyf9px";
-  "https://github.com/input-output-hk/servant-purescript"."002e172173ad2f2f69f98a3b56b7312364f23afe" = "178vp5xbr6bn534qlnrwjlp4klj8mrswx506lk50j240205d5d5n";
   "https://github.com/input-output-hk/Win32-network"."3825d3abf75f83f406c1f7161883c438dac7277d" = "19wahfv726fa3mqajpqdqhnl9ica3xmf68i254q45iyjcpj1psqx";
   "https://github.com/Quid2/flat"."ee59880f47ab835dbd73bea0847dab7869fc20d8" = "1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm";
   "https://github.com/input-output-hk/hedgehog-extras"."edf6945007177a638fbeb8802397f3a6f4e47c14" = "0wc7qzkc7j4ns2rz562h6qrx2f8xyq7yjcb7zidnj7f6j0pcd0i9";
   "https://github.com/input-output-hk/optparse-applicative"."7497a29cb998721a9068d5725d49461f2bba0e7a" = "1gvsrg925vynwgqwplgjmp53vj953qyh3wbdf34pw21c8r47w35r";
-  "https://github.com/paluh/plutus-apps"."5bcc67b3b2eb219a54b90c24920a72c9266190a2" = "1yc8zwviqlvvizgi4ckpy5jdk2w21qjyijhgpfzrizz84ci2igzd";
 }

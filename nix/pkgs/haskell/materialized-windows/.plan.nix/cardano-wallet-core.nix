@@ -8,7 +8,7 @@
   , config
   , ... }:
   {
-    flags = { release = false; };
+    flags = { release = false; scrypt = true; };
     package = {
       specVersion = "1.10";
       identifier = { name = "cardano-wallet-core"; version = "2022.1.18"; };
@@ -114,7 +114,6 @@
           (hsPkgs."retry" or (errorHandler.buildDepError "retry"))
           (hsPkgs."safe" or (errorHandler.buildDepError "safe"))
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
-          (hsPkgs."scrypt" or (errorHandler.buildDepError "scrypt"))
           (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
           (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
           (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
@@ -148,7 +147,7 @@
           (hsPkgs."Win32-network" or (errorHandler.buildDepError "Win32-network"))
           (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
           (hsPkgs."cardano-wallet-test-utils" or (errorHandler.buildDepError "cardano-wallet-test-utils"))
-          ];
+          ] ++ (pkgs.lib).optional (flags.scrypt) (hsPkgs."scrypt" or (errorHandler.buildDepError "scrypt"));
         buildable = true;
         modules = [
           "Paths_cardano_wallet_core"
@@ -162,6 +161,8 @@
           "Cardano/Pool/DB/Sqlite"
           "Cardano/Pool/DB/Sqlite/TH"
           "Cardano/Pool/Metadata"
+          "Cardano/Pool/Rank"
+          "Cardano/Pool/Rank/Likelihood"
           "Cardano/Wallet"
           "Cardano/Wallet/Address/Pool"
           "Cardano/Wallet/Api"
@@ -190,6 +191,7 @@
           "Cardano/Wallet/DB/WalletState"
           "Cardano/Wallet/Logging"
           "Cardano/Wallet/Network"
+          "Cardano/Wallet/Network/Light"
           "Cardano/Wallet/Network/Ports"
           "Cardano/Wallet/Orphans"
           "Cardano/Wallet/TokenMetadata"
@@ -214,6 +216,10 @@
           "Cardano/Wallet/Primitive/Model"
           "Cardano/Wallet/Primitive/Slotting"
           "Cardano/Wallet/Primitive/SyncProgress"
+          "Cardano/Wallet/Primitive/Passphrase"
+          "Cardano/Wallet/Primitive/Passphrase/Current"
+          "Cardano/Wallet/Primitive/Passphrase/Legacy"
+          "Cardano/Wallet/Primitive/Passphrase/Types"
           "Cardano/Wallet/Primitive/Types"
           "Cardano/Wallet/Primitive/Types/Address"
           "Cardano/Wallet/Primitive/Types/Coin"
@@ -341,6 +347,7 @@
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             (hsPkgs."quickcheck-classes" or (errorHandler.buildDepError "quickcheck-classes"))
             (hsPkgs."quickcheck-state-machine" or (errorHandler.buildDepError "quickcheck-state-machine"))
+            (hsPkgs."quickcheck-quid" or (errorHandler.buildDepError "quickcheck-quid"))
             (hsPkgs."quiet" or (errorHandler.buildDepError "quiet"))
             (hsPkgs."random" or (errorHandler.buildDepError "random"))
             (hsPkgs."retry" or (errorHandler.buildDepError "retry"))
@@ -383,6 +390,7 @@
             "Cardano/Pool/DB/MVarSpec"
             "Cardano/Pool/DB/Properties"
             "Cardano/Pool/DB/SqliteSpec"
+            "Cardano/Pool/RankSpec"
             "Cardano/Wallet/Address/PoolSpec"
             "Cardano/Wallet/Api/Malformed"
             "Cardano/Wallet/Api/Server/TlsSpec"
@@ -401,6 +409,7 @@
             "Cardano/Wallet/DB/Sqlite/TypesSpec"
             "Cardano/Wallet/DB/StateMachine"
             "Cardano/Wallet/DummyTarget/Primitive/Types"
+            "Cardano/Wallet/Network/LightSpec"
             "Cardano/Wallet/Network/PortsSpec"
             "Cardano/Wallet/NetworkSpec"
             "Cardano/Wallet/Primitive/AddressDerivation/ByronSpec"
@@ -418,6 +427,8 @@
             "Cardano/Wallet/Primitive/Migration/PlanningSpec"
             "Cardano/Wallet/Primitive/Migration/SelectionSpec"
             "Cardano/Wallet/Primitive/ModelSpec"
+            "Cardano/Wallet/Primitive/PassphraseSpec"
+            "Cardano/Wallet/Primitive/Passphrase/LegacySpec"
             "Cardano/Wallet/Primitive/Slotting/Legacy"
             "Cardano/Wallet/Primitive/SlottingSpec"
             "Cardano/Wallet/Primitive/SyncProgressSpec"
@@ -488,11 +499,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "6";
+      url = "4";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "6";
+      url = "4";
       rev = "minimal";
       sha256 = "";
       };
