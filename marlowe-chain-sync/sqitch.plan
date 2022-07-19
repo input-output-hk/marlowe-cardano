@@ -4,3 +4,4 @@
 
 appschema 2022-07-19T18:22:03Z Jamie Bertram <jamie.bertram@iohk.io> # Add schema for Chain Sync
 block [appschema] 2022-07-19T19:05:16Z Jamie Bertram <jamie.bertram@iohk.io> # Creates the block table.
+tx [block] 2022-07-19T19:27:25Z Jamie Bertram <jamie.bertram@iohk.io> # Adds tx tables.

@@ -12,10 +12,10 @@ CREATE TABLE chain.block
   , blockNo BIGINT NOT NULL
   , rollbackBlock INT
   , CONSTRAINT pk_block PRIMARY KEY (id)
-  , CONSTRAINT unique_hash UNIQUE (hash)
-  , CONSTRAINT fk_block FOREIGN KEY(rollbackBlock) REFERENCES chain.block(id)
+  , CONSTRAINT unique_block_hash UNIQUE (hash)
+  , CONSTRAINT fk_block_block FOREIGN KEY(rollbackBlock) REFERENCES chain.block(id)
   );
 
-CREATE INDEX blockSlotNo ON chain.block(slotNo);
+CREATE INDEX block_slotNo ON chain.block(slotNo);
 
 COMMIT;
