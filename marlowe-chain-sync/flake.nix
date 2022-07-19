@@ -110,8 +110,6 @@
             ];
             shellHook = pre-commit-check.shellHook
             + ''
-              export SQITCH_USERNAME=postgres
-              export SQITCH_PASSWORD=9kZ@o7j4OkMC
               export PGUSER=postgres
               export PGPASSWORD=9kZ@o7j4OkMC
             '';
