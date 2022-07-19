@@ -489,9 +489,6 @@
         "hackageNix": "hackageNix",
         "haskellNix": "haskellNix",
         "hls-source": "hls-source",
-        "hostNixpkgs": [
-          "nixpkgs"
-        ],
         "iohkNix": "iohkNix",
         "nixpkgs": [
           "haskellNix",

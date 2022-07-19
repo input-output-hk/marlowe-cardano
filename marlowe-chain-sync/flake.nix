@@ -3,7 +3,6 @@
 
   inputs = {
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
-    hostNixpkgs.follows = "nixpkgs";
     hackageNix = {
       url = "github:input-output-hk/hackage.nix";
       flake = false;
@@ -33,7 +32,7 @@
     };
   };
 
-  outputs = { self, haskellNix, nixpkgs, utils, gitignore, hls-source, pre-commit-hooks, ... }:
+  outputs = { self, haskellNix, nixpkgs, utils, gitignore, hls-source, pre-commit-hooks, iohkNix, ... }:
     let
       inherit (gitignore.lib) gitignoreSource;
       inherit (utils.lib) eachSystem defaultSystems;
@@ -53,6 +52,7 @@
             };
           overlays = [
             haskellNix.overlay
+            iohkNix.overlays.cardano-lib
             projectOverlay
           ];
           pkgs = import nixpkgs {
@@ -80,6 +80,17 @@
               };
             };
           };
+          run-node = import ./nix/cardano-node.nix {
+            inherit pkgs;
+            port = 3001;
+            network = with pkgs.cardanoLib; with environments; testnet // {
+              topology = mkEdgeTopology {
+                edgeNodes = [ testnet.relaysNew ];
+                edgePort = testnet.edgePort;
+                valency = 1;
+              };
+            };
+          };
 
         in
         flake // {
@@ -87,6 +98,7 @@
             withHoogle = false;
             buildInputs = with pkgs; [
               nixpkgs-fmt
+              run-node
               hie-bios.components.exes.hie-bios
               haskell-language-server.components.exes.haskell-language-server
               hlint.components.exes.hlint
