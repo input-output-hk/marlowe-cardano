@@ -847,7 +847,6 @@
         ouroboros-network-framework = ./.plan.nix/ouroboros-network-framework.nix;
         orphans-deriving-via = ./.plan.nix/orphans-deriving-via.nix;
         cardano-numeric = ./.plan.nix/cardano-numeric.nix;
-        marlowe-chain-sync = ./.plan.nix/marlowe-chain-sync.nix;
         cardano-wallet-cli = ./.plan.nix/cardano-wallet-cli.nix;
         word-array = ./.plan.nix/word-array.nix;
         ouroboros-consensus-shelley = ./.plan.nix/ouroboros-consensus-shelley.nix;
@@ -1031,9 +1030,6 @@
             };
           "cardano-numeric" = {
             flags = { "release" = lib.mkOverride 900 false; };
-            };
-          "marlowe-chain-sync" = {
-            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "cardano-wallet-cli" = {
             flags = { "release" = lib.mkOverride 900 false; };
@@ -1454,7 +1450,6 @@
           "network".components.library.planned = lib.mkOverride 900 true;
           "psqueues".components.library.planned = lib.mkOverride 900 true;
           "show-combinators".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-chain-sync".components.exes."marlowesyncd".planned = lib.mkOverride 900 true;
           "ListLike".components.library.planned = lib.mkOverride 900 true;
           "string-interpolate".components.library.planned = lib.mkOverride 900 true;
           "bsb-http-chunked".components.library.planned = lib.mkOverride 900 true;
@@ -1573,7 +1568,6 @@
           "pqueue".components.library.planned = lib.mkOverride 900 true;
           "contravariant".components.library.planned = lib.mkOverride 900 true;
           "appar".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-chain-sync".components.library.planned = lib.mkOverride 900 true;
           "optparse-applicative-fork".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-cardano".components.exes."db-analyser".planned = lib.mkOverride 900 true;
           "servant-docs".components.library.planned = lib.mkOverride 900 true;
