@@ -108,7 +108,13 @@
               stylish-haskell.components.exes.stylish-haskell
               cabal-install.components.exes.cabal
             ];
-            shellHook = pre-commit-check.shellHook;
+            shellHook = pre-commit-check.shellHook
+            + ''
+              export SQITCH_USERNAME=postgres
+              export SQITCH_PASSWORD=9kZ@o7j4OkMC
+              export PGUSER=postgres
+              export PGPASSWORD=9kZ@o7j4OkMC
+            '';
           };
         };
     in
