@@ -11,9 +11,10 @@ module Spec.Marlowe.Semantics (
 import Data.Maybe (fromMaybe, isNothing)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName)
+import Ledger.Scripts (dataHash)
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
 import Spec.Marlowe.Arbitrary
-import Spec.Marlowe.Common (contractGen, observationGen, valueGen)
+import Spec.Marlowe.Orphans ()
 import Spec.Marlowe.Util
 import Spec.Marlowe.Util.AssocMap
 import Test.Tasty
@@ -23,9 +24,14 @@ import Test.Tasty.QuickCheck
 import qualified PlutusTx.AssocMap as AM
 
 
--- FIXME: Turn this off when semantics are fixed!
+-- FIXME: Turn this off when semantics are fixed, see SCP-4269.
 _ALLOW_ZERO_PAYMENT :: Bool
 _ALLOW_ZERO_PAYMENT = True
+
+
+-- FIXME: Turn this off when the `getContinuation` test is fixed, see SCP-4268.
+_ALLOW_FAILED_CONTINUATION_ :: Bool
+_ALLOW_FAILED_CONTINUATION_ = True
 
 
 tests :: [TestTree]
@@ -35,17 +41,17 @@ tests =
       [
         testGroup "Entropy"
           [
-            testCase "PubKeyHash"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen PubKeyHash     )
-          , testCase "CurrencySymbol" $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen CurrencySymbol )
-          , testCase "TokenName"      $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen TokenName      )
-          , testCase "Token"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Token          )
-          , testCase "Party"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Party          )
+            testCase "PubKeyHash"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen PubKeyHash                               )
+          , testCase "CurrencySymbol" $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen CurrencySymbol                           )
+          , testCase "TokenName"      $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen TokenName                                )
+          , testCase "Token"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Token                                    )
+          , testCase "Party"          $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen Party                                    )
           , testCase "ChoiceName"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100)  arbitraryChoiceName
-          , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ChoiceId       )
-          , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId        )
-          , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryAccounts   )
-          , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryChoices    )
-          , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> arbitraryBoundValues)
+          , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ChoiceId                                 )
+          , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId                                  )
+          , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> (arbitrary :: Gen Accounts                   ))
+          , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> (arbitrary :: Gen (AM.Map ChoiceId ChosenNum)))
+          , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> (arbitrary :: Gen (AM.Map ValueId Integer   )))
           ]
       ]
   , testGroup "Semantics"
@@ -127,6 +133,7 @@ tests =
         , testProperty "Let" checkReduceContractStepLet
         , testProperty "Assert" checkReduceContractStepAssert
         ]
+      , testProperty "reduceContractUntilQuiescent" checkReduceContractUntilQuiescent
       , testGroup "applyAction"
         [
           testProperty "Input does not match action" checkApplyActionMismatch
@@ -146,6 +153,9 @@ tests =
           ]
         , testProperty "INotify" checkINotify
         ]
+      , testProperty "getContinuation" checkGetContinuation
+      , testProperty "applyInput" checkApplyInput
+      , testCase "isClose" checkIsClose
       ]
     ]
 
@@ -206,14 +216,14 @@ checkConstant =
 
 checkNegValue :: Property
 checkNegValue =
-  checkValue (const . const $ valueGen) $ \eval _ _ _ x ->
+  checkValue (const . const $ arbitrary) $ \eval _ _ _ x ->
     eval (NegValue x) == - eval x
 
 
 checkAddValue :: Property
 checkAddValue =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval _ _ _ (x, y) ->
       eval (AddValue x y) == eval x + eval y
@@ -222,7 +232,7 @@ checkAddValue =
 checkSubValue :: Property
 checkSubValue =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval _ _ _ (x, y) ->
       eval (SubValue x y) == eval x - eval y
@@ -231,7 +241,7 @@ checkSubValue =
 checkMulValue :: Property
 checkMulValue =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval _ _ _ (x, y) ->
       eval (MulValue x y) == eval x * eval y
@@ -245,20 +255,20 @@ checkDivValueNumeratorDenominatorZero =
 
 checkDivValueNumeratorZero :: Property
 checkDivValueNumeratorZero =
-  checkValue (const . const $ valueGen) $ \eval _ _ _ x ->
+  checkValue (const . const $ arbitrary) $ \eval _ _ _ x ->
     eval (DivValue (Constant 0) x) == 0
 
 
 checkDivValueDenominatorZero :: Property
 checkDivValueDenominatorZero =
-  checkValue (const . const $ valueGen) $ \eval _ _ _ x ->
+  checkValue (const . const $ arbitrary) $ \eval _ _ _ x ->
     eval (DivValue x (Constant 0)) == 0
 
 
 checkDivValueMultiple :: Property
 checkDivValueMultiple =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval _ _ _ (x, n) ->
       eval (DivValue (MulValue x n) n) == eval x || eval n == 0
@@ -267,7 +277,7 @@ checkDivValueMultiple =
 checkDivValueRounding :: Property
 checkDivValueRounding =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval _ _ _ (x, y) ->
       eval (DivValue x y) == eval x `roundedDivide` eval y || eval y == 0
@@ -322,7 +332,7 @@ checkUseValue isElement =
 checkCond :: Property
 checkCond =
   let
-    gen _ _ = (,,) <$> observationGen <*> valueGen <*> valueGen
+    gen _ _ = (,,) <$> arbitrary <*> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval eval' _ _ (condition, thenValue, elseValue) ->
       eval (Cond condition thenValue elseValue) == (if eval' condition then eval thenValue else eval elseValue)
@@ -331,7 +341,7 @@ checkCond =
 checkAndObs :: Property
 checkAndObs =
   let
-    gen _ _ = (,) <$> observationGen <*> observationGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \_ eval _ _ (x, y) ->
       eval (AndObs x y) == (eval x && eval y)
@@ -340,7 +350,7 @@ checkAndObs =
 checkOrObs :: Property
 checkOrObs =
   let
-    gen _ _ = (,) <$> observationGen <*> observationGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \_ eval _ _ (x, y) ->
       eval (OrObs x y) == (eval x || eval y)
@@ -348,7 +358,7 @@ checkOrObs =
 
 checkNotObs :: Property
 checkNotObs =
-  checkValue (const . const $ observationGen) $ \_ eval _ _ x ->
+  checkValue (const . const $ arbitrary) $ \_ eval _ _ x ->
     eval (NotObs x) == not (eval x)
 
 
@@ -370,7 +380,7 @@ checkChoseSomething isElement =
 checkValueGE :: Property
 checkValueGE =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval eval' _ _ (x, y) ->
       eval' (ValueGE x y) == (eval x >= eval y)
@@ -379,7 +389,7 @@ checkValueGE =
 checkValueGT :: Property
 checkValueGT =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval eval' _ _ (x, y) ->
       eval' (ValueGT x y) == (eval x > eval y)
@@ -388,7 +398,7 @@ checkValueGT =
 checkValueLT :: Property
 checkValueLT =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval eval' _ _ (x, y) ->
       eval' (ValueLT x y) == (eval x < eval y)
@@ -397,7 +407,7 @@ checkValueLT =
 checkValueLE :: Property
 checkValueLE =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval eval' _ _ (x, y) ->
       eval' (ValueLE x y) == (eval x <= eval y)
@@ -406,7 +416,7 @@ checkValueLE =
 checkValueEQ :: Property
 checkValueEQ =
   let
-    gen _ _ = (,) <$> valueGen <*> valueGen
+    gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval eval' _ _ (x, y) ->
       eval' (ValueEQ x y) == (eval x == eval y)
@@ -459,9 +469,10 @@ choiceNotInBounds bounds =
 checkIDeposit :: Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe Bool -> Property
 checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property $ do
   let gen = do
-        environment <- arbitrary
-        state <- arbitrary
-        ((account, token), _) <- arbitraryFromAccounts $ accounts state
+        context <- arbitrary
+        environment <- arbitrary' context
+        state <- arbitrary' context
+        (account, token) <- arbitrary' context
         accountMatches' <- maybe arbitrary pure accountMatches
         account' <- if accountMatches' then pure account else suchThat arbitrary (/= account)
         partyMatches' <- maybe arbitrary pure partyMatches
@@ -470,7 +481,7 @@ checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property 
         tokenMatches' <- maybe arbitrary pure tokenMatches
         token' <- if tokenMatches' then pure token else suchThat arbitrary (/= token)
         amountMatches' <- maybe arbitrary pure amountMatches
-        amount <- valueGen
+        amount <- arbitrary
         let amountEvaluated = evalValue environment state amount
         amount' <- if amountMatches' then pure amountEvaluated else suchThat arbitrary (/= amountEvaluated)
         pure (environment, state, account', party', token', amount', Deposit account party token amount, accountMatches' && partyMatches' && tokenMatches' && amountMatches')
@@ -512,7 +523,7 @@ checkINotify = property $ do
   let gen = do
         environment <- arbitrary
         state <- arbitrary
-        x <- observationGen
+        x <- arbitrary
         pure (environment, state, x)
   forAll gen $ \(environment, state, x) ->
     let
@@ -527,7 +538,7 @@ checkINotify = property $ do
 checkRefundOne :: (Int -> Bool) -> Property
 checkRefundOne f =
   property
-    $ forAll (arbitraryAccounts `suchThat` (f . length . AM.toList)) $ \accounts' ->
+    $ forAll (arbitrary `suchThat` (f . length . AM.toList)) $ \accounts' ->
       case (AM.null accounts', refundOne accounts') of
          (True, Nothing                          ) -> True
          (True, _                                ) -> False
@@ -542,9 +553,9 @@ checkMoneyInAccount =
   property $ do
   let gen =
         do
-          accounts' <- arbitraryAccounts
-          (, accounts') <$> arbitraryFromAccounts accounts'
-  forAll gen $ \(((account, token), _), accounts') ->
+          context <- arbitrary
+          (,) <$> arbitrary' context <*> arbitrary' context
+  forAll gen $ \((account, token), accounts') ->
     fromMaybe 0 ((account, token) `AM.lookup` accounts') == moneyInAccount account token accounts'
 
 
@@ -553,9 +564,9 @@ checkUpdateMoneyInAccount =
   property $ do
   let gen =
         do
-          accounts' <- arbitraryAccounts
-          (, accounts') <$> arbitraryFromAccounts accounts'
-  forAll gen $ \(((account, token), amount), accounts') ->
+          context <- arbitrary
+          (,,) <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context
+  forAll gen $ \((account, token), amount, accounts') ->
     let
       newAccounts = AM.filter (> 0) $ assocMapInsert (account, token) amount accounts'
     in
@@ -567,9 +578,9 @@ checkAddMoneyToAccount =
   property $ do
   let gen =
         do
-          accounts' <- arbitraryAccounts
-          (, accounts') <$> arbitraryFromAccounts accounts'
-  forAll gen $ \(((account, token), amount), accounts') ->
+          context <- arbitrary
+          (,,) <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context
+  forAll gen $ \((account, token), amount, accounts') ->
     let
       newAccounts = assocMapAdd (account, token) amount accounts'
       accounts'' = addMoneyToAccount account token amount accounts'
@@ -584,9 +595,9 @@ checkGiveMoney =
   property $ do
   let gen =
         do
-          accounts' <- arbitraryAccounts
-          (, , accounts') <$> arbitraryFromAccounts accounts' <*> arbitrary
-  forAll gen $ \(((account, token), amount), payee, accounts') ->
+          context <- arbitrary
+          (,,,) <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary' context
+  forAll gen $ \((account, token), amount, payee, accounts') ->
     let
       newAccounts =
         case payee of
@@ -630,10 +641,15 @@ checkReduceContractStepPay :: Property
 checkReduceContractStepPay =
   property $ do
   let gen = do
-        environment <- arbitrary
-        state <- arbitrary
-        ((account, token), _) <- arbitraryFromAccounts $ accounts state
-        (environment, state, account, , token, , ) <$> arbitrary <*> valueGen <*> contractGen
+        context <- arbitrary
+        (,,,,,,)
+          <$> arbitrary' context
+          <*> arbitrary' context
+          <*> arbitrary' context
+          <*> arbitrary' context
+          <*> arbitrary' context
+          <*> arbitrary' context
+          <*> arbitrary' context
   forAll gen $ \(environment, state, account, payee, token, value, contract) ->
     let
       prior = fromMaybe 0 $ AM.lookup (account, token) (accounts state)
@@ -689,7 +705,7 @@ checkReduceContractStepPay =
 checkReduceContractStepIf :: Property
 checkReduceContractStepIf =
   property $ do
-  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> observationGen <*> contractGen <*> contractGen) $ \(environment, state, observation, thenContract, elseContract) ->
+  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, thenContract, elseContract) ->
     let
       passed = evalObservation environment state observation
     in
@@ -701,7 +717,7 @@ checkReduceContractStepIf =
 checkReduceContractStepWhen :: Property
 checkReduceContractStepWhen =
   property $ do
-  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> listOf caseGen <*> arbitrary <*> contractGen) $ \(environment, state, cases, timeout, contract) ->
+  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> listOf arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, cases, timeout, contract) ->
     let
       before = snd (timeInterval environment) < timeout
       afterwards = fst (timeInterval environment) >= timeout
@@ -715,7 +731,7 @@ checkReduceContractStepWhen =
 checkReduceContractStepLet :: Property
 checkReduceContractStepLet =
   property $ do
-  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> valueGen <*> contractGen) $ \(environment, state, valueId, value, contract) ->
+  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, valueId, value, contract) ->
     let
       x = evalValue environment state value
       shadow = valueId `AM.member` boundValues state
@@ -734,7 +750,7 @@ checkReduceContractStepLet =
 checkReduceContractStepAssert :: Property
 checkReduceContractStepAssert =
   property $ do
-  forAll ((,,,) <$> arbitrary <*> arbitrary <*> observationGen <*> contractGen) $ \(environment, state, observation, contract) ->
+  forAll ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, contract) ->
     let
       passed = evalObservation environment state observation
     in
@@ -742,3 +758,59 @@ checkReduceContractStepAssert =
         Reduced ReduceNoWarning       ReduceNoPayment state' contract' -> passed     && state == state' && contract == contract'
         Reduced ReduceAssertionFailed ReduceNoPayment state' contract' -> not passed && state == state' && contract == contract'
         _                                                              -> False
+
+
+checkReduceContractUntilQuiescent :: Property
+checkReduceContractUntilQuiescent =
+  property $ do
+    forAll ((,,) <$> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, contract) ->
+      case reduceContractUntilQuiescent environment state contract of
+        ContractQuiescent _ _ _ _ Close              -> True
+        ContractQuiescent _ _ _ _ (When _ timeout _) -> snd (timeInterval environment) < timeout
+        ContractQuiescent{}                          -> False
+        RRAmbiguousTimeIntervalError                 -> True
+
+
+checkGetContinuation :: Property
+checkGetContinuation =
+  property $ do
+    let gen =
+         do
+           sameContract <- arbitrary
+           correctHash <- arbitrary
+           contract <- arbitrary
+           contract' <- if sameContract then pure contract else arbitrary
+           contract'' <- arbitrary
+           let contractHash  = dataHash $ toBuiltinData contract
+               contractHash' = dataHash . toBuiltinData $ if correctHash then contract' else contract''
+           content <- arbitrary
+           action <- arbitrary
+           input <- elements [NormalInput content, MerkleizedInput content contractHash' contract']
+           case' <- elements [Case action contract, MerkleizedCase action contractHash]
+           pure (input, case', contract, contractHash == contractHash')
+    forAll gen $ \(input, case', contract, hashesMatch) ->
+      _ALLOW_FAILED_CONTINUATION_ || case (input, case', getContinuation input case') of
+        (NormalInput{}    , Case{}          , contract') -> Just contract == contract'
+        (MerkleizedInput{}, MerkleizedCase{}, contract') -> (Just contract == contract') == hashesMatch
+        (_                , _               , Nothing  ) -> True
+        _                                                -> False
+
+
+checkApplyInput :: Property
+checkApplyInput =
+  property $ do
+    forAll ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, input, contract) ->
+      case (contract, applyInput environment state input contract) of
+        (When cases _ _, result           ) -> result == applyCases environment state input cases
+        (_             , ApplyNoMatchError) -> True
+        _                                   -> False
+
+checkIsClose :: Assertion
+checkIsClose =
+  do
+    assertBool "isClose Close = True"  $ isClose Close
+    assertBool "isClose Pay = False"   . not . isClose $ Pay undefined undefined undefined undefined undefined
+    assertBool "isClose If = False"    . not . isClose $ If undefined undefined undefined
+    assertBool "isClose When = False"  . not . isClose $ When undefined undefined undefined
+    assertBool "isClose Let = False"   . not . isClose $ Let undefined undefined undefined
+    assertBool "isClose Asset = False" . not . isClose $ Assert undefined undefined

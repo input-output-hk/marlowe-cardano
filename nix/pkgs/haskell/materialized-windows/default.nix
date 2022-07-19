@@ -856,6 +856,7 @@
         cardano-config = ./.plan.nix/cardano-config.nix;
         lobemo-backend-graylog = ./.plan.nix/lobemo-backend-graylog.nix;
         marlowe-dashboard-server = ./.plan.nix/marlowe-dashboard-server.nix;
+        marlowe-runtime = ./.plan.nix/marlowe-runtime.nix;
         ouroboros-network-testing = ./.plan.nix/ouroboros-network-testing.nix;
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         trace-forward = ./.plan.nix/trace-forward.nix;
@@ -1047,6 +1048,9 @@
             };
           "lobemo-backend-graylog" = { flags = {}; };
           "marlowe-dashboard-server" = { flags = {}; };
+          "marlowe-runtime" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "ouroboros-network-testing" = { flags = {}; };
           "marlowe-contracts" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -1537,6 +1541,7 @@
           "Stream".components.library.planned = lib.mkOverride 900 true;
           "katip".components.library.planned = lib.mkOverride 900 true;
           "cardano-wallet".components.exes."cardano-wallet".planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."chain-sync".planned = lib.mkOverride 900 true;
           "cardano-submit-api".components.library.planned = lib.mkOverride 900 true;
           "lzma".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.setup.planned = lib.mkOverride 900 true;
@@ -1659,6 +1664,7 @@
           "th-compat".components.library.planned = lib.mkOverride 900 true;
           "cardano-crypto".components.library.planned = lib.mkOverride 900 true;
           "tls".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe-runtime".planned = lib.mkOverride 900 true;
           "http-types".components.library.planned = lib.mkOverride 900 true;
           "websockets-snap".components.library.planned = lib.mkOverride 900 true;
           "generic-monoid".components.library.planned = lib.mkOverride 900 true;
@@ -1763,6 +1769,7 @@
           "microstache".components.library.planned = lib.mkOverride 900 true;
           "trace-dispatcher".components.exes."trace-dispatcher-examples".planned = lib.mkOverride 900 true;
           "text".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.library.planned = lib.mkOverride 900 true;
           "lobemo-backend-graylog".components.library.planned = lib.mkOverride 900 true;
           "partial-order".components.library.planned = lib.mkOverride 900 true;
           "formatting".components.library.planned = lib.mkOverride 900 true;
