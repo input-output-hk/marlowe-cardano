@@ -2,6 +2,6 @@
 
 BEGIN;
 
-DROP TABLE chain.block;
+DROP TABLE chain.block CASCADE;
 
 COMMIT;
