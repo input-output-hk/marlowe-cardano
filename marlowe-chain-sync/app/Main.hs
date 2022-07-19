@@ -3,13 +3,16 @@ module Main where
 import Cardano.Api (Block (Block), BlockHeader (..), BlockInMode (BlockInMode), ChainPoint (..), ChainTip (..),
                     ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.Async (concurrently, waitCatch, withAsync)
+import Control.Concurrent.Async (Concurrently (..), waitCatch, withAsync)
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Exception (Exception (displayException))
 import Control.Monad (guard)
 import Control.Monad.STM (STM)
+import Data.Foldable (traverse_)
 import Data.Functor (void)
+import Data.Time (secondsToNominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (ChainSyncEvent (..), runNodeClient)
+import Language.Marlowe.Runtime.ChainSync.Store (StoreApi (..), StoreDependencies (..), mkStore, mkStoreEventHandler)
 import Options (Options (..), getOptions)
 import Ouroboros.Network.Point (WithOrigin (..))
 import System.IO (hPutStrLn, stderr)
@@ -24,6 +27,7 @@ runChainSync Options{..} = do
   tpoint <- newTVarIO ChainPointAtGenesis
   ttip <- newTVarIO ChainTipAtGenesis
   tConnectionAttempts <- newTVarIO @Int 0
+  (awaitChanges, storeHandler) <- atomically mkStoreEventHandler
   let
     runNodeClientSupervised :: IO ()
     runNodeClientSupervised = withAsync runNodeClient' \a -> do
@@ -50,6 +54,7 @@ runChainSync Options{..} = do
     runNodeClient' :: IO ()
     runNodeClient' =
       runNodeClient connectionInfo getHeaderAtPoint getIntersectionPoints \event -> atomically do
+        storeHandler event
         writeTVar tConnectionAttempts 0
         case event of
           RollForward (BlockInMode (Block (BlockHeader slotNo hash _) _) _) tip -> do
@@ -83,4 +88,14 @@ runChainSync Options{..} = do
 
   point <- readTVarIO tpoint
   tip <- readTVarIO ttip
-  void $ concurrently runNodeClientSupervised (writeStats point tip)
+  store <- mkStore StoreDependencies
+    { commitRollback = \_ -> putStrLn "committing rollback"
+    , commitBlocks = \blocks -> putStrLn $ "saving " <> show (length blocks) <> " blocks"
+    , awaitChanges
+    , rateLimit = secondsToNominalDiffTime 1
+    }
+  void $ runConcurrently $ traverse_ Concurrently
+    [ runNodeClientSupervised
+    , writeStats point tip
+    , runStore store
+    ]

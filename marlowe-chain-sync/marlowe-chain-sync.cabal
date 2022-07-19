@@ -43,6 +43,7 @@ common lang
     ExplicitForAll
     GeneralizedNewtypeDeriving
     LambdaCase
+    NamedFieldPuns
     NumericUnderscores
     OverloadedStrings
     RecordWildCards
@@ -61,11 +62,15 @@ library
   hs-source-dirs:   src
   exposed-modules:
     Language.Marlowe.Runtime.ChainSync.NodeClient
+    Language.Marlowe.Runtime.ChainSync.Store
   other-modules:
   build-depends:
       base >= 4.9 && < 5
     , cardano-api
     , ouroboros-network
+    , stm
+    , time
+    , witherable
 
 executable marlowesyncd
   import: lang
@@ -84,5 +89,6 @@ executable marlowesyncd
     , optparse-applicative
     , ouroboros-network
     , stm
+    , time
   ghc-options:
     -threaded

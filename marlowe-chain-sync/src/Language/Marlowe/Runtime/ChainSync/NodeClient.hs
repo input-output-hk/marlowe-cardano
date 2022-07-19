@@ -3,7 +3,9 @@
 {-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.Runtime.ChainSync.NodeClient
-  ( ChainSyncEvent(..)
+  ( CardanoBlock
+  , ChainEventHandler
+  , ChainSyncEvent(..)
   , runNodeClient
   ) where
 
@@ -22,6 +24,7 @@ import Ouroboros.Network.Point (WithOrigin (..))
 type CardanoBlock = BlockInMode CardanoMode
 type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
+type ChainEventHandler m = ChainSyncEvent -> m ()
 
 data ChainSyncEvent
   = RollForward CardanoBlock ChainTip
@@ -31,7 +34,7 @@ runNodeClient
   :: LocalNodeConnectInfo CardanoMode
   -> (ChainPoint -> IO (WithOrigin BlockHeader))
   -> (ChainPoint -> Maybe ChainPoint -> IO [ChainPoint])
-  -> (ChainSyncEvent -> IO ())
+  -> ChainEventHandler IO
   -> IO ()
 runNodeClient nodeConnectInfo getHeaderAtPoint getIntersectionPoints onEvent =
   connectToLocalNode nodeConnectInfo LocalNodeClientProtocols
@@ -61,7 +64,7 @@ runNodeClient nodeConnectInfo getHeaderAtPoint getIntersectionPoints onEvent =
 pipelinedClient
   :: forall m
    . Monad m
-  => (ChainSyncEvent -> m ())
+  => ChainEventHandler m
   -> (ChainPoint -> m (WithOrigin BlockNo))
   -> (ChainPoint -> Maybe ChainPoint -> m [ChainPoint])
   -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip m ()
@@ -104,7 +107,7 @@ pipelinedClient onEvent getBlockNoAtPoint getIntersectionPoints =
 mkClientStIdle
   :: forall m n
    . Monad m
-  => (ChainSyncEvent -> m ())
+  => ChainEventHandler m
   -> (ChainPoint -> m (WithOrigin BlockNo))
   -> MkPipelineDecision
   -> Nat n
@@ -144,7 +147,7 @@ mkClientStIdle onEvent getBlockNoAtPoint pipelineDecision n clientTip nodeTip =
 
 mkClientStNext
   :: Monad m
-  => (ChainSyncEvent -> m ())
+  => ChainEventHandler m
   -> (ChainPoint -> m (WithOrigin BlockNo))
   -> (WithOrigin BlockNo -> NumberedChainTip -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip m ())
   -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
