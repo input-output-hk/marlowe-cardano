@@ -86,7 +86,7 @@ import Network.WebSockets (Connection)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (PabClient, activateContract, instanceClient))
 import Plutus.PAB.Webserver.Types (ContractActivationArgs (..), InstanceStatusToClient (..))
-import Plutus.V1.Ledger.Api (CurrencySymbol (..), TokenName (..), fromBuiltin, toBuiltin)
+import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol (..), TokenName (..), fromBuiltin, toBuiltin)
 import Plutus.V1.Ledger.Time (DiffMilliSeconds (..), POSIXTime (..))
 import Servant.API ((:>))
 import System.Timeout (timeout)
@@ -102,6 +102,7 @@ import Cardano.Wallet.Shelley.Network.Node (Log (MsgAccountDelegationAndRewards)
 import Control.Arrow ((<<<))
 import Control.Monad.Error (MonadError (catchError))
 import Control.Monad.RWS.Class (MonadReader)
+import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.Reader.Class (MonadReader (ask))
 import Control.Monad.State (modify)
 import qualified Data.Aeson as A (Value (..), object)
@@ -119,6 +120,7 @@ import Data.Text.Array (equal)
 import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
 import qualified Data.Vector as V (all, zip)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransaction)
+import qualified Language.Marlowe.Client as Client
 import Ledger.TimeSlot (SlotConfig)
 import Network.HTTP.Client (HttpException)
 import qualified PlutusTx.AssocMap as AM (fromList)
@@ -128,9 +130,10 @@ import qualified Servant.Client as Servant (client)
 newtype ScriptState = ScriptState [String]
 
 
-data ScriptContext = ScriptContext
-  { networkId  :: NetworkId
-  , slotConfig :: SlotConfig
+data ScriptEnv = ScriptEnv
+  { seNetworkId        :: NetworkId
+  , seSlotConfig       :: SlotConfig
+  , seConstModelParams :: CostModelParams
   }
 
 -- Next Tasks:
@@ -151,14 +154,24 @@ data ScriptContext = ScriptContext
 --                           -> Bool                   -- ^ Whether to print statistics about the validator.
 --                           -> m (MarloweTransaction AlonzoEra)
 
+--   Initialize
+--     {
+--       soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
+--     , soRoleCurrency :: CurrencySymbol        -- ^ We derive
+--     , soContract     :: Contract              -- ^ The Marlowe contract to be created.
+    -- | FIXME: No *JSON instances for this
 
 interpret :: MonadError CliError m
           => MonadState ScriptState m
-          => MonadReader ScriptContext m
+          => MonadReader ScriptEnv m
           => MonadIO m
           => ScriptOperation
           -> m ()
-interpret (Initialize _) = do
+interpret Initialize {..} = do
+  ScriptEnv {..} <- ask
+  let
+    marloweParams = Client.marloweParams soRoleCurrency
+  initializeTransactionImpl
   -- x <- get
   -- modify \(ScriptState lst) -> ScriptState ("newValue" : lst)
   -- put (ScriptState [])
@@ -181,7 +194,7 @@ scriptTest  :: MonadError CliError m
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest _costModel _network _connection _slotConfig ScriptTest{..} =
+scriptTest _costModel _networkId _connection _slotConfig ScriptTest{..} =
   do
     -- putStrLn :: String -> IO ()
     -- liftIO :: IO a -> m a
@@ -191,14 +204,14 @@ scriptTest _costModel _network _connection _slotConfig ScriptTest{..} =
     let
       interpretLoop :: MonadError CliError m
                     => MonadState ScriptState m
-                    => MonadReader ScriptContext m
+                    => MonadReader ScriptEnv m
                     => MonadIO m
                     => m ()
       interpretLoop = for_ stScriptOperations \operation -> do
         interpret operation
     catchError
       (
-        execStateT interpretLoop (ScriptState [])
+        runReaderT (execStateT interpretLoop (ScriptState [])) (ScriptEnv _networkId _slotConfig _costModel)
         -- TODO: Add a timeout.
         -- void
         --   . execStateT (mapM_ (interpret access) ptPabOperations)

@@ -1,8 +1,33 @@
 stTestName: Sample Test
+
 stScriptOperations:
+
   - tag: Initialize
     soOwner: "Someone"
+    soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
+    soContract:
+      when:
+      - case:
+          party:
+            role_token: PAB
+          deposits: 15000000
+          into_account:
+            role_token: PAB
+          of_token:
+            currency_symbol: ''
+            token_name: ''
+        then:
+          when:
+          - case:
+              notify_if: true
+            then: close
+          timeout: 1961123625000
+          timeout_continuation: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
   - tag: Prepare
     soOwner: "Another Someone"
+
   - tag: Fail
     soFailureMessage: "Failure Invoked"

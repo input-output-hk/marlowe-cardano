@@ -55,7 +55,7 @@ module Language.Marlowe.CLI.Test.Types (
 ) where
 
 
-import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, Value)
+import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, StakeAddressReference, Value)
 import Cardano.Wallet.Primitive.AddressDerivation (Passphrase)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Chan (Chan)
@@ -81,6 +81,7 @@ import Control.Lens.Lens (lens)
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.Map.Strict as M (Map)
 import Data.Maybe (fromMaybe)
+import Ledger (CurrencySymbol)
 import Options.Applicative (optional)
 
 
@@ -146,11 +147,18 @@ data PabTest =
     deriving anyclass (FromJSON, ToJSON)
 
 
+type TransactionNickname = String
+
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
   Initialize
     {
-      soOwner :: RoleName  -- ^ The name of the wallet's owner.
+      soOwner        :: RoleName              -- ^ The name of the wallet's owner.
+    , soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
+    , soRoleCurrency :: CurrencySymbol        -- ^ We derive
+    , soContract     :: Contract              -- ^ The Marlowe contract to be created.
+    -- | FIXME: No *JSON instances for this
+    -- , soStake :: Maybe StakeAddressReference
     }
   | Prepare
     {
