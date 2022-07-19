@@ -3,7 +3,8 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli cardano-wallet dev-scripts;
+  # inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli cardano-wallet dev-scripts;
+  inherit (packages) pkgs marlowe docs cardano-wallet dev-scripts;
   inherit (dev-scripts) start-cardano-node start-wallet;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
@@ -115,7 +116,7 @@ let
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
-    marlowe-cli
+    # marlowe-cli
     cardano-cli
   ]);
 
@@ -140,6 +141,5 @@ haskell.project.shellFor {
   # Point to some source dependencies
   + ''
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-    export WEB_COMMON_SRC="${webCommon.cleanSrc}"
   '';
 }
