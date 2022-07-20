@@ -52,7 +52,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Party(..)
 
   )
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
 import Marlowe (Api)
 import Marlowe as Server

@@ -28,7 +28,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , _boundValues
   , _choices
   )
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots)
 import Marlowe.ViewPartials (displayWarningList)
 import Page.Simulation.Types (BottomPanelView(..), State)

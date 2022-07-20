@@ -17,7 +17,7 @@ import Halogen.HTML (HTML)
 import Halogen.HTML (slot) as HH
 import Halogen.Hooks (raise)
 import Halogen.Hooks as Hooks
-import Language.Marlowe.Extended.V1.Metadata (MetaData, MetadataHintInfo)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, MetadataHintInfo)
 import MainFrame.Types (ChildSlots)
 import Type.Prelude (Proxy(..))
 

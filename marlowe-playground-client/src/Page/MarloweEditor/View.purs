@@ -32,7 +32,7 @@ import Halogen.HTML.Events (onClick, onSelectedIndexChange)
 import Halogen.HTML.Properties (class_, classes, disabled, title)
 import Halogen.HTML.Properties as HP
 import Halogen.Monaco (monacoComponent)
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots, _marloweEditorPageSlot)
 import Marlowe.Monaco as MM
 import Page.MarloweEditor.BottomPanel (panelContents)

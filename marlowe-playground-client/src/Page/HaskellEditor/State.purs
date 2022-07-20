@@ -33,9 +33,12 @@ import Language.Haskell.Interpreter
 import Language.Haskell.Monaco as HM
 import Language.Marlowe.Extended.V1 (Contract)
 import Language.Marlowe.Extended.V1.Metadata
+  ( getMetadataHintInfo
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types
   ( MetaData
   , MetadataHintInfo
-  , getMetadataHintInfo
+
   )
 import MainFrame.Types (ChildSlots, _haskellEditorSlot)
 import Marlowe (Api, postApiCompile)

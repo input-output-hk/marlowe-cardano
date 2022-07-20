@@ -1,7 +1,7 @@
 module Examples.PureScript.Swap
-  ( contractTemplate
+  ( contractModule
   , fullExtendedContract
-  , metaData
+  , metadata
   , fixedTimeoutContract
   , defaultTimeContent
   ) where
@@ -12,23 +12,28 @@ import Data.BigInt.Argonaut (fromInt)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Map.Ordered.OMap as OMap
 import Data.Tuple.Nested ((/\))
-import Examples.Metadata as Metadata
 import Language.Marlowe.Core.V1.Semantics.Types (Party(..), Token(..))
 import Language.Marlowe.Extended.V1
   ( Action(..)
   , Case(..)
   , Contract(..)
+  , Module(..)
   , Payee(..)
   , Timeout(..)
   , Value(..)
   )
-import Language.Marlowe.Extended.V1.Metadata (ContractTemplate, MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ContractType(..)
+  , MetaData
+  , NumberFormat(..)
+  )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (unsafeInstantFromInt)
 
-contractTemplate :: ContractTemplate
-contractTemplate = { metaData, extendedContract: fullExtendedContract }
+contractModule :: Module
+contractModule = Module { metadata, contract: fullExtendedContract }
 
 fixedTimeoutContract :: Contract
 fixedTimeoutContract =
@@ -47,8 +52,45 @@ defaultTimeContent =
     , "Timeout for dollar deposit" /\ unsafeInstantFromInt 1200000
     ]
 
-metaData :: MetaData
-metaData = Metadata.swap
+metadata :: MetaData
+metadata =
+  { contractType: Swap
+  , contractName: "Swap of Ada and dollar tokens"
+  , contractShortDescription: "Atomically exchange of Ada and dollar tokens."
+  , contractLongDescription:
+      "Waits until one party deposits Ada and the other party deposits dollar tokens. If both parties collaborate it carries the exchange atomically, otherwise parties are refunded."
+  , choiceInfo: Map.empty
+  , roleDescriptions:
+      ( Map.fromFoldable
+          [ "Ada provider" /\ "The party that provides the Ada."
+          , "Dollar provider" /\ "The party that provides the dollar tokens."
+          ]
+      )
+  , timeParameterDescriptions:
+      ( OMap.fromFoldable
+          [ "Timeout for Ada deposit" /\
+              "Deadline by which Ada must be deposited."
+          , "Timeout for dollar deposit" /\
+              "Deadline by which dollar tokens must be deposited (must be after the deadline for Ada deposit)."
+          ]
+      )
+  , valueParameterInfo:
+      ( OMap.fromFoldable
+          [ "Amount of Ada"
+              /\
+                { valueParameterFormat: DecimalFormat 0 "₳"
+                , valueParameterDescription:
+                    "Amount of Ada to be exchanged for dollars."
+                }
+          , "Amount of dollars"
+              /\
+                { valueParameterFormat: DecimalFormat 0 "$"
+                , valueParameterDescription:
+                    "Amount of dollar tokens to be exchanged for Ada."
+                }
+          ]
+      )
+  }
 
 ada :: Token
 ada = Token "" ""

@@ -2,58 +2,82 @@ module Language.Marlowe.Extended.V1.Metadata where
 
 import Prologue
 
-import Data.Argonaut.Decode (class DecodeJson)
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson)
-import Data.Argonaut.Encode.Aeson as E
-import Data.Generic.Rep (class Generic)
-import Data.Lens (Lens')
-import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
-import Data.Set (Set)
 import Data.Set as Set
-import Data.Set.Ordered.OSet (OSet)
 import Data.Set.Ordered.OSet as OSet
-import Data.Show.Generic (genericShow)
-import Data.Tuple (uncurry)
-import Data.Tuple.Nested ((/\))
 import Language.Marlowe.Core.V1.Semantics.Types as S
-import Language.Marlowe.Extended.V1 (Contract, ContractType(..), getChoiceNames)
+import Language.Marlowe.Extended.V1 (Contract, getChoiceNames)
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ChoiceInfo
+  , ContractType(..)
+  , MetaData
+  , MetadataHintInfo
+  , NumberFormat(..)
+  , NumberFormatType(..)
+  , ValueParameterInfo
+  )
 import Marlowe.HasParties (getParties)
 import Marlowe.Template (Placeholders(..), getPlaceholderIds)
-import Type.Proxy (Proxy(..))
 
-data NumberFormat
-  = DefaultFormat
-  | DecimalFormat Int String
-  | TimeFormat
+contractTypeInitials :: ContractType -> String
+contractTypeInitials Escrow = "ES"
 
-derive instance eqNumberFormat :: Eq NumberFormat
+contractTypeInitials EscrowWithCollateral = "EC"
 
-derive instance genericNumberFormat :: Generic NumberFormat _
+contractTypeInitials ZeroCouponBond = "ZC"
 
-instance encodeJsonNumberFormat :: EncodeJson NumberFormat where
-  encodeJson = case _ of
-    DefaultFormat -> E.encodeTagged "DefaultFormat" unit E.null
-    DecimalFormat a b -> E.encodeTagged "DecimalFormat" (Tuple a b) E.value
-    TimeFormat -> E.encodeTagged "TimeFormat" unit E.null
+contractTypeInitials CouponBondGuaranteed = "CB"
 
-instance decodeJsonNumberFormat :: DecodeJson NumberFormat where
-  decodeJson =
-    D.decode
-      $ D.sumType "NumberFormat"
-      $ Map.fromFoldable
-          [ "DefaultFormat" /\ D.content (DefaultFormat <$ D.null)
-          , "DecimalFormat" /\ D.content (uncurry DecimalFormat <$> D.value)
-          , "TimeFormat" /\ D.content (TimeFormat <$ D.null)
-          ]
+contractTypeInitials Swap = "S"
 
-instance showNumberFormat :: Show NumberFormat where
-  show = genericShow
+contractTypeInitials ContractForDifferences = "CD"
+
+contractTypeInitials Other = "O"
+
+contractTypeName :: ContractType -> String
+contractTypeName Escrow = "Escrow"
+
+contractTypeName EscrowWithCollateral = "Escrow with Collateral"
+
+contractTypeName ZeroCouponBond = "Zero Coupon Bond"
+
+contractTypeName CouponBondGuaranteed = "Coupon Bond Guaranteed"
+
+contractTypeName Swap = "Swap"
+
+contractTypeName ContractForDifferences = "Contract for Differences"
+
+contractTypeName Other = "Other"
+
+initialsToContractType :: String -> ContractType
+initialsToContractType "ES" = Escrow
+
+initialsToContractType "EC" = EscrowWithCollateral
+
+initialsToContractType "ZC" = ZeroCouponBond
+
+initialsToContractType "CB" = CouponBondGuaranteed
+
+initialsToContractType "S" = Swap
+
+initialsToContractType "CD" = ContractForDifferences
+
+initialsToContractType _ = Other
+
+contractTypeArray :: Array ContractType
+contractTypeArray =
+  [ Escrow
+  , EscrowWithCollateral
+  , ZeroCouponBond
+  , CouponBondGuaranteed
+  , Swap
+  , ContractForDifferences
+  , Other
+  ]
 
 integerFormat :: NumberFormat
 integerFormat = DecimalFormat 0 ""
@@ -73,13 +97,6 @@ isDecimalFormat :: NumberFormat -> Boolean
 isDecimalFormat (DecimalFormat _ _) = true
 
 isDecimalFormat _ = false
-
-data NumberFormatType
-  = DefaultFormatType
-  | DecimalFormatType
-  | TimeFormatType
-
-derive instance eqNumberFormatType :: Eq NumberFormatType
 
 toString :: NumberFormatType -> String
 toString DefaultFormatType = "DefaultFormatType"
@@ -109,17 +126,6 @@ defaultForFormatType DecimalFormatType = DecimalFormat 0 ""
 
 defaultForFormatType TimeFormatType = TimeFormat
 
-type ValueParameterInfo =
-  { valueParameterFormat :: NumberFormat
-  , valueParameterDescription :: String
-  }
-
-_valueParameterFormat :: Lens' ValueParameterInfo NumberFormat
-_valueParameterFormat = prop (Proxy :: _ "valueParameterFormat")
-
-_valueParameterDescription :: Lens' ValueParameterInfo String
-_valueParameterDescription = prop (Proxy :: _ "valueParameterDescription")
-
 emptyValueParameterInfo :: ValueParameterInfo
 emptyValueParameterInfo =
   { valueParameterFormat: DefaultFormat
@@ -144,17 +150,6 @@ updateValueParameterInfo f = OMap.alter updateValueParameterInfoEntry
     emptyValueParameterInfo
     mValueParameterInfo
 
-type ChoiceInfo =
-  { choiceFormat :: NumberFormat
-  , choiceDescription :: String
-  }
-
-_choiceFormat :: Lens' ChoiceInfo NumberFormat
-_choiceFormat = prop (Proxy :: _ "choiceFormat")
-
-_choiceDescription :: Lens' ChoiceInfo String
-_choiceDescription = prop (Proxy :: _ "choiceDescription")
-
 emptyChoiceInfo :: ChoiceInfo
 emptyChoiceInfo =
   { choiceFormat: DefaultFormat
@@ -175,45 +170,6 @@ updateChoiceInfo f = Map.alter updateChoiceInfoEntry
   updateChoiceInfoEntry mChoiceInfo = Just $ f $ fromMaybe emptyChoiceInfo
     mChoiceInfo
 
-type MetaData =
-  { contractType :: ContractType
-  -- TODO: fix primitive obsession
-  , contractName :: String
-  , contractShortDescription :: String
-  , contractLongDescription :: String
-  , roleDescriptions :: Map S.TokenName String
-  -- TODO: fix primitive obsession (what is the key supposed to be?)
-  , timeParameterDescriptions :: OMap String String
-  -- TODO: fix primitive obsession (what is the key supposed to be?)
-  , valueParameterInfo :: OMap String ValueParameterInfo
-  -- TODO: fix primitive obsession (what is the key supposed to be?)
-  , choiceInfo :: Map String ChoiceInfo
-  }
-
-_contractName :: Lens' MetaData String
-_contractName = prop (Proxy :: _ "contractName")
-
-_contractType :: Lens' MetaData ContractType
-_contractType = prop (Proxy :: _ "contractType")
-
-_contractShortDescription :: Lens' MetaData String
-_contractShortDescription = prop (Proxy :: _ "contractShortDescription")
-
-_contractLongDescription :: Lens' MetaData String
-_contractLongDescription = prop (Proxy :: _ "contractLongDescription")
-
-_roleDescriptions :: Lens' MetaData (Map S.TokenName String)
-_roleDescriptions = prop (Proxy :: _ "roleDescriptions")
-
-_timeParameterDescriptions :: Lens' MetaData (OMap String String)
-_timeParameterDescriptions = prop (Proxy :: _ "timeParameterDescriptions")
-
-_valueParameterInfo :: Lens' MetaData (OMap String ValueParameterInfo)
-_valueParameterInfo = prop (Proxy :: _ "valueParameterInfo")
-
-_choiceInfo :: Lens' MetaData (Map String ChoiceInfo)
-_choiceInfo = prop (Proxy :: _ "choiceInfo")
-
 emptyContractMetadata :: MetaData
 emptyContractMetadata =
   { contractType: Other
@@ -230,25 +186,6 @@ getChoiceFormat :: MetaData -> String -> NumberFormat
 getChoiceFormat { choiceInfo } choiceName =
   maybe DefaultFormat (\choiceInfoVal -> choiceInfoVal.choiceFormat) $
     Map.lookup choiceName choiceInfo
-
-type MetadataHintInfo =
-  { roles :: Set S.TokenName
-  , timeParameters :: OSet String
-  , valueParameters :: OSet String
-  , choiceNames :: Set String
-  }
-
-_roles :: Lens' MetadataHintInfo (Set S.TokenName)
-_roles = prop (Proxy :: _ "roles")
-
-_timeParameters :: Lens' MetadataHintInfo (OSet String)
-_timeParameters = prop (Proxy :: _ "timeParameters")
-
-_valueParameters :: Lens' MetadataHintInfo (OSet String)
-_valueParameters = prop (Proxy :: _ "valueParameters")
-
-_choiceNames :: Lens' MetadataHintInfo (Set String)
-_choiceNames = prop (Proxy :: _ "choiceNames")
 
 getMetadataHintInfo :: Contract -> MetadataHintInfo
 getMetadataHintInfo contract =
@@ -280,13 +217,3 @@ getHintsFromMetadata
   , choiceNames: Map.keys choiceInfo
   }
 
-type ContractTemplate =
-  { metaData :: MetaData
-  , extendedContract :: Contract
-  }
-
-_metaData :: Lens' ContractTemplate MetaData
-_metaData = prop (Proxy :: _ "metaData")
-
-_extendedContract :: Lens' ContractTemplate Contract
-_extendedContract = prop (Proxy :: _ "extendedContract")

@@ -27,7 +27,7 @@ import Halogen.Css (classNames)
 import Halogen.HTML (a, div, pre_, section, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots)
 import Page.MarloweEditor.Types
   ( Action(..)

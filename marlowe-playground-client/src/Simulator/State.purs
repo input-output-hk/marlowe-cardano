@@ -74,7 +74,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , timeouts
   )
 import Language.Marlowe.Core.V1.Semantics.Types (Case(..)) as S
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Marlowe.Holes
   ( Contract(..)
   , Term(..)

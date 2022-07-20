@@ -15,7 +15,7 @@ import Data.String as String
 import Halogen.HTML (HTML, abbr, text)
 import Halogen.HTML.Properties (title)
 import Language.Marlowe.Core.V1.Semantics.Types (Party(..), Payee(..))
-import Language.Marlowe.Extended.V1.Metadata (MetaData, NumberFormat(..))
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, NumberFormat(..))
 
 renderPrettyParty :: forall p i. MetaData -> Party -> HTML p i
 renderPrettyParty _ (PK pkh) =
