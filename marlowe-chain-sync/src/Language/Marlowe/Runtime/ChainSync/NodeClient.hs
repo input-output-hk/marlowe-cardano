@@ -3,10 +3,7 @@
 {-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.Runtime.ChainSync.NodeClient
-  ( CardanoBlock
-  , Changes(..)
-  , GetHeaderAtPoint(..)
-  , GetIntersectionPoints(..)
+  ( Changes(..)
   , NodeClientDependencies(..)
   , NodeClient(..)
   , isEmptyChanges
@@ -25,16 +22,11 @@ import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readT
 import Control.Exception (finally)
 import Data.List (sortOn)
 import Data.Ord (Down (..))
+import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, GetHeaderAtPoint (..), GetIntersectionPoints (..))
 import Ouroboros.Network.Point (WithOrigin (..))
 
-type CardanoBlock = BlockInMode CardanoMode
 type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
-
-newtype GetHeaderAtPoint m = GetHeaderAtPoint
-  { runGetHeaderAtPoint :: ChainPoint -> m (WithOrigin BlockHeader) }
-newtype GetIntersectionPoints m = GetIntersectionPoints
-  { runGetIntersectionPoints :: ChainPoint -> Maybe ChainPoint -> m [ChainPoint] }
 
 data Changes = Changes
   { changesRollback :: !(Maybe ChainPoint)
