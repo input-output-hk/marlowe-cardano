@@ -12,7 +12,7 @@ import Data.Argonaut (JsonDecodeError)
 import Data.List as L
 import Data.Variant (Variant)
 import Data.Variant.Internal as V
-import Marlowe.Semantics (TransactionError(..))
+import Language.Marlowe.Core.V1.Semantics.Types (TransactionError(..))
 import Prim.RowList as RL
 import Servant.PureScript (AjaxError)
 import Text.Pretty (Doc, text)

@@ -20,6 +20,13 @@ import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens', Traversal', _Just, traversed)
 import Data.Lens.Record (prop)
 import Data.List (List)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Accounts
+  , Contract
+  , Payment
+  , TransactionInput
+  )
+import Language.Marlowe.Core.V1.Semantics.Types (State) as Semantic
 import Marlowe.Execution.Types
   ( ContractAndState
   , PastState
@@ -27,8 +34,6 @@ import Marlowe.Execution.Types
   , State
   , TimeoutInfo
   )
-import Marlowe.Semantics (Accounts, Contract, Payment, TransactionInput)
-import Marlowe.Semantics (State) as Semantic
 import Type.Proxy (Proxy(..))
 
 _semanticState :: Lens' State Semantic.State

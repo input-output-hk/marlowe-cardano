@@ -40,6 +40,8 @@ import Language.Haskell.Interpreter (CompilationError, InterpreterError, Interpr
 import qualified Language.Marlowe as S
 import Language.Marlowe.Extended
 import Language.Marlowe.Semantics.Types (State (..))
+import Language.Marlowe.Core.V1.Semantics.Types (State (..))
+import Language.Marlowe.Extended.V1
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), PSType, SumType (..),
                                    TypeInfo (TypeInfo), _typeName, argonaut, buildBridge, equal, genericShow, mkSumType,
                                    order, psTypeParameters, typeModule, typeName, (^==))
@@ -76,68 +78,68 @@ gistIdBridge = do
 
 psContract :: MonadReader BridgeData m => m PSType
 psContract =
-    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Contract" <$>
+    TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "Contract" <$>
     psTypeParameters
 
 contractBridge :: BridgePart
 contractBridge = do
     typeName ^== "Contract"
-    typeModule ^== "Language.Marlowe.Semantics.Types"
+    typeModule ^== "Language.Marlowe.Core.V1.Semantics.Types"
     psContract
 
 psState :: MonadReader BridgeData m => m PSType
 psState =
-    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "State" <$>
+    TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "State" <$>
     psTypeParameters
 
 stateBridge :: BridgePart
 stateBridge = do
     typeName ^== "State"
-    typeModule ^== "Language.Marlowe.Semantics.Types"
+    typeModule ^== "Language.Marlowe.Core.V1.Semantics.Types"
     psState
 
 psObservation :: MonadReader BridgeData m => m PSType
 psObservation =
-    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Observation" <$>
+    TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "Observation" <$>
     psTypeParameters
 
 observationBridge :: BridgePart
 observationBridge = do
     typeName ^== "Observation"
-    typeModule ^== "Language.Marlowe.Semantics.Types"
+    typeModule ^== "Language.Marlowe.Core.V1.Semantics.Types"
     psObservation
 
 psValue :: MonadReader BridgeData m => m PSType
 psValue =
-    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Value" <$>
+    TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "Value" <$>
     psTypeParameters
 
 valueBridge :: BridgePart
 valueBridge = do
     typeName ^== "Value"
-    typeModule ^== "Language.Marlowe.Semantics.Types"
+    typeModule ^== "Language.Marlowe.Core.V1.Semantics.Types"
     psValue
 
 psTransactionInput :: MonadReader BridgeData m => m PSType
 psTransactionInput =
-    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "TransactionInput" <$>
+    TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "TransactionInput" <$>
     psTypeParameters
 
 transactionInputBridge :: BridgePart
 transactionInputBridge = do
     typeName ^== "TransactionInput"
-    typeModule ^== "Language.Marlowe.Semantics"
+    typeModule ^== "Language.Marlowe.Core.V1.Semantics"
     psTransactionInput
 
 psTransactionWarning :: MonadReader BridgeData m => m PSType
 psTransactionWarning =
-    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "TransactionWarning" <$>
+    TypeInfo "web-common-marlowe" "Language.Marlowe.Core.V1.Semantics.Types" "TransactionWarning" <$>
     psTypeParameters
 
 transactionWarningBridge :: BridgePart
 transactionWarningBridge = do
     typeName ^== "TransactionWarning"
-    typeModule ^== "Language.Marlowe.Semantics"
+    typeModule ^== "Language.Marlowe.Core.V1.Semantics"
     psTransactionWarning
 
 dayBridge :: BridgePart

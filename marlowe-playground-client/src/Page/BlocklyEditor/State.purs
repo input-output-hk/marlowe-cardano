@@ -23,11 +23,11 @@ import Examples.Marlowe.Contracts (example) as ME
 import Halogen (HalogenM, modify_)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
+import Language.Marlowe.Extended.V1 as Extended
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
 import MainFrame.Types (ChildSlots, _blocklySlot)
 import Marlowe (Api)
 import Marlowe.Blockly as MB
-import Marlowe.Extended as Extended
-import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Holes as Holes
 import Marlowe.Linter as Linter
 import Marlowe.Template (TemplateContent)

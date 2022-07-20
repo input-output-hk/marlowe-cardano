@@ -36,7 +36,7 @@ import Language.Marlowe.CLI.Run (initializeTransaction, prepareTransaction, runT
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
-import Language.Marlowe.Semantics.Types (Input)
+import Language.Marlowe.Core.V1.Semantics.Types (Input)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName, defaultCostModelParams)
 
 import qualified Cardano.Api as Api (Value)

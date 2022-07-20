@@ -56,9 +56,9 @@ import Language.Haskell.Interpreter
   , InterpreterResult(..)
   )
 import Language.Haskell.Monaco as HM
+import Language.Marlowe.Extended.V1 as E
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
 import MainFrame.Types (ChildSlots, _haskellEditorSlot)
-import Marlowe.Extended as E
-import Marlowe.Extended.Metadata (MetaData)
 import Network.RemoteData (RemoteData(..), _Success)
 import Page.HaskellEditor.Types
   ( Action(..)

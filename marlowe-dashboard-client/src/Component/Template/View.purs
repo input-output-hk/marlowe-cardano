@@ -57,7 +57,8 @@ import Halogen.HTML.Properties.ARIA (describedBy, labelledBy)
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (contractIcon)
-import Marlowe.Extended.Metadata
+import Language.Marlowe.Core.V1.Semantics.Types (Assets, adaToken, getAda)
+import Language.Marlowe.Extended.V1.Metadata
   ( ContractTemplate
   , MetaData
   , ValueParameterInfo
@@ -66,7 +67,6 @@ import Marlowe.Extended.Metadata
   )
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
-import Marlowe.Semantics (Assets, adaToken, getAda)
 import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)
 

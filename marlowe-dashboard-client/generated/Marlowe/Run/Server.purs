@@ -16,6 +16,7 @@ import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple)
 import Data.WalletId (WalletId)
+import Language.Marlowe.Core.V1.Semantics.Types (CurrencySymbol, TokenName)
 import Marlowe.Run.Contract.V1.Types (RoleToken)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
@@ -24,7 +25,6 @@ import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   , RestorePostData
   )
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
-import Marlowe.Semantics (CurrencySymbol, TokenName)
 import Servant.PureScript
   ( class MonadAjax
   , AjaxError

@@ -16,7 +16,7 @@ import Data.Show.Generic (genericShow)
 import Data.Time.Duration (Minutes)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
-import Marlowe.Extended.Metadata (MetadataHintInfo)
+import Language.Marlowe.Extended.V1.Metadata (MetadataHintInfo)
 import Monaco (IMarkerData)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Type.Proxy (Proxy(..))

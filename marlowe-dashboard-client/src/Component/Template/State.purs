@@ -42,10 +42,13 @@ import Halogen (HalogenM)
 import Halogen as H
 import Halogen.Form.Injective (blank, inject)
 import Halogen.Store.Monad (class MonadStore)
-import Marlowe.Extended (ContractType(..))
-import Marlowe.Extended.Metadata (ContractTemplate, NumberFormat(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
+import Language.Marlowe.Extended.V1 (ContractType(..))
+import Language.Marlowe.Extended.V1.Metadata
+  ( ContractTemplate
+  , NumberFormat(..)
+  )
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics (Party(..))
 import Marlowe.Template
   ( TemplateContent(..)
   , getPlaceholderIds

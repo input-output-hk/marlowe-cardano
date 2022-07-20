@@ -36,9 +36,7 @@ import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Halogen.Subscription (notify)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
-import Marlowe.PAB (PlutusAppId(..))
-import Marlowe.Run.Wallet.V1.Types (WalletInfo)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Contract
   , MarloweData
   , MarloweParams
@@ -46,6 +44,8 @@ import Marlowe.Semantics
   , TransactionInput
   , _rolesCurrency
   )
+import Marlowe.PAB (PlutusAppId(..))
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)

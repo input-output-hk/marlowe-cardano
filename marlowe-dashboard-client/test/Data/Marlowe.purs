@@ -62,15 +62,7 @@ import Language.Marlowe.Client
   , MarloweError
   , UnspentPayouts
   )
-import Marlowe.Run.Contract.V1.Types (RoleToken(..))
-import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
-  ( CreatePostData(..)
-  , RestorePostData(..)
-  )
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types as Wallet
-import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Action(..)
   , Assets
@@ -93,6 +85,14 @@ import Marlowe.Semantics
   , ValueId
   , _rolesCurrency
   )
+import Marlowe.Run.Contract.V1.Types (RoleToken(..))
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
+  ( CreatePostData(..)
+  , RestorePostData(..)
+  )
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types as Wallet
+import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
 import Plutus.V1.Ledger.Address as PAB
 import Plutus.V1.Ledger.Credential (Credential(..))

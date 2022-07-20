@@ -14,7 +14,7 @@ import Data.Slot (Slot)
 import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
 import Halogen.Component.Reactive (_derived, _input, _transient)
-import Marlowe.Semantics (MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (MarloweParams)
 import Page.Dashboard.Types
   ( Card
   , ContractFilter

@@ -8,9 +8,9 @@ import Data.Maybe (maybe)
 import Data.Tuple.Nested ((/\))
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
+import Language.Marlowe.Core.V1.Semantics.Types (Contract)
+import Language.Marlowe.Extended.V1 (toCore)
 import Marlowe.Deinstantiate (findTemplate)
-import Marlowe.Extended (toCore)
-import Marlowe.Semantics (Contract)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (unsafeInstantFromInt)
 import Test.Spec (Spec, describe, it)
@@ -29,9 +29,9 @@ all =
                     { timeContent:
                         Map.fromFoldable
                           [ "Payment deadline" /\ unsafeInstantFromInt 600
+                          , "Complaint deadline" /\ unsafeInstantFromInt 1800
                           , "Complaint response deadline" /\
-                              unsafeInstantFromInt 1800
-                          , "Complaint deadline" /\ unsafeInstantFromInt 2400
+                              unsafeInstantFromInt 2400
                           , "Mediation deadline" /\ unsafeInstantFromInt 3600
                           ]
                     , valueContent:

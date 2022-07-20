@@ -28,7 +28,7 @@ import Data.Newtype (over, unwrap)
 import Data.Ord (abs)
 import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
-import Marlowe.Semantics (TimeInterval(..), Token(..))
+import Language.Marlowe.Core.V1.Semantics.Types (TimeInterval(..), Token(..))
 import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Time as POSIXTime
 

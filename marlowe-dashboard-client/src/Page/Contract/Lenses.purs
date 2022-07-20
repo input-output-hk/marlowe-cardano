@@ -8,8 +8,8 @@ import Data.Lens.At (at)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromMaybe)
 import Data.NewContract (NewContract)
-import Marlowe.Semantics (CurrencySymbol)
-import Marlowe.Semantics as Semantics
+import Language.Marlowe.Core.V1.Semantics.Types (CurrencySymbol)
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Page.Contract.Types (ContractState, StartedState, Tab(..))
 import Type.Proxy (Proxy(..))
 

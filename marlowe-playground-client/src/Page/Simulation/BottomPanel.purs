@@ -17,9 +17,7 @@ import Halogen.Css (classNames)
 import Halogen.HTML (HTML, br_, div, div_, h4, section, text)
 import Halogen.HTML.Properties (class_, classes)
 import Humanize (humanizeValue)
-import MainFrame.Types (ChildSlots)
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(..)
   , Party
   , Token
@@ -30,6 +28,8 @@ import Marlowe.Semantics
   , _boundValues
   , _choices
   )
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import MainFrame.Types (ChildSlots)
 import Marlowe.ViewPartials (displayWarningList)
 import Page.Simulation.Types (BottomPanelView(..), State)
 import Pretty (renderPrettyParty)

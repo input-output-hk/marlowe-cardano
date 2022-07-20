@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.StructuredProducts where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.ZeroCouponBond

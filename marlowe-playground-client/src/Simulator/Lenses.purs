@@ -11,8 +11,8 @@ import Data.List.Types (NonEmptyList)
 import Data.Map (Map)
 import Data.Profunctor.Choice (class Choice)
 import Data.Profunctor.Strong (class Strong)
+import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Marlowe.Holes (Contract, Term)
-import Marlowe.Semantics (Party)
 import Simulator.Types
   ( ActionInput
   , ActionInputId

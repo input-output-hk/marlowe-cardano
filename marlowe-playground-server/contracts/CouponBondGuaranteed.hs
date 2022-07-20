@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module CouponBondGuaranteed where
 
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 main :: IO ()
 main = printJSON $ contract

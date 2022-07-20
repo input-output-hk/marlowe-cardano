@@ -47,17 +47,15 @@ import Data.NonEmptyList.Lens (_Tail)
 import Data.Semigroup.Foldable (foldl1)
 import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested ((/\))
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Holes
-  ( Contract(..)
-  , Term(..)
-  , TransactionOutput(..)
-  , computeTransaction
-  , fromTerm
-  , reduceContractUntilQuiescent
+import Language.Marlowe.Core.V1.Semantics
+  ( boundFrom
+  , emptyState
+  , evalValue
+  , fixInterval
+  , moneyInContract
   )
-import Marlowe.Holes as T
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (evalObservation) as S
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Action(..)
   , Bound(..)
   , ChoiceId(..)
@@ -73,14 +71,19 @@ import Marlowe.Semantics
   , TransactionError(..)
   , TransactionInput(..)
   , _minTime
-  , boundFrom
-  , emptyState
-  , evalValue
-  , fixInterval
-  , moneyInContract
   , timeouts
   )
-import Marlowe.Semantics as S
+import Language.Marlowe.Core.V1.Semantics.Types (Case(..)) as S
+import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Marlowe.Holes
+  ( Contract(..)
+  , Term(..)
+  , TransactionOutput(..)
+  , computeTransaction
+  , fromTerm
+  , reduceContractUntilQuiescent
+  )
+import Marlowe.Holes as T
 import Marlowe.Template
   ( getPlaceholderIds
   , initializeTemplateContentWithIncreasingTime

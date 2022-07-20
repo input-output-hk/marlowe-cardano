@@ -7,7 +7,7 @@
 --
 -- Example usage:
 --
--- >>> import Language.Marlowe.Extended
+-- >>> import Language.Marlowe.Extended.V1
 -- >>> import Marlowe.Mermaid
 -- >>>
 -- >>> contract = If (Constant 5 `ValueEQ` Constant 2) Close Close
@@ -27,7 +27,7 @@ module Marlowe.Mermaid (toMermaid) where
 import Data.Hashable (hash)
 import Data.List (nub)
 import GHC.Real (denominator, numerator)
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 
 -- | Convert the 'Contract' DSL into a flat list (like converting from a graph
 -- representation to a vertex list). The result is a list denoting the

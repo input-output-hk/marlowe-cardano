@@ -17,7 +17,7 @@ all: ../ReadMe.md $(MDS) $(PNGS) $(SVGS)
 
 
 %.md: %.ipynb
-	pandoc -f ipynb -t markdown \
+	pandoc -f ipynb -t gfm \
 	       --metadata jupyter= \
 	       --metadata date="$(DATE)" \
 	       --metadata version="$(VERSION)" \

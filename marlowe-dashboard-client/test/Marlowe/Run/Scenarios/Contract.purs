@@ -24,9 +24,13 @@ import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff (Error)
 import Language.Marlowe.Client (MarloweError(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Assets
+  , Contract
+  , MarloweParams
+  )
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import MainFrame.Types as MF
-import Marlowe.Semantics (Assets, Contract, MarloweParams)
-import Marlowe.Semantics as Semantics
 import MarloweContract (MarloweContract(..))
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
 import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)

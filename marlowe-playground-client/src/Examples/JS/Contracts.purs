@@ -21,8 +21,8 @@ escrow =
     const price: Value = ConstantParam("Price");
 
     const depositTimeout: Timeout = TimeParam("Payment deadline");
-    const disputeTimeout: Timeout = TimeParam("Complaint response deadline");
-    const answerTimeout: Timeout = TimeParam("Complaint deadline");
+    const disputeTimeout: Timeout = TimeParam("Complaint deadline");
+    const answerTimeout: Timeout = TimeParam("Complaint response deadline");
     const arbitrageTimeout: Timeout = TimeParam("Mediation deadline");
 
     function choice(choiceName: string, chooser: Party, choiceValue: SomeNumber, continuation: Contract): Case {

@@ -19,7 +19,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Semantics (Contract, State)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
 import Type.Proxy (Proxy(Proxy))
 
 newtype Request = Request

@@ -11,10 +11,14 @@ import Halogen as H
 import Halogen.Component.Reactive (_input, _transient)
 import Halogen.Component.Reactive as Reactive
 import Halogen.Store.Connect (Connected)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ChoiceId
+  , ChosenNum
+  , CurrencySymbol
+  )
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (ChoiceId, ChosenNum, CurrencySymbol)
-import Marlowe.Semantics as Semantics
 import Store.RoleTokens (RoleTokenStore)
 import Type.Proxy (Proxy(..))
 
