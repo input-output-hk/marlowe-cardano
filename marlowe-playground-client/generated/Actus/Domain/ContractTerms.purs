@@ -604,6 +604,7 @@ newtype ContractTerms a = ContractTerms
   , dayCountConvention :: Maybe DCC
   , scheduleConfig :: ScheduleConfig
   , statusDate :: String
+  , marketObjectCodeRef :: Maybe String
   , contractPerformance :: Maybe PRF
   , creditEventTypeCovered :: Maybe CETC
   , coverageOfCreditEnhancement :: Maybe a
@@ -687,6 +688,7 @@ instance (EncodeJson a) => EncodeJson (ContractTerms a) where
         , dayCountConvention: (E.maybe E.value) :: _ (Maybe DCC)
         , scheduleConfig: E.value :: _ ScheduleConfig
         , statusDate: E.value :: _ String
+        , marketObjectCodeRef: (E.maybe E.value) :: _ (Maybe String)
         , contractPerformance: (E.maybe E.value) :: _ (Maybe PRF)
         , creditEventTypeCovered: (E.maybe E.value) :: _ (Maybe CETC)
         , coverageOfCreditEnhancement: (E.maybe E.value) :: _ (Maybe a)
@@ -774,6 +776,7 @@ instance (DecodeJson a) => DecodeJson (ContractTerms a) where
         , dayCountConvention: (D.maybe D.value) :: _ (Maybe DCC)
         , scheduleConfig: D.value :: _ ScheduleConfig
         , statusDate: D.value :: _ String
+        , marketObjectCodeRef: (D.maybe D.value) :: _ (Maybe String)
         , contractPerformance: (D.maybe D.value) :: _ (Maybe PRF)
         , creditEventTypeCovered: (D.maybe D.value) :: _ (Maybe CETC)
         , coverageOfCreditEnhancement: (D.maybe D.value) :: _ (Maybe a)
@@ -867,6 +870,7 @@ _ContractTerms
        , dayCountConvention :: Maybe DCC
        , scheduleConfig :: ScheduleConfig
        , statusDate :: String
+       , marketObjectCodeRef :: Maybe String
        , contractPerformance :: Maybe PRF
        , creditEventTypeCovered :: Maybe CETC
        , coverageOfCreditEnhancement :: Maybe a
