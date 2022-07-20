@@ -49,7 +49,7 @@ runTests ScriptTests{..} =
   do
     costModel <-
       maybe
-        (throwError "Missing default cost model.")
+        (throwError $ CliError "Missing default cost model.")
         pure
         defaultCostModelParams
     let
@@ -62,7 +62,7 @@ runTests ScriptTests{..} =
         }
     slotConfig <- querySlotConfig connection
     tests' <- mapM decodeFileStrict tests
-    mapM_ (scriptTest network costModel connection slotConfig) tests'
+    mapM_ (scriptTest costModel network connection slotConfig) tests'
 runTests PabTests{..} =
   do
     manager <- liftIO $ newManager defaultManagerSettings

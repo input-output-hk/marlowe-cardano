@@ -76,7 +76,7 @@ import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), CompanionInstanceI
                                         prComparison, prRetry, psAppInstances, psBurnAddress, psCompanionInstances,
                                         psFaucetAddress, psFaucetKey, psFollowerInstances, psPassphrase, psWallets)
 import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
-import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
                                 EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
@@ -112,6 +112,8 @@ import Data.Foldable (traverse_)
 import Data.Foldable.Extra (for_)
 import qualified Data.HashMap.Strict as H (foldrWithKey, lookup)
 import Data.List.Extra ((!?))
+import Data.Map (Map)
+import qualified Data.Map as Map
 import qualified Data.Map.Strict as M (adjust, insert, lookup)
 import qualified Data.Quantity as W (Quantity (..))
 import Data.Text (Text, split)
@@ -127,39 +129,15 @@ import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
 
 -- Script state is a placeholder
-newtype ScriptState = ScriptState [String]
-
+newtype ScriptState = ScriptState
+  { transactions :: Map String (MarloweTransaction AlonzoEra)
+  }
 
 data ScriptEnv = ScriptEnv
   { seNetworkId        :: NetworkId
   , seSlotConfig       :: SlotConfig
   , seConstModelParams :: CostModelParams
   }
-
--- Next Tasks:
--- 1. Try to use initializeTransaction (Language.MArlowe.CLI.Run.hs) and prepareTransction
--- We'd need to change those functions to give us the result instead of storing it in a file.
---
---
--- initializeTransactionImpl :: MonadError CliError m
---                           => MonadIO m
---                           => MarloweParams          -- ^ The Marlowe contract parameters.
---                           -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
---                           -> CostModelParams        -- ^ The cost model parameters.
---                           -> NetworkId              -- ^ The network ID.
---                           -> StakeAddressReference  -- ^ The stake address.
---                           -> Contract               -- ^ The initial Marlowe contract.
---                           -> State                  -- ^ The initial Marlowe state.
---                           -> Bool                   -- ^ Whether to deeply merkleize the contract.
---                           -> Bool                   -- ^ Whether to print statistics about the validator.
---                           -> m (MarloweTransaction AlonzoEra)
-
---   Initialize
---     {
---       soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
---     , soRoleCurrency :: CurrencySymbol        -- ^ We derive
---     , soContract     :: Contract              -- ^ The Marlowe contract to be created.
-    -- | FIXME: No *JSON instances for this
 
 interpret :: MonadError CliError m
           => MonadState ScriptState m
@@ -171,15 +149,31 @@ interpret Initialize {..} = do
   ScriptEnv {..} <- ask
   let
     marloweParams = Client.marloweParams soRoleCurrency
-  initializeTransactionImpl
-  -- x <- get
-  -- modify \(ScriptState lst) -> ScriptState ("newValue" : lst)
-  -- put (ScriptState [])
-  -- ctx <- ask
-  -- x <- get
-  modify $ \(ScriptState state) -> ScriptState (state ++ ["Initialize"])
+    marloweState = initialMarloweState soOwner soMinAda
+
+    addTransaction :: MarloweTransaction AlonzoEra -> ScriptState -> ScriptState
+    addTransaction transaction scriptState@ScriptState { transactions } =
+      scriptState{ transactions = Map.insert soTransaction transaction transactions }
+
+  transaction <- initializeTransactionImpl
+    marloweParams
+    seSlotConfig
+    seConstModelParams
+    seNetworkId
+    NoStakeAddress
+    soContract
+    marloweState
+    True
+    True
+
+  modify $ addTransaction transaction
+
 interpret (Fail message) = throwError $ CliError message
-interpret (Prepare _)    = modify $ \(ScriptState state) -> ScriptState (state ++ ["Prepare"])
+interpret (Prepare _)    = pure ()
+  -- modify $ \(ScriptState state) -> ScriptState (state ++ ["Prepare"])
+
+initialMarloweState :: RoleName -> Integer -> t
+initialMarloweState = error "not implemented"
 
 --runOperation :: ScriptOperation -> ()
 --runOperation (Initialize {}) = initializeTransaction
@@ -209,18 +203,8 @@ scriptTest _costModel _networkId _connection _slotConfig ScriptTest{..} =
                     => m ()
       interpretLoop = for_ stScriptOperations \operation -> do
         interpret operation
-    catchError
-      (
-        runReaderT (execStateT interpretLoop (ScriptState [])) (ScriptEnv _networkId _slotConfig _costModel)
-        -- TODO: Add a timeout.
-        -- void
-        --   . execStateT (mapM_ (interpret access) ptPabOperations)
-        --   $ []
-          -- $ PabState
-            -- faucetKey faucetAddress burnAddress
-            -- (Passphrase . BA.pack $ toEnum . fromEnum <$> passphrase)
-            -- mempty mempty mempty mempty
-      )
+    void $ catchError
+      ( runReaderT (execStateT interpretLoop (ScriptState mempty)) (ScriptEnv _networkId _slotConfig _costModel))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (putStrLn $ show e)

@@ -4,6 +4,7 @@ stScriptOperations:
 
   - tag: Initialize
     soOwner: "Someone"
+    soTransaction: "TestTransaction-1"
     soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
     soContract:
       when:
@@ -27,6 +28,7 @@ stScriptOperations:
       timeout_continuation: close
 
   - tag: Prepare
+    soTransaction: "TestTransaction-1"
     soOwner: "Another Someone"
 
   - tag: Fail

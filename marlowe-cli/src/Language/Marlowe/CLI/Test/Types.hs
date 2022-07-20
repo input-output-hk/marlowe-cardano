@@ -154,6 +154,7 @@ data ScriptOperation =
   Initialize
     {
       soOwner        :: RoleName              -- ^ The name of the wallet's owner.
+    , soMinAda       :: Integer
     , soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
     , soRoleCurrency :: CurrencySymbol        -- ^ We derive
     , soContract     :: Contract              -- ^ The Marlowe contract to be created.
