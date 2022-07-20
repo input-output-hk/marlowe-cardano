@@ -34,7 +34,7 @@ import Data.String.Regex (match, regex)
 import Data.String.Regex.Flags (noFlags)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Help (holeText)
-import Language.Marlowe.Extended.V1.Metadata (MetadataHintInfo)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetadataHintInfo)
 import Marlowe.Holes
   ( Contract
   , Holes(..)

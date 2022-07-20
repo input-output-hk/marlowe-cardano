@@ -23,7 +23,7 @@ import Language.Haskell.Interpreter
   , _InterpreterResult
   )
 import Language.Marlowe.Extended.V1 as E
-import Language.Marlowe.Extended.V1.Metadata (MetadataHintInfo)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetadataHintInfo)
 import Network.RemoteData (RemoteData(..), _Loading, _Success)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)

@@ -51,7 +51,7 @@ import Language.Javascript.Interpreter
   ( CompilationError(..)
   , InterpreterResult(..)
   )
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots, _jsEditorSlot)
 import Page.JavascriptEditor.State (mkEditor)
 import Page.JavascriptEditor.Types

@@ -17,8 +17,8 @@ import Data.Generic.Rep
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol)
 import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 (Module(..))
 import Language.Marlowe.Extended.V1 as EM
-import Language.Marlowe.Extended.V1.Metadata (ContractTemplate)
 import Marlowe.Market (contractTemplates)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 
@@ -122,10 +122,10 @@ instance isInstanceOfContract :: IsInstanceOf S.Contract EM.Contract where
   isInstance a b = genericIsInstanceOf a b
 
 -- TODO: As part of SCP-3497 remove this and use another way to share the contract metadata
-findTemplate :: S.Contract -> Maybe ContractTemplate
+findTemplate :: S.Contract -> Maybe Module
 findTemplate contract =
   case
-    filter (\candidate -> isInstance contract candidate.extendedContract)
+    filter (\(Module candidate) -> isInstance contract candidate.contract)
       contractTemplates
     of
     [ template ] -> Just template

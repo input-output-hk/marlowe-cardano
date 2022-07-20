@@ -193,7 +193,7 @@ contractForDifferences =
               ]
         }
     )
-    ContractForDifferences.extendedContract
+    ContractForDifferences.contract
 
 contractForDifferencesFlows :: ContractFlows
 contractForDifferencesFlows =

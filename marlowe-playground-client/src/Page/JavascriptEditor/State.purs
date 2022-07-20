@@ -34,9 +34,11 @@ import Language.Javascript.Interpreter as JSI
 import Language.Javascript.Monaco as JSM
 import Language.Marlowe.Extended.V1 (Contract)
 import Language.Marlowe.Extended.V1.Metadata
+  ( getMetadataHintInfo
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types
   ( MetaData
   , MetadataHintInfo
-  , getMetadataHintInfo
   )
 import MainFrame.Types (ChildSlots, _jsEditorSlot)
 import Marlowe (Api)

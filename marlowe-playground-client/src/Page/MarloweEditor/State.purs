@@ -30,7 +30,7 @@ import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Language.Marlowe.Extended.V1 as Extended
-import Language.Marlowe.Extended.V1.Metadata (MetaData, MetadataHintInfo)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, MetadataHintInfo)
 import MainFrame.Types (ChildSlots, _marloweEditorPageSlot)
 import Marlowe (Api)
 import Marlowe.Holes as Holes

@@ -12,26 +12,25 @@ import Data.Argonaut
   , decodeJson
   , encodeJson
   )
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
 import Data.Argonaut.Extra (caseConstantFrom, getProp, object, requireProp)
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
-import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.DateTime.Instant (Instant, unInstant)
-import Data.Enum (class Enum)
-import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
+import Data.Lens (Lens')
+import Data.Lens.Iso.Newtype (_Newtype)
+import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Newtype (unwrap)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Show.Generic (genericShow)
 import Data.Traversable (foldMap, traverse)
 import Data.Tuple (Tuple(..))
 import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Marlowe.Template
   ( class Fillable
   , class Template
@@ -50,94 +49,7 @@ import Text.Pretty
   , genericPretty
   , pretty
   )
-
-data ContractType
-  = Escrow
-  | EscrowWithCollateral
-  | ZeroCouponBond
-  | CouponBondGuaranteed
-  | Swap
-  | ContractForDifferences
-  | Other
-
-derive instance genericContractType :: Generic ContractType _
-
-derive instance eqContractType :: Eq ContractType
-
-derive instance ordContractType :: Ord ContractType
-
-instance enumContractType :: Enum ContractType where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedContractType :: Bounded ContractType where
-  bottom = genericBottom
-  top = genericTop
-
-instance showContractType :: Show ContractType where
-  show v = genericShow v
-
-contractTypeArray :: Array ContractType
-contractTypeArray =
-  [ Escrow
-  , EscrowWithCollateral
-  , ZeroCouponBond
-  , CouponBondGuaranteed
-  , Swap
-  , ContractForDifferences
-  , Other
-  ]
-
-contractTypeInitials :: ContractType -> String
-contractTypeInitials Escrow = "ES"
-
-contractTypeInitials EscrowWithCollateral = "EC"
-
-contractTypeInitials ZeroCouponBond = "ZC"
-
-contractTypeInitials CouponBondGuaranteed = "CB"
-
-contractTypeInitials Swap = "S"
-
-contractTypeInitials ContractForDifferences = "CD"
-
-contractTypeInitials Other = "O"
-
-contractTypeName :: ContractType -> String
-contractTypeName Escrow = "Escrow"
-
-contractTypeName EscrowWithCollateral = "Escrow with Collateral"
-
-contractTypeName ZeroCouponBond = "Zero Coupon Bond"
-
-contractTypeName CouponBondGuaranteed = "Coupon Bond Guaranteed"
-
-contractTypeName Swap = "Swap"
-
-contractTypeName ContractForDifferences = "Contract for Differences"
-
-contractTypeName Other = "Other"
-
-initialsToContractType :: String -> ContractType
-initialsToContractType "ES" = Escrow
-
-initialsToContractType "EC" = EscrowWithCollateral
-
-initialsToContractType "ZC" = ZeroCouponBond
-
-initialsToContractType "CB" = CouponBondGuaranteed
-
-initialsToContractType "S" = Swap
-
-initialsToContractType "CD" = ContractForDifferences
-
-initialsToContractType _ = Other
-
-instance encodeJsonContractType :: EncodeJson ContractType where
-  encodeJson = E.encode E.enum
-
-instance decodeJsonContractType :: DecodeJson ContractType where
-  decodeJson = D.decode D.enum
+import Type.Proxy (Proxy(..))
 
 class ToCore a b where
   toCore :: a -> Maybe b
@@ -884,6 +796,34 @@ instance contractHasChoices :: HasChoices Contract where
     cont
   getChoiceNames (Let _ val cont) = getChoiceNames val <> getChoiceNames cont
   getChoiceNames (Assert obs cont) = getChoiceNames obs <> getChoiceNames cont
+
+-- A module is a way to package a contract with it's metadata. Eventually
+-- this type could include imports and exports (reason behind the name).
+-- We don't include the version number in the datatype because it is implicit
+-- by the package name (`Language.Marlowe.Extended.V1`) and explicit by the
+-- JSON serialization.
+newtype Module = Module
+  { metadata :: MetaData
+  -- Currently we have a single entrypoint for the full contract, but we could
+  -- extend this to be a `OMap Identifier Contract` to enable functions.
+  -- In order to guarantee that we can convert to Marlowe Core we would need to
+  -- validate that a function can only call functions defined above (if bottom-up)
+  -- and that they cannot call themselves
+  , contract :: Contract
+  }
+
+derive instance Newtype Module _
+
+derive newtype instance Eq Module
+instance Show Module where
+  show (Module { metadata }) = "(Module " <> metadata.contractName <> ")"
+
+-- TODO: toJSON/fromJSON
+_metadata :: Lens' Module MetaData
+_metadata = _Newtype <<< prop (Proxy :: _ "metadata")
+
+_contract :: Lens' Module Contract
+_contract = _Newtype <<< prop (Proxy :: _ "contract")
 
 -- In the extended marlowe we are treating timeouts as milliseconds relative to an initial time.
 -- This function will recurse on a contract making the relative timeouts absolute

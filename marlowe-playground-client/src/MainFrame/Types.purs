@@ -33,7 +33,7 @@ import Halogen as H
 import Halogen.Classes (activeClass)
 import Halogen.Monaco (KeyBindings)
 import Halogen.Monaco as Monaco
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Network.RemoteData (_Loading, _Success)
 import Page.BlocklyEditor.Types as BE
 import Page.HaskellEditor.Types as HE

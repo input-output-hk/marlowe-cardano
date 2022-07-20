@@ -41,13 +41,13 @@ import Language.Marlowe.Core.V1.Semantics
   )
 import Language.Marlowe.Core.V1.Semantics.Types as S
 import Language.Marlowe.Extended.V1 as EM
-import Language.Marlowe.Extended.V1.Metadata
-  ( MetadataHintInfo
-  , _choiceNames
+import Language.Marlowe.Extended.V1.Metadata.Lenses
+  ( _choiceNames
   , _roles
   , _timeParameters
   , _valueParameters
   )
+import Language.Marlowe.Extended.V1.Metadata.Types (MetadataHintInfo)
 import Marlowe.Holes
   ( Action(..)
   , Bound(..)

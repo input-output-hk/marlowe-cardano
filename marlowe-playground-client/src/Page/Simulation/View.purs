@@ -123,10 +123,9 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , timeouts
   )
 import Language.Marlowe.Extended.V1.Metadata
-  ( MetaData
-  , NumberFormat(..)
-  , getChoiceFormat
+  ( getChoiceFormat
   )
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, NumberFormat(..))
 import MainFrame.Types
   ( ChildSlots
   , _currencyInputSlot

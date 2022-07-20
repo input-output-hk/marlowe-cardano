@@ -9,7 +9,7 @@ import Data.Tuple.Nested ((/\))
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
-import Language.Marlowe.Extended.V1 (toCore)
+import Language.Marlowe.Extended.V1 (Module(..), toCore)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (unsafeInstantFromInt)
@@ -21,6 +21,8 @@ all =
   describe "Deinstantiator Tests" do
     it "Escrow" do
       let
+        Module { contract: extendedContract } = Escrow.contractModule
+
         mFilledEscrow :: Maybe Contract
         mFilledEscrow =
           toCore
@@ -40,14 +42,16 @@ all =
                           ]
                     }
                 )
-                Escrow.contractTemplate.extendedContract
+                extendedContract
             )
       shouldSatisfy (mFilledEscrow == Nothing) not
       shouldEqual
-        (Just Escrow.contractTemplate)
+        (Just Escrow.contractModule)
         (maybe Nothing findTemplate mFilledEscrow)
     it "Zero Coupon Bond" do
       let
+        Module { contract: extendedContract } = ZeroCouponBond.contractModule
+
         mFilledZeroCouponBond :: Maybe Contract
         mFilledZeroCouponBond =
           toCore
@@ -65,9 +69,9 @@ all =
                           ]
                     }
                 )
-                ZeroCouponBond.contractTemplate.extendedContract
+                extendedContract
             )
       shouldSatisfy (mFilledZeroCouponBond == Nothing) not
       shouldEqual
-        (Just ZeroCouponBond.contractTemplate)
+        (Just ZeroCouponBond.contractModule)
         (maybe Nothing findTemplate mFilledZeroCouponBond)
