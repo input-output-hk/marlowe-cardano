@@ -66,10 +66,13 @@ library
   other-modules:
   build-depends:
       base >= 4.9 && < 5
+    , async
     , cardano-api
     , ouroboros-network
     , stm
+    , stm-delay
     , time
+    , transformers
     , witherable
 
 executable marlowesyncd
