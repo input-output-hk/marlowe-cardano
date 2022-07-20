@@ -33,8 +33,7 @@ import Data.String (IsString (fromString))
 import Data.Time (LocalTime (..), UTCTime (UTCTime), timeOfDayToTime)
 import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
 import Data.Validation (Validation (..))
-import Language.Marlowe (Action (..), Case (..), Contract (..), Observation (..), POSIXTime (..), Party (..),
-                         Payee (..), Value (..), ValueId (ValueId), ada)
+import Language.Marlowe.Extended.V1
 import Ledger.Value (TokenName (TokenName))
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
@@ -62,7 +61,7 @@ genContract' rf ct =
   let cfs = genProjectedCashflows rf ct []
    in foldl' gen Close $ reverse cfs
   where
-    gen :: Contract -> CashFlow (Value Observation) -> Contract
+    gen :: Contract -> CashFlow Value -> Contract
     gen cont CashFlow {..} =
       let t = POSIXTime $ timeToSlotNumber cashPaymentDay
           c = reduceContract cont
@@ -88,7 +87,7 @@ genContract' rf ct =
                   c
               )
 
-    invoice :: String -> String -> Value Observation -> POSIXTime -> Contract -> Contract
+    invoice :: String -> String -> Value -> Timeout -> Contract -> Contract
     invoice from to amount timeout continue =
       let party = Role $ TokenName $ fromString from
           counterparty = Role $ TokenName $ fromString to
@@ -106,16 +105,16 @@ genContract' rf ct =
             timeout
             Close
 
-useval :: String -> Integer -> Value Observation
+useval :: String -> Integer -> Value
 useval name t = UseValue $ ValueId $ fromString $ name ++ "_" ++ show t
 
-letval :: String -> Integer -> Value Observation -> Contract -> Contract
+letval :: String -> Integer -> Value -> Contract -> Contract
 letval name t = Let $ ValueId $ fromString $ name ++ "_" ++ show t
 
 toMarloweFixedPoint :: Double -> Integer
 toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint Prelude.*)
 
-constant :: Double -> Value Observation
+constant :: Double -> Value
 constant = Constant . toMarloweFixedPoint
 
 cardanoEpochStart :: Integer
@@ -138,6 +137,7 @@ toMarlowe ct =
       dayCountConvention = dayCountConvention ct,
       scheduleConfig = scheduleConfig ct,
       statusDate = statusDate ct,
+      marketObjectCodeRef = Nothing,
       contractPerformance = contractPerformance ct,
       creditEventTypeCovered = creditEventTypeCovered ct,
       coverageOfCreditEnhancement = constant <$> coverageOfCreditEnhancement ct,
@@ -209,7 +209,7 @@ toMarlowe ct =
       constraints = constraints ct
     }
   where
-    trans :: ContractStructure Double -> ContractStructure (Value Observation)
+    trans :: ContractStructure Double -> ContractStructure Value
     trans cs =
       cs
         { reference = case reference cs of

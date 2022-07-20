@@ -3,6 +3,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
 
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
+
 module Spec.Actus.Examples
     (tests)
 where
@@ -13,6 +15,7 @@ import Data.Maybe (fromJust)
 import Data.Time.Calendar
 import Data.Time.LocalTime
 import Language.Marlowe
+import Language.Marlowe.Extended.V1 as Ex (Value (..), toCore)
 import qualified Ledger.Value as Val
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -81,7 +84,7 @@ ex_pam1 =
             nominalInterestRate = Just $ constant 0.02,
             interestCalculationBase = Just IPCB_NT
           }
-      contract = genContract' defaultRiskFactors terms
+      Just contract = toCore $ genContract' defaultRiskFactors terms
       principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10_000_000_000
       ip = NormalInput $ IDeposit (Role "party") "party" ada 200_000_000
       redemption = NormalInput $ IDeposit (Role "party") "party" ada 10_000_000_000
@@ -176,7 +179,7 @@ ex_lam1 =
             nominalInterestRate = Just $ constant 0.02,
             interestCalculationBase = Just IPCB_NT
           }
-      contract = genContract' defaultRiskFactors terms
+      Just contract = toCore $ genContract' defaultRiskFactors terms
       principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10_000_000_000
       pr i = NormalInput $ IDeposit (Role "party") "party" ada i
       ip i = NormalInput $ IDeposit (Role "party") "party" ada i
@@ -291,7 +294,7 @@ ex_nam1 =
             nominalInterestRate = Just $ constant 0.02,
             interestCalculationBase = Just IPCB_NT
           }
-      contract = genContract' defaultRiskFactors terms
+      Just contract = toCore $ genContract' defaultRiskFactors terms
       principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000_000_000
       pr i = NormalInput $ IDeposit (Role "party") "party" ada i
       ip i = NormalInput $ IDeposit (Role "party") "party" ada i
@@ -397,7 +400,7 @@ ex_ann1 =
             nominalInterestRate = Just $ constant 0.02,
             interestCalculationBase = Just IPCB_NT
           }
-      contract = genContract' defaultRiskFactors terms
+      Just contract = toCore $ genContract' defaultRiskFactors terms
       principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000_000_000
       pr i = NormalInput $ IDeposit (Role "party") "party" ada i
       ip i = NormalInput $ IDeposit (Role "party") "party" ada i
@@ -482,7 +485,7 @@ ex_optns1 =
             statusDate = read "2020-01-01 00:00:00",
             optionExerciseType = Just OPXT_E
           }
-      contract = genContract' rf terms
+      Just contract = toCore $ genContract' rf terms
       principal = NormalInput . IDeposit (Role "counterparty") "counterparty" ada
       ex = NormalInput . IDeposit (Role "party") "party" ada
       rf XD d
@@ -538,7 +541,7 @@ ex_com1 =
             quantity = Just $ constant 2
             -- unit = Just "BRL"
           }
-      contract = genContract' defaultRiskFactors terms
+      Just contract = toCore $ genContract' defaultRiskFactors terms
       principal = NormalInput . IDeposit (Role "party") "party" ada
    in case computeTransaction
         ( TransactionInput
@@ -557,7 +560,7 @@ ex_com1 =
           let tc = totalPayments (Party "counterparty") txPay
           assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400_000_000)
 
-defaultRiskFactors :: EventType -> LocalTime -> RiskFactors (Value Observation)
+defaultRiskFactors :: EventType -> LocalTime -> RiskFactors Ex.Value
 defaultRiskFactors _ _ =
   RiskFactors
     { o_rf_CURS = 1,
