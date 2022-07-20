@@ -38,8 +38,6 @@ import qualified EscrowWithCollateral
 import qualified Example
 import Language.Haskell.Interpreter (CompilationError, InterpreterError, InterpreterResult, SourceCode, Warning)
 import qualified Language.Marlowe as S
-import Language.Marlowe.Extended
-import Language.Marlowe.Semantics.Types (State (..))
 import Language.Marlowe.Core.V1.Semantics.Types (State (..))
 import Language.Marlowe.Extended.V1
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), PSType, SumType (..),

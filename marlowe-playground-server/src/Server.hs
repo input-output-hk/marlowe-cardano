@@ -63,15 +63,15 @@ genActusContract terms =
 genActusCashflows :: ContractTerms Double -> Handler [CashFlow Double]
 genActusCashflows terms = pure $ genProjectedCashflows defaultRiskFactors terms []
 
-defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactors a
+defaultRiskFactors :: RealFrac a => EventType -> LocalTime -> RiskFactors a
 defaultRiskFactors _ _ =
     RiskFactors
-        { o_rf_CURS = _one,
-          o_rf_RRMO = _one,
-          o_rf_SCMO = _one,
-          pp_payoff = _zero,
-          xd_payoff = _zero,
-          dv_payoff = _zero
+        { o_rf_CURS = 1,
+          o_rf_RRMO = 1,
+          o_rf_SCMO = 1,
+          pp_payoff = 0,
+          xd_payoff = 0,
+          dv_payoff = 0
         }
 
 oracle :: MonadIO m => String -> String -> m Value
