@@ -12,7 +12,7 @@ import Data.Lens (Lens', lens)
 import Data.UUID.Argonaut (UUID)
 import Language.Marlowe.Client (MarloweError)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 
 -- This data type contains the information needed to display a new contract
 data NewContract = NewContract

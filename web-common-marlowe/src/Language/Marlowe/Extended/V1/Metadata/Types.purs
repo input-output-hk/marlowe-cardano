@@ -18,9 +18,7 @@ import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Set (Set)
-import Data.Set as Set
 import Data.Set.Ordered.OSet (OSet)
-import Data.Set.Ordered.OSet as OSet
 import Data.Show.Generic (genericShow)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))

@@ -16,7 +16,7 @@ import Halogen.HTML (PlainHTML)
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Halogen.HTML.Properties.ARIA as HPA
-import Language.Marlowe.Extended.V1.Metadata (NumberFormat(..))
+import Language.Marlowe.Extended.V1.Metadata.Types (NumberFormat(..))
 
 type HasHintSlot slots =
   (hintSlot :: forall query. H.Slot query Void String | slots)

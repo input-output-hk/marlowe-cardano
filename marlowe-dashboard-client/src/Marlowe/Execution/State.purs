@@ -60,7 +60,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , timeouts
   )
 import Language.Marlowe.Core.V1.Semantics.Types (State) as Semantic
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
 import Marlowe.Execution.Lenses (_resultingPayments)
 import Marlowe.Execution.Types

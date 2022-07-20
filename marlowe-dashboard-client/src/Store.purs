@@ -24,7 +24,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , MarloweParams
   , Token
   )
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Marlowe.Execution.Types as Execution
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Contract.V1.Types (RoleToken)

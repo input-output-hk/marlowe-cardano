@@ -14,7 +14,7 @@ module Images
 
 import Halogen.HTML (HTML, img)
 import Halogen.HTML.Properties (src)
-import Language.Marlowe.Extended.V1 (ContractType(..))
+import Language.Marlowe.Extended.V1.Metadata.Types (ContractType(..))
 
 foreign import marloweRunLogo :: String
 

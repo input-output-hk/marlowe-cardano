@@ -38,7 +38,7 @@ import Halogen.HTML.Properties.ARIA (role)
 import Halogen.Store.Monad (class MonadStore)
 import Images (contractIcon)
 import Language.Marlowe.Core.V1.Semantics.Types (_rolesCurrency)
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Marlowe.Execution.State (currentStep, isClosed)
 import Page.Contract.Lenses (_marloweParams, _metadata)
 import Page.Dashboard.Types
