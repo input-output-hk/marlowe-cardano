@@ -61,6 +61,7 @@ library
   import: lang
   hs-source-dirs:   src
   exposed-modules:
+    Language.Marlowe.Runtime.ChainSync.Database
     Language.Marlowe.Runtime.ChainSync.NodeClient
     Language.Marlowe.Runtime.ChainSync.Store
   other-modules:

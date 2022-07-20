@@ -1,13 +1,10 @@
 module Language.Marlowe.Runtime.ChainSync.Store
   ( Changes(..)
-  , CommitBlocks(..)
-  , CommitRollback(..)
   , ChainStoreDependencies(..)
   , ChainStore(..)
   , mkChainStore
   ) where
 
-import Cardano.Api (ChainPoint (..))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard)
@@ -15,12 +12,10 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Foldable (traverse_)
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (CardanoBlock, Changes (..), isEmptyChanges)
+import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks (..), CommitRollback (..))
+import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes (..), isEmptyChanges)
 import Prelude hiding (filter)
 import Witherable (Witherable (..))
-
-newtype CommitRollback m = CommitRollback { runCommitRollback :: ChainPoint -> m () }
-newtype CommitBlocks m = CommitBlocks { runCommitBlocks :: [CardanoBlock] -> m () }
 
 data ChainStoreDependencies = ChainStoreDependencies
   { commitRollback :: !(CommitRollback IO)

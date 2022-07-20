@@ -9,11 +9,11 @@ import Control.Monad (forever)
 import Data.Foldable (traverse_)
 import Data.Functor (void)
 import Data.Time (secondsToNominalDiffTime)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (GetHeaderAtPoint (..), GetIntersectionPoints (..),
-                                                      NodeClient (..), NodeClientDependencies (..), mkNodeClient,
+import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks (..), CommitRollback (..), GetHeaderAtPoint (..),
+                                                    GetIntersectionPoints (..))
+import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient (..), NodeClientDependencies (..), mkNodeClient,
                                                       runNodeClient)
-import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), CommitBlocks (..),
-                                                 CommitRollback (..), mkChainStore)
+import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), mkChainStore)
 import Options (Options (..), getOptions)
 import Ouroboros.Network.Point (WithOrigin (..))
 import System.IO (hPutStrLn, stderr)
