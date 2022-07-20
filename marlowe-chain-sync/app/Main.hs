@@ -1,18 +1,19 @@
 module Main where
 
-import Cardano.Api (Block (Block), BlockHeader (..), BlockInMode (BlockInMode), ChainPoint (..), ChainTip (..),
-                    ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
+import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (Concurrently (..), waitCatch, withAsync)
-import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar)
+import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar)
 import Control.Exception (Exception (displayException))
-import Control.Monad (guard)
-import Control.Monad.STM (STM)
+import Control.Monad (forever)
 import Data.Foldable (traverse_)
 import Data.Functor (void)
 import Data.Time (secondsToNominalDiffTime)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (ChainSyncEvent (..), runNodeClient)
-import Language.Marlowe.Runtime.ChainSync.Store (StoreApi (..), StoreDependencies (..), mkStore, mkStoreEventHandler)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (GetHeaderAtPoint (..), GetIntersectionPoints (..),
+                                                      NodeClient (..), NodeClientDependencies (..), mkNodeClient,
+                                                      runNodeClient)
+import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), CommitBlocks (..),
+                                                 CommitRollback (..), mkChainStore)
 import Options (Options (..), getOptions)
 import Ouroboros.Network.Point (WithOrigin (..))
 import System.IO (hPutStrLn, stderr)
@@ -24,13 +25,38 @@ main = do
 
 runChainSync :: Options -> IO ()
 runChainSync Options{..} = do
-  tpoint <- newTVarIO ChainPointAtGenesis
-  ttip <- newTVarIO ChainTipAtGenesis
   tConnectionAttempts <- newTVarIO @Int 0
-  (awaitChanges, storeHandler) <- atomically mkStoreEventHandler
+  let
+    localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
+    localNodeConnectInfo = LocalNodeConnectInfo
+      { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+      , localNodeNetworkId = networkId
+      , localNodeSocketPath = nodeSocket
+      }
+    getHeaderAtPoint :: GetHeaderAtPoint IO
+    getHeaderAtPoint = GetHeaderAtPoint \_ -> pure Origin
+
+    getIntersectionPoints :: GetIntersectionPoints IO
+    getIntersectionPoints = GetIntersectionPoints \_ _ -> pure []
+
+  (runNodeClient, runChainStore) <- atomically do
+    NodeClient{..} <- mkNodeClient NodeClientDependencies
+      { localNodeConnectInfo
+      , getHeaderAtPoint
+      , getIntersectionPoints
+      }
+    ChainStore{..} <- mkChainStore ChainStoreDependencies
+      { commitRollback = CommitRollback \_ -> putStrLn "committing rollback"
+      , commitBlocks = CommitBlocks \blocks -> putStrLn $ "saving " <> show (length blocks) <> " blocks"
+      , rateLimit = secondsToNominalDiffTime 1
+      , getChanges
+      , clearChanges
+      }
+    pure (runNodeClient, runChainStore)
+
   let
     runNodeClientSupervised :: IO ()
-    runNodeClientSupervised = withAsync runNodeClient' \a -> do
+    runNodeClientSupervised = forever $ withAsync runNodeClient \a -> do
       result <- waitCatch a
       case result of
         Right _ -> pure ()
@@ -51,51 +77,17 @@ runChainSync Options{..} = do
           threadDelay $ 1_000_000 * timeoutSeconds
           runNodeClientSupervised
 
-    runNodeClient' :: IO ()
-    runNodeClient' =
-      runNodeClient connectionInfo getHeaderAtPoint getIntersectionPoints \event -> atomically do
-        storeHandler event
-        writeTVar tConnectionAttempts 0
-        case event of
-          RollForward (BlockInMode (Block (BlockHeader slotNo hash _) _) _) tip -> do
-            writeTVar tpoint $ ChainPoint slotNo hash
-            writeTVar ttip tip
-          RollBackward point tip                                                -> do
-            writeTVar tpoint point
-            writeTVar ttip tip
-      where
-        connectionInfo = LocalNodeConnectInfo
-          { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-          , localNodeNetworkId = networkId
-          , localNodeSocketPath = nodeSocket
-          }
-        getHeaderAtPoint _ = pure Origin
-        getIntersectionPoints _ _ = pure []
+    runChainStoreSupervised :: IO ()
+    runChainStoreSupervised = withAsync runChainStore \a -> do
+      result <- waitCatch a
+      case result of
+        Right _ -> pure ()
+        Left exception -> do
+          hPutStrLn stderr "Chain store exited unexpectedly, restarting."
+          hPutStrLn stderr $ "Message: " <> displayException exception
+          runChainStoreSupervised
 
-    awaitStatsChanges :: ChainPoint -> ChainTip -> STM (ChainPoint, ChainTip)
-    awaitStatsChanges lastPoint lastTip = do
-      point <- readTVar tpoint
-      tip <- readTVar ttip
-      guard $ (point, tip) /= (lastPoint, lastTip)
-      pure (point, tip)
-
-    writeStats :: ChainPoint -> ChainTip -> IO ()
-    writeStats lastPoint lastTip = do
-      (point, tip) <- atomically $ awaitStatsChanges lastPoint lastTip
-      putStrLn $ "Current point: " <> show point <> "; Current tip: " <> show tip
-      threadDelay 1_000_000
-      writeStats point tip
-
-  point <- readTVarIO tpoint
-  tip <- readTVarIO ttip
-  store <- mkStore StoreDependencies
-    { commitRollback = \_ -> putStrLn "committing rollback"
-    , commitBlocks = \blocks -> putStrLn $ "saving " <> show (length blocks) <> " blocks"
-    , awaitChanges
-    , rateLimit = secondsToNominalDiffTime 1
-    }
   void $ runConcurrently $ traverse_ Concurrently
     [ runNodeClientSupervised
-    , writeStats point tip
-    , runStore store
+    , runChainStoreSupervised
     ]

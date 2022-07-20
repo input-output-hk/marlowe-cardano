@@ -4,19 +4,25 @@
 
 module Language.Marlowe.Runtime.ChainSync.NodeClient
   ( CardanoBlock
-  , ChainEventHandler
-  , ChainSyncEvent(..)
-  , runNodeClient
+  , Changes(..)
+  , GetHeaderAtPoint(..)
+  , GetIntersectionPoints(..)
+  , NodeClientDependencies(..)
+  , NodeClient(..)
+  , isEmptyChanges
+  , mkNodeClient
   ) where
 
 import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), BlockNo, CardanoMode, ChainPoint (..),
                     ChainSyncClientPipelined (..), ChainTip (..), LocalChainSyncClient (..),
-                    LocalNodeClientProtocols (..), LocalNodeConnectInfo, chainPointToSlotNo, connectToLocalNode)
+                    LocalNodeClientProtocols (..), LocalNodeConnectInfo, SlotNo, chainPointToSlotNo, connectToLocalNode)
 import Cardano.Api.ChainSync.ClientPipelined (ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..),
                                               ClientStNext (..), MkPipelineDecision, N (..), Nat (..),
                                               PipelineDecision (..), mapChainSyncClientPipelined,
                                               pipelineDecisionLowHighMark, runPipelineDecision)
 import Control.Arrow ((&&&))
+import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar)
+import Control.Exception (finally)
 import Data.List (sortOn)
 import Data.Ord (Down (..))
 import Ouroboros.Network.Point (WithOrigin (..))
@@ -24,59 +30,94 @@ import Ouroboros.Network.Point (WithOrigin (..))
 type CardanoBlock = BlockInMode CardanoMode
 type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
-type ChainEventHandler m = ChainSyncEvent -> m ()
 
-data ChainSyncEvent
-  = RollForward CardanoBlock ChainTip
-  | RollBackward ChainPoint ChainTip
+newtype GetHeaderAtPoint m = GetHeaderAtPoint
+  { runGetHeaderAtPoint :: ChainPoint -> m (WithOrigin BlockHeader) }
+newtype GetIntersectionPoints m = GetIntersectionPoints
+  { runGetIntersectionPoints :: ChainPoint -> Maybe ChainPoint -> m [ChainPoint] }
 
-runNodeClient
-  :: LocalNodeConnectInfo CardanoMode
-  -> (ChainPoint -> IO (WithOrigin BlockHeader))
-  -> (ChainPoint -> Maybe ChainPoint -> IO [ChainPoint])
-  -> ChainEventHandler IO
-  -> IO ()
-runNodeClient nodeConnectInfo getHeaderAtPoint getIntersectionPoints onEvent =
-  connectToLocalNode nodeConnectInfo LocalNodeClientProtocols
-    { localChainSyncClient = LocalChainSyncClientPipelined
-        $ mapChainSyncClientPipelined id id (blockToBlockNo &&& id) (chainTipToBlockNo &&& id)
-        $ pipelinedClient onEvent getBlockNoAtPoint getIntersectionPoints
-    , localTxSubmissionClient = Nothing
-    , localTxMonitoringClient = Nothing
-    , localStateQueryClient   = Nothing
+data Changes = Changes
+  { changesRollback :: !(Maybe ChainPoint)
+  , changesBlocks   :: ![CardanoBlock]
+  , changesTip      :: !ChainTip
+  }
+
+emptyChanges :: Changes
+emptyChanges = Changes Nothing [] ChainTipAtGenesis
+
+toEmptyChanges :: Changes -> Changes
+toEmptyChanges changes = changes { changesRollback = Nothing, changesBlocks = [] }
+
+isEmptyChanges :: Changes -> Bool
+isEmptyChanges (Changes Nothing [] _) = True
+isEmptyChanges _                      = False
+
+data NodeClientDependencies = NodeClientDependencies
+  { localNodeConnectInfo  :: !(LocalNodeConnectInfo CardanoMode)
+  , getHeaderAtPoint      :: !(GetHeaderAtPoint IO)
+  , getIntersectionPoints :: !(GetIntersectionPoints IO)
+  }
+
+data NodeClient = NodeClient
+  { runNodeClient :: !(IO ())
+  , getChanges    :: !(STM Changes)
+  , clearChanges  :: !(STM ())
+  }
+
+mkNodeClient :: NodeClientDependencies -> STM NodeClient
+mkNodeClient NodeClientDependencies{..} = do
+  changesVar <- newTVar emptyChanges
+
+  let
+    clearChanges :: STM ()
+    clearChanges = modifyTVar changesVar toEmptyChanges
+
+    getChanges :: STM Changes
+    getChanges = readTVar changesVar
+
+    pipelinedClient' :: ChainSyncClientPipelined CardanoBlock ChainPoint ChainTip IO ()
+    pipelinedClient' = mapChainSyncClientPipelined id id (blockToBlockNo &&& id) (chainTipToBlockNo &&& id)
+        $ pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints
+
+    runNodeClient :: IO ()
+    runNodeClient = connectToLocalNode localNodeConnectInfo LocalNodeClientProtocols
+      { localChainSyncClient = LocalChainSyncClientPipelined pipelinedClient'
+      , localTxSubmissionClient = Nothing
+      , localTxMonitoringClient = Nothing
+      , localStateQueryClient   = Nothing
+      }
+
+  pure NodeClient
+    { runNodeClient = finally runNodeClient (atomically clearChanges)
+    , getChanges
+    , clearChanges
     }
-  where
-    blockHeaderToBlockNo :: BlockHeader -> BlockNo
-    blockHeaderToBlockNo (BlockHeader _ _ blockNo) = blockNo
 
-    blockToBlockNo :: CardanoBlock -> BlockNo
-    blockToBlockNo (BlockInMode (Block header _) _) = blockHeaderToBlockNo header
+blockHeaderToBlockNo :: BlockHeader -> BlockNo
+blockHeaderToBlockNo (BlockHeader _ _ blockNo) = blockNo
 
-    getBlockNoAtPoint :: ChainPoint -> IO (WithOrigin BlockNo)
-    getBlockNoAtPoint = fmap (fmap blockHeaderToBlockNo) . getHeaderAtPoint
+blockToBlockNo :: CardanoBlock -> BlockNo
+blockToBlockNo (BlockInMode (Block header _) _) = blockHeaderToBlockNo header
 
-    chainTipToBlockNo :: ChainTip -> WithOrigin BlockNo
-    chainTipToBlockNo = \case
-      ChainTipAtGenesis    -> Origin
-      ChainTip _ _ blockNo -> At blockNo
-
+chainTipToBlockNo :: ChainTip -> WithOrigin BlockNo
+chainTipToBlockNo = \case
+  ChainTipAtGenesis    -> Origin
+  ChainTip _ _ blockNo -> At blockNo
 
 pipelinedClient
-  :: forall m
-   . Monad m
-  => ChainEventHandler m
-  -> (ChainPoint -> m (WithOrigin BlockNo))
-  -> (ChainPoint -> Maybe ChainPoint -> m [ChainPoint])
-  -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip m ()
-pipelinedClient onEvent getBlockNoAtPoint getIntersectionPoints =
+  :: TVar Changes
+  -> GetHeaderAtPoint IO
+  -> GetIntersectionPoints IO
+  -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
+pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints =
   ChainSyncClientPipelined $ intersect ChainPointAtGenesis Nothing
   where
     intersect
       :: ChainPoint
       -> Maybe ChainPoint
-      -> m (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip m ())
+      -> IO (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip IO ())
     intersect lowerBound upperBound = do
-      points <- sortPoints <$> getIntersectionPoints lowerBound upperBound
+      points <- sortPoints <$> runGetIntersectionPoints getIntersectionPoints lowerBound upperBound
       pure $ SendMsgFindIntersect points ClientPipelinedStIntersect
         { recvMsgIntersectFound = \point tip -> case refineBounds point points of
             Nothing                         -> clientStIdle point tip
@@ -96,25 +137,24 @@ pipelinedClient onEvent getBlockNoAtPoint getIntersectionPoints =
     clientStIdle
       :: ChainPoint
       -> NumberedChainTip
-      -> m (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip m ())
+      -> IO (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip IO ())
     clientStIdle point nodeTip = do
-      clientTip <- getBlockNoAtPoint point
-      pure $ mkClientStIdle onEvent getBlockNoAtPoint pipelinePolicy Zero clientTip nodeTip
+      clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
+      pure $ mkClientStIdle changesVar getHeaderAtPoint pipelinePolicy Zero clientTip nodeTip
 
     pipelinePolicy :: MkPipelineDecision
     pipelinePolicy = pipelineDecisionLowHighMark 1 50
 
 mkClientStIdle
-  :: forall m n
-   . Monad m
-  => ChainEventHandler m
-  -> (ChainPoint -> m (WithOrigin BlockNo))
+  :: forall n
+   . TVar Changes
+  -> GetHeaderAtPoint IO
   -> MkPipelineDecision
   -> Nat n
   -> WithOrigin BlockNo
   -> NumberedChainTip
-  -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
-mkClientStIdle onEvent getBlockNoAtPoint pipelineDecision n clientTip nodeTip =
+  -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
+mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip nodeTip =
   case (n, runPipelineDecision pipelineDecision n clientTip (fst nodeTip)) of
     (_, (Request, pipelineDecision')) ->
       SendMsgRequestNext (collect pipelineDecision' n) $ pure (collect pipelineDecision' n)
@@ -133,31 +173,49 @@ mkClientStIdle onEvent getBlockNoAtPoint pipelineDecision n clientTip nodeTip =
   where
     nextPipelineRequest
       :: MkPipelineDecision
-      -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
+      -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
     nextPipelineRequest pipelineDecision' = SendMsgRequestNextPipelined
-      $ mkClientStIdle onEvent getBlockNoAtPoint pipelineDecision' (Succ n) clientTip nodeTip
+      $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision' (Succ n) clientTip nodeTip
 
     collect
       :: forall n'
         . MkPipelineDecision
         -> Nat n'
-        -> ClientStNext n' NumberedCardanoBlock ChainPoint NumberedChainTip m ()
-    collect pipelineDecision' = mkClientStNext onEvent getBlockNoAtPoint
-      . mkClientStIdle onEvent getBlockNoAtPoint pipelineDecision'
+        -> ClientStNext n' NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
+    collect pipelineDecision' = mkClientStNext changesVar getHeaderAtPoint pipelineDecision'
 
 mkClientStNext
-  :: Monad m
-  => ChainEventHandler m
-  -> (ChainPoint -> m (WithOrigin BlockNo))
-  -> (WithOrigin BlockNo -> NumberedChainTip -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip m ())
-  -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
-mkClientStNext onEvent getBlockNoAtPoint next = ClientStNext
+  :: TVar Changes
+  -> GetHeaderAtPoint IO
+  -> MkPipelineDecision
+  -> Nat n
+  -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
+mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
   { recvMsgRollForward = \(blockNo, block) tip -> do
-      onEvent $ RollForward block $ snd tip
+      atomically $ modifyTVar changesVar \changes@Changes{..} -> changes
+        { changesBlocks = block : changesBlocks
+        , changesTip = snd tip
+        }
       let clientTip = At blockNo
-      pure $ next clientTip tip
+      pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   , recvMsgRollBackward = \point tip -> do
-      onEvent $ RollBackward point $ snd tip
-      clientTip <- getBlockNoAtPoint point
-      pure $ next clientTip tip
+      atomically $ modifyTVar changesVar \Changes{..} -> Changes
+        { changesBlocks = case point of
+            ChainPointAtGenesis -> []
+            ChainPoint slot _   -> filter ((<= slot) . blockSlot) changesBlocks
+        , changesRollback = Just $ maybe point (minPoint point) changesRollback
+        , changesTip = snd tip
+        }
+      clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
+      pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   }
+
+minPoint :: ChainPoint -> ChainPoint -> ChainPoint
+minPoint ChainPointAtGenesis _ = ChainPointAtGenesis
+minPoint _ ChainPointAtGenesis = ChainPointAtGenesis
+minPoint p1@(ChainPoint s1 _) p2@(ChainPoint s2 _)
+  | s1 < s2 = p1
+  | otherwise = p2
+
+blockSlot :: CardanoBlock -> SlotNo
+blockSlot (BlockInMode (Block (BlockHeader slot _ _) _) _) = slot
