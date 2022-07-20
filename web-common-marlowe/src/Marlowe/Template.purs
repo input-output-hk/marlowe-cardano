@@ -185,6 +185,7 @@ updateTemplateContent initialTime d orderSet placeholders prevTemplateContent =
 class Template a b where
   getPlaceholderIds :: a -> b
 
+-- TODO: See if this needs to be a typeclass
 class Fillable a b where
   fillTemplate :: b -> a -> a
 

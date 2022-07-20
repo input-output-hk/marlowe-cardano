@@ -13,7 +13,7 @@ import Data.Show.Generic (genericShow)
 import Halogen as H
 import Halogen.Form.Input (FieldState)
 import Language.Marlowe.Core.V1.Semantics.Types (TokenName)
-import Language.Marlowe.Extended.V1.Metadata (MetaData, NumberFormat)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, NumberFormat)
 import Type.Proxy (Proxy(..))
 
 type Input =

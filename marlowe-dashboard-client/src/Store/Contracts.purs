@@ -61,7 +61,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   ( MarloweParams
   , TransactionError
   )
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Marlowe.Client (_chHistory, getMarloweParams)
 import Marlowe.Client as Client
 import Marlowe.Execution.State (restoreState) as Execution
