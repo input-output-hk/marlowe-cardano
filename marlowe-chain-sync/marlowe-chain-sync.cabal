@@ -62,6 +62,7 @@ library
   import: lang
   hs-source-dirs:   src
   exposed-modules:
+    Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
     Language.Marlowe.Runtime.ChainSync.NodeClient
@@ -103,7 +104,6 @@ executable marlowesyncd
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
-    , async
     , cardano-api
     , marlowe-chain-sync
     , optparse-applicative
