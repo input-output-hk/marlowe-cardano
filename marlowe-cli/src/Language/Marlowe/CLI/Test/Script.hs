@@ -50,6 +50,12 @@ import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionIm
 import qualified Language.Marlowe.Client as Client
 import Ledger.TimeSlot (SlotConfig)
 
+import Cardano.Api (CardanoMode, LocalNodeConnectInfo (..), NetworkId (..))
+import Control.Monad.Except (MonadError, throwError)
+import Language.Marlowe.CLI.Test.Types
+import Language.Marlowe.CLI.Types (CliError (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
+
 newtype ScriptState = ScriptState
   { transactions :: Map String (MarloweTransaction AlonzoEra)
   }
@@ -109,7 +115,6 @@ interpret (Fail message) = throwError $ CliError message
 insertMarloweTransaction :: TransactionNickname -> MarloweTransaction AlonzoEra -> ScriptState -> ScriptState
 insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
   scriptState{ transactions = Map.insert nickname transaction transactions }
-
 
 -- | Find Marlowe Transaction corresponding to a transaction nickname.
 findMarloweTransaction :: MonadError CliError m
