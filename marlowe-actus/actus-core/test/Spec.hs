@@ -35,7 +35,7 @@ main = do
     testCasesFromFile
       [ "guarantee14" -- result in reference test is not precise: 3508695 but should be 3508695.652174
       ] $ p ++ "actus-tests-ceg.json"
-  -- cecTests <- testCasesFromFile [] $ p ++ "actus-tests-cec.json"
+  cecTests <- testCasesFromFile [] $ p ++ "actus-tests-cec.json"
 
   defaultMain $
     testGroup
@@ -53,6 +53,7 @@ main = do
             tests "CSH" cshTests,
             tests "CLM" clmTests,
             tests "SWPPV" swppvTests,
-            tests "CEG" cegTests
+            tests "CEG" cegTests,
+            tests "CEC" cecTests
           ]
       ]

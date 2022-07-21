@@ -1038,7 +1038,9 @@ _STF_XD_CEG
 _STF_XD_CEC :: RealFrac a => [[(EventType, ShiftedDay, ContractState a)]] -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_XD_CEC
   referenceStates
-  _
+  RiskFactors
+    { xd_payoff
+    }
   ContractTerms
     { coverageOfCreditEnhancement = Just cecv,
       guaranteedExposure = Just CEGE_NO,
@@ -1050,12 +1052,14 @@ _STF_XD_CEC
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c
-     in s & L.exerciseAmount ?~ nt'
+     in s & L.exerciseAmount ?~ min xd_payoff nt'
           & L.notionalPrincipal .~ nt'
           & L.statusDate .~ t
 _STF_XD_CEC
   referenceStates
-  _
+  RiskFactors
+    { xd_payoff
+    }
   ContractTerms
     { coverageOfCreditEnhancement = Just cecv,
       guaranteedExposure = Just CEGE_NI,
@@ -1065,9 +1069,9 @@ _STF_XD_CEC
   t =
     let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
-          let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
+          let (_, _, c) = last $ takeWhile (\(_, _, x) -> sd x <= t) cs
            in nt c + ipac c
-     in s & L.exerciseAmount ?~ nt'
+     in s & L.exerciseAmount ?~ min xd_payoff nt'
           & L.notionalPrincipal .~ nt'
           & L.statusDate .~ t
 _STF_XD_CEC
@@ -1076,11 +1080,13 @@ _STF_XD_CEC
     { xd_payoff
     }
   ContractTerms
-    { contractRole
+    { coverageOfCreditEnhancement,
+       contractRole
     }
   s
   t =
-    let nt' = sign contractRole * (sum $ map f referenceStates)
+    let cecv = fromMaybe 1 coverageOfCreditEnhancement
+        nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c

@@ -25,6 +25,7 @@ import Data.ByteString.Lazy as B (readFile)
 import Data.Char (toUpper)
 import Data.List as L (find)
 import Data.Map as Map (Map, elems, lookup)
+import Data.Maybe (isJust)
 import Data.Time (LocalTime (..))
 import Debug.Pretty.Simple
 import GHC.Generics (Generic)
@@ -84,7 +85,7 @@ getValue TestCase {..} ev date =
     observedKey RR = marketObjectCodeOfRateReset terms
     observedKey SC = marketObjectCodeOfScalingIndex terms
     observedKey DV = Just (fmap toUpper identifier ++ "_DV")
-    observedKey XD = Prelude.head $ map (getMarketObjectCode . reference) (contractStructure terms)
+    observedKey XD = let l = map (getMarketObjectCode . reference) (contractStructure terms) in head $ filter isJust l
     observedKey _  = settlementCurrency terms
 
 -- |Unscheduled events from test cases
