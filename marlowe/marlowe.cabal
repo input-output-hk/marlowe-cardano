@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe
-version: 0.1.0.0
+version: 0.1.0.1
 license: Apache-2.0
 license-files:
   LICENSE
@@ -47,8 +47,13 @@ library
   hs-source-dirs: src
   ghc-options:
     -Wunused-packages
+
+  if !(impl(ghcjs) || os(ghcjs))
+    build-depends: plutus-tx-plugin -any
+
   build-depends:
-    aeson -any,
+    aeson <2,
+    base16-aeson,
     base -any,
     bytestring,
     cardano-api -any,
@@ -56,15 +61,17 @@ library
     cardano-ledger-alonzo -any,
     cardano-ledger-core -any,
     containers -any,
-    data-default -any,
     deriving-aeson -any,
     extra -any,
     lens,
     mtl,
     newtype-generics,
     template-haskell -any,
-    plutus-ledger,
+    plutus-ledger-ada,
     plutus-ledger-api -any,
+    plutus-ledger-aeson,
+    plutus-ledger-slot,
+    plutus-script-utils,
     plutus-tx -any,
     serialise -any,
     base16-bytestring -any,
@@ -72,10 +79,7 @@ library
     sbv >= 8.4,
     scientific -any,
     wl-pprint -any,
-    unordered-containers -any,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
+
   exposed-modules:
     Language.Marlowe
     Language.Marlowe.Extended.V1
@@ -107,12 +111,16 @@ test-suite marlowe-test
         Spec.Marlowe.Semantics
         Spec.Marlowe.Util
         Spec.Marlowe.Util.AssocMap
+
+    if !(impl(ghcjs) || os(ghcjs))
+      build-depends: plutus-tx-plugin -any
+
     build-depends:
         aeson -any,
+        aeson-extra,
         cardano-api -any,
         base >=4.9 && <5,
         containers -any,
-        data-default  -any,
         hint -any,
         lens -any,
         bytestring -any,
@@ -123,8 +131,10 @@ test-suite marlowe-test
         text -any,
         serialise,
         cborg,
-        plutus-ledger,
+        plutus-ledger-ada,
+        plutus-ledger-aeson,
         plutus-ledger-api -any,
+        plutus-ledger-slot,
         marlowe,
         plutus-tx -any,
         QuickCheck,

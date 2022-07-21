@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments             #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveAnyClass             #-}
@@ -28,22 +29,26 @@ module Language.Marlowe.Core.V1.Semantics.Types where
 import Control.Applicative ((<*>), (<|>))
 import Control.Newtype.Generics (Newtype)
 import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Extras as JSON
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types hiding (Error, Value)
+import qualified Data.Aeson.Types as JSON
+import Data.ByteString.Base16.Aeson (Base16 (Base16))
+import qualified Data.ByteString.Base16.Aeson as Base16.Aeson
 import qualified Data.Foldable as F
-import qualified Data.HashMap.Internal.Strict as HashMap
 import Data.String (IsString (..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Ledger (POSIXTime (..), PubKeyHash (..))
-import Ledger.Value (CurrencySymbol (..), TokenName (..))
 import qualified Ledger.Value as Val
+import Plutus.V1.Ledger.Aeson ()
+import Plutus.V1.Ledger.Api (CurrencySymbol (unCurrencySymbol), POSIXTime (..), PubKeyHash (PubKeyHash, getPubKeyHash),
+                             TokenName (unTokenName))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
+import PlutusTx.Builtins.Aeson ()
 import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
 import Prelude (mapM, (<$>))
@@ -56,6 +61,10 @@ import qualified Prelude as Haskell
 {-# INLINABLE getInputContent #-}
 {-# INLINABLE inBounds #-}
 {-# INLINABLE emptyState #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 {-| = Type definitions for Marlowe's seamntics
 -}
@@ -276,12 +285,11 @@ instance ToJSON Input where
     let
       obj = case toJSON content of
         Object obj -> obj
-        _          -> HashMap.empty
-    in
-      Object $ HashMap.union obj $ HashMap.fromList
-          [ ("merkleized_continuation", toJSON continuation)
-          , ("continuation_hash", toJSON hash)
-          ]
+        _          -> KeyMap.empty
+    in Object $ obj `KeyMap.union` KeyMap.fromList
+        [ ("merkleized_continuation", toJSON continuation)
+        , ("continuation_hash", toJSON hash)
+        ]
 
 
 getInputContent :: Input -> InputContent
@@ -320,11 +328,17 @@ inBounds :: ChosenNum -> [Bound] -> Bool
 inBounds num = any (\(Bound l u) -> num >= l && num <= u)
 
 
+toJSONAssocMap :: ToJSON k => ToJSON v => Map k v -> JSON.Value
+toJSONAssocMap = toJSON . Map.toList
+
+fromJSONAssocMap :: FromJSON k => FromJSON v => JSON.Value -> JSON.Parser (Map k v)
+fromJSONAssocMap v = Map.fromList <$> parseJSON v
+
 instance FromJSON State where
   parseJSON = withObject "State" (\v ->
-         State <$> (v .: "accounts")
-               <*> (v .: "choices")
-               <*> (v .: "boundValues")
+         State <$> (v .: "accounts" >>= fromJSONAssocMap)
+               <*> (v .: "choices" >>= fromJSONAssocMap)
+               <*> (v .: "boundValues" >>= fromJSONAssocMap)
                <*> (POSIXTime <$> (withInteger =<< (v .: "minTime")))
                                  )
 
@@ -333,22 +347,28 @@ instance ToJSON State where
                , choices = c
                , boundValues = bv
                , minTime = POSIXTime ms } = object
-        [ "accounts" .= a
-        , "choices" .= c
-        , "boundValues" .= bv
+        [ "accounts" .= toJSONAssocMap a
+        , "choices" .= toJSONAssocMap c
+        , "boundValues" .= toJSONAssocMap bv
         , "minTime" .= ms ]
 
 instance FromJSON Party where
-  parseJSON = withObject "Party" (\v ->
-        (PK . PubKeyHash . toBuiltin <$> (JSON.decodeByteString =<< (v .: "pk_hash")))
+  parseJSON = withObject "Party" (\v -> do
+        Base16 bs <- parseJSON =<< (v .: "pk_hash")
+        return $ PK . PubKeyHash . toBuiltin $ bs
     <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
                                  )
 instance ToJSON Party where
     toJSON (PK pkh) = object
-        [ "pk_hash" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin $ getPubKeyHash pkh) ]
+        [ "pk_hash" .= (toJSON $ Base16 $ fromBuiltin $ getPubKeyHash pkh) ]
     toJSON (Role (Val.TokenName name)) = object
         [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
 
+instance ToJSONKey ChoiceId where
+  toJSONKey = JSON.ToJSONKeyValue toJSON JSON.toEncoding
+
+instance FromJSONKey ChoiceId where
+  fromJSONKey = JSON.FromJSONKeyValue parseJSON
 
 instance FromJSON ChoiceId where
   parseJSON = withObject "ChoiceId" (\v ->
@@ -364,13 +384,15 @@ instance ToJSON ChoiceId where
 
 instance FromJSON Token where
   parseJSON = withObject "Token" (\v ->
-       Token <$> (Val.currencySymbol <$> (JSON.decodeByteString =<< (v .: "currency_symbol")))
-             <*> (Val.tokenName . Text.encodeUtf8 <$> (v .: "token_name"))
-                                 )
+       Token <$> do
+                    cs <- v .: "currency_symbol"
+                    Base16 bs <- parseJSON cs
+                    return $ Val.currencySymbol bs
+             <*> (Val.tokenName . Text.encodeUtf8 <$> (v .: "token_name")))
 
 instance ToJSON Token where
   toJSON (Token currSym tokName) = object
-      [ "currency_symbol" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin $ unCurrencySymbol currSym)
+      [ "currency_symbol" .= (toJSON $ Base16 $ fromBuiltin $ unCurrencySymbol currSym)
       , "token_name" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin $ unTokenName tokName)
       ]
 
@@ -547,12 +569,15 @@ instance ToJSON Payee where
 
 
 instance FromJSON a => FromJSON (Case a) where
-  parseJSON = withObject "Case" (\v ->
-        (Case <$> (v .: "case")
-              <*> (v .: "then"))
-    <|> (MerkleizedCase <$> (v .: "case")
-                        <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_then")))
-                                )
+  parseJSON = withObject "Case" \v ->
+      Case <$> (v .: "case") <*> (v .: "then")
+      <|> MerkleizedCase
+        <$> v .: "case"
+        <*> do
+          mt <- v.: "merkleized_then"
+          Base16 bs <- parseJSON mt
+          return $ toBuiltin bs
+
 instance ToJSON a => ToJSON (Case a) where
   toJSON (Case act cont) = object
       [ "case" .= act
@@ -560,7 +585,7 @@ instance ToJSON a => ToJSON (Case a) where
       ]
   toJSON (MerkleizedCase act bs) = object
       [ "case" .= act
-      , "merkleized_then" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
+      , "merkleized_then" .= (Base16.Aeson.byteStringToJSON $ fromBuiltin bs)
       ]
 
 

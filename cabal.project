@@ -5,10 +5,15 @@ index-state: 2022-04-11T18:57:22Z
 
 packages:
   marlowe
-  marlowe-actus
-  marlowe-cli
+  -- marlowe-actus
   marlowe-contracts
-  plutus-ledger
+  marlowe-cli
+
+  lib/aeson-via-serialise
+  lib/base16-aeson
+  lib/plutus-ledger-aeson
+  lib/plutus-ledger-ada
+  lib/plutus-ledger-slot
 
 -- -- setup from cardano-node
 -- -- -------------------------------------------------------------------------
@@ -119,7 +124,7 @@ packages:
 -- ---------------------------------------------------------
 -- Disable all tests by default
 
-tests: False
+tests: True
 
 test-show-details: direct
 
@@ -221,6 +226,11 @@ package ouroboros-consensus-cardano-test
 package ouroboros-network
   tests: False
 
+-- You have to copy ghc-options manually to `nix/pkgs/haskell/haskell.nix`
+package plutus-core
+  tests: False
+  ghc-options: -Wno-unused-packages -Wno-name-shadowing
+
 package ouroboros-network-framework
   tests: False
 
@@ -249,6 +259,14 @@ package cardano-ledger-alonzo-test
   tests: False
 
 -- Marlowe specific dependencies
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/plutus-apps
+  tag: v2022-07-01
+  --sha256: 0ii631ak757kjzs7jm625zfv2g28ffjrfkmgslxbbgvwpqxkdbaj
+  subdir:
+    plutus-script-utils
 
 source-repository-package
   type: git

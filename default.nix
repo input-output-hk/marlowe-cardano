@@ -36,7 +36,7 @@ rec {
 
   inherit (marlowe) cardano-node cardano-cli;
 
-  # inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
+  inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
 
   dev-scripts = import ./nix/dev/scripts.nix {
     inherit pkgs;

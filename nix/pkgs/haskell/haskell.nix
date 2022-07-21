@@ -8,6 +8,7 @@
 , z3
 , R
 , libsodium-vrf
+, secp256k1
 , checkMaterialization
 , compiler-nix-name
 , enableHaskellProfiling
@@ -68,20 +69,8 @@ let
           marlowe-actus.package.buildable = false;
           marlowe-contracts.package.buildable = false;
           marlowe-cli.package.buildable = false;
-          marlowe-dashboard-server.package.buildable = false;
-          marlowe-playground-server.package.buildable = false; # Would also require libpq
-          marlowe-symbolic.package.buildable = false;
-          playground-common.package.buildable = false;
-          plutus-benchmark.package.buildable = false;
-          plutus-chain-index-core.package.buildable = false;
-          plutus-contract.package.buildable = false;
-          plutus-errors.package.buildable = false;
           plutus-ledger.package.buildable = false;
-          plutus-pab.package.buildable = false;
-          plutus-playground-server.package.buildable = false; # Would also require libpq
           plutus-tx-plugin.package.buildable = false;
-          plutus-use-cases.package.buildable = false;
-          web-ghc.package.buildable = false;
           # These need R
           plutus-core.components.benchmarks.cost-model-test.buildable = lib.mkForce false;
           plutus-core.components.benchmarks.update-cost-model.buildable = lib.mkForce false;
@@ -206,23 +195,15 @@ let
             iohk-monitoring.doHaddock = false;
 
             # Werror everything. This is a pain, see https://github.com/input-output-hk/haskell.nix/issues/519
-            plutus-core.ghcOptions = [ "-Werror" ];
+            plutus-core.ghcOptions = [ "-Werror" "-Wno-unused-packages" "-Wno-name-shadowing" ];
             marlowe.ghcOptions = [ "-Werror" ];
             marlowe-symbolic.ghcOptions = [ "-Werror" ];
             marlowe-actus.ghcOptions = [ "-Werror" ];
-            marlowe-playground-server.ghcOptions = [ "-Werror" ];
-            marlowe-dashboard-server.ghcOptions = [ "-Werror" ];
             marlowe-contract.ghcOptions = [ "-Werror" ];
-            playground-common.ghcOptions = [ "-Werror" ];
-            plutus-contract.ghcOptions = [ "-Werror" ];
             plutus-ledger.ghcOptions = [ "-Werror" ];
-            plutus-ledger-api.ghcOptions = [ "-Werror" ];
-            plutus-playground-server.ghcOptions = [ "-Werror" ];
-            plutus-pab.ghcOptions = [ "-Werror" ];
             plutus-tx.ghcOptions = [ "-Werror" ];
             plutus-tx-plugin.ghcOptions = [ "-Werror" ];
             plutus-doc.ghcOptions = [ "-Werror" ];
-            plutus-use-cases.ghcOptions = [ "-Werror" ];
 
             # External package settings
 
@@ -233,8 +214,8 @@ let
             ieee.components.library.libs = lib.mkForce [ ];
 
             # See https://github.com/input-output-hk/iohk-nix/pull/488
-            cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf ] ];
-            cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf ] ];
+            cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf secp256k1 ] ];
+            cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf secp256k1 ] ];
           };
       })
     ] ++ lib.optional enableHaskellProfiling {
