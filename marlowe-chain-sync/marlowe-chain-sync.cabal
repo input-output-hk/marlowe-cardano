@@ -50,6 +50,7 @@ common lang
     ScopedTypeVariables
     StandaloneDeriving
     TypeApplications
+    TupleSections
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
@@ -62,18 +63,33 @@ library
   hs-source-dirs:   src
   exposed-modules:
     Language.Marlowe.Runtime.ChainSync.Database
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
     Language.Marlowe.Runtime.ChainSync.NodeClient
     Language.Marlowe.Runtime.ChainSync.Store
   other-modules:
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async
+    , bytestring
+    , cborg
     , cardano-api
+    , cardano-binary
+    , cardano-ledger-babbage
+    , cardano-ledger-alonzo
+    , cardano-ledger-core
+    , containers
+    , hasql
+    , hasql-th
+    , hasql-transaction
     , ouroboros-network
+    , profunctors
     , stm
     , stm-delay
+    , text
     , time
     , transformers
+    , vector
     , witherable
 
 executable marlowesyncd
