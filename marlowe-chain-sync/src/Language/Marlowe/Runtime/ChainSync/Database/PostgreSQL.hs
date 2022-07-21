@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE QuasiQuotes               #-}
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL where
 
