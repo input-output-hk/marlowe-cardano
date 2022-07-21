@@ -25,7 +25,7 @@ import Cardano.Api (CardanoMode, LocalNodeConnectInfo (..), NetworkId (..))
 import Control.Monad.Except (MonadError, throwError)
 import Language.Marlowe.CLI.Test.Types
 import Language.Marlowe.CLI.Types (CliError (..))
-import Ledger.TimeSlot (SlotConfig (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
 
 -- | Test a Marlowe contract.

@@ -60,22 +60,24 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), Asset
                     SlotNo (..), StakeAddressReference (NoStakeAddress), TimeLocksSupported (..), TxAuxScripts (..),
                     TxBody (..), TxBodyContent (..), TxBodyErrorAutoBalance (..), TxBodyScriptData (..),
                     TxCertificates (..), TxExtraKeyWitnesses (..), TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
-                    TxFeesExplicitInEra (..), TxId, TxIn (..), TxInMode (..), TxInsCollateral (..), TxIx (..),
-                    TxMetadataInEra (..), TxMetadataJsonSchema (TxMetadataJsonNoSchema),
-                    TxMetadataSupportedInEra (TxMetadataInAlonzoEra), TxMintValue (..), TxOut (..), TxOutDatum (..),
-                    TxOutValue (..), TxScriptValidity (..),
-                    TxScriptValiditySupportedInEra (TxScriptValiditySupportedInAlonzoEra), TxUpdateProposal (..),
-                    TxValidityLowerBound (..), TxValidityUpperBound (..), TxWithdrawals (..), UTxO (..),
-                    ValidityLowerBoundSupportedInEra (..), ValidityNoUpperBoundSupportedInEra (..),
-                    ValidityUpperBoundSupportedInEra (..), Value, WitCtxTxIn, Witness (..), anyAddressInEra,
-                    castVerificationKey, getTxId, getVerificationKey, hashScript, hashScriptData, lovelaceToValue,
-                    makeShelleyAddressInEra, makeTransactionBodyAutoBalance, metadataFromJson, negateValue,
-                    queryNodeLocalState, readFileTextEnvelope, selectAsset, selectLovelace, serialiseToCBOR,
-                    serialiseToRawBytesHex, signShelleyTransaction, submitTxToNodeLocal, toAddressAny,
-                    txOutValueToValue, valueFromList, valueToList, valueToLovelace, verificationKeyHash,
-                    writeFileTextEnvelope)
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
-                            protocolParamMaxTxExUnits, protocolParamMaxTxSize)
+                    TxFeesExplicitInEra (..), TxId, TxIn (..), TxInMode (..), TxInsCollateral (..),
+                    TxInsReference (TxInsReferenceNone), TxIx (..), TxMetadataInEra (..),
+                    TxMetadataJsonSchema (TxMetadataJsonNoSchema), TxMetadataSupportedInEra (TxMetadataInAlonzoEra),
+                    TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..),
+                    TxReturnCollateral (TxReturnCollateralNone), TxScriptValidity (..),
+                    TxScriptValiditySupportedInEra (TxScriptValiditySupportedInAlonzoEra),
+                    TxTotalCollateral (TxTotalCollateralNone), TxUpdateProposal (..), TxValidityLowerBound (..),
+                    TxValidityUpperBound (..), TxWithdrawals (..), UTxO (..), ValidityLowerBoundSupportedInEra (..),
+                    ValidityNoUpperBoundSupportedInEra (..), ValidityUpperBoundSupportedInEra (..), Value, WitCtxTxIn,
+                    Witness (..), anyAddressInEra, castVerificationKey, getTxId, getVerificationKey, hashScript,
+                    hashScriptData, lovelaceToValue, makeShelleyAddressInEra, makeTransactionBodyAutoBalance,
+                    metadataFromJson, negateValue, queryNodeLocalState, readFileTextEnvelope, selectAsset,
+                    selectLovelace, serialiseToCBOR, serialiseToRawBytesHex, signShelleyTransaction,
+                    submitTxToNodeLocal, toAddressAny, txOutValueToValue, valueFromList, valueToList, valueToLovelace,
+                    verificationKeyHash, writeFileTextEnvelope)
+import Cardano.Api.Shelley (PlutusScriptOrReferenceInput (PScript), ReferenceScript (ReferenceScriptNone),
+                            SimpleScriptOrReferenceInput (SScript), TxBody (ShelleyTxBody), fromPlutusData,
+                            protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
@@ -91,19 +93,19 @@ import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli
                                 readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Types (CliError (..), OutputQuery (..), PayFromScript (..), PayToScript (..),
                                    SomePaymentSigningKey)
-import Ledger.TimeSlot (SlotConfig (..))
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import System.IO (hPutStrLn, stderr)
 
 import qualified Data.Aeson as A (Value (Object))
+import qualified Data.Aeson.Key as Aeson.Key
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (unpack)
-import qualified Data.HashMap.Strict as H (singleton)
 import qualified Data.Map.Strict as M (elems, keysSet, singleton, toList)
 import qualified Data.Set as S (empty, fromList, singleton)
-import qualified Data.Text as T (pack)
 
 
 -- | Build a non-Marlowe transaction.
@@ -174,7 +176,7 @@ buildClean connection signingKeyFiles lovelace changeAddress range mintValue met
           TxMintValue _ minting' _ -> minting'
           _                        -> mempty
       inputs = fst <$> utxos
-      extractValue (TxOut _ value _) = txOutValueToValue value
+      extractValue (TxOut _ value _ _) = txOutValueToValue value
       total = mconcat $ extractValue . snd <$> utxos
       outputs =
         [
@@ -223,7 +225,7 @@ buildFaucet connection value fundedAddress changeAddress signingKey timeout =
         $ changeAddress
     let
       inputs = fst <$> utxos
-      extractValue (TxOut _ v _) = txOutValueToValue v
+      extractValue (TxOut _ v _ _) = txOutValueToValue v
       total = mconcat $ extractValue . snd <$> utxos
       lovelace = lovelaceToValue . toEnum . (`div` 2) . fromEnum $ selectLovelace total
       outputs =
@@ -267,7 +269,7 @@ buildFaucet' connection value addresses bodyFile timeout =
       witness =
         BuildTxWith
           . ScriptWitness ScriptWitnessForSpending
-          $ SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 script
+          $ SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 (SScript script)
       changeAddress =
         toAddressAny'
           $ makeShelleyAddressInEra
@@ -283,7 +285,7 @@ buildFaucet' connection value addresses bodyFile timeout =
         $ changeAddress
     let
       inputs = [(txIn, witness) | txIn <- fst <$> utxos]
-      extractValue (TxOut _ v _) = txOutValueToValue v
+      extractValue (TxOut _ v _ _) = txOutValueToValue v
       total = mconcat $ extractValue . snd <$> utxos
       lovelace = lovelaceToValue . toEnum . (`div` 2) . fromEnum $ selectLovelace total
       value' = mconcat $ replicate (length addresses) value
@@ -349,16 +351,16 @@ buildMinting connection signingKeyFile tokenNames metadataFile count expires lov
         TxMintValue MultiAssetInAlonzoEra minting
           . BuildTxWith
           . M.singleton policy
-          $ SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 script
+          $ SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 (SScript script)
     metadata' <-
       case metadata of
         Just (A.Object metadata'') -> fmap (TxMetadataInEra TxMetadataInAlonzoEra)
                                         . liftCli
                                         . metadataFromJson TxMetadataJsonNoSchema
                                         . A.Object
-                                        . H.singleton "721"
+                                        . KeyMap.singleton "721"
                                         . A.Object
-                                        . H.singleton (T.pack . BS8.unpack $ serialiseToRawBytesHex policy)
+                                        . KeyMap.singleton (Aeson.Key.fromString . BS8.unpack $ serialiseToRawBytesHex policy)
                                         $ A.Object metadata''
         _                          -> pure TxMetadataNone
     void
@@ -606,29 +608,32 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
     protocol <- queryAlonzo connection QueryProtocolParameters
     let
       protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
-      txInsCollateral   = TxInsCollateral CollateralInAlonzoEra $ maybeToList collateral
-      txFee             = TxFeeExplicit TxFeesExplicitInAlonzoEra 0
-      txValidityRange   = (
-                            maybe
-                              TxValidityNoLowerBound
-                              (TxValidityLowerBound ValidityLowerBoundInAlonzoEra . fst)
-                              slotRange
-                          , maybe
-                              (TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra)
-                              (TxValidityUpperBound ValidityUpperBoundInAlonzoEra . snd)
-                              slotRange
-                          )
-      txMetadata        = metadata
-      txAuxScripts      = TxAuxScriptsNone
-      txExtraKeyWits    = TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra extraSigners
-      txProtocolParams  = BuildTxWith $ Just protocol'
-      txWithdrawals     = TxWithdrawalsNone
-      txCertificates    = TxCertificatesNone
-      txUpdateProposal  = TxUpdateProposalNone
-      txMintValue       = mintValue
-      txScriptValidity  = if invalid
-                            then TxScriptValidity TxScriptValiditySupportedInAlonzoEra ScriptInvalid
-                            else TxScriptValidityNone
+      txInsCollateral    = TxInsCollateral CollateralInAlonzoEra $ maybeToList collateral
+      txReturnCollateral = TxReturnCollateralNone
+      txTotalCollateral  = TxTotalCollateralNone
+      txFee              = TxFeeExplicit TxFeesExplicitInAlonzoEra 0
+      txValidityRange    = (
+                             maybe
+                               TxValidityNoLowerBound
+                               (TxValidityLowerBound ValidityLowerBoundInAlonzoEra . fst)
+                               slotRange
+                           , maybe
+                               (TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra)
+                               (TxValidityUpperBound ValidityUpperBoundInAlonzoEra . snd)
+                               slotRange
+                           )
+      txMetadata         = metadata
+      txAuxScripts       = TxAuxScriptsNone
+      txExtraKeyWits     = TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra extraSigners
+      txProtocolParams   = BuildTxWith $ Just protocol'
+      txWithdrawals      = TxWithdrawalsNone
+      txCertificates     = TxCertificatesNone
+      txUpdateProposal   = TxUpdateProposalNone
+      txInsReference     = TxInsReferenceNone
+      txMintValue        = mintValue
+      txScriptValidity   = if invalid
+                             then TxScriptValidity TxScriptValiditySupportedInAlonzoEra ScriptInvalid
+                             else TxScriptValidityNone
       scriptTxIn = redeemScript <$> payFromScript
       txIns = extraInputs <> scriptTxIn <> fmap makeTxIn inputs
       scriptTxOut = maybe [] payScript payToScript
@@ -669,8 +674,8 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
       -- Correct for a negative balance in cases where execution units, and hence fees, have increased.
       change' =
         case (change, trial) of
-          (TxOut _ (TxOutValue _ value) _, Left (TxBodyErrorAdaBalanceNegative delta)) ->
-            TxOut changeAddress' (TxOutValue MultiAssetInAlonzoEra $ value <> lovelaceToValue delta) TxOutDatumNone
+          (TxOut _ (TxOutValue _ value) _ _, Left (TxBodyErrorAdaBalanceNegative delta)) ->
+            TxOut changeAddress' (TxOutValue MultiAssetInAlonzoEra $ value <> lovelaceToValue delta) TxOutDatumNone ReferenceScriptNone
           _ -> change
     -- Construct the body with correct execution units and fees.
     BalancedTxBody txBody _ lovelace <-
@@ -682,7 +687,7 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
             protocol'
             S.empty
             utxo
-            (TxBodyContent{..} {txOuts = change' : txOuts})
+            (TxBodyContent{..} {txOuts = change' : txOuts, txInsReference = TxInsReferenceNone })
             changeAddress'
             Nothing
     when printStats
@@ -799,7 +804,7 @@ redeemScript PayFromScript{..} =
       $ PlutusScriptWitness
         PlutusScriptV1InAlonzo
         PlutusScriptV1
-        script
+        (PScript script)
         (ScriptDatumForTxIn . fromPlutusData $ toData datum)
         (fromPlutusData $ toData redeemer)
         (ExecutionUnits 0 0)
@@ -814,7 +819,8 @@ payScript PayToScript{..} =
     TxOut
       address
       (TxOutValue MultiAssetInAlonzoEra value)
-      (TxOutDatum ScriptDataInAlonzoEra datumOut)
+      (TxOutDatumInTx ScriptDataInAlonzoEra datumOut)
+      ReferenceScriptNone
   ]
 
 
@@ -844,7 +850,8 @@ makeTxOut address datum value =
       $ TxOut
         address'
         (TxOutValue MultiAssetInAlonzoEra value)
-        (maybe TxOutDatumNone (TxOutDatum ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
+        (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
+        ReferenceScriptNone
 
 
 -- | Convert an address to Alonzo era.
@@ -909,7 +916,7 @@ selectUtxos connection address query =
   do
     UTxO candidates <- queryUtxos connection address
     let
-      query' (_, TxOut _ value' _) =
+      query' (_, TxOut _ value' _ _) =
         let
           value = txOutValueToValue value'
           count = length $ valueToList value

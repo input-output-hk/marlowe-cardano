@@ -263,8 +263,9 @@ package cardano-ledger-alonzo-test
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
-  tag: v2022-07-01
-  --sha256: 0ii631ak757kjzs7jm625zfv2g28ffjrfkmgslxbbgvwpqxkdbaj
+  -- on branch: PLT-568-BabbageEra
+  tag: 255b85db7e4b8e42b4e858f4ba275d2c172a52ce
+  --sha256: 1hrak4d52qy0163vanpkq80650md1dja3v43l5yhjg9rphy5h68c
   subdir:
     plutus-script-utils
 
