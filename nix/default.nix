@@ -49,7 +49,7 @@ let
   # pkgs = import sources.nixpkgs {
 
 
-  pkgs = import sources.nixpkgs-cardano-node {
+  pkgs = import sources.nixpkgs-cardano-node-unstable {
     inherit crossSystem;
     # In nixpkgs versions older than 21.05, if we don't explicitly pass
     # in localSystem we will hit a code path that uses builtins.currentSystem,

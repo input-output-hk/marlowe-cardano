@@ -227,6 +227,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-cardano-node-unstable": {
+      "locked": {
+        "lastModified": 1644486793,
+        "narHash": "sha256-EeijR4guVHgVv+JpOX3cQO+1XdrkJfGmiJ9XVsVU530=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "1882c6b7368fd284ad01b0a5b5601ef136321292",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-cardano-node": {
       "locked": {
         "lastModified": 1642336556,
@@ -448,6 +464,7 @@
         "iohk-nix": "iohk-nix",
         "nixpkgs": "nixpkgs",
         "nixpkgs-cardano-node": "nixpkgs-cardano-node",
+        "nixpkgs-cardano-node-unstable": "nixpkgs-cardano-node-unstable",
         "npmlock2nix": "npmlock2nix",
         "plutus-apps": "plutus-apps",
         "plutus-core": "plutus-core",

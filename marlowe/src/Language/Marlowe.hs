@@ -16,8 +16,8 @@ import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types hiding (getAction)
 import Language.Marlowe.Pretty
 import Language.Marlowe.Util
-import Ledger (POSIXTime (..))
-import Ledger.Ada (adaSymbol, adaToken)
+import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
+import Plutus.V1.Ledger.Api (POSIXTime (..))
 import PlutusTx.Ratio as P
 
 

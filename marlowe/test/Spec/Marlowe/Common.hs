@@ -7,10 +7,12 @@ module Spec.Marlowe.Common where
 
 import Data.Map.Strict (Map)
 
-import Language.Marlowe
-import Ledger (pubKeyHash)
-import qualified Ledger
-import Ledger.TimeSlot (SlotConfig (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
+                                                 Observation (..), Party (..), Payee (..), Token (..), Value (..),
+                                                 ValueId (..))
+import qualified Language.Marlowe.Extended.V1 as Extended
+import qualified Plutus.V1.Ledger.Api as Ledger
+import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import qualified PlutusTx.Ratio as P
 import Test.QuickCheck
 -- import Wallet (PubKey (..))
@@ -295,7 +297,7 @@ contractRelGenSized s bn
                        let newTimeout = bn + timeOutDelta
                            ns = if numCases > 0 then s `quot` numCases else s - 1
                        When <$> vectorOf numCases (caseRelGenSized ns bn)
-                            <*> (return $ POSIXTime newTimeout)
+                            <*> (return $ Ledger.POSIXTime newTimeout)
                             <*> contractRelGenSized ns newTimeout
                   , Assert <$> observationGenSized (s `quot` 3)
                            <*> contractRelGenSized (s `quot` 2) bn
@@ -326,13 +328,13 @@ shrinkContract cont = case cont of
         Close:cont1:cont2:([If obs x cont2 | x <- shrinkContract cont1]
                       ++ [If obs cont1 y | y <- shrinkContract cont2]
                       ++ [If z cont1 cont2 | z <- shrinkObservation obs])
-    When [] (POSIXTime tim) cont ->
-        Close:cont:([When [] (POSIXTime tim) x | x <- shrinkContract cont]
-              ++ [When [] (POSIXTime y) cont | y <- shrinkSimpleInteger tim])
-    When l (POSIXTime tim) cont ->
-        Close:cont:([When nl (POSIXTime tim) cont | nl <- shrinkList shrinkCase l]
-              ++ [When l (POSIXTime tim) x | x <- shrinkContract cont]
-              ++ [When l (POSIXTime y) cont | y <- shrinkSimpleInteger tim])
+    When [] (Extended.POSIXTime tim) cont ->
+        Close:cont:([When [] (Extended.POSIXTime tim) x | x <- shrinkContract cont]
+              ++ [When [] (Extended.POSIXTime y) cont | y <- shrinkSimpleInteger tim])
+    When l (Extended.POSIXTime tim) cont ->
+        Close:cont:([When nl (Extended.POSIXTime tim) cont | nl <- shrinkList shrinkCase l]
+              ++ [When l (Extended.POSIXTime tim) x | x <- shrinkContract cont]
+              ++ [When l (Extended.POSIXTime y) cont | y <- shrinkSimpleInteger tim])
     Assert obs cont ->
         Close:cont:([Assert x cont | x <- shrinkObservation obs]
               ++ [Assert obs y | y <- shrinkContract cont])
@@ -356,9 +358,9 @@ pangramContract = let
                 (Pay aliceAcc (Account aliceAcc) token (DivValue (AvailableMoney aliceAcc token) constant) Close)
                 Close)
         , Case (Notify (AndObs (TimeIntervalStart `ValueLT` TimeIntervalEnd) TrueObs)) Close
-        ] (POSIXTime 100) Close
+        ] (Extended.POSIXTime 100) Close
 
 
-secondsSinceShelley :: SlotConfig -> Integer -> POSIXTime
+secondsSinceShelley :: SlotConfig -> Integer -> Ledger.POSIXTime
 secondsSinceShelley SlotConfig {scSlotZeroTime} seconds =
-    scSlotZeroTime + POSIXTime (seconds * 1000)
+    scSlotZeroTime + Extended.POSIXTime (seconds * 1000)

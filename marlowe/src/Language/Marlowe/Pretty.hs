@@ -12,9 +12,11 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Generics (C, Constructor, D, Generic, K1 (K1), M1 (M1), Rep, S, U1, conName, from, (:*:) ((:*:)),
                      (:+:) (L1, R1))
-import Ledger (POSIXTime (..), PubKeyHash (..), Slot (..))
-import Ledger.Ada (Ada, getLovelace)
 import Ledger.Value
+import Plutus.V1.Ledger.Ada (Ada, getLovelace)
+import Plutus.V1.Ledger.Api (PubKeyHash (PubKeyHash))
+import Plutus.V1.Ledger.Slot (Slot (Slot))
+import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime))
 import qualified PlutusTx.Prelude as P
 import Text.PrettyPrint.Leijen (Doc, comma, encloseSep, hang, lbracket, line, lparen, parens, rbracket, rparen, space,
                                 text)

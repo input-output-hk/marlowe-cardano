@@ -25,16 +25,13 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
 import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, TypedRolePayoutValidator,
                                  smallUntypedValidator)
-import Ledger.TimeSlot (SlotConfig, slotRangeToPOSIXTimeRange)
-import Ledger.Tx.CardanoAPI (SomeCardanoApiTx (SomeTx))
-import Ledger.Typed.Scripts (DatumType, validatorAddress)
-import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
 import qualified Ledger.Value (TokenName, Value)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
+import Plutus.V1.Ledger.Aeson ()
 import Plutus.V1.Ledger.Api (Address (..), Credential (PubKeyCredential), CurrencySymbol (..), Datum (..),
                              Extended (..), Interval (..), LowerBound (..), Redeemer (..), TxId (..), TxOut (..),
                              TxOutRef (..), UpperBound (..), dataToBuiltinData, fromBuiltinData, toBuiltin)
-import Plutus.V1.Ledger.Scripts (ScriptHash (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
 import Plutus.V1.Ledger.Tx (txInRef)
 
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo (Data (..))
@@ -45,7 +42,7 @@ import qualified Data.ByteString as BS (drop)
 import qualified Data.Map.Strict as M (Map, keys, lookup, toList)
 import qualified Data.Set as S (toList)
 import Data.Traversable (for)
-import Ledger.Address (PaymentPubKeyHash (unPaymentPubKeyHash))
+import Plutus.Script.Utils.V1.Typed.Scripts
 import qualified PlutusTx.IsData.Class
 
 

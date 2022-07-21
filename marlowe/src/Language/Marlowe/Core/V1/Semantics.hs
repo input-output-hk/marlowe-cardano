@@ -57,9 +57,10 @@ import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..
                                                  getAction, getInputContent, inBounds)
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Ledger (POSIXTime (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
 import qualified Ledger.Value as Val
+import Plutus.V1.Ledger.Aeson ()
+import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime, getPOSIXTime), ValidatorHash)
 import PlutusTx (makeIsDataIndexed)
 import qualified PlutusTx.AssocMap as Map
 import qualified PlutusTx.Builtins as Builtins
