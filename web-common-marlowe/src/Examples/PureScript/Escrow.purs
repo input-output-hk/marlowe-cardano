@@ -138,7 +138,7 @@ ada :: Token
 ada = Token "" ""
 
 buyer :: Party
-buyer = Role "Buyer23"
+buyer = Role "Buyer"
 
 seller :: Party
 seller = Role "Seller"

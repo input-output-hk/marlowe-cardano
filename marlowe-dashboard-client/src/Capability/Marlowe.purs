@@ -100,8 +100,7 @@ instance Debuggable InstantiateContractError where
     encodeJson
       { errorType: "Contract instantiation"
       , currentTime: show currentTime
-      -- TODO: Re-enable once we make the Module toJSON
-      -- , module: module'
+      , module: module'
       , params
       }
 

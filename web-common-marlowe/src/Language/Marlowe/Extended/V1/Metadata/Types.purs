@@ -10,13 +10,9 @@ import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
 import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
-import Data.Lens (Lens')
-import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap (OMap)
-import Data.Map.Ordered.OMap as OMap
-import Data.Maybe (fromMaybe, maybe)
 import Data.Set (Set)
 import Data.Set.Ordered.OSet (OSet)
 import Data.Show.Generic (genericShow)

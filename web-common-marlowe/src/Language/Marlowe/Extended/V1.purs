@@ -3,6 +3,7 @@ module Language.Marlowe.Extended.V1 where
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Monad.Except.Trans (throwError)
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut
   ( class DecodeJson
@@ -818,7 +819,22 @@ derive newtype instance Eq Module
 instance Show Module where
   show (Module { metadata }) = "(Module " <> metadata.contractName <> ")"
 
--- TODO: toJSON/fromJSON
+instance EncodeJson Module where
+  -- me_ stands for Marlowe Extended
+  encodeJson (Module { metadata, contract }) = encodeJson
+    { me_version: 1, contract, metadata }
+
+instance DecodeJson Module where
+  decodeJson =
+    object "Module" do
+      version <- requireProp "me_version"
+      when (version /= 1) $ throwError
+        $ AtKey "me_version"
+        $ TypeMismatch "1"
+      contract <- requireProp "contract"
+      metadata <- requireProp "metadata"
+      pure $ Just $ Module { metadata, contract }
+
 _metadata :: Lens' Module MetaData
 _metadata = _Newtype <<< prop (Proxy :: _ "metadata")
 
