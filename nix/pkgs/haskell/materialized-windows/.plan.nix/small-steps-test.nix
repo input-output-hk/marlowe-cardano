@@ -35,6 +35,7 @@
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."goblins" or (errorHandler.buildDepError "goblins"))
+          (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
           (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
           (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
           (hsPkgs."microlens" or (errorHandler.buildDepError "microlens"))
@@ -88,11 +89,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "9";
+      url = "8";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "9";
+      url = "8";
       rev = "minimal";
       sha256 = "";
       };

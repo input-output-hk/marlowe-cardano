@@ -42,26 +42,25 @@
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
+          (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cardano-binary" or (errorHandler.buildDepError "cardano-binary"))
           (hsPkgs."cardano-crypto-class" or (errorHandler.buildDepError "cardano-crypto-class"))
           (hsPkgs."cardano-crypto-test" or (errorHandler.buildDepError "cardano-crypto-test"))
           (hsPkgs."cardano-crypto-wrapper" or (errorHandler.buildDepError "cardano-crypto-wrapper"))
           (hsPkgs."cardano-crypto" or (errorHandler.buildDepError "cardano-crypto"))
+          (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
           (hsPkgs."cardano-ledger-byron" or (errorHandler.buildDepError "cardano-ledger-byron"))
           (hsPkgs."cardano-ledger-byron-test" or (errorHandler.buildDepError "cardano-ledger-byron-test"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
-          (hsPkgs."cardano-prelude-test" or (errorHandler.buildDepError "cardano-prelude-test"))
-          (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
           (hsPkgs."cardano-ledger-pretty" or (errorHandler.buildDepError "cardano-ledger-pretty"))
           (hsPkgs."cardano-protocol-tpraos" or (errorHandler.buildDepError "cardano-protocol-tpraos"))
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
           (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-          (hsPkgs."compact-map" or (errorHandler.buildDepError "compact-map"))
+          (hsPkgs."vector-map" or (errorHandler.buildDepError "vector-map"))
           (hsPkgs."data-default-class" or (errorHandler.buildDepError "data-default-class"))
           (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
-          (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
           (hsPkgs."generic-random" or (errorHandler.buildDepError "generic-random"))
           (hsPkgs."hashable" or (errorHandler.buildDepError "hashable"))
           (hsPkgs."hedgehog-quickcheck" or (errorHandler.buildDepError "hedgehog-quickcheck"))
@@ -85,6 +84,7 @@
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."tree-diff" or (errorHandler.buildDepError "tree-diff"))
+          (hsPkgs."unliftio" or (errorHandler.buildDepError "unliftio"))
           (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
           ];
         buildable = true;
@@ -116,6 +116,7 @@
           "Test/Cardano/Ledger/Shelley/LaxBlock"
           "Test/Cardano/Ledger/Shelley/Orphans"
           "Test/Cardano/Ledger/Shelley/PropertyTests"
+          "Test/Cardano/Ledger/Shelley/Rewards"
           "Test/Cardano/Ledger/Shelley/Rules/Chain"
           "Test/Cardano/Ledger/Shelley/Rules/ClassifyTraces"
           "Test/Cardano/Ledger/Shelley/Rules/TestChain"
@@ -146,27 +147,22 @@
             (hsPkgs."cardano-binary" or (errorHandler.buildDepError "cardano-binary"))
             (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
             (hsPkgs."cardano-crypto-class" or (errorHandler.buildDepError "cardano-crypto-class"))
-            (hsPkgs."cardano-crypto-praos" or (errorHandler.buildDepError "cardano-crypto-praos"))
             (hsPkgs."cardano-ledger-byron" or (errorHandler.buildDepError "cardano-ledger-byron"))
             (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
             (hsPkgs."cardano-ledger-pretty" or (errorHandler.buildDepError "cardano-ledger-pretty"))
-            (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
-            (hsPkgs."cardano-prelude-test" or (errorHandler.buildDepError "cardano-prelude-test"))
             (hsPkgs."cardano-protocol-tpraos" or (errorHandler.buildDepError "cardano-protocol-tpraos"))
             (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
             (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-            (hsPkgs."compact-map" or (errorHandler.buildDepError "compact-map"))
             (hsPkgs."data-default-class" or (errorHandler.buildDepError "data-default-class"))
             (hsPkgs."groups" or (errorHandler.buildDepError "groups"))
             (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
             (hsPkgs."iproute" or (errorHandler.buildDepError "iproute"))
             (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
-            (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
             (hsPkgs."cardano-ledger-shelley-test" or (errorHandler.buildDepError "cardano-ledger-shelley-test"))
             (hsPkgs."cardano-ledger-shelley" or (errorHandler.buildDepError "cardano-ledger-shelley"))
-            (hsPkgs."set-algebra" or (errorHandler.buildDepError "set-algebra"))
+            (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
             (hsPkgs."small-steps-test" or (errorHandler.buildDepError "small-steps-test"))
             (hsPkgs."small-steps" or (errorHandler.buildDepError "small-steps"))
             (hsPkgs."strict-containers" or (errorHandler.buildDepError "strict-containers"))
@@ -175,12 +171,9 @@
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
-            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             ];
           buildable = true;
           modules = [
-            "Test/Control/Iterate/SetAlgebra"
-            "Test/Control/Iterate/SplitMapRules"
             "Test/Cardano/Ledger/Shelley/Examples"
             "Test/Cardano/Ledger/Shelley/Examples/Combinators"
             "Test/Cardano/Ledger/Shelley/Examples/EmptyBlock"
@@ -196,7 +189,6 @@
             "Test/Cardano/Ledger/Shelley/Fees"
             "Test/Cardano/Ledger/Shelley/MultiSigExamples"
             "Test/Cardano/Ledger/Shelley/Pretty"
-            "Test/Cardano/Ledger/Shelley/Rewards"
             "Test/Cardano/Ledger/Shelley/SafeHash"
             "Test/Cardano/Ledger/Shelley/Serialisation"
             "Test/Cardano/Ledger/Shelley/Serialisation/CDDL"
@@ -220,7 +212,6 @@
             (hsPkgs."cardano-crypto-praos" or (errorHandler.buildDepError "cardano-crypto-praos"))
             (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
             (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
-            (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
             (hsPkgs."cardano-protocol-tpraos" or (errorHandler.buildDepError "cardano-protocol-tpraos"))
             (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
@@ -251,11 +242,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "9";
+      url = "8";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "9";
+      url = "8";
       rev = "minimal";
       sha256 = "";
       };

@@ -13,7 +13,7 @@
       specVersion = "1.10";
       identifier = {
         name = "cardano-wallet-core-integration";
-        version = "2022.1.18";
+        version = "2022.7.1";
         };
       license = "Apache-2.0";
       copyright = "2018-2020 IOHK";
@@ -141,11 +141,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       };

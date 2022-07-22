@@ -8,7 +8,7 @@
   , config
   , ... }:
   {
-    flags = { asserts = false; ipv6 = false; };
+    flags = { asserts = false; ipv6 = false; tracetcpinfo = false; };
     package = {
       specVersion = "2.2";
       identifier = { name = "network-mux"; version = "0.1.0.0"; };
@@ -53,7 +53,7 @@
           (hsPkgs."Win32-network" or (errorHandler.buildDepError "Win32-network"))
           ];
         buildable = true;
-        modules = [
+        modules = ([
           "Network/Mux"
           "Network/Mux/Channel"
           "Network/Mux/Codec"
@@ -72,8 +72,9 @@
           "Network/Mux/DeltaQ/TraceStatsSupport"
           "Network/Mux/DeltaQ/TraceTransformer"
           "Network/Mux/DeltaQ/TraceTypes"
+          "Network/Mux/TCPInfo"
           "Control/Concurrent/JobPool"
-          ] ++ (pkgs.lib).optional (system.isWindows) "Network/Mux/Bearer/NamedPipe";
+          ] ++ (pkgs.lib).optional (system.isLinux) "Network/Mux/TCPInfo/Linux") ++ (pkgs.lib).optional (system.isWindows) "Network/Mux/Bearer/NamedPipe";
         hsSourceDirs = [ "src" ];
         };
       exes = {
@@ -117,7 +118,7 @@
             ];
           buildable = if system.isWindows then false else true;
           modules = [ "Linger" ];
-          hsSourceDirs = [ "demo" ];
+          hsSourceDirs = [ "tools" ];
           mainPath = [ "cardano-ping.hs" ] ++ [ "" ];
           };
         };
@@ -153,11 +154,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "10";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "10";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       };

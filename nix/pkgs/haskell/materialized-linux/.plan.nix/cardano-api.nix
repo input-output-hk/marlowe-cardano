@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "cardano-api"; version = "1.34.1"; };
+      identifier = { name = "cardano-api"; version = "1.35.1"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "operations@iohk.io";
@@ -48,6 +48,7 @@
           (hsPkgs."cardano-crypto-wrapper" or (errorHandler.buildDepError "cardano-crypto-wrapper"))
           (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+          (hsPkgs."cardano-ledger-babbage" or (errorHandler.buildDepError "cardano-ledger-babbage"))
           (hsPkgs."cardano-ledger-byron" or (errorHandler.buildDepError "cardano-ledger-byron"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."cardano-ledger-shelley-ma" or (errorHandler.buildDepError "cardano-ledger-shelley-ma"))
@@ -55,7 +56,7 @@
           (hsPkgs."cardano-protocol-tpraos" or (errorHandler.buildDepError "cardano-protocol-tpraos"))
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
           (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
-          (hsPkgs."compact-map" or (errorHandler.buildDepError "compact-map"))
+          (hsPkgs."vector-map" or (errorHandler.buildDepError "vector-map"))
           (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."cryptonite" or (errorHandler.buildDepError "cryptonite"))
@@ -67,6 +68,7 @@
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."nothunks" or (errorHandler.buildDepError "nothunks"))
+          (hsPkgs."optparse-applicative-fork" or (errorHandler.buildDepError "optparse-applicative-fork"))
           (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
           (hsPkgs."ouroboros-consensus-byron" or (errorHandler.buildDepError "ouroboros-consensus-byron"))
           (hsPkgs."ouroboros-consensus-cardano" or (errorHandler.buildDepError "ouroboros-consensus-cardano"))
@@ -77,6 +79,7 @@
           (hsPkgs."parsec" or (errorHandler.buildDepError "parsec"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
+          (hsPkgs."prettyprinter-configurable" or (errorHandler.buildDepError "prettyprinter-configurable"))
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
           (hsPkgs."small-steps" or (errorHandler.buildDepError "small-steps"))
@@ -91,7 +94,7 @@
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
           (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
           (hsPkgs."yaml" or (errorHandler.buildDepError "yaml"))
-          ];
+          ] ++ (pkgs.lib).optional (!system.isWindows) (hsPkgs."unix" or (errorHandler.buildDepError "unix"));
         buildable = true;
         modules = [
           "Cardano/Api/Address"
@@ -105,6 +108,7 @@
           "Cardano/Api/HasTypeProxy"
           "Cardano/Api/IPC"
           "Cardano/Api/IPC/Monad"
+          "Cardano/Api/InMode"
           "Cardano/Api/Json"
           "Cardano/Api/Key"
           "Cardano/Api/KeysByron"
@@ -124,14 +128,13 @@
           "Cardano/Api/SerialiseJSON"
           "Cardano/Api/SerialiseLedgerCddl"
           "Cardano/Api/SerialiseRaw"
-          "Cardano/Api/SerialiseTextEnvelope"
           "Cardano/Api/SerialiseUsing"
           "Cardano/Api/Shelley/Genesis"
           "Cardano/Api/SpecialByron"
           "Cardano/Api/StakePoolMetadata"
           "Cardano/Api/Tx"
           "Cardano/Api/TxBody"
-          "Cardano/Api/TxInMode"
+          "Cardano/Api/TxIn"
           "Cardano/Api/TxMetadata"
           "Cardano/Api/TxSubmit/ErrorRender"
           "Cardano/Api/TxSubmit/Types"
@@ -146,6 +149,7 @@
           "Cardano/Api/Protocol/Types"
           "Cardano/Api/Shelley"
           "Cardano/Api/Orphans"
+          "Cardano/Api/SerialiseTextEnvelope"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -166,7 +170,7 @@
             (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
-            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
             (hsPkgs."cardano-ledger-shelley" or (errorHandler.buildDepError "cardano-ledger-shelley"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             ];
@@ -229,6 +233,7 @@
             "Test/Cardano/Api/Typed/Orphans"
             "Test/Cardano/Api/Typed/RawBytes"
             "Test/Cardano/Api/Typed/Script"
+            "Test/Cardano/Api/Typed/TxBody"
             "Test/Cardano/Api/Typed/Value"
             ];
           hsSourceDirs = [ "test" ];
@@ -238,11 +243,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "5";
+      url = "2";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "5";
+      url = "2";
       rev = "minimal";
       sha256 = "";
       };
