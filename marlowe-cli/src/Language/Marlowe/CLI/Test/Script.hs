@@ -25,110 +25,31 @@
 {-# LANGUAGE TypeOperators      #-}
 
 
-module Language.Marlowe.CLI.Test.Script where --(
--- -- * Testing
---   scriptTest
--- ) where
+module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (AddressAny (..), AddressInEra (..), AlonzoEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr),
-                    AssetId (..), AssetName (..), CardanoMode, LocalNodeConnectInfo (..), NetworkId, PolicyId (..),
-                    Quantity (..), ShelleyEra, StakeAddressReference (NoStakeAddress), anyAddressInShelleyBasedEra,
-                    deserialiseAddress, deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace,
-                    selectLovelace, serialiseAddress, toAddressAny, valueFromList, valueToList)
-import Cardano.Api.Shelley (shelleyPayAddrToPlutusPubKHash)
-import Cardano.Mnemonic (SomeMnemonic (..), mnemonicToText)
-import Cardano.Wallet.Api (GetTransaction, MigrateShelleyWallet)
-import Cardano.Wallet.Api.Client (addressClient, getWallet, listAddresses, postWallet, walletClient)
-import Cardano.Wallet.Api.Types (ApiMnemonicT (..), ApiT (..), ApiTransaction (..), ApiTxId (..), ApiWallet (..),
-                                 ApiWalletAssetsBalance (ApiWalletAssetsBalance), ApiWalletBalance (ApiWalletBalance),
-                                 ApiWalletMigrationPostData (..), WalletOrAccountPostData (..), WalletPostData (..))
-import Cardano.Wallet.Gen (genMnemonic)
-import Cardano.Wallet.Primitive.AddressDerivation (NetworkDiscriminant (..), Passphrase (..))
-import Cardano.Wallet.Primitive.SyncProgress (SyncProgress (Ready))
-import Cardano.Wallet.Primitive.Types (WalletName (..))
-import Cardano.Wallet.Primitive.Types.TokenPolicy (TokenName (UnsafeTokenName), TokenPolicyId (UnsafeTokenPolicyId))
-import Cardano.Wallet.Primitive.Types.TokenQuantity (TokenQuantity (TokenQuantity))
-import Cardano.Wallet.Shelley.Compatibility (fromCardanoAddress)
-import Control.Concurrent (forkFinally, threadDelay)
-import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
-import Control.Exception (Exception (fromException), SomeException, catch, displayException)
-import Control.Lens (use, (%=), (^.))
-import Control.Monad (unless, void, when)
-import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
-import Control.Monad.Extra (untilJustM, whenJust)
-import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift, put)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object, String), (.=))
-import Data.Aeson.OneLine (renderValue)
-import Data.Aeson.Types (parseEither)
-import Data.List (foldl')
-import Data.List.NonEmpty (NonEmpty (..))
-import Data.Maybe (fromMaybe)
-import Data.Proxy (Proxy (..))
-import Data.Time.Clock (nominalDiffTimeToSeconds)
-import Data.UUID.V4 (nextRandom)
-import Language.Marlowe.CLI.Export (buildAddress, buildRoleAddress)
-import Language.Marlowe.CLI.IO (liftCli, liftCliIO, liftCliMaybe)
-import Language.Marlowe.CLI.PAB (receiveStatus)
-import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), CompanionInstanceInfo (..), FollowerInstanceInfo (..),
-                                        InstanceNickname, PabAccess (..), PabOperation (..), PabResponse,
-                                        PabResponseComparison (Equals, Matches), PabState (..), PabTest (..), RoleName,
-                                        ScriptOperation (..), ScriptTest (..), WalletInfo (..), comparisonJSON,
-                                        prComparison, prRetry, psAppInstances, psBurnAddress, psCompanionInstances,
-                                        psFaucetAddress, psFaucetKey, psFollowerInstances, psPassphrase, psWallets)
-import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
-import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction), SomePaymentSigningKey)
-import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
-                                EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
-import Language.Marlowe.Contract (MarloweContract (..))
--- import Language.Marlowe.Semantics (MarloweParams (rolesCurrency))
--- import Language.Marlowe.Semantics.Types (Party (Role))
-import Network.WebSockets (Connection)
-import Plutus.PAB.Events.Contract (ContractInstanceId (..))
-import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (PabClient, activateContract, instanceClient))
-import Plutus.PAB.Webserver.Types (ContractActivationArgs (..), InstanceStatusToClient (..))
-import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol (..), TokenName (..), fromBuiltin, toBuiltin)
-import Plutus.V1.Ledger.Time (DiffMilliSeconds (..), POSIXTime (..))
-import Servant.API ((:>))
-import System.Timeout (timeout)
-import Test.QuickCheck (generate)
-import Wallet.Emulator.Wallet (Wallet (..), WalletId (..))
+import Cardano.Api (AlonzoEra, CardanoMode, LocalNodeConnectInfo (..), NetworkId,
+                    StakeAddressReference (NoStakeAddress))
+import Control.Monad (void)
+import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
+import Control.Monad.State.Strict (MonadState, execStateT, get)
+import Language.Marlowe.CLI.Test.Types (ScriptOperation (..), ScriptTest (..), TransactionNickname)
+import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction))
+import Plutus.V1.Ledger.Api (CostModelParams)
 
-import qualified Cardano.Api as C (Value)
-import qualified Cardano.Wallet.Api.Types as W (ApiWallet (id, state))
-import qualified Cardano.Wallet.Primitive.Types as W (WalletId (..))
-import qualified Cardano.Wallet.Primitive.Types.Hash as W (Hash (Hash))
-import qualified Cardano.Wallet.Primitive.Types.TokenMap as W (AssetId (AssetId), toFlatList)
-import Cardano.Wallet.Shelley.Network.Node (Log (MsgAccountDelegationAndRewards))
-import Control.Arrow ((<<<))
-import Control.Monad.Error (MonadError (catchError))
 import Control.Monad.RWS.Class (MonadReader)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.Reader.Class (MonadReader (ask))
 import Control.Monad.State (modify)
-import qualified Data.Aeson as A (Value (..), object)
-import qualified Data.ByteArray as BA (pack)
-import qualified Data.ByteString.Char8 as BS8 (pack)
-import Data.Foldable (traverse_)
+import qualified Data.Aeson as JSON
 import Data.Foldable.Extra (for_)
-import qualified Data.HashMap.Strict as H (foldrWithKey, lookup)
-import Data.List.Extra ((!?))
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.Map.Strict as M (adjust, insert, lookup)
-import qualified Data.Quantity as W (Quantity (..))
-import Data.Text (Text, split)
-import qualified Data.Text as T (pack, unpack)
-import Data.Text.Array (equal)
-import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
-import qualified Data.Vector as V (all, zip)
-import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransaction)
+import qualified Data.Map.Strict as M (lookup)
+import Language.Marlowe.CLI.Command.Template (initialMarloweState)
+import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl)
 import qualified Language.Marlowe.Client as Client
 import Ledger.TimeSlot (SlotConfig)
-import Network.HTTP.Client (HttpException)
-import qualified PlutusTx.AssocMap as AM (fromList)
-import qualified Servant.Client as Servant (client)
 
--- Script state is a placeholder
 newtype ScriptState = ScriptState
   { transactions :: Map String (MarloweTransaction AlonzoEra)
   }
@@ -148,12 +69,17 @@ interpret :: MonadError CliError m
 interpret Initialize {..} = do
   ScriptEnv {..} <- ask
   let
-    marloweParams = Client.marloweParams soRoleCurrency
+    roleCurrencyJson = JSON.object
+      [ ( "unCurrencySymbol"
+        , JSON.String soRoleCurrency
+        )
+      ]
+  parsedRoleCurrency <- case JSON.fromJSON roleCurrencyJson of
+    JSON.Error message          -> throwError $ CliError message
+    JSON.Success currencySymbol -> pure currencySymbol
+  let
+    marloweParams = Client.marloweParams parsedRoleCurrency
     marloweState = initialMarloweState soOwner soMinAda
-
-    addTransaction :: MarloweTransaction AlonzoEra -> ScriptState -> ScriptState
-    addTransaction transaction scriptState@ScriptState { transactions } =
-      scriptState{ transactions = Map.insert soTransaction transaction transactions }
 
   transaction <- initializeTransactionImpl
     marloweParams
@@ -166,18 +92,35 @@ interpret Initialize {..} = do
     True
     True
 
-  modify $ addTransaction transaction
+  modify $ insertMarloweTransaction soTransaction transaction
+
+interpret Prepare {..} = do
+  marloweTransaction <- findMarloweTransaction soTransaction
+  preparedMarloweTransaction <- prepareTransactionImpl
+                                  marloweTransaction
+                                  soInputs
+                                  soMinimumTime
+                                  soMaximumTime
+                                  True
+  modify $ insertMarloweTransaction soTransaction preparedMarloweTransaction
 
 interpret (Fail message) = throwError $ CliError message
-interpret (Prepare _)    = pure ()
-  -- modify $ \(ScriptState state) -> ScriptState (state ++ ["Prepare"])
 
-initialMarloweState :: RoleName -> Integer -> t
-initialMarloweState = error "not implemented"
+insertMarloweTransaction :: TransactionNickname -> MarloweTransaction AlonzoEra -> ScriptState -> ScriptState
+insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
+  scriptState{ transactions = Map.insert nickname transaction transactions }
 
---runOperation :: ScriptOperation -> ()
---runOperation (Initialize {}) = initializeTransaction
---runOperation Prepare    = prepareTransaction
+
+-- | Find Marlowe Transaction corresponding to a transaction nickname.
+findMarloweTransaction :: MonadError CliError m
+                => MonadState ScriptState m
+                => TransactionNickname   -- ^ The nickname.
+                -> m (MarloweTransaction AlonzoEra) -- ^ Action returning the instance.
+findMarloweTransaction nickname = do
+  ScriptState { transactions } <- get
+  case M.lookup nickname transactions of
+    Nothing -> throwError $ CliError ("[findMarloweTransaction] Marlowe Transaction was not found for nickname " <> show nickname <> ".")
+    Just marloweTransaction -> pure marloweTransaction
 
 -- | Test a Marlowe contract.
 scriptTest  :: MonadError CliError m
@@ -188,10 +131,8 @@ scriptTest  :: MonadError CliError m
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest _costModel _networkId _connection _slotConfig ScriptTest{..} =
+scriptTest costModel networkId connection slotConfig ScriptTest{..} =
   do
-    -- putStrLn :: String -> IO ()
-    -- liftIO :: IO a -> m a
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
 
@@ -204,7 +145,7 @@ scriptTest _costModel _networkId _connection _slotConfig ScriptTest{..} =
       interpretLoop = for_ stScriptOperations \operation -> do
         interpret operation
     void $ catchError
-      ( runReaderT (execStateT interpretLoop (ScriptState mempty)) (ScriptEnv _networkId _slotConfig _costModel))
+      ( runReaderT (execStateT interpretLoop (ScriptState mempty)) (ScriptEnv networkId slotConfig costModel))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (putStrLn $ show e)

@@ -23,6 +23,7 @@ module Language.Marlowe.CLI.Run (
   initializeTransaction
 , initializeTransactionImpl
 , prepareTransaction
+, prepareTransactionImpl
 , makeMarlowe
 , runTransaction
 -- * Roles
@@ -135,24 +136,22 @@ initializeTransaction marloweParams slotConfig costModelParams network stake con
       contract state
       merkleize
       printStats
-    maybeWriteJson outputFile
-          . (if merkleize then merkleizeMarlowe else id)
-          $ marloweTransaction
+    maybeWriteJson outputFile marloweTransaction
 
 
 -- | Create an initial Marlowe transaction.
 initializeTransactionImpl :: MonadError CliError m
                           => MonadIO m
-                          => MarloweParams          -- ^ The Marlowe contract parameters.
-                          -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
-                          -> CostModelParams        -- ^ The cost model parameters.
-                          -> NetworkId              -- ^ The network ID.
-                          -> StakeAddressReference  -- ^ The stake address.
-                          -> Contract               -- ^ The initial Marlowe contract.
-                          -> State                  -- ^ The initial Marlowe state.
-                          -> Bool                   -- ^ Whether to deeply merkleize the contract.
-                          -> Bool                   -- ^ Whether to print statistics about the validator.
-                          -> m (MarloweTransaction AlonzoEra)
+                          => MarloweParams                      -- ^ The Marlowe contract parameters.
+                          -> SlotConfig                         -- ^ The POSIXTime-to-slot configuration.
+                          -> CostModelParams                    -- ^ The cost model parameters.
+                          -> NetworkId                          -- ^ The network ID.
+                          -> StakeAddressReference              -- ^ The stake address.
+                          -> Contract                           -- ^ The initial Marlowe contract.
+                          -> State                              -- ^ The initial Marlowe state.
+                          -> Bool                               -- ^ Whether to deeply merkleize the contract.
+                          -> Bool                               -- ^ Whether to print statistics about the validator.
+                          -> m (MarloweTransaction AlonzoEra)   -- ^ Action to return a MarloweTransaction
 initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState merkleize printStats =
   do
     let
@@ -171,7 +170,8 @@ initializeTransactionImpl marloweParams mtSlotConfig costModelParams network sta
           hPutStrLn stderr ""
           hPutStrLn stderr $ "Validator size: " <> show viSize
           hPutStrLn stderr $ "Base-validator cost: " <> show viCost
-    pure MarloweTransaction{..}
+    let marloweTransaction = MarloweTransaction{..}
+    pure $ if merkleize then merkleizeMarlowe marloweTransaction else marloweTransaction
 
 
 -- | Prepare the next step in a Marlowe contract.
@@ -187,13 +187,25 @@ prepareTransaction :: MonadError CliError m
 prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile printStats =
   do
     marloweIn <- decodeFileStrict marloweFile
+    marloweOut <- prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats
+    maybeWriteJson outputFile marloweOut
+
+prepareTransactionImpl :: MonadError CliError m
+               => MonadIO m
+               => MarloweTransaction AlonzoEra
+               -> [Input]         -- ^ The contract's inputs.
+               -> POSIXTime       -- ^ The first valid time for the transaction.
+               -> POSIXTime       -- ^ The last valid time for the transaction.
+               -> Bool            -- ^ Whether to print statistics about the result.
+               -> m (MarloweTransaction AlonzoEra) -- ^ Action to compute the next step in the contract.
+prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats =
+  do
     let
       txInterval = (minimumTime, maximumTime)
     (warnings, marloweOut@MarloweTransaction{..}) <-
       makeMarlowe
         (marloweIn :: MarloweTransaction AlonzoEra)  -- FIXME: Generalize eras.
-        TransactionInput{..}
-    maybeWriteJson outputFile marloweOut
+        (TransactionInput txInterval txInputs)
     liftIO
       $ do
         when printStats
@@ -223,6 +235,7 @@ prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile print
           |
             (i, Payment accountId payee money) <- zip [1..] mtPayments
           ]
+    pure marloweOut
 
 
 -- | Prepare the next step in a Marlowe contract.

@@ -40,6 +40,7 @@ module Language.Marlowe.CLI.Test.Types (
 , PabResponseComparison(..)
 , PabResponse(..)
 , CompanionInstanceInfo(..)
+, TransactionNickname
 -- * Lenses
 , psFaucetKey
 , psFaucetAddress
@@ -67,7 +68,7 @@ import Language.Marlowe.CLI.Types (CliError, SomePaymentSigningKey)
 import Language.Marlowe.Client (MarloweClientInput, MarloweContractState)
 import Language.Marlowe.Contract (MarloweContract)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, State, TimeInterval)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input, State, TimeInterval)
 import Plutus.Contract (ContractInstanceId)
 import Plutus.PAB.Webserver.Client (PabClient)
 import Plutus.V1.Ledger.Api (PubKeyHash)
@@ -81,6 +82,7 @@ import Control.Lens.Lens (lens)
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.Map.Strict as M (Map)
 import Data.Maybe (fromMaybe)
+import Data.Text
 import Ledger (CurrencySymbol)
 import Options.Applicative (optional)
 
@@ -153,17 +155,21 @@ type TransactionNickname = String
 data ScriptOperation =
   Initialize
     {
-      soOwner        :: RoleName              -- ^ The name of the wallet's owner.
+      soOwner        :: AccountId             -- ^ The name of the wallet's owner.
     , soMinAda       :: Integer
     , soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
-    , soRoleCurrency :: CurrencySymbol        -- ^ We derive
+    , soRoleCurrency :: Text                  -- ^ We derive
     , soContract     :: Contract              -- ^ The Marlowe contract to be created.
     -- | FIXME: No *JSON instances for this
     -- , soStake :: Maybe StakeAddressReference
     }
   | Prepare
     {
-      soOwner :: RoleName  -- ^ The name of the wallet's owner.
+      soOwner       :: AccountId -- ^ The name of the wallet's owner.
+    , soTransaction :: TransactionNickname   -- ^ The name of the wallet's owner.
+    , soInputs      :: [Input]
+    , soMinimumTime :: POSIXTime
+    , soMaximumTime :: POSIXTime
     }
   | Fail
     {

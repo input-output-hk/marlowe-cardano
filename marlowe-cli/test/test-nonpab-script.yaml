@@ -3,9 +3,11 @@ stTestName: Sample Test
 stScriptOperations:
 
   - tag: Initialize
-    soOwner: "Someone"
+    soOwner:
+      role_token: "Someone"
     soTransaction: "TestTransaction-1"
     soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
+    soMinAda: 1000000
     soContract:
       when:
       - case:
@@ -29,7 +31,19 @@ stScriptOperations:
 
   - tag: Prepare
     soTransaction: "TestTransaction-1"
-    soOwner: "Another Someone"
+    soInputs:
+      - input_from_party:
+          role_token: PAB
+        that_deposits: 15000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: PAB
+    soOwner:
+      role_token: "Another Someone"
+    soMinimumTime: 1645590825000
+    soMaximumTime: 1898051625000
 
   - tag: Fail
     soFailureMessage: "Failure Invoked"
