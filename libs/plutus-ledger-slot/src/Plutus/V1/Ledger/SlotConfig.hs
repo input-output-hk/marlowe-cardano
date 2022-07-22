@@ -31,7 +31,7 @@ import Data.Default (Default (def))
 import qualified Data.Time.Clock as Time
 import qualified Data.Time.Clock.POSIX as Time
 import GHC.Generics (Generic)
-import Plutus.V1.Ledger.Aeson ()
+import Ledger.Orphans ()
 import Plutus.V1.Ledger.Interval (Extended (..), Interval (Interval), LowerBound (..), UpperBound (..), interval,
                                   member)
 import Plutus.V1.Ledger.Slot (Slot (Slot), SlotRange)

@@ -7,8 +7,8 @@ library
 
     build-depends:
       , aeson
-      , base ^>=4.14.3.0
       , base16
+      , base >=4.9  && <5
       , bytestring
       , text
     hs-source-dirs:   src

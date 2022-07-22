@@ -41,6 +41,10 @@ common lang
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
+  default-extensions:
+    DataKinds
+    ImportQualifiedPost
+
 library
   import: lang
   hs-source-dirs: src
@@ -103,9 +107,14 @@ library
     optparse-applicative,
     ouroboros-consensus,
     ouroboros-network,
+    plutus-ledger-ada,
     plutus-ledger-api,
-    plutus-ledger-aeson,
+    -- Used solely for a few cardano-api <-> plutus-ledger-api conversions
+    plutus-ledger,
+    -- If we drop plutus-ledger we should bring back this.
+    -- plutus-ledger-aeson,
     plutus-ledger-slot,
+    plutus-script-utils,
     plutus-tx,
     prettyprinter,
     QuickCheck,

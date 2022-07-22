@@ -49,7 +49,10 @@ library
   -- Other IOG dependencies
   --------------------------
   build-depends:
-    , plutus-ledger-aeson
+    -- We don't need plutus ledger here but
+    -- we have orphans collision.
+    -- , plutus-ledger-aeson
+    , plutus-ledger
     , plutus-core                     >=1.0.0
     , plutus-ledger-api               >=1.0.0
     , plutus-tx                       >=1.0.0
