@@ -7,7 +7,7 @@ packages:
   marlowe
   marlowe-actus
   marlowe-contracts
-  marlowe-cli
+  -- marlowe-cli
 
   libs/aeson-via-serialise
   libs/base16-aeson
@@ -161,11 +161,7 @@ source-repository-package
   --sha256: 15l98qjpgsns4qcxklgian035mc83fqabcwsvawlr8d3rv2gzx30
   subdir:
     plutus-script-utils
-
-    -- Ideally we would like to drop plutus-ledger
-    -- but we use few helpers from CardanoAPI
     plutus-ledger
-    -- freer-extras is plutus-ledger dependencie
     freer-extras
 
 source-repository-package
