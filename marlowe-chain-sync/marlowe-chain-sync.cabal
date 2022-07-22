@@ -65,25 +65,32 @@ library
     Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
+    Language.Marlowe.Runtime.ChainSync.Genesis
     Language.Marlowe.Runtime.ChainSync.NodeClient
     Language.Marlowe.Runtime.ChainSync.Store
   other-modules:
   build-depends:
       base >= 4.9 && < 5
+    , base16
     , aeson
     , async
     , bytestring
     , cborg
     , cardano-api
     , cardano-binary
+    , cardano-crypto-wrapper
+    , cardano-ledger-byron
     , cardano-ledger-babbage
     , cardano-ledger-alonzo
     , cardano-ledger-core
+    , cardano-ledger-shelley
     , containers
     , hasql
     , hasql-th
     , hasql-transaction
+    , ouroboros-consensus-shelley
     , ouroboros-network
+    , parallel
     , profunctors
     , stm
     , stm-delay
@@ -104,11 +111,19 @@ executable marlowesyncd
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
+    , aeson
+    , base16
+    , bytestring
     , cardano-api
+    , cardano-crypto-wrapper
+    , cardano-ledger-byron
+    , hasql
     , marlowe-chain-sync
     , optparse-applicative
     , ouroboros-network
     , stm
+    , text
     , time
+    , transformers
   ghc-options:
     -threaded

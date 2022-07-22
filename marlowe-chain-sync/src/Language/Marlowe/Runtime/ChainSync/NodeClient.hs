@@ -18,8 +18,9 @@ import Cardano.Api.ChainSync.ClientPipelined (ClientPipelinedStIdle (..), Client
                                               PipelineDecision (..), mapChainSyncClientPipelined,
                                               pipelineDecisionLowHighMark, runPipelineDecision)
 import Control.Arrow ((&&&))
-import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar)
+import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Exception (finally)
+import Control.Monad (guard)
 import Data.List (sortOn)
 import Data.Ord (Down (..))
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, GetHeaderAtPoint (..), GetIntersectionPoints (..))
@@ -43,6 +44,12 @@ toEmptyChanges changes = changes { changesRollback = Nothing, changesBlocks = []
 isEmptyChanges :: Changes -> Bool
 isEmptyChanges (Changes Nothing [] _) = True
 isEmptyChanges _                      = False
+
+maxBatchSize :: Int
+maxBatchSize = 50_000
+
+isMaxBatchSize :: Changes -> Bool
+isMaxBatchSize Changes{..} = length changesBlocks >= maxBatchSize
 
 data NodeClientDependencies = NodeClientDependencies
   { localNodeConnectInfo  :: !(LocalNodeConnectInfo CardanoMode)
@@ -184,10 +191,13 @@ mkClientStNext
   -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
 mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
   { recvMsgRollForward = \(blockNo, block) tip -> do
-      atomically $ modifyTVar changesVar \changes@Changes{..} -> changes
-        { changesBlocks = block : changesBlocks
-        , changesTip = snd tip
-        }
+      atomically do
+        changes <- readTVar changesVar
+        guard $ not $ isMaxBatchSize changes
+        writeTVar changesVar changes
+          { changesBlocks = block : changesBlocks changes
+          , changesTip = snd tip
+          }
       let clientTip = At blockNo
       pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   , recvMsgRollBackward = \point tip -> do

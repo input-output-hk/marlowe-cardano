@@ -6,18 +6,22 @@ BEGIN;
 SET client_min_messages = 'warning';
 
 CREATE TABLE chain.block
-  ( id SERIAL
-  , hash BYTEA NOT NULL
-  , slotNo BIGINT NOT NULL
-  , blockNo BIGINT NOT NULL
-  , rollbackBlock INT
+  ( hash BYTEA NOT NULL
+  , slotNo BIGINT
+  , blockNo BIGINT
+  , rollbackToBlock BYTEA
   , rollbackToGenesis BOOLEAN
-  , CONSTRAINT block_rollback_exclusive CHECK (rollbackBlock IS NULL OR rollbackToGenesis IS NULL)
-  , CONSTRAINT pk_block PRIMARY KEY (id)
-  , CONSTRAINT unique_block_hash UNIQUE (hash)
-  , CONSTRAINT fk_block_block FOREIGN KEY(rollbackBlock) REFERENCES chain.block(id)
+  , CONSTRAINT block_rollback_exclusive CHECK (rollbackToBlock IS NULL OR rollbackToGenesis IS NULL)
+  , CONSTRAINT pk_block PRIMARY KEY (hash)
+  , CONSTRAINT fk_block_block FOREIGN KEY(rollbackToBlock) REFERENCES chain.block(hash)
   );
 
-CREATE INDEX block_slotNo ON chain.block(slotNo);
+CREATE INDEX block_hash_slotNo
+    ON chain.block
+ USING BTREE (hash, slotNo DESC);
+
+CREATE INDEX block_slotNo
+    ON chain.block
+ USING BRIN (slotNo);
 
 COMMIT;
