@@ -1,0 +1,19 @@
+{
+  "name": "marlowe-purescript-spec",
+  "version": "1.0.0",
+  "scripts": {
+    "build:spago": "spago build --purs-args \"--strict --censor-lib --stash --is-lib=generated --is-lib=.spago\"",
+    "build:spago:watch": "spago build --purs-args \"--strict --censor-lib --stash --is-lib=generated --is-lib=.spago\" --watch --clear-screen",
+    "install:spago": "spago install",
+    "docs": "spago docs",
+    "repl": "spago repl"
+  },
+  "bin": "./index.js",
+  "resolutions": {},
+  "license": "Apache-2.0",
+  "dependencies": {
+    "big-integer": "^1.6.50",
+    "json-bigint": "^1.0.0",
+    "uuid": "^8.3.2"
+  }
+}

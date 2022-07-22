@@ -1267,6 +1267,11 @@ derive instance eqTransactionOutput :: Eq TransactionOutput
 instance showTransactionOutput :: Show TransactionOutput where
   show = genericShow
 
+instance EncodeJson TransactionOutput where
+  encodeJson (Error transaction_error) = encodeJson { transaction_error }
+  encodeJson (TransactionOutput transaction_success) = encodeJson
+    { transaction_success }
+
 newtype MarloweData = MarloweData
   { marloweContract :: Contract
   , marloweState :: State
