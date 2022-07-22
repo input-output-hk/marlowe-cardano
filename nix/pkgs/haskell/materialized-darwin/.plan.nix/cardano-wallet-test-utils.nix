@@ -13,7 +13,7 @@
       specVersion = "1.10";
       identifier = {
         name = "cardano-wallet-test-utils";
-        version = "2022.1.18";
+        version = "2022.7.1";
         };
       license = "Apache-2.0";
       copyright = "2018-2020 IOHK";
@@ -105,6 +105,7 @@
             (hsPkgs."generic-lens" or (errorHandler.buildDepError "generic-lens"))
             (hsPkgs."generics-sop" or (errorHandler.buildDepError "generics-sop"))
             (hsPkgs."lattices" or (errorHandler.buildDepError "lattices"))
+            (hsPkgs."safe" or (errorHandler.buildDepError "safe"))
             (hsPkgs."silently" or (errorHandler.buildDepError "silently"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             (hsPkgs."unliftio" or (errorHandler.buildDepError "unliftio"))
@@ -122,11 +123,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       };

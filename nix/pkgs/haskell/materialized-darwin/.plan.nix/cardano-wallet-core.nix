@@ -11,7 +11,7 @@
     flags = { release = false; scrypt = true; };
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-wallet-core"; version = "2022.1.18"; };
+      identifier = { name = "cardano-wallet-core"; version = "2022.7.1"; };
       license = "Apache-2.0";
       copyright = "2018-2020 IOHK";
       maintainer = "operations@iohk.io";
@@ -59,6 +59,7 @@
           (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
           (hsPkgs."cryptonite" or (errorHandler.buildDepError "cryptonite"))
           (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
+          (hsPkgs."data-interval" or (errorHandler.buildDepError "data-interval"))
           (hsPkgs."dbvar" or (errorHandler.buildDepError "dbvar"))
           (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
           (hsPkgs."digest" or (errorHandler.buildDepError "digest"))
@@ -73,6 +74,7 @@
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."fmt" or (errorHandler.buildDepError "fmt"))
           (hsPkgs."foldl" or (errorHandler.buildDepError "foldl"))
+          (hsPkgs."free" or (errorHandler.buildDepError "free"))
           (hsPkgs."generic-lens" or (errorHandler.buildDepError "generic-lens"))
           (hsPkgs."generic-arbitrary" or (errorHandler.buildDepError "generic-arbitrary"))
           (hsPkgs."generics-sop" or (errorHandler.buildDepError "generics-sop"))
@@ -105,6 +107,7 @@
           (hsPkgs."persistent-sqlite" or (errorHandler.buildDepError "persistent-sqlite"))
           (hsPkgs."persistent-template" or (errorHandler.buildDepError "persistent-template"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+          (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."pretty-simple" or (errorHandler.buildDepError "pretty-simple"))
           (hsPkgs."profunctors" or (errorHandler.buildDepError "profunctors"))
           (hsPkgs."quiet" or (errorHandler.buildDepError "quiet"))
@@ -151,9 +154,11 @@
         buildable = true;
         modules = [
           "Paths_cardano_wallet_core"
+          "Cardano/Api/Extra"
           "Cardano/Byron/Codec/Cbor"
           "Cardano/DB/Sqlite"
           "Cardano/DB/Sqlite/Delete"
+          "Cardano/Ledger/Credential/Safe"
           "Cardano/Pool/DB"
           "Cardano/Pool/DB/Log"
           "Cardano/Pool/DB/MVar"
@@ -164,13 +169,18 @@
           "Cardano/Pool/Rank"
           "Cardano/Pool/Rank/Likelihood"
           "Cardano/Wallet"
+          "Cardano/Wallet/Address/Book"
           "Cardano/Wallet/Address/Pool"
           "Cardano/Wallet/Api"
+          "Cardano/Wallet/Api/Aeson/Variant"
           "Cardano/Wallet/Api/Client"
           "Cardano/Wallet/Api/Link"
           "Cardano/Wallet/Api/Server"
           "Cardano/Wallet/Api/Server/Tls"
           "Cardano/Wallet/Api/Types"
+          "Cardano/Wallet/Api/Types/SchemaMetadata"
+          "Cardano/Wallet/Checkpoints/Policy"
+          "Cardano/Wallet/Checkpoints"
           "Cardano/Wallet/CoinSelection"
           "Cardano/Wallet/CoinSelection/Internal"
           "Cardano/Wallet/CoinSelection/Internal/Balance"
@@ -178,16 +188,18 @@
           "Cardano/Wallet/CoinSelection/Internal/Context"
           "Cardano/Wallet/Compat"
           "Cardano/Wallet/DB"
-          "Cardano/Wallet/DB/Checkpoints"
-          "Cardano/Wallet/DB/MVar"
-          "Cardano/Wallet/DB/Model"
-          "Cardano/Wallet/DB/Sqlite"
-          "Cardano/Wallet/DB/Sqlite/AddressBook"
-          "Cardano/Wallet/DB/Sqlite/CheckpointsOld"
+          "Cardano/Wallet/DB/Pure/Implementation"
+          "Cardano/Wallet/DB/Pure/Layer"
+          "Cardano/Wallet/DB/Layer"
           "Cardano/Wallet/DB/Sqlite/Migration"
+          "Cardano/Wallet/DB/Sqlite/Schema"
           "Cardano/Wallet/DB/Sqlite/Stores"
-          "Cardano/Wallet/DB/Sqlite/TH"
           "Cardano/Wallet/DB/Sqlite/Types"
+          "Cardano/Wallet/DB/Store/Checkpoints"
+          "Cardano/Wallet/DB/Store/Meta/Model"
+          "Cardano/Wallet/DB/Store/Meta/Store"
+          "Cardano/Wallet/DB/Store/Transactions/Model"
+          "Cardano/Wallet/DB/Store/Transactions/Store"
           "Cardano/Wallet/DB/WalletState"
           "Cardano/Wallet/Logging"
           "Cardano/Wallet/Network"
@@ -218,6 +230,7 @@
           "Cardano/Wallet/Primitive/SyncProgress"
           "Cardano/Wallet/Primitive/Passphrase"
           "Cardano/Wallet/Primitive/Passphrase/Current"
+          "Cardano/Wallet/Primitive/Passphrase/Gen"
           "Cardano/Wallet/Primitive/Passphrase/Legacy"
           "Cardano/Wallet/Primitive/Passphrase/Types"
           "Cardano/Wallet/Primitive/Types"
@@ -243,6 +256,7 @@
           "Cardano/Wallet/Version"
           "Cardano/Wallet/Version/TH"
           "Control/Concurrent/Concierge"
+          "Control/Monad/Exception/Unchecked"
           "Control/Monad/Random/Extra"
           "Crypto/Hash/Utils"
           "Data/Aeson/Extra"
@@ -305,6 +319,7 @@
             (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
             (hsPkgs."cryptonite" or (errorHandler.buildDepError "cryptonite"))
             (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
+            (hsPkgs."data-interval" or (errorHandler.buildDepError "data-interval"))
             (hsPkgs."dbvar" or (errorHandler.buildDepError "dbvar"))
             (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
             (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
@@ -332,13 +347,16 @@
             (hsPkgs."io-sim" or (errorHandler.buildDepError "io-sim"))
             (hsPkgs."lattices" or (errorHandler.buildDepError "lattices"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+            (hsPkgs."list-transformer" or (errorHandler.buildDepError "list-transformer"))
             (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."MonadRandom" or (errorHandler.buildDepError "MonadRandom"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."network-uri" or (errorHandler.buildDepError "network-uri"))
             (hsPkgs."nothunks" or (errorHandler.buildDepError "nothunks"))
             (hsPkgs."persistent" or (errorHandler.buildDepError "persistent"))
             (hsPkgs."persistent-sqlite" or (errorHandler.buildDepError "persistent-sqlite"))
+            (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."pretty-simple" or (errorHandler.buildDepError "pretty-simple"))
             (hsPkgs."regex-pcre-builtin" or (errorHandler.buildDepError "regex-pcre-builtin"))
@@ -346,13 +364,13 @@
             (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             (hsPkgs."quickcheck-classes" or (errorHandler.buildDepError "quickcheck-classes"))
+            (hsPkgs."quickcheck-instances" or (errorHandler.buildDepError "quickcheck-instances"))
             (hsPkgs."quickcheck-state-machine" or (errorHandler.buildDepError "quickcheck-state-machine"))
             (hsPkgs."quickcheck-quid" or (errorHandler.buildDepError "quickcheck-quid"))
             (hsPkgs."quiet" or (errorHandler.buildDepError "quiet"))
             (hsPkgs."random" or (errorHandler.buildDepError "random"))
             (hsPkgs."retry" or (errorHandler.buildDepError "retry"))
             (hsPkgs."safe" or (errorHandler.buildDepError "safe"))
-            (hsPkgs."scrypt" or (errorHandler.buildDepError "scrypt"))
             (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
             (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
             (hsPkgs."should-not-typecheck" or (errorHandler.buildDepError "should-not-typecheck"))
@@ -377,7 +395,7 @@
             (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
             (hsPkgs."wai-extra" or (errorHandler.buildDepError "wai-extra"))
             (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
-            ];
+            ] ++ (pkgs.lib).optional (flags.scrypt) (hsPkgs."scrypt" or (errorHandler.buildDepError "scrypt"));
           build-tools = [
             (hsPkgs.buildPackages.hspec-discover.components.exes.hspec-discover or (pkgs.buildPackages.hspec-discover or (errorHandler.buildToolDepError "hspec-discover:hspec-discover")))
             ];
@@ -397,17 +415,23 @@
             "Cardano/Wallet/Api/ServerSpec"
             "Cardano/Wallet/Api/TypesSpec"
             "Cardano/Wallet/ApiSpec"
+            "Cardano/Wallet/Checkpoints/PolicySpec"
+            "Cardano/Wallet/CheckpointsSpec"
             "Cardano/Wallet/CoinSelectionSpec"
             "Cardano/Wallet/CoinSelection/InternalSpec"
             "Cardano/Wallet/CoinSelection/Internal/BalanceSpec"
             "Cardano/Wallet/CoinSelection/Internal/CollateralSpec"
             "Cardano/Wallet/DB/Arbitrary"
-            "Cardano/Wallet/DB/MVarSpec"
+            "Cardano/Wallet/DB/Fixtures"
+            "Cardano/Wallet/DB/LayerSpec"
             "Cardano/Wallet/DB/Properties"
-            "Cardano/Wallet/DB/SqliteSpec"
+            "Cardano/Wallet/DB/Pure/ImplementationSpec"
             "Cardano/Wallet/DB/Sqlite/StoresSpec"
             "Cardano/Wallet/DB/Sqlite/TypesSpec"
             "Cardano/Wallet/DB/StateMachine"
+            "Cardano/Wallet/DB/Store/Meta/ModelSpec"
+            "Cardano/Wallet/DB/Store/Meta/StoreSpec"
+            "Cardano/Wallet/DB/Store/Transactions/StoreSpec"
             "Cardano/Wallet/DummyTarget/Primitive/Types"
             "Cardano/Wallet/Network/LightSpec"
             "Cardano/Wallet/Network/PortsSpec"
@@ -499,11 +523,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       };

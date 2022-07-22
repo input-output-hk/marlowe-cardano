@@ -41,6 +41,8 @@
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cardano-binary" or (errorHandler.buildDepError "cardano-binary"))
           (hsPkgs."cardano-crypto-class" or (errorHandler.buildDepError "cardano-crypto-class"))
+          (hsPkgs."cardano-crypto-praos" or (errorHandler.buildDepError "cardano-crypto-praos"))
+          (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."cardano-protocol-tpraos" or (errorHandler.buildDepError "cardano-protocol-tpraos"))
           (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
@@ -58,6 +60,7 @@
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+          (hsPkgs."cardano-ledger-babbage" or (errorHandler.buildDepError "cardano-ledger-babbage"))
           (hsPkgs."cardano-ledger-shelley" or (errorHandler.buildDepError "cardano-ledger-shelley"))
           (hsPkgs."cardano-ledger-shelley-ma" or (errorHandler.buildDepError "cardano-ledger-shelley-ma"))
           (hsPkgs."small-steps" or (errorHandler.buildDepError "small-steps"))
@@ -67,7 +70,9 @@
           ];
         buildable = true;
         modules = [
+          "Ouroboros/Consensus/Shelley/Crypto"
           "Ouroboros/Consensus/Shelley/Eras"
+          "Ouroboros/Consensus/Shelley/HFEras"
           "Ouroboros/Consensus/Shelley/Ledger"
           "Ouroboros/Consensus/Shelley/Ledger/Block"
           "Ouroboros/Consensus/Shelley/Ledger/Config"
@@ -79,10 +84,16 @@
           "Ouroboros/Consensus/Shelley/Ledger/NetworkProtocolVersion"
           "Ouroboros/Consensus/Shelley/Ledger/Query"
           "Ouroboros/Consensus/Shelley/Ledger/PeerSelection"
-          "Ouroboros/Consensus/Shelley/Ledger/TPraos"
+          "Ouroboros/Consensus/Shelley/Ledger/Protocol"
+          "Ouroboros/Consensus/Shelley/Ledger/SupportsProtocol"
           "Ouroboros/Consensus/Shelley/Node"
+          "Ouroboros/Consensus/Shelley/Node/Common"
+          "Ouroboros/Consensus/Shelley/Node/Praos"
+          "Ouroboros/Consensus/Shelley/Node/TPraos"
           "Ouroboros/Consensus/Shelley/Node/Serialisation"
-          "Ouroboros/Consensus/Shelley/ShelleyBased"
+          "Ouroboros/Consensus/Shelley/Protocol/Abstract"
+          "Ouroboros/Consensus/Shelley/Protocol/Praos"
+          "Ouroboros/Consensus/Shelley/Protocol/TPraos"
           "Ouroboros/Consensus/Shelley/ShelleyHFC"
           ];
         hsSourceDirs = [ "src" ];
@@ -90,11 +101,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "10";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "10";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       };

@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "2.4";
-      identifier = { name = "hedgehog-extras"; version = "0.1.0.0"; };
+      identifier = { name = "hedgehog-extras"; version = "0.2.0.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "operations@iohk.io";
@@ -89,11 +89,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "8";
+      url = "5";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "8";
+      url = "5";
       rev = "minimal";
       sha256 = "";
       };

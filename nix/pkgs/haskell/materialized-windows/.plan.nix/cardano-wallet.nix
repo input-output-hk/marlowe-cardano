@@ -11,7 +11,7 @@
     flags = { release = false; };
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-wallet"; version = "2022.1.18"; };
+      identifier = { name = "cardano-wallet"; version = "2022.7.1"; };
       license = "Apache-2.0";
       copyright = "2020 IOHK";
       maintainer = "operations@iohk.io";
@@ -40,6 +40,7 @@
           (hsPkgs."bech32" or (errorHandler.buildDepError "bech32"))
           (hsPkgs."bech32-th" or (errorHandler.buildDepError "bech32-th"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
+          (hsPkgs."blockfrost-api" or (errorHandler.buildDepError "blockfrost-api"))
           (hsPkgs."blockfrost-client" or (errorHandler.buildDepError "blockfrost-client"))
           (hsPkgs."blockfrost-client-core" or (errorHandler.buildDepError "blockfrost-client-core"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
@@ -50,11 +51,13 @@
           (hsPkgs."cardano-crypto-class" or (errorHandler.buildDepError "cardano-crypto-class"))
           (hsPkgs."cardano-crypto-wrapper" or (errorHandler.buildDepError "cardano-crypto-wrapper"))
           (hsPkgs."cardano-wallet-launcher" or (errorHandler.buildDepError "cardano-wallet-launcher"))
+          (hsPkgs."cardano-ledger-babbage" or (errorHandler.buildDepError "cardano-ledger-babbage"))
           (hsPkgs."cardano-ledger-byron" or (errorHandler.buildDepError "cardano-ledger-byron"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."cardano-ledger-shelley" or (errorHandler.buildDepError "cardano-ledger-shelley"))
           (hsPkgs."cardano-ledger-shelley-ma" or (errorHandler.buildDepError "cardano-ledger-shelley-ma"))
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+          (hsPkgs."cardano-protocol-tpraos" or (errorHandler.buildDepError "cardano-protocol-tpraos"))
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
           (hsPkgs."cardano-wallet-cli" or (errorHandler.buildDepError "cardano-wallet-cli"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
@@ -68,10 +71,13 @@
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."fmt" or (errorHandler.buildDepError "fmt"))
           (hsPkgs."generic-lens" or (errorHandler.buildDepError "generic-lens"))
+          (hsPkgs."http-types" or (errorHandler.buildDepError "http-types"))
           (hsPkgs."int-cast" or (errorHandler.buildDepError "int-cast"))
           (hsPkgs."io-classes" or (errorHandler.buildDepError "io-classes"))
           (hsPkgs."iohk-monitoring" or (errorHandler.buildDepError "iohk-monitoring"))
+          (hsPkgs."lifted-async" or (errorHandler.buildDepError "lifted-async"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
+          (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."network-mux" or (errorHandler.buildDepError "network-mux"))
@@ -81,12 +87,17 @@
           (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
           (hsPkgs."ouroboros-consensus-byron" or (errorHandler.buildDepError "ouroboros-consensus-byron"))
           (hsPkgs."ouroboros-consensus-cardano" or (errorHandler.buildDepError "ouroboros-consensus-cardano"))
+          (hsPkgs."ouroboros-consensus-protocol" or (errorHandler.buildDepError "ouroboros-consensus-protocol"))
           (hsPkgs."ouroboros-consensus-shelley" or (errorHandler.buildDepError "ouroboros-consensus-shelley"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."ouroboros-network-framework" or (errorHandler.buildDepError "ouroboros-network-framework"))
           (hsPkgs."random" or (errorHandler.buildDepError "random"))
           (hsPkgs."retry" or (errorHandler.buildDepError "retry"))
+          (hsPkgs."safe-money" or (errorHandler.buildDepError "safe-money"))
+          (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
+          (hsPkgs."semialign" or (errorHandler.buildDepError "semialign"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
+          (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
           (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
           (hsPkgs."strict-containers" or (errorHandler.buildDepError "strict-containers"))
           (hsPkgs."strict-non-empty-containers" or (errorHandler.buildDepError "strict-non-empty-containers"))
@@ -95,6 +106,8 @@
           (hsPkgs."text-class" or (errorHandler.buildDepError "text-class"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+          (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
+          (hsPkgs."these" or (errorHandler.buildDepError "these"))
           (hsPkgs."typed-process" or (errorHandler.buildDepError "typed-process"))
           (hsPkgs."unliftio" or (errorHandler.buildDepError "unliftio"))
           (hsPkgs."unliftio-core" or (errorHandler.buildDepError "unliftio-core"))
@@ -112,16 +125,22 @@
           "Cardano/Wallet/Shelley/BlockchainSource"
           "Cardano/Wallet/Shelley/Compatibility"
           "Cardano/Wallet/Shelley/Compatibility/Ledger"
-          "Cardano/Wallet/Shelley/Network"
-          "Cardano/Wallet/Shelley/Network/Blockfrost"
-          "Cardano/Wallet/Shelley/Network/Node"
-          "Cardano/Wallet/Shelley/Transaction"
           "Cardano/Wallet/Shelley/Launch"
           "Cardano/Wallet/Shelley/Launch/Blockfrost"
           "Cardano/Wallet/Shelley/Launch/Cluster"
           "Cardano/Wallet/Shelley/Logging"
+          "Cardano/Wallet/Shelley/Network"
+          "Cardano/Wallet/Shelley/Network/Blockfrost"
+          "Cardano/Wallet/Shelley/Network/Blockfrost/Conversion"
+          "Cardano/Wallet/Shelley/Network/Blockfrost/Error"
+          "Cardano/Wallet/Shelley/Network/Blockfrost/Fixture"
+          "Cardano/Wallet/Shelley/Network/Blockfrost/Layer"
+          "Cardano/Wallet/Shelley/Network/Blockfrost/Monad"
+          "Cardano/Wallet/Shelley/Network/Discriminant"
+          "Cardano/Wallet/Shelley/Network/Node"
           "Cardano/Wallet/Shelley/Pools"
           "Cardano/Wallet/Shelley/Tracers"
+          "Cardano/Wallet/Shelley/Transaction"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -203,14 +222,17 @@
             (hsPkgs."cardano-crypto-class" or (errorHandler.buildDepError "cardano-crypto-class"))
             (hsPkgs."cardano-crypto-wrapper" or (errorHandler.buildDepError "cardano-crypto-wrapper"))
             (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+            (hsPkgs."cardano-ledger-babbage" or (errorHandler.buildDepError "cardano-ledger-babbage"))
             (hsPkgs."cardano-ledger-byron" or (errorHandler.buildDepError "cardano-ledger-byron"))
             (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
+            (hsPkgs."cardano-numeric" or (errorHandler.buildDepError "cardano-numeric"))
             (hsPkgs."cardano-wallet" or (errorHandler.buildDepError "cardano-wallet"))
             (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
             (hsPkgs."cardano-wallet-launcher" or (errorHandler.buildDepError "cardano-wallet-launcher"))
             (hsPkgs."cardano-wallet-test-utils" or (errorHandler.buildDepError "cardano-wallet-test-utils"))
             (hsPkgs."cardano-ledger-shelley-ma" or (errorHandler.buildDepError "cardano-ledger-shelley-ma"))
             (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+            (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
             (hsPkgs."pretty-simple" or (errorHandler.buildDepError "pretty-simple"))
             (hsPkgs."strict-containers" or (errorHandler.buildDepError "strict-containers"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
@@ -232,6 +254,7 @@
             (hsPkgs."ouroboros-consensus-shelley" or (errorHandler.buildDepError "ouroboros-consensus-shelley"))
             (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
             (hsPkgs."cardano-ledger-shelley" or (errorHandler.buildDepError "cardano-ledger-shelley"))
+            (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."text-class" or (errorHandler.buildDepError "text-class"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
@@ -248,6 +271,7 @@
             "Cardano/Wallet/Shelley/LaunchSpec"
             "Cardano/Wallet/Shelley/Launch/BlockfrostSpec"
             "Cardano/Wallet/Shelley/NetworkSpec"
+            "Cardano/Wallet/Shelley/Network/BlockfrostSpec"
             "Cardano/Wallet/Shelley/TransactionSpec"
             "Spec"
             ];
@@ -339,11 +363,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "4";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       };

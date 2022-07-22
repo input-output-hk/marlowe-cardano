@@ -10,7 +10,7 @@
   {
     flags = { asserts = false; ipv6 = false; cddl = true; };
     package = {
-      specVersion = "1.10";
+      specVersion = "3.0";
       identifier = { name = "ouroboros-network"; version = "0.1.0.0"; };
       license = "Apache-2.0";
       copyright = "2019 Input Output (Hong Kong) Ltd.";
@@ -30,7 +30,6 @@
         "test-cddl/specs/handshake-node-to-client.cddl"
         "test-cddl/specs/chain-sync.cddl"
         "test-cddl/specs/block-fetch.cddl"
-        "test-cddl/specs/tx-submission.cddl"
         "test-cddl/specs/tx-submission2.cddl"
         "test-cddl/specs/keep-alive.cddl"
         "test-cddl/specs/local-tx-submission.cddl"
@@ -57,6 +56,7 @@
           (hsPkgs."iproute" or (errorHandler.buildDepError "iproute"))
           (hsPkgs."nothunks" or (errorHandler.buildDepError "nothunks"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
+          (hsPkgs."pretty-simple" or (errorHandler.buildDepError "pretty-simple"))
           (hsPkgs."psqueues" or (errorHandler.buildDepError "psqueues"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
           (hsPkgs."random" or (errorHandler.buildDepError "random"))
@@ -141,16 +141,10 @@
           "Ouroboros/Network/Protocol/LocalTxMonitor/Client"
           "Ouroboros/Network/Protocol/LocalTxMonitor/Server"
           "Ouroboros/Network/Protocol/LocalTxMonitor/Codec"
-          "Ouroboros/Network/Protocol/TipSample/Type"
-          "Ouroboros/Network/Protocol/TipSample/Client"
-          "Ouroboros/Network/Protocol/TipSample/Server"
-          "Ouroboros/Network/Protocol/TipSample/Codec"
-          "Ouroboros/Network/Protocol/TxSubmission/Type"
-          "Ouroboros/Network/Protocol/TxSubmission/Client"
-          "Ouroboros/Network/Protocol/TxSubmission/Server"
-          "Ouroboros/Network/Protocol/TxSubmission/Codec"
           "Ouroboros/Network/Protocol/TxSubmission2/Type"
           "Ouroboros/Network/Protocol/TxSubmission2/Codec"
+          "Ouroboros/Network/Protocol/TxSubmission2/Client"
+          "Ouroboros/Network/Protocol/TxSubmission2/Server"
           "Ouroboros/Network/Protocol/LocalTxSubmission/Type"
           "Ouroboros/Network/Protocol/LocalTxSubmission/Client"
           "Ouroboros/Network/Protocol/LocalTxSubmission/Server"
@@ -159,9 +153,6 @@
           "Ouroboros/Network/Protocol/KeepAlive/Client"
           "Ouroboros/Network/Protocol/KeepAlive/Server"
           "Ouroboros/Network/Protocol/KeepAlive/Codec"
-          "Ouroboros/Network/Protocol/Trans/Hello/Type"
-          "Ouroboros/Network/Protocol/Trans/Hello/Codec"
-          "Ouroboros/Network/Protocol/Trans/Hello/Util"
           "Ouroboros/Network/TxSubmission/Inbound"
           "Ouroboros/Network/TxSubmission/Mempool/Reader"
           "Ouroboros/Network/TxSubmission/Outbound"
@@ -172,7 +163,7 @@
         hsSourceDirs = [ "src" ];
         };
       sublibs = {
-        "ouroboros-protocol-tests" = {
+        "protocol-tests" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
@@ -217,13 +208,9 @@
             "Ouroboros/Network/Protocol/LocalTxMonitor/Direct"
             "Ouroboros/Network/Protocol/LocalTxMonitor/Examples"
             "Ouroboros/Network/Protocol/LocalTxMonitor/Test"
-            "Ouroboros/Network/Protocol/TipSample/Direct"
-            "Ouroboros/Network/Protocol/TipSample/Examples"
-            "Ouroboros/Network/Protocol/TipSample/Test"
-            "Ouroboros/Network/Protocol/TxSubmission/Direct"
-            "Ouroboros/Network/Protocol/TxSubmission/Examples"
-            "Ouroboros/Network/Protocol/TxSubmission/Test"
+            "Ouroboros/Network/Protocol/TxSubmission2/Direct"
             "Ouroboros/Network/Protocol/TxSubmission2/Test"
+            "Ouroboros/Network/Protocol/TxSubmission2/Examples"
             "Ouroboros/Network/Protocol/KeepAlive/Direct"
             "Ouroboros/Network/Protocol/KeepAlive/Examples"
             "Ouroboros/Network/Protocol/KeepAlive/Test"
@@ -273,6 +260,8 @@
             (hsPkgs."iproute" or (errorHandler.buildDepError "iproute"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
+            (hsPkgs."pipes" or (errorHandler.buildDepError "pipes"))
+            (hsPkgs."pretty-simple" or (errorHandler.buildDepError "pretty-simple"))
             (hsPkgs."process" or (errorHandler.buildDepError "process"))
             (hsPkgs."psqueues" or (errorHandler.buildDepError "psqueues"))
             (hsPkgs."random" or (errorHandler.buildDepError "random"))
@@ -292,8 +281,9 @@
             (hsPkgs."network-mux" or (errorHandler.buildDepError "network-mux"))
             (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
             (hsPkgs."ouroboros-network-framework" or (errorHandler.buildDepError "ouroboros-network-framework"))
+            (hsPkgs."ouroboros-network-framework".components.sublibs.testlib or (errorHandler.buildDepError "ouroboros-network-framework:testlib"))
             (hsPkgs."ouroboros-network-testing" or (errorHandler.buildDepError "ouroboros-network-testing"))
-            (hsPkgs."ouroboros-network".components.sublibs.ouroboros-protocol-tests or (errorHandler.buildDepError "ouroboros-network:ouroboros-protocol-tests"))
+            (hsPkgs."ouroboros-network".components.sublibs.protocol-tests or (errorHandler.buildDepError "ouroboros-network:protocol-tests"))
             (hsPkgs."strict-stm" or (errorHandler.buildDepError "strict-stm"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."typed-protocols-examples" or (errorHandler.buildDepError "typed-protocols-examples"))
@@ -325,6 +315,9 @@
             "Test/Ouroboros/Network/PeerSelection/PeerGraph"
             "Test/Ouroboros/Network/NodeToNode/Version"
             "Test/Ouroboros/Network/NodeToClient/Version"
+            "Test/Ouroboros/Network/ShrinkCarefully"
+            "Test/Ouroboros/Network/Testnet"
+            "Test/Ouroboros/Network/Testnet/Simulation/Node"
             "Test/Mux"
             "Test/Pipe"
             "Test/Socket"
@@ -355,7 +348,7 @@
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."ouroboros-network-framework" or (errorHandler.buildDepError "ouroboros-network-framework"))
             (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
-            (hsPkgs."ouroboros-network".components.sublibs.ouroboros-protocol-tests or (errorHandler.buildDepError "ouroboros-network:ouroboros-protocol-tests"))
+            (hsPkgs."ouroboros-network".components.sublibs.protocol-tests or (errorHandler.buildDepError "ouroboros-network:protocol-tests"))
             ];
           buildable = if flags.cddl then true else false;
           hsSourceDirs = [ "test-cddl" ];
@@ -365,11 +358,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "10";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "10";
+      url = "13";
       rev = "minimal";
       sha256 = "";
       };
