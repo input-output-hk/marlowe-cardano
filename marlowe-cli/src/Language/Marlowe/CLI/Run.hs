@@ -35,18 +35,24 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode, LocalNodeConnectInfo (localNodeNetworkId),
-                    MultiAssetSupportedInEra (MultiAssetInAlonzoEra), NetworkId,
+import Cardano.Api
+import Cardano.Api (AddressAny, AddressInEra (..), AddressTypeInEra (ShelleyAddressInEra), AlonzoEra, CardanoMode, Hash,
+                    LocalNodeConnectInfo (localNodeNetworkId), MultiAssetSupportedInEra (MultiAssetInAlonzoEra),
+                    NetworkId, PaymentCredential (PaymentCredentialByKey, PaymentCredentialByScript),
                     QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
                     Script (..), ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraAlonzo), SlotNo (..),
-                    StakeAddressReference (..), TxId, TxIn, TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..),
-                    TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace,
-                    toAddressAny, txOutValueToValue, writeFileTextEnvelope)
+                    StakeAddressReference (..), StakeCredential, StakeKey, TxId, TxIn, TxMintValue (TxMintNone),
+                    TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId,
+                    lovelaceToValue, makeShelleyAddress, selectLovelace, toAddressAny, txOutValueToValue,
+                    writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
-import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
+import Cardano.Api.Shelley (ProtocolParameters, StakeCredential (StakeCredentialByKey, StakeCredentialByScript),
+                            fromPlutusData)
+import Cardano.Wallet.Shelley.Compatibility (toCardanoStakeCredential)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Data.Bifunctor (bimap)
+import qualified Data.Bifunctor as Bifunctor
 import Data.Function (on)
 import Data.List (groupBy, sortBy)
 import qualified Data.Map.Strict as M (toList)
@@ -66,13 +72,19 @@ import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Paymen
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                                  InputContent (..), Party (..), Payee (..), State (accounts),
                                                  Token (..))
-import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
-import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
+import Ledger (ToCardanoError (Tag))
+import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash))
+import qualified Ledger.Address as Ledger
+import Ledger.Tx.CardanoAPI (ToCardanoError (StakingPointersNotSupported), toCardanoAddressInEra,
+                             toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoScriptHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
 import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum (..), POSIXTime, TokenName,
                              toBuiltinData, toData)
+import qualified Plutus.V1.Ledger.Api as PV1
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot)
 import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue)
 import qualified PlutusTx.AssocMap as AM (toList)
+import qualified PlutusTx.Builtins as PlutusTx
 import Prettyprinter.Extras (Pretty (..))
 import System.IO (hPutStrLn, stderr)
 
@@ -266,7 +278,6 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
                                    where
                                      convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot mtSlotConfig
 
-
 -- | Run a Marlowe transaction.
 runTransaction :: MonadError CliError m
                => MonadIO m
@@ -347,7 +358,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
             Party (PK pkh)    -> do
                                    address <-
                                      liftCli
-                                       . toCardanoAddress network
+                                       . toCardanoAddressInEra network
                                        $ Address (PubKeyCredential pkh) Nothing
                                    money' <-
                                      liftCli
@@ -410,7 +421,7 @@ adjustMinimumUTxO protocol address datum value =
         TxOut
           address
           (TxOutValue MultiAssetInAlonzoEra value)
-          (maybe TxOutDatumNone (TxOutDatum ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
+          (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
     minValue <- liftCli $ calculateMinimumUTxO ShelleyBasedEraAlonzo txOut protocol
     let
       minLovelace = selectLovelace minValue
@@ -450,7 +461,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
       roleAddress = viAddress validatorInfo :: AddressInEra AlonzoEra
       roleDatum = diDatum $ buildRoleDatum roleName
       roleRedeemer = riRedeemer buildRoleRedeemer
-      checkRole (TxOut _ _ datum) =
+      checkRole (TxOut _ _ datum _) =
         case datum of
           TxOutDatumNone             -> False
           TxOutDatumHash _ datumHash -> datumHash == roleHash
@@ -464,7 +475,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         $ roleAddress
     let
       spend = buildPayFromScript roleScript roleDatum roleRedeemer . fst <$> utxos
-      withdrawal = (changeAddress, Nothing, mconcat [txOutValueToValue value | (_, TxOut _ value _) <- utxos])
+      withdrawal = (changeAddress, Nothing, mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos])
       outputs' = withdrawal : outputs
     body <-
       buildBody connection

@@ -12,38 +12,15 @@
 module Language.Marlowe.Client.History where
 
 
-import Cardano.Api.Shelley (ShelleyBasedEra (ShelleyBasedEraAlonzo), Tx (ShelleyTx))
-import Cardano.Binary (toCBOR, toStrictByteString)
-import Control.Lens ((^.))
-import Control.Monad (guard, when)
 import Data.Aeson (FromJSON, ToJSON)
-import Data.Bifunctor (second)
-import Data.List (nub)
-import Data.Maybe (catMaybes, isJust, isNothing, mapMaybe)
-import Data.Tuple.Extra (secondM)
 import GHC.Generics (Generic)
-import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
-import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, TypedRolePayoutValidator,
-                                 smallUntypedValidator)
+import Language.Marlowe.Core.V1.Semantics (MarloweData, TransactionInput)
+import Language.Marlowe.Scripts (TypedMarloweValidator, TypedRolePayoutValidator)
+import Ledger.Orphans ()
 import qualified Ledger.Value (TokenName, Value)
-import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V1.Ledger.Aeson ()
-import Plutus.V1.Ledger.Api (Address (..), Credential (PubKeyCredential), CurrencySymbol (..), Datum (..),
-                             Extended (..), Interval (..), LowerBound (..), Redeemer (..), TxId (..), TxOut (..),
-                             TxOutRef (..), UpperBound (..), dataToBuiltinData, fromBuiltinData, toBuiltin)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
-import Plutus.V1.Ledger.Tx (txInRef)
+import Plutus.V1.Ledger.Api (TxId (..), TxOutRef (..))
 
-import qualified Cardano.Ledger.Alonzo.Data as Alonzo (Data (..))
-import qualified Cardano.Ledger.Alonzo.Tx as Alonzo (ScriptPurpose (Spending), ValidatedTx (..), body, indexedRdmrs,
-                                                     inputs)
-import qualified Cardano.Ledger.TxIn as Cardano (TxIn (..))
-import qualified Data.ByteString as BS (drop)
-import qualified Data.Map.Strict as M (Map, keys, lookup, toList)
-import qualified Data.Set as S (toList)
-import Data.Traversable (for)
 import Plutus.Script.Utils.V1.Typed.Scripts
-import qualified PlutusTx.IsData.Class
 
 
 -- | A transaction-output reference specific to Marlowe.

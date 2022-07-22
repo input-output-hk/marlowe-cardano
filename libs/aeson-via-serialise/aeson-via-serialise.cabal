@@ -8,7 +8,7 @@ library
 
     build-depends:
       , aeson
-      , base ^>=4.14.3.0
+      , base >=4.9  && <5
       , base16-aeson
       , bytestring
       , cborg

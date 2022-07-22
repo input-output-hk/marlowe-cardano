@@ -5,124 +5,17 @@ index-state: 2022-04-11T18:57:22Z
 
 packages:
   marlowe
-  -- marlowe-actus
+  marlowe-actus
   marlowe-contracts
   marlowe-cli
 
-  lib/aeson-via-serialise
-  lib/base16-aeson
-  lib/plutus-ledger-aeson
-  lib/plutus-ledger-ada
-  lib/plutus-ledger-slot
+  libs/aeson-via-serialise
+  libs/base16-aeson
+  -- libs/plutus-ledger-aeson
+  libs/plutus-ledger-ada
+  libs/plutus-ledger-slot
 
--- -- setup from cardano-node
--- -- -------------------------------------------------------------------------
--- -- Constraints tweaking
--- 
--- -- cardano-addresses unit tests bring in some version constraint conflicts.
--- --
--- -- 1. hjsonschema and hjsonpointer deps have overly strict bounds.
--- -- 2. it has strict aeson < 1.5 dep - this will be fixed in the next release.
--- allow-newer:
---     hjsonschema:*
---   , hjsonpointer:*
---   , cardano-sl-x509:ip
---   , *:aeson
---   , size-based:template-haskell
--- 
--- -- Copied from (copied from cardano-node/cabal.project)
--- allow-newer:
---   *:aeson,
---   monoidal-containers:aeson,
---   size-based:template-haskell
--- 
--- allow-newer:
---   async-timer:unliftio-core
--- 
--- constraints:
---     hashable < 1.4
---   , bimap >= 0.4.0
---   , openapi3 >= 3.2.0
---   , libsystemd-journal >= 1.4.4
---   , systemd >= 2.3.0
---   -- dependency of systemd-2.3.0
---   , network >= 3.1.1.1
---   -- choose versions that work with base >= 4.12
---   , hjsonpointer >= 1.5.0
---   , hjsonschema >= 1.10.0
---   , Cabal >= 3.4.0.0
---   , async-timer >= 0.2.0.0
---   , unliftio-core >= 0.2.0.1
--- 
---   -- This pin is just here to make cabalProejct == stackProject.
---   -- Remove it if you are happy for a newer version to be picked when possible.
---   , semigroups == 0.19.2
---   , persistent < 2.13.3.4
--- 
--- -- ----------------------------------------------------------------
--- -- Flags for dependencies
--- 
--- package cardano-config
---   flags: +systemd
--- package cardano-node
---   flags: +systemd
--- 
--- -- -------------------------------------------------------------------------
--- -- Enable specific tests in this repo
--- 
--- test-show-details: direct
--- 
--- package dbvar
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-wallet
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-wallet-core
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-wallet-cli
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-wallet-launcher
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-wallet-text-class
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-numeric
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-wallet-core-integration
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package cardano-wallet-test-utils
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- package strict-non-empty-containers
---   tests: True
---   ghc-options: -fwrite-ide-info
--- 
--- -- Now disable all other tests with a global flag.
--- -- This is what they do in cardano-node/cabal.project.
--- 
--- tests: False
--- 
--- -- -------------------------------------------------------------------------
-
--- setup from cardano-node
-
--- ---------------------------------------------------------
--- Disable all tests by default
+-- Disable all tests
 
 tests: False
 
@@ -258,7 +151,7 @@ package io-classes
 package cardano-ledger-alonzo-test
   tests: False
 
--- Marlowe specific dependencies
+-- marlowe-cardano specific dependencies:
 
 -- on branch: PLT-568-BabbageEra
 source-repository-package
@@ -268,6 +161,12 @@ source-repository-package
   --sha256: 15l98qjpgsns4qcxklgian035mc83fqabcwsvawlr8d3rv2gzx30
   subdir:
     plutus-script-utils
+
+    -- Ideally we would like to drop plutus-ledger
+    -- but we use few helpers from CardanoAPI
+    plutus-ledger
+    -- freer-extras is plutus-ledger dependencie
+    freer-extras
 
 source-repository-package
   type: git
@@ -541,7 +440,6 @@ source-repository-package
   location: https://github.com/input-output-hk/cardano-sl-x509
   tag: a91add165152fa36f08e95fafe7da24f1dba4690
   --sha256: 1ia8vlqghis92cla8qmqa6kh8f3jn29b01fshyk5hmgy5373s684
-
 
 
 

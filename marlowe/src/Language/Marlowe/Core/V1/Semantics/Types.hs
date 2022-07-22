@@ -41,14 +41,13 @@ import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
+import Ledger.Orphans ()
 import qualified Ledger.Value as Val
-import Plutus.V1.Ledger.Aeson ()
 import Plutus.V1.Ledger.Api (CurrencySymbol (unCurrencySymbol), POSIXTime (..), PubKeyHash (PubKeyHash, getPubKeyHash),
                              TokenName (unTokenName))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
-import PlutusTx.Builtins.Aeson ()
 import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
 import Prelude (mapM, (<$>))

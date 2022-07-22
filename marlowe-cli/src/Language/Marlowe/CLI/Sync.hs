@@ -74,12 +74,14 @@ import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
 import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), smallUntypedValidator)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
--- import Plutus.V1.Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddress, fromCardanoPolicyId, toCardanoScriptHash)
+import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
+import Plutus.Script.Utils.V1.Scripts (dataHash)
+import Plutus.Script.Utils.V1.Typed.Scripts (validatorHash)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), Extended (..), FromData, Interval (..),
                              LowerBound (..), MintingPolicyHash (..), TokenName (..), UpperBound (..),
                              dataToBuiltinData, fromData)
 import Plutus.V1.Ledger.Slot (Slot (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
 import System.Directory (doesFileExist, renameFile)
 import System.IO (BufferMode (LineBuffering), Handle, IOMode (WriteMode), hClose, hSetBuffering, openFile, stderr,
                   stdout)
@@ -501,19 +503,19 @@ classifyOutputs txId txOuts =
 classifyOutput :: TxIn                                -- ^ The transaction output ID.
                -> TxOut CtxTx era                     -- ^ The transaction output content.
                -> Either FromCardanoError MarloweOut  -- ^ The classified transaction output.
-classifyOutput moTxIn (TxOut address value datum) =
+classifyOutput moTxIn (TxOut address value datum _) =
   do
-    moAddress <- fromCardanoAddress address
+    moAddress <- fromCardanoAddressInEra address
     let
       moValue = txOutValueToValue value
     pure
       $ case datum of
-          TxOutDatum _ datum' -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
-                                   (Just moOutput, _) -> ApplicationOut{..}
-                                   (_, Just name)     -> if BA.length name <= 32
-                                                           then let moPayout = TokenName name in PayoutOut{..}
-                                                           else PlainOut{..}
-                                   _                  -> PlainOut{..}
+          TxOutDatumInTx _ datum' -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
+                                    (Just moOutput, _) -> ApplicationOut{..}
+                                    (_, Just name)     -> if BA.length name <= 32
+                                                            then let moPayout = TokenName name in PayoutOut{..}
+                                                            else PlainOut{..}
+                                    _                  -> PlainOut{..}
           _                   -> PlainOut{..}
 
 

@@ -69,7 +69,10 @@ library
     template-haskell -any,
     plutus-ledger-ada,
     plutus-ledger-api -any,
-    plutus-ledger-aeson,
+    -- We use plutus-ledger here because because marlowe-cli depens on it
+    -- currently and we have collision between orphans.
+    plutus-ledger,
+    -- plutus-ledger-aeson,
     plutus-ledger-slot,
     plutus-script-utils,
     plutus-tx -any,
@@ -131,7 +134,8 @@ test-suite marlowe-test
         serialise,
         cborg,
         plutus-ledger-ada,
-        plutus-ledger-aeson,
+        plutus-ledger,
+        -- plutus-ledger-aeson,
         plutus-ledger-api -any,
         plutus-ledger-slot,
         marlowe,
