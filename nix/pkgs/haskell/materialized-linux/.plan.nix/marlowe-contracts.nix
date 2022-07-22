@@ -34,6 +34,8 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+          (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           ];
@@ -44,6 +46,7 @@
           "Marlowe/Contracts/Escrow"
           "Marlowe/Contracts/Forward"
           "Marlowe/Contracts/Futures"
+          "Marlowe/Contracts/LoanPool"
           "Marlowe/Contracts/Options"
           "Marlowe/Contracts/StructuredProducts"
           "Marlowe/Contracts/Swap"

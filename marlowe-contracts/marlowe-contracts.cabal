@@ -66,9 +66,9 @@ library
   other-modules:
   build-depends:
     base >= 4.9 && < 5,
-    marlowe -any,
-    plutus-ledger-api -any,
+    plutus-ledger -any,
     plutus-tx -any,
+    marlowe,
     time -any
 
 test-suite marlowe-contracts-test

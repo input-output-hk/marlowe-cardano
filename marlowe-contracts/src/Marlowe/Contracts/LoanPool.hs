@@ -5,9 +5,9 @@
 module Marlowe.Contracts.LoanPool where
 
 import Language.Marlowe.Extended.V1
+import Ledger.Value (TokenName (..))
 import Marlowe.Contracts.Common
-import qualified Plutus.V1.Ledger.Value as Ledger
-import PlutusTx.Prelude (consByteString)
+import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 numberOfInvestorTokens :: Integer
 numberOfInvestorTokens = 100_000_000_000
@@ -25,9 +25,9 @@ pool :: Party
 pool = Role "LoanPool"
 
 lenders :: [Party]
-lenders =
-  let base = 48
-   in map (\i -> Role $ Ledger.TokenName $ consByteString i "L") [base..base+numberOfLenders]
+lenders =  map (\i -> Role $ toTokenName $ "L" <> show i) [0..numberOfLenders]
+  where
+    toTokenName = TokenName . stringToBuiltinByteString
 
 investorToken :: Token
 investorToken = Token tokSymbol tokName
