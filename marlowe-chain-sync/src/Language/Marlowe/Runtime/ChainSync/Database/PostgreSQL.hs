@@ -1,38 +1,95 @@
+{-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE QuasiQuotes               #-}
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL where
 
-import Cardano.Api (AssetId (..), AssetName (..), Block (..), BlockHeader (..), BlockInMode (..), BlockNo (..),
-                    CardanoMode, ChainPoint (..), CtxTx, EraInMode, IsCardanoEra, PolicyId, Quantity (Quantity),
-                    SerialiseAsCBOR (serialiseToCBOR), SerialiseAsRawBytes (..),
+import Cardano.Api (AddressAny, AsType (..), AssetId (..), AssetName (..), Block (..), BlockHeader (..),
+                    BlockInMode (..), BlockNo (..), CardanoMode, ChainPoint (..), CtxTx, EraInMode, IsCardanoEra,
+                    PolicyId, Quantity (Quantity), SerialiseAsCBOR (serialiseToCBOR), SerialiseAsRawBytes (..),
                     ShelleyBasedEra (ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage), SlotNo (..), Tx, TxBody (..),
                     TxBodyContent (..), TxId, TxIn (..), TxIx (..), TxMetadata (..), TxMetadataInEra (..),
                     TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..), TxValidityLowerBound (..),
                     TxValidityUpperBound (..), getTxBody, getTxId, hashScriptData, selectLovelace, valueToList)
-import Cardano.Api.Shelley (Hash (..), Tx (..))
+import Cardano.Api.Shelley (Hash (..), Tx (..), toShelleyTxIn)
 
 import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString)
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import Data.ByteString (ByteString)
-import Data.ByteString.Short (fromShort)
-import Data.Function (on)
+import Data.ByteString.Short (fromShort, toShort)
+import Data.Foldable (sequenceA_)
 import Data.Int (Int64)
-import Data.List (sort)
 import qualified Data.Map as Map
-import Data.Profunctor (lmap)
+import Data.Profunctor (lmap, rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Hasql.Session (Session, statement)
-import Hasql.Statement (Statement)
-import Hasql.TH (resultlessStatement)
-import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitRollback (..))
+import Hasql.Statement (Statement, refineResult)
+import Hasql.TH (resultlessStatement, vectorStatement)
+import qualified Hasql.Transaction as T
+import qualified Hasql.Transaction.Sessions as T
+import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
+                                                    CommitRollback (..), GetGenesisBlock (..),
+                                                    GetIntersectionPoints (..))
+import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
+
+-- GetGenesisBlock
+
+getGenesisBlock :: GetGenesisBlock Session
+getGenesisBlock = GetGenesisBlock $ statement () $ refineResult (decodeResults . V.toList)
+  [vectorStatement|
+    SELECT block.hash :: bytea
+         , txOut.txId :: bytea
+         , txOut.lovelace :: bigint
+         , txOut.address :: bytea
+    FROM   chain.block AS block
+    JOIN   chain.tx    AS tx    ON tx.blockHash = block.hash
+    JOIN   chain.txOut AS txOut ON txOut.txId   = tx.id
+    WHERE  block.blockNo IS NULL
+    ORDER BY txId ASC
+  |]
+  where
+    decodeResults :: [(ByteString, ByteString, Int64, ByteString)] -> Either Text (Maybe GenesisBlock)
+    decodeResults [] = Right Nothing
+    decodeResults rows@((hash, _, _, _) : _) =
+      Just . GenesisBlock (HeaderHash $ toShort hash) . Set.fromDistinctAscList <$> traverse decodeGenesisTx rows
+
+    decodeGenesisTx :: (ByteString, ByteString, Int64, ByteString) -> Either Text GenesisTx
+    decodeGenesisTx (_, txId, lovelace, address) = GenesisTx
+      <$> decodeTxId txId
+      <*> pure (fromIntegral lovelace)
+      <*> decodeAddressAny address
+
+decodeTxId :: ByteString -> Either Text TxId
+decodeTxId txId = case deserialiseFromRawBytes AsTxId txId of
+  Nothing    -> Left "Invalid TxId"
+  Just txId' -> Right txId'
+
+decodeAddressAny :: ByteString -> Either Text AddressAny
+decodeAddressAny address = case deserialiseFromRawBytes AsAddressAny address of
+  Nothing       -> Left "Invalid address"
+  Just address' -> Right address'
+
+-- GetIntersectionPoints
+
+getIntersectionPoints :: GetIntersectionPoints Session
+getIntersectionPoints = GetIntersectionPoints \_ _ -> statement () $ rmap decodeResults
+  [vectorStatement|
+    SELECT slotNo :: bigint, hash :: bytea FROM chain.block WHERE slotNo IS NOT NULL ORDER BY slotNo DESC LIMIT 2160
+  |]
+  where
+    decodeResults :: Vector (Int64, ByteString) -> [ChainPoint]
+    decodeResults = fmap decodeResult . V.toList
+
+    decodeResult :: (Int64, ByteString) -> ChainPoint
+    decodeResult (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
+
+-- CommitRollback
 
 type CommitRollbackParams =
   ( Maybe Int64      -- rollback point slot
@@ -56,379 +113,368 @@ commitRollback = CommitRollback $ flip statement $ lmap pointToParams stmnt
       ChainPointAtGenesis                        -> (Nothing, Nothing)
       ChainPoint (SlotNo slot) (HeaderHash hash) -> (Just $ fromIntegral slot, Just $ fromShort hash)
 
-type CommitBlocksParams =
-  ( Vector ByteString           -- block header hashes
-  , Vector Int64                -- block slots
-  , Vector Int64                -- block numbers
-
-  , Vector ByteString           -- tx block hash (for joining)
-  , Vector ByteString           -- tx hash
-  , Vector (Maybe Int64)        -- tx validity lower bound
-  , Vector (Maybe Int64)        -- tx validity upper bound
-  , Vector (Maybe ByteString)  -- tx metadata (key 1564)
-
-  , Vector ByteString           -- tx out tx hash (for joining)
-  , Vector Int64                -- tx out ix
-  , Vector ByteString           -- tx out address
-  , Vector Int64                -- tx out lovelace
-  , Vector (Maybe ByteString)   -- tx out datum hash
-  , Vector (Maybe ByteString)   -- tx out datum bytes
-
-  , Vector ByteString           -- tx in sink tx hash (for joining)
-  , Vector ByteString           -- tx in source tx hash (for joining)
-  , Vector Int64                -- tx in tx ix (for joining)
-  , Vector (Maybe ByteString)   -- tx in redeemer datum
-
-  , Vector ByteString           -- asset policyId
-  , Vector Text                 -- asset name
-
-  , Vector ByteString           -- asset out policyId
-  , Vector Text                 -- asset out name
-  , Vector ByteString           -- asset out tx hash (for joining)
-  , Vector Int64                -- asset out tx ix (for joining)
-  , Vector Int64                -- asset out quantity
-
-  , Vector ByteString           -- asset mint policyId
-  , Vector Text                 -- asset mint name
-  , Vector ByteString           -- asset mint tx hash (for joining)
-  , Vector Int64                -- asset mint quantity
+-- CommitGenesisBlock
+type GenesisBlockParams =
+  ( ByteString
+  , Vector ByteString
+  , Vector Int64
+  , Vector ByteString
   )
 
-data SomeCardanoTx = forall era. IsCardanoEra era =>
-  SomeCardanoTx (Hash BlockHeader) (Tx era) (EraInMode era CardanoMode)
+commitGenesisBlock :: CommitGenesisBlock Session
+commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
+  let
+    genesisBlockTxsList = Set.toList genesisBlockTxs
+  in
+    T.transaction T.ReadCommitted T.Write $ sequenceA_
+      [ T.statement
+          (headerHashToParam genesisBlockHash)
+          [resultlessStatement| INSERT INTO chain.block (hash) VALUES ($1 :: bytea) |]
+      , T.statement
+          ( V.fromList $ serialiseToRawBytes . genesisTxId <$> genesisBlockTxsList
+          , V.fromList $ headerHashToParam genesisBlockHash <$ genesisBlockTxsList
+          )
+          [resultlessStatement|
+            INSERT INTO chain.tx (id, blockHash)
+            SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
+          |]
+      , T.statement
+          ( V.fromList $ serialiseToRawBytes . genesisTxId <$> genesisBlockTxsList
+          , V.fromList $ serialiseToRawBytes . genesisTxAddress <$> genesisBlockTxsList
+          , V.fromList $ fromIntegral . genesisTxLovelace <$> genesisBlockTxsList
+          )
+          [resultlessStatement|
+            INSERT INTO chain.txOut (txId, address, lovelace, txIx)
+            SELECT *, 0 FROM UNNEST ($1 :: bytea[], $2 :: bytea[], $3 :: bigint[])
+          |]
+      ]
 
-data SomeCardanoTxOut = forall era. IsCardanoEra era =>
-  SomeCardanoTxOut TxId TxIx (TxOut CtxTx era) (EraInMode era CardanoMode)
+-- CommitBlocks
+
+data BlockRow = BlockRow
+  { hash    :: !ByteString
+  , slotNo  :: !Int64
+  , blockNo :: !Int64
+  }
+
+data TxRow = TxRow
+  { blockHash          :: !ByteString
+  , txId               :: !ByteString
+  , validityLowerBound :: !(Maybe Int64)
+  , validityUpperBound :: !(Maybe Int64)
+  , metadataKey1564    :: !(Maybe ByteString)
+  }
+
+data TxOutRow = TxOutRow
+  { txId       :: !ByteString
+  , txIx       :: !Int64
+  , address    :: !ByteString
+  , lovelace   :: !Int64
+  , datumHash  :: !(Maybe ByteString)
+  , datumBytes :: !(Maybe ByteString)
+  }
+
+data TxInRow = TxInRow
+  { txOutId            :: !ByteString
+  , txOutIx            :: !Int64
+  , txInId             :: !ByteString
+  , redeemerDatumBytes :: !(Maybe ByteString)
+  }
+
+data AssetRow = AssetRow
+  { policyId :: !ByteString
+  , name     :: !ByteString
+  }
+
+data AssetOutRow = AssetOutRow
+  { policyId :: !ByteString
+  , name     :: !ByteString
+  , txId     :: !ByteString
+  , txIx     :: !Int64
+  , quantity :: !Int64
+  }
+
+data AssetMintRow = AssetMintRow
+  { policyId :: !ByteString
+  , name     :: !ByteString
+  , txId     :: !ByteString
+  , quantity :: !Int64
+  }
+
+data SomeTx = forall era. IsCardanoEra era =>
+  SomeTx (Hash BlockHeader) (Tx era) (EraInMode era CardanoMode)
+
+data SomeTxOut = forall era. IsCardanoEra era =>
+  SomeTxOut TxId TxIx (TxOut CtxTx era) (EraInMode era CardanoMode)
+
+data SomeTxIn = SomeTxIn TxId TxIx TxId (Maybe ByteString)
 
 data Asset = Asset PolicyId AssetName deriving (Eq, Ord)
 
-data MintAsset = MintAsset TxId PolicyId AssetName Quantity
+data AssetMint = AssetMint TxId PolicyId AssetName Quantity
 
-data OutAsset = OutAsset TxId TxIx PolicyId AssetName Quantity
+data AssetOut = AssetOut TxId TxIx PolicyId AssetName Quantity
 
 commitBlocks :: CommitBlocks Session
-commitBlocks = CommitBlocks $ flip statement $ lmap blocksToParams stmnt
+commitBlocks = CommitBlocks \blocks -> T.transaction T.ReadCommitted T.Write $ sequenceA_
+  let
+    txs = extractTxs =<< blocks
+    txOuts = extractTxOuts =<< txs
+    txIns = extractTxIns =<< txs
+    assetOuts = extractAssetOuts =<< txOuts
+    assetMints = extractAssetMints =<< txs
+   in
+    [ commitBlockHeaders blocks
+    , commitTxs txs
+    , commitTxOuts txOuts
+    , commitTxIns txIns
+    , commitAssets assetOuts assetMints
+    ]
   where
-    stmnt :: Statement CommitBlocksParams ()
-    stmnt =
-      [resultlessStatement|
-        WITH blockInputs (hash, slotNo, blockNo) AS
-          ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bigint[], $3 :: bigint[])
-          )
-        , txInputs (blockHash, hash, validityLowerBound, validityLowerBound, metadataKey1564) AS
-          ( SELECT * FROM UNNEST ($4 :: bytea[], $5 :: bytea[], $6 :: bigint?[], $7 :: bigint?[], $8 :: bytea?[])
-          )
-        , txOutInputs (txHash, ix, address, lovelace, datumHash, datumBytes) AS
-          ( SELECT * FROM UNNEST ($9 :: bytea[], $10 :: bigint[], $11 :: bytea[], $12 :: bigint[], $13 :: bytea?[], $14 :: bytea?[])
-          )
-        , txInInputs (txSink, txSource, ix, redeemerDatumBytes) AS
-          ( SELECT * FROM UNNEST ($15 :: bytea[], $16 :: bytea[], $17 :: bigint[], $18 :: bytea?[])
-          )
-        , assetInputs (policyId, name) AS
-          ( SELECT * FROM UNNEST ($19 :: bytea[], $20 :: text[])
-          )
-        , assetOutInputs (policyId, name, txHash, ix, quantity) AS
-          ( SELECT * FROM UNNEST ($21 :: bytea[], $22 :: text[], $23 :: bytea[], $24 :: bigint[], $25 :: bigint[])
-          )
-        , assetMintInputs (policyId, name, txHash, quantity) AS
-          ( SELECT * FROM UNNEST ($26 :: bytea[], $27 :: text[], $28 :: bytea[], $29 :: bigint[])
-          )
-        , newBlocks AS
-          ( INSERT INTO chain.block (hash, slotNo, blockNo)
-            SELECT * FROM blockInputs
-            ON CONFLICT (hash) DO UPDATE SET rollbackBlock = NULL
-            RETURNING (id, hash)
-          )
-        , newTxs AS
-          ( INSERT INTO chain.tx (blockId, hash, validityLowerBound, validityUpperBound, metadataKey1564)
-            SELECT block.id, tx.hash, tx.validityLowerBound, tx.validityUpperBound, tx.metadataKey1564
-            FROM   txInputs  AS tx
-            JOIN   newBlocks AS block ON tx.blockHash = block.hash
-            RETURNING (id, hash)
-          )
-        , txIds AS
-          ( SELECT id, hash
-            FROM   newTxs
-            UNION  ALL
-            SELECT tx.id, tx.hash
-            FROM   txInInputs AS txIn
-            JOIN   chain.tx   AS tx   ON tx.hash = txIn.txSource
-          )
-        , newTxOuts AS
-          ( INSERT INTO chain.txOut (txId, ix, address, lovelace, datumHash, datumBytes)
-            SELECT tx.id, txOut.ix, txOut.address, txOut.lovelace, txOut.datumHash, txOut.datumBytes
-            FROM   txOutInputs AS txOut
-            JOIN   txIds       AS tx    ON txOut.txHash = tx.hash
-            RETURNING (id, txOut.txHash, ix)
-          )
-        , txOutIds AS
-          ( SELECT id, txHash, ix
-            FROM   newTxOuts AS txOut
-            UNION  ALL
-            SELECT txOut.id, tx.hash, txOut.ix
-            FROM   txInInputs  AS txIn
-            JOIN   chain.tx    AS tx    ON  tx.hash = txIn.txSource
-            JOIN   chain.txOut AS txOut ON  txOut.txId = tx.id
-                                        AND txOut.ix = txIn.ix
-          )
-        , newTxIns AS
-          ( INSERT INTO chain.txIn (txId, txOutId, redeemerDatumBytes)
-            SELECT tx.id, txOut.id, txIn.redeemerDatumBytes
-            FROM  txInInputs AS txIn
-            JOIN  newTxs     AS tx    ON  tx.hash = txIn.txSink
-            JOIN  txOutIds   AS txOut ON  txOut.txHash = txIn.txSource
-                                      AND txOut.ix = txIn.ix
-          )
-        , newAssets AS
-          ( INSERT INTO chain.asset (policyId, name)
-            SELECT * FROM assetInputs
-            ON CONFLICT (policyId, name) DO NOTHING
-            RETURNING (id, policyId, name)
-          )
-        , assetIds AS
-          ( SELECT * FROM newAssets
-            UNION ALL
-            SELECT asset.*
-            FROM   assetOutInputs AS assetOut
-            JOIN   chain.asset    AS asset    ON  asset.policyId = assetOut.policuId
-                                              AND asset.name = assetOut.name
-            UNION ALL
-            SELECT asset.*
-            FROM   assetMintInputs AS assetMint
-            JOIN   chain.asset    AS asset    ON  asset.policyId = assetMint.policuId
-                                              AND asset.name = assetMint.name
-          )
-        , newAssetOuts AS
-          ( INSERT INTO chain.assetOut (txOutId, assetId, quantity)
-            SELECT txOut.id, asset.id, assetOut.quantity
-            FROM   assetOutInputs AS assetOut
-            JOIN   txOutIds       AS txOut    ON  txOut.txHash = assetOut.txHash
-                                              AND txOut.ix = assetOut.ix
-            JOIN   assetIds       AS asset    ON  asset.policyId = assetOut.policyId
-                                              AND asset.name = assetOut.name
-          )
-        INSERT INTO chain.assetMint (txId, assetId, quantity)
-        SELECT tx.id, asset.id, assetMint.quantity
-        FROM   assetMintInputs AS assetMint
-        JOIN   txIds           AS tx        ON  tx.hash = assetMint.txHash
-        JOIN   assetIds        AS asset     ON  asset.policyId = assetMint.policyId
-                                            AND asset.name = assetMint.name
-      |]
-
-    blocksToParams :: [CardanoBlock] -> CommitBlocksParams
-    blocksToParams blocks =
-      ( V.fromList $ extractHeaderHash           <$> blocks
-      , V.fromList $ extractSlot                 <$> blocks
-      , V.fromList $ extractBlockNo              <$> blocks
-
-      , V.fromList $ extractTxHeaderHash         <$> txs
-      , V.fromList $ extractTxHash               <$> txs
-      , V.fromList $ extractTxValidityLowerBound <$> txs
-      , V.fromList $ extractTxValidityUpperBound <$> txs
-      , V.fromList $ extractTxMetadataKey1564    <$> txs
-
-      , V.fromList $ extractTxOutTxHash          <$> txOuts
-      , V.fromList $ extractTxOutIx              <$> txOuts
-      , V.fromList $ extractTxOutAddress         <$> txOuts
-      , V.fromList $ extractTxOutLovelace        <$> txOuts
-      , V.fromList $ extractTxOutDatumHash       <$> txOuts
-      , V.fromList $ extractTxOutDatumBytes      <$> txOuts
-
-      , V.fromList $ extractTxInSinkTxHashes     =<< txs
-      , V.fromList $ extractTxInSourceTxHashes   =<< txs
-      , V.fromList $ extractTxInIxes             =<< txs
-      , V.fromList $ extractTxInRedeemerBytes    =<< txs
-
-      , V.fromList $ extractAssetPolicyId        <$> assets
-      , V.fromList $ extractAssetName            <$> assets
-
-      , V.fromList $ extractAssetOutPolicyId     <$> outAssets
-      , V.fromList $ extractAssetOutName         <$> outAssets
-      , V.fromList $ extractAssetOutTxHash       <$> outAssets
-      , V.fromList $ extractAssetOutIx           <$> outAssets
-      , V.fromList $ extractAssetOutQuantity     <$> outAssets
-
-      , V.fromList $ extractAssetMintPolicyId    <$> mintAssets
-      , V.fromList $ extractAssetMintName        <$> mintAssets
-      , V.fromList $ extractAssetMintTxHash      <$> mintAssets
-      , V.fromList $ extractAssetMintQuantity    <$> mintAssets
-      )
+    commitBlockHeaders :: [CardanoBlock] -> T.Transaction ()
+    commitBlockHeaders blocks = T.statement params stmt
       where
-        txs :: [SomeCardanoTx]
-        txs = extractTxs =<< blocks
+        stmt =
+          [resultlessStatement|
+            INSERT INTO chain.block (hash, slotNo, blockNo)
+            SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bigint[], $3 :: bigint[])
+            ON CONFLICT (hash) DO UPDATE SET
+                 rollbackToBlock = NULL
+               , rollbackToGenesis = NULL
+          |]
+        params =
+          ( V.fromList $ hash <$> rows
+          , V.fromList $ slotNo <$> rows
+          , V.fromList $ blockNo <$> rows
+          )
+        rows = row <$> blocks
+        row (BlockInMode (Block (BlockHeader slotNo hash (BlockNo blockNo)) _) _)  = BlockRow
+          { hash = headerHashToParam hash
+          , slotNo = slotNoToParam slotNo
+          , blockNo = fromIntegral blockNo
+          }
 
-        txOuts :: [SomeCardanoTxOut]
-        txOuts = extractTxOuts =<< txs
+    commitTxs :: [SomeTx] -> T.Transaction ()
+    commitTxs txs = T.statement params stmt
+      where
+        stmt =
+          [resultlessStatement|
+            INSERT INTO chain.tx (id, blockHash, validityLowerBound, validityUpperBound, metadataKey1564)
+            SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[], $3 :: bigint?[], $4 :: bigint?[], $5 :: bytea?[])
+            ON CONFLICT (id) DO NOTHING
+          |]
+        params =
+          ( V.fromList $ (\TxRow{..} -> txId) <$> rows
+          , V.fromList $ blockHash <$> rows
+          , V.fromList $ validityLowerBound <$> rows
+          , V.fromList $ validityUpperBound <$> rows
+          , V.fromList $ metadataKey1564 <$> rows
+          )
+        rows = row <$> txs
+        row (SomeTx blockHash tx _) = case getTxBody tx of
+          body@(TxBody TxBodyContent{..}) -> TxRow
+            { blockHash = headerHashToParam blockHash
+            , txId = serialiseToRawBytes $ getTxId body
+            , validityLowerBound = case fst txValidityRange of
+                TxValidityNoLowerBound        -> Nothing
+                TxValidityLowerBound _ slotNo -> Just $ slotNoToParam slotNo
+            , validityUpperBound = case snd txValidityRange of
+                TxValidityNoUpperBound _      -> Nothing
+                TxValidityUpperBound _ slotNo -> Just $ slotNoToParam slotNo
+            , metadataKey1564 = case txMetadata of
+                TxMetadataNone                          -> Nothing
+                TxMetadataInEra _ (TxMetadata metadata) -> do
+                  value <- Map.lookup 1564 metadata
+                  pure $ serialiseToCBOR $ TxMetadata $ Map.singleton 1564 value
+            }
 
-        assets :: [Asset]
-        assets = Set.toList
-          $ on (<>) Set.fromList (mintAssetToAsset <$> mintAssets) (outAssetToAsset <$> outAssets)
+    commitTxOuts :: [SomeTxOut] -> T.Transaction ()
+    commitTxOuts txOuts = T.statement params stmt
+      where
+        stmt =
+          [resultlessStatement|
+            INSERT INTO chain.txOut (txId, txIx, address, lovelace, datumHash, datumBytes)
+            SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bigint[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea?[], $6 :: bytea?[])
+            ON CONFLICT (txId, txIx) DO NOTHING
+          |]
+        params =
+          ( V.fromList $ (\TxOutRow{..} -> txId) <$> rows
+          , V.fromList $ (\TxOutRow{..} -> txIx) <$> rows
+          , V.fromList $ address <$> rows
+          , V.fromList $ lovelace <$> rows
+          , V.fromList $ datumHash <$> rows
+          , V.fromList $ datumBytes <$> rows
+          )
+        rows = row <$> txOuts
+        row (SomeTxOut txId txIx (TxOut address value datum _) _) = TxOutRow
+          { txId = serialiseToRawBytes txId
+          , txIx = txIxToParam txIx
+          , address = serialiseToRawBytes address
+          , lovelace = fromIntegral case value of
+              TxOutAdaOnly _ lovelace -> lovelace
+              TxOutValue _ value'     -> selectLovelace value'
+          , datumHash = case datum of
+              TxOutDatumNone        -> Nothing
+              TxOutDatumHash _ hash -> Just $ serialiseToRawBytes hash
+              TxOutDatumInTx _ d    -> Just $ serialiseToRawBytes $ hashScriptData d
+              TxOutDatumInline _ d  -> Just $ serialiseToRawBytes $ hashScriptData d
+          , datumBytes = case datum of
+              TxOutDatumNone       -> Nothing
+              TxOutDatumHash _ _   -> Nothing
+              TxOutDatumInTx _ d   -> Just $ serialiseToCBOR d
+              TxOutDatumInline _ d -> Just $ serialiseToCBOR d
+          }
 
-        mintAssets :: [MintAsset]
-        mintAssets = extractMintAssets =<< txs
+    commitTxIns :: [SomeTxIn] -> T.Transaction ()
+    commitTxIns txIns = T.statement params stmt
+      where
+        stmt =
+          [resultlessStatement|
+            INSERT INTO chain.txIn (txOutId, txOutIx, txInId, redeemerDatumBytes)
+            SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bigint[], $3 :: bytea[], $4 :: bytea?[])
+            ON CONFLICT (txOutId, txOutIx, txInId) DO NOTHING
+          |]
+        params =
+          ( V.fromList $ txOutId <$> rows
+          , V.fromList $ txOutIx <$> rows
+          , V.fromList $ txInId <$> rows
+          , V.fromList $ redeemerDatumBytes <$> rows
+          )
+        rows = row <$> txIns
+        row (SomeTxIn txOutId txOutIx txInId redeemerDatumBytes) = TxInRow
+          { txOutId = serialiseToRawBytes txOutId
+          , txOutIx = txIxToParam txOutIx
+          , txInId = serialiseToRawBytes txInId
+          , redeemerDatumBytes
+          }
 
-        outAssets :: [OutAsset]
-        outAssets = extractOutAssets =<< txOuts
+    commitAssets :: [AssetOut] -> [AssetMint] -> T.Transaction ()
+    commitAssets assetOuts assetMints = T.statement params stmt
+      where
+        stmt =
+          [resultlessStatement|
+            WITH assetOutInputs (policyId, name, txId, txIx, quantity) AS
+              ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bigint[])
+              )
+            , assetMintInputs (policyId, name, txId, quantity) AS
+              ( SELECT * FROM UNNEST ($6 :: bytea[], $7 :: bytea[], $8 :: bytea[], $9 :: bigint[])
+              )
+            , newAssets AS
+              ( INSERT INTO chain.asset (policyId, name)
+                SELECT assetInputs.* FROM
+                  ( SELECT DISTINCT policyId, name FROM assetOutInputs
+                    UNION
+                    SELECT DISTINCT policyId, name FROM assetMintInputs
+                  ) AS assetInputs
+                ON CONFLICT (policyId, name) DO NOTHING
+                RETURNING id, policyId, name
+              )
+            , assetIds AS
+              ( SELECT * FROM newAssets
+                UNION
+                SELECT asset.*
+                FROM   assetOutInputs AS assetOut
+                JOIN   chain.asset    AS asset    ON  asset.policyId = assetOut.policyId
+                                                  AND asset.name = assetOut.name
+                UNION
+                SELECT asset.*
+                FROM   assetMintInputs AS assetMint
+                JOIN   chain.asset    AS asset    ON  asset.policyId = assetMint.policyId
+                                                  AND asset.name = assetMint.name
+              )
+            , newAssetOuts AS
+              ( INSERT INTO chain.assetOut (txId, txIx, assetId, quantity)
+                SELECT assetOut.txId, assetOut.txIx, asset.id, assetOut.quantity
+                FROM   assetOutInputs AS assetOut
+                JOIN   assetIds       AS asset    ON  asset.policyId = assetOut.policyId
+                                                  AND asset.name = assetOut.name
+              )
+            INSERT INTO chain.assetMint (txId, assetId, quantity)
+            SELECT assetMint.txId, asset.id, assetMint.quantity
+            FROM   assetMintInputs AS assetMint
+            JOIN   assetIds        AS asset     ON  asset.policyId = assetMint.policyId
+                                                AND asset.name = assetMint.name
+          |]
+        params =
+          ( V.fromList $ (\AssetOutRow{..} -> policyId) <$> assetOutRows
+          , V.fromList $ (\AssetOutRow{..} -> name) <$> assetOutRows
+          , V.fromList $ (\AssetOutRow{..} -> txId) <$> assetOutRows
+          , V.fromList $ (\AssetOutRow{..} -> txIx) <$> assetOutRows
+          , V.fromList $ (\AssetOutRow{..} -> quantity) <$> assetOutRows
+          , V.fromList $ (\AssetMintRow{..} -> policyId) <$> assetMintRows
+          , V.fromList $ (\AssetMintRow{..} -> name) <$> assetMintRows
+          , V.fromList $ (\AssetMintRow{..} -> txId) <$> assetMintRows
+          , V.fromList $ (\AssetMintRow{..} -> quantity) <$> assetMintRows
+          )
+        assetOutRows = assetOutRow <$> assetOuts
+        assetMintRows = assetMintRow <$> assetMints
+        assetOutRow (AssetOut txId txIx policyId (AssetName name) (Quantity quantity)) = AssetOutRow
+          { policyId = serialiseToRawBytes policyId
+          , name
+          , txId = serialiseToRawBytes txId
+          , txIx = txIxToParam txIx
+          , quantity = fromIntegral quantity
+          }
+        assetMintRow (AssetMint txId policyId (AssetName name) (Quantity quantity)) = AssetMintRow
+          { policyId = serialiseToRawBytes policyId
+          , name
+          , txId = serialiseToRawBytes txId
+          , quantity = fromIntegral quantity
+          }
 
-    extractHeaderHash :: CardanoBlock -> ByteString
-    extractHeaderHash (BlockInMode (Block (BlockHeader _ (HeaderHash hash) _) _) _) = fromShort hash
+    slotNoToParam :: SlotNo -> Int64
+    slotNoToParam (SlotNo slotNo) = fromIntegral slotNo
 
-    extractSlot :: CardanoBlock -> Int64
-    extractSlot (BlockInMode (Block (BlockHeader (SlotNo slot) _ _) _) _) = fromIntegral slot
+    txIxToParam :: TxIx -> Int64
+    txIxToParam (TxIx txIx) = fromIntegral txIx
 
-    extractBlockNo :: CardanoBlock -> Int64
-    extractBlockNo (BlockInMode (Block (BlockHeader _ _ (BlockNo  blockNo)) _) _) = fromIntegral blockNo
+    extractTxs :: CardanoBlock -> [SomeTx]
+    extractTxs (BlockInMode (Block (BlockHeader _ hash _) blockTxs) era) = flip (SomeTx hash) era <$> blockTxs
 
-    extractTxs :: CardanoBlock -> [SomeCardanoTx]
-    extractTxs (BlockInMode (Block (BlockHeader _ hash _) blockTxs) era) = flip (SomeCardanoTx hash) era <$> blockTxs
-
-    extractTxHeaderHash :: SomeCardanoTx -> ByteString
-    extractTxHeaderHash (SomeCardanoTx (HeaderHash hash) _ _) = fromShort hash
-
-    extractTxHash :: SomeCardanoTx -> ByteString
-    extractTxHash (SomeCardanoTx _ tx _) = serialiseToRawBytes $ getTxId $ getTxBody tx
-
-    extractTxValidityLowerBound :: SomeCardanoTx -> Maybe Int64
-    extractTxValidityLowerBound (SomeCardanoTx _ tx _) = case getTxBody tx of
-      TxBody TxBodyContent{..} -> case fst txValidityRange of
-        TxValidityNoLowerBound               -> Nothing
-        TxValidityLowerBound _ (SlotNo slot) -> Just $ fromIntegral slot
-
-    extractTxValidityUpperBound :: SomeCardanoTx -> Maybe Int64
-    extractTxValidityUpperBound (SomeCardanoTx _ tx _) = case getTxBody tx of
-      TxBody TxBodyContent{..} -> case snd txValidityRange of
-        TxValidityNoUpperBound _             -> Nothing
-        TxValidityUpperBound _ (SlotNo slot) -> Just $ fromIntegral slot
-
-    extractTxMetadataKey1564 :: SomeCardanoTx -> Maybe ByteString
-    extractTxMetadataKey1564 (SomeCardanoTx _ tx _) = case getTxBody tx of
-      TxBody TxBodyContent{..} -> case txMetadata of
-        TxMetadataNone                          -> Nothing
-        TxMetadataInEra _ (TxMetadata metadata) -> do
-          value <- Map.lookup 1564 metadata
-          pure $ serialiseToCBOR $ TxMetadata $ Map.singleton 1564 value
-
-    extractTxOuts :: SomeCardanoTx -> [SomeCardanoTxOut]
-    extractTxOuts (SomeCardanoTx _ tx era) = case getTxBody tx of
+    extractTxOuts :: SomeTx -> [SomeTxOut]
+    extractTxOuts (SomeTx _ tx era) = case getTxBody tx of
       body@(TxBody TxBodyContent{..}) -> do
         (ix, txOut) <- [0..] `zip` txOuts
-        pure $ SomeCardanoTxOut (getTxId body) (TxIx ix) txOut era
+        pure $ SomeTxOut (getTxId body) (TxIx ix) txOut era
 
-    extractTxOutTxHash :: SomeCardanoTxOut -> ByteString
-    extractTxOutTxHash (SomeCardanoTxOut txId _ _ _) = serialiseToRawBytes txId
+    extractTxIns :: SomeTx -> [SomeTxIn]
+    extractTxIns (SomeTx _ tx _) = case getTxBody tx of
+      body@(TxBody TxBodyContent{..}) -> do
+        txIn@(TxIn txId txIx) <- fst <$> txIns
+        pure $ SomeTxIn txId txIx (getTxId body) $ getRedeemer txIn
+      where
+        getRedeemer :: TxIn -> Maybe ByteString
+        getRedeemer = case tx of
+          ShelleyTx ShelleyBasedEraAlonzo alonzoTx@Alonzo.ValidatedTx{} ->
+            \txIn -> do
+              (Alonzo.Data datum, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending $ toShelleyTxIn txIn
+              pure $ toStrictByteString $ toCBOR datum
 
-    extractTxOutIx :: SomeCardanoTxOut -> Int64
-    extractTxOutIx (SomeCardanoTxOut _ (TxIx ix) _ _) = fromIntegral ix
+          ShelleyTx ShelleyBasedEraBabbage  babbageTx@Babbage.ValidatedTx{} -> do
+            \txIn -> do
+              (Alonzo.Data datum, _) <- Babbage.indexedRdmrs babbageTx $ Babbage.Spending $ toShelleyTxIn txIn
+              pure $ toStrictByteString $ toCBOR datum
 
-    extractTxOutAddress :: SomeCardanoTxOut -> ByteString
-    extractTxOutAddress (SomeCardanoTxOut _ _ (TxOut address _ _ _) _) = serialiseToRawBytes address
+          _ -> const Nothing
 
-    extractTxOutLovelace :: SomeCardanoTxOut -> Int64
-    extractTxOutLovelace (SomeCardanoTxOut _ _ (TxOut _ value _ _) _) = fromIntegral case value of
-      TxOutAdaOnly _ lovelace -> lovelace
-      TxOutValue _ value'     -> selectLovelace value'
-
-    extractTxOutDatumHash :: SomeCardanoTxOut -> Maybe ByteString
-    extractTxOutDatumHash (SomeCardanoTxOut _ _ (TxOut _ _ datum _) _) = case datum of
-      TxOutDatumNone        -> Nothing
-      TxOutDatumHash _ hash -> Just $ serialiseToRawBytes hash
-      TxOutDatumInTx _ d    -> Just $ serialiseToRawBytes $ hashScriptData d
-      TxOutDatumInline _ d  -> Just $ serialiseToRawBytes $ hashScriptData d
-
-    extractTxOutDatumBytes :: SomeCardanoTxOut -> Maybe ByteString
-    extractTxOutDatumBytes (SomeCardanoTxOut _ _ (TxOut _ _ datum _) _) = case datum of
-      TxOutDatumNone       -> Nothing
-      TxOutDatumHash _ _   -> Nothing
-      TxOutDatumInTx _ d   -> Just $ serialiseToCBOR d
-      TxOutDatumInline _ d -> Just $ serialiseToCBOR d
-
-    extractTxInSourceTxHashes :: SomeCardanoTx -> [ByteString]
-    extractTxInSourceTxHashes (SomeCardanoTx _ tx _) = case getTxBody tx of
-      body@(TxBody TxBodyContent{..}) -> serialiseToRawBytes (getTxId body) <$ txIns
-
-    extractTxInSinkTxHashes :: SomeCardanoTx -> [ByteString]
-    extractTxInSinkTxHashes (SomeCardanoTx _ tx _) = case getTxBody tx of
-      TxBody TxBodyContent{..} -> do
-        TxIn txId _ <- sort $ fst <$> txIns
-        pure $ serialiseToRawBytes txId
-
-    extractTxInIxes :: SomeCardanoTx -> [Int64]
-    extractTxInIxes (SomeCardanoTx _ tx _) = case getTxBody tx of
-      TxBody TxBodyContent{..} -> do
-        TxIn _ (TxIx ix) <- sort $ fst <$> txIns
-        pure $ fromIntegral ix
-
-    extractTxInRedeemerBytes :: SomeCardanoTx -> [Maybe ByteString]
-    extractTxInRedeemerBytes (SomeCardanoTx _ tx _) = case tx of
-      ShelleyTx ShelleyBasedEraAlonzo alonzoTx@Alonzo.ValidatedTx{} -> do
-        txIn <- sort . Set.toList . Alonzo.inputs . Alonzo.body $ alonzoTx
-        pure do
-          (Alonzo.Data datum, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending txIn
-          pure $ toStrictByteString $ toCBOR datum
-
-      ShelleyTx ShelleyBasedEraBabbage  babbageTx@Babbage.ValidatedTx{} -> do
-        txIn <- sort . Set.toList . Babbage.inputs . Babbage.body $ babbageTx
-        pure do
-          (Alonzo.Data datum, _) <- Babbage.indexedRdmrs babbageTx $ Babbage.Spending txIn
-          pure $ toStrictByteString $ toCBOR datum
-
-      _ -> case getTxBody tx of
-        TxBody TxBodyContent{..} -> Nothing <$ txIns
-
-    extractMintAssets :: SomeCardanoTx -> [MintAsset]
-    extractMintAssets (SomeCardanoTx _ tx _) = case getTxBody tx of
+    extractAssetMints :: SomeTx -> [AssetMint]
+    extractAssetMints (SomeTx _ tx _) = case getTxBody tx of
       body@(TxBody TxBodyContent{..}) -> case txMintValue of
         TxMintNone -> []
         TxMintValue _ value _ -> do
           (assetId, quantity) <- valueToList value
           case assetId of
             AdaAssetId            -> []
-            AssetId policyId name -> [MintAsset (getTxId body) policyId name quantity]
+            AssetId policyId name -> [AssetMint (getTxId body) policyId name quantity]
 
-    mintAssetToAsset :: MintAsset -> Asset
-    mintAssetToAsset (MintAsset _ policyId name _) = Asset policyId name
-
-    extractOutAssets :: SomeCardanoTxOut -> [OutAsset]
-    extractOutAssets (SomeCardanoTxOut txId ix (TxOut _ value _ _)  _) = case value of
+    extractAssetOuts :: SomeTxOut -> [AssetOut]
+    extractAssetOuts (SomeTxOut txId ix (TxOut _ value _ _)  _) = case value of
       TxOutAdaOnly _ _  -> []
       TxOutValue _ value' -> do
         (assetId, quantity) <- valueToList value'
         case assetId of
           AdaAssetId            -> []
-          AssetId policyId name -> [OutAsset txId ix policyId name quantity]
+          AssetId policyId name -> [AssetOut txId ix policyId name quantity]
 
-    outAssetToAsset :: OutAsset -> Asset
-    outAssetToAsset (OutAsset _ _ policyId name _) = Asset policyId name
-
-    extractAssetPolicyId :: Asset -> ByteString
-    extractAssetPolicyId (Asset policyId _) = serialiseToRawBytes policyId
-
-    extractAssetName :: Asset -> Text
-    extractAssetName (Asset _ (AssetName name)) = decodeUtf8 name
-
-    extractAssetOutPolicyId :: OutAsset -> ByteString
-    extractAssetOutPolicyId (OutAsset _ _ policyId _ _) = serialiseToRawBytes policyId
-
-    extractAssetOutName :: OutAsset -> Text
-    extractAssetOutName (OutAsset _ _ _ (AssetName name) _) = decodeUtf8 name
-
-    extractAssetOutTxHash :: OutAsset -> ByteString
-    extractAssetOutTxHash (OutAsset txId _ _ _ _) = serialiseToRawBytes txId
-
-    extractAssetOutIx :: OutAsset -> Int64
-    extractAssetOutIx (OutAsset _ (TxIx ix) _ _ _) = fromIntegral ix
-
-    extractAssetOutQuantity :: OutAsset -> Int64
-    extractAssetOutQuantity (OutAsset _ _ _ _ (Quantity q)) = fromIntegral q
-
-    extractAssetMintPolicyId :: MintAsset -> ByteString
-    extractAssetMintPolicyId (MintAsset _ policyId _ _) = serialiseToRawBytes policyId
-
-    extractAssetMintName :: MintAsset -> Text
-    extractAssetMintName (MintAsset _ _ (AssetName name) _) = decodeUtf8 name
-
-    extractAssetMintTxHash :: MintAsset -> ByteString
-    extractAssetMintTxHash (MintAsset txId _ _ _) = serialiseToRawBytes txId
-
-    extractAssetMintQuantity :: MintAsset -> Int64
-    extractAssetMintQuantity (MintAsset _ _ _ (Quantity q)) = fromIntegral q
+headerHashToParam :: Hash BlockHeader -> ByteString
+headerHashToParam (HeaderHash hash) = fromShort hash

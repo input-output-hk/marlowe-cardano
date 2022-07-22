@@ -2,7 +2,7 @@
 
 BEGIN;
 
-SELECT id, hash, slotNo, blockNo, rollbackBlock, rollbackToGenesis
+SELECT hash, slotNo, blockNo, rollbackToBlock, rollbackToGenesis
   FROM chain.block
  WHERE FALSE;
 

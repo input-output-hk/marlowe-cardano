@@ -5,12 +5,15 @@ module Language.Marlowe.Runtime.ChainSync
   ) where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo)
-import Control.Concurrent.Async (Concurrently (..))
+import qualified Cardano.Chain.Genesis as Byron
+import Control.Concurrent.Async (waitBoth, withAsyncBound)
 import Control.Concurrent.STM (STM)
-import Data.Foldable (traverse_)
+import Control.Monad (unless)
+import Data.ByteString (ByteString)
 import Data.Functor (void)
 import Data.Time (NominalDiffTime)
-import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries (..))
+import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..))
+import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient (..), NodeClientDependencies (..), mkNodeClient)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), mkChainStore)
 
@@ -18,6 +21,8 @@ data ChainSyncDependencies = ChainSyncDependencies
   { localNodeConnectInfo :: !(LocalNodeConnectInfo CardanoMode)
   , databaseQueries      :: !(DatabaseQueries IO)
   , persistRateLimit     :: !NominalDiffTime
+  , genesisConfigHash    :: !ByteString
+  , genesisConfig        :: !Byron.Config
   }
 
 newtype ChainSync = ChainSync { runChainSync :: IO () }
@@ -37,7 +42,16 @@ mkChainSync ChainSyncDependencies{..} = do
     , getChanges
     , clearChanges
     }
-  pure $ ChainSync $ void $ runConcurrently $ traverse_ Concurrently
-    [ runNodeClient
-    , runChainStore
-    ]
+  pure $ ChainSync do
+    let genesisBlock = computeByronGenesisBlock genesisConfigHash genesisConfig
+    mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
+    case mDbGenesisBlock of
+      Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
+        fail "Existing genesis block does not match computed genesis block"
+      Nothing -> do
+        _ <- fail "No genesis block"
+        runCommitGenesisBlock commitGenesisBlock genesisBlock
+
+    void $ withAsyncBound runNodeClient \a1 ->
+      withAsyncBound runChainStore \a2 ->
+        waitBoth a1 a2

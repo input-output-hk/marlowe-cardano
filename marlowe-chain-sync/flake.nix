@@ -112,6 +112,8 @@
             + ''
               export PGUSER=postgres
               export PGPASSWORD=9kZ@o7j4OkMC
+              export BYRON_GENESIS=${pkgs.cardanoLib.environments.testnet.networkConfig.ByronGenesisFile}
+              export BYRON_GENESIS_HASH=${pkgs.cardanoLib.environments.testnet.networkConfig.ByronGenesisHash}
             '';
           };
         };
