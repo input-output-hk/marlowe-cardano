@@ -45,4 +45,4 @@
         hsSourceDirs = [ "src" ];
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../lib/aeson-via-serialise; }
+    } // rec { src = (pkgs.lib).mkDefault ../libs/aeson-via-serialise; }

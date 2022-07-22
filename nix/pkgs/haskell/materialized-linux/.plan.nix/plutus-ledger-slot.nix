@@ -18,22 +18,22 @@
       author = "Michael Peyton Jones, Jann Mueller";
       homepage = "";
       url = "";
-      synopsis = "Wallet API";
-      description = "Plutus ledger library";
+      synopsis = "";
+      description = "";
       buildType = "Simple";
       isLocal = true;
       detailLevel = "FullDetails";
-      licenseFiles = [ "LICENSE" "NOTICE" ];
+      licenseFiles = [];
       dataDir = ".";
       dataFiles = [];
       extraSrcFiles = [];
       extraTmpFiles = [];
-      extraDocFiles = [ "README.md" ];
+      extraDocFiles = [];
       };
     components = {
       "library" = {
         depends = [
-          (hsPkgs."plutus-ledger-aeson" or (errorHandler.buildDepError "plutus-ledger-aeson"))
+          (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
@@ -52,4 +52,4 @@
         hsSourceDirs = [ "src" ];
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../lib/plutus-ledger-slot; }
+    } // rec { src = (pkgs.lib).mkDefault ../libs/plutus-ledger-slot; }

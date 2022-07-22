@@ -34,8 +34,8 @@
       "library" = {
         depends = [
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-          (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
+          (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           ];
@@ -44,4 +44,4 @@
         hsSourceDirs = [ "src" ];
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../lib/base16-aeson; }
+    } // rec { src = (pkgs.lib).mkDefault ../libs/base16-aeson; }
