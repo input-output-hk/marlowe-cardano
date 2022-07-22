@@ -46,8 +46,8 @@ import Cardano.Api (AddressAny, AddressInEra (..), AddressTypeInEra (ShelleyAddr
                     lovelaceToValue, makeShelleyAddress, selectLovelace, toAddressAny, txOutValueToValue,
                     writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
-import Cardano.Api.Shelley (ProtocolParameters, StakeCredential (StakeCredentialByKey, StakeCredentialByScript),
-                            fromPlutusData)
+import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone),
+                            StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData)
 import Cardano.Wallet.Shelley.Compatibility (toCardanoStakeCredential)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
@@ -305,7 +305,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
         Just (marloweInFile, spend, collateral) -> do
                                                     marloweIn  <- decodeFileStrict marloweInFile
                                                     let
-                                                      validatorInfo = mtValidator (marloweIn :: MarloweTransaction AlonzoEra) -- FIXME: Generalize eras.
+                                                      validatorInfo = mtValidator (marloweIn :: MarloweTransaction BabbageEra) -- FIXME: Generalize eras.
                                                       PlutusScript _ validator = viScript validatorInfo
                                                       redeemer = riRedeemer $ buildRedeemer (mtInputs marloweOut)
                                                       inputDatum  = diDatum $ buildDatum (mtContract marloweIn) (mtState marloweIn)
@@ -330,9 +330,14 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                                           ]
                                                     pure ([spend'], Just collateral, merkles)
     let
-      toAddressAny' :: AddressInEra AlonzoEra -> AddressAny
-      toAddressAny' (AddressInEra _ address) = toAddressAny address
+      alonzoToAddressAny' :: AddressInEra AlonzoEra -> AddressAny
+      alonzoToAddressAny' (AddressInEra _ address) = toAddressAny address
+
+      babbageToAddressAny' :: AddressInEra BabbageEra -> AddressAny
+      babbageToAddressAny' (AddressInEra _ address) = toAddressAny address
+
       network = localNodeNetworkId connection
+      scriptAddress :: AddressInEra BabbageEra
       scriptAddress = viAddress $ mtValidator marloweOut
       outputDatum = diDatum $ buildDatum (mtContract marloweOut) (mtState marloweOut)
     outputValue <-
@@ -349,7 +354,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
           guard (outputValue /= mempty)
           pure
             $ buildPayToScript scriptAddress outputValue outputDatum
-      roleAddress = viAddress $ mtRoleValidator marloweOut :: AddressInEra AlonzoEra
+      roleAddress = viAddress $ mtRoleValidator marloweOut :: AddressInEra BabbageEra
     payments <-
       catMaybes
       <$> sequence
@@ -364,7 +369,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                      liftCli
                                        $ toCardanoValue money
                                    money'' <- adjustMinimumUTxO protocol address Nothing money'
-                                   pure $ Just (toAddressAny' address, Nothing, money'')
+                                   pure $ Just (babbageToAddressAny' address, Nothing, money'')
             Party (Role role) -> do
                                    money' <-
                                      liftCli
@@ -372,7 +377,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                    let
                                      datum = Just . diDatum $ buildRoleDatum role
                                    money'' <- adjustMinimumUTxO protocol roleAddress datum money'
-                                   pure $ Just (toAddressAny' roleAddress, datum, money'')
+                                   pure $ Just (babbageToAddressAny' roleAddress, datum, money'')
 
             Account _         -> pure Nothing
         |
@@ -410,7 +415,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
 -- | Adjust the lovelace in an output to confirm to the minimum ADA requirement.
 adjustMinimumUTxO :: MonadError CliError m
                   => ProtocolParameters       -- ^ The protocol parameters.
-                  -> AddressInEra AlonzoEra   -- ^ The output address.
+                  -> AddressInEra BabbageEra  -- ^ The output address.
                   -> Maybe Datum              -- ^ The datum, if any.
                   -> Api.Value                -- ^ The output value.
                   -> m Api.Value              -- ^ Action to compute the adjusted value.
@@ -420,9 +425,10 @@ adjustMinimumUTxO protocol address datum value =
       txOut =
         TxOut
           address
-          (TxOutValue MultiAssetInAlonzoEra value)
-          (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
-    minValue <- liftCli $ calculateMinimumUTxO ShelleyBasedEraAlonzo txOut protocol
+          (TxOutValue MultiAssetInBabbageEra value)
+          (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInBabbageEra . fromPlutusData . toData) datum)
+          ReferenceScriptNone
+    minValue <- liftCli $ calculateMinimumUTxO ShelleyBasedEraBabbage txOut protocol
     let
       minLovelace = selectLovelace minValue
       deficit = minLovelace <> negate (minimum[selectLovelace value, minLovelace])
@@ -456,6 +462,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
     let
       toAddressAny' :: AddressInEra AlonzoEra -> AddressAny
       toAddressAny' (AddressInEra _ address) = toAddressAny address
+
       validatorInfo = mtRoleValidator marloweOut
       PlutusScript _ roleScript = viScript validatorInfo
       roleAddress = viAddress validatorInfo :: AddressInEra AlonzoEra
@@ -463,6 +470,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
       roleRedeemer = riRedeemer buildRoleRedeemer
       checkRole (TxOut _ _ datum _) =
         case datum of
+          TxOutDatumInline _ _       -> False
           TxOutDatumNone             -> False
           TxOutDatumHash _ datumHash -> datumHash == roleHash
     utxos <-
