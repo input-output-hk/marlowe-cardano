@@ -128,8 +128,8 @@ readTxIdEither :: String              -- ^ The string to be read.
                -> Either String TxId  -- ^ Either the transaction ID or an error message.
 readTxIdEither s =
   case deserialiseFromRawBytesHex AsTxId $ BS8.pack s of
-    Nothing   -> Left "Invalid transaction ID."
-    Just txId -> Right txId
+    Left msg   -> Left ("Invalid transaction ID: " <> show msg)
+    Right txId -> Right txId
 
 
 -- | Parser for `TxIx`.
@@ -200,10 +200,10 @@ readAssetIdEither :: String                 -- ^ The string to be read.
 readAssetIdEither s =
   case s =~ "^([[:xdigit:]]{56})\\.([^+]+)$" of
     [[_, symbol, name]] -> case deserialiseFromRawBytesHex AsPolicyId $ BS8.pack symbol of
-                             Just symbol' -> Right
+                             Right symbol' -> Right
                                                 $ AssetId symbol'
                                                   (AssetName . BS8.pack $ name)
-                             Nothing      -> Left "Invalid policy ID."
+                             Left msg      -> Left ("Invalid policy ID: " <> show msg)
     _                   -> Left "Invalid token."
 
 

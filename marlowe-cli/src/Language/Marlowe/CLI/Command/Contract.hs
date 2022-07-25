@@ -31,7 +31,8 @@ import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, 
 import Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer, exportValidator)
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
-import Plutus.V1.Ledger.Api (CurrencySymbol, defaultCostModelParams)
+import Plutus.V1.Ledger.Api (CurrencySymbol)
+import PlutusCore (defaultCostModelParams)
 
 import qualified Options.Applicative as O
 
