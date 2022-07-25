@@ -2,7 +2,7 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database where
 
-import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint (..), TxInMode)
+import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint (..), ChainTip, TxInMode)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..))
 import Ouroboros.Network.Point (WithOrigin)
 
@@ -20,13 +20,13 @@ instance Applicative m => Monoid (CommitRollback m) where
   mempty = CommitRollback \_ -> pure mempty
   mappend = (<>)
 
-newtype CommitBlocks m = CommitBlocks { runCommitBlocks :: [CardanoBlock] -> m () }
+newtype CommitBlocks m = CommitBlocks { runCommitBlocks :: [CardanoBlock] -> ChainPoint -> ChainTip -> m () }
 
 instance Applicative m => Semigroup (CommitBlocks m) where
   CommitBlocks a <> CommitBlocks b = CommitBlocks \blocks -> a blocks *> b blocks
 
 instance Applicative m => Monoid (CommitBlocks m) where
-  mempty = CommitBlocks \_ -> pure mempty
+  mempty = CommitBlocks \_ _ _ -> pure mempty
   mappend = (<>)
 
 newtype CommitGenesisBlock m = CommitGenesisBlock { runCommitGenesisBlock :: GenesisBlock -> m () }
@@ -42,7 +42,7 @@ hoistCommitRollback :: (forall a. m a -> n a) -> CommitRollback m -> CommitRollb
 hoistCommitRollback transformation = CommitRollback . fmap transformation . runCommitRollback
 
 hoistCommitBlocks :: (forall a. m a -> n a) -> CommitBlocks m -> CommitBlocks n
-hoistCommitBlocks transformation = CommitBlocks . fmap transformation . runCommitBlocks
+hoistCommitBlocks transformation = CommitBlocks . (fmap . fmap . fmap) transformation . runCommitBlocks
 
 hoistCommitGenesisBlock :: (forall a. m a -> n a) -> CommitGenesisBlock m -> CommitGenesisBlock n
 hoistCommitGenesisBlock transformation = CommitGenesisBlock . fmap transformation . runCommitGenesisBlock

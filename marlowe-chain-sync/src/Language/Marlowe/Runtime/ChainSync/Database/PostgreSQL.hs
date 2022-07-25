@@ -28,15 +28,17 @@ import qualified Data.Map as Map
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Hasql.Session (Session, sql, statement)
 import Hasql.Statement (refineResult)
-import Hasql.TH (resultlessStatement, vectorStatement)
+import Hasql.TH (maybeStatement, resultlessStatement, vectorStatement)
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
-                                                    CommitRollback (..), GetGenesisBlock (..),
+                                                    CommitRollback (..), GetGenesisBlock (..), GetHeaderAtPoint (..),
                                                     GetIntersectionPoints (..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
+import Ouroboros.Network.Point (WithOrigin (..))
 
 -- GetGenesisBlock
 
@@ -64,6 +66,22 @@ getGenesisBlock = GetGenesisBlock $ statement () $ refineResult (decodeResults .
       <$> decodeTxId txId
       <*> pure (fromIntegral lovelace)
       <*> decodeAddressAny address
+
+getHeaderAtPoint :: GetHeaderAtPoint Session
+getHeaderAtPoint = GetHeaderAtPoint \case
+  ChainPointAtGenesis -> pure Origin
+  point@(ChainPoint slotNo hash) ->
+    statement (slotNoToParam slotNo, headerHashToParam hash) $ refineResult decodeResults
+      [maybeStatement|
+        SELECT block.blockNo :: bigint
+          FROM chain.block AS block
+        WHERE block.slotNo = $1 :: bigint
+          AND block.id     = $2 :: bytea
+      |]
+    where
+      decodeResults :: Maybe Int64 -> Either Text (WithOrigin BlockHeader)
+      decodeResults Nothing        = Left $ "No block found at " <> T.pack (show point)
+      decodeResults (Just blockNo) = Right $ At $ BlockHeader slotNo hash $ BlockNo $ fromIntegral blockNo
 
 decodeTxId :: ByteString -> Either Text TxId
 decodeTxId txId = case deserialiseFromRawBytes AsTxId txId of
@@ -249,8 +267,13 @@ data AssetMint = AssetMint TxId SlotNo PolicyId AssetName Quantity
 
 data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
 
+-- TODO use COPY ... FROM when catching up for faster bulk inserts.
+-- See https://hackage.haskell.org/package/postgresql-libpq-0.9.4.3/docs/Database-PostgreSQL-LibPQ.html#g:8
+-- For how to do this with postgresql-libpg. You can expose the underlying
+-- libpg connection from a `Session` using `withLibPQConnection`
+-- (see https://hackage.haskell.org/package/hasql-1.6.0.1/docs/Hasql-Connection.html#v:withLibPQConnection)
 commitBlocks :: CommitBlocks Session
-commitBlocks = CommitBlocks \blocks ->
+commitBlocks = CommitBlocks \blocks _ _ ->
   let
     txs = extractTxs =<< blocks
     txOuts = extractTxOuts =<< txs
