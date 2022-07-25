@@ -6,3 +6,4 @@ appschema 2022-07-19T18:22:03Z Jamie Bertram <jamie.bertram@iohk.io> # Add schem
 block [appschema] 2022-07-19T19:05:16Z Jamie Bertram <jamie.bertram@iohk.io> # Creates the block table.
 tx [block] 2022-07-19T19:27:25Z Jamie Bertram <jamie.bertram@iohk.io> # Adds tx tables.
 asset [tx] 2022-07-19T20:04:57Z Jamie Bertram <jamie.bertram@iohk.io> # Adds asset tables
+partition [appschema] 2022-07-25T20:26:08Z Jamie Bertram <jamie.bertram@iohk.io> # Adds partition creation function
