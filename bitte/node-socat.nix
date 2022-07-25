@@ -1,6 +1,6 @@
 { writeShellScriptBin, wait-for-socket, socat, lib, coreutils }:
 
-writeShellScriptBin "node-socat" ''
+writeShellScriptBin "entrypoint" ''
   set -eEuo pipefail
 
   export PATH=${lib.makeBinPath [ wait-for-socket socat coreutils ]}
