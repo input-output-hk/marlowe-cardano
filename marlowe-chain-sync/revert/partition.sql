@@ -2,6 +2,6 @@
 
 BEGIN;
 
-DROP FUNCTION createSlotPartition;
+DROP FUNCTION chain.createSlotPartition;
 
 COMMIT;
