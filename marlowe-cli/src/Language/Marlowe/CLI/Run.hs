@@ -47,7 +47,9 @@ import Cardano.Api (AddressAny, AddressInEra (..), AddressTypeInEra (ShelleyAddr
                     writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone),
-                            StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData)
+                            StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData,
+                            toShelleyAddr)
+import Cardano.Wallet.Api.Types (AnyAddress)
 import Cardano.Wallet.Shelley.Compatibility (toCardanoStakeCredential)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
@@ -330,15 +332,17 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                                           ]
                                                     pure ([spend'], Just collateral, merkles)
     let
-      alonzoToAddressAny' :: AddressInEra AlonzoEra -> AddressAny
-      alonzoToAddressAny' (AddressInEra _ address) = toAddressAny address
-
       babbageToAddressAny' :: AddressInEra BabbageEra -> AddressAny
       babbageToAddressAny' (AddressInEra _ address) = toAddressAny address
 
       network = localNodeNetworkId connection
+
       scriptAddress :: AddressInEra BabbageEra
       scriptAddress = viAddress $ mtValidator marloweOut
+
+      scriptAddressInAlonzo :: AddressInEra AlonzoEra
+      scriptAddressInAlonzo =  anyAddressInShelleyBasedEra (babbageToAddressAny' scriptAddress)
+
       outputDatum = diDatum $ buildDatum (mtContract marloweOut) (mtState marloweOut)
     outputValue <-
       mconcat
@@ -353,7 +357,8 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
         do
           guard (outputValue /= mempty)
           pure
-            $ buildPayToScript scriptAddress outputValue outputDatum
+            $ buildPayToScript scriptAddressInAlonzo outputValue outputDatum
+
       roleAddress = viAddress $ mtRoleValidator marloweOut :: AddressInEra BabbageEra
     payments <-
       catMaybes

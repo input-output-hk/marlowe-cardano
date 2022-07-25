@@ -40,11 +40,12 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), AssetId, Hash, IsCardanoEra, Lovelace, PaymentExtendedKey,
-                    PaymentKey, PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData,
-                    SigningKey, SlotNo, TxIn, VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope,
-                    serialiseAddress, serialiseToTextEnvelope)
-import Cardano.Api.Shelley (PlutusScript (..))
+import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), AssetId, BabbageEra, HasTypeProxy (proxyToAsType), Hash,
+                    IsCardanoEra, IsShelleyBasedEra, Lovelace, PaymentExtendedKey, PaymentKey, PlutusScript,
+                    PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo, TxIn,
+                    VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
+                    serialiseToTextEnvelope, shelleyBasedEra)
+import Cardano.Api.Shelley (PlutusScript (..), cardanoEra)
 import Codec.Serialise (deserialise)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.ByteString.Short (ShortByteString)
@@ -62,6 +63,7 @@ import qualified Cardano.Api as Api (Value)
 import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort)
 import qualified Data.Map.Strict as M (Map)
+import Data.Proxy (Proxy (Proxy))
 
 
 -- | Exception for Marlowe CLI.
@@ -98,7 +100,7 @@ data MarloweTransaction era =
   }
     deriving (Generic, Show)
 
-instance IsCardanoEra era => ToJSON (MarloweTransaction era) where
+instance IsShelleyBasedEra era => ToJSON (MarloweTransaction era) where
   toJSON MarloweTransaction{..} =
     object
       [
@@ -132,6 +134,24 @@ instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize era
           pure MarloweTransaction{..}
 
 
+instance FromJSON (MarloweTransaction BabbageEra) where  -- FIXME: Generalize eras.
+  parseJSON =
+    withObject "MarloweTransaction"
+      $ \o ->
+        do
+          mtValidator     <- o .: "marloweValidator"
+          mtRoleValidator <- o .: "rolesValidator"
+          mtRoles         <- o .: "roles"
+          mtState         <- o .: "state"
+          mtContract      <- o .: "contract"
+          mtContinuations <- fromMaybe mempty <$> (o .:? "continuations")
+          mtRange         <- o .: "range"
+          mtInputs        <- o .: "inputs"
+          mtPayments      <- o .: "payments"
+          mtSlotConfig    <- o .: "slotConfig"
+          pure MarloweTransaction{..}
+
+
 -- | Comprehensive information about a Marlowe transaction.
 data MarloweInfo era =
   MarloweInfo
@@ -142,7 +162,7 @@ data MarloweInfo era =
   }
     deriving (Eq, Generic, Show)
 
-instance IsCardanoEra era => ToJSON (MarloweInfo era) where
+instance IsShelleyBasedEra era => ToJSON (MarloweInfo era) where
   toJSON MarloweInfo{..} =
     object
       [
@@ -175,7 +195,7 @@ data ValidatorInfo era =
   }
     deriving (Eq, Generic, Show)
 
-instance IsCardanoEra era => ToJSON (ValidatorInfo era) where
+instance IsShelleyBasedEra era => ToJSON (ValidatorInfo era) where
   toJSON ValidatorInfo{..} =
     object
       [
@@ -186,7 +206,7 @@ instance IsCardanoEra era => ToJSON (ValidatorInfo era) where
       , "cost"    .= toJSON viCost
       ]
 
-instance FromJSON (ValidatorInfo AlonzoEra) where  -- FIXME: Generalize eras.
+instance IsShelleyBasedEra era => FromJSON (ValidatorInfo era) where  -- FIXME: Generalize eras.
   parseJSON =
     withObject "ValidatorInfo"
       $ \o ->
@@ -196,7 +216,7 @@ instance FromJSON (ValidatorInfo AlonzoEra) where  -- FIXME: Generalize eras.
           script    <- o .: "script"
           viSize    <- o .: "size"
           viCost    <- o .: "cost"
-          viAddress <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) address of
+          viAddress <- case deserialiseAddress (proxyToAsType (Proxy :: Proxy (AddressInEra era))) address of
                          Just address' -> pure address'
                          Nothing       -> fail "Failed deserialising address."
           viScript <- case deserialiseFromTextEnvelope (AsScript AsPlutusScriptV1) script of
