@@ -77,4 +77,7 @@ in
     client = marlowe-playground.client;
     variant = "marlowe";
   };
+  node-socat = pkgs.callPackage ./node-socat.nix {
+    inherit wait-for-socket;
+  };
 } // runs.testnet-dev // runs
