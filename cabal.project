@@ -7,7 +7,7 @@ packages:
   marlowe
   marlowe-actus
   marlowe-contracts
-  -- marlowe-cli
+  marlowe-cli
 
   libs/aeson-via-serialise
   libs/base16-aeson
