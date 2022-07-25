@@ -48,9 +48,7 @@ mkChainSync ChainSyncDependencies{..} = do
     case mDbGenesisBlock of
       Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
         fail "Existing genesis block does not match computed genesis block"
-      Nothing -> do
-        _ <- fail "No genesis block"
-        runCommitGenesisBlock commitGenesisBlock genesisBlock
+      Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
 
     void $ withAsyncBound runNodeClient \a1 ->
       withAsyncBound runChainStore \a2 ->

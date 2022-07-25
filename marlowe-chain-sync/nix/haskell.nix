@@ -1,7 +1,7 @@
 { pkgs, src, hls-source }:
 let
   inherit (pkgs) stdenv lib haskell-nix;
-  index-state = "2022-07-18T00:00:00Z";
+  index-state = "2022-02-18T00:00:00Z";
   compiler-nix-name = "ghc8107";
   cabalInstallProject = haskell-nix.hackage-project {
     name = "cabal-install";
