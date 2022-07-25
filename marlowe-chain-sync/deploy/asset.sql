@@ -21,9 +21,9 @@ CREATE TABLE chain.assetOut
       ON DELETE RESTRICT
   );
 
-CREATE INDEX assetMint_slotNo ON chain.assetMint USING BTREE (slotNo);
-CREATE INDEX assetMint_txId ON chain.assetMint USING BTREE (txId);
-CREATE INDEX assetMint_assetId ON chain.assetMint USING BTREE (assetId);
+CREATE INDEX assetOut_slotNo ON chain.assetOut USING BTREE (slotNo);
+CREATE INDEX assetOut_txId_txIx ON chain.assetOut USING BTREE (txOutId, txOutIx);
+CREATE INDEX assetOut_assetId ON chain.assetOut USING BTREE (assetId);
 
 CREATE TABLE chain.assetMint
   ( txId BYTEA NOT NULL
@@ -36,7 +36,7 @@ CREATE TABLE chain.assetMint
 
 COMMIT;
 
-CREATE INDEX assetOut_slotNo ON chain.assetOut USING BTREE (slotNo);
-CREATE INDEX assetOut_txId_txIx ON chain.assetOut USING BTREE (txId, txIx);
-CREATE INDEX assetOut_assetId ON chain.assetOut USING BTREE (assetId);
+CREATE INDEX assetMint_slotNo ON chain.assetMint USING BTREE (slotNo);
+CREATE INDEX assetMint_txId ON chain.assetMint USING BTREE (txId);
+CREATE INDEX assetMint_assetId ON chain.assetMint USING BTREE (assetId);
 
