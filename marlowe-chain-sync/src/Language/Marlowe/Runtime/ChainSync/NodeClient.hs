@@ -30,26 +30,33 @@ type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
 
 data Changes = Changes
-  { changesRollback :: !(Maybe ChainPoint)
-  , changesBlocks   :: ![CardanoBlock]
-  , changesTip      :: !ChainTip
+  { changesRollback   :: !(Maybe ChainPoint)
+  , changesBlocks     :: ![CardanoBlock]
+  , changesTip        :: !ChainTip
+  , changesBlockCount :: !Int
+  , changesTxCount    :: !Int
   }
 
 emptyChanges :: Changes
-emptyChanges = Changes Nothing [] ChainTipAtGenesis
+emptyChanges = Changes Nothing [] ChainTipAtGenesis 0 0
 
 toEmptyChanges :: Changes -> Changes
-toEmptyChanges changes = changes { changesRollback = Nothing, changesBlocks = [] }
+toEmptyChanges changes = changes
+  { changesRollback = Nothing
+  , changesBlocks = []
+  , changesBlockCount = 0
+  , changesTxCount = 0
+  }
 
 isEmptyChanges :: Changes -> Bool
-isEmptyChanges (Changes Nothing [] _) = True
-isEmptyChanges _                      = False
+isEmptyChanges (Changes Nothing [] _ 0 0) = True
+isEmptyChanges _                          = False
 
-maxBatchSize :: Int
-maxBatchSize = 50_000
+maxCost :: Int
+maxCost = 100_000
 
-isMaxBatchSize :: Changes -> Bool
-isMaxBatchSize Changes{..} = length changesBlocks >= maxBatchSize
+cost :: Changes -> Int
+cost Changes{..} = changesBlockCount + changesTxCount * 10
 
 data NodeClientDependencies = NodeClientDependencies
   { localNodeConnectInfo  :: !(LocalNodeConnectInfo CardanoMode)
@@ -190,24 +197,35 @@ mkClientStNext
   -> Nat n
   -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
 mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
-  { recvMsgRollForward = \(blockNo, block) tip -> do
+  { recvMsgRollForward = \(blockNo, block@(BlockInMode (Block _ txs) _)) tip -> do
       atomically do
         changes <- readTVar changesVar
-        guard $ not $ isMaxBatchSize changes
-        writeTVar changesVar changes
-          { changesBlocks = block : changesBlocks changes
-          , changesTip = snd tip
-          }
+        let
+          nextChanges = changes
+            { changesBlocks = block : changesBlocks changes
+            , changesTip = snd tip
+            , changesBlockCount = changesBlockCount changes + 1
+            , changesTxCount = changesTxCount changes + length txs
+            }
+        guard $ cost nextChanges <= maxCost || isEmptyChanges changes
+        writeTVar changesVar nextChanges
       let clientTip = At blockNo
       pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   , recvMsgRollBackward = \point tip -> do
-      atomically $ modifyTVar changesVar \Changes{..} -> Changes
-        { changesBlocks = case point of
+      atomically $ modifyTVar changesVar \Changes{..} ->
+        let
+          changesBlocks' = case point of
             ChainPointAtGenesis -> []
-            ChainPoint slot _   -> filter ((<= slot) . blockSlot) changesBlocks
-        , changesRollback = Just $ maybe point (minPoint point) changesRollback
-        , changesTip = snd tip
-        }
+            ChainPoint slot _   -> dropWhile ((> slot) . blockSlot) changesBlocks
+          blockTxCount (BlockInMode (Block _ txs) _) = length txs
+        in
+          Changes
+            { changesBlocks = changesBlocks'
+            , changesRollback = Just $ maybe point (minPoint point) changesRollback
+            , changesTip = snd tip
+            , changesBlockCount = length changesBlocks'
+            , changesTxCount = sum $ blockTxCount <$> changesBlocks
+            }
       clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
       pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   }

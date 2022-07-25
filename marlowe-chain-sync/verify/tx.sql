@@ -2,15 +2,15 @@
 
 BEGIN;
 
-SELECT id, blockHash, validityLowerBound, validityUpperBound, metadataKey1564
+SELECT id, blockId, slotNo, validityLowerBound, validityUpperBound, metadataKey1564, isValid
   FROM chain.tx
  WHERE FALSE;
 
-SELECT txId, txIx, address, lovelace, datumHash, datumBytes
+SELECT txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral
   FROM chain.txOut
  WHERE FALSE;
 
-SELECT txOutId, txOutIx, txInId, redeemerDatumBytes
+SELECT txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral
   FROM chain.txIn
  WHERE FALSE;
 

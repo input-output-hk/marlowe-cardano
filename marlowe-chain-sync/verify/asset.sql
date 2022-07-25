@@ -6,11 +6,11 @@ SELECT id, policyId, name
   FROM chain.asset
  WHERE FALSE;
 
-SELECT txId, txIx, assetId, quantity
+SELECT txOutId, txOutIx, slotNo, assetId, quantity
   FROM chain.assetOut
  WHERE FALSE;
 
-SELECT txId, assetId, quantity
+SELECT txId, slotNo, assetId, quantity
   FROM chain.assetMint
  WHERE FALSE;
 
