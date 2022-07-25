@@ -15,8 +15,8 @@ tests: False
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 657e41685082764deafd2a3c1b82866e8af77065
-  --sha256: 1dy20h3s395nz7qix0rygxwd36kwq8v05cfb1z4c59bi5y6ns172
+  tag: 1.35.2
+  --sha256: 01a5qdrmsag18s2mlf8axfbrag59j2fp6xyc89pwmzgs7x77ldsr
   subdir:
     cardano-api
     cardano-cli
@@ -51,8 +51,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/hedgehog-extras
-  tag: 714ee03a5a786a05fc57ac5d2f1c2edce4660d85
-  --sha256: 1qa4mm36xynaf17990ijmzww0ij8hjrc0vw5nas6d0zx6q9hb978
+  tag: 967d79533c21e33387d0227a5f6cc185203fe658
+  --sha256: 0rbqb7a64aya1qizlr3im06hdydg9zr6sl3i8bvqqlf7kpa647sd
 
 source-repository-package
   type: git
@@ -80,8 +80,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: 65292694de72f137e6b90c5f361ae7646b48775f
-  --sha256: 05m1c7v8a2797675gkagpzl6bcjnj7w6lnx5x7hf90847ap88b05
+  tag: ebcf1a8936dd84de0182d54004473f4ce66c7923
+  --sha256: 1nx07kcjhj39alarr0bxw9viw3m6flfr8d14g2a3crymf6hxwg36
   subdir:
     eras/alonzo/impl
     eras/alonzo/test-suite
@@ -110,8 +110,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: c7fc9fba236972c27a55e0f3d34c2758cf616bfc
-  --sha256: 0sg1hhnifqxfc5n5f9ikbxyrjlg77hynbhsql0h4smqniw29dbwk
+  tag: bb4ed71ba8e587f672d06edf9d2e376f4b055555
+  --sha256: 00h10l5mmiza9819p9v5q5749nb9pzgi20vpzpy1d34zmh6gf1cj
   subdir:
     cardano-prelude
     cardano-prelude-test
@@ -146,8 +146,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 69b748ea07ffbaf9c7868645f9f8ca9b58f658b5
-  --sha256: 0yfici9p5gbj7gzpbk19izwsksagzc8fjls3cax291128jyvpi7w
+  tag: cb9eba406ceb2df338d8384b35c8addfe2067201
+  --sha256: 066llskxzjgcs13lwlvklb28azb9kd9b77j61x8fvrj1rlf5njfw
   subdir:
     monoidal-synchronisation
     network-mux
@@ -183,8 +183,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus
-  tag: f680ac6979e069fcc013e4389ee607ff5fa6672f
-  --sha256: 180jq8hd0jlg48ya7b5yw3bnd2d5czy0b1agy9ng3mgnzpyq747i
+  tag: a3fba9f4e776c38bc54cb9a1c1cae82d2338b718
+  --sha256: 1vy4fwrq5jbghwkfgnrd5c22zjv8ym9y2j8g38pq50da4nfyv3dh
   subdir:
     plutus-core
     plutus-ledger-api
@@ -213,12 +213,6 @@ source-repository-package
   tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
   --sha256: 1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm
 
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/aeson
-  tag: be4774468e651d1d512edad278cca7276e978034
-  --sha256: 12fr5xnr3ax0r5gzwbf4v49yirppgprmvzlfj1ldx4zhcrdf5j7j
-
 constraints:
     hedgehog >= 1.0
   , bimap >= 0.4.0
@@ -228,17 +222,12 @@ constraints:
     -- that dependency
   , network >= 3.1.1.0
   , HSOpenSSL >= 0.11.7.2
-  , algebraic-graphs < 0.7
-  , protolude < 0.3.1
 
 package snap-server
   flags: +openssl
 
 package comonad
   flags: -test-doctests
-
-package cardano-ledger-alonzo-test
-  tests: False
 
 allow-newer:
   *:aeson,
