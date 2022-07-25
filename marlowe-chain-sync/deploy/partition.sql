@@ -3,7 +3,7 @@
 
 BEGIN;
 
-CREATE FUNCTION createSlotPartition(name text, n integer)
+CREATE FUNCTION chain.createSlotPartition(name text, n integer)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
