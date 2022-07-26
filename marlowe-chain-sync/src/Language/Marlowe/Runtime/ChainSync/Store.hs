@@ -22,7 +22,6 @@ data ChainStoreDependencies = ChainStoreDependencies
   , commitBlocks   :: !(CommitBlocks IO)
   , rateLimit      :: !NominalDiffTime
   , getChanges     :: !(STM Changes)
-  , clearChanges   :: !(STM ())
   }
 
 newtype ChainStore = ChainStore
@@ -37,7 +36,6 @@ mkChainStore ChainStoreDependencies{..} = do
       traverse_ waitDelay delay
       changes <- getChanges
       guard $ not $ isEmptyChanges changes
-      clearChanges
       pure changes
 
     runChainStore :: IO ()
@@ -47,7 +45,7 @@ mkChainStore ChainStoreDependencies{..} = do
           delay <- wither computeDelay lastWrite
           Changes{..} <- atomically $ awaitChanges delay
           traverse_ (runCommitRollback commitRollback) changesRollback
-          runCommitBlocks commitBlocks changesBlocks
+          runCommitBlocks commitBlocks changesBlocks changesPoint changesTip
           go . Just =<< getCurrentTime
 
     computeDelay :: UTCTime -> IO (Maybe Delay)

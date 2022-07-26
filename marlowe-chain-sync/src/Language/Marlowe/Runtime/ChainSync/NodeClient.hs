@@ -19,7 +19,6 @@ import Cardano.Api.ChainSync.ClientPipelined (ClientPipelinedStIdle (..), Client
                                               pipelineDecisionLowHighMark, runPipelineDecision)
 import Control.Arrow ((&&&))
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
-import Control.Exception (finally)
 import Control.Monad (guard)
 import Data.List (sortOn)
 import Data.Ord (Down (..))
@@ -33,12 +32,13 @@ data Changes = Changes
   { changesRollback   :: !(Maybe ChainPoint)
   , changesBlocks     :: ![CardanoBlock]
   , changesTip        :: !ChainTip
+  , changesPoint      :: !ChainPoint
   , changesBlockCount :: !Int
   , changesTxCount    :: !Int
   }
 
 emptyChanges :: Changes
-emptyChanges = Changes Nothing [] ChainTipAtGenesis 0 0
+emptyChanges = Changes Nothing [] ChainTipAtGenesis ChainPointAtGenesis 0 0
 
 toEmptyChanges :: Changes -> Changes
 toEmptyChanges changes = changes
@@ -49,8 +49,8 @@ toEmptyChanges changes = changes
   }
 
 isEmptyChanges :: Changes -> Bool
-isEmptyChanges (Changes Nothing [] _ 0 0) = True
-isEmptyChanges _                          = False
+isEmptyChanges (Changes Nothing [] _ _ _ _) = True
+isEmptyChanges _                            = False
 
 maxCost :: Int
 maxCost = 100_000
@@ -67,7 +67,6 @@ data NodeClientDependencies = NodeClientDependencies
 data NodeClient = NodeClient
   { runNodeClient :: !(IO ())
   , getChanges    :: !(STM Changes)
-  , clearChanges  :: !(STM ())
   }
 
 mkNodeClient :: NodeClientDependencies -> STM NodeClient
@@ -75,11 +74,11 @@ mkNodeClient NodeClientDependencies{..} = do
   changesVar <- newTVar emptyChanges
 
   let
-    clearChanges :: STM ()
-    clearChanges = modifyTVar changesVar toEmptyChanges
-
     getChanges :: STM Changes
-    getChanges = readTVar changesVar
+    getChanges = do
+      changes <- readTVar changesVar
+      modifyTVar changesVar toEmptyChanges
+      pure changes
 
     pipelinedClient' :: ChainSyncClientPipelined CardanoBlock ChainPoint ChainTip IO ()
     pipelinedClient' = mapChainSyncClientPipelined id id (blockToBlockNo &&& id) (chainTipToBlockNo &&& id)
@@ -93,11 +92,7 @@ mkNodeClient NodeClientDependencies{..} = do
       , localStateQueryClient   = Nothing
       }
 
-  pure NodeClient
-    { runNodeClient = finally runNodeClient (atomically clearChanges)
-    , getChanges
-    , clearChanges
-    }
+  pure NodeClient { runNodeClient, getChanges }
 
 blockHeaderToBlockNo :: BlockHeader -> BlockNo
 blockHeaderToBlockNo (BlockHeader _ _ blockNo) = blockNo
@@ -197,17 +192,18 @@ mkClientStNext
   -> Nat n
   -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
 mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
-  { recvMsgRollForward = \(blockNo, block@(BlockInMode (Block _ txs) _)) tip -> do
+  { recvMsgRollForward = \(blockNo, block@(BlockInMode (Block (BlockHeader slotNo hash _) txs) _)) tip -> do
       atomically do
         changes <- readTVar changesVar
         let
           nextChanges = changes
             { changesBlocks = block : changesBlocks changes
             , changesTip = snd tip
+            , changesPoint = ChainPoint slotNo hash
             , changesBlockCount = changesBlockCount changes + 1
             , changesTxCount = changesTxCount changes + length txs
             }
-        guard $ cost nextChanges <= maxCost || isEmptyChanges changes
+        guard $ isEmptyChanges changes || cost nextChanges <= maxCost
         writeTVar changesVar nextChanges
       let clientTip = At blockNo
       pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
@@ -223,6 +219,7 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
             { changesBlocks = changesBlocks'
             , changesRollback = Just $ maybe point (minPoint point) changesRollback
             , changesTip = snd tip
+            , changesPoint = point
             , changesBlockCount = length changesBlocks'
             , changesTxCount = sum $ blockTxCount <$> changesBlocks
             }

@@ -119,7 +119,7 @@ commitRollback = CommitRollback \case
     , "TRUNCATE TABLE chain.tx;"
     , "TRUNCATE TABLE chain.txOut;"
     , "TRUNCATE TABLE chain.txIn;"
-    , "TRUNCATE TABLE chain.asset;"
+    , "DELETE FROM chain.asset;"
     , "TRUNCATE TABLE chain.assetOut;"
     , "TRUNCATE TABLE chain.assetMint;"
     , "TRUNCATE TABLE chain.block;"
@@ -355,14 +355,14 @@ commitBlocks = CommitBlocks \blocks _ _ ->
                                               AND asset.name = assetMint.name
           )
         , newAssetOuts AS
-          ( INSERT INTO chain.assetOut (txOutId, txOutIx, assetId, quantity)
-            SELECT assetOut.txOutId, assetOut.txOutIx, asset.id, assetOut.quantity
+          ( INSERT INTO chain.assetOut (txOutId, txOutIx, slotNo, assetId, quantity)
+            SELECT assetOut.txOutId, assetOut.txOutIx, assetOut.slotNo, asset.id, assetOut.quantity
             FROM   assetOutInputs AS assetOut
             JOIN   assetIds       AS asset    ON  asset.policyId = assetOut.policyId
                                               AND asset.name = assetOut.name
           )
-        INSERT INTO chain.assetMint (txId, assetId, quantity)
-        SELECT assetMint.txId, asset.id, assetMint.quantity
+        INSERT INTO chain.assetMint (txId, slotNo, assetId, quantity)
+        SELECT assetMint.txId, assetMint.slotNo, asset.id, assetMint.quantity
         FROM   assetMintInputs AS assetMint
         JOIN   assetIds        AS asset     ON  asset.policyId = assetMint.policyId
                                             AND asset.name = assetMint.name
@@ -403,6 +403,7 @@ commitBlocks = CommitBlocks \blocks _ _ ->
       , V.fromList $ (\AssetOutRow{..} -> txIx) <$> assetOutRows
       , V.fromList $ (\AssetOutRow{..} -> slotNo) <$> assetOutRows
       , V.fromList $ (\AssetOutRow{..} -> quantity) <$> assetOutRows
+
       , V.fromList $ (\AssetMintRow{..} -> policyId) <$> assetMintRows
       , V.fromList $ (\AssetMintRow{..} -> name) <$> assetMintRows
       , V.fromList $ (\AssetMintRow{..} -> txId) <$> assetMintRows
