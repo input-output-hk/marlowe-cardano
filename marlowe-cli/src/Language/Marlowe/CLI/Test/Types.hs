@@ -161,6 +161,10 @@ data ScriptOperation =
     , soMinimumTime :: POSIXTime
     , soMaximumTime :: POSIXTime
     }
+  | Execute
+    {
+      soTransaction :: TransactionNickname
+    }
   | Fail
     {
       soFailureMessage :: String
