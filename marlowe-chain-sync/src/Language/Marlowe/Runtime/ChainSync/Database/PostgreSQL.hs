@@ -42,6 +42,7 @@ import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
 import Ouroboros.Network.Point (WithOrigin (..))
 
+-- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries :: DatabaseQueries Session
 databaseQueries = DatabaseQueries
  commitRollback
@@ -109,7 +110,7 @@ decodeAddressAny address = case deserialiseFromRawBytes AsAddressAny address of
 -- GetIntersectionPoints
 
 getIntersectionPoints :: GetIntersectionPoints Session
-getIntersectionPoints = GetIntersectionPoints \_ _ -> statement () $ rmap decodeResults
+getIntersectionPoints = GetIntersectionPoints $ statement () $ rmap decodeResults
   [vectorStatement|
     SELECT slotNo :: bigint, id :: bytea
     FROM   chain.block
