@@ -431,8 +431,6 @@
         "haskell-nix": "haskell-nix",
         "iohk-nix": "iohk-nix",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-cardano-node": "nixpkgs-cardano-node",
-        "nixpkgs-cardano-node-unstable": "nixpkgs-cardano-node-unstable",
         "npmlock2nix": "npmlock2nix",
         "plutus-apps": "plutus-apps",
         "plutus-core": "plutus-core",
