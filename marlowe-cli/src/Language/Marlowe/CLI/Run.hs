@@ -418,6 +418,21 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
       (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra)   -> go marloweOut'
       (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
 
+runTransactionImpl :: MonadError CliError m
+               => MonadIO m
+               => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
+               -> Maybe (FilePath, TxIn, TxIn)            -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
+               -> FilePath                                -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+               -> [TxIn]                                  -- ^ The transaction inputs.
+               -> [(AddressAny, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
+               -> AddressAny                              -- ^ The change address.
+               -> [FilePath]                              -- ^ The files for required signing keys.
+               -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
+               -> FilePath                                -- ^ The output file for the transaction body.
+               -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Bool                                    -- ^ Whether to print statistics about the transaction.
+               -> Bool                                    -- ^ Assertion that the transaction is invalid.
+               -> m ()                                  -- ^ Action to build the transaction body.
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
 ensureAtLeastHalfAnAda :: Api.Value -> Api.Value
