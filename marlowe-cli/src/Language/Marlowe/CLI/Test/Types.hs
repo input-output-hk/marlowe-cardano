@@ -21,6 +21,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 
 module Language.Marlowe.CLI.Test.Types (
@@ -41,6 +42,8 @@ module Language.Marlowe.CLI.Test.Types (
 , PabResponse(..)
 , CompanionInstanceInfo(..)
 , TransactionNickname
+, ScriptContract(..)
+
 -- * Lenses
 , psFaucetKey
 , psFaucetAddress
@@ -80,11 +83,14 @@ import qualified Cardano.Wallet.Primitive.Types as W (WalletId)
 import Control.Lens.Combinators (Lens')
 import Control.Lens.Lens (lens)
 import qualified Data.Aeson as A (Value (..))
+import qualified Data.Aeson as Aeson
+import qualified Data.HashMap.Strict
 import qualified Data.Map.Strict as M (Map)
 import Data.Maybe (fromMaybe)
 import Data.Text
 import Ledger (CurrencySymbol)
 import Options.Applicative (optional)
+import qualified Test.QuickCheck.Property as Aeson
 
 
 -- | Configuration for a set of Marlowe tests.
@@ -151,6 +157,24 @@ data PabTest =
 
 type TransactionNickname = String
 
+data ScriptContract = InlineContract Contract | TemplateContract String
+    deriving stock (Eq, Generic, Show)
+
+instance ToJSON ScriptContract where
+    toJSON (InlineContract c)              = Aeson.object [("inline", toJSON c)]
+    toJSON (TemplateContract templateName) = Aeson.object [("template", toJSON templateName)]
+
+instance FromJSON ScriptContract where
+    parseJSON json = case json of
+      Aeson.Object (Data.HashMap.Strict.toList -> [("inline", contractJson)]) -> do
+        parsedContract <- parseJSON contractJson
+        pure $ InlineContract parsedContract
+      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateNameJson)]) -> do
+        parsedTemplateName <- parseJSON templateNameJson
+        pure $ TemplateContract parsedTemplateName
+      _ -> fail "Expected object with a single field of either `inline` or `template`"
+
+
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
   Initialize
@@ -159,7 +183,7 @@ data ScriptOperation =
     , soMinAda       :: Integer
     , soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
     , soRoleCurrency :: Text                  -- ^ We derive
-    , soContract     :: Contract              -- ^ The Marlowe contract to be created.
+    , soContract     :: ScriptContract        -- ^ The Marlowe contract to be created.
     -- | FIXME: No *JSON instances for this
     -- , soStake :: Maybe StakeAddressReference
     }
