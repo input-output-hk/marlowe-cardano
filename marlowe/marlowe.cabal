@@ -100,6 +100,7 @@ test-suite marlowe-test
         Spec.Marlowe.Marlowe
         Spec.Marlowe.Orphans
         Spec.Marlowe.Semantics
+        Spec.Marlowe.Transaction
         Spec.Marlowe.Util
         Spec.Marlowe.Util.AssocMap
 
@@ -116,6 +117,8 @@ test-suite marlowe-test
         lens -any,
         bytestring -any,
         freer-simple -any,
+        freer-extras -any,
+        mtl -any,
         tasty -any,
         tasty-hunit -any,
         tasty-quickcheck,

@@ -4,8 +4,9 @@ module Main(main) where
 
 -- import qualified Spec.Marlowe.AutoExecute
 import qualified Spec.Marlowe.Marlowe
-
 import qualified Spec.Marlowe.Semantics (tests)
+import qualified Spec.Marlowe.Transaction (tests)
+
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 
@@ -31,4 +32,4 @@ tests = testGroup "Marlowe" $
         ]
     ]
     <> Spec.Marlowe.Semantics.tests
-
+    <> [Spec.Marlowe.Transaction.tests]
