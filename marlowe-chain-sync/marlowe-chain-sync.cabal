@@ -22,12 +22,6 @@ source-repository head
   location: https://github.com/input-output-hk/marlowe-cardano
   subdir: marlowe-chain-sync
 
-flag defer-plugin-errors
-    description:
-        Defer errors from the plugin, useful for things like Haddock that can't handle it.
-    default: False
-    manual: True
-
 common lang
   default-language: Haskell2010
   default-extensions:
@@ -55,8 +49,6 @@ common lang
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
-  if flag(defer-plugin-errors)
-    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
 library
   import: lang
