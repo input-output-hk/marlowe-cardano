@@ -80,17 +80,23 @@
               };
             };
           };
-          run-node = import ./nix/cardano-node.nix {
-            inherit pkgs;
-            port = 3001;
-            network = with pkgs.cardanoLib; with environments; testnet // {
-              topology = mkEdgeTopology {
-                edgeNodes = [ testnet.relaysNew ];
-                edgePort = testnet.edgePort;
-                valency = 1;
-              };
+          network = with pkgs.cardanoLib; with environments; testnet // {
+            topology = mkEdgeTopology {
+              edgeNodes = [ testnet.relaysNew ];
+              edgePort = testnet.edgePort;
+              valency = 1;
             };
           };
+
+          run-node = import ./nix/cardano-node.nix {
+            inherit pkgs network;
+            port = 3001;
+          };
+
+          run-marlowesyncd = pkgs.writeShellScriptBin "run-marlowesyncd" ''
+            cabal run marlowesyncd -- --genesis-config-file $BYRON_GENESIS \
+                                      --genesis-config-file-hash $BYRON_GENESIS_HASH
+          '';
 
         in
         flake // {
@@ -99,6 +105,7 @@
             buildInputs = with pkgs; [
               nixpkgs-fmt
               run-node
+              run-marlowesyncd
               docker-compose
               postgresql
               sqitchPg
@@ -112,8 +119,11 @@
             + ''
               export PGUSER=postgres
               export PGPASSWORD=9kZ@o7j4OkMC
-              export BYRON_GENESIS=${pkgs.cardanoLib.environments.testnet.networkConfig.ByronGenesisFile}
-              export BYRON_GENESIS_HASH=${pkgs.cardanoLib.environments.testnet.networkConfig.ByronGenesisHash}
+              export BYRON_GENESIS=${network.networkConfig.ByronGenesisFile}
+              export BYRON_GENESIS_HASH=${network.networkConfig.ByronGenesisHash}
+              export CARDANO_TESTNET_MAGIC=1097911063
+              export CARDANO_NODE_SOCKET_PATH=/tmp/node.socket
+              export CHAIN_SYNC_DB_URI=postgresql://postgres:9kZ%40o7j4OkMC@0.0.0.0/chain
             '';
           };
         };
