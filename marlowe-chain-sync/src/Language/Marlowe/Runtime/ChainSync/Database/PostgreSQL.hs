@@ -1,9 +1,10 @@
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE QuasiQuotes               #-}
 
-module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL where
+module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (databaseQueries) where
 
 import Cardano.Api (AddressAny, AsType (..), AssetId (..), AssetName (..), Block (..), BlockHeader (..),
                     BlockInMode (..), BlockNo (..), CardanoMode, ChainPoint (..), CtxTx, EraInMode, IsCardanoEra,
@@ -35,10 +36,20 @@ import Hasql.Session (Session, sql, statement)
 import Hasql.Statement (refineResult)
 import Hasql.TH (maybeStatement, resultlessStatement, vectorStatement)
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
-                                                    CommitRollback (..), GetGenesisBlock (..), GetHeaderAtPoint (..),
+                                                    CommitRollback (..), DatabaseQueries (DatabaseQueries),
+                                                    GetGenesisBlock (..), GetHeaderAtPoint (..),
                                                     GetIntersectionPoints (..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
 import Ouroboros.Network.Point (WithOrigin (..))
+
+databaseQueries :: DatabaseQueries Session
+databaseQueries = DatabaseQueries
+ commitRollback
+ commitBlocks
+ commitGenesisBlock
+ getHeaderAtPoint
+ getIntersectionPoints
+ getGenesisBlock
 
 -- GetGenesisBlock
 
@@ -66,6 +77,8 @@ getGenesisBlock = GetGenesisBlock $ statement () $ refineResult (decodeResults .
       <$> decodeTxId txId
       <*> pure (fromIntegral lovelace)
       <*> decodeAddressAny address
+
+-- GetHeaderAtPoint
 
 getHeaderAtPoint :: GetHeaderAtPoint Session
 getHeaderAtPoint = GetHeaderAtPoint \case
@@ -159,12 +172,6 @@ commitRollback = CommitRollback \case
     |]
 
 -- CommitGenesisBlock
-type GenesisBlockParams =
-  ( ByteString
-  , Vector ByteString
-  , Vector Int64
-  , Vector ByteString
-  )
 
 commitGenesisBlock :: CommitGenesisBlock Session
 commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
@@ -229,11 +236,6 @@ data TxInRow = TxInRow
   , slotNo             :: !Int64
   , redeemerDatumBytes :: !(Maybe ByteString)
   , isCollateral       :: !Bool
-  }
-
-data AssetRow = AssetRow
-  { policyId :: !ByteString
-  , name     :: !ByteString
   }
 
 data AssetOutRow = AssetOutRow
