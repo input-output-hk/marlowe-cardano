@@ -8,9 +8,11 @@
 
 module Network.Protocol.FilteredChainSync.Types where
 
+import Data.Binary (Binary (..))
 import Data.Kind (Type)
 import Data.String (IsString)
 import Data.Text (Text)
+import qualified Data.Text.Encoding as T
 import Network.TypedProtocol (Protocol (..))
 
 -- | The type of states in the protocol.
@@ -46,6 +48,14 @@ newtype SchemaVersion = SchemaVersion Text
   deriving stock (Show, Eq, Ord)
   deriving newtype (IsString)
 
+instance Binary SchemaVersion where
+  put (SchemaVersion v) = put $ T.encodeUtf8 v
+  get = do
+    bytes <- get
+    case T.decodeUtf8' bytes of
+      Left err      -> fail $ show err
+      Right version -> pure $ SchemaVersion version
+
 instance Protocol (FilteredChainSync query point tip) where
 
   -- | The type of messages in the protocol. Corresponds to the state
@@ -58,28 +68,28 @@ instance Protocol (FilteredChainSync query point tip) where
       'StHandshake
 
     -- | Accept the handshake.
-    MsgConfirmHandshake :: [SchemaVersion] -> Message (FilteredChainSync query point tip)
+    MsgConfirmHandshake :: Message (FilteredChainSync query point tip)
       'StHandshake
       'StIdle
 
     -- | Reject the handshake.
-    MsgRejectHandshake :: Message (FilteredChainSync query point tip)
+    MsgRejectHandshake :: [SchemaVersion] -> Message (FilteredChainSync query point tip)
       'StHandshake
       'StFault
 
     -- | Request the next matching result for the given query from the client's
     -- position.
-    MsgQueryNext :: query err result -> Message (FilteredChainSync query point tip)
+    MsgQueryNext :: point -> query err result -> Message (FilteredChainSync query point tip)
       'StIdle
       ('StNext err result 'StCanAwait)
 
     -- | Reject a query with an error message.
-    MsgRejectQuery :: err -> tip -> Message (FilteredChainSync query point tip)
+    MsgRejectQuery :: query err result -> err -> tip -> Message (FilteredChainSync query point tip)
       ('StNext err result wait)
       'StIdle
 
     -- | Send a response to a query and roll the client forward to a new point.
-    MsgRollForward :: result -> point -> tip -> Message (FilteredChainSync query point tip)
+    MsgRollForward :: query err result -> result -> point -> tip -> Message (FilteredChainSync query point tip)
       ('StNext err result wait)
       'StIdle
 
