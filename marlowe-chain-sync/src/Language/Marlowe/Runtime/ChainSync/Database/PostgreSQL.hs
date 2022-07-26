@@ -275,7 +275,7 @@ data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
 -- libpg connection from a `Session` using `withLibPQConnection`
 -- (see https://hackage.haskell.org/package/hasql-1.6.0.1/docs/Hasql-Connection.html#v:withLibPQConnection)
 commitBlocks :: CommitBlocks Session
-commitBlocks = CommitBlocks \blocks _ _ ->
+commitBlocks = CommitBlocks \blocks ->
   let
     txs = extractTxs =<< blocks
     txOuts = extractTxOuts =<< txs
