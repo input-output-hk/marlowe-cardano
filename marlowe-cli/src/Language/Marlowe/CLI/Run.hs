@@ -34,26 +34,19 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api
-import Cardano.Api (AddressAny, AddressInEra (..), AddressTypeInEra (ShelleyAddressInEra), AlonzoEra, CardanoMode, Hash,
-                    LocalNodeConnectInfo (localNodeNetworkId), MultiAssetSupportedInEra (MultiAssetInAlonzoEra),
-                    NetworkId, PaymentCredential (PaymentCredentialByKey, PaymentCredentialByScript),
-                    QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
-                    Script (..), ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraAlonzo), SlotNo (..),
-                    StakeAddressReference (..), StakeCredential, StakeKey, TxId, TxIn, TxMintValue (TxMintNone),
-                    TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId,
-                    lovelaceToValue, makeShelleyAddress, selectLovelace, toAddressAny, txOutValueToValue,
-                    writeFileTextEnvelope)
+import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, BabbageEra, CardanoMode,
+                    LocalNodeConnectInfo (localNodeNetworkId), MultiAssetSupportedInEra (MultiAssetInBabbageEra),
+                    NetworkId, QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO),
+                    QueryUTxOFilter (QueryUTxOByAddress), Script (..), ScriptDataSupportedInEra (..),
+                    ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..), StakeAddressReference (..), TxId, TxIn,
+                    TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
+                    anyAddressInShelleyBasedEra, calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace,
+                    toAddressAny, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
-import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone),
-                            StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData,
-                            toShelleyAddr)
-import Cardano.Wallet.Api.Types (AnyAddress)
-import Cardano.Wallet.Shelley.Compatibility (toCardanoStakeCredential)
+import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Data.Bifunctor (bimap)
-import qualified Data.Bifunctor as Bifunctor
 import Data.Function (on)
 import Data.List (groupBy, sortBy)
 import qualified Data.Map.Strict as M (toList)
@@ -73,19 +66,13 @@ import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Paymen
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                                  InputContent (..), Party (..), Payee (..), State (accounts),
                                                  Token (..))
-import Ledger (ToCardanoError (Tag))
-import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash))
-import qualified Ledger.Address as Ledger
-import Ledger.Tx.CardanoAPI (ToCardanoError (StakingPointersNotSupported), toCardanoAddressInEra,
-                             toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoScriptHash, toCardanoValue)
+import Ledger.Tx.CardanoAPI (toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
 import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum (..), POSIXTime, TokenName,
                              toBuiltinData, toData)
-import qualified Plutus.V1.Ledger.Api as PV1
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot)
 import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue)
 import qualified PlutusTx.AssocMap as AM (toList)
-import qualified PlutusTx.Builtins as PlutusTx
 import Prettyprinter.Extras (Pretty (..))
 import System.IO (hPutStrLn, stderr)
 

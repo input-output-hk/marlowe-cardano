@@ -25,7 +25,7 @@ module Language.Marlowe.CLI.Command.Test (
 
 import Cardano.Api (NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseUrl)
+import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
 import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests))
 import Language.Marlowe.CLI.Types (CliError)
@@ -49,7 +49,7 @@ runTestCommand = runTests
 parseTestCommand :: O.Mod O.OptionFields NetworkId
                  -> O.Mod O.OptionFields FilePath
                  -> O.Parser TestCommand
-parseTestCommand network socket=
+parseTestCommand _ _ =
   O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
 --  <> _scriptsCommand network socket

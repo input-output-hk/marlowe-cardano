@@ -93,7 +93,7 @@ library
     containers,
     data-default,
     directory,
-    extra,
+    extra -any,
     freer-simple,
     http-client,
     lens,
