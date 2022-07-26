@@ -24,23 +24,28 @@ import Prelude hiding (filter)
 import System.IO (stderr)
 import Witherable (Witherable (..))
 
+-- | Set of dependencies required by the ChainStore
 data ChainStoreDependencies = ChainStoreDependencies
-  { commitRollback :: !(CommitRollback IO)
-  , commitBlocks   :: !(CommitBlocks IO)
-  , rateLimit      :: !NominalDiffTime
-  , getChanges     :: !(STM Changes)
+  { commitRollback :: !(CommitRollback IO) -- ^ How to persist rollbacks in the database backend
+  , commitBlocks   :: !(CommitBlocks IO)   -- ^ How to commit blocks in bulk in the database backend
+  , rateLimit      :: !NominalDiffTime     -- ^ The minimum time between database writes
+  , getChanges     :: !(STM Changes)       -- ^ A source of changes to commit
   }
 
+-- | Public API of the ChainStore component
 newtype ChainStore = ChainStore
-  { runChainStore :: IO ()
+  { runChainStore :: IO () -- ^ Run the chain store in IO
   }
 
+-- | Create a ChainStore component.
 mkChainStore :: ChainStoreDependencies -> STM ChainStore
 mkChainStore ChainStoreDependencies{..} = do
   let
     awaitChanges :: Maybe Delay -> STM Changes
     awaitChanges delay = do
+      -- Wait until allowed to write again (determined by rateLimit).
       traverse_ waitDelay delay
+      -- Reading this STM action clears the source of changes.
       changes <- getChanges
       guard $ not $ isEmptyChanges changes
       pure changes

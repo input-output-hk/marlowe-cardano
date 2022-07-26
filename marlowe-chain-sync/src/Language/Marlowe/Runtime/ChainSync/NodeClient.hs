@@ -28,18 +28,21 @@ import Ouroboros.Network.Point (WithOrigin (..))
 type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
 
+-- | Describes a batch of chain data changes to write.
 data Changes = Changes
-  { changesRollback   :: !(Maybe ChainPoint)
-  , changesBlocks     :: ![CardanoBlock]
-  , changesTip        :: !ChainTip
-  , changesPoint      :: !ChainPoint
-  , changesBlockCount :: !Int
-  , changesTxCount    :: !Int
+  { changesRollback   :: !(Maybe ChainPoint) -- ^ Point to rollback to before writing any blocks.
+  , changesBlocks     :: ![CardanoBlock]     -- ^ New blocks to write.
+  , changesTip        :: !ChainTip           -- ^ Most recently observed tip of the local node.
+  , changesPoint      :: !ChainPoint         -- ^ Chain point the changes will advance the local state to.
+  , changesBlockCount :: !Int                -- ^ Number of blocks in the change set.
+  , changesTxCount    :: !Int                -- ^ Number of transactions in the change set.
   }
 
+-- | An emtpy Changes collection.
 emptyChanges :: Changes
 emptyChanges = Changes Nothing [] ChainTipAtGenesis ChainPointAtGenesis 0 0
 
+-- | Make a set of changes into an empty set (preserves the tip and point fields).
 toEmptyChanges :: Changes -> Changes
 toEmptyChanges changes = changes
   { changesRollback = Nothing
@@ -48,27 +51,35 @@ toEmptyChanges changes = changes
   , changesTxCount = 0
   }
 
+-- | Returns True if the change set is empty.
 isEmptyChanges :: Changes -> Bool
 isEmptyChanges (Changes Nothing [] _ _ _ _) = True
 isEmptyChanges _                            = False
 
+-- | The maximum cost a set of changes is allowed to incur before the
+-- NodeClient blocks.
 maxCost :: Int
 maxCost = 100_000
 
+-- | Computes the cost of a change set. The value is a unitless heuristic.
+--   Prevents large numbers of transactions and blocks being held in memory.
 cost :: Changes -> Int
 cost Changes{..} = changesBlockCount + changesTxCount * 10
 
+-- | The set of dependencies needed by the NodeClient component.
 data NodeClientDependencies = NodeClientDependencies
-  { localNodeConnectInfo  :: !(LocalNodeConnectInfo CardanoMode)
-  , getHeaderAtPoint      :: !(GetHeaderAtPoint IO)
-  , getIntersectionPoints :: !(GetIntersectionPoints IO)
+  { localNodeConnectInfo  :: !(LocalNodeConnectInfo CardanoMode) -- ^ Connection info for the local node.
+  , getHeaderAtPoint      :: !(GetHeaderAtPoint IO)              -- ^ How to load a block header at a given point.
+  , getIntersectionPoints :: !(GetIntersectionPoints IO)         -- ^ How to load the set of initial intersection points for the chain sync client.
   }
 
+-- | The public API of the NodeClient component.
 data NodeClient = NodeClient
-  { runNodeClient :: !(IO ())
-  , getChanges    :: !(STM Changes)
+  { runNodeClient :: !(IO ())       -- ^ Run the component in IO.
+  , getChanges    :: !(STM Changes) -- ^ An STM action that atomically reads and clears the current change set.
   }
 
+-- | Create a new NodeClient component.
 mkNodeClient :: NodeClientDependencies -> STM NodeClient
 mkNodeClient NodeClientDependencies{..} = do
   changesVar <- newTVar emptyChanges
@@ -111,29 +122,15 @@ pipelinedClient
   -> GetIntersectionPoints IO
   -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
 pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints =
-  ChainSyncClientPipelined $ intersect ChainPointAtGenesis Nothing
+  ChainSyncClientPipelined do
+    points <- sortPoints <$> runGetIntersectionPoints getIntersectionPoints
+    pure $ SendMsgFindIntersect points ClientPipelinedStIntersect
+      { recvMsgIntersectFound = clientStIdle
+      , recvMsgIntersectNotFound = clientStIdle ChainPointAtGenesis
+      }
   where
-    intersect
-      :: ChainPoint
-      -> Maybe ChainPoint
-      -> IO (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip IO ())
-    intersect lowerBound upperBound = do
-      points <- sortPoints <$> runGetIntersectionPoints getIntersectionPoints lowerBound upperBound
-      pure $ SendMsgFindIntersect points ClientPipelinedStIntersect
-        { recvMsgIntersectFound = \point tip -> case refineBounds point points of
-            Nothing                         -> clientStIdle point tip
-            Just (lowerBound', upperBound') -> intersect lowerBound' $ Just upperBound'
-        , recvMsgIntersectNotFound = clientStIdle ChainPointAtGenesis
-        }
-
     sortPoints :: [ChainPoint] -> [ChainPoint]
     sortPoints = sortOn $ Down . chainPointToSlotNo
-
-    -- INVARIANT: points are sorted in descenting order by slot
-    refineBounds :: ChainPoint -> [ChainPoint] -> Maybe (ChainPoint, ChainPoint)
-    refineBounds found points = (found,) <$> case takeWhile (/= found) points of
-      []      -> Nothing
-      points' -> Just $ last points'
 
     clientStIdle
       :: ChainPoint
@@ -143,6 +140,10 @@ pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints =
       clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
       pure $ mkClientStIdle changesVar getHeaderAtPoint pipelinePolicy Zero clientTip nodeTip
 
+    -- How to pipeline. If we have fewer than 50 requests in flight, send
+    -- another request. When we hit 50, start collecting responses until we
+    -- have 1 request in flight, then repeat. If we are caught up to tip,
+    -- requests will not be pipelined.
     pipelinePolicy :: MkPipelineDecision
     pipelinePolicy = pipelineDecisionLowHighMark 1 50
 
@@ -203,6 +204,8 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
             , changesBlockCount = changesBlockCount changes + 1
             , changesTxCount = changesTxCount changes + length txs
             }
+        -- Retry unless either the current change set is empty, or the next
+        -- change set would not be too expensive.
         guard $ isEmptyChanges changes || cost nextChanges <= maxCost
         writeTVar changesVar nextChanges
       let clientTip = At blockNo
@@ -217,7 +220,14 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
         in
           Changes
             { changesBlocks = changesBlocks'
-            , changesRollback = Just $ maybe point (minPoint point) changesRollback
+            , changesRollback = case changesRollback of
+                -- If there was no previous rollback, and we still have blocks
+                -- in the batch after the rollback, we don't need to actually
+                -- process the rollback.
+                Nothing           -> point <$ guard (null changesBlocks')
+                -- Otherwise, we need to process whichever rollback was to an
+                -- earlier point: the previous one, or this new one.
+                Just prevRollback -> Just $ minPoint point prevRollback
             , changesTip = snd tip
             , changesPoint = point
             , changesBlockCount = length changesBlocks'

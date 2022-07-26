@@ -39,7 +39,7 @@ newtype GetHeaderAtPoint m = GetHeaderAtPoint
   { runGetHeaderAtPoint :: ChainPoint -> m (WithOrigin BlockHeader) }
 
 newtype GetIntersectionPoints m = GetIntersectionPoints
-  { runGetIntersectionPoints :: ChainPoint -> Maybe ChainPoint -> m [ChainPoint] }
+  { runGetIntersectionPoints :: m [ChainPoint] }
 
 newtype GetGenesisBlock m = GetGenesisBlock
   { runGetGenesisBlock :: m (Maybe GenesisBlock) }
@@ -48,7 +48,7 @@ hoistGetHeaderAtPoint :: (forall a. m a -> n a) -> GetHeaderAtPoint m -> GetHead
 hoistGetHeaderAtPoint transformation = GetHeaderAtPoint . fmap transformation . runGetHeaderAtPoint
 
 hoistGetIntersectionPoints :: (forall a. m a -> n a) -> GetIntersectionPoints m -> GetIntersectionPoints n
-hoistGetIntersectionPoints transformation = GetIntersectionPoints . (fmap . fmap) transformation . runGetIntersectionPoints
+hoistGetIntersectionPoints transformation = GetIntersectionPoints . transformation . runGetIntersectionPoints
 
 hoistGetGenesisBlock :: (forall a. m a -> n a) -> GetGenesisBlock m -> GetGenesisBlock n
 hoistGetGenesisBlock transformation = GetGenesisBlock . transformation . runGetGenesisBlock
