@@ -32,7 +32,9 @@ import Cardano.Api (CardanoMode, LocalNodeConnectInfo (..), NetworkId (..), Scri
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
-import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..), MarloweTransaction)
+import Language.Marlowe.CLI.Test.Types (ScriptContract (InlineContract, TemplateContract), ScriptOperation (..),
+                                        ScriptTest (..), TransactionNickname)
+import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction))
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -83,13 +85,17 @@ interpret = \case
       marloweParams = Client.marloweParams parsedRoleCurrency
       marloweState = initialMarloweState soOwner soMinAda
 
+    testContract <- case soContract of
+      InlineContract contract -> pure contract
+      TemplateContract _      -> throwError $ CliError "Not implemented yet"
+
     transaction <- flip runReaderT (CliEnv seEra) $ initializeTransactionImpl
       marloweParams
       seSlotConfig
       seConstModelParams
       seNetworkId
       NoStakeAddress
-      soContract
+      testContract
       marloweState
       True
       True

@@ -21,6 +21,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 
 module Language.Marlowe.CLI.Test.Types (
@@ -29,12 +30,25 @@ module Language.Marlowe.CLI.Test.Types (
 , ScriptTest(..)
 , ScriptOperation(..)
 , TransactionNickname
+, ScriptContract(..)
+
+-- * Lenses
+, psFaucetKey
+, psFaucetAddress
+, psBurnAddress
+, psPassphrase
+, psWallets
+, psAppInstances
+, psFollowerInstances
+, psCompanionInstances
+, prComparison
+, prRetry
+, comparisonJSON
 ) where
 
 
 import Cardano.Api (AddressInEra, NetworkId)
 import GHC.Generics (Generic)
--- import Language.Marlowe.CLI.PAB (WsRunner)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input)
@@ -73,6 +87,37 @@ data ScriptTest =
     deriving anyclass (FromJSON, ToJSON)
 
 
+-- | An on- and off-chain test of the Marlowe contracts, via the Marlowe PAB.
+data PabTest =
+  PabTest
+  {
+    ptTestName      :: String          -- ^ The name of the test.
+  , ptPabOperations :: [PabOperation]  -- ^ The sequence of test operations.
+  }
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+
+
+type TransactionNickname = String
+
+data ScriptContract = InlineContract Contract | TemplateContract String
+    deriving stock (Eq, Generic, Show)
+
+instance ToJSON ScriptContract where
+    toJSON (InlineContract c)              = Aeson.object [("inline", toJSON c)]
+    toJSON (TemplateContract templateName) = Aeson.object [("template", toJSON templateName)]
+
+instance FromJSON ScriptContract where
+    parseJSON json = case json of
+      Aeson.Object (Data.HashMap.Strict.toList -> [("inline", contractJson)]) -> do
+        parsedContract <- parseJSON contractJson
+        pure $ InlineContract parsedContract
+      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateNameJson)]) -> do
+        parsedTemplateName <- parseJSON templateNameJson
+        pure $ TemplateContract parsedTemplateName
+      _ -> fail "Expected object with a single field of either `inline` or `template`"
+
+
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
   Initialize
@@ -81,7 +126,7 @@ data ScriptOperation =
     , soMinAda       :: Integer
     , soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
     , soRoleCurrency :: Text                  -- ^ We derive
-    , soContract     :: Contract              -- ^ The Marlowe contract to be created.
+    , soContract     :: ScriptContract        -- ^ The Marlowe contract to be created.
     -- | FIXME: No *JSON instances for this
     -- , soStake :: Maybe StakeAddressReference
     }
