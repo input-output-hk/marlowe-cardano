@@ -22,8 +22,8 @@ chain using the Filtered Chain Sync Protocol.
 
 .PP
 If the connection to the local node is lost, or cannot be established, this
-program will attempt to reconnect until it succeeds with truncated exponential
-backoff.
+program will terminate with an exception. The same applies if database
+connection is lost. It will not terminate if any downstream clients disconnect.
 
 .SH OPTIONS
 .IP --testnet-magic
@@ -40,6 +40,25 @@ socket file. Must be specified. Alternatively, the
 .B CARDANO_NODE_SOCKET_PATH
 environment variable can be used to specify this value. The command line option
 will override the environment variable.
+
+.IP --database-uri
+URI location of the database instance to save chain data to. The choice of
+storage engine is determined by the URI scheme. Currently supported backends
+include
+.B postgres(1).
+The URI for PostgreSQL must conform to the format described in
+.I https://www.postgresql.org/docs/current/libpq-connect.html#id-1.7.3.8.3.6.
+Alternatively, the
+.B CHAIN_SYNC_DB_URI
+environment variable can be used to specify this value. The command line option
+will override the environment variable.
+
+.IP --genesis-config-file
+Filepath location of the Byron Genesis JSON config file for the local node.
+
+.IP --genesis-config-file-hash
+Hash of the file specified by
+.B --genesis-config-file.
 
 .IP --version
 Show the version number.
