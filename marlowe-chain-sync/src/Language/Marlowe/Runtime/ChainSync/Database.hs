@@ -23,7 +23,8 @@ instance Applicative m => Monoid (CommitRollback m) where
 newtype CommitBlocks m = CommitBlocks { runCommitBlocks :: [CardanoBlock] -> ChainPoint -> ChainTip -> m () }
 
 instance Applicative m => Semigroup (CommitBlocks m) where
-  CommitBlocks a <> CommitBlocks b = CommitBlocks \blocks -> a blocks *> b blocks
+  CommitBlocks a <> CommitBlocks b = CommitBlocks \blocks point tip ->
+    a blocks point tip *> b blocks point tip
 
 instance Applicative m => Monoid (CommitBlocks m) where
   mempty = CommitBlocks \_ _ _ -> pure mempty

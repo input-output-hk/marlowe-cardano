@@ -40,7 +40,6 @@ mkChainSync ChainSyncDependencies{..} = do
     , commitBlocks
     , rateLimit = persistRateLimit
     , getChanges
-    , clearChanges
     }
   pure $ ChainSync do
     let genesisBlock = computeByronGenesisBlock genesisConfigHash genesisConfig

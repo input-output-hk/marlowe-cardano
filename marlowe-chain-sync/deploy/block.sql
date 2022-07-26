@@ -10,7 +10,7 @@ CREATE TABLE chain.block
   , slotNo BIGINT NOT NULL
   , blockNo BIGINT NOT NULL
   , rollbackToBlock BYTEA
-  , rollbackToSlot BYTEA
+  , rollbackToSlot BIGINT
   ) PARTITION BY RANGE (slotNo);
 
 CREATE INDEX block_slotNo ON chain.block USING BRIN (slotNo);

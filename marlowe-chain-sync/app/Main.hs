@@ -1,6 +1,7 @@
 module Main where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
+import Cardano.Api (CardanoMode, ChainPoint (..), ChainTip (..), ConsensusModeParams (..), EpochSlots (..),
+                    LocalNodeConnectInfo (..), SlotNo (..))
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
@@ -8,6 +9,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT, withExceptT)
+import Data.Function (on)
 import Data.String (IsString (fromString))
 import Data.Text (unpack)
 import Data.Text.Encoding (decodeUtf8)
@@ -17,10 +19,9 @@ import Hasql.Session (Session)
 import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSync (..), ChainSyncDependencies (..), mkChainSync)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks (..), CommitRollback (..), DatabaseQueries (..),
-                                                    GetHeaderAtPoint (..), hoistDatabaseQueries)
+                                                    hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Options (Options (..), getOptions)
-import Ouroboros.Network.Point (WithOrigin (..))
 
 main :: IO ()
 main = run =<< getOptions "0.0.0.0"
@@ -57,14 +58,22 @@ run Options{..} = do
     databaseQueries = DatabaseQueries
       { commitRollback = mconcat
           [ CommitRollback \point -> liftIO $ putStrLn $ "Rolling back to point " <> show point
-          -- , PostgreSQL.commitRollback
+          , PostgreSQL.commitRollback
           ]
       , commitBlocks = mconcat
-          [ CommitBlocks \blocks -> liftIO $ putStrLn $ "saving " <> show (length blocks) <> " blocks"
+          [ CommitBlocks \blocks point tip -> do
+              let
+                percent = case (point, tip) of
+                  (_, ChainTipAtGenesis)                             -> 1
+                  (ChainPointAtGenesis, _)                           -> 0
+                  (ChainPoint (SlotNo p) _, ChainTip (SlotNo t) _ _) -> on (/) fromIntegral p t
+              liftIO $ putStrLn $ "saving " <> show (length blocks) <> " blocks (" <> case percent of
+                1 -> "in sync)"
+                _ -> show (floor (percent * 100 :: Double) :: Int) <> "%)"
           , PostgreSQL.commitBlocks
           ]
       , commitGenesisBlock = PostgreSQL.commitGenesisBlock
-      , getHeaderAtPoint = GetHeaderAtPoint \_ -> pure Origin
+      , getHeaderAtPoint = PostgreSQL.getHeaderAtPoint
       , getIntersectionPoints = PostgreSQL.getIntersectionPoints
       , getGenesisBlock = PostgreSQL.getGenesisBlock
       }
