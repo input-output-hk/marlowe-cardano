@@ -333,12 +333,14 @@
         "semigroups".flags.unordered-containers = true;
         "semigroups".flags.text = true;
         "semigroups".flags.hashable = true;
+        "cborg-json".revision = (((hackage."cborg-json")."0.2.3.0").revisions).default;
         "free".revision = (((hackage."free")."5.1.7").revisions).default;
         "terminfo".revision = (((hackage."terminfo")."0.4.1.4").revisions).default;
         "connection".revision = (((hackage."connection")."0.3.1").revisions).default;
         "pipes".revision = (((hackage."pipes")."4.3.16").revisions).default;
         "haskell-lexer".revision = (((hackage."haskell-lexer")."1.1").revisions).default;
         "microlens".revision = (((hackage."microlens")."0.4.12.0").revisions).default;
+        "one-line-aeson-text".revision = (((hackage."one-line-aeson-text")."0.1.0.4").revisions).default;
         "ghc-heap".revision = (((hackage."ghc-heap")."8.10.7").revisions).default;
         "resourcet".revision = (((hackage."resourcet")."1.2.4.3").revisions).default;
         "pipes-safe".revision = (((hackage."pipes-safe")."2.3.4").revisions).default;
@@ -829,6 +831,7 @@
         byron-spec-chain = ./.plan.nix/byron-spec-chain.nix;
         cardano-crypto-test = ./.plan.nix/cardano-crypto-test.nix;
         hjsonschema = ./.plan.nix/hjsonschema.nix;
+        marlowe-cli = ./.plan.nix/marlowe-cli.nix;
         cardano-config = ./.plan.nix/cardano-config.nix;
         plutus-ledger-ada = ./.plan.nix/plutus-ledger-ada.nix;
         ouroboros-network-testing = ./.plan.nix/ouroboros-network-testing.nix;
@@ -1027,6 +1030,9 @@
           "byron-spec-chain" = { flags = {}; };
           "cardano-crypto-test" = { flags = {}; };
           "hjsonschema" = { flags = {}; };
+          "marlowe-cli" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "cardano-config" = {
             flags = { "systemd" = lib.mkOverride 900 true; };
             };
@@ -1286,6 +1292,7 @@
           "profunctors".components.library.planned = lib.mkOverride 900 true;
           "exceptions".components.library.planned = lib.mkOverride 900 true;
           "hjsonpointer".components.library.planned = lib.mkOverride 900 true;
+          "one-line-aeson-text".components.library.planned = lib.mkOverride 900 true;
           "mmorph".components.library.planned = lib.mkOverride 900 true;
           "safe-exceptions".components.library.planned = lib.mkOverride 900 true;
           "strict-containers".components.library.planned = lib.mkOverride 900 true;
@@ -1458,6 +1465,8 @@
           "half".components.library.planned = lib.mkOverride 900 true;
           "cardano-git-rev".components.library.planned = lib.mkOverride 900 true;
           "text-class".components.library.planned = lib.mkOverride 900 true;
+          "cborg-json".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-cli".components.exes."marlowe-cli".planned = lib.mkOverride 900 true;
           "monad-loops".components.library.planned = lib.mkOverride 900 true;
           "cardano-wallet".components.exes."mock-token-metadata-server".planned = lib.mkOverride 900 true;
           "websockets".components.library.planned = lib.mkOverride 900 true;
@@ -1612,6 +1621,7 @@
           "servant-client".components.library.planned = lib.mkOverride 900 true;
           "natural-transformation".components.library.planned = lib.mkOverride 900 true;
           "wl-pprint-annotated".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-cli".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.library.planned = lib.mkOverride 900 true;
           "th-compat".components.library.planned = lib.mkOverride 900 true;
           "cardano-crypto".components.library.planned = lib.mkOverride 900 true;

@@ -33,23 +33,7 @@ let
     ++ ownOverlays;
 
 
-  # Belowe strategy to use old nixpkgs and custom overlay didn't work.
-  # I've moved complately to nixpkgs from cardano-node flake.lock.
-  #
-  #    (final: prev: { secp256k1 = pkgsCardanoNode.secp256k1; })
-  #
-  # pkgsCardanoNode = import sources.nixpkgs-cardano-node {
-  #   inherit crossSystem;
-  #   # In nixpkgs versions older than 21.05, if we don't explicitly pass
-  #   # in localSystem we will hit a code path that uses builtins.currentSystem,
-  #   # which breaks flake's pure evaluation.
-  #   localSystem = { inherit system; };
-  #   config = haskellNix.nixpkgsArgs.config // config;
-  # };
-  # pkgs = import sources.nixpkgs {
-
-
-  pkgs = import sources.nixpkgs-cardano-node-unstable {
+  pkgs = import sources.nixpkgs {
     inherit crossSystem;
     # In nixpkgs versions older than 21.05, if we don't explicitly pass
     # in localSystem we will hit a code path that uses builtins.currentSystem,

@@ -62,7 +62,6 @@ library
     cardano-ledger-core -any,
     containers -any,
     deriving-aeson -any,
-    extra -any,
     lens,
     mtl,
     newtype-generics,

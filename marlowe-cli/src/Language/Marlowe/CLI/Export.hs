@@ -78,7 +78,6 @@ import Codec.Serialise (serialise)
 import qualified Data.Bifunctor as Bifunctor
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Short as SBS
-import Ledger.Typed.Scripts.Validators (TypedValidator, validatorScript)
 import qualified Plutus.V1.Ledger.Api as PV1
 import Plutus.V1.Ledger.EvaluationContext (mkEvaluationContext)
 
