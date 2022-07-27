@@ -13,51 +13,33 @@
 
 module Plutus.V1.Ledger.Aeson where
 
-import Codec.Serialise (Serialise)
-import Data.Aeson (FromJSON (parseJSON), FromJSONKey, ToJSON (toJSON), ToJSONKey)
+import Data.Aeson (FromJSON (parseJSON), FromJSONKey, ToJSON (toJSON), ToJSONKey, (.:))
 import qualified Data.Aeson as JSON
 
 import Plutus.V1.Ledger.Api
-import qualified Plutus.V1.Ledger.Bytes as Bytes
 import Plutus.V1.Ledger.Tx
 
 import qualified Codec.CBOR.Write as CBOR.Write
-import Codec.Serialise (Serialise)
 import Codec.Serialise as Serialise
-import Data.Aeson (FromJSON (parseJSON), FromJSONKey, ToJSON (toJSON), ToJSONKey, (.:))
 import qualified Data.Aeson as Aeson
-import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as JSON
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16.Aeson as Base16.Aeson
 import qualified Data.ByteString.Lazy as BSL
-import Data.Hashable (Hashable)
 import Data.Scientific (floatingOrInteger, scientific)
 import Data.String (IsString (fromString))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as E
 import qualified Flat
-import Plutus.V1.Ledger.Address (Address)
 import qualified Plutus.V1.Ledger.Bytes as Bytes
-import Plutus.V1.Ledger.Interval (Extended, Interval, LowerBound, UpperBound)
 import Plutus.V1.Ledger.Scripts
-import Plutus.V1.Ledger.Time (POSIXTime (POSIXTime))
 import Plutus.V1.Ledger.Value
 import qualified PlutusTx.AssocMap as Map
 import qualified PlutusTx.Builtins
 import PlutusTx.Builtins.Aeson ()
 
-import Codec.Serialise (Serialise)
-import Data.Aeson (FromJSON, ToJSON)
 import Data.Hashable (Hashable)
 
-import Plutus.V1.Ledger.Credential
-
-import Codec.Serialise (Serialise)
-import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
-import Data.Hashable (Hashable)
-
-import Plutus.V1.Ledger.Crypto
 
 {- Note [JSON instances for Script]
 The JSON instances for Script are partially hand-written rather than going via the Serialise
@@ -73,7 +55,7 @@ instance ToJSON Script where
 instance FromJSON Script where
     -- See note [JSON instances for Script]
     parseJSON v = do
-      (Base16 bs) <- parseJSON v
+      (EncodeBase16 bs) <- parseJSON v
       let
         lbs = BSL.fromStrict bs
       case Flat.unflatWith Flat.decode lbs of
@@ -151,7 +133,7 @@ instance FromJSON CurrencySymbol where
   parseJSON =
     JSON.withObject "CurrencySymbol" $ \object -> do
       raw <- object .: "unCurrencySymbol"
-      Base16 bytes <- parseJSON raw
+      EncodeBase16 bytes <- parseJSON raw
       pure $ CurrencySymbol $ PlutusTx.Builtins.toBuiltin bytes
 
 deriving anyclass instance Hashable CurrencySymbol
@@ -171,7 +153,7 @@ and we serialize it base16 encoded, with 0x in front so it will look as a hex st
 instance ToJSON TokenName where
     toJSON = JSON.object . pure . (,) "unTokenName" . JSON.toJSON .
         fromTokenName
-            (\bs -> Text.cons '\NUL' (asBase16 bs))
+            (Text.cons '\NUL' . asBase16)
             (\t -> case Text.take 1 t of "\NUL" -> Text.concat ["\NUL\NUL", t]; _ -> t)
       where
         -- copied from 'Plutus.V1.Ledger.Value' because not exported
@@ -191,7 +173,7 @@ instance FromJSON TokenName where
             fromText = tokenName . E.encodeUtf8 . Text.pack . fromString . Text.unpack
             fromJSONText t = case Text.take 3 t of
                 "\NUL0x"       -> do
-                  Base16 bs <- parseJSON (Aeson.String $ Text.drop 3 t)
+                  EncodeBase16 bs <- parseJSON (Aeson.String $ Text.drop 3 t)
                   pure $ tokenName bs
                 "\NUL\NUL\NUL" -> pure . fromText . Text.drop 2 $ t
                 _              -> pure . fromText $ t
@@ -257,11 +239,11 @@ deriving anyclass instance FromJSONKey LedgerBytes
 deriving anyclass instance ToJSONKey LedgerBytes
 
 instance ToJSON LedgerBytes where
-    toJSON = toJSON . Base16 . Bytes.bytes
+    toJSON = toJSON . EncodeBase16 . Bytes.bytes
 
 instance FromJSON LedgerBytes where
     parseJSON v = do
-      Base16 bs <- parseJSON v
+      EncodeBase16 bs <- parseJSON v
       return $ Bytes.fromBytes bs
 
 deriving anyclass instance ToJSON RedeemerPtr

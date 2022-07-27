@@ -778,6 +778,7 @@
         cardano-ledger-pretty = ./.plan.nix/cardano-ledger-pretty.nix;
         cardano-protocol-tpraos = ./.plan.nix/cardano-protocol-tpraos.nix;
         plutus-core = ./.plan.nix/plutus-core.nix;
+        plutus-ledger-aeson = ./.plan.nix/plutus-ledger-aeson.nix;
         plutus-ledger-api = ./.plan.nix/plutus-ledger-api.nix;
         cardano-prelude-test = ./.plan.nix/cardano-prelude-test.nix;
         strict-non-empty-containers = ./.plan.nix/strict-non-empty-containers.nix;
@@ -916,6 +917,9 @@
           "cardano-ledger-pretty" = { flags = {}; };
           "cardano-protocol-tpraos" = { flags = {}; };
           "plutus-core" = { flags = {}; };
+          "plutus-ledger-aeson" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "plutus-ledger-api" = { flags = {}; };
           "cardano-prelude-test" = {
             flags = { "development" = lib.mkOverride 900 false; };
@@ -1675,6 +1679,7 @@
           "vault".components.library.planned = lib.mkOverride 900 true;
           "th-abstraction".components.library.planned = lib.mkOverride 900 true;
           "unagi-chan".components.library.planned = lib.mkOverride 900 true;
+          "plutus-ledger-aeson".components.library.planned = lib.mkOverride 900 true;
           "cardano-ledger-shelley-test".components.library.planned = lib.mkOverride 900 true;
           "parsers".components.library.planned = lib.mkOverride 900 true;
           "random-shuffle".components.library.planned = lib.mkOverride 900 true;

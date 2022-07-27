@@ -32,7 +32,7 @@ import qualified Data.Aeson as JSON
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types hiding (Error, Value)
 import qualified Data.Aeson.Types as JSON
-import Data.ByteString.Base16.Aeson (Base16 (Base16))
+import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
 import qualified Data.ByteString.Base16.Aeson as Base16.Aeson
 import qualified Data.Foldable as F
 import Data.String (IsString (..))
@@ -353,13 +353,13 @@ instance ToJSON State where
 
 instance FromJSON Party where
   parseJSON = withObject "Party" (\v -> do
-        Base16 bs <- parseJSON =<< (v .: "pk_hash")
+        EncodeBase16 bs <- parseJSON =<< (v .: "pk_hash")
         return $ PK . PubKeyHash . toBuiltin $ bs
     <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
                                  )
 instance ToJSON Party where
     toJSON (PK pkh) = object
-        [ "pk_hash" .= (toJSON $ Base16 $ fromBuiltin $ getPubKeyHash pkh) ]
+        [ "pk_hash" .= (toJSON $ EncodeBase16 $ fromBuiltin $ getPubKeyHash pkh) ]
     toJSON (Role (Val.TokenName name)) = object
         [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
 
@@ -385,13 +385,13 @@ instance FromJSON Token where
   parseJSON = withObject "Token" (\v ->
        Token <$> do
                     cs <- v .: "currency_symbol"
-                    Base16 bs <- parseJSON cs
+                    EncodeBase16 bs <- parseJSON cs
                     return $ Val.currencySymbol bs
              <*> (Val.tokenName . Text.encodeUtf8 <$> (v .: "token_name")))
 
 instance ToJSON Token where
   toJSON (Token currSym tokName) = object
-      [ "currency_symbol" .= (toJSON $ Base16 $ fromBuiltin $ unCurrencySymbol currSym)
+      [ "currency_symbol" .= (toJSON $ EncodeBase16 $ fromBuiltin $ unCurrencySymbol currSym)
       , "token_name" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin $ unTokenName tokName)
       ]
 
@@ -574,7 +574,7 @@ instance FromJSON a => FromJSON (Case a) where
         <$> v .: "case"
         <*> do
           mt <- v.: "merkleized_then"
-          Base16 bs <- parseJSON mt
+          EncodeBase16 bs <- parseJSON mt
           return $ toBuiltin bs
 
 instance ToJSON a => ToJSON (Case a) where

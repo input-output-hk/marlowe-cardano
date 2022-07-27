@@ -11,7 +11,7 @@ packages:
 
   libs/aeson-via-serialise
   libs/base16-aeson
-  -- libs/plutus-ledger-aeson
+  libs/plutus-ledger-aeson
   libs/plutus-ledger-ada
   libs/plutus-ledger-slot
 

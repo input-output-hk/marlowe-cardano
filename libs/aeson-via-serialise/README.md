@@ -1,6 +1,6 @@
 # aeson-via-serialise
 
-Use `Serialise` together with `Base16` encoding to handle `JSON` encoding.
+Use `Serialise` together with `EncodeBase16` encoding to handle `JSON` encoding.
 
 ## Credits
 

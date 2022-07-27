@@ -17,7 +17,7 @@ instance Serialise a => Aeson.ToJSON (ViaSerialise a) where
 
 instance Serialise a => Aeson.FromJSON (ViaSerialise a) where
     parseJSON v = ViaSerialise <$> do
-      Base16 bs <- Aeson.parseJSON v
+      EncodeBase16 bs <- Aeson.parseJSON v
       case deserialiseOrFail . BSL.fromStrict $ bs of
         Left err  -> fail (show err)
         Right res -> pure res

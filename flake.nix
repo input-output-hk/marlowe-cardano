@@ -12,6 +12,7 @@
 
     # We intentionally import nixpkgs and haskell.nix as non-flakes, to match the
     # flake-free normal build workflow exactly.
+    # Currently the pinned version follows cardano-node/flake.lock `nixpkgs-unstable`.
     nixpkgs = {
       type = "github";
       owner = "NixOS";
