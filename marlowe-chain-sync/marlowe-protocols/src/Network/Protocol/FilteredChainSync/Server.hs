@@ -2,6 +2,11 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- | A view of the filtered chain sync protocol from the point of view of the
+-- server. This provides a simplified interface for implementing the server
+-- role of the protocol. The types should be much easier to use than the
+-- underlying typed protocol types.
+
 module Network.Protocol.FilteredChainSync.Server where
 
 import Data.Bifunctor (Bifunctor (bimap))
@@ -11,19 +16,44 @@ import Network.Protocol.FilteredChainSync.Types (ClientHasAgency (..), FilteredC
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
 import Network.TypedProtocol.Core (PeerRole (..))
 
+-- | A filtered chain sync protocol server that runs in some monad 'm'.
 newtype FilteredChainSyncServer query point tip m a = FilteredChainSyncServer
   { runFilteredChainSyncServer :: m (ServerStInit query point tip m a)
   }
 
+-- | In the 'StInit' protocol state, the server does not have agency. Instead,
+-- it is waiting to handle a handshake request from the client, which it must
+-- handle.
 newtype ServerStInit query point tip m a = ServerStInit
   { recvMsgRequestHandshake :: SchemaVersion -> m (ServerStHandshake query point tip m a)
   }
 
+-- | In the 'StHandshake' protocol state, the server has agency. It must send
+-- either:
+--
+-- * a handshake rejection message
+-- * a handshake confirmation message
 data ServerStHandshake query point tip m a where
-  SendMsgHandshakeRejected  :: [SchemaVersion] -> m a -> ServerStHandshake query point tip m a
-  SendMsgHandshakeConfirmed :: m (ServerStIdle query point tip m a) -> ServerStHandshake query point tip m a
+
+  -- | Reject the handshake request
+  SendMsgHandshakeRejected
+    :: [SchemaVersion] -- ^ A list of supported schema versions.
+    -> a               -- ^ The result of running the protocol.
+    -> ServerStHandshake query point tip m a
+
+  -- | Accept the handshake request
+  SendMsgHandshakeConfirmed
+    :: m (ServerStIdle query point tip m a) -- ^ An action that computes the idle handlers.
+    -> ServerStHandshake query point tip m a
 
 
+-- | In the `StIdle` protocol state, the server does not have agency. Instead,
+-- it is waiting to handle either:
+--
+-- * A query next update request
+-- * A termination message
+--
+-- It must be prepared to handle either.
 data ServerStIdle query point tip m a = ServerStIdle
   { recvMsgQueryNext
     :: forall err result
@@ -35,24 +65,38 @@ data ServerStIdle query point tip m a = ServerStIdle
   , recvMsgDone :: m a
   }
 
+-- | In the `StNext` protocol state, the server has agency. It must send
+-- either:
+--
+-- * A query rejection response
+-- * A roll forward response
+-- * A roll backward response
 data ServerStNext query err result point tip m a where
+
+  -- | Reject the query with an error message.
   SendMsgQueryRejected
     :: err
     -> tip
     -> m (ServerStIdle query point tip m a)
     -> ServerStNext query err result point tip m a
+
+  -- | Send a query response and advance the client to a new point in the
+  -- chain.
   SendMsgRollForward
     :: result
     -> point
     -> tip
     -> m (ServerStIdle query point tip m a)
     -> ServerStNext query err result point tip m a
+
+  -- | Roll the client back to a previous point.
   SendMsgRollBackward
     :: point
     -> tip
     -> m (ServerStIdle query point tip m a)
     -> ServerStNext query err result point tip m a
 
+-- | Transform the query, point, and tip types in the server.
 mapFilteredChainSyncServer
   :: forall query query' point point' tip tip' m a
    . Functor m
@@ -85,6 +129,7 @@ mapFilteredChainSyncServer cmapQuery mapPoint mapTip =
     mapNext (SendMsgRollForward result point tip idle) = SendMsgRollForward result (mapPoint point) (mapTip tip) $ mapIdle <$> idle
     mapNext (SendMsgRollBackward point tip idle) = SendMsgRollBackward (mapPoint point) (mapTip tip) $ mapIdle <$> idle
 
+-- | Change the underlying monad with a natural transformation.
 hoistFilteredChainSyncServer
   :: forall query point tip m n a
    . Functor m
@@ -99,7 +144,7 @@ hoistFilteredChainSyncServer f =
     hoistInit = ServerStInit . fmap (f . fmap hoistHandshake) . recvMsgRequestHandshake
 
     hoistHandshake :: ServerStHandshake query point tip m a -> ServerStHandshake query point tip n a
-    hoistHandshake (SendMsgHandshakeRejected vs m)  = SendMsgHandshakeRejected vs $ f m
+    hoistHandshake (SendMsgHandshakeRejected vs a)  = SendMsgHandshakeRejected vs a
     hoistHandshake (SendMsgHandshakeConfirmed idle) = SendMsgHandshakeConfirmed $ f $ hoistIdle <$> idle
 
     hoistIdle :: ServerStIdle query point tip m a -> ServerStIdle query point tip n a
@@ -116,6 +161,7 @@ hoistFilteredChainSyncServer f =
     hoistNext (SendMsgRollForward result point tip idle) = SendMsgRollForward result point tip $ f $ hoistIdle <$> idle
     hoistNext (SendMsgRollBackward point tip idle)       = SendMsgRollBackward point tip $ f $ hoistIdle <$> idle
 
+-- | Interpret the server as a 'typed-protocols' 'Peer'.
 filteredChainSyncServerPeer
   :: forall query point tip m a
    . Monad m
@@ -137,7 +183,7 @@ filteredChainSyncServerPeer initialPoint (FilteredChainSyncServer mclient) =
   peerHandshake = \case
     SendMsgHandshakeRejected versions ma ->
       Yield (ServerAgency TokHandshake) (MsgRejectHandshake versions) $
-      Effect $ Done TokFault <$> ma
+      Done TokFault ma
     SendMsgHandshakeConfirmed midle ->
       Yield (ServerAgency TokHandshake) MsgConfirmHandshake $
       peerIdle initialPoint midle

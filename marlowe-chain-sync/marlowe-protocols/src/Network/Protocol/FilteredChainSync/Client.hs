@@ -2,6 +2,11 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- | A view of the filtered chain sync protocol from the point of view of the
+-- client. This provides a simplified interface for implementing the client
+-- role of the protocol. The types should be much easier to use than the
+-- underlying typed protocol types.
+
 module Network.Protocol.FilteredChainSync.Client where
 
 import Network.Protocol.FilteredChainSync.Types (ClientHasAgency (..), FilteredChainSync (..), Message (..),
@@ -10,35 +15,58 @@ import Network.Protocol.FilteredChainSync.Types (ClientHasAgency (..), FilteredC
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
 import Network.TypedProtocol.Core (PeerRole (..))
 
+-- | A filtered chain sync protocol client that runs in some monad 'm'.
 newtype FilteredChainSyncClient query point tip m a = FilteredChainSyncClient
   { runFilteredChainSyncClient :: m (ClientStInit query point tip m a)
   }
 
+-- | In the 'StInit' protocol state, the client has agency. It must send a
+-- handshake request message.
 data ClientStInit query point tip m a
   = SendMsgRequestHandshake SchemaVersion (ClientStHandshake query point tip m a)
 
+-- | In the 'StHandshake' protocol state, the client does not have agency.
+-- Instead, it must be prepared to handle either:
+--
+-- * a handshake rejection message
+-- * a handshake confirmation message
 data ClientStHandshake query point tip m a = ClientStHandshake
   { recvMsgHandshakeRejected  :: [SchemaVersion] -> m a
   , recvMsgHandshakeConfirmed :: m (ClientStIdle query point tip m a)
   }
 
+-- | In the `StIdle` protocol state, the client has agency. It must send
+-- either:
+--
+-- * A query next update request
+-- * A termination message
 data ClientStIdle query point tip m a where
+
+  -- | Send a query and handle the response.
   SendMsgQueryNext
-    :: query err result
-    -> ClientStNext query err result point tip m a
-    -> m (ClientStNext query err result point tip m a)
+    :: query err result                                -- ^ The query
+    -> ClientStNext query err result point tip m a     -- ^ A handler for when the server responds immediately
+    -> m (ClientStNext query err result point tip m a) -- ^ A handler for when the server indicates the client will need to wait for a response
     -> ClientStIdle query point tip m a
 
+  -- | Send a termination message
   SendMsgDone
-    :: a
+    :: a                                -- The result of running the protocol
     -> ClientStIdle query point tip m a
 
+-- | In the `StNext` protocol state, the client does not have agency. Instead,
+-- it must be prepared to handle either:
+--
+-- * A query rejection response
+-- * A roll forward response
+-- * A roll backward response
 data ClientStNext query err result point tip m a = ClientStNext
   { recvMsgQueryRejected :: err -> tip -> m (ClientStIdle query point tip m a)
   , recvMsgRollForward   :: result -> point -> tip -> m (ClientStIdle query point tip m a)
   , recvMsgRollBackward  :: point -> tip -> m (ClientStIdle query point tip m a)
   }
 
+-- | Transform the query, point, and tip types in the client.
 mapFilteredChainSyncClient
   :: forall query query' point point' tip tip' m a
    . Functor m
@@ -71,6 +99,7 @@ mapFilteredChainSyncClient mapQuery cmapPoint cmapTip FilteredChainSyncClient{..
       , recvMsgRollBackward = \point tip -> mapIdle <$> recvMsgRollBackward (cmapPoint point) (cmapTip tip)
       }
 
+-- | Change the underlying monad with a natural transformation.
 hoistFilteredChainSyncClient
   :: forall query point tip m n a
    . Functor m
@@ -104,6 +133,7 @@ hoistFilteredChainSyncClient f FilteredChainSyncClient{..} =
       , recvMsgRollBackward = \point tip -> f $ hoistIdle <$> recvMsgRollBackward point tip
       }
 
+-- | Interpret the client as a 'typed-protocols' 'Peer'.
 filteredChainSyncClientPeer
   :: forall query point tip m a
    . Monad m
