@@ -6,6 +6,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Text.Internal.Lazy (smallChunkSize)
 import qualified System.IO as IO
+
 data Channel m a = Channel
   { send :: a -> m ()
   , recv :: m (Maybe a)

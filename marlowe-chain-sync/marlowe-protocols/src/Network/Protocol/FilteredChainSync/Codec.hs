@@ -5,8 +5,9 @@
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
 
-module Network.Protocol.FilteredChainSync.Codec (codecFilteredChainSync) where
+module Network.Protocol.FilteredChainSync.Codec (DeserializeError(..), SomeQuery(..), codecFilteredChainSync) where
 
+import Control.Exception (Exception)
 import Control.Monad (mfilter)
 import Data.Binary (Binary (get), Get, Put, getWord8, put)
 import Data.Binary.Get (ByteOffset, Decoder (..), runGetIncremental)
@@ -24,7 +25,9 @@ data DeserializeError = DeserializeError
   { message         :: !String
   , offset          :: !ByteOffset
   , unconsumedInput :: !BS.ByteString
-  }
+  } deriving (Show)
+
+instance Exception DeserializeError where
 
 data SomeQuery query = forall err result. SomeQuery (query err result)
 

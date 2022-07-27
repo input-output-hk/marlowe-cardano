@@ -59,13 +59,16 @@ library
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
     Language.Marlowe.Runtime.ChainSync.Genesis
     Language.Marlowe.Runtime.ChainSync.NodeClient
+    Language.Marlowe.Runtime.ChainSync.Protocol
+    Language.Marlowe.Runtime.ChainSync.Server
     Language.Marlowe.Runtime.ChainSync.Store
   other-modules:
   build-depends:
       base >= 4.9 && < 5
-    , base16
     , aeson
     , async
+    , base16
+    , binary
     , bytestring
     , cborg
     , cardano-api
@@ -80,6 +83,7 @@ library
     , hasql
     , hasql-th
     , hasql-transaction
+    , marlowe-protocols
     , ouroboros-consensus-shelley
     , ouroboros-network
     , parallel
@@ -89,6 +93,7 @@ library
     , text
     , time
     , transformers
+    , typed-protocols
     , vector
     , witherable
 
