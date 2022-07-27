@@ -79,7 +79,7 @@ instance Protocol (FilteredChainSync query point tip) where
 
     -- | Request the next matching result for the given query from the client's
     -- position.
-    MsgQueryNext :: point -> query err result -> Message (FilteredChainSync query point tip)
+    MsgQueryNext :: query err result -> Message (FilteredChainSync query point tip)
       'StIdle
       ('StNext err result 'StCanAwait)
 

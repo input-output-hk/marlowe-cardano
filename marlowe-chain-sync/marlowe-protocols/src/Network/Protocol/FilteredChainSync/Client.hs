@@ -6,7 +6,7 @@ module Network.Protocol.FilteredChainSync.Client where
 
 import Network.Protocol.FilteredChainSync.Types (ClientHasAgency (..), FilteredChainSync (..), Message (..),
                                                  NobodyHasAgency (..), SchemaVersion, ServerHasAgency (..),
-                                                 TokNextKind (..))
+                                                 StNextKind (..), TokNextKind (..))
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
 import Network.TypedProtocol.Core (PeerRole (..))
 
@@ -116,8 +116,13 @@ filteredChainSyncClientPeer initialPoint (FilteredChainSyncClient mclient) =
   peerInit
     :: ClientStInit query point tip m a
     -> Peer (FilteredChainSync query point tip) 'AsClient 'StInit m a
-  peerInit (SendMsgRequestHandshake schemaVersion ClientStHandshake{..}) =
-    Yield (ClientAgency TokInit) (MsgRequestHandshake schemaVersion) $
+  peerInit (SendMsgRequestHandshake schemaVersion handshake) =
+    Yield (ClientAgency TokInit) (MsgRequestHandshake schemaVersion) $ peerHandshake handshake
+
+  peerHandshake
+    :: ClientStHandshake query point tip m a
+    -> Peer (FilteredChainSync query point tip) 'AsClient 'StHandshake m a
+  peerHandshake ClientStHandshake{..} =
     Await (ServerAgency TokHandshake) \case
       MsgRejectHandshake versions -> Effect $ Done TokFault <$> recvMsgHandshakeRejected versions
       MsgConfirmHandshake         -> peerIdle initialPoint recvMsgHandshakeConfirmed
@@ -132,17 +137,26 @@ filteredChainSyncClientPeer initialPoint (FilteredChainSyncClient mclient) =
     :: point
     -> ClientStIdle query point tip m a
     -> Peer (FilteredChainSync query point tip) 'AsClient 'StIdle m a
-  peerIdle_ pos (SendMsgQueryNext query next waitNext) =
-    Yield (ClientAgency TokIdle) (MsgQueryNext pos query) $
-    Await (ServerAgency (TokNext query TokCanAwait)) \case
-      MsgRejectQuery err tip          -> peerIdle pos $ recvMsgQueryRejected next err tip
-      MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward next result pos' tip
-      MsgRollBackward pos' tip -> peerIdle pos' $ recvMsgRollBackward next pos' tip
-      MsgWait -> Effect do
-        ClientStNext{..} <- waitNext
-        pure $ Await (ServerAgency (TokNext query TokMustReply)) \case
-          MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
-          MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
-          MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
+  peerIdle_ pos = \case
+    SendMsgQueryNext query ClientStNext{..} waitNext ->
+      Yield (ClientAgency TokIdle) (MsgQueryNext query) $
+      Await (ServerAgency (TokNext query TokCanAwait)) \case
+        MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
+        MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
+        MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
+        MsgWait                        -> peerWait pos query waitNext
 
-  peerIdle_ _ (SendMsgDone a) = Yield (ClientAgency TokIdle) MsgDone (Done TokDone a)
+    SendMsgDone a -> Yield (ClientAgency TokIdle) MsgDone (Done TokDone a)
+
+  peerWait
+    :: forall err result
+     . point
+    -> query err result
+    -> m (ClientStNext query err result point tip m a)
+    -> Peer (FilteredChainSync query point tip) 'AsClient ('StNext err result 'StMustReply) m a
+  peerWait pos query mnext = Effect do
+    ClientStNext{..} <- mnext
+    pure $ Await (ServerAgency (TokNext query TokMustReply)) \case
+      MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
+      MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
+      MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip

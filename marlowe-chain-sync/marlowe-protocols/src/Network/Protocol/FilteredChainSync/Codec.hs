@@ -67,9 +67,8 @@ codecFilteredChainSync
         put schemaVersion
 
     encodeMsg (ClientAgency TokIdle) msg = case msg of
-      MsgQueryNext pos query -> do
+      MsgQueryNext query -> do
         putWord8 0x04
-        put $ encodePoint pos
         put $ encodeQuery $ SomeQuery query
       MsgDone            -> putWord8 0x09
 
@@ -109,9 +108,8 @@ codecFilteredChainSync
         (0x01, ClientAgency TokInit) -> SomeMessage . MsgRequestHandshake <$> get
 
         (0x04, ClientAgency TokIdle) -> do
-          pos <- decodePoint
           SomeQuery query <- decodeQuery
-          pure $ SomeMessage $ MsgQueryNext pos query
+          pure $ SomeMessage $ MsgQueryNext query
 
         (0x09, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
 
