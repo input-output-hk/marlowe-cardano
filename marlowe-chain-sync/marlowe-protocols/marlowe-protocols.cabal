@@ -47,8 +47,11 @@ library
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
   exposed-modules:
+    Network.Channel,
+    Network.Protocol.Driver,
     Network.Protocol.FilteredChainSync.Client,
     Network.Protocol.FilteredChainSync.Codec,
+    Network.Protocol.FilteredChainSync.Server,
     Network.Protocol.FilteredChainSync.Types
   build-depends:
       base >= 4.9 && < 5
