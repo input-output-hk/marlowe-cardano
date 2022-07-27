@@ -7,6 +7,7 @@
 {-# LANGUAGE TupleSections    #-}
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
+{-# OPTIONS_GHC -fno-warn-orphans               #-}
 
 
 module Spec.Marlowe.Transaction (
@@ -15,11 +16,13 @@ module Spec.Marlowe.Transaction (
 
 
 import Control.Applicative
+import Control.Arrow ((&&&))
 import Control.Lens.Getter
 import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Function (on)
 import Data.List (sort)
+import Data.Tuple (swap)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
@@ -48,6 +51,20 @@ unPayment :: Payment -> Payment'
 unPayment (Payment a p m) = Payment' (a, p, flattenValue m)
 
 
+instance Arbitrary TransactionInput where
+  arbitrary = arbitrary' =<< arbitrary
+  shrink TransactionInput{..} =
+       [TransactionInput   interval' txInputs  | interval' <- shrink txInterval]
+    <> [TransactionInput txInterval    inputs' | inputs'   <- shrink txInputs  ]
+
+instance ContextuallyArbitrary TransactionInput where
+  arbitrary' context =
+    do
+      Environment txInterval <- arbitrary' context
+      n <- arbitraryFibonacci [1, 1, 1, 1, 0, 2]  -- TODO: Review.
+      TransactionInput txInterval <$> vectorOf n (arbitrary' context)
+
+
 data MarloweContext =
   MarloweContext
   {
@@ -60,13 +77,15 @@ data MarloweContext =
 
 instance Arbitrary MarloweContext where
   arbitrary = arbitrary' =<< arbitrary
+  shrink mc@MarloweContext{..} =
+       [mc {mcInput    = input'   , mcOutput = computeTransaction   input' mcState  mcContract } | input'    <- shrink mcInput   ]
+    <> [mc {mcState    = state'   , mcOutput = computeTransaction mcInput    state' mcContract } | state'    <- shrink mcState   ]
+    <> [mc {mcContract = contract', mcOutput = computeTransaction mcInput  mcState    contract'} | contract' <- shrink mcContract]
 
 instance ContextuallyArbitrary MarloweContext where
   arbitrary' context =
     do
-      Environment txInterval <- arbitrary' context
-      n <- arbitraryFibonacci [1, 1, 1, 1, 0, 2]  -- TODO: Review.
-      mcInput    <- TransactionInput txInterval <$> vectorOf n (arbitrary' context)
+      mcInput    <- arbitrary' context
       mcState    <- arbitrary' context
       mcContract <- arbitrary' context
       let
@@ -74,8 +93,31 @@ instance ContextuallyArbitrary MarloweContext where
       pure MarloweContext{..}
 
 
+updateOutput :: MarloweContext -> MarloweContext
+updateOutput mc@MarloweContext{..} =
+  mc {mcOutput = computeTransaction mcInput mcState mcContract}
+
+
+makeInvalidInterval :: MarloweContext -> MarloweContext
+makeInvalidInterval mc@MarloweContext{mcInput=mcInput@TransactionInput{txInterval=i}} =
+  updateOutput
+    $ mc {mcInput = mcInput {txInterval = swap i}}
+
+
 validTimes :: Getter MarloweContext TimeInterval
 validTimes = to $ txInterval . mcInput
+
+
+earliestTime :: Getter MarloweContext POSIXTime
+earliestTime = to $ fst . txInterval . mcInput
+
+
+latestTime :: Getter MarloweContext POSIXTime
+latestTime = to $ snd . txInterval . mcInput
+
+
+minimumTime :: Getter MarloweContext POSIXTime
+minimumTime = to $ \MarloweContext{..} -> maximum [minTime mcState, fst $ txInterval mcInput]
 
 
 inputs :: Getter MarloweContext [Input]
@@ -193,12 +235,8 @@ require :: MonadError (Maybe e) m
 require = ((`unless` throwError Nothing) .)
 
 
-requireNoInputs :: Testify ()
-requireNoInputs = view inputs >>= require null
-
-
-requireInputs :: Testify ()
-requireInputs = view inputs >>= require (not . null)
+requireInputs :: (Int -> Bool) -> Testify ()
+requireInputs f = view inputs >>= require (f . length)
 
 
 requireNoAccounts :: Testify ()
@@ -213,22 +251,57 @@ requireContract :: Contract -> Testify ()
 requireContract contract = view preContract >>= require (== contract)
 
 
+requireLT :: Ord a => Testify a -> Testify a -> Testify ()
+requireLT x y = liftA2 (<) x y >>= (`unless` throwError Nothing)
+
+
+requireLE :: Ord a => Testify a -> Testify a -> Testify ()
+requireLE x y = liftA2 (<=) x y >>= (`unless` throwError Nothing)
+
+
+requireEarliestLtPre :: Testify ()
+requireEarliestLtPre = view earliestTime `requireLT` view preTime
+
+
+requireEarliestLeLatest :: Testify ()
+requireEarliestLeLatest = view earliestTime `requireLE` view latestTime
+
+
 requireValidTime :: Testify ()
 requireValidTime =
-  do
-    time <- view preTime
-    (lower, upper) <- view validTimes
-    unless (lower <= time && time <= upper)
-      $ throwError Nothing
+     view earliestTime `requireLE` view preTime
+  >> view preTime      `requireLE` view latestTime
 
 
 requireInPast :: Testify ()
 requireInPast =
+     view earliestTime `requireLE` view latestTime
+  >> view latestTime   `requireLT` view preTime
+
+
+requireInvalidInterval :: Testify ()
+requireInvalidInterval = view latestTime `requireLT` view earliestTime
+
+
+requireNextTimeout :: Testify POSIXTime
+requireNextTimeout =
   do
-    time <- view preTime
-    (lower, upper) <- view validTimes
-    unless (lower <= upper && upper < time)
-      $ throwError Nothing
+    c <- view preContract
+    case c of
+      When _ timeout _ -> pure timeout
+      _                -> throwError Nothing
+
+
+requireNotTimeout :: Testify ()
+requireNotTimeout =
+     view minimumTime `requireLE` requireNextTimeout
+  >> view latestTime  `requireLT` requireNextTimeout
+
+
+requireAmbiguousTimeout :: Testify ()
+requireAmbiguousTimeout =
+     view minimumTime   `requireLT` requireNextTimeout
+  >> requireNextTimeout `requireLE` view latestTime
 
 
 throwUnless :: MonadError (Maybe String) m
@@ -288,8 +361,8 @@ data TransactionTest =
   }
 
 
-test :: TransactionTest -> TestTree
-test TransactionTest{..} =
+test :: Bool -> TransactionTest -> TestTree
+test doShrink TransactionTest{..} =
   testProperty name
     . property
     $ let
@@ -303,7 +376,7 @@ test TransactionTest{..} =
             Right ()      -> True   -- Test passed.
         gen = generator `suchThat` preResolve precondition
       in
-        forAll gen
+        (if doShrink then forAllShrink gen shrink else forAll gen)
           . postResolve
           $ precondition >> invariant >> postcondition
 
@@ -314,7 +387,7 @@ explicitClose =
   {
     name          = "Closing no accounts is useless"
   , generator     = arbitrary
-  , precondition  = requireContract Close >> requireNoAccounts >> requireValidTime >> requireNoInputs
+  , precondition  = requireContract Close >> requireNoAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = pure ()
   , postcondition = hasError TEUselessTransaction
   }
@@ -326,7 +399,7 @@ implicitClose =
   {
     name          = "Pay all accounts on close"
   , generator     = arbitrary
-  , precondition  = requireContract Close >> requireAccounts >> requireValidTime >> requireNoInputs
+  , precondition  = requireContract Close >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameChoices >> sameValues
   , postcondition = hasNoAccounts >> noWarnings >> paysAllAccounts
   }
@@ -336,7 +409,7 @@ tooEarly :: TransactionTest
 tooEarly =
   TransactionTest
   {
-    name          = "Detect interval in past"
+    name          = "Detect time interval in past"
   , generator     = arbitrary
   , precondition  = requireInPast
   , invariant     = pure ()
@@ -344,12 +417,51 @@ tooEarly =
   }
 
 
+invalidInterval :: TransactionTest
+invalidInterval =
+  TransactionTest
+  {
+    name          = "Detect invalid time interval"
+  , generator     = makeInvalidInterval <$> arbitrary
+  , precondition  = requireInvalidInterval
+  , invariant     = pure ()
+  , postcondition = view validTimes >>= hasError . TEIntervalError . InvalidInterval
+  }
+
+
+uselessNoInput :: TransactionTest
+uselessNoInput =
+  TransactionTest
+  {
+    name          = "Applying no inputs is useless until timeout"
+  , generator     = arbitrary
+  , precondition  = requireValidTime >> requireNotTimeout >> requireInputs (== 0)
+  , invariant     = pure ()
+  , postcondition = hasError TEUselessTransaction
+  }
+
+
+ambiguousTimeout :: TransactionTest
+ambiguousTimeout =
+  TransactionTest
+  {
+    name          = "Ambiguous interval for timeout"
+  , generator     = arbitrary
+  , precondition  = requireAmbiguousTimeout >> requireInputs (== 0)
+  , invariant     = pure ()
+  , postcondition = hasError TEAmbiguousTimeIntervalError
+  }
+
+
 tests :: TestTree
 tests =
   testGroup "Transactions"
-    $ fmap test
+    $ fmap (test False)
     [
       explicitClose
     , implicitClose
     , tooEarly
+    , invalidInterval
+    , uselessNoInput
+    , ambiguousTimeout
     ]
