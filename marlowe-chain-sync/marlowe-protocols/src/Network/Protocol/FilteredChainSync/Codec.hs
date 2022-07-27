@@ -5,10 +5,10 @@
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
 
-module Network.Protocol.FilteredChainSync.Codec where
+module Network.Protocol.FilteredChainSync.Codec (codecFilteredChainSync) where
 
 import Control.Monad (mfilter)
-import Data.Binary (Binary (get), Get, getWord8, put)
+import Data.Binary (Binary (get), Get, Put, getWord8, put)
 import Data.Binary.Get (ByteOffset, Decoder (..), runGetIncremental)
 import Data.Binary.Put (putWord8, runPut)
 import qualified Data.ByteString as BS
@@ -27,19 +27,15 @@ data DeserializeError = DeserializeError
 
 data SomeQuery query = forall err result. SomeQuery (query err result)
 
-data SomeResult query = forall err result. SomeResult (query err result) result
-
-data SomeError query = forall err result. SomeError (query err result) err
-
 codecFilteredChainSync
   :: forall query point tip m
    . Applicative m
   => (SomeQuery query -> LBS.ByteString)
   -> Get (SomeQuery query)
-  -> (SomeResult query -> LBS.ByteString)
-  -> Get (SomeResult query)
-  -> (SomeError query -> LBS.ByteString)
-  -> Get (SomeError query)
+  -> (forall err result. query err result -> result -> LBS.ByteString)
+  -> (forall err result. query err result -> Get result)
+  -> (forall err result. query err result -> err -> LBS.ByteString)
+  -> (forall err result. query err result -> Get err)
   -> (point -> LBS.ByteString)
   -> Get point
   -> (tip -> LBS.ByteString)
@@ -55,7 +51,7 @@ codecFilteredChainSync
   encodePoint
   decodePoint
   encodeTip
-  decodeTip = Codec encodeMsg $ decodeGet . decodeMsg
+  decodeTip = Codec (fmap runPut . encodeMsg) $ decodeGet . decodeMsg
   where
     encodeMsg
       :: forall
@@ -64,40 +60,44 @@ codecFilteredChainSync
           (st' :: FilteredChainSync query point tip)
        . PeerHasAgency pr st
       -> Message (FilteredChainSync query point tip) st st'
-      -> LBS.ByteString
-    encodeMsg (ClientAgency TokInit) = \case
-      MsgRequestHandshake schemaVersion -> runPut do
+      -> Put
+    encodeMsg (ClientAgency TokInit) msg = case msg of
+      MsgRequestHandshake schemaVersion -> do
         putWord8 0x01
         put schemaVersion
 
-    encodeMsg (ClientAgency TokIdle) = runPut . \case
+    encodeMsg (ClientAgency TokIdle) msg = case msg of
       MsgQueryNext pos query -> do
         putWord8 0x04
         put $ encodePoint pos
         put $ encodeQuery $ SomeQuery query
       MsgDone            -> putWord8 0x09
 
-    encodeMsg (ServerAgency TokHandshake) = runPut . \case
+    encodeMsg (ServerAgency TokHandshake) msg = case msg of
       MsgConfirmHandshake                  -> putWord8 0x02
       MsgRejectHandshake supportedVersions -> do
        putWord8 0x03
        put supportedVersions
 
-    encodeMsg (ServerAgency TokNext{}) = runPut . \case
-      MsgRejectQuery query err tip          -> do
+    encodeMsg (ServerAgency (TokNext query _)) (MsgRejectQuery err tip) = do
         putWord8 0x05
-        put $ encodeError $ SomeError query err
+        -- FIXME how to do this without unsafeCoerce?
+        put $ encodeError (unsafeCoerce query) err
         put $ encodeTip tip
-      MsgRollForward query result pos tip -> do
+
+    encodeMsg (ServerAgency (TokNext query _)) (MsgRollForward result pos tip) = do
         putWord8 0x06
-        put $ encodeResult $ SomeResult query result
+        -- FIXME how to do this without unsafeCoerce?
+        put $ encodeResult (unsafeCoerce query) result
         put $ encodePoint pos
         put $ encodeTip tip
-      MsgRollBackward pos tip       -> do
+
+    encodeMsg (ServerAgency TokNext{}) (MsgRollBackward pos tip) = do
         putWord8 0x07
         put $ encodePoint pos
         put $ encodeTip tip
-      MsgWait                         -> putWord8 0x08
+
+    encodeMsg (ServerAgency TokNext{}) MsgWait = putWord8 0x08
 
     decodeMsg
       :: forall (pr :: PeerRole) (st :: FilteredChainSync query point tip)
@@ -119,25 +119,25 @@ codecFilteredChainSync
 
         (0x03, ServerAgency TokHandshake) -> SomeMessage . MsgRejectHandshake <$> get
 
-        (0x05, ServerAgency (TokNext _)) -> do
-          SomeError query err <- decodeError
+        (0x05, ServerAgency (TokNext query _)) -> do
+          err <- decodeError (unsafeCoerce query)
           tip <- decodeTip
           -- FIXME how to do this without unsafeCoerce?
-          pure $ unsafeCoerce $ SomeMessage $ MsgRejectQuery query err tip
+          pure $ unsafeCoerce $ SomeMessage $ MsgRejectQuery err tip
 
-        (0x06, ServerAgency (TokNext _)) -> do
-          SomeResult query result <- decodeResult
+        (0x06, ServerAgency (TokNext query _)) -> do
+          result <- decodeResult (unsafeCoerce query)
           point <- decodePoint
           tip <- decodeTip
           -- FIXME how to do this without unsafeCoerce?
-          pure $ unsafeCoerce $ SomeMessage $ MsgRollForward query result point tip
+          pure $ SomeMessage $ unsafeCoerce $ MsgRollForward result point tip
 
-        (0x07, ServerAgency (TokNext _)) -> do
+        (0x07, ServerAgency (TokNext _ _)) -> do
           point <- decodePoint
           tip <- decodeTip
           pure $ SomeMessage $ MsgRollBackward point tip
 
-        (0x08, ServerAgency (TokNext TokCanAwait)) -> pure $ SomeMessage MsgWait
+        (0x08, ServerAgency (TokNext _ TokCanAwait)) -> pure $ SomeMessage MsgWait
 
         _ -> fail $ "Unexpected tag " <> show tag
 

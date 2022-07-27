@@ -84,12 +84,12 @@ instance Protocol (FilteredChainSync query point tip) where
       ('StNext err result 'StCanAwait)
 
     -- | Reject a query with an error message.
-    MsgRejectQuery :: query err result -> err -> tip -> Message (FilteredChainSync query point tip)
+    MsgRejectQuery :: err -> tip -> Message (FilteredChainSync query point tip)
       ('StNext err result wait)
       'StIdle
 
     -- | Send a response to a query and roll the client forward to a new point.
-    MsgRollForward :: query err result -> result -> point -> tip -> Message (FilteredChainSync query point tip)
+    MsgRollForward :: result -> point -> tip -> Message (FilteredChainSync query point tip)
       ('StNext err result wait)
       'StIdle
 
@@ -114,7 +114,7 @@ instance Protocol (FilteredChainSync query point tip) where
 
   data ServerHasAgency st where
     TokHandshake :: ServerHasAgency 'StHandshake
-    TokNext :: TokNextKind k -> ServerHasAgency ('StNext err result k)
+    TokNext :: query err result -> TokNextKind k -> ServerHasAgency ('StNext err result k)
 
   data NobodyHasAgency st where
     TokFault :: NobodyHasAgency 'StFault
