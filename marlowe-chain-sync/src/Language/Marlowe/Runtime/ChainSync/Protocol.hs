@@ -1,12 +1,13 @@
-{-# LANGUAGE EmptyCase #-}
-{-# LANGUAGE GADTs     #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.ChainSync.Protocol where
 
-import Cardano.Api (BlockNo (..), ChainPoint (..), ChainTip (..), SlotNo (..))
+import Cardano.Api (BlockHeader (BlockHeader), BlockNo (..), ChainPoint (..), ChainTip (..), SlotNo (..))
 import Cardano.Api.Shelley (Hash (..))
 import Data.Binary (Get, Put, get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS
+import Data.These (These (..))
+import Data.Void (Void, absurd)
 import Network.Protocol.FilteredChainSync.Client (FilteredChainSyncClient)
 import Network.Protocol.FilteredChainSync.Codec (DeserializeError, SomeQuery (SomeQuery), codecFilteredChainSync)
 import Network.Protocol.FilteredChainSync.Server (FilteredChainSyncServer)
@@ -14,6 +15,24 @@ import Network.Protocol.FilteredChainSync.Types (FilteredChainSync, SchemaVersio
 import Network.TypedProtocol.Codec (Codec)
 
 data Query err result where
+
+  Align
+    :: Query err1 result1
+    -> Query err2 result2
+    -> Query (These err1 err2) (These result1 result2)
+
+  Join
+    :: Query err1 result1
+    -> Query err2 result2
+    -> Query (These err1 err2) (result1, result2)
+
+  GetBlockHeader :: Query Void BlockHeader
+
+data QueryResult err result
+  = RollForward result ChainPoint ChainTip
+  | RollBack ChainPoint ChainTip
+  | Reject err ChainTip
+  | Wait ChainTip
 
 type RuntimeFilteredChainSync = FilteredChainSync Query ChainPoint ChainTip
 
@@ -31,62 +50,185 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
   decodeResult
   encodeError
   decodeError
-  encodePoint
-  decodePoint
-  encodeTip
-  decodeTip
+  putChainPoint
+  getChainPoint
+  putChainTip
+  getChainTip
   where
     encodeQuery :: SomeQuery Query -> Put
-    encodeQuery (SomeQuery q) = case q of {}
+    encodeQuery (SomeQuery q) = case q of
+      Align q1 q2 -> do
+        putWord8 0x01
+        encodeQuery $ SomeQuery q1
+        encodeQuery $ SomeQuery q2
 
-    decodeQuery = fail "no queries defined"
+      Join q1 q2 -> do
+        putWord8 0x02
+        encodeQuery $ SomeQuery q1
+        encodeQuery $ SomeQuery q2
+
+      GetBlockHeader -> putWord8 0x03
+
+    decodeQuery = do
+      tag <- getWord8
+      case tag of
+        0x01 -> do
+          SomeQuery q1 <- decodeQuery
+          SomeQuery q2 <- decodeQuery
+          pure $ SomeQuery $ Align q1 q2
+
+        0x02 -> do
+          SomeQuery q1 <- decodeQuery
+          SomeQuery q2 <- decodeQuery
+          pure $ SomeQuery $ Join q1 q2
+
+        0x03 -> pure $ SomeQuery GetBlockHeader
+        _ -> fail $ "Invalid query tag " <> show tag
 
     encodeResult :: forall err result. Query err result -> result -> Put
     encodeResult = \case
+      Align q1 q2 -> \case
+        This r1 -> do
+          putWord8 0x01
+          encodeResult q1 r1
+        That r2 -> do
+          putWord8 0x02
+          encodeResult q2 r2
+        These r1 r2 -> do
+          putWord8 0x03
+          encodeResult q1 r1
+          encodeResult q2 r2
+
+      Join q1 q2 -> \(r1, r2) -> do
+        encodeResult q1 r1
+        encodeResult q2 r2
+
+      GetBlockHeader -> putBlockHeader
 
     decodeResult :: forall err result. Query err result -> Get result
     decodeResult = \case
+      Align q1 q2    -> do
+        tag <- getWord8
+        case tag of
+          0x01 -> This <$> decodeResult q1
+          0x02 -> That <$> decodeResult q2
+          0x03 -> These <$> decodeResult q1 <*> decodeResult q2
+          _    -> fail $ "Invalid align result tag " <> show tag
+
+      Join q1 q2 -> (,) <$> decodeResult q1 <*> decodeResult q2
+
+      GetBlockHeader -> getBlockHeader
 
     encodeError :: forall err result. Query err result -> err -> Put
     encodeError = \case
+      Align q1 q2 -> \case
+        This e1 -> do
+          putWord8 0x01
+          encodeError q1 e1
+        That e2 -> do
+          putWord8 0x02
+          encodeError q2 e2
+        These e1 e2 -> do
+          putWord8 0x03
+          encodeError q1 e1
+          encodeError q2 e2
+
+      Join q1 q2 -> \case
+        This e1 -> do
+          putWord8 0x01
+          encodeError q1 e1
+        That e2 -> do
+          putWord8 0x02
+          encodeError q2 e2
+        These e1 e2 -> do
+          putWord8 0x03
+          encodeError q1 e1
+          encodeError q2 e2
+
+      GetBlockHeader -> absurd
 
     decodeError :: forall err result. Query err result -> Get err
     decodeError = \case
+      Align q1 q2    -> do
+        tag <- getWord8
+        case tag of
+          0x01 -> This <$> decodeError q1
+          0x02 -> That <$> decodeError q2
+          0x03 -> These <$> decodeError q1 <*> decodeError q2
+          _    -> fail $ "Invalid align error tag " <> show tag
 
-    encodePoint = \case
-      ChainPointAtGenesis -> putWord8 0x01
-      ChainPoint (SlotNo slot) (HeaderHash hash) -> do
-        putWord8 0x02
-        put slot
-        put hash
+      Join q1 q2    -> do
+        tag <- getWord8
+        case tag of
+          0x01 -> This <$> decodeError q1
+          0x02 -> That <$> decodeError q2
+          0x03 -> These <$> decodeError q1 <*> decodeError q2
+          _    -> fail $ "Invalid join error tag " <> show tag
 
-    decodePoint = do
-      tag <- getWord8
-      case tag of
-        0x01 -> pure ChainPointAtGenesis
-        0x02 -> do
-          slot <- get
-          ChainPoint (SlotNo slot) . HeaderHash <$> get
-        _ -> fail $ "Invalid chaoin point tag " <> show tag
-
-    encodeTip = \case
-      ChainTipAtGenesis -> putWord8 0x01
-      ChainTip (SlotNo slot) (HeaderHash hash) (BlockNo block) -> do
-        putWord8 0x02
-        put slot
-        put hash
-        put block
-
-    decodeTip = do
-      tag <- getWord8
-      case tag of
-        0x01 -> pure ChainTipAtGenesis
-        0x02 -> do
-          slot <- get
-          hash <- get
-          block <- get
-          pure $ ChainTip (SlotNo slot) (HeaderHash hash) (BlockNo block)
-        _ -> fail $ "Invalid chaoin tip tag " <> show tag
+      GetBlockHeader -> fail "absurd"
 
 schemaVersion1_0 :: SchemaVersion
 schemaVersion1_0 = SchemaVersion "marlowe-chain-sync-1.0"
+
+putSlotNo :: SlotNo -> Put
+putSlotNo (SlotNo slot) = do
+  put slot
+
+getSlotNo :: Get SlotNo
+getSlotNo = SlotNo <$> get
+
+putHeaderHash :: Hash BlockHeader -> Put
+putHeaderHash (HeaderHash slot) = do
+  put slot
+
+getHeaderHash :: Get (Hash BlockHeader )
+getHeaderHash = HeaderHash <$> get
+
+putBlockNo :: BlockNo -> Put
+putBlockNo (BlockNo block) = do
+  put block
+
+getBlockNo :: Get BlockNo
+getBlockNo = BlockNo <$> get
+
+putBlockHeader :: BlockHeader -> Put
+putBlockHeader (BlockHeader slot hash block) = do
+  putSlotNo slot
+  putHeaderHash hash
+  putBlockNo block
+
+getBlockHeader :: Get BlockHeader
+getBlockHeader = BlockHeader <$> getSlotNo <*> getHeaderHash <*> getBlockNo
+
+putChainPoint :: ChainPoint -> Put
+putChainPoint = \case
+  ChainPointAtGenesis -> putWord8 0x01
+  ChainPoint slot hash -> do
+    putWord8 0x02
+    putSlotNo slot
+    putHeaderHash hash
+
+getChainPoint :: Get ChainPoint
+getChainPoint = do
+  tag <- getWord8
+  case tag of
+    0x01 -> pure ChainPointAtGenesis
+    0x02 -> ChainPoint <$> getSlotNo <*> getHeaderHash
+    _    -> fail $ "Invalid chaoin point tag " <> show tag
+
+putChainTip :: ChainTip -> Put
+putChainTip = \case
+  ChainTipAtGenesis -> putWord8 0x01
+  ChainTip slot hash block -> do
+    putWord8 0x02
+    putSlotNo slot
+    putHeaderHash hash
+    putBlockNo block
+
+getChainTip :: Get ChainTip
+getChainTip = do
+  tag <- getWord8
+  case tag of
+    0x01 -> pure ChainTipAtGenesis
+    0x02 -> ChainTip <$> getSlotNo <*> getHeaderHash <*> getBlockNo
+    _    -> fail $ "Invalid chaoin tip tag " <> show tag

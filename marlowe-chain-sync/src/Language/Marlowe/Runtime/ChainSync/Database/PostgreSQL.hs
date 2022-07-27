@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo             #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
@@ -7,16 +8,16 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (databaseQueries) where
 
 import Cardano.Api (AddressAny, AsType (..), AssetId (..), AssetName (..), Block (..), BlockHeader (..),
-                    BlockInMode (..), BlockNo (..), CardanoMode, ChainPoint (..), CtxTx, EraInMode, IsCardanoEra,
-                    Lovelace (..), PolicyId, Quantity (Quantity), ScriptValidity (..),
+                    BlockInMode (..), BlockNo (..), CardanoMode, ChainPoint (..), ChainTip (..), CtxTx, EraInMode,
+                    IsCardanoEra, Lovelace (..), PolicyId, Quantity (Quantity), ScriptValidity (..),
                     SerialiseAsCBOR (serialiseToCBOR), SerialiseAsRawBytes (..),
                     ShelleyBasedEra (ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage), SlotNo (..), Tx, TxBody (..),
                     TxBodyContent (..), TxId, TxIn (..), TxInsCollateral (..), TxIx (..), TxMetadata (..),
                     TxMetadataInEra (..), TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..),
                     TxReturnCollateral (..), TxScriptValidity (..), TxValidityLowerBound (..),
-                    TxValidityUpperBound (..), getTxBody, getTxId, hashScriptData, selectLovelace, valueToList)
+                    TxValidityUpperBound (..), chainPointToSlotNo, getTxBody, getTxId, hashScriptData, selectLovelace,
+                    valueToList)
 import Cardano.Api.Shelley (Hash (..), Tx (..), toShelleyTxIn)
-
 import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString)
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
@@ -31,16 +32,21 @@ import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.These (These (..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Hasql.Session (Session, sql, statement)
 import Hasql.Statement (refineResult)
 import Hasql.TH (maybeStatement, resultlessStatement, vectorStatement)
+import Hasql.Transaction (Transaction)
+import qualified Hasql.Transaction as HT
+import qualified Hasql.Transaction.Sessions as TS
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
                                                     CommitRollback (..), DatabaseQueries (DatabaseQueries),
                                                     GetGenesisBlock (..), GetHeaderAtPoint (..),
-                                                    GetIntersectionPoints (..))
+                                                    GetIntersectionPoints (..), GetQueryResult (..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
+import Language.Marlowe.Runtime.ChainSync.Protocol (Query (..), QueryResult (..))
 import Ouroboros.Network.Point (WithOrigin (..))
 
 -- | PostgreSQL implementation for the chain sync database queries.
@@ -52,6 +58,7 @@ databaseQueries genesisBlock = DatabaseQueries
  getHeaderAtPoint
  getIntersectionPoints
  getGenesisBlock
+ getQueryResult
 
 -- GetGenesisBlock
 
@@ -124,6 +131,126 @@ getIntersectionPoints = GetIntersectionPoints $ statement () $ rmap decodeResult
 
     decodeResult :: (Int64, ByteString) -> ChainPoint
     decodeResult (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
+
+-- GetQueryResult
+
+getQueryResult :: GetQueryResult Session
+getQueryResult = GetQueryResult \point ->
+  TS.transaction TS.Serializable TS.Read . mkTransaction point
+  where
+    mkTransaction :: ChainPoint -> Query err result -> Transaction (QueryResult err result)
+    mkTransaction point query = do
+      tip <- getTip
+      getRollbackPoint >>= \case
+        Nothing -> mkTransaction' point query >>= \case
+          Left err                      -> pure $ Reject err tip
+          Right (Just (result, point')) -> pure $ RollForward result point' tip
+          Right Nothing                 -> pure $ Wait tip
+        Just rollbackPoint -> pure $ RollBack rollbackPoint tip
+      where
+        getRollbackPoint :: Transaction (Maybe ChainPoint)
+        getRollbackPoint = case pointParams of
+          Nothing -> pure Nothing
+          Just pointParams' -> fmap decode <$> HT.statement pointParams'
+            [maybeStatement|
+              WITH RECURSIVE rollbacks AS
+                ( SELECT *
+                    FROM chain.block
+                  WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
+                  UNION
+                  SELECT chain.block.*
+                    FROM chain.block AS block
+                    JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
+                )
+              SELECT slotNo :: bigint, id :: bytea
+                FROM rollbacks
+              WHERE rollbackToSlot IS NULL
+            |]
+          where
+            decode (-1, _)        = ChainPointAtGenesis
+            decode (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
+
+        getTip :: Transaction ChainTip
+        getTip = decode <$> HT.statement ()
+          [maybeStatement|
+            SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+              FROM rollbacks
+             WHERE rollbackToSlot IS NULL
+             ORDER BY slotNo DESC
+             LIMIT 1
+          |]
+          where
+            decode Nothing                        = ChainTipAtGenesis
+            decode (Just (-1, _, _))              = ChainTipAtGenesis
+            decode (Just (slotNo, hash, blockNo)) =
+              ChainTip (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash) (BlockNo $ fromIntegral blockNo)
+
+        pointParams :: Maybe (Int64, ByteString)
+        pointParams = case point of
+          ChainPointAtGenesis    -> Nothing
+          ChainPoint slotNo hash -> Just (slotNoToParam slotNo, headerHashToParam hash)
+
+
+
+    mkTransaction' :: ChainPoint -> Query err result -> Transaction (Either err (Maybe (result, ChainPoint)))
+    mkTransaction' point query = do
+      case query of
+
+        Align q1 q2 -> do
+          qr1 <- mkTransaction' point q1
+          qr2 <- mkTransaction' point q2
+          pure case (qr1, qr2) of
+            (Left e1, Left e2)                             -> Left $ These e1 e2
+            (Left e1, _)                                   -> Left $ This e1
+            (_, Left e2)                                   -> Left $ That e2
+            (Right (Just (r1, p1)), Right (Just (r2, p2))) -> Right $ Just case compare (chainPointToSlotNo p1) (chainPointToSlotNo p2) of
+                                                                             EQ -> (These r1 r2, p1)
+                                                                             LT -> (This r1, p1)
+                                                                             GT -> (That r2, p2)
+            (Right (Just (r1, p1)), Right _)               -> Right $ Just (This r1, p1)
+            (Right _, Right (Just (r2, p2)))               -> Right $ Just (That r2, p2)
+            _                                              -> Right Nothing
+
+        Join q1 q2 -> do
+          qr1 <- mkTransaction' point q1
+          qr2 <- mkTransaction' point q2
+          pure case (qr1, qr2) of
+            (Left e1, Left e2)   -> Left $ These e1 e2
+            (Left e1, _)         -> Left $ This e1
+            (_, Left e2)         -> Left $ That e2
+            (Right (Just (r1, p1)), Right (Just (r2, p2))) -> Right $ Just
+              ( (r1, r2)
+              , case compare (chainPointToSlotNo p1) (chainPointToSlotNo p2) of
+                  LT -> p2
+                  _  -> p1
+              )
+            _ -> Right Nothing
+
+        GetBlockHeader -> do
+          let
+            decode (slotNo, hash, blockNo) =
+              let
+                slot = SlotNo $ fromIntegral slotNo
+                headerHash = HeaderHash $ toShort hash
+                block = BlockNo $ fromIntegral blockNo
+                header = BlockHeader slot headerHash block
+              in
+                (header, ChainPoint slot headerHash)
+          Right . fmap decode <$> HT.statement pointSlot
+            [maybeStatement|
+              SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+                FROM chain.block
+              WHERE slotNo > $1 :: bigint
+                AND rollbackToBlock IS NULL
+              ORDER BY slotNo
+              LIMIT 1
+            |]
+
+      where
+        pointSlot :: Int64
+        pointSlot = case point of
+          ChainPointAtGenesis    -> -1
+          ChainPoint slotNo hash -> slotNoToParam slotNo
 
 -- CommitRollback
 

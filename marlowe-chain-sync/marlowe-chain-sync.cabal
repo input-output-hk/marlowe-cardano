@@ -91,6 +91,7 @@ library
     , stm
     , stm-delay
     , text
+    , these
     , time
     , transformers
     , typed-protocols
