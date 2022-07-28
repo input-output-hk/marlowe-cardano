@@ -1,12 +1,12 @@
 module Main where
 
-import Cardano.Api (BlockHeader (BlockHeader), BlockNo (..), ChainPoint (..), ChainTip (..))
+import Cardano.Api (BlockHeader (BlockHeader), BlockNo (..), ChainPoint (..), TxIx (..))
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)
 import Data.Void (absurd)
 import Debug.Trace (traceShowId)
-import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (GetBlockHeader), Move (..), runtimeFilteredChainSyncCodec,
-                                                    schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (GetBlockHeader), Move (..), WaitUntilUTxOSpentError (..),
+                                                    runtimeFilteredChainSyncCodec, schemaVersion1_0)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.FilteredChainSync.Client (ClientStHandshake (..), ClientStIdle (..), ClientStInit (..),
@@ -41,23 +41,24 @@ run conn = void $ runPeerWithDriver driver peer (startDState driver)
       { recvMsgHandshakeRejected = \supportedVersions -> do
           putStr "Schema version not supported by server. Supported versions: "
           print supportedVersions
-      , recvMsgHandshakeConfirmed = stIdle 1
+      , recvMsgHandshakeConfirmed = stIdle
       }
-    stIdle stepSize = do
-      let query = WaitBlocks stepSize $ Extract GetBlockHeader
+    stIdle = do
+      let query = WaitSlots 25644 $ WaitUntilUTxOSpent "59b32f725ef2909ed3af209d92f97a0a29198ed9b85b9a2ac3ca4bdd05817a53" (TxIx 0) $ Extract GetBlockHeader
       pure $ SendMsgQueryNext query stNext (pure stNext)
     stNext = ClientStNext
-      { recvMsgQueryRejected = absurd
-      , recvMsgRollForward = \(BlockHeader _ _ (BlockNo blockNo)) point tip -> do
-          putStr "Roll forward: "
+      { recvMsgQueryRejected = \case
+          Left UTxONotFound         -> error "UTxO not found"
+          Left (UTxOAlreadySpent _) -> error "UTxO already spent"
+          Right v                   -> absurd v
+      , recvMsgRollForward = \(BlockHeader _ _ (BlockNo _)) point _ -> do
+          putStr "UTxO spent at point: "
           print point
-          stIdle $ fromIntegral case tip of
-            ChainTipAtGenesis                 -> 1
-            ChainTip _ _ (BlockNo tipBlockNo) -> max 1 (min 1000 $ tipBlockNo - blockNo)
+          pure $ SendMsgDone ()
       , recvMsgRollBackward = \point _ -> do
           putStr "Roll backward: "
           print point
-          stIdle 1
+          stIdle
       }
 
 data Options = Options

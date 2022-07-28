@@ -2,18 +2,25 @@
 
 module Language.Marlowe.Runtime.ChainSync.Protocol where
 
-import Cardano.Api (BlockHeader (BlockHeader), BlockNo (..), ChainPoint (..), ChainTip (..), SlotNo (..))
+import Cardano.Api (AsType (..), BlockHeader (..), BlockNo (..), ChainPoint (..), ChainTip (..),
+                    SerialiseAsRawBytes (..), SlotNo (..), TxId, TxIx (..))
 import Cardano.Api.Shelley (Hash (..))
 import Data.Binary (Get, Put, get, getWord8, put, putWord8)
+import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
 import Data.These (These (..))
 import Data.Void (Void, absurd)
 import Network.Protocol.FilteredChainSync.Client (FilteredChainSyncClient)
-import Network.Protocol.FilteredChainSync.Codec (DeserializeError, SomeQuery (SomeQuery), codecFilteredChainSync)
+import Network.Protocol.FilteredChainSync.Codec (DeserializeError, SomeQuery (..), codecFilteredChainSync)
 import Network.Protocol.FilteredChainSync.Server (FilteredChainSyncServer)
 import Network.Protocol.FilteredChainSync.Types (FilteredChainSync, SchemaVersion (SchemaVersion))
 import Network.TypedProtocol.Codec (Codec)
 import Numeric.Natural (Natural)
+
+data WaitUntilUTxOSpentError
+  = UTxONotFound
+  | UTxOAlreadySpent TxId
 
 data Move err result where
 
@@ -27,6 +34,8 @@ data Move err result where
   WaitSlots :: Natural -> Move err result -> Move err result
 
   WaitBlocks :: Natural -> Move err result -> Move err result
+
+  WaitUntilUTxOSpent :: TxId -> TxIx -> Move err result -> Move (Either WaitUntilUTxOSpentError err) result
 
 data Extract err result where
 
@@ -55,8 +64,8 @@ type RuntimeFilteredChainSyncCodec m = Codec RuntimeFilteredChainSync Deserializ
 
 runtimeFilteredChainSyncCodec :: Applicative m => RuntimeFilteredChainSyncCodec m
 runtimeFilteredChainSyncCodec = codecFilteredChainSync
-  encodeQuery
-  decodeQuery
+  putMove
+  getMove
   encodeResult
   decodeResult
   encodeError
@@ -66,121 +75,156 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
   putChainTip
   getChainTip
   where
-    encodeQuery :: SomeQuery Move -> Put
-    encodeQuery (SomeQuery q) = case q of
-      Or q1 q2 -> do
+    putMove :: SomeQuery Move -> Put
+    putMove (SomeQuery move) = case move of
+      Or m1 m2 -> do
         putWord8 0x01
-        encodeQuery $ SomeQuery q1
-        encodeQuery $ SomeQuery q2
+        putMove $ SomeQuery m1
+        putMove $ SomeQuery m2
 
       Extract extract -> do
         putWord8 0x02
         putExtract extract
 
-      WaitSlots slots query -> do
+      WaitSlots slots move' -> do
         putWord8 0x03
         put slots
-        encodeQuery $ SomeQuery query
+        putMove $ SomeQuery move'
 
-      WaitBlocks blocks query -> do
+      WaitBlocks blocks move' -> do
         putWord8 0x04
         put blocks
-        encodeQuery $ SomeQuery query
+        putMove $ SomeQuery move'
 
-    decodeQuery = do
+      WaitUntilUTxOSpent txId txIx move' -> do
+        putWord8 0x05
+        putTxId txId
+        putTxIx txIx
+        putMove $ SomeQuery move'
+
+    getMove = do
       tag <- getWord8
       case tag of
         0x01 -> do
-          SomeQuery q1 <- decodeQuery
-          SomeQuery q2 <- decodeQuery
-          pure $ SomeQuery $ Or q1 q2
+          SomeQuery m1 <- getMove
+          SomeQuery m2 <- getMove
+          pure $ SomeQuery $ Or m1 m2
 
         0x02 -> do
           SomeExtract extract <- getExtract
           pure $ SomeQuery $ Extract extract
         0x03 -> do
           slots <- get
-          SomeQuery query <- decodeQuery
-          let query' = WaitSlots slots query
+          SomeQuery move <- getMove
+          let query' = WaitSlots slots move
           pure $ SomeQuery query'
         0x04 -> do
           blocks <- get
-          SomeQuery query <- decodeQuery
-          let query' = WaitBlocks blocks query
+          SomeQuery move <- getMove
+          let query' = WaitBlocks blocks move
           pure $ SomeQuery query'
-        _ -> fail $ "Invalid query tag " <> show tag
+        0x05 -> do
+          txId <- getTxId
+          txIx <- getTxIx
+          SomeQuery move <- getMove
+          let query' = WaitUntilUTxOSpent txId txIx move
+          pure $ SomeQuery query'
+        _ -> fail $ "Invalid move tag " <> show tag
 
     encodeResult :: forall err result. Move err result -> result -> Put
     encodeResult = \case
-      Or q1 q2 -> \case
+      Or m1 m2 -> \case
         This r1 -> do
           putWord8 0x01
-          encodeResult q1 r1
+          encodeResult m1 r1
         That r2 -> do
           putWord8 0x02
-          encodeResult q2 r2
+          encodeResult m2 r2
         These r1 r2 -> do
           putWord8 0x03
-          encodeResult q1 r1
-          encodeResult q2 r2
+          encodeResult m1 r1
+          encodeResult m2 r2
 
       Extract extract -> putExtractResult extract
 
-      WaitSlots _ query -> encodeResult query
+      WaitSlots _ move -> encodeResult move
 
-      WaitBlocks _ query -> encodeResult query
+      WaitBlocks _ move -> encodeResult move
+
+      WaitUntilUTxOSpent _ _ move -> encodeResult move
 
     decodeResult :: forall err result. Move err result -> Get result
     decodeResult = \case
-      Or q1 q2    -> do
+      Or m1 m2    -> do
         tag <- getWord8
         case tag of
-          0x01 -> This <$> decodeResult q1
-          0x02 -> That <$> decodeResult q2
-          0x03 -> These <$> decodeResult q1 <*> decodeResult q2
+          0x01 -> This <$> decodeResult m1
+          0x02 -> That <$> decodeResult m2
+          0x03 -> These <$> decodeResult m1 <*> decodeResult m2
           _    -> fail $ "Invalid align result tag " <> show tag
 
       Extract extract -> getExtractResult extract
 
-      WaitSlots _ query -> decodeResult query
+      WaitSlots _ move -> decodeResult move
 
-      WaitBlocks _ query -> decodeResult query
+      WaitBlocks _ move -> decodeResult move
+
+      WaitUntilUTxOSpent _ _ move -> decodeResult move
 
     encodeError :: forall err result. Move err result -> err -> Put
     encodeError = \case
-      Or q1 q2 -> \case
+      Or m1 m2 -> \case
         This e1 -> do
           putWord8 0x01
-          encodeError q1 e1
+          encodeError m1 e1
         That e2 -> do
           putWord8 0x02
-          encodeError q2 e2
+          encodeError m2 e2
         These e1 e2 -> do
           putWord8 0x03
-          encodeError q1 e1
-          encodeError q2 e2
+          encodeError m1 e1
+          encodeError m2 e2
 
       Extract extract -> putExtractError extract
 
-      WaitSlots _ query -> encodeError query
+      WaitSlots _ move -> encodeError move
 
-      WaitBlocks _ query -> encodeError query
+      WaitBlocks _ move -> encodeError move
+
+      WaitUntilUTxOSpent _ _ move -> \case
+        Left UTxONotFound -> putWord8 0x01
+        Left (UTxOAlreadySpent txId) -> do
+          putWord8 0x02
+          putTxId txId
+        Right err -> encodeError move err
 
     decodeError :: forall err result. Move err result -> Get err
     decodeError = \case
-      Or q1 q2    -> do
+      Or m1 m2    -> do
         tag <- getWord8
         case tag of
-          0x01 -> This <$> decodeError q1
-          0x02 -> That <$> decodeError q2
-          0x03 -> These <$> decodeError q1 <*> decodeError q2
+          0x01 -> This <$> decodeError m1
+          0x02 -> That <$> decodeError m2
+          0x03 -> These <$> decodeError m1 <*> decodeError m2
           _    -> fail $ "Invalid or error tag " <> show tag
 
       Extract extract -> getExtractError extract
 
-      WaitSlots _ query -> decodeError query
+      WaitSlots _ move -> decodeError move
 
-      WaitBlocks _ query -> decodeError query
+      WaitBlocks _ move -> decodeError move
+
+      WaitUntilUTxOSpent _ _ move -> do
+        tag <- getWord8
+        case tag of
+          0x01 -> Left <$> do
+            tag' <- getWord8
+            case tag' of
+              0x01 -> pure UTxONotFound
+              0x02 -> UTxOAlreadySpent <$> getTxId
+              _    -> fail $ "Invalid WaitUntilUTxOSpentError tag " <> show tag
+          0x02 -> Right <$> decodeError move
+          _    -> fail $ "Invalid Either tag " <> show tag
 
 schemaVersion1_0 :: SchemaVersion
 schemaVersion1_0 = SchemaVersion "marlowe-chain-sync-1.0"
@@ -220,9 +264,9 @@ getExtract = do
   tag <- getWord8
   case tag of
     0x01 -> do
-      SomeExtract q1 <- getExtract
-      SomeExtract q2 <- getExtract
-      pure $ SomeExtract $ And q1 q2
+      SomeExtract e1 <- getExtract
+      SomeExtract e2 <- getExtract
+      pure $ SomeExtract $ And e1 e2
     0x02 -> pure $ SomeExtract GetBlockHeader
     _ -> fail $ "Invalid extract tag " <> show tag
 
@@ -305,3 +349,19 @@ getChainTip = do
     0x01 -> pure ChainTipAtGenesis
     0x02 -> ChainTip <$> getSlotNo <*> getHeaderHash <*> getBlockNo
     _    -> fail $ "Invalid chaoin tip tag " <> show tag
+
+putTxId :: TxId -> Put
+putTxId = put . serialiseToRawBytes
+
+getTxId :: Get TxId
+getTxId = do
+  bytes <- get
+  case deserialiseFromRawBytes AsTxId bytes of
+    Nothing   -> fail $ T.unpack $ "Invalid TxId bytes: " <> encodeBase16 bytes
+    Just txId -> pure txId
+
+putTxIx :: TxIx -> Put
+putTxIx (TxIx ix) = put ix
+
+getTxIx :: Get TxIx
+getTxIx  = TxIx <$> get

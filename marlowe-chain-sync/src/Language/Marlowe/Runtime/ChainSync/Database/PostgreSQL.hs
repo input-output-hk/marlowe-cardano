@@ -22,6 +22,7 @@ import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString)
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
@@ -48,7 +49,8 @@ import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (
                                                     hoistCommitGenesisBlock, hoistCommitRollback, hoistGetGenesisBlock,
                                                     hoistGetHeaderAtPoint, hoistGetIntersectionPoints, hoistMoveClient)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (..), Move (..), MoveResult (..))
+import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (..), Move (..), MoveResult (..),
+                                                    WaitUntilUTxOSpentError (..))
 import Ouroboros.Network.Point (WithOrigin (..))
 
 -- | PostgreSQL implementation for the chain sync database queries.
@@ -210,8 +212,8 @@ moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
 
       Extract extract -> fmap (Just . (,point)) <$> extractResults point extract
 
-      WaitSlots slots query' -> do
-        waitResult <- fmap decodeOffset <$> HT.statement (fromIntegral slots + fst pointParams)
+      WaitSlots slots move' -> do
+        waitResult <- fmap decodeOffset <$> HT.statement (fromIntegral slots + pointSlot)
           [maybeStatement|
             SELECT slotNo :: bigint, id :: bytea
               FROM chain.block
@@ -222,10 +224,10 @@ moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
           |]
         case waitResult of
           Nothing     -> pure $ Right Nothing
-          Just point' -> performMove point' query'
+          Just point' -> performMove point' move'
 
-      WaitBlocks blocks query' -> do
-        waitResult <- fmap decodeOffset <$> HT.statement (fst pointParams, fromIntegral blocks)
+      WaitBlocks blocks move' -> do
+        waitResult <- fmap decodeOffset <$> HT.statement (pointSlot, fromIntegral blocks)
           [maybeStatement|
             SELECT slotNo :: bigint, id :: bytea
               FROM chain.block
@@ -237,13 +239,39 @@ moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
           |]
         case waitResult of
           Nothing     -> pure $ Right Nothing
-          Just point' -> performMove point' query'
+          Just point' -> performMove point' move'
+
+      WaitUntilUTxOSpent txId txIx move' -> do
+        let
+          decode (Just slotNo, Just txInId, Just block) =
+            Just . (SlotNo $ fromIntegral slotNo,,HeaderHash $ toShort block) <$> decodeTxId txInId
+          decode _ = pure Nothing
+        mResult <- HT.statement (pointSlot, serialiseToRawBytes txId, txIxToParam txIx) $ refineResult (traverse decode)
+          [maybeStatement|
+              SELECT txIn.slotNo :: bigint? AS txInSlot
+                   , txIn.txInId :: bytea? AS txInId
+                   , block.id :: bytea? AS txInBlock
+                FROM chain.txOut AS txOut
+           LEFT JOIN chain.txIn  AS txIn  ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
+           LEFT JOIN chain.block AS block ON block.slotNo = txIn.slotNo
+               WHERE txOut.slotNo <= $1 :: bigint
+                 AND block.rollbackToBlock IS NULL
+                 AND txOut.txId = $2 :: bytea
+                 AND txOut.txIx = $3 :: smallint
+            |]
+
+        case mResult of
+          Nothing     -> pure $ Left $ Left UTxONotFound
+          Just (Just (txInSlot, txInId, txInBlock))
+            | slotNoToParam txInSlot <= pointSlot -> pure $ Left $ Left $ UTxOAlreadySpent txInId
+            | otherwise -> first Right <$> performMove (ChainPoint txInSlot txInBlock)  move'
+          Just _ -> pure $ Right Nothing
 
       where
-        pointParams :: (Int64, ByteString)
-        pointParams = headerHashToParam <$> case point of
-          ChainPointAtGenesis    -> (-1, genesisBlockHash genesisBlock)
-          ChainPoint slotNo hash -> (slotNoToParam slotNo, hash)
+        pointSlot :: Int64
+        pointSlot = case point of
+          ChainPointAtGenesis -> -1
+          ChainPoint slotNo _ -> slotNoToParam slotNo
 
         decodeOffset (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
 
