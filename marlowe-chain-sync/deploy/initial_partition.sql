@@ -5,7 +5,7 @@
 
 BEGIN;
 
-CREATE FUNCTION chain.createInitialPartitions(name text)
+CREATE FUNCTION pg_temp.createInitialPartitions(name text)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
@@ -17,11 +17,9 @@ BEGIN
 END;
 $$;
 
-SELECT chain.createInitialPartitions('block');
-SELECT chain.createInitialPartitions('tx');
-SELECT chain.createInitialPartitions('txOut');
-SELECT chain.createInitialPartitions('txIn');
-
-DROP FUNCTION chain.createInitialPartitions;
+SELECT pg_temp.createInitialPartitions('block');
+SELECT pg_temp.createInitialPartitions('tx');
+SELECT pg_temp.createInitialPartitions('txOut');
+SELECT pg_temp.createInitialPartitions('txIn');
 
 COMMIT;
