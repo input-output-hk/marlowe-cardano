@@ -20,6 +20,7 @@ module Language.Marlowe.CLI.Command.Template (
   TemplateCommand(..)
 , parseTemplateCommand
 , runTemplateCommand
+, initialMarloweState
 ) where
 
 
