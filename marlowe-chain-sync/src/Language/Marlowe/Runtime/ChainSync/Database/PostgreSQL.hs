@@ -24,7 +24,7 @@ import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort, toShort)
-import Data.Int (Int64)
+import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
@@ -221,7 +221,7 @@ data TxRow = TxRow
 
 data TxOutRow = TxOutRow
   { txId         :: !ByteString
-  , txIx         :: !Int64
+  , txIx         :: !Int16
   , slotNo       :: !Int64
   , address      :: !ByteString
   , lovelace     :: !Int64
@@ -232,7 +232,7 @@ data TxOutRow = TxOutRow
 
 data TxInRow = TxInRow
   { txOutId            :: !ByteString
-  , txOutIx            :: !Int64
+  , txOutIx            :: !Int16
   , txInId             :: !ByteString
   , slotNo             :: !Int64
   , redeemerDatumBytes :: !(Maybe ByteString)
@@ -243,7 +243,7 @@ data AssetOutRow = AssetOutRow
   { policyId :: !ByteString
   , name     :: !ByteString
   , txId     :: !ByteString
-  , txIx     :: !Int64
+  , txIx     :: !Int16
   , slotNo   :: !Int64
   , quantity :: !Int64
   }
@@ -313,7 +313,7 @@ commitBlocks = CommitBlocks \blocks ->
             FROM   txInputs AS tx
           )
         , txOutInputs (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral) AS
-          ( SELECT * FROM UNNEST ($11 :: bytea[], $12 :: bigint[], $13 :: bigint[], $14 :: bytea[], $15 :: bigint[], $16 :: bytea?[], $17 :: bytea?[], $18 :: boolean[])
+          ( SELECT * FROM UNNEST ($11 :: bytea[], $12 :: smallint[], $13 :: bigint[], $14 :: bytea[], $15 :: bigint[], $16 :: bytea?[], $17 :: bytea?[], $18 :: boolean[])
           )
         , newTxOuts AS
           ( INSERT INTO chain.txOut (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral)
@@ -321,7 +321,7 @@ commitBlocks = CommitBlocks \blocks ->
             FROM   txOutInputs AS txOut
           )
         , txInInputs (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral) AS
-          ( SELECT * FROM UNNEST ($19 :: bytea[], $20 :: bigint[], $21 :: bytea[], $22 :: bigint[], $23 :: bytea?[], $24 :: boolean[])
+          ( SELECT * FROM UNNEST ($19 :: bytea[], $20 :: smallint[], $21 :: bytea[], $22 :: bigint[], $23 :: bytea?[], $24 :: boolean[])
           )
         , newTxIns AS
           ( INSERT INTO chain.txIn (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral)
@@ -329,7 +329,7 @@ commitBlocks = CommitBlocks \blocks ->
             FROM   txInInputs  AS txIn
           )
         , assetOutInputs (policyId, name, txOutId, txOutIx, slotNo, quantity) AS
-          ( SELECT * FROM UNNEST ($25 :: bytea[], $26 :: bytea[], $27 :: bytea[], $28 :: bigint[], $29 :: bigint[], $30 :: bigint[])
+          ( SELECT * FROM UNNEST ($25 :: bytea[], $26 :: bytea[], $27 :: bytea[], $28 :: smallint[], $29 :: bigint[], $30 :: bigint[])
           )
         , assetMintInputs (policyId, name, txId, slotNo, quantity) AS
           ( SELECT * FROM UNNEST ($31 :: bytea[], $32 :: bytea[], $33 :: bytea[], $34 :: bigint[], $35 :: bigint[])
@@ -560,5 +560,5 @@ lovelaceToParam (Lovelace slotNo) = fromIntegral slotNo
 slotNoToParam :: SlotNo -> Int64
 slotNoToParam (SlotNo slotNo) = fromIntegral slotNo
 
-txIxToParam :: TxIx -> Int64
+txIxToParam :: TxIx -> Int16
 txIxToParam (TxIx txIx) = fromIntegral txIx

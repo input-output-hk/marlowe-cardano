@@ -13,7 +13,7 @@ CREATE TABLE chain.asset
 
 CREATE TABLE chain.assetOut
   ( txOutId BYTEA NOT NULL
-  , txOutIx BIGINT NOT NULL
+  , txOutIx SMALLINT NOT NULL
   , slotNo BIGINT NOT NULL
   , assetId INT NOT NULL
   , quantity BIGINT NOT NULL
