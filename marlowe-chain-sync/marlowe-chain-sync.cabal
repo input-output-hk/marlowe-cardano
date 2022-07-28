@@ -49,6 +49,7 @@ common lang
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
+    -threaded
 
 library
   import: lang
@@ -116,6 +117,7 @@ executable marlowesyncd
     , cardano-crypto-wrapper
     , cardano-ledger-byron
     , hasql
+    , hasql-pool
     , marlowe-chain-sync
     , marlowe-protocols
     , network
@@ -125,5 +127,3 @@ executable marlowesyncd
     , text
     , time
     , transformers
-  ghc-options:
-    -threaded

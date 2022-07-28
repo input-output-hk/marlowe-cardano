@@ -11,10 +11,10 @@ import Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT, withExceptT)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.String (IsString (fromString))
 import Data.Text (unpack)
-import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
-import qualified Hasql.Connection as Connection
+import Hasql.Pool (UsageError (..))
+import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSync (..), ChainSyncDependencies (..), mkChainSync)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
@@ -36,11 +36,7 @@ run Options{..} = withSocketsDo do
   addr <- resolve
   bracket (open addr) close \socket -> do
     socketIdVar <- newTVarIO @Int 0
-    connectionResult <- Connection.acquire (fromString databaseUri)
-    connection <- either
-      (fail . maybe "Failed to connect to database" (unpack . decodeUtf8))
-      pure
-      connectionResult
+    pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
     genesisConfigResult <- runExceptT do
       hash <- ExceptT $ pure $ decodeAbstractHash genesisConfigHash
       (hash,) <$> withExceptT
@@ -51,7 +47,7 @@ run Options{..} = withSocketsDo do
     chainSync <- atomically $ mkChainSync ChainSyncDependencies
       { localNodeConnectInfo
       , databaseQueries = hoistDatabaseQueries
-          (either throwQueryError pure <=< flip Session.run connection)
+          (either throwUsageError pure <=< Pool.use pool)
           (PostgreSQL.databaseQueries $ computeByronGenesisBlock genesisConfigHashValue genesisConfig)
       , persistRateLimit
       , genesisConfigHash = genesisConfigHashValue
@@ -71,7 +67,8 @@ run Options{..} = withSocketsDo do
       hPutStr stderr ("send[" <> show i <> "]: ") *> TL.hPutStrLn stderr (encodeBase16 bytes)
     logRecv i mbytes =
       hPutStr stderr ("recv[" <> show i <> "]: ") *> hPrint stderr (encodeBase16 <$> mbytes)
-    throwQueryError (Session.QueryError _ _ err) = error $ show err
+    throwUsageError (ConnectionError err)                       = error $ show err
+    throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
 
     localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
     localNodeConnectInfo = LocalNodeConnectInfo

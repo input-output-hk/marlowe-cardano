@@ -35,7 +35,7 @@ import qualified Data.Text as T
 import Data.These (These (..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Hasql.Session (Session, sql, statement)
+import Hasql.Session (Session)
 import Hasql.Statement (refineResult)
 import Hasql.TH (maybeStatement, resultlessStatement, vectorStatement)
 import Hasql.Transaction (Transaction)
@@ -44,7 +44,10 @@ import qualified Hasql.Transaction.Sessions as TS
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
                                                     CommitRollback (..), DatabaseQueries (DatabaseQueries),
                                                     GetGenesisBlock (..), GetHeaderAtPoint (..),
-                                                    GetIntersectionPoints (..), GetQueryResult (..))
+                                                    GetIntersectionPoints (..), GetQueryResult (..), hoistCommitBlocks,
+                                                    hoistCommitGenesisBlock, hoistCommitRollback, hoistGetGenesisBlock,
+                                                    hoistGetHeaderAtPoint, hoistGetIntersectionPoints,
+                                                    hoistGetQueryResult)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
 import Language.Marlowe.Runtime.ChainSync.Protocol (Query (..), QueryResult (..))
 import Ouroboros.Network.Point (WithOrigin (..))
@@ -52,18 +55,18 @@ import Ouroboros.Network.Point (WithOrigin (..))
 -- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries :: GenesisBlock -> DatabaseQueries Session
 databaseQueries genesisBlock = DatabaseQueries
- (commitRollback genesisBlock)
- commitBlocks
- commitGenesisBlock
- getHeaderAtPoint
- getIntersectionPoints
- getGenesisBlock
- getQueryResult
+ (hoistCommitRollback (TS.transaction TS.ReadCommitted TS.Write) $ commitRollback genesisBlock)
+ (hoistCommitBlocks (TS.transaction TS.ReadCommitted TS.Write) commitBlocks)
+ (hoistCommitGenesisBlock (TS.transaction TS.ReadCommitted TS.Write) commitGenesisBlock)
+ (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
+ (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
+ (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
+ (hoistGetQueryResult (TS.transaction TS.ReadCommitted TS.Read) getQueryResult)
 
 -- GetGenesisBlock
 
-getGenesisBlock :: GetGenesisBlock Session
-getGenesisBlock = GetGenesisBlock $ statement () $ refineResult (decodeResults . V.toList)
+getGenesisBlock :: GetGenesisBlock Transaction
+getGenesisBlock = GetGenesisBlock $ HT.statement () $ refineResult (decodeResults . V.toList)
   [vectorStatement|
     SELECT block.id :: bytea
          , tx.id :: bytea
@@ -89,11 +92,11 @@ getGenesisBlock = GetGenesisBlock $ statement () $ refineResult (decodeResults .
 
 -- GetHeaderAtPoint
 
-getHeaderAtPoint :: GetHeaderAtPoint Session
+getHeaderAtPoint :: GetHeaderAtPoint Transaction
 getHeaderAtPoint = GetHeaderAtPoint \case
   ChainPointAtGenesis -> pure Origin
   point@(ChainPoint slotNo hash) ->
-    statement (slotNoToParam slotNo, headerHashToParam hash) $ refineResult decodeResults
+    HT.statement (slotNoToParam slotNo, headerHashToParam hash) $ refineResult decodeResults
       [maybeStatement|
         SELECT block.blockNo :: bigint
           FROM chain.block AS block
@@ -117,8 +120,8 @@ decodeAddressAny address = case deserialiseFromRawBytes AsAddressAny address of
 
 -- GetIntersectionPoints
 
-getIntersectionPoints :: GetIntersectionPoints Session
-getIntersectionPoints = GetIntersectionPoints $ statement () $ rmap decodeResults
+getIntersectionPoints :: GetIntersectionPoints Transaction
+getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeResults
   [vectorStatement|
     SELECT slotNo :: bigint, id :: bytea
     FROM   chain.block
@@ -134,9 +137,8 @@ getIntersectionPoints = GetIntersectionPoints $ statement () $ rmap decodeResult
 
 -- GetQueryResult
 
-getQueryResult :: GetQueryResult Session
-getQueryResult = GetQueryResult \point ->
-  TS.transaction TS.Serializable TS.Read . mkTransaction point
+getQueryResult :: GetQueryResult Transaction
+getQueryResult = GetQueryResult mkTransaction
   where
     mkTransaction :: ChainPoint -> Query err result -> Transaction (QueryResult err result)
     mkTransaction point query = do
@@ -158,7 +160,7 @@ getQueryResult = GetQueryResult \point ->
                     FROM chain.block
                   WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
                   UNION
-                  SELECT chain.block.*
+                  SELECT block.*
                     FROM chain.block AS block
                     JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
                 )
@@ -254,13 +256,12 @@ getQueryResult = GetQueryResult \point ->
 
 -- CommitRollback
 
-commitRollback :: GenesisBlock -> CommitRollback Session
+commitRollback :: GenesisBlock -> CommitRollback Transaction
 commitRollback genesisBlock = CommitRollback \case
   ChainPointAtGenesis -> do
     -- truncate all tables
-    sql $ BS.intercalate "\n"
-      [ "BEGIN;"
-      , "TRUNCATE TABLE chain.tx;"
+    HT.sql $ BS.intercalate "\n"
+      [ "TRUNCATE TABLE chain.tx;"
       , "TRUNCATE TABLE chain.txOut;"
       , "TRUNCATE TABLE chain.txIn;"
       , "TRUNCATE TABLE chain.asset RESTART IDENTITY CASCADE;"
@@ -268,9 +269,7 @@ commitRollback genesisBlock = CommitRollback \case
       ]
     -- re-add the genesis block (faster than excluding the info using DELETE FROM ... WHERE ...)
     runCommitGenesisBlock commitGenesisBlock genesisBlock
-    -- commit the transaction
-    sql "COMMIT;"
-  ChainPoint slotNo hash -> statement (slotNoToParam slotNo, headerHashToParam hash)
+  ChainPoint slotNo hash -> HT.statement (slotNoToParam slotNo, headerHashToParam hash)
     [resultlessStatement|
       WITH blockUpdates AS
         ( UPDATE chain.block
@@ -305,7 +304,7 @@ commitRollback genesisBlock = CommitRollback \case
 
 -- CommitGenesisBlock
 
-commitGenesisBlock :: CommitGenesisBlock Session
+commitGenesisBlock :: CommitGenesisBlock Transaction
 commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
   let
     genesisBlockTxsList = Set.toList genesisBlockTxs
@@ -316,7 +315,7 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
       , V.fromList $ lovelaceToParam . genesisTxLovelace <$> genesisBlockTxsList
       )
   in
-    statement params
+    HT.statement params
       [resultlessStatement|
         WITH newBlock AS
           ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
@@ -406,7 +405,7 @@ data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
 -- For how to do this with postgresql-libpg. You can expose the underlying
 -- libpg connection from a `Session` using `withLibPQConnection`
 -- (see https://hackage.haskell.org/package/hasql-1.6.0.1/docs/Hasql-Connection.html#v:withLibPQConnection)
-commitBlocks :: CommitBlocks Session
+commitBlocks :: CommitBlocks Transaction
 commitBlocks = CommitBlocks \blocks ->
   let
     txs = extractTxs =<< blocks
@@ -415,7 +414,7 @@ commitBlocks = CommitBlocks \blocks ->
     assetOuts = extractAssetOuts =<< txOuts
     assetMints = extractAssetMints =<< txs
    in
-    statement (params blocks txs txOuts txIns assetOuts assetMints)
+    HT.statement (params blocks txs txOuts txIns assetOuts assetMints)
       [resultlessStatement|
         WITH blockInputs (id, slotNo, blockNo) AS
           ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bigint[], $3 :: bigint[])
