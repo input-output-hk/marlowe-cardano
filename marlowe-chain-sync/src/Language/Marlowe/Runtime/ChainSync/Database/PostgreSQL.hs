@@ -15,8 +15,8 @@ import Cardano.Api (AddressAny, AsType (..), AssetId (..), AssetName (..), Block
                     TxBodyContent (..), TxId, TxIn (..), TxInsCollateral (..), TxIx (..), TxMetadata (..),
                     TxMetadataInEra (..), TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..),
                     TxReturnCollateral (..), TxScriptValidity (..), TxValidityLowerBound (..),
-                    TxValidityUpperBound (..), chainPointToSlotNo, getTxBody, getTxId, hashScriptData, selectLovelace,
-                    valueToList)
+                    TxValidityUpperBound (..), chainPointToHeaderHash, chainPointToSlotNo, getTxBody, getTxId,
+                    hashScriptData, selectLovelace, valueToList)
 import Cardano.Api.Shelley (Hash (..), Tx (..), toShelleyTxIn)
 import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString)
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
@@ -29,6 +29,7 @@ import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
+import Data.Maybe (catMaybes)
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -49,7 +50,7 @@ import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (
                                                     hoistCommitGenesisBlock, hoistCommitRollback, hoistGetGenesisBlock,
                                                     hoistGetHeaderAtPoint, hoistGetIntersectionPoints, hoistMoveClient)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (..), Move (..), MoveResult (..),
+import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (..), IntersectError (..), Move (..), MoveResult (..),
                                                     WaitUntilUTxOSpentError (..))
 import Ouroboros.Network.Point (WithOrigin (..))
 
@@ -258,7 +259,7 @@ moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
                  AND block.rollbackToBlock IS NULL
                  AND txOut.txId = $2 :: bytea
                  AND txOut.txIx = $3 :: smallint
-            |]
+          |]
 
         case mResult of
           Nothing     -> pure $ Left $ Left UTxONotFound
@@ -266,6 +267,28 @@ moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
             | slotNoToParam txInSlot <= pointSlot -> pure $ Left $ Left $ UTxOAlreadySpent txInId
             | otherwise -> first Right <$> performMove (ChainPoint txInSlot txInBlock)  move'
           Just _ -> pure $ Right Nothing
+
+      Intersect points move' -> do
+        let
+          params =
+            ( V.fromList $ fmap slotNoToParam $ catMaybes $ chainPointToSlotNo <$> points
+            , V.fromList $ fmap headerHashToParam $ catMaybes $ chainPointToHeaderHash <$> points
+            )
+        intersectResult <- fmap decodeOffset <$> HT.statement params
+          [maybeStatement|
+            WITH points (slotNo, id) AS
+              ( SELECT * FROM UNNEST ($1 :: bigint[], $2 :: bytea[])
+              )
+            SELECT block.slotNo :: bigint, block.id :: bytea
+              FROM chain.block AS block
+              JOIN points AS point USING (slotNo, id)
+             WHERE rollbackToBlock IS NULL
+             ORDER BY slotNo DESC
+             LIMIT 1
+          |]
+        case intersectResult of
+          Nothing     -> pure $ Left $ Left IntersectionNotFound
+          Just point' -> first Right <$> performMove point' move'
 
       where
         pointSlot :: Int64

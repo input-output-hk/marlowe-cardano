@@ -5,9 +5,11 @@ module Language.Marlowe.Runtime.ChainSync.Protocol where
 import Cardano.Api (AsType (..), BlockHeader (..), BlockNo (..), ChainPoint (..), ChainTip (..),
                     SerialiseAsRawBytes (..), SlotNo (..), TxId, TxIx (..))
 import Cardano.Api.Shelley (Hash (..))
+import Control.Monad (replicateM)
 import Data.Binary (Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
+import Data.Foldable (traverse_)
 import qualified Data.Text as T
 import Data.These (These (..))
 import Data.Void (Void, absurd)
@@ -21,6 +23,8 @@ import Numeric.Natural (Natural)
 data WaitUntilUTxOSpentError
   = UTxONotFound
   | UTxOAlreadySpent TxId
+
+data IntersectError = IntersectionNotFound
 
 data Move err result where
 
@@ -36,6 +40,8 @@ data Move err result where
   WaitBlocks :: Natural -> Move err result -> Move err result
 
   WaitUntilUTxOSpent :: TxId -> TxIx -> Move err result -> Move (Either WaitUntilUTxOSpentError err) result
+
+  Intersect :: [ChainPoint] -> Move err result -> Move (Either IntersectError err) result
 
 data Extract err result where
 
@@ -104,6 +110,12 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
         putTxIx txIx
         putMove $ SomeQuery move'
 
+      Intersect points move' -> do
+        putWord8 0x06
+        put $ length points
+        traverse_ putChainPoint points
+        putMove $ SomeQuery move'
+
     getMove = do
       tag <- getWord8
       case tag of
@@ -118,19 +130,21 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
         0x03 -> do
           slots <- get
           SomeQuery move <- getMove
-          let query' = WaitSlots slots move
-          pure $ SomeQuery query'
+          pure $ SomeQuery $ WaitSlots slots move
         0x04 -> do
           blocks <- get
           SomeQuery move <- getMove
-          let query' = WaitBlocks blocks move
-          pure $ SomeQuery query'
+          pure $ SomeQuery $ WaitBlocks blocks move
         0x05 -> do
           txId <- getTxId
           txIx <- getTxIx
           SomeQuery move <- getMove
-          let query' = WaitUntilUTxOSpent txId txIx move
-          pure $ SomeQuery query'
+          pure $ SomeQuery $ WaitUntilUTxOSpent txId txIx move
+        0x06 -> do
+          n <- get
+          points <- replicateM n getChainPoint
+          SomeQuery move <- getMove
+          pure $ SomeQuery $ Intersect points move
         _ -> fail $ "Invalid move tag " <> show tag
 
     encodeResult :: forall err result. Move err result -> result -> Put
@@ -155,6 +169,8 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
 
       WaitUntilUTxOSpent _ _ move -> encodeResult move
 
+      Intersect _ move -> encodeResult move
+
     decodeResult :: forall err result. Move err result -> Get result
     decodeResult = \case
       Or m1 m2    -> do
@@ -172,6 +188,8 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
       WaitBlocks _ move -> decodeResult move
 
       WaitUntilUTxOSpent _ _ move -> decodeResult move
+
+      Intersect _ move -> decodeResult move
 
     encodeError :: forall err result. Move err result -> err -> Put
     encodeError = \case
@@ -194,11 +212,23 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
       WaitBlocks _ move -> encodeError move
 
       WaitUntilUTxOSpent _ _ move -> \case
-        Left UTxONotFound -> putWord8 0x01
-        Left (UTxOAlreadySpent txId) -> do
+        Left spendErr -> do
+          putWord8 0x01
+          case spendErr of
+            UTxONotFound -> putWord8 0x01
+            UTxOAlreadySpent txId -> do
+              putWord8 0x02
+              putTxId txId
+        Right err -> do
           putWord8 0x02
-          putTxId txId
-        Right err -> encodeError move err
+          encodeError move err
+
+      Intersect _ move -> \case
+        Left _ -> do
+          putWord8 0x01
+        Right err -> do
+          putWord8 0x02
+          encodeError move err
 
     decodeError :: forall err result. Move err result -> Get err
     decodeError = \case
@@ -225,6 +255,13 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
               0x01 -> pure UTxONotFound
               0x02 -> UTxOAlreadySpent <$> getTxId
               _    -> fail $ "Invalid WaitUntilUTxOSpentError tag " <> show tag
+          0x02 -> Right <$> decodeError move
+          _    -> fail $ "Invalid Either tag " <> show tag
+
+      Intersect _ move -> do
+        tag <- getWord8
+        case tag of
+          0x01 -> pure $ Left IntersectionNotFound
           0x02 -> Right <$> decodeError move
           _    -> fail $ "Invalid Either tag " <> show tag
 
