@@ -16,7 +16,6 @@ import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy as B (readFile)
 import Data.Maybe (fromJust, mapMaybe)
 import Data.Time.LocalTime
-import Debug.Pretty.Simple
 import Language.Marlowe
 import Language.Marlowe.Extended.V1 as Ex (toCore)
 import qualified Ledger.Value as Val
@@ -162,7 +161,7 @@ ex_nam1 =
 
                   assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000_000_000)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_198)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_200)
       )
 
 
@@ -207,7 +206,7 @@ ex_ann1 =
 
                   assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000_000_000)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_198)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_200)
       )
 
 -- |ex_optns1 defines a contract of type OPTNS
