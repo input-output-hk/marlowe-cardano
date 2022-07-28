@@ -21,7 +21,7 @@ CREATE INDEX tx_id ON chain.tx USING BTREE (id);
 
 CREATE TABLE chain.txOut
   ( txId BYTEA NOT NULL
-  , txIx BIGINT NOT NULL
+  , txIx SMALLINT NOT NULL
   , slotNo BIGINT NOT NULL
   , address BYTEA NOT NULL
   , lovelace BIGINT NOT NULL
@@ -37,7 +37,7 @@ CREATE INDEX txOut_address ON chain.txOut USING BTREE (address);
 
 CREATE TABLE chain.txIn
   ( txOutId BYTEA NOT NULL
-  , txOutIx BIGINT NOT NULL
+  , txOutIx SMALLINT NOT NULL
   , txInId BYTEA NOT NULL
   , slotNo BIGINT NOT NULL
   , redeemerDatumBytes BYTEA
