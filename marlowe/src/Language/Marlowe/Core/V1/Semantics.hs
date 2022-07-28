@@ -250,17 +250,10 @@ evalValue env state value = let
         SubValue lhs rhs     -> eval lhs - eval rhs
         MulValue lhs rhs     -> eval lhs * eval rhs
         DivValue lhs rhs     -> let n = eval lhs
-                                in if n == 0 then 0 else let
                                     d = eval rhs
-                                in if d == 0 then 0 else let
-                                    (q, r) = n `quotRem` d
-                                    ar = abs r * 2
-                                    ad = abs d
-                                in if ar < ad then q -- reminder < 1/2
-                                   else if ar > ad then q + signum n * signum d -- reminder > 1/2
-                                   else let -- reminder == 1/2
-                                qIsEven = q `Builtins.remainderInteger` 2 == 0
-                                in if qIsEven then q else q + signum n * signum d
+                                in if d == 0
+                                   then 0
+                                   else n `Builtins.quotientInteger` d
         ChoiceValue choiceId ->
             case Map.lookup choiceId (choices state) of
                 Just x  -> x
@@ -272,16 +265,6 @@ evalValue env state value = let
                 Just x  -> x
                 Nothing -> 0
         Cond cond thn els    -> if evalObservation env state cond then eval thn else eval els
-  where
-    abs :: Integer -> Integer
-    abs a = if a >= 0 then a else negate a
-
-    signum :: Integer -> Integer
-    signum x
-      | x > 0 = 1
-      | x == 0 = 0
-      | otherwise = -1
-
 
 -- | Evaluate 'Observation' to 'Bool'.
 evalObservation :: Environment -> State -> Observation -> Bool

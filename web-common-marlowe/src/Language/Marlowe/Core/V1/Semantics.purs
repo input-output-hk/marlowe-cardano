@@ -10,7 +10,6 @@ import Data.List (List(..), fromFoldable, reverse, (:))
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap, wrap)
-import Data.Ord (abs, signum)
 import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Accounts
@@ -139,34 +138,12 @@ evalValue env state value =
       DivValue lhs rhs ->
         let
           n = eval lhs
+          d = eval rhs
         in
-          if n == fromInt 0 then
+          if d == fromInt 0 then
             fromInt 0
           else
-            let
-              d = eval rhs
-            in
-              if d == fromInt 0 then
-                fromInt 0
-              else
-                let
-                  q = n `div` d
-
-                  r = n `mod` d
-
-                  ar = abs r * fromInt 2
-
-                  ad = abs d
-                in
-                  if ar < ad then
-                    q -- reminder < 1/2
-                  else if ar > ad then
-                    q + signum n * signum d -- reminder > 1/2
-                  else
-                    let -- reminder == 1/2
-                      qIsEven = q `mod` fromInt 2 == fromInt 0
-                    in
-                      if qIsEven then q else q + signum n * signum d
+            n / d
       ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId
         (unwrap state).choices
       TimeIntervalStart ->
