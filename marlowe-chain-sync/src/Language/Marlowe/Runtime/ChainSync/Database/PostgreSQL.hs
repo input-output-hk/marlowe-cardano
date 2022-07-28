@@ -37,7 +37,7 @@ import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Hasql.Session (Session)
 import Hasql.Statement (refineResult)
-import Hasql.TH (maybeStatement, resultlessStatement, vectorStatement)
+import Hasql.TH (maybeStatement, resultlessStatement, singletonStatement, vectorStatement)
 import Hasql.Transaction (Transaction)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
@@ -61,7 +61,7 @@ databaseQueries genesisBlock = DatabaseQueries
  (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
  (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
  (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
- (hoistGetQueryResult (TS.transaction TS.ReadCommitted TS.Read) getQueryResult)
+ (hoistGetQueryResult (TS.transaction TS.ReadCommitted TS.Read) (getQueryResult genesisBlock))
 
 -- GetGenesisBlock
 
@@ -137,8 +137,8 @@ getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeRes
 
 -- GetQueryResult
 
-getQueryResult :: GetQueryResult Transaction
-getQueryResult = GetQueryResult mkTransaction
+getQueryResult :: GenesisBlock -> GetQueryResult Transaction
+getQueryResult genesisBlock = GetQueryResult mkTransaction
   where
     mkTransaction :: ChainPoint -> Query err result -> Transaction (QueryResult err result)
     mkTransaction point query = do
@@ -213,17 +213,6 @@ getQueryResult = GetQueryResult mkTransaction
             (Right _, Right (Just (r2, p2)))               -> Right $ Just (That r2, p2)
             _                                              -> Right Nothing
 
-        And q1 q2 -> do
-          qr1 <- mkTransaction' point q1
-          qr2 <- mkTransaction' point q2
-          pure case (qr1, qr2) of
-            (Left e1, Left e2)   -> Left $ These e1 e2
-            (Left e1, _)         -> Left $ This e1
-            (_, Left e2)         -> Left $ That e2
-            (Right (Just (r1, p1)), Right (Just (r2, p2)))
-              | p1 == p2 -> Right $ Just ((r1, r2), p1)
-            _ -> Right Nothing
-
         GetBlockHeader -> do
           let
             decode (slotNo, hash, blockNo) =
@@ -231,24 +220,53 @@ getQueryResult = GetQueryResult mkTransaction
                 slot = SlotNo $ fromIntegral slotNo
                 headerHash = HeaderHash $ toShort hash
                 block = BlockNo $ fromIntegral blockNo
-                header = BlockHeader slot headerHash block
               in
-                (header, ChainPoint slot headerHash)
-          Right . fmap decode <$> HT.statement pointSlot
-            [maybeStatement|
+                BlockHeader slot headerHash block
+          Right . Just . (,point) . decode <$> HT.statement pointParams
+            [singletonStatement|
               SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
                 FROM chain.block
-              WHERE slotNo > $1 :: bigint
+              WHERE slotNo = $1 :: bigint
+                AND id = $2 :: bytea
+                AND rollbackToBlock IS NULL
+            |]
+
+        WaitSlots slots query' -> do
+          waitResult <- fmap decodeOffset <$> HT.statement (fromIntegral slots + fst pointParams)
+            [maybeStatement|
+              SELECT slotNo :: bigint, id :: bytea
+                FROM chain.block
+              WHERE slotNo >= $1 :: bigint
                 AND rollbackToBlock IS NULL
               ORDER BY slotNo
               LIMIT 1
             |]
+          case waitResult of
+            Nothing     -> pure $ Right Nothing
+            Just point' -> mkTransaction' point' query'
+
+        WaitBlocks blocks query' -> do
+          waitResult <- fmap decodeOffset <$> HT.statement (fst pointParams, fromIntegral blocks)
+            [maybeStatement|
+              SELECT slotNo :: bigint, id :: bytea
+                FROM chain.block
+              WHERE slotNo >= $1 :: bigint
+                AND rollbackToBlock IS NULL
+              ORDER BY slotNo
+              LIMIT 1
+              OFFSET $2 :: int
+            |]
+          case waitResult of
+            Nothing     -> pure $ Right Nothing
+            Just point' -> mkTransaction' point' query'
 
       where
-        pointSlot :: Int64
-        pointSlot = case point of
-          ChainPointAtGenesis -> -1
-          ChainPoint slotNo _ -> slotNoToParam slotNo
+        pointParams :: (Int64, ByteString)
+        pointParams = headerHashToParam <$> case point of
+          ChainPointAtGenesis    -> (-1, genesisBlockHash genesisBlock)
+          ChainPoint slotNo hash -> (slotNoToParam slotNo, hash)
+
+        decodeOffset (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
 
 -- CommitRollback
 

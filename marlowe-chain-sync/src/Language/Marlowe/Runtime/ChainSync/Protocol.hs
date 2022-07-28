@@ -13,6 +13,7 @@ import Network.Protocol.FilteredChainSync.Codec (DeserializeError, SomeQuery (So
 import Network.Protocol.FilteredChainSync.Server (FilteredChainSyncServer)
 import Network.Protocol.FilteredChainSync.Types (FilteredChainSync, SchemaVersion (SchemaVersion))
 import Network.TypedProtocol.Codec (Codec)
+import Numeric.Natural (Natural)
 
 data Query err result where
 
@@ -21,12 +22,11 @@ data Query err result where
     -> Query err2 result2
     -> Query (These err1 err2) (These result1 result2)
 
-  And
-    :: Query err1 result1
-    -> Query err2 result2
-    -> Query (These err1 err2) (result1, result2)
-
   GetBlockHeader :: Query Void BlockHeader
+
+  WaitSlots :: Natural -> Query err result -> Query err result
+
+  WaitBlocks :: Natural -> Query err result -> Query err result
 
 data QueryResult err result
   = RollForward result ChainPoint ChainTip
@@ -62,12 +62,17 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
         encodeQuery $ SomeQuery q1
         encodeQuery $ SomeQuery q2
 
-      And q1 q2 -> do
-        putWord8 0x02
-        encodeQuery $ SomeQuery q1
-        encodeQuery $ SomeQuery q2
+      GetBlockHeader -> putWord8 0x02
 
-      GetBlockHeader -> putWord8 0x03
+      WaitSlots slots query -> do
+        putWord8 0x03
+        put slots
+        encodeQuery $ SomeQuery query
+
+      WaitBlocks blocks query -> do
+        putWord8 0x04
+        put blocks
+        encodeQuery $ SomeQuery query
 
     decodeQuery = do
       tag <- getWord8
@@ -77,12 +82,17 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           SomeQuery q2 <- decodeQuery
           pure $ SomeQuery $ Or q1 q2
 
-        0x02 -> do
-          SomeQuery q1 <- decodeQuery
-          SomeQuery q2 <- decodeQuery
-          pure $ SomeQuery $ And q1 q2
-
-        0x03 -> pure $ SomeQuery GetBlockHeader
+        0x02 -> pure $ SomeQuery GetBlockHeader
+        0x03 -> do
+          slots <- get
+          SomeQuery query <- decodeQuery
+          let query' = WaitSlots slots query
+          pure $ SomeQuery query'
+        0x04 -> do
+          blocks <- get
+          SomeQuery query <- decodeQuery
+          let query' = WaitBlocks blocks query
+          pure $ SomeQuery query'
         _ -> fail $ "Invalid query tag " <> show tag
 
     encodeResult :: forall err result. Query err result -> result -> Put
@@ -99,11 +109,11 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           encodeResult q1 r1
           encodeResult q2 r2
 
-      And q1 q2 -> \(r1, r2) -> do
-        encodeResult q1 r1
-        encodeResult q2 r2
-
       GetBlockHeader -> putBlockHeader
+
+      WaitSlots _ query -> encodeResult query
+
+      WaitBlocks _ query -> encodeResult query
 
     decodeResult :: forall err result. Query err result -> Get result
     decodeResult = \case
@@ -115,9 +125,11 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           0x03 -> These <$> decodeResult q1 <*> decodeResult q2
           _    -> fail $ "Invalid align result tag " <> show tag
 
-      And q1 q2 -> (,) <$> decodeResult q1 <*> decodeResult q2
-
       GetBlockHeader -> getBlockHeader
+
+      WaitSlots _ query -> decodeResult query
+
+      WaitBlocks _ query -> decodeResult query
 
     encodeError :: forall err result. Query err result -> err -> Put
     encodeError = \case
@@ -133,19 +145,11 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           encodeError q1 e1
           encodeError q2 e2
 
-      And q1 q2 -> \case
-        This e1 -> do
-          putWord8 0x01
-          encodeError q1 e1
-        That e2 -> do
-          putWord8 0x02
-          encodeError q2 e2
-        These e1 e2 -> do
-          putWord8 0x03
-          encodeError q1 e1
-          encodeError q2 e2
-
       GetBlockHeader -> absurd
+
+      WaitSlots _ query -> encodeError query
+
+      WaitBlocks _ query -> encodeError query
 
     decodeError :: forall err result. Query err result -> Get err
     decodeError = \case
@@ -155,17 +159,13 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           0x01 -> This <$> decodeError q1
           0x02 -> That <$> decodeError q2
           0x03 -> These <$> decodeError q1 <*> decodeError q2
-          _    -> fail $ "Invalid align error tag " <> show tag
-
-      And q1 q2    -> do
-        tag <- getWord8
-        case tag of
-          0x01 -> This <$> decodeError q1
-          0x02 -> That <$> decodeError q2
-          0x03 -> These <$> decodeError q1 <*> decodeError q2
-          _    -> fail $ "Invalid join error tag " <> show tag
+          _    -> fail $ "Invalid or error tag " <> show tag
 
       GetBlockHeader -> fail "absurd"
+
+      WaitSlots _ query -> decodeError query
+
+      WaitBlocks _ query -> decodeError query
 
 schemaVersion1_0 :: SchemaVersion
 schemaVersion1_0 = SchemaVersion "marlowe-chain-sync-1.0"

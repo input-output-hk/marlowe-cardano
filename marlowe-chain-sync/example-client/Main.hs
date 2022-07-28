@@ -1,6 +1,6 @@
 module Main where
 
-import Cardano.Api (BlockHeader (BlockHeader), ChainPoint (..))
+import Cardano.Api (BlockHeader (BlockHeader), BlockNo (..), ChainPoint (..), ChainTip (..))
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)
 import Data.Void (absurd)
@@ -27,7 +27,8 @@ main = do
       connect sock $ traceShowId $ addrAddress addr
       pure sock
 
-
+-- | This example client skips every 1000 blocks until it catches up to the
+-- tip, at which point it requests one block at a time.
 run :: Socket -> IO ()
 run conn = void $ runPeerWithDriver driver peer (startDState driver)
   where
@@ -39,19 +40,23 @@ run conn = void $ runPeerWithDriver driver peer (startDState driver)
       { recvMsgHandshakeRejected = \supportedVersions -> do
           putStr "Schema version not supported by server. Supported versions: "
           print supportedVersions
-      , recvMsgHandshakeConfirmed = stIdle
+      , recvMsgHandshakeConfirmed = stIdle 1
       }
-    stIdle = pure $ SendMsgQueryNext GetBlockHeader stNext (pure stNext)
+    stIdle stepSize = do
+      let query = WaitBlocks stepSize GetBlockHeader
+      pure $ SendMsgQueryNext query stNext (pure stNext)
     stNext = ClientStNext
       { recvMsgQueryRejected = absurd
-      , recvMsgRollForward = \(BlockHeader slotNo hash blockNo) _ _ -> do
+      , recvMsgRollForward = \(BlockHeader _ _ (BlockNo blockNo)) point tip -> do
           putStr "Roll forward: "
-          print (slotNo, hash, blockNo)
-          stIdle
+          print point
+          stIdle $ fromIntegral case tip of
+            ChainTipAtGenesis                 -> 1
+            ChainTip _ _ (BlockNo tipBlockNo) -> max 1 (min 1000 $ tipBlockNo - blockNo)
       , recvMsgRollBackward = \point _ -> do
           putStr "Roll backward: "
           print point
-          stIdle
+          stIdle 1
       }
 
 data Options = Options
