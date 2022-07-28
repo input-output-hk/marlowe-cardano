@@ -280,7 +280,7 @@ checkDivValueRounding =
     gen _ _ = (,) <$> arbitrary <*> arbitrary
   in
     checkValue gen $ \eval _ _ _ (x, y) ->
-      eval (DivValue x y) == eval x `roundedDivide` eval y || eval y == 0
+      eval (DivValue x y) == eval x `truncatedDivide` eval y || eval y == 0
 
 
 checkChoiceValue :: Bool -> Property

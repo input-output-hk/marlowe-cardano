@@ -500,8 +500,8 @@ divAnalysisTest = do
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2
     eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
-    eval (DivValue (Constant 7) (Constant 2)) @=? 4
-    eval (DivValue (Constant (-7)) (Constant 2)) @=? -4
+    eval (DivValue (Constant 7) (Constant 2)) @=? 3
+    eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
 
 
 divTest :: IO ()
@@ -511,8 +511,8 @@ divTest = do
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2
     eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
-    eval (DivValue (Constant 7) (Constant 2)) @=? 4
-    eval (DivValue (Constant (-7)) (Constant 2)) @=? -4
+    eval (DivValue (Constant 7) (Constant 2)) @=? 3
+    eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
 
 
 
