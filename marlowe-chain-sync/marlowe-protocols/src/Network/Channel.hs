@@ -1,10 +1,13 @@
 {-# LANGUAGE RankNTypes #-}
 module Network.Channel where
 
-import Control.Monad ((>=>))
+import Control.Monad (mfilter, (>=>))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import Data.Functor (($>))
 import Data.Text.Internal.Lazy (smallChunkSize)
+import Network.Socket (Socket)
+import qualified Network.Socket.ByteString.Lazy as Socket
 import qualified System.IO as IO
 
 data Channel m a = Channel
@@ -37,7 +40,7 @@ handlesAsChannel
   :: IO.Handle -- ^ Read handle
   -> IO.Handle -- ^ Write handle
   -> Channel IO LBS.ByteString
-handlesAsChannel hread hwrite = Channel {send, recv}
+handlesAsChannel hread hwrite = Channel {..}
   where
     send :: LBS.ByteString -> IO ()
     send chunk = do
@@ -50,3 +53,23 @@ handlesAsChannel hread hwrite = Channel {send, recv}
       if eof
         then pure Nothing
         else Just . LBS.fromStrict <$> BS.hGetSome hread smallChunkSize
+
+socketAsChannel :: Socket -> Channel IO LBS.ByteString
+socketAsChannel sock = Channel {..}
+  where
+    send :: LBS.ByteString -> IO ()
+    send = Socket.sendAll sock
+
+    recv :: IO (Maybe LBS.ByteString)
+    recv = mfilter (not . LBS.null) . pure <$> Socket.recv sock (fromIntegral smallChunkSize)
+
+effectChannel
+  :: Monad m
+  => (a -> m ())       -- ^ Run effect on send
+  -> (Maybe a -> m ()) -- ^ Run effect on recv
+  -> Channel m a
+  -> Channel m a
+effectChannel onSend onRecv Channel{..} = Channel
+  { send = \a -> onSend a *> send a
+  , recv = recv >>= \ma -> onRecv ma $> ma
+  }

@@ -174,7 +174,7 @@ getQueryResult = GetQueryResult \point ->
         getTip = decode <$> HT.statement ()
           [maybeStatement|
             SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-              FROM rollbacks
+              FROM chain.block
              WHERE rollbackToSlot IS NULL
              ORDER BY slotNo DESC
              LIMIT 1
@@ -249,8 +249,8 @@ getQueryResult = GetQueryResult \point ->
       where
         pointSlot :: Int64
         pointSlot = case point of
-          ChainPointAtGenesis    -> -1
-          ChainPoint slotNo hash -> slotNoToParam slotNo
+          ChainPointAtGenesis -> -1
+          ChainPoint slotNo _ -> slotNoToParam slotNo
 
 -- CommitRollback
 

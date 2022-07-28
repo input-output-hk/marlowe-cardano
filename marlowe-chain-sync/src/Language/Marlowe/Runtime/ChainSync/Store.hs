@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.ChainSync.Store
 
 import Cardano.Api (ChainPoint (..), ChainTip (..), SlotNo (..))
 import Cardano.Api.Shelley (Hash (..))
-import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, when)
 import Control.Monad.Trans.Class (lift)
@@ -18,6 +18,7 @@ import Data.Foldable (for_, traverse_)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
+import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks (..), CommitRollback (..))
 import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes (..), isEmptyChanges)
 import Prelude hiding (filter)
@@ -33,13 +34,15 @@ data ChainStoreDependencies = ChainStoreDependencies
   }
 
 -- | Public API of the ChainStore component
-newtype ChainStore = ChainStore
-  { runChainStore :: IO () -- ^ Run the chain store in IO
+data ChainStore = ChainStore
+  { runChainStore :: !(IO Void)        -- ^ Run the chain store in IO
+  , localTip      :: !(STM ChainTip) -- ^ Action to read the current (local) chain tip
   }
 
 -- | Create a ChainStore component.
 mkChainStore :: ChainStoreDependencies -> STM ChainStore
 mkChainStore ChainStoreDependencies{..} = do
+  localTipVar <- newTVar ChainTipAtGenesis
   let
     awaitChanges :: Maybe Delay -> STM Changes
     awaitChanges delay = do
@@ -50,7 +53,7 @@ mkChainStore ChainStoreDependencies{..} = do
       guard $ not $ isEmptyChanges changes
       pure changes
 
-    runChainStore :: IO ()
+    runChainStore :: IO Void
     runChainStore = go Nothing
       where
         go lastWrite = do
@@ -73,9 +76,9 @@ mkChainStore ChainStoreDependencies{..} = do
               , " blocks, "
               , T.pack $ show changesTxCount
               , " transactions. New tip: "
-              , case changesPoint of
-                  ChainPointAtGenesis -> "Genesis"
-                  ChainPoint (SlotNo slot) (HeaderHash hash) -> T.intercalate " "
+              , case changesLocalTip of
+                  ChainTipAtGenesis -> "Genesis"
+                  ChainTip (SlotNo slot) (HeaderHash hash) _ -> T.intercalate " "
                     [ "block"
                     , encodeBase16 $ fromShort hash
                     , "at slot"
@@ -88,6 +91,7 @@ mkChainStore ChainStoreDependencies{..} = do
               , ")"
               ]
             runCommitBlocks commitBlocks changesBlocks
+            atomically $ writeTVar localTipVar changesLocalTip
           go . Just =<< getCurrentTime
 
     computeDelay :: UTCTime -> IO (Maybe Delay)
@@ -99,4 +103,6 @@ mkChainStore ChainStoreDependencies{..} = do
       let delayMicroseconds = floor $ 1_000_000 * nominalDiffTimeToSeconds delay
       lift $ newDelay delayMicroseconds
 
-  pure $ ChainStore { runChainStore }
+    localTip = readTVar localTipVar
+
+  pure $ ChainStore { runChainStore, localTip }

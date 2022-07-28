@@ -57,5 +57,6 @@ library
       base >= 4.9 && < 5
     , binary
     , bytestring
+    , network
     , text
     , typed-protocols

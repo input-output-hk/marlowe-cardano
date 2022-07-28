@@ -33,14 +33,14 @@ data Changes = Changes
   { changesRollback   :: !(Maybe ChainPoint) -- ^ Point to rollback to before writing any blocks.
   , changesBlocks     :: ![CardanoBlock]     -- ^ New blocks to write.
   , changesTip        :: !ChainTip           -- ^ Most recently observed tip of the local node.
-  , changesPoint      :: !ChainPoint         -- ^ Chain point the changes will advance the local state to.
+  , changesLocalTip   :: !ChainTip           -- ^ Chain tip the changes will advance the local state to.
   , changesBlockCount :: !Int                -- ^ Number of blocks in the change set.
   , changesTxCount    :: !Int                -- ^ Number of transactions in the change set.
   }
 
 -- | An emtpy Changes collection.
 emptyChanges :: Changes
-emptyChanges = Changes Nothing [] ChainTipAtGenesis ChainPointAtGenesis 0 0
+emptyChanges = Changes Nothing [] ChainTipAtGenesis ChainTipAtGenesis 0 0
 
 -- | Make a set of changes into an empty set (preserves the tip and point fields).
 toEmptyChanges :: Changes -> Changes
@@ -200,7 +200,7 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
           nextChanges = changes
             { changesBlocks = block : changesBlocks changes
             , changesTip = snd tip
-            , changesPoint = ChainPoint slotNo hash
+            , changesLocalTip = ChainTip slotNo hash blockNo
             , changesBlockCount = changesBlockCount changes + 1
             , changesTxCount = changesTxCount changes + length txs
             }
@@ -211,6 +211,7 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
       let clientTip = At blockNo
       pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   , recvMsgRollBackward = \point tip -> do
+      clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
       atomically $ modifyTVar changesVar \Changes{..} ->
         let
           changesBlocks' = case point of
@@ -229,11 +230,13 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
                 -- earlier point: the previous one, or this new one.
                 Just prevRollback -> Just $ minPoint point prevRollback
             , changesTip = snd tip
-            , changesPoint = point
+            , changesLocalTip = case (point, clientTip) of
+                (ChainPointAtGenesis, _)             -> ChainTipAtGenesis
+                (_, Origin)                          -> ChainTipAtGenesis
+                (ChainPoint slotNo hash, At blockNo) -> ChainTip slotNo hash blockNo
             , changesBlockCount = length changesBlocks'
             , changesTxCount = sum $ blockTxCount <$> changesBlocks
             }
-      clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
       pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   }
 

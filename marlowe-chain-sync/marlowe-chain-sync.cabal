@@ -117,6 +117,8 @@ executable marlowesyncd
     , cardano-ledger-byron
     , hasql
     , marlowe-chain-sync
+    , marlowe-protocols
+    , network
     , optparse-applicative
     , ouroboros-network
     , stm

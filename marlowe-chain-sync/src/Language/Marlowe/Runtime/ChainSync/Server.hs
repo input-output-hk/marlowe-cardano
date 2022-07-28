@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase             #-}
+{-# LANGUAGE RankNTypes            #-}
 
 module Language.Marlowe.Runtime.ChainSync.Server where
 
@@ -11,6 +12,8 @@ import Control.Exception (throwIO)
 import Control.Monad (guard)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Functor (void)
+import qualified Data.Text as T
+import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Database (GetQueryResult (..))
 import Language.Marlowe.Runtime.ChainSync.Protocol (Query, QueryResult (..), runtimeFilteredChainSyncCodec,
@@ -21,9 +24,10 @@ import Network.Protocol.FilteredChainSync.Server (FilteredChainSyncServer (..), 
                                                   ServerStIdle (..), ServerStInit (..), ServerStNext (..),
                                                   filteredChainSyncServerPeer)
 import Network.TypedProtocol (Driver (..), runPeerWithDriver)
+import System.IO (stderr)
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
-  { getChannel     :: !(IO (Channel IO LBS.ByteString))
+  { withChannel    :: !(forall a. (Channel IO LBS.ByteString -> IO a) -> IO a)
   , getQueryResult :: !(GetQueryResult IO)
   , localTip       :: !(STM ChainTip)
   }
@@ -35,8 +39,8 @@ newtype ChainSyncServer = ChainSyncServer
 mkChainSyncServer :: ChainSyncServerDependencies -> STM ChainSyncServer
 mkChainSyncServer ChainSyncServerDependencies{..} = do
   let
-    runChainSyncServer = do
-      channel <- getChannel
+    runChainSyncServer = withChannel \channel -> do
+      hPutStrLn stderr "New client connected"
       worker <- atomically $ mkWorker WorkerDependencies {..}
       withAsync (runWorker worker) \aworker ->
         withAsync runChainSyncServer \aserver -> do
@@ -44,7 +48,11 @@ mkChainSyncServer ChainSyncServerDependencies{..} = do
           case result of
             Right (Left ex) -> throwIO ex
             Right (Right x) -> absurd x
-            Left _          -> wait aserver
+            Left (Left ex)  -> do
+              hPutStrLn stderr $ "Lost client with exception " <> T.pack (show ex)
+            Left _  -> do
+              hPutStrLn stderr "Client terminated normally"
+          wait aserver
   pure $ ChainSyncServer { runChainSyncServer }
 
 data WorkerDependencies = WorkerDependencies

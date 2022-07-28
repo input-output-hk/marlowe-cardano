@@ -152,4 +152,4 @@ decodeGet = go . runGetIncremental
     go = pure . \case
       Fail unconsumedInput offset message -> DecodeFail DeserializeError{..}
       Partial f                           -> DecodePartial $ go . f . fmap LBS.toStrict
-      Done unconsumedInput _ a            -> DecodeDone a $ mfilter LBS.null $ Just $ LBS.fromStrict unconsumedInput
+      Done unconsumedInput _ a            -> DecodeDone a $ mfilter (not . LBS.null) $ Just $ LBS.fromStrict unconsumedInput
