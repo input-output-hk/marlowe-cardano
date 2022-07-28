@@ -3,7 +3,7 @@
 
 
 module Spec.Marlowe.Util (
-  roundedDivide
+  truncatedDivide
 , flattenMoney
 , stateEq
 , checkEntropy
@@ -20,6 +20,7 @@ import Test.Tasty.HUnit (Assertion, assertBool)
 import Test.Tasty.QuickCheck (Gen, generate)
 
 import qualified PlutusTx.Prelude as P
+import qualified PlutusTx.Ratio as P
 
 
 canonicalState :: State -> State
@@ -39,10 +40,10 @@ flattenMoney :: Money -> [(Token, Integer)]
 flattenMoney = fmap (\(s, n, a) -> (Token s n, a)) .  flattenValue
 
 
-roundedDivide :: Integer
-              -> Integer
-              -> Integer
-roundedDivide x y = maybe 0 P.round $ x `P.ratio` y
+truncatedDivide :: Integer
+                -> Integer
+                -> Integer
+truncatedDivide x y = maybe 0 P.truncate $ x `P.ratio` y
 
 
 checkEntropy :: Ord a => Int -> (Double, Double) -> Gen a -> Assertion

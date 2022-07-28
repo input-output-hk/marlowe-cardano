@@ -65,6 +65,7 @@ import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Builtins (emptyByteString, sha2_256)
 import PlutusTx.Lattice
 import qualified PlutusTx.Prelude as P
+import qualified PlutusTx.Ratio as P
 import Spec.Marlowe.Common
 import qualified Streaming.Prelude as S
 import System.IO.Unsafe (unsafePerformIO)
@@ -428,9 +429,9 @@ divisionRoundingTest = property $ do
             n <- amount
             d <- suchThat amount (/= 0)
             return (n, d)
-    forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === halfEvenRound (n M.% d)
+    forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === roundToZero (n M.% d)
     where
-      halfEvenRound = P.round
+      roundToZero = P.truncate
 
 
 mulTest :: Property
@@ -500,8 +501,8 @@ divAnalysisTest = do
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2
     eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
-    eval (DivValue (Constant 7) (Constant 2)) @=? 4
-    eval (DivValue (Constant (-7)) (Constant 2)) @=? -4
+    eval (DivValue (Constant 7) (Constant 2)) @=? 3
+    eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
 
 
 divTest :: IO ()
@@ -511,8 +512,8 @@ divTest = do
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2
     eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
-    eval (DivValue (Constant 7) (Constant 2)) @=? 4
-    eval (DivValue (Constant (-7)) (Constant 2)) @=? -4
+    eval (DivValue (Constant 7) (Constant 2)) @=? 3
+    eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
 
 
 
