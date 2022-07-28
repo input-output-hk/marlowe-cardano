@@ -353,26 +353,22 @@ commitBlocks = CommitBlocks \blocks ->
             UNION
             SELECT asset.*
             FROM   assetOutInputs AS assetOut
-            JOIN   chain.asset    AS asset    ON  asset.policyId = assetOut.policyId
-                                              AND asset.name = assetOut.name
+            JOIN   chain.asset    AS asset    USING  (policyId, name)
             UNION
             SELECT asset.*
             FROM   assetMintInputs AS assetMint
-            JOIN   chain.asset    AS asset    ON  asset.policyId = assetMint.policyId
-                                              AND asset.name = assetMint.name
+            JOIN   chain.asset    AS asset    USING  (policyId, name)
           )
         , newAssetOuts AS
           ( INSERT INTO chain.assetOut (txOutId, txOutIx, slotNo, assetId, quantity)
             SELECT assetOut.txOutId, assetOut.txOutIx, assetOut.slotNo, asset.id, assetOut.quantity
             FROM   assetOutInputs AS assetOut
-            JOIN   assetIds       AS asset    ON  asset.policyId = assetOut.policyId
-                                              AND asset.name = assetOut.name
+            JOIN   assetIds       AS asset    USING (policyId, name)
           )
         INSERT INTO chain.assetMint (txId, slotNo, assetId, quantity)
         SELECT assetMint.txId, assetMint.slotNo, asset.id, assetMint.quantity
         FROM   assetMintInputs AS assetMint
-        JOIN   assetIds        AS asset     ON  asset.policyId = assetMint.policyId
-                                            AND asset.name = assetMint.name
+        JOIN   assetIds        AS asset     USING (policyId, name)
       |]
   where
     params blocks txs txOuts txIns assetOuts assetMints =
