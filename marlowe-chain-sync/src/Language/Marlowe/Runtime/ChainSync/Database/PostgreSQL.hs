@@ -44,9 +44,9 @@ import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx 
 import Ouroboros.Network.Point (WithOrigin (..))
 
 -- | PostgreSQL implementation for the chain sync database queries.
-databaseQueries :: DatabaseQueries Session
-databaseQueries = DatabaseQueries
- commitRollback
+databaseQueries :: GenesisBlock -> DatabaseQueries Session
+databaseQueries genesisBlock = DatabaseQueries
+ (commitRollback genesisBlock)
  commitBlocks
  commitGenesisBlock
  getHeaderAtPoint
@@ -127,19 +127,22 @@ getIntersectionPoints = GetIntersectionPoints $ statement () $ rmap decodeResult
 
 -- CommitRollback
 
-commitRollback :: CommitRollback Session
-commitRollback = CommitRollback \case
-  ChainPointAtGenesis -> sql $ BS.intercalate "\n"
-    [ "BEGIN;"
-    , "TRUNCATE TABLE chain.tx;"
-    , "TRUNCATE TABLE chain.txOut;"
-    , "TRUNCATE TABLE chain.txIn;"
-    , "DELETE FROM chain.asset;"
-    , "TRUNCATE TABLE chain.assetOut;"
-    , "TRUNCATE TABLE chain.assetMint;"
-    , "TRUNCATE TABLE chain.block;"
-    , "COMMIT;"
-    ]
+commitRollback :: GenesisBlock -> CommitRollback Session
+commitRollback genesisBlock = CommitRollback \case
+  ChainPointAtGenesis -> do
+    -- truncate all tables
+    sql $ BS.intercalate "\n"
+      [ "BEGIN;"
+      , "TRUNCATE TABLE chain.tx;"
+      , "TRUNCATE TABLE chain.txOut;"
+      , "TRUNCATE TABLE chain.txIn;"
+      , "TRUNCATE TABLE chain.asset RESTART IDENTITY CASCADE;"
+      , "TRUNCATE TABLE chain.block;"
+      ]
+    -- re-add the genesis block (faster than excluding the info using DELETE FROM ... WHERE ...)
+    runCommitGenesisBlock commitGenesisBlock genesisBlock
+    -- commit the transaction
+    sql "COMMIT;"
   ChainPoint slotNo hash -> statement (slotNoToParam slotNo, headerHashToParam hash)
     [resultlessStatement|
       WITH blockUpdates AS

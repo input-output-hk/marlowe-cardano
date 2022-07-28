@@ -16,6 +16,7 @@ import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSync (..), ChainSyncDependencies (..), mkChainSync)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
+import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
 import Options (Options (..), getOptions)
 
 main :: IO ()
@@ -34,13 +35,14 @@ run Options{..} = do
       (const "failed to read byron genesis file")
       (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
   (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
+  let genesisConfigHashValue = abstractHashToBytes hash
   chainSync <- atomically $ mkChainSync ChainSyncDependencies
     { localNodeConnectInfo
     , databaseQueries = hoistDatabaseQueries
         (either throwQueryError pure <=< flip Session.run connection)
-        PostgreSQL.databaseQueries
+        (PostgreSQL.databaseQueries $ computeByronGenesisBlock genesisConfigHashValue genesisConfig)
     , persistRateLimit
-    , genesisConfigHash = abstractHashToBytes hash
+    , genesisConfigHash = genesisConfigHashValue
     , genesisConfig
     }
   runChainSync chainSync
