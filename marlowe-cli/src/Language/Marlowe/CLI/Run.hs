@@ -190,14 +190,15 @@ prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile print
     marloweOut <- prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats
     maybeWriteJson outputFile marloweOut
 
+-- | Implementation of Prepare function
 prepareTransactionImpl :: MonadError CliError m
                => MonadIO m
-               => MarloweTransaction AlonzoEra
-               -> [Input]         -- ^ The contract's inputs.
-               -> POSIXTime       -- ^ The first valid time for the transaction.
-               -> POSIXTime       -- ^ The last valid time for the transaction.
-               -> Bool            -- ^ Whether to print statistics about the result.
-               -> m (MarloweTransaction AlonzoEra) -- ^ Action to compute the next step in the contract.
+               => MarloweTransaction AlonzoEra      -- ^ Marlowe transaction to be prepared.
+               -> [Input]                           -- ^ The contract's inputs.
+               -> POSIXTime                         -- ^ The first valid time for the transaction.
+               -> POSIXTime                         -- ^ The last valid time for the transaction.
+               -> Bool                              -- ^ Whether to print statistics about the result.
+               -> m (MarloweTransaction AlonzoEra)  -- ^ Action to compute the next step in the contract.
 prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats =
   do
     let
