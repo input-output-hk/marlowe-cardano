@@ -127,3 +127,22 @@ executable marlowesyncd
     , text
     , time
     , transformers
+
+executable example-client
+  import: lang
+  hs-source-dirs: example-client
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_chain_sync
+  autogen-modules:
+    Paths_marlowe_chain_sync
+  build-depends:
+      base >= 4.9 && < 5
+    , bytestring
+    , cardano-api
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , network
+    , optparse-applicative
+    , text
+    , typed-protocols
