@@ -15,30 +15,41 @@ import Network.Protocol.FilteredChainSync.Types (FilteredChainSync, SchemaVersio
 import Network.TypedProtocol.Codec (Codec)
 import Numeric.Natural (Natural)
 
-data Query err result where
+data Move err result where
 
   Or
-    :: Query err1 result1
-    -> Query err2 result2
-    -> Query (These err1 err2) (These result1 result2)
+    :: Move err1 result1
+    -> Move err2 result2
+    -> Move (These err1 err2) (These result1 result2)
 
-  GetBlockHeader :: Query Void BlockHeader
+  Extract :: Extract err result -> Move err result
 
-  WaitSlots :: Natural -> Query err result -> Query err result
+  WaitSlots :: Natural -> Move err result -> Move err result
 
-  WaitBlocks :: Natural -> Query err result -> Query err result
+  WaitBlocks :: Natural -> Move err result -> Move err result
 
-data QueryResult err result
+data Extract err result where
+
+  And
+    :: Extract err1 result1
+    -> Extract err2 result2
+    -> Extract (These err1 err2) (result1, result2)
+
+  GetBlockHeader :: Extract Void BlockHeader
+
+data SomeExtract = forall err result. SomeExtract (Extract err result)
+
+data MoveResult err result
   = RollForward result ChainPoint ChainTip
   | RollBack ChainPoint ChainTip
   | Reject err ChainTip
   | Wait ChainTip
 
-type RuntimeFilteredChainSync = FilteredChainSync Query ChainPoint ChainTip
+type RuntimeFilteredChainSync = FilteredChainSync Move ChainPoint ChainTip
 
-type RuntimeFilteredChainSyncClient = FilteredChainSyncClient Query ChainPoint ChainTip
+type RuntimeFilteredChainSyncClient = FilteredChainSyncClient Move ChainPoint ChainTip
 
-type RuntimeFilteredChainSyncServer = FilteredChainSyncServer Query ChainPoint ChainTip
+type RuntimeFilteredChainSyncServer = FilteredChainSyncServer Move ChainPoint ChainTip
 
 type RuntimeFilteredChainSyncCodec m = Codec RuntimeFilteredChainSync DeserializeError m LBS.ByteString
 
@@ -55,14 +66,16 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
   putChainTip
   getChainTip
   where
-    encodeQuery :: SomeQuery Query -> Put
+    encodeQuery :: SomeQuery Move -> Put
     encodeQuery (SomeQuery q) = case q of
       Or q1 q2 -> do
         putWord8 0x01
         encodeQuery $ SomeQuery q1
         encodeQuery $ SomeQuery q2
 
-      GetBlockHeader -> putWord8 0x02
+      Extract extract -> do
+        putWord8 0x02
+        putExtract extract
 
       WaitSlots slots query -> do
         putWord8 0x03
@@ -82,7 +95,9 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           SomeQuery q2 <- decodeQuery
           pure $ SomeQuery $ Or q1 q2
 
-        0x02 -> pure $ SomeQuery GetBlockHeader
+        0x02 -> do
+          SomeExtract extract <- getExtract
+          pure $ SomeQuery $ Extract extract
         0x03 -> do
           slots <- get
           SomeQuery query <- decodeQuery
@@ -95,7 +110,7 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           pure $ SomeQuery query'
         _ -> fail $ "Invalid query tag " <> show tag
 
-    encodeResult :: forall err result. Query err result -> result -> Put
+    encodeResult :: forall err result. Move err result -> result -> Put
     encodeResult = \case
       Or q1 q2 -> \case
         This r1 -> do
@@ -109,13 +124,13 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           encodeResult q1 r1
           encodeResult q2 r2
 
-      GetBlockHeader -> putBlockHeader
+      Extract extract -> putExtractResult extract
 
       WaitSlots _ query -> encodeResult query
 
       WaitBlocks _ query -> encodeResult query
 
-    decodeResult :: forall err result. Query err result -> Get result
+    decodeResult :: forall err result. Move err result -> Get result
     decodeResult = \case
       Or q1 q2    -> do
         tag <- getWord8
@@ -125,13 +140,13 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           0x03 -> These <$> decodeResult q1 <*> decodeResult q2
           _    -> fail $ "Invalid align result tag " <> show tag
 
-      GetBlockHeader -> getBlockHeader
+      Extract extract -> getExtractResult extract
 
       WaitSlots _ query -> decodeResult query
 
       WaitBlocks _ query -> decodeResult query
 
-    encodeError :: forall err result. Query err result -> err -> Put
+    encodeError :: forall err result. Move err result -> err -> Put
     encodeError = \case
       Or q1 q2 -> \case
         This e1 -> do
@@ -145,13 +160,13 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           encodeError q1 e1
           encodeError q2 e2
 
-      GetBlockHeader -> absurd
+      Extract extract -> putExtractError extract
 
       WaitSlots _ query -> encodeError query
 
       WaitBlocks _ query -> encodeError query
 
-    decodeError :: forall err result. Query err result -> Get err
+    decodeError :: forall err result. Move err result -> Get err
     decodeError = \case
       Or q1 q2    -> do
         tag <- getWord8
@@ -161,7 +176,7 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           0x03 -> These <$> decodeError q1 <*> decodeError q2
           _    -> fail $ "Invalid or error tag " <> show tag
 
-      GetBlockHeader -> fail "absurd"
+      Extract extract -> getExtractError extract
 
       WaitSlots _ query -> decodeError query
 
@@ -169,6 +184,64 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
 
 schemaVersion1_0 :: SchemaVersion
 schemaVersion1_0 = SchemaVersion "marlowe-chain-sync-1.0"
+
+putExtract :: Extract err result -> Put
+putExtract = \case
+  And e1 e2 -> do
+    putWord8 0x01
+    putExtract e1
+    putExtract e2
+  GetBlockHeader -> putWord8 0x02
+
+putExtractResult :: Extract err result -> result -> Put
+putExtractResult = \case
+  And e1 e2 -> \(r1, r2) -> do
+    putExtractResult e1 r1
+    putExtractResult e2 r2
+  GetBlockHeader -> putBlockHeader
+
+putExtractError :: Extract err result -> err -> Put
+putExtractError = \case
+  And e1 e2 -> \case
+    This err1 -> do
+      putWord8 0x01
+      putExtractError e1 err1
+    That err2 -> do
+      putWord8 0x02
+      putExtractError e2 err2
+    These err1 err2 -> do
+      putWord8 0x03
+      putExtractError e1 err1
+      putExtractError e2 err2
+  GetBlockHeader -> absurd
+
+getExtract :: Get SomeExtract
+getExtract = do
+  tag <- getWord8
+  case tag of
+    0x01 -> do
+      SomeExtract q1 <- getExtract
+      SomeExtract q2 <- getExtract
+      pure $ SomeExtract $ And q1 q2
+    0x02 -> pure $ SomeExtract GetBlockHeader
+    _ -> fail $ "Invalid extract tag " <> show tag
+
+getExtractResult :: Extract err result -> Get result
+getExtractResult = \case
+  And e1 e2      -> (,) <$> getExtractResult e1 <*> getExtractResult e2
+  GetBlockHeader -> getBlockHeader
+
+getExtractError :: Extract err result -> Get err
+getExtractError = \case
+  And e1 e2    -> do
+    tag <- getWord8
+    case tag of
+      0x01 -> This <$> getExtractError e1
+      0x02 -> That <$> getExtractError e2
+      0x03 -> These <$> getExtractError e1 <*> getExtractError e2
+      _    -> fail $ "Invalid or extract error tag " <> show tag
+
+  GetBlockHeader -> fail "absurd"
 
 putSlotNo :: SlotNo -> Put
 putSlotNo (SlotNo slot) = do

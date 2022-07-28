@@ -5,7 +5,8 @@ import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)
 import Data.Void (absurd)
 import Debug.Trace (traceShowId)
-import Language.Marlowe.Runtime.ChainSync.Protocol (Query (..), runtimeFilteredChainSyncCodec, schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (GetBlockHeader), Move (..), runtimeFilteredChainSyncCodec,
+                                                    schemaVersion1_0)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.FilteredChainSync.Client (ClientStHandshake (..), ClientStIdle (..), ClientStInit (..),
@@ -43,7 +44,7 @@ run conn = void $ runPeerWithDriver driver peer (startDState driver)
       , recvMsgHandshakeConfirmed = stIdle 1
       }
     stIdle stepSize = do
-      let query = WaitBlocks stepSize GetBlockHeader
+      let query = WaitBlocks stepSize $ Extract GetBlockHeader
       pure $ SendMsgQueryNext query stNext (pure stNext)
     stNext = ClientStNext
       { recvMsgQueryRejected = absurd

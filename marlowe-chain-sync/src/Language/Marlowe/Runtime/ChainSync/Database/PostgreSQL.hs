@@ -44,24 +44,23 @@ import qualified Hasql.Transaction.Sessions as TS
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
                                                     CommitRollback (..), DatabaseQueries (DatabaseQueries),
                                                     GetGenesisBlock (..), GetHeaderAtPoint (..),
-                                                    GetIntersectionPoints (..), GetQueryResult (..), hoistCommitBlocks,
+                                                    GetIntersectionPoints (..), MoveClient (..), hoistCommitBlocks,
                                                     hoistCommitGenesisBlock, hoistCommitRollback, hoistGetGenesisBlock,
-                                                    hoistGetHeaderAtPoint, hoistGetIntersectionPoints,
-                                                    hoistGetQueryResult)
+                                                    hoistGetHeaderAtPoint, hoistGetIntersectionPoints, hoistMoveClient)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Query (..), QueryResult (..))
+import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (..), Move (..), MoveResult (..))
 import Ouroboros.Network.Point (WithOrigin (..))
 
 -- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries :: GenesisBlock -> DatabaseQueries Session
 databaseQueries genesisBlock = DatabaseQueries
- (hoistCommitRollback (TS.transaction TS.ReadCommitted TS.Write) $ commitRollback genesisBlock)
- (hoistCommitBlocks (TS.transaction TS.ReadCommitted TS.Write) commitBlocks)
- (hoistCommitGenesisBlock (TS.transaction TS.ReadCommitted TS.Write) commitGenesisBlock)
- (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
- (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
- (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
- (hoistGetQueryResult (TS.transaction TS.ReadCommitted TS.Read) (getQueryResult genesisBlock))
+  (hoistCommitRollback (TS.transaction TS.ReadCommitted TS.Write) $ commitRollback genesisBlock)
+  (hoistCommitBlocks (TS.transaction TS.ReadCommitted TS.Write) commitBlocks)
+  (hoistCommitGenesisBlock (TS.transaction TS.ReadCommitted TS.Write) commitGenesisBlock)
+  (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
+  (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
+  (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
+  (hoistMoveClient (TS.transaction TS.ReadCommitted TS.Read) (moveClient genesisBlock))
 
 -- GetGenesisBlock
 
@@ -135,16 +134,16 @@ getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeRes
     decodeResult :: (Int64, ByteString) -> ChainPoint
     decodeResult (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
 
--- GetQueryResult
+-- MoveClient
 
-getQueryResult :: GenesisBlock -> GetQueryResult Transaction
-getQueryResult genesisBlock = GetQueryResult mkTransaction
+moveClient :: GenesisBlock -> MoveClient Transaction
+moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
   where
-    mkTransaction :: ChainPoint -> Query err result -> Transaction (QueryResult err result)
-    mkTransaction point query = do
+    performMoveWithRollbackCheck :: ChainPoint -> Move err result -> Transaction (MoveResult err result)
+    performMoveWithRollbackCheck point move = do
       tip <- getTip
       getRollbackPoint >>= \case
-        Nothing -> mkTransaction' point query >>= \case
+        Nothing -> performMove point move >>= \case
           Left err                      -> pure $ Reject err tip
           Right (Just (result, point')) -> pure $ RollForward result point' tip
           Right Nothing                 -> pure $ Wait tip
@@ -192,73 +191,53 @@ getQueryResult genesisBlock = GetQueryResult mkTransaction
           ChainPointAtGenesis    -> Nothing
           ChainPoint slotNo hash -> Just (slotNoToParam slotNo, headerHashToParam hash)
 
+    performMove :: ChainPoint -> Move err result -> Transaction (Either err (Maybe (result, ChainPoint)))
+    performMove point = \case
+      Or q1 q2 -> do
+        qr1 <- performMove point q1
+        qr2 <- performMove point q2
+        pure case (qr1, qr2) of
+          (Left e1, Left e2)                             -> Left $ These e1 e2
+          (Left e1, _)                                   -> Left $ This e1
+          (_, Left e2)                                   -> Left $ That e2
+          (Right (Just (r1, p1)), Right (Just (r2, p2))) -> Right $ Just case compare (chainPointToSlotNo p1) (chainPointToSlotNo p2) of
+                                                                            EQ -> (These r1 r2, p1)
+                                                                            LT -> (This r1, p1)
+                                                                            GT -> (That r2, p2)
+          (Right (Just (r1, p1)), Right _)               -> Right $ Just (This r1, p1)
+          (Right _, Right (Just (r2, p2)))               -> Right $ Just (That r2, p2)
+          _                                              -> Right Nothing
 
+      Extract extract -> fmap (Just . (,point)) <$> extractResults point extract
 
-    mkTransaction' :: ChainPoint -> Query err result -> Transaction (Either err (Maybe (result, ChainPoint)))
-    mkTransaction' point query = do
-      case query of
+      WaitSlots slots query' -> do
+        waitResult <- fmap decodeOffset <$> HT.statement (fromIntegral slots + fst pointParams)
+          [maybeStatement|
+            SELECT slotNo :: bigint, id :: bytea
+              FROM chain.block
+            WHERE slotNo >= $1 :: bigint
+              AND rollbackToBlock IS NULL
+            ORDER BY slotNo
+            LIMIT 1
+          |]
+        case waitResult of
+          Nothing     -> pure $ Right Nothing
+          Just point' -> performMove point' query'
 
-        Or q1 q2 -> do
-          qr1 <- mkTransaction' point q1
-          qr2 <- mkTransaction' point q2
-          pure case (qr1, qr2) of
-            (Left e1, Left e2)                             -> Left $ These e1 e2
-            (Left e1, _)                                   -> Left $ This e1
-            (_, Left e2)                                   -> Left $ That e2
-            (Right (Just (r1, p1)), Right (Just (r2, p2))) -> Right $ Just case compare (chainPointToSlotNo p1) (chainPointToSlotNo p2) of
-                                                                             EQ -> (These r1 r2, p1)
-                                                                             LT -> (This r1, p1)
-                                                                             GT -> (That r2, p2)
-            (Right (Just (r1, p1)), Right _)               -> Right $ Just (This r1, p1)
-            (Right _, Right (Just (r2, p2)))               -> Right $ Just (That r2, p2)
-            _                                              -> Right Nothing
-
-        GetBlockHeader -> do
-          let
-            decode (slotNo, hash, blockNo) =
-              let
-                slot = SlotNo $ fromIntegral slotNo
-                headerHash = HeaderHash $ toShort hash
-                block = BlockNo $ fromIntegral blockNo
-              in
-                BlockHeader slot headerHash block
-          Right . Just . (,point) . decode <$> HT.statement pointParams
-            [singletonStatement|
-              SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-                FROM chain.block
-              WHERE slotNo = $1 :: bigint
-                AND id = $2 :: bytea
-                AND rollbackToBlock IS NULL
-            |]
-
-        WaitSlots slots query' -> do
-          waitResult <- fmap decodeOffset <$> HT.statement (fromIntegral slots + fst pointParams)
-            [maybeStatement|
-              SELECT slotNo :: bigint, id :: bytea
-                FROM chain.block
-              WHERE slotNo >= $1 :: bigint
-                AND rollbackToBlock IS NULL
-              ORDER BY slotNo
-              LIMIT 1
-            |]
-          case waitResult of
-            Nothing     -> pure $ Right Nothing
-            Just point' -> mkTransaction' point' query'
-
-        WaitBlocks blocks query' -> do
-          waitResult <- fmap decodeOffset <$> HT.statement (fst pointParams, fromIntegral blocks)
-            [maybeStatement|
-              SELECT slotNo :: bigint, id :: bytea
-                FROM chain.block
-              WHERE slotNo >= $1 :: bigint
-                AND rollbackToBlock IS NULL
-              ORDER BY slotNo
-              LIMIT 1
-              OFFSET $2 :: int
-            |]
-          case waitResult of
-            Nothing     -> pure $ Right Nothing
-            Just point' -> mkTransaction' point' query'
+      WaitBlocks blocks query' -> do
+        waitResult <- fmap decodeOffset <$> HT.statement (fst pointParams, fromIntegral blocks)
+          [maybeStatement|
+            SELECT slotNo :: bigint, id :: bytea
+              FROM chain.block
+            WHERE slotNo >= $1 :: bigint
+              AND rollbackToBlock IS NULL
+            ORDER BY slotNo
+            LIMIT 1
+            OFFSET $2 :: int
+          |]
+        case waitResult of
+          Nothing     -> pure $ Right Nothing
+          Just point' -> performMove point' query'
 
       where
         pointParams :: (Int64, ByteString)
@@ -267,6 +246,38 @@ getQueryResult genesisBlock = GetQueryResult mkTransaction
           ChainPoint slotNo hash -> (slotNoToParam slotNo, hash)
 
         decodeOffset (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
+
+    extractResults :: ChainPoint -> Extract err result -> Transaction (Either err result)
+    extractResults point = \case
+      And e1 e2 -> do
+        r1 <- extractResults point e1
+        r2 <- extractResults point e2
+        pure case (r1, r2) of
+          (Right a, Right b) -> Right (a, b)
+          (Left a, Left b)   -> Left $ These a b
+          (Left a, _)        -> Left $ This a
+          ( _, Left b)       -> Left $ That b
+      GetBlockHeader -> do
+        let
+          decode (slotNo, hash, blockNo) =
+            let
+              slot = SlotNo $ fromIntegral slotNo
+              headerHash = HeaderHash $ toShort hash
+              block = BlockNo $ fromIntegral blockNo
+            in
+              BlockHeader slot headerHash block
+        Right . decode <$> HT.statement pointParams
+          [singletonStatement|
+            SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+              FROM chain.block
+            WHERE slotNo = $1 :: bigint
+              AND id = $2 :: bytea
+          |]
+      where
+        pointParams :: (Int64, ByteString)
+        pointParams = headerHashToParam <$> case point of
+          ChainPointAtGenesis    -> (-1, genesisBlockHash genesisBlock)
+          ChainPoint slotNo hash -> (slotNoToParam slotNo, hash)
 
 -- CommitRollback
 

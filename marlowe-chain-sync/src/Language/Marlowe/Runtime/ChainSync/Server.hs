@@ -15,8 +15,8 @@ import Data.Functor (void)
 import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.ChainSync.Database (GetQueryResult (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Query, QueryResult (..), runtimeFilteredChainSyncCodec,
+import Language.Marlowe.Runtime.ChainSync.Database (MoveClient (..))
+import Language.Marlowe.Runtime.ChainSync.Protocol (Move, MoveResult (..), runtimeFilteredChainSyncCodec,
                                                     schemaVersion1_0)
 import Network.Channel (Channel (..))
 import Network.Protocol.Driver (mkDriver)
@@ -27,9 +27,9 @@ import Network.TypedProtocol (Driver (..), runPeerWithDriver)
 import System.IO (stderr)
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
-  { withChannel    :: !(forall a. (Channel IO LBS.ByteString -> IO a) -> IO a)
-  , getQueryResult :: !(GetQueryResult IO)
-  , localTip       :: !(STM ChainTip)
+  { withChannel :: !(forall a. (Channel IO LBS.ByteString -> IO a) -> IO a)
+  , moveClient  :: !(MoveClient IO)
+  , localTip    :: !(STM ChainTip)
   }
 
 newtype ChainSyncServer = ChainSyncServer
@@ -56,9 +56,9 @@ mkChainSyncServer ChainSyncServerDependencies{..} = do
   pure $ ChainSyncServer { runChainSyncServer }
 
 data WorkerDependencies = WorkerDependencies
-  { channel        :: !(Channel IO LBS.ByteString)
-  , getQueryResult :: !(GetQueryResult IO)
-  , localTip       :: !(STM ChainTip)
+  { channel    :: !(Channel IO LBS.ByteString)
+  , moveClient :: !(MoveClient IO)
+  , localTip   :: !(STM ChainTip)
   }
 
 newtype Worker = Worker
@@ -80,7 +80,7 @@ mkWorker WorkerDependencies{..} = do
       then SendMsgHandshakeConfirmed $ stIdle ChainPointAtGenesis
       else SendMsgHandshakeRejected [ schemaVersion1_0 ] ()
 
-    stIdle :: ChainPoint -> IO (ServerStIdle Query ChainPoint ChainTip IO ())
+    stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainTip IO ())
     stIdle pos = pure ServerStIdle
       { recvMsgQueryNext = \query -> do
           let
@@ -93,7 +93,7 @@ mkWorker WorkerDependencies{..} = do
               guard $ lastTip /= newTip
 
             pollQuery onReply onWait = do
-              qResult <- runGetQueryResult getQueryResult pos query
+              qResult <- runMoveClient moveClient pos query
               case qResult of
                 RollForward result pos' tip -> onReply $ SendMsgRollForward result pos' tip $ stIdle pos'
                 RollBack pos' tip           -> onReply $ SendMsgRollBackward pos' tip $ stIdle pos'
