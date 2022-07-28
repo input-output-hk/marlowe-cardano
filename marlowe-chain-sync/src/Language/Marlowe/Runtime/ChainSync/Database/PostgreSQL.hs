@@ -23,6 +23,7 @@ import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
@@ -99,12 +100,12 @@ getHeaderAtPoint = GetHeaderAtPoint \case
 
 decodeTxId :: ByteString -> Either Text TxId
 decodeTxId txId = case deserialiseFromRawBytes AsTxId txId of
-  Nothing    -> Left "Invalid TxId"
+  Nothing    -> Left $ "Invalid TxId bytes: " <> encodeBase16 txId
   Just txId' -> Right txId'
 
 decodeAddressAny :: ByteString -> Either Text AddressAny
 decodeAddressAny address = case deserialiseFromRawBytes AsAddressAny address of
-  Nothing       -> Left "Invalid address"
+  Nothing       -> Left $ "Invalid address bytes: " <> encodeBase16 address
   Just address' -> Right address'
 
 -- GetIntersectionPoints
