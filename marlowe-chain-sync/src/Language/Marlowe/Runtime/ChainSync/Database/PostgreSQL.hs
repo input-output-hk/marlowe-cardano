@@ -198,7 +198,7 @@ getQueryResult = GetQueryResult mkTransaction
     mkTransaction' point query = do
       case query of
 
-        Align q1 q2 -> do
+        Or q1 q2 -> do
           qr1 <- mkTransaction' point q1
           qr2 <- mkTransaction' point q2
           pure case (qr1, qr2) of
@@ -213,19 +213,15 @@ getQueryResult = GetQueryResult mkTransaction
             (Right _, Right (Just (r2, p2)))               -> Right $ Just (That r2, p2)
             _                                              -> Right Nothing
 
-        Join q1 q2 -> do
+        And q1 q2 -> do
           qr1 <- mkTransaction' point q1
           qr2 <- mkTransaction' point q2
           pure case (qr1, qr2) of
             (Left e1, Left e2)   -> Left $ These e1 e2
             (Left e1, _)         -> Left $ This e1
             (_, Left e2)         -> Left $ That e2
-            (Right (Just (r1, p1)), Right (Just (r2, p2))) -> Right $ Just
-              ( (r1, r2)
-              , case compare (chainPointToSlotNo p1) (chainPointToSlotNo p2) of
-                  LT -> p2
-                  _  -> p1
-              )
+            (Right (Just (r1, p1)), Right (Just (r2, p2)))
+              | p1 == p2 -> Right $ Just ((r1, r2), p1)
             _ -> Right Nothing
 
         GetBlockHeader -> do

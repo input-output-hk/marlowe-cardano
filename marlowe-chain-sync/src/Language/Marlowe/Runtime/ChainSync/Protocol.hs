@@ -16,12 +16,12 @@ import Network.TypedProtocol.Codec (Codec)
 
 data Query err result where
 
-  Align
+  Or
     :: Query err1 result1
     -> Query err2 result2
     -> Query (These err1 err2) (These result1 result2)
 
-  Join
+  And
     :: Query err1 result1
     -> Query err2 result2
     -> Query (These err1 err2) (result1, result2)
@@ -57,12 +57,12 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
   where
     encodeQuery :: SomeQuery Query -> Put
     encodeQuery (SomeQuery q) = case q of
-      Align q1 q2 -> do
+      Or q1 q2 -> do
         putWord8 0x01
         encodeQuery $ SomeQuery q1
         encodeQuery $ SomeQuery q2
 
-      Join q1 q2 -> do
+      And q1 q2 -> do
         putWord8 0x02
         encodeQuery $ SomeQuery q1
         encodeQuery $ SomeQuery q2
@@ -75,19 +75,19 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
         0x01 -> do
           SomeQuery q1 <- decodeQuery
           SomeQuery q2 <- decodeQuery
-          pure $ SomeQuery $ Align q1 q2
+          pure $ SomeQuery $ Or q1 q2
 
         0x02 -> do
           SomeQuery q1 <- decodeQuery
           SomeQuery q2 <- decodeQuery
-          pure $ SomeQuery $ Join q1 q2
+          pure $ SomeQuery $ And q1 q2
 
         0x03 -> pure $ SomeQuery GetBlockHeader
         _ -> fail $ "Invalid query tag " <> show tag
 
     encodeResult :: forall err result. Query err result -> result -> Put
     encodeResult = \case
-      Align q1 q2 -> \case
+      Or q1 q2 -> \case
         This r1 -> do
           putWord8 0x01
           encodeResult q1 r1
@@ -99,7 +99,7 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           encodeResult q1 r1
           encodeResult q2 r2
 
-      Join q1 q2 -> \(r1, r2) -> do
+      And q1 q2 -> \(r1, r2) -> do
         encodeResult q1 r1
         encodeResult q2 r2
 
@@ -107,7 +107,7 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
 
     decodeResult :: forall err result. Query err result -> Get result
     decodeResult = \case
-      Align q1 q2    -> do
+      Or q1 q2    -> do
         tag <- getWord8
         case tag of
           0x01 -> This <$> decodeResult q1
@@ -115,13 +115,13 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           0x03 -> These <$> decodeResult q1 <*> decodeResult q2
           _    -> fail $ "Invalid align result tag " <> show tag
 
-      Join q1 q2 -> (,) <$> decodeResult q1 <*> decodeResult q2
+      And q1 q2 -> (,) <$> decodeResult q1 <*> decodeResult q2
 
       GetBlockHeader -> getBlockHeader
 
     encodeError :: forall err result. Query err result -> err -> Put
     encodeError = \case
-      Align q1 q2 -> \case
+      Or q1 q2 -> \case
         This e1 -> do
           putWord8 0x01
           encodeError q1 e1
@@ -133,7 +133,7 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           encodeError q1 e1
           encodeError q2 e2
 
-      Join q1 q2 -> \case
+      And q1 q2 -> \case
         This e1 -> do
           putWord8 0x01
           encodeError q1 e1
@@ -149,7 +149,7 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
 
     decodeError :: forall err result. Query err result -> Get err
     decodeError = \case
-      Align q1 q2    -> do
+      Or q1 q2    -> do
         tag <- getWord8
         case tag of
           0x01 -> This <$> decodeError q1
@@ -157,7 +157,7 @@ runtimeFilteredChainSyncCodec = codecFilteredChainSync
           0x03 -> These <$> decodeError q1 <*> decodeError q2
           _    -> fail $ "Invalid align error tag " <> show tag
 
-      Join q1 q2    -> do
+      And q1 q2    -> do
         tag <- getWord8
         case tag of
           0x01 -> This <$> decodeError q1
