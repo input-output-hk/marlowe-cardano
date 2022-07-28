@@ -20,7 +20,8 @@ module Actus.Marlowe
     genProjectedCashflows,
 
     -- utility
-    toMarlowe
+    toMarlowe,
+    toMarloweFixedPoint
   )
 where
 
