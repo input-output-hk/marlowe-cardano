@@ -46,6 +46,8 @@ data Extract err result where
 
   GetBlockHeader :: Extract Void BlockHeader
 
+  Nil :: Extract Void ()
+
 data SomeExtract = forall err result. SomeExtract (Extract err result)
 
 data MoveResult err result
@@ -236,6 +238,7 @@ putExtract = \case
     putExtract e1
     putExtract e2
   GetBlockHeader -> putWord8 0x02
+  Nil -> putWord8 0x03
 
 putExtractResult :: Extract err result -> result -> Put
 putExtractResult = \case
@@ -243,6 +246,7 @@ putExtractResult = \case
     putExtractResult e1 r1
     putExtractResult e2 r2
   GetBlockHeader -> putBlockHeader
+  Nil -> const mempty
 
 putExtractError :: Extract err result -> err -> Put
 putExtractError = \case
@@ -258,6 +262,7 @@ putExtractError = \case
       putExtractError e1 err1
       putExtractError e2 err2
   GetBlockHeader -> absurd
+  Nil -> absurd
 
 getExtract :: Get SomeExtract
 getExtract = do
@@ -268,12 +273,14 @@ getExtract = do
       SomeExtract e2 <- getExtract
       pure $ SomeExtract $ And e1 e2
     0x02 -> pure $ SomeExtract GetBlockHeader
+    0x03 -> pure $ SomeExtract Nil
     _ -> fail $ "Invalid extract tag " <> show tag
 
 getExtractResult :: Extract err result -> Get result
 getExtractResult = \case
   And e1 e2      -> (,) <$> getExtractResult e1 <*> getExtractResult e2
   GetBlockHeader -> getBlockHeader
+  Nil            -> pure ()
 
 getExtractError :: Extract err result -> Get err
 getExtractError = \case
@@ -286,6 +293,7 @@ getExtractError = \case
       _    -> fail $ "Invalid or extract error tag " <> show tag
 
   GetBlockHeader -> fail "absurd"
+  Nil -> fail "absurd"
 
 putSlotNo :: SlotNo -> Put
 putSlotNo (SlotNo slot) = do

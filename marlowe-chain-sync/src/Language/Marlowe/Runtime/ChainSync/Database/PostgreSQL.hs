@@ -301,6 +301,7 @@ moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
             WHERE slotNo = $1 :: bigint
               AND id = $2 :: bytea
           |]
+      Nil -> pure $ Right ()
       where
         pointParams :: (Int64, ByteString)
         pointParams = headerHashToParam <$> case point of
