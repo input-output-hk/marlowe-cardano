@@ -57,8 +57,8 @@ ex_pam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' defaultRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows defaultRiskFactors ct []
+          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+              cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -100,8 +100,8 @@ ex_lam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' defaultRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows defaultRiskFactors ct []
+          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+              cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -145,8 +145,8 @@ ex_nam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' defaultRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows defaultRiskFactors ct []
+          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+              cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -190,8 +190,8 @@ ex_ann1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' defaultRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows defaultRiskFactors ct []
+          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+              cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -262,8 +262,8 @@ ex_com1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' defaultRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows defaultRiskFactors ct []
+          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+              cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -281,8 +281,8 @@ ex_com1 =
                   assertBool ("total payments to counterparty: " ++ show tc) (tc == 1_400)
       )
 
-defaultRiskFactors :: Num a => EventType -> LocalTime -> RiskFactors a
-defaultRiskFactors _ _ =
+emptyRiskFactors :: Num a => EventType -> LocalTime -> RiskFactors a
+emptyRiskFactors _ _ =
   RiskFactors
     { o_rf_CURS = 1,
       o_rf_RRMO = 1,

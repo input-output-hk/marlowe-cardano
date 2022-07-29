@@ -1,12 +1,15 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
-{-# LANGUAGE TupleSections    #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TupleSections      #-}
 
 -- | = Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.
 module Actus.Marlowe
   ( genContract,
     genContract',
+    defaultRiskFactors,
     CashFlowMarlowe,
     ContractTermsMarlowe,
     RiskFactorsMarlowe,
@@ -35,6 +38,7 @@ import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
 import Data.Validation (Validation (..))
 import Language.Marlowe.Extended.V1
 import Ledger.Value (TokenName (TokenName))
+import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point
@@ -62,7 +66,18 @@ genContract' rf ct =
    in foldl' gen Close $ reverse cfs
   where
     gen :: Contract -> CashFlow Value -> Contract
-    gen cont CashFlow {..} =
+    gen cont cf@CashFlow {..}
+      | hasRiskFactor cf =
+        When
+          [ Case
+              (Choice (cashFlowToChoiceId cf) [Bound 0 100_000_000_000])
+              (stub cont cf)
+          ]
+          (toTimeout cashPaymentDay)
+          Close
+    gen cont cf = stub cont cf
+
+    stub cont CashFlow {..} =
       let t = toTimeout cashPaymentDay
           c = reduceContract cont
        in reduceContract $
@@ -104,6 +119,74 @@ genContract' rf ct =
             ]
             timeout
             Close
+
+cashFlowToChoiceId :: CashFlow a -> ChoiceId
+cashFlowToChoiceId CashFlow {..} =
+  let l = show cashEvent <> show cashPaymentDay
+   in ChoiceId (stringToBuiltinByteString l) (Role "RiskFactor")
+
+hasRiskFactor :: CashFlow Value -> Bool
+hasRiskFactor cf = hasRiskFactor' (amount cf)
+  where
+    hasRiskFactor' :: Value -> Bool
+    hasRiskFactor' (ChoiceValue j) | cashFlowToChoiceId cf == j = True
+    hasRiskFactor' (ChoiceValue _) = False
+    hasRiskFactor' (Constant _) = False
+    hasRiskFactor' (AvailableMoney _ _) = False
+    hasRiskFactor' (UseValue _) = False
+    hasRiskFactor' (AddValue a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (SubValue a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (MulValue a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (DivValue a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (NegValue a) = hasRiskFactor' a
+    hasRiskFactor' TimeIntervalStart = False
+    hasRiskFactor' TimeIntervalEnd = False
+    hasRiskFactor' (ConstantParam _) = False
+    hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
+
+defaultRiskFactors :: EventType -> LocalTime -> RiskFactors Value
+defaultRiskFactors ev t =
+  let choiceId = ChoiceId (stringToBuiltinByteString $ show ev <> show t) (Role "RiskFactor")
+      value = ChoiceValue choiceId
+  in mkRiskFactor ev value
+
+mkRiskFactor :: EventType -> Value -> RiskFactors Value
+mkRiskFactor PP value =
+  RiskFactors
+    { o_rf_CURS = 1,
+      o_rf_RRMO = 1,
+      o_rf_SCMO = 1,
+      pp_payoff = value,
+      xd_payoff = 0,
+      dv_payoff = 0
+    }
+mkRiskFactor XD value =
+  RiskFactors
+    { o_rf_CURS = 1,
+      o_rf_RRMO = 1,
+      o_rf_SCMO = 1,
+      pp_payoff = 0,
+      xd_payoff = value,
+      dv_payoff = 0
+    }
+mkRiskFactor DV value =
+  RiskFactors
+    { o_rf_CURS = 1,
+      o_rf_RRMO = 1,
+      o_rf_SCMO = 1,
+      pp_payoff = 0,
+      xd_payoff = 0,
+      dv_payoff = value
+    }
+mkRiskFactor _ _ =
+  RiskFactors
+    { o_rf_CURS = 1,
+      o_rf_RRMO = 1,
+      o_rf_SCMO = 1,
+      pp_payoff = 0,
+      xd_payoff = 0,
+      dv_payoff = 0
+    }
 
 constant :: Double -> Value
 constant = Constant . toMarloweFixedPoint
