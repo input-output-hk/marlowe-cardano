@@ -63,6 +63,7 @@ library
     Language.Marlowe.Runtime.ChainSync.Protocol
     Language.Marlowe.Runtime.ChainSync.Server
     Language.Marlowe.Runtime.ChainSync.Store
+    Language.Marlowe.Runtime.ChainSync.Types
   other-modules:
   build-depends:
       base >= 4.9 && < 5
@@ -81,6 +82,7 @@ library
     , cardano-ledger-core
     , cardano-ledger-shelley
     , containers
+    , foldl
     , hasql
     , hasql-th
     , hasql-transaction
@@ -88,6 +90,7 @@ library
     , ouroboros-consensus-shelley
     , ouroboros-network
     , parallel
+    , plutus-ledger-api
     , profunctors
     , stm
     , stm-delay

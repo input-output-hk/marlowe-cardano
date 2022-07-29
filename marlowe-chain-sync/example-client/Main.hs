@@ -1,12 +1,11 @@
 module Main where
 
-import Cardano.Api (BlockHeader (BlockHeader), BlockNo (..), ChainPoint (..), TxIx (..))
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)
 import Data.Void (absurd)
-import Debug.Trace (traceShowId)
-import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (GetBlockHeader), Move (..), WaitUntilUTxOSpentError (..),
-                                                    runtimeFilteredChainSyncCodec, schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Protocol (Move (..), UTxOError (..), runtimeFilteredChainSyncCodec,
+                                                    schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Types (TxOutRef (..), WithGenesis (..))
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.FilteredChainSync.Client (ClientStHandshake (..), ClientStIdle (..), ClientStInit (..),
@@ -25,7 +24,7 @@ main = do
   bracket (open addr) close run
   where
     open addr = bracketOnError (openSocket addr) close \sock -> do
-      connect sock $ traceShowId $ addrAddress addr
+      connect sock $ addrAddress addr
       pure sock
 
 -- | This example client skips every 1000 blocks until it catches up to the
@@ -35,30 +34,33 @@ run conn = void $ runPeerWithDriver driver peer (startDState driver)
   where
     driver = mkDriver throwIO runtimeFilteredChainSyncCodec channel
     channel = socketAsChannel conn
-    peer = filteredChainSyncClientPeer ChainPointAtGenesis client
+    peer = filteredChainSyncClientPeer Genesis client
     client = FilteredChainSyncClient $ pure $ SendMsgRequestHandshake schemaVersion1_0 stHandshake
     stHandshake = ClientStHandshake
       { recvMsgHandshakeRejected = \supportedVersions -> do
           putStr "Schema version not supported by server. Supported versions: "
           print supportedVersions
-      , recvMsgHandshakeConfirmed = stIdle
+      , recvMsgHandshakeConfirmed = stIdleGenesis
       }
-    stIdle = do
-      let query = WaitSlots 25644 $ WaitUntilUTxOSpent "59b32f725ef2909ed3af209d92f97a0a29198ed9b85b9a2ac3ca4bdd05817a53" (TxIx 0) $ Extract GetBlockHeader
-      pure $ SendMsgQueryNext query stNext (pure stNext)
+    stIdleGenesis = pure $ SendMsgQueryNext (AdvanceSlots 25644) stNextGenesis (pure stNextGenesis)
+    stNextGenesis = ClientStNext
+      { recvMsgQueryRejected = absurd
+      , recvMsgRollForward = \_ _ _ -> stIdleConsume
+      , recvMsgRollBackward = \_ _ -> stIdleGenesis
+      }
+    stIdleConsume = pure $ SendMsgQueryNext (ConsumeUTxO (TxOutRef "59b32f725ef2909ed3af209d92f97a0a29198ed9b85b9a2ac3ca4bdd05817a53" 0)) stNext (pure stNext)
     stNext = ClientStNext
       { recvMsgQueryRejected = \case
-          Left UTxONotFound         -> error "UTxO not found"
-          Left (UTxOAlreadySpent _) -> error "UTxO already spent"
-          Right v                   -> absurd v
-      , recvMsgRollForward = \(BlockHeader _ _ (BlockNo _)) point _ -> do
-          putStr "UTxO spent at point: "
-          print point
+          UTxONotFound -> error "UTxO not found"
+          UTxOSpent _  -> error "UTxO already spent"
+      , recvMsgRollForward = \tx _ _ -> do
+          putStr "UTxO spent by transaction: "
+          print tx
           pure $ SendMsgDone ()
       , recvMsgRollBackward = \point _ -> do
           putStr "Roll backward: "
           print point
-          stIdle
+          stIdleConsume
       }
 
 data Options = Options

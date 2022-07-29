@@ -8,28 +8,29 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (databaseQueries) where
 
 import Cardano.Api (AddressAny, AsType (..), AssetId (..), AssetName (..), Block (..), BlockHeader (..),
-                    BlockInMode (..), BlockNo (..), CardanoMode, ChainPoint (..), ChainTip (..), CtxTx, EraInMode,
-                    IsCardanoEra, Lovelace (..), PolicyId, Quantity (Quantity), ScriptValidity (..),
+                    BlockInMode (..), BlockNo (..), CardanoMode, ChainPoint (..), CtxTx, EraInMode, IsCardanoEra,
+                    Lovelace (..), PolicyId, Quantity (Quantity), ScriptValidity (..),
                     SerialiseAsCBOR (serialiseToCBOR), SerialiseAsRawBytes (..),
                     ShelleyBasedEra (ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage), SlotNo (..), Tx, TxBody (..),
                     TxBodyContent (..), TxId, TxIn (..), TxInsCollateral (..), TxIx (..), TxMetadata (..),
                     TxMetadataInEra (..), TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..),
                     TxReturnCollateral (..), TxScriptValidity (..), TxValidityLowerBound (..),
-                    TxValidityUpperBound (..), chainPointToHeaderHash, chainPointToSlotNo, getTxBody, getTxId,
-                    hashScriptData, selectLovelace, valueToList)
-import Cardano.Api.Shelley (Hash (..), Tx (..), toShelleyTxIn)
-import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString)
+                    TxValidityUpperBound (..), getTxBody, getTxId, hashScriptData, selectLovelace, valueToList)
+import Cardano.Api.Shelley (Hash (..), Tx (..), toPlutusData, toShelleyTxIn)
+import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString, unsafeDeserialize')
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
-import Data.Bifunctor (first)
+import Control.Foldl (Fold (Fold))
+import qualified Control.Foldl as Fold
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Int (Int16, Int64)
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -37,9 +38,10 @@ import qualified Data.Text as T
 import Data.These (These (..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
+import Data.Void (Void)
 import Hasql.Session (Session)
 import Hasql.Statement (refineResult)
-import Hasql.TH (maybeStatement, resultlessStatement, singletonStatement, vectorStatement)
+import Hasql.TH (foldStatement, maybeStatement, resultlessStatement, singletonStatement, vectorStatement)
 import Hasql.Transaction (Transaction)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
@@ -50,9 +52,11 @@ import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (
                                                     hoistCommitGenesisBlock, hoistCommitRollback, hoistGetGenesisBlock,
                                                     hoistGetHeaderAtPoint, hoistGetIntersectionPoints, hoistMoveClient)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Extract (..), IntersectError (..), Move (..), MoveResult (..),
-                                                    WaitUntilUTxOSpentError (..))
+import Language.Marlowe.Runtime.ChainSync.Protocol (IntersectError (..), Move (..), MoveResult (..), UTxOError (..))
+import qualified Language.Marlowe.Runtime.ChainSync.Types as Types
+import Numeric.Natural (Natural)
 import Ouroboros.Network.Point (WithOrigin (..))
+import Prelude hiding (init)
 
 -- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries :: GenesisBlock -> DatabaseQueries Session
@@ -63,7 +67,7 @@ databaseQueries genesisBlock = DatabaseQueries
   (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
   (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
   (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
-  (hoistMoveClient (TS.transaction TS.ReadCommitted TS.Read) (moveClient genesisBlock))
+  (hoistMoveClient (TS.transaction TS.ReadCommitted TS.Read) moveClient)
 
 -- GetGenesisBlock
 
@@ -139,197 +143,299 @@ getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeRes
 
 -- MoveClient
 
-moveClient :: GenesisBlock -> MoveClient Transaction
-moveClient genesisBlock = MoveClient performMoveWithRollbackCheck
+moveClient :: MoveClient Transaction
+moveClient = MoveClient performMoveWithRollbackCheck
+
+performMoveWithRollbackCheck :: Types.ChainPoint -> Move err result -> Transaction (MoveResult err result)
+performMoveWithRollbackCheck point move = do
+  tip <- getTip
+  getRollbackPoint >>= \case
+    Nothing -> performMove move point >>= \case
+      MoveAbort err            -> pure $ Reject err tip
+      MoveArrive point' result -> pure $ RollForward result point' tip
+      MoveWait                 -> pure $ Wait tip
+    Just rollbackPoint -> pure $ RollBack rollbackPoint tip
   where
-    performMoveWithRollbackCheck :: ChainPoint -> Move err result -> Transaction (MoveResult err result)
-    performMoveWithRollbackCheck point move = do
-      tip <- getTip
-      getRollbackPoint >>= \case
-        Nothing -> performMove point move >>= \case
-          Left err                      -> pure $ Reject err tip
-          Right (Just (result, point')) -> pure $ RollForward result point' tip
-          Right Nothing                 -> pure $ Wait tip
-        Just rollbackPoint -> pure $ RollBack rollbackPoint tip
-      where
-        getRollbackPoint :: Transaction (Maybe ChainPoint)
-        getRollbackPoint = case pointParams of
-          Nothing -> pure Nothing
-          Just pointParams' -> fmap decode <$> HT.statement pointParams'
-            [maybeStatement|
-              WITH RECURSIVE rollbacks AS
-                ( SELECT *
-                    FROM chain.block
-                  WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
-                  UNION
-                  SELECT block.*
-                    FROM chain.block AS block
-                    JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
-                )
-              SELECT slotNo :: bigint, id :: bytea
-                FROM rollbacks
-              WHERE rollbackToSlot IS NULL
-            |]
-          where
-            decode (-1, _)        = ChainPointAtGenesis
-            decode (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
-
-        getTip :: Transaction ChainTip
-        getTip = decode <$> HT.statement ()
-          [maybeStatement|
-            SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-              FROM chain.block
-             WHERE rollbackToSlot IS NULL
-             ORDER BY slotNo DESC
-             LIMIT 1
-          |]
-          where
-            decode Nothing                        = ChainTipAtGenesis
-            decode (Just (-1, _, _))              = ChainTipAtGenesis
-            decode (Just (slotNo, hash, blockNo)) =
-              ChainTip (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash) (BlockNo $ fromIntegral blockNo)
-
-        pointParams :: Maybe (Int64, ByteString)
-        pointParams = case point of
-          ChainPointAtGenesis    -> Nothing
-          ChainPoint slotNo hash -> Just (slotNoToParam slotNo, headerHashToParam hash)
-
-    performMove :: ChainPoint -> Move err result -> Transaction (Either err (Maybe (result, ChainPoint)))
-    performMove point = \case
-      Or q1 q2 -> do
-        qr1 <- performMove point q1
-        qr2 <- performMove point q2
-        pure case (qr1, qr2) of
-          (Left e1, Left e2)                             -> Left $ These e1 e2
-          (Left e1, _)                                   -> Left $ This e1
-          (_, Left e2)                                   -> Left $ That e2
-          (Right (Just (r1, p1)), Right (Just (r2, p2))) -> Right $ Just case compare (chainPointToSlotNo p1) (chainPointToSlotNo p2) of
-                                                                            EQ -> (These r1 r2, p1)
-                                                                            LT -> (This r1, p1)
-                                                                            GT -> (That r2, p2)
-          (Right (Just (r1, p1)), Right _)               -> Right $ Just (This r1, p1)
-          (Right _, Right (Just (r2, p2)))               -> Right $ Just (That r2, p2)
-          _                                              -> Right Nothing
-
-      Extract extract -> fmap (Just . (,point)) <$> extractResults point extract
-
-      WaitSlots slots move' -> do
-        waitResult <- fmap decodeOffset <$> HT.statement (fromIntegral slots + pointSlot)
-          [maybeStatement|
-            SELECT slotNo :: bigint, id :: bytea
-              FROM chain.block
-            WHERE slotNo >= $1 :: bigint
-              AND rollbackToBlock IS NULL
-            ORDER BY slotNo
-            LIMIT 1
-          |]
-        case waitResult of
-          Nothing     -> pure $ Right Nothing
-          Just point' -> performMove point' move'
-
-      WaitBlocks blocks move' -> do
-        waitResult <- fmap decodeOffset <$> HT.statement (pointSlot, fromIntegral blocks)
-          [maybeStatement|
-            SELECT slotNo :: bigint, id :: bytea
-              FROM chain.block
-            WHERE slotNo >= $1 :: bigint
-              AND rollbackToBlock IS NULL
-            ORDER BY slotNo
-            LIMIT 1
-            OFFSET $2 :: int
-          |]
-        case waitResult of
-          Nothing     -> pure $ Right Nothing
-          Just point' -> performMove point' move'
-
-      WaitUntilUTxOSpent txId txIx move' -> do
-        let
-          decode (Just slotNo, Just txInId, Just block) =
-            Just . (SlotNo $ fromIntegral slotNo,,HeaderHash $ toShort block) <$> decodeTxId txInId
-          decode _ = pure Nothing
-        mResult <- HT.statement (pointSlot, serialiseToRawBytes txId, txIxToParam txIx) $ refineResult (traverse decode)
-          [maybeStatement|
-              SELECT txIn.slotNo :: bigint? AS txInSlot
-                   , txIn.txInId :: bytea? AS txInId
-                   , block.id :: bytea? AS txInBlock
-                FROM chain.txOut AS txOut
-           LEFT JOIN chain.txIn  AS txIn  ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
-           LEFT JOIN chain.block AS block ON block.slotNo = txIn.slotNo
-               WHERE txOut.slotNo <= $1 :: bigint
-                 AND block.rollbackToBlock IS NULL
-                 AND txOut.txId = $2 :: bytea
-                 AND txOut.txIx = $3 :: smallint
-          |]
-
-        case mResult of
-          Nothing     -> pure $ Left $ Left UTxONotFound
-          Just (Just (txInSlot, txInId, txInBlock))
-            | slotNoToParam txInSlot <= pointSlot -> pure $ Left $ Left $ UTxOAlreadySpent txInId
-            | otherwise -> first Right <$> performMove (ChainPoint txInSlot txInBlock)  move'
-          Just _ -> pure $ Right Nothing
-
-      Intersect points move' -> do
-        let
-          params =
-            ( V.fromList $ fmap slotNoToParam $ catMaybes $ chainPointToSlotNo <$> points
-            , V.fromList $ fmap headerHashToParam $ catMaybes $ chainPointToHeaderHash <$> points
+    getRollbackPoint :: Transaction (Maybe Types.ChainPoint)
+    getRollbackPoint = case pointParams of
+      Nothing -> pure Nothing
+      Just pointParams' -> fmap decodeChainPoint <$> HT.statement pointParams'
+        [maybeStatement|
+          WITH RECURSIVE rollbacks AS
+            ( SELECT *
+                FROM chain.block
+              WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
+              UNION
+              SELECT block.*
+                FROM chain.block AS block
+                JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
             )
-        intersectResult <- fmap decodeOffset <$> HT.statement params
-          [maybeStatement|
-            WITH points (slotNo, id) AS
-              ( SELECT * FROM UNNEST ($1 :: bigint[], $2 :: bytea[])
-              )
-            SELECT block.slotNo :: bigint, block.id :: bytea
-              FROM chain.block AS block
-              JOIN points AS point USING (slotNo, id)
-             WHERE rollbackToBlock IS NULL
-             ORDER BY slotNo DESC
-             LIMIT 1
-          |]
-        case intersectResult of
-          Nothing     -> pure $ Left $ Left IntersectionNotFound
-          Just point' -> first Right <$> performMove point' move'
+          SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+            FROM rollbacks
+          WHERE rollbackToSlot IS NULL
+        |]
 
+    getTip :: Transaction Types.ChainPoint
+    getTip = decodeChainPoint <$> HT.statement ()
+      [singletonStatement|
+        SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+          FROM chain.block
+          WHERE rollbackToSlot IS NULL
+          ORDER BY slotNo DESC
+          LIMIT 1
+      |]
+
+    pointParams :: Maybe (Int64, ByteString)
+    pointParams = case point of
+      Types.Genesis    -> Nothing
+      Types.At (Types.BlockHeader (Types.SlotNo slotNo) (Types.BlockHeaderHash hash) _) -> Just (fromIntegral slotNo, hash)
+
+data PerformMoveResult err result
+  = MoveWait
+  | MoveAbort err
+  | MoveArrive Types.BlockHeader result
+
+performMove :: Move err result -> Types.ChainPoint -> Transaction (PerformMoveResult err result)
+performMove = \case
+  Fork left right      -> performFork left right
+  AdvanceSlots slots   -> performAdvanceSlots slots
+  AdvanceBlocks blocks -> performAdvanceBlocks blocks
+  ConsumeUTxO txOutRef -> performConsumeUTxO txOutRef
+  Intersect points     -> performIntersect points
+
+performFork :: Move err1 result1 -> Move err2 result2 -> Types.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
+performFork left right point = do
+  leftMoveResult <- performMove left point
+  rightMoveResult <- performMove right point
+  let
+    alignResults leftHeader leftResult rightHeader rightResult = case compare leftHeader rightHeader of
+      EQ -> MoveArrive leftHeader $ These leftResult rightResult
+      LT -> MoveArrive leftHeader $ This leftResult
+      GT -> MoveArrive rightHeader $ That rightResult
+  pure case (leftMoveResult, rightMoveResult) of
+    (MoveAbort leftErr, MoveAbort rightErr)                                -> MoveAbort $ These leftErr rightErr
+    (MoveAbort leftErr, _)                                                 -> MoveAbort $ This leftErr
+    (_, MoveAbort rightErr)                                                -> MoveAbort $ That rightErr
+    (MoveArrive leftHeader leftResult, MoveArrive rightHeader rightResult) -> alignResults leftHeader leftResult rightHeader rightResult
+    (MoveArrive leftHeader leftResult, MoveWait)                           -> MoveArrive leftHeader $ This leftResult
+    (MoveWait, MoveArrive rightHeader rightResult)                         -> MoveArrive rightHeader $ That rightResult
+    _                                                                      -> MoveWait
+
+performAdvanceSlots :: Natural -> Types.ChainPoint -> Transaction (PerformMoveResult Void ())
+performAdvanceSlots slots point = do
+  decodeAdvance <$> HT.statement (fromIntegral slots + pointSlot point)
+    [maybeStatement|
+      SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+        FROM chain.block
+      WHERE slotNo >= $1 :: bigint
+        AND rollbackToBlock IS NULL
+      ORDER BY slotNo
+      LIMIT 1
+    |]
+
+performAdvanceBlocks :: Natural -> Types.ChainPoint -> Transaction (PerformMoveResult Void ())
+performAdvanceBlocks blocks point = do
+  decodeAdvance <$> HT.statement (pointSlot point, fromIntegral blocks)
+    [maybeStatement|
+      SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+        FROM chain.block
+      WHERE slotNo >= $1 :: bigint
+        AND rollbackToBlock IS NULL
+      ORDER BY slotNo
+      LIMIT 1
+      OFFSET $2 :: int
+    |]
+
+performConsumeUTxO :: Types.TxOutRef -> Types.ChainPoint -> Transaction (PerformMoveResult UTxOError Types.Transaction)
+performConsumeUTxO Types.TxOutRef{..} point = do
+  initialResult <- HT.statement (pointSlot point, Types.unTxId txId, fromIntegral txIx) $
+    [foldStatement|
+      SELECT block.slotNo :: bigint?
+           , block.id :: bytea?
+           , block.blockNo :: bigint?
+           , tx.id :: bytea?
+           , tx.validityLowerBound :: bigint?
+           , tx.validityUpperBound :: bigint?
+           , tx.metadataKey1564 :: bytea?
+           , asset.policyId :: bytea?
+           , asset.name :: bytea?
+           , assetMint.quantity :: bigint?
+        FROM chain.txOut AS txOut
+        LEFT JOIN chain.txIn      AS txIn      ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
+        LEFT JOIN chain.tx        AS tx        ON tx.id = txIn.txInId AND tx.slotNo = txIn.slotNo
+        LEFT JOIN chain.block     AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
+        LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
+        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
+        WHERE txOut.slotNo <= $1 :: bigint
+          AND block.rollbackToBlock IS NULL
+          AND txOut.txId = $2 :: bytea
+          AND txOut.txIx = $3 :: smallint
+    |] foldTx
+  case initialResult of
+    MoveWait -> pure MoveWait
+    MoveAbort err -> pure $ MoveAbort err
+    MoveArrive header@Types.BlockHeader{..} tx@Types.Transaction{txId = spendingTxId} ->  do
+      txIns <- queryTxIns slotNo spendingTxId
+      txOuts <- queryTxOuts slotNo spendingTxId
+      pure $ MoveArrive header tx { Types.inputs = txIns, Types.outputs = txOuts }
+  where
+    foldTx :: Fold ReadTxRow (PerformMoveResult UTxOError Types.Transaction)
+    foldTx = Fold foldTx' (MoveAbort UTxONotFound) id
+
+    foldTx'
+      :: PerformMoveResult UTxOError Types.Transaction
+      -> ReadTxRow
+      -> PerformMoveResult UTxOError Types.Transaction
+    foldTx' (MoveAbort (UTxOSpent spendingTxId)) _ = MoveAbort $ UTxOSpent spendingTxId
+    foldTx' MoveWait _                             = MoveWait
+    foldTx' (MoveAbort UTxONotFound) row           = readFirstTxRow row
+    foldTx' (MoveArrive header tx) row             = MoveArrive header $ mergeTxRow tx row
+
+    readFirstTxRow :: ReadTxRow -> PerformMoveResult UTxOError Types.Transaction
+    readFirstTxRow
+      ( Just slotNo
+      , Just hash
+      , Just blockNo
+      , Just spendingTxId
+      , validityLowerBound
+      , validityUpperBound
+      , _
+      , policyId
+      , tokenName
+      , quantity
+      ) | slotNo <= pointSlot point = MoveAbort $ UTxOSpent $ Types.TxId spendingTxId
+        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Types.Transaction
+          { txId = Types.TxId spendingTxId
+          , validityRange = case (validityLowerBound, validityUpperBound) of
+              (Nothing, Nothing) -> Types.Unbounded
+              (Just lb, Nothing) -> Types.MinBound $ decodeSlotNo lb
+              (Nothing, Just ub) -> Types.MaxBound $ decodeSlotNo ub
+              (Just lb, Just ub) -> Types.MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+          , metadata = Nothing
+          , inputs = Set.empty
+          , outputs = []
+          , mintedTokens = decodeTokens policyId tokenName quantity
+          }
+    readFirstTxRow _ = MoveWait
+
+    mergeTxRow :: Types.Transaction -> ReadTxRow -> Types.Transaction
+    mergeTxRow tx@Types.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, tokenName, quantity) = tx
+      { Types.mintedTokens = mintedTokens <> decodeTokens policyId tokenName quantity
+      }
+
+queryTxIns :: Types.SlotNo -> Types.TxId -> Transaction (Set.Set Types.TransactionInput)
+queryTxIns slotNo txInId = HT.statement (Types.unTxId txInId, fromIntegral slotNo) $
+  [foldStatement|
+    SELECT txOutId :: bytea, txOutIx :: smallint, redeemerDatumBytes :: bytea?
+      FROM chain.txIn as txIn
+     WHERE txInId = $1 :: bytea AND slotNo = $2 :: bigint
+  |] (Fold.foldMap (Set.singleton . decodeTxIn) id)
+  where
+    decodeTxIn :: ReadTxInRow -> Types.TransactionInput
+    decodeTxIn (txId, txIx, redeemerDatumBytes) = Types.TransactionInput
+      { txId = Types.TxId txId
+      , txIx = fromIntegral txIx
+      , redeemer = Types.Redeemer . Types.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
+      }
+
+queryTxOuts :: Types.SlotNo -> Types.TxId -> Transaction [Types.TransactionOutput]
+queryTxOuts slotNo txId = HT.statement (Types.unTxId txId, fromIntegral slotNo) $
+  [foldStatement|
+    SELECT txOut.txIx :: smallint
+         , txOut.address :: bytea
+         , txOut.lovelace :: bigint
+         , txOut.datumHash :: bytea?
+         , txOut.datumBytes :: bytea?
+         , asset.policyId :: bytea?
+         , asset.name :: bytea?
+         , assetOut.quantity :: bigint?
+      FROM chain.txOut         AS txOut
+      LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+      LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+     WHERE txOut.txId = $1 :: bytea AND txOut.slotNo = $2 :: bigint
+     ORDER BY txIx
+  |] (Fold foldRow IntMap.empty (fmap snd . IntMap.toAscList))
+  where
+    foldRow :: IntMap Types.TransactionOutput -> ReadTxOutRow -> IntMap Types.TransactionOutput
+    foldRow acc (txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
+      IntMap.alter (Just . maybe newTxOut mergeTxOut) (fromIntegral txIx) acc
       where
-        pointSlot :: Int64
-        pointSlot = case point of
-          ChainPointAtGenesis -> -1
-          ChainPoint slotNo _ -> slotNoToParam slotNo
+        newTxOut = Types.TransactionOutput
+          { address = Types.Address address
+          , assets = Types.Assets
+              { ada = Types.Lovelace $ fromIntegral lovelace
+              , tokens = decodeTokens policyId tokenName quantity
+              }
+          , datumHash = Types.DatumHash <$> datumHash
+          , datum = Types.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
+          }
 
-        decodeOffset (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
+        mergeTxOut txOut@Types.TransactionOutput{assets = assets@Types.Assets{..}} = txOut
+          { Types.assets = assets
+              { Types.tokens = tokens <> decodeTokens policyId tokenName quantity
+              }
+          }
 
-    extractResults :: ChainPoint -> Extract err result -> Transaction (Either err result)
-    extractResults point = \case
-      And e1 e2 -> do
-        r1 <- extractResults point e1
-        r2 <- extractResults point e2
-        pure case (r1, r2) of
-          (Right a, Right b) -> Right (a, b)
-          (Left a, Left b)   -> Left $ These a b
-          (Left a, _)        -> Left $ This a
-          ( _, Left b)       -> Left $ That b
-      GetBlockHeader -> do
-        let
-          decode (slotNo, hash, blockNo) =
-            let
-              slot = SlotNo $ fromIntegral slotNo
-              headerHash = HeaderHash $ toShort hash
-              block = BlockNo $ fromIntegral blockNo
-            in
-              BlockHeader slot headerHash block
-        Right . decode <$> HT.statement pointParams
-          [singletonStatement|
-            SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-              FROM chain.block
-            WHERE slotNo = $1 :: bigint
-              AND id = $2 :: bytea
-          |]
-      Nil -> pure $ Right ()
-      where
-        pointParams :: (Int64, ByteString)
-        pointParams = headerHashToParam <$> case point of
-          ChainPointAtGenesis    -> (-1, genesisBlockHash genesisBlock)
-          ChainPoint slotNo hash -> (slotNoToParam slotNo, hash)
+decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Types.Tokens
+decodeTokens (Just policyId) (Just tokenName) (Just quantity) =
+  Types.Tokens $ Map.singleton
+    (Types.AssetId (Types.PolicyId policyId) (Types.TokenName tokenName))
+    (Types.Quantity $ fromIntegral quantity)
+decodeTokens _ _ _ = mempty
+
+type ReadTxRow =
+  ( Maybe Int64      -- Tx's Block's SlotNo
+  , Maybe ByteString -- Tx's Block's BlockHeaderHash
+  , Maybe Int64      -- Tx's Block's BlockNo
+
+  , Maybe ByteString -- Tx's id
+  , Maybe Int64      -- Tx's validityLowerBound
+  , Maybe Int64      -- Tx's validityUpperBound
+  , Maybe ByteString -- Tx's metadataKey1564
+
+  , Maybe ByteString -- Tx's minted Token's PolicyId
+  , Maybe ByteString -- Tx's minted Token's TokenName
+  , Maybe Int64      -- Tx's minted Token's Quantity
+  )
+
+type ReadTxInRow =
+  ( ByteString       -- TxIn's TxId
+  , Int16            -- TxIn's TxIx
+  , Maybe ByteString -- TxIn's redeemerDatumBytes
+  )
+
+type ReadTxOutRow =
+  ( Int16            -- TxOut's TxIx
+  , ByteString       -- TxOut's Address
+  , Int64            -- TxOut's Lovelace
+  , Maybe ByteString -- TxOut's DatumHash
+  , Maybe ByteString -- TxOut's datumBytes
+  , Maybe ByteString -- TxOut's Token's PolicyId
+  , Maybe ByteString -- TxOut's Token's TokenName
+  , Maybe Int64      -- TxOut's Token's Quantity
+  )
+
+performIntersect :: [Types.BlockHeader] -> Types.ChainPoint -> Transaction (PerformMoveResult IntersectError ())
+performIntersect points point = do
+    let
+      params =
+        ( V.fromList $ (\Types.BlockHeader{..} -> fromIntegral slotNo) <$> points
+        , V.fromList $ (\Types.BlockHeader{..} -> Types.unBlockHeaderHash headerHash) <$> points
+        , pointSlot point
+        )
+    decodeAdvance <$> HT.statement params
+      [maybeStatement|
+        WITH points (slotNo, id) AS
+          ( SELECT * FROM UNNEST ($1 :: bigint[], $2 :: bytea[])
+          )
+        SELECT block.slotNo :: bigint, block.id :: bytea, block.blockNo :: bigint
+          FROM chain.block AS block
+          JOIN points AS point USING (slotNo, id)
+          WHERE rollbackToBlock IS NULL
+            AND block.slotNo > $3 :: bigint
+          ORDER BY slotNo DESC
+          LIMIT 1
+      |]
 
 -- CommitRollback
 
@@ -765,3 +871,24 @@ slotNoToParam (SlotNo slotNo) = fromIntegral slotNo
 
 txIxToParam :: TxIx -> Int16
 txIxToParam (TxIx txIx) = fromIntegral txIx
+
+decodeBlockHader :: (Int64, ByteString, Int64) -> Types.BlockHeader
+decodeBlockHader (slotNo, hash, blockNo) = Types.BlockHeader (decodeSlotNo slotNo) (Types.BlockHeaderHash hash) (decodeBlockNo blockNo)
+
+decodeChainPoint :: (Int64, ByteString, Int64) -> Types.ChainPoint
+decodeChainPoint (-1, _, _) = Types.Genesis
+decodeChainPoint row        = Types.At $ decodeBlockHader row
+
+decodeSlotNo :: Int64 -> Types.SlotNo
+decodeSlotNo = Types.SlotNo . fromIntegral
+
+decodeBlockNo :: Int64 -> Types.BlockNo
+decodeBlockNo = Types.BlockNo . fromIntegral
+
+pointSlot :: Types.ChainPoint -> Int64
+pointSlot Types.Genesis                    = -1
+pointSlot (Types.At Types.BlockHeader{..}) = fromIntegral slotNo
+
+decodeAdvance :: Maybe (Int64, ByteString, Int64) -> PerformMoveResult err ()
+decodeAdvance Nothing    = MoveWait
+decodeAdvance (Just row) = MoveArrive (decodeBlockHader row) ()

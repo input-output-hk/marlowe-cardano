@@ -5,12 +5,14 @@
 
 module Language.Marlowe.Runtime.ChainSync.Server where
 
-import Cardano.Api (ChainPoint (..), ChainTip)
+import qualified Cardano.Api as Cardano
+import qualified Cardano.Api.Shelley as Cardano
 import Control.Concurrent.Async (wait, waitEitherCatch, withAsync)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (throwIO)
 import Control.Monad (guard)
 import qualified Data.ByteString.Lazy as LBS
+import Data.ByteString.Short (toShort)
 import Data.Functor (void)
 import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
@@ -18,6 +20,8 @@ import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient (..))
 import Language.Marlowe.Runtime.ChainSync.Protocol (Move, MoveResult (..), runtimeFilteredChainSyncCodec,
                                                     schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Types (BlockHeader (BlockHeader), BlockHeaderHash (unBlockHeaderHash),
+                                                 ChainPoint, WithGenesis (..))
 import Network.Channel (Channel (..))
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.FilteredChainSync.Server (FilteredChainSyncServer (..), ServerStHandshake (..),
@@ -29,7 +33,7 @@ import System.IO (stderr)
 data ChainSyncServerDependencies = ChainSyncServerDependencies
   { withChannel :: !(forall a. (Channel IO LBS.ByteString -> IO a) -> IO a)
   , moveClient  :: !(MoveClient IO)
-  , localTip    :: !(STM ChainTip)
+  , localTip    :: !(STM Cardano.ChainTip)
   }
 
 newtype ChainSyncServer = ChainSyncServer
@@ -58,7 +62,7 @@ mkChainSyncServer ChainSyncServerDependencies{..} = do
 data WorkerDependencies = WorkerDependencies
   { channel    :: !(Channel IO LBS.ByteString)
   , moveClient :: !(MoveClient IO)
-  , localTip   :: !(STM ChainTip)
+  , localTip   :: !(STM Cardano.ChainTip)
   }
 
 newtype Worker = Worker
@@ -72,20 +76,25 @@ mkWorker WorkerDependencies{..} = do
 
     driver = mkDriver throwIO runtimeFilteredChainSyncCodec channel
 
-    peer = filteredChainSyncServerPeer ChainPointAtGenesis server
+    peer = filteredChainSyncServerPeer Genesis server
 
     server = FilteredChainSyncServer $ pure stInit
 
     stInit = ServerStInit \version -> pure if version == schemaVersion1_0
-      then SendMsgHandshakeConfirmed $ stIdle ChainPointAtGenesis
+      then SendMsgHandshakeConfirmed $ stIdle Genesis
       else SendMsgHandshakeRejected [ schemaVersion1_0 ] ()
 
-    stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainTip IO ())
+    stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainPoint IO ())
     stIdle pos = pure ServerStIdle
       { recvMsgQueryNext = \query -> do
           let
             goWait lastTip = do
-              atomically $ awaitTipChange lastTip
+              atomically $ awaitTipChange case lastTip of
+                Genesis -> Cardano.ChainTipAtGenesis
+                At (BlockHeader slotNo hash blockNo) -> Cardano.ChainTip
+                  (Cardano.SlotNo $ fromIntegral slotNo)
+                  (Cardano.HeaderHash $ toShort $ unBlockHeaderHash hash)
+                  (Cardano.BlockNo $ fromIntegral blockNo)
               pollQuery pure goWait
 
             awaitTipChange lastTip = do
@@ -95,7 +104,7 @@ mkWorker WorkerDependencies{..} = do
             pollQuery onReply onWait = do
               qResult <- runMoveClient moveClient pos query
               case qResult of
-                RollForward result pos' tip -> onReply $ SendMsgRollForward result pos' tip $ stIdle pos'
+                RollForward result pos' tip -> onReply $ SendMsgRollForward result (At pos') tip $ stIdle $ At pos'
                 RollBack pos' tip           -> onReply $ SendMsgRollBackward pos' tip $ stIdle pos'
                 Reject err tip              -> onReply $ SendMsgQueryRejected err tip $ stIdle pos
                 Wait tip                    -> onWait tip
