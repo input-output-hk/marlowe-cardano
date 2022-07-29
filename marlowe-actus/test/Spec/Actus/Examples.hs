@@ -71,8 +71,8 @@ ex_pam1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000_000_000)
-                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 12_000_000_000)
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
+                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 12_000)
       )
 
 -- |ex_lam1 defines a contract of type LAM
@@ -114,9 +114,9 @@ ex_lam1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000_000_000)
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11100_000_000)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_100)
       )
 
 
@@ -159,9 +159,9 @@ ex_nam1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10000_000_000)
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_200)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240)
       )
 
 
@@ -204,9 +204,9 @@ ex_ann1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000_000_000)
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240_223_200)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240)
       )
 
 -- |ex_optns1 defines a contract of type OPTNS
@@ -250,9 +250,9 @@ ex_optns1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000_000)
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 40_000_000)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 40)
       )
 
 -- |ex_com1 defines a contract of type COM
@@ -278,7 +278,7 @@ ex_com1 =
 
                   assertBool "total payments to party" (totalPayments (Party "party") txPay == 0)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400_000_000)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 1_400)
       )
 
 defaultRiskFactors :: Num a => EventType -> LocalTime -> RiskFactors a
@@ -294,7 +294,7 @@ defaultRiskFactors _ _ =
 
 -- |totalPayments calculates the sum of the payments provided as argument
 totalPayments :: Payee -> [Payment] -> Integer
-totalPayments payee = sum . map m . filter f
+totalPayments payee = fromMarloweFixedPoint . sum . map m . filter f
   where
     m (Payment _ _ mon) = Val.valueOf mon "" ""
     f (Payment _ pay _) = pay == payee

@@ -18,14 +18,15 @@ module Actus.Marlowe
 
     -- utility
     toMarlowe,
-    toMarloweFixedPoint
+    toMarloweFixedPoint,
+    fromMarloweFixedPoint
   )
 where
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain
-import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract,
-                               toMarloweFixedPoint)
+import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, fromMarloweFixedPoint,
+                               reduceContract, toMarloweFixedPoint)
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
 import Data.String (IsString (fromString))

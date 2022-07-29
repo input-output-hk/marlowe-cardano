@@ -11,6 +11,7 @@ module Actus.Marlowe.Instance
   , RiskFactorsMarlowe
 
   , toMarloweFixedPoint
+  , fromMarloweFixedPoint
   -- * Contract reduction
   , reduceContract
   )
@@ -34,6 +35,9 @@ marloweFixedPoint = 1_000_000
 
 toMarloweFixedPoint :: Double -> Integer
 toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint *)
+
+fromMarloweFixedPoint :: Integer -> Integer
+fromMarloweFixedPoint i = i `quot` marloweFixedPoint
 
 -- In order to have manageble contract sizes, we need to reduce Value as
 -- good as possible. Note: this interfers with the semantics - ideally
