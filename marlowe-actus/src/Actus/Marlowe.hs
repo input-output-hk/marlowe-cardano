@@ -5,10 +5,7 @@
 -- | = Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.
 module Actus.Marlowe
-  ( constant,
-    letval,
-    useval,
-    genContract,
+  ( genContract,
     genContract',
     CashFlowMarlowe,
     ContractTermsMarlowe,
@@ -27,7 +24,8 @@ where
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain
-import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract)
+import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, reduceContract,
+                               toMarloweFixedPoint)
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
 import Data.String (IsString (fromString))
@@ -64,7 +62,7 @@ genContract' rf ct =
   where
     gen :: Contract -> CashFlow Value -> Contract
     gen cont CashFlow {..} =
-      let t = POSIXTime $ timeToSlotNumber cashPaymentDay
+      let t = toTimeout cashPaymentDay
           c = reduceContract cont
        in reduceContract $
             If
@@ -106,25 +104,13 @@ genContract' rf ct =
             timeout
             Close
 
-useval :: String -> Integer -> Value
-useval name t = UseValue $ ValueId $ fromString $ name ++ "_" ++ show t
-
-letval :: String -> Integer -> Value -> Contract -> Contract
-letval name t = Let $ ValueId $ fromString $ name ++ "_" ++ show t
-
-toMarloweFixedPoint :: Double -> Integer
-toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint Prelude.*)
-
 constant :: Double -> Value
 constant = Constant . toMarloweFixedPoint
 
-cardanoEpochStart :: Integer
-cardanoEpochStart = 100
-
-timeToSlotNumber :: LocalTime -> Integer
-timeToSlotNumber LocalTime {..} =
+toTimeout :: LocalTime -> Timeout
+toTimeout LocalTime {..} =
   let (MkSystemTime secs _) = utcToSystemTime (UTCTime localDay (timeOfDayToTime localTimeOfDay))
-   in fromIntegral secs Prelude.- cardanoEpochStart
+   in POSIXTime (toInteger secs)
 
 toMarlowe :: ContractTerms Double -> ContractTermsMarlowe
 toMarlowe ct =

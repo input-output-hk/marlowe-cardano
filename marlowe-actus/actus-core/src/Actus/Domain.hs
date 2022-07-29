@@ -12,7 +12,6 @@ module Actus.Domain
   , RiskFactors (..)
   , CashFlow (..)
   , sign
-  , marloweFixedPoint
   , setDefaultContractTermValues
   )
   where
@@ -56,9 +55,6 @@ data CashFlow a = CashFlow
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
-
-marloweFixedPoint :: Integer
-marloweFixedPoint = 1000000
 
 sign :: Num a => CR -> a
 sign CR_RPA = 1

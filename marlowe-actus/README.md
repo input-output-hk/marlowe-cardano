@@ -39,7 +39,7 @@ This generates yearly cash flows with the interest payment for 10 years and the 
 |9|10000|0|200|200|
 |10|10000|10000|200|10200|
 
-[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_pam1.json)
+[ACTUS contract terms](test/Spec/Actus/ex_pam1.json)
 
 #### Linear Amortizer (LAM)
 
@@ -66,7 +66,7 @@ term: 10 years
 |9|2000|1000|40|1040|
 |10|1000|1000|20|1020|
 
-[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_lam1.json)
+[ACTUS contract terms](test/Spec/Actus/ex_lam1.json)
 
 #### Negative Amortizer (NAM)
 
@@ -92,7 +92,7 @@ term: 10 years
 |9|3134|1000|63|1000|
 |10|2196|1000|44|1000|
 
-[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_nam1.json)
+[ACTUS contract terms](test/Spec/Actus/ex_nam1.json)
 
 #### Annuity (ANN)
 
@@ -118,7 +118,7 @@ term: 10 years
 |9|3134|937|63|1000|
 |10|2196|956|44|1000|
 
-[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_ann1.json)
+[ACTUS contract terms](test/Spec/Actus/ex_ann1.json)
 
 #### Stock
 
@@ -143,7 +143,7 @@ maturity date: 30.3.2020
 |Maturity|Underlying|120|
 |Maturity|Option|40|
 
-[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_optns1.json)
+[ACTUS contract terms](test/Spec/Actus/ex_optns1.json)
 
 #### Future
 

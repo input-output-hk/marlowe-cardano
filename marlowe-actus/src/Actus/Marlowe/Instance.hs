@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Actus.Marlowe.Instance
@@ -8,12 +9,14 @@ module Actus.Marlowe.Instance
   , ContractStateMarlowe
   , ContractTermsMarlowe
   , RiskFactorsMarlowe
+
+  , toMarloweFixedPoint
   -- * Contract reduction
   , reduceContract
   )
 where
 
-import Actus.Domain (CashFlow, ContractState, ContractTerms, RiskFactors, marloweFixedPoint)
+import Actus.Domain (CashFlow, ContractState, ContractTerms, RiskFactors)
 import Data.Maybe (fromMaybe)
 import GHC.Real (Ratio (..))
 import qualified Language.Marlowe.Core.V1.Semantics as Core
@@ -25,6 +28,12 @@ type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value
 type ContractTermsMarlowe = ContractTerms Value
 type RiskFactorsMarlowe = RiskFactors Value
+
+marloweFixedPoint :: Integer
+marloweFixedPoint = 1_000_000
+
+toMarloweFixedPoint :: Double -> Integer
+toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint *)
 
 -- In order to have manageble contract sizes, we need to reduce Value as
 -- good as possible. Note: this interfers with the semantics - ideally
