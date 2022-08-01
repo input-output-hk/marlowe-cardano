@@ -24,7 +24,7 @@ import Halogen (HalogenM, modify_)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import Language.Marlowe.Extended.V1 as Extended
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots, _blocklySlot)
 import Marlowe (Api)
 import Marlowe.Blockly as MB

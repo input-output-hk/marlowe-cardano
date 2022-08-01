@@ -66,10 +66,12 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , TransactionInput
   )
 import Language.Marlowe.Core.V1.Semantics.Types as Semantic
-import Language.Marlowe.Extended.V1 (resolveRelativeTimes, toCore)
-import Language.Marlowe.Extended.V1.Metadata
-  ( ContractTemplate
-  , _extendedContract
+import Language.Marlowe.Extended.V1
+  ( Module
+  , _contract
+  , _metadata
+  , resolveRelativeTimes
+  , toCore
   )
 import Marlowe.Execution.State (removePendingTransaction, setPendingTransaction)
 import Marlowe.PAB (PlutusAppId)
@@ -87,18 +89,18 @@ import Type.Row (type (+))
 import Types (AjaxResponse, JsonAjaxErrorRow)
 
 data InstantiateContractError =
-  InstantiateContractError Instant ContractTemplate ContractParams
+  InstantiateContractError Instant Module ContractParams
 
 instance Explain InstantiateContractError where
   explain _ = text
     "We couldn't create an instance of the contract with the provided parameters"
 
 instance Debuggable InstantiateContractError where
-  debuggable (InstantiateContractError currentTime template params) =
+  debuggable (InstantiateContractError currentTime module' params) =
     encodeJson
       { errorType: "Contract instantiation"
       , currentTime: show currentTime
-      , template
+      , module: module'
       , params
       }
 
@@ -120,7 +122,7 @@ class
   ManageMarlowe m where
   initializeContract
     :: Instant
-    -> ContractTemplate
+    -> Module
     -> ContractParams
     -> PABConnectedWallet
     -> m
@@ -197,7 +199,7 @@ instance
   ) =>
   ManageMarlowe (AppM m) where
 
-  initializeContract currentInstant template params wallet = do
+  initializeContract currentInstant module' params wallet = do
     info' "Initializing contract"
     u <- askUnliftAff
     runExceptT do
@@ -212,7 +214,7 @@ instance
       -- fail with `instantiateContractError` if not all params were provided.
       contract <- except
         $ lmap instantiateContractError
-        $ instantiateExtendedContract currentInstant template params
+        $ instantiateExtendedContract currentInstant module' params
       -- Call the PAB to create the new contract. It returns a request id and a function
       -- that we can use to block and wait for the response
       reqId /\ awaitContractCreation <-
@@ -223,7 +225,7 @@ instance
       -- the information relevant to show a placeholder of a starting contract.
       let
         newContract =
-          NewContract reqId nickname template.metaData Nothing contract
+          NewContract reqId nickname (view _metadata module') Nothing contract
       lift do
         updateStore $ Store.ContractCreated newContract
         Tuple newContract <$> awaitAndHandleResult
@@ -381,12 +383,12 @@ instance Debuggable CreateError where
 
 instantiateExtendedContract
   :: Instant
-  -> ContractTemplate
+  -> Module
   -> ContractParams
   -> Either InstantiateContractError Semantic.Contract
-instantiateExtendedContract now template params =
+instantiateExtendedContract now module' params =
   let
-    extendedContract = view (_extendedContract) template
+    extendedContract = view (_contract) module'
 
     { timeouts, values } = params
 
@@ -401,5 +403,5 @@ instantiateExtendedContract now template params =
     absoluteFilledContract = resolveRelativeTimes now filledContract
   in
     note'
-      (\_ -> InstantiateContractError now template params)
+      (\_ -> InstantiateContractError now module' params)
       $ toCore absoluteFilledContract

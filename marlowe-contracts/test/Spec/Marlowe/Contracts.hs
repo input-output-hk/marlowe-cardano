@@ -57,7 +57,7 @@ tokValueOf :: Integer -> C.Money
 tokValueOf = singleton tokSymbol tokName
 
 assertTotalPayments :: Party -> [C.Payment] -> C.Money -> Assertion
-assertTotalPayments p t x = assertBool "total payments to party" (totalPayments t == x)
+assertTotalPayments p t = assertEqual "total payments to party" $ totalPayments t
   where
     totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party p)
 
@@ -355,8 +355,8 @@ futureNoMarginCall =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 1_333_333)
-          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 1_333_334)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_666)
         C.Error err ->
           assertNoFailedTransactions err
 
@@ -395,8 +395,8 @@ futureWithMarginCall =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 61_333_333)
-          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 61_333_334)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_666)
         C.Error err ->
           assertNoFailedTransactions err
 

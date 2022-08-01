@@ -52,15 +52,15 @@ parseTestCommand :: O.Mod O.OptionFields NetworkId
 parseTestCommand network socket=
   O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
---  <> _scriptsCommand network socket
+    <> scriptsCommand network socket
     <> pabsCommand network socket
 
 
 -- | Parser for the "scripts" command.
-_scriptsCommand :: O.Mod O.OptionFields NetworkId
+scriptsCommand :: O.Mod O.OptionFields NetworkId
                 -> O.Mod O.OptionFields FilePath
                 -> O.Mod O.CommandFields TestCommand
-_scriptsCommand network socket =
+scriptsCommand network socket =
   O.command "scripts"
     $ O.info (scriptsOptions network socket)
     $ O.progDesc "Test Marlowe scripts on-chain."

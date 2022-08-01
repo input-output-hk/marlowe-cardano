@@ -32,7 +32,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ValueId
   )
 import Language.Marlowe.Core.V1.Semantics.Types (State) as Semantic
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Marlowe.PAB (PlutusAppId)
 
 -- The execution state represents the status of a Marlowe contract synced with the PAB.

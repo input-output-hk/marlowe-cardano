@@ -74,17 +74,3 @@ executable marlowe-runtime
     , marlowe-runtime
   ghc-options:
     -threaded
-
-executable chain-sync
-  import: lang
-  hs-source-dirs:   chain-sync
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , marlowe-runtime
-  ghc-options:
-    -threaded

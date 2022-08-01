@@ -66,7 +66,7 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Language.Marlowe.Core.V1.Semantics.Types (TokenName)
-import Language.Marlowe.Extended.V1.Metadata (MetaData, NumberFormat(..))
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, NumberFormat(..))
 import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)
 import Type.Proxy (Proxy(..))

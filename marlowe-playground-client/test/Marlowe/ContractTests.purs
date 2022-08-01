@@ -126,16 +126,16 @@ examplesMatch =
       $ shouldEqual (Just ZeroCouponBond.fullExtendedContract)
           (contractToExtended Contracts.zeroCouponBond)
     it "Coupon bond guaranteed"
-      $ shouldEqual (Just CouponBondGuaranteed.extendedContract)
+      $ shouldEqual (Just CouponBondGuaranteed.contract)
           (contractToExtended Contracts.couponBondGuaranteed)
     it "Swap"
       $ shouldEqual (Just Swap.fullExtendedContract)
           (contractToExtended Contracts.swap)
     it "Contract for differences"
-      $ shouldEqual (Just ContractForDifferences.extendedContract)
+      $ shouldEqual (Just ContractForDifferences.contract)
           (contractToExtended Contracts.contractForDifferences)
     it "Contract for differences with oracle"
-      $ shouldEqual (Just ContractForDifferencesWithOracle.extendedContract)
+      $ shouldEqual (Just ContractForDifferencesWithOracle.contract)
           (contractToExtended Contracts.contractForDifferencesWithOracle)
 
 seller :: Party
@@ -220,7 +220,7 @@ filledCouponBondGuaranteed =
                   ]
             }
         )
-        CouponBondGuaranteed.extendedContract
+        CouponBondGuaranteed.contract
     )
 
 filledSwap :: Term T.Contract
@@ -260,7 +260,7 @@ filledContractForDifferences =
                   ]
             }
         )
-        ContractForDifferences.extendedContract
+        ContractForDifferences.contract
     )
 
 filledContractForDifferencesWithOracle :: Term T.Contract
@@ -285,7 +285,7 @@ filledContractForDifferencesWithOracle =
                   ]
             }
         )
-        ContractForDifferencesWithOracle.extendedContract
+        ContractForDifferencesWithOracle.contract
     )
 
 -- TODO:  We should combine this test with the ones defined in Marlowe.Holes.SemanticTest

@@ -2,8 +2,7 @@ module Component.MetadataTab.Types where
 
 import Contrib.Data.Unfoldable (Move) as Unfoldable
 import Language.Marlowe.Core.V1.Semantics.Types as S
-import Language.Marlowe.Extended.V1 (ContractType)
-import Language.Marlowe.Extended.V1.Metadata (NumberFormat)
+import Language.Marlowe.Extended.V1.Metadata.Types (ContractType, NumberFormat)
 
 class ShowConstructor a where
   showConstructor :: a -> String

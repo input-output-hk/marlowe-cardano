@@ -48,19 +48,20 @@ import Halogen.HTML.Properties
   , type_
   , value
   )
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Extended.V1.Metadata
   ( contractTypeArray
   , contractTypeInitials
   , contractTypeName
+  , defaultForFormatType
+  , fromString
+  , getFormatType
   , initialsToContractType
+  , isDecimalFormat
+  , isDefaultFormat
+  , toString
   )
-import Language.Marlowe.Extended.V1.Metadata
-  ( ChoiceInfo
-  , MetaData
-  , MetadataHintInfo
-  , NumberFormat(..)
-  , NumberFormatType(..)
-  , _choiceInfo
+import Language.Marlowe.Extended.V1.Metadata.Lenses
+  ( _choiceInfo
   , _choiceNames
   , _roleDescriptions
   , _roles
@@ -68,12 +69,14 @@ import Language.Marlowe.Extended.V1.Metadata
   , _timeParameters
   , _valueParameterInfo
   , _valueParameters
-  , defaultForFormatType
-  , fromString
-  , getFormatType
-  , isDecimalFormat
-  , isDefaultFormat
-  , toString
+
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ChoiceInfo
+  , MetaData
+  , MetadataHintInfo
+  , NumberFormat(..)
+  , NumberFormatType(..)
   )
 import Record (merge, set) as Record
 import Type.Prelude (Proxy(..))

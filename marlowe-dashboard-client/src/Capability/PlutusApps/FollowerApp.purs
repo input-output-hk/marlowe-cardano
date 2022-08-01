@@ -36,6 +36,7 @@ import Halogen (HalogenM)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Language.Marlowe.Client (ContractHistory)
 import Language.Marlowe.Core.V1.Semantics.Types (MarloweParams)
+import Language.Marlowe.Extended.V1 (_metadata)
 import Language.Marlowe.Extended.V1.Metadata (emptyContractMetadata)
 import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
@@ -179,7 +180,7 @@ onNewObservableState followerAppId contractHistory = do
   let
     metadata = maybe
       emptyContractMetadata
-      _.metaData
+      (view _metadata)
       (findTemplate $ getContract contractHistory)
 
   updateStore

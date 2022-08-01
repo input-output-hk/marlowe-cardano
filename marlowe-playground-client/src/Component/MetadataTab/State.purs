@@ -14,10 +14,11 @@ import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Query (HalogenM)
 import Language.Marlowe.Extended.V1.Metadata
-  ( ChoiceInfo
-  , NumberFormat
-  , ValueParameterInfo
-  , _choiceInfo
+  ( updateChoiceInfo
+  , updateValueParameterInfo
+  )
+import Language.Marlowe.Extended.V1.Metadata.Lenses
+  ( _choiceInfo
   , _contractLongDescription
   , _contractName
   , _contractShortDescription
@@ -25,8 +26,13 @@ import Language.Marlowe.Extended.V1.Metadata
   , _roleDescriptions
   , _timeParameterDescriptions
   , _valueParameterInfo
-  , updateChoiceInfo
-  , updateValueParameterInfo
+
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ChoiceInfo
+  , NumberFormat
+  , ValueParameterInfo
+
   )
 import MainFrame.Types
   ( Action

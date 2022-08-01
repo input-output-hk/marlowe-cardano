@@ -39,7 +39,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Input(..)
   , TransactionInput(..)
   )
-import Language.Marlowe.Extended.V1.Metadata (MetaData)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Symbolic.Types.Response (Result)
 import Marlowe.Symbolic.Types.Response as R

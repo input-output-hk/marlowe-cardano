@@ -12,7 +12,7 @@ import Data.PABConnectedWallet (PABConnectedWallet)
 import Effect.Aff (Aff)
 import Halogen as H
 import Language.Marlowe.Core.V1.Semantics.Types (MarloweParams, TokenName)
-import Language.Marlowe.Extended.V1.Metadata (ContractTemplate)
+import Language.Marlowe.Extended.V1 (Module)
 
 type Input = PABConnectedWallet
 
@@ -37,10 +37,10 @@ type Slot = H.Slot Query Msg
 
 data Wizard
   = Start
-  | Overview ContractTemplate (Maybe ContractFields)
-  | Setup ContractTemplate ContractSetup.Input
-  | AddContact String ContractTemplate ContractSetup.Input
-  | Review ContractTemplate ContractParams
+  | Overview Module (Maybe ContractFields)
+  | Setup Module ContractSetup.Input
+  | AddContact String Module ContractSetup.Input
+  | Review Module ContractParams
 
 derive instance Eq Wizard
 
@@ -52,9 +52,9 @@ type State =
 data Action
   = OnReset
   | OnBack
-  | OnTemplateChosen ContractTemplate
-  | OnSetup ContractTemplate (Maybe ContractFields)
+  | OnTemplateChosen Module
+  | OnSetup Module (Maybe ContractFields)
   | OpenCreateWalletCard TokenName
-  | OnStartContract ContractTemplate ContractParams
+  | OnStartContract Module ContractParams
   | OnContractSetupMsg ContractSetup.Msg
   | OnAddContactMsg AddContact.Msg

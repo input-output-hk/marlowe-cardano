@@ -1,0 +1,129 @@
+cabal-version: 2.4
+name: marlowe-chain-sync
+version: 0.0.0.0
+synopsis:
+  Cardano chain sync system for thee Marlowe Runtime
+description:
+  Marlowe runtime component for Cardano node synchronization. Communicates with
+  downstream compoents using the Filtered Chain Sync protocol, which provides
+  efficient push and pull-based traversal of the cardano blockchain.
+bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
+license: Apache-2.0
+author: Jamie Bertram
+maintainer: jamie.bertram@iohk.io
+stability: experimental
+category: Language
+license-files:
+  LICENSE
+  NOTICE
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: marlowe-chain-sync
+
+flag defer-plugin-errors
+    description:
+        Defer errors from the plugin, useful for things like Haddock that can't handle it.
+    default: False
+    manual: True
+
+common lang
+  default-language: Haskell2010
+  default-extensions:
+    BlockArguments
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitForAll
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    NamedFieldPuns
+    NumericUnderscores
+    OverloadedStrings
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TypeApplications
+    TupleSections
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+  if flag(defer-plugin-errors)
+    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
+library
+  import: lang
+  hs-source-dirs:   src
+  exposed-modules:
+    Language.Marlowe.Runtime.ChainSync
+    Language.Marlowe.Runtime.ChainSync.Database
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
+    Language.Marlowe.Runtime.ChainSync.Genesis
+    Language.Marlowe.Runtime.ChainSync.NodeClient
+    Language.Marlowe.Runtime.ChainSync.Store
+  other-modules:
+  build-depends:
+      base >= 4.9 && < 5
+    , base16
+    , aeson
+    , async
+    , bytestring
+    , cborg
+    , cardano-api
+    , cardano-binary
+    , cardano-crypto-wrapper
+    , cardano-ledger-byron
+    , cardano-ledger-babbage
+    , cardano-ledger-alonzo
+    , cardano-ledger-core
+    , cardano-ledger-shelley
+    , containers
+    , hasql
+    , hasql-th
+    , hasql-transaction
+    , ouroboros-consensus-shelley
+    , ouroboros-network
+    , parallel
+    , profunctors
+    , stm
+    , stm-delay
+    , text
+    , time
+    , transformers
+    , vector
+    , witherable
+
+executable marlowesyncd
+  import: lang
+  hs-source-dirs:   app
+  main-is: Main.hs
+  other-modules:
+    Options
+    Paths_marlowe_chain_sync
+  autogen-modules:
+    Paths_marlowe_chain_sync
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , base16
+    , bytestring
+    , cardano-api
+    , cardano-crypto-wrapper
+    , cardano-ledger-byron
+    , hasql
+    , marlowe-chain-sync
+    , optparse-applicative
+    , ouroboros-network
+    , stm
+    , text
+    , time
+    , transformers
+  ghc-options:
+    -threaded
