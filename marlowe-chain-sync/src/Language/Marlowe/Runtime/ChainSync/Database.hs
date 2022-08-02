@@ -3,9 +3,8 @@
 module Language.Marlowe.Runtime.ChainSync.Database where
 
 import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint (..), TxInMode)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Move, MoveResult)
-import qualified Language.Marlowe.Runtime.ChainSync.Types as Types
 import Ouroboros.Network.Point (WithOrigin)
 
 type CardanoBlock = BlockInMode CardanoMode
@@ -47,7 +46,7 @@ newtype GetGenesisBlock m = GetGenesisBlock
   { runGetGenesisBlock :: m (Maybe GenesisBlock) }
 
 newtype MoveClient m = MoveClient
-  { runMoveClient :: forall err result. Types.ChainPoint -> Move err result -> m (MoveResult err result) }
+  { runMoveClient :: forall err result. Api.ChainPoint -> Api.Move err result -> m (Api.MoveResult err result) }
 
 hoistGetHeaderAtPoint :: (forall a. m a -> n a) -> GetHeaderAtPoint m -> GetHeaderAtPoint n
 hoistGetHeaderAtPoint transformation = GetHeaderAtPoint . fmap transformation . runGetHeaderAtPoint

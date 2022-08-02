@@ -17,10 +17,10 @@ import Data.Functor (void)
 import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (BlockHeader), BlockHeaderHash (unBlockHeaderHash),
+                                               ChainPoint, Move, MoveResult (..), WithGenesis (..),
+                                               runtimeChainSeekCodec, schemaVersion1_0)
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Move, MoveResult (..), runtimeChainSeekCodec, schemaVersion1_0)
-import Language.Marlowe.Runtime.ChainSync.Types (BlockHeader (BlockHeader), BlockHeaderHash (unBlockHeaderHash),
-                                                 ChainPoint, WithGenesis (..))
 import Network.Channel (Channel (..))
 import Network.Protocol.ChainSeek.Server (ChainSeekServer (..), ServerStHandshake (..), ServerStIdle (..),
                                           ServerStInit (..), ServerStNext (..), chainSeekServerPeer)

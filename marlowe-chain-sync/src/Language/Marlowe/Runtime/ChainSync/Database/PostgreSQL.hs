@@ -45,6 +45,7 @@ import Hasql.TH (foldStatement, maybeStatement, resultlessStatement, singletonSt
 import Hasql.Transaction (Transaction)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
                                                     CommitRollback (..), DatabaseQueries (DatabaseQueries),
                                                     GetGenesisBlock (..), GetHeaderAtPoint (..),
@@ -52,8 +53,6 @@ import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (
                                                     hoistCommitGenesisBlock, hoistCommitRollback, hoistGetGenesisBlock,
                                                     hoistGetHeaderAtPoint, hoistGetIntersectionPoints, hoistMoveClient)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (IntersectError (..), Move (..), MoveResult (..), UTxOError (..))
-import qualified Language.Marlowe.Runtime.ChainSync.Types as Types
 import Numeric.Natural (Natural)
 import Ouroboros.Network.Point (WithOrigin (..))
 import Prelude hiding (init)
@@ -146,17 +145,17 @@ getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeRes
 moveClient :: MoveClient Transaction
 moveClient = MoveClient performMoveWithRollbackCheck
 
-performMoveWithRollbackCheck :: Types.ChainPoint -> Move err result -> Transaction (MoveResult err result)
+performMoveWithRollbackCheck :: Api.ChainPoint -> Api.Move err result -> Transaction (Api.MoveResult err result)
 performMoveWithRollbackCheck point move = do
   tip <- getTip
   getRollbackPoint >>= \case
     Nothing -> performMove move point >>= \case
-      MoveAbort err            -> pure $ Reject err tip
-      MoveArrive point' result -> pure $ RollForward result point' tip
-      MoveWait                 -> pure $ Wait tip
-    Just rollbackPoint -> pure $ RollBack rollbackPoint tip
+      MoveAbort err            -> pure $ Api.Reject err tip
+      MoveArrive point' result -> pure $ Api.RollForward result point' tip
+      MoveWait                 -> pure $ Api.Wait tip
+    Just rollbackPoint -> pure $ Api.RollBack rollbackPoint tip
   where
-    getRollbackPoint :: Transaction (Maybe Types.ChainPoint)
+    getRollbackPoint :: Transaction (Maybe Api.ChainPoint)
     getRollbackPoint = case pointParams of
       Nothing -> pure Nothing
       Just pointParams' -> fmap decodeChainPoint <$> HT.statement pointParams'
@@ -175,7 +174,7 @@ performMoveWithRollbackCheck point move = do
           WHERE rollbackToSlot IS NULL
         |]
 
-    getTip :: Transaction Types.ChainPoint
+    getTip :: Transaction Api.ChainPoint
     getTip = decodeChainPoint <$> HT.statement ()
       [singletonStatement|
         SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
@@ -187,23 +186,23 @@ performMoveWithRollbackCheck point move = do
 
     pointParams :: Maybe (Int64, ByteString)
     pointParams = case point of
-      Types.Genesis    -> Nothing
-      Types.At (Types.BlockHeader (Types.SlotNo slotNo) (Types.BlockHeaderHash hash) _) -> Just (fromIntegral slotNo, hash)
+      Api.Genesis                                                               -> Nothing
+      Api.At (Api.BlockHeader (Api.SlotNo slotNo) (Api.BlockHeaderHash hash) _) -> Just (fromIntegral slotNo, hash)
 
 data PerformMoveResult err result
   = MoveWait
   | MoveAbort err
-  | MoveArrive Types.BlockHeader result
+  | MoveArrive Api.BlockHeader result
 
-performMove :: Move err result -> Types.ChainPoint -> Transaction (PerformMoveResult err result)
+performMove :: Api.Move err result -> Api.ChainPoint -> Transaction (PerformMoveResult err result)
 performMove = \case
-  Fork left right      -> performFork left right
-  AdvanceSlots slots   -> performAdvanceSlots slots
-  AdvanceBlocks blocks -> performAdvanceBlocks blocks
-  ConsumeUTxO txOutRef -> performConsumeUTxO txOutRef
-  Intersect points     -> performIntersect points
+  Api.Fork left right      -> performFork left right
+  Api.AdvanceSlots slots   -> performAdvanceSlots slots
+  Api.AdvanceBlocks blocks -> performAdvanceBlocks blocks
+  Api.ConsumeUTxO txOutRef -> performConsumeUTxO txOutRef
+  Api.Intersect points     -> performIntersect points
 
-performFork :: Move err1 result1 -> Move err2 result2 -> Types.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
+performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
 performFork left right point = do
   leftMoveResult <- performMove left point
   rightMoveResult <- performMove right point
@@ -221,7 +220,7 @@ performFork left right point = do
     (MoveWait, MoveArrive rightHeader rightResult)                         -> MoveArrive rightHeader $ That rightResult
     _                                                                      -> MoveWait
 
-performAdvanceSlots :: Natural -> Types.ChainPoint -> Transaction (PerformMoveResult Void ())
+performAdvanceSlots :: Natural -> Api.ChainPoint -> Transaction (PerformMoveResult Void ())
 performAdvanceSlots slots point = do
   decodeAdvance <$> HT.statement (fromIntegral slots + pointSlot point)
     [maybeStatement|
@@ -233,7 +232,7 @@ performAdvanceSlots slots point = do
       LIMIT 1
     |]
 
-performAdvanceBlocks :: Natural -> Types.ChainPoint -> Transaction (PerformMoveResult Void ())
+performAdvanceBlocks :: Natural -> Api.ChainPoint -> Transaction (PerformMoveResult Void ())
 performAdvanceBlocks blocks point = do
   decodeAdvance <$> HT.statement (pointSlot point, fromIntegral blocks)
     [maybeStatement|
@@ -246,9 +245,9 @@ performAdvanceBlocks blocks point = do
       OFFSET $2 :: int
     |]
 
-performConsumeUTxO :: Types.TxOutRef -> Types.ChainPoint -> Transaction (PerformMoveResult UTxOError Types.Transaction)
-performConsumeUTxO Types.TxOutRef{..} point = do
-  initialResult <- HT.statement (pointSlot point, Types.unTxId txId, fromIntegral txIx) $
+performConsumeUTxO :: Api.TxOutRef -> Api.ChainPoint -> Transaction (PerformMoveResult Api.UTxOError Api.Transaction)
+performConsumeUTxO Api.TxOutRef{..} point = do
+  initialResult <- HT.statement (pointSlot point, Api.unTxId txId, fromIntegral txIx) $
     [foldStatement|
       SELECT block.slotNo :: bigint?
            , block.id :: bytea?
@@ -274,24 +273,24 @@ performConsumeUTxO Types.TxOutRef{..} point = do
   case initialResult of
     MoveWait -> pure MoveWait
     MoveAbort err -> pure $ MoveAbort err
-    MoveArrive header@Types.BlockHeader{..} tx@Types.Transaction{txId = spendingTxId} ->  do
+    MoveArrive header@Api.BlockHeader{..} tx@Api.Transaction{txId = spendingTxId} ->  do
       txIns <- queryTxIns slotNo spendingTxId
       txOuts <- queryTxOuts slotNo spendingTxId
-      pure $ MoveArrive header tx { Types.inputs = txIns, Types.outputs = txOuts }
+      pure $ MoveArrive header tx { Api.inputs = txIns, Api.outputs = txOuts }
   where
-    foldTx :: Fold ReadTxRow (PerformMoveResult UTxOError Types.Transaction)
-    foldTx = Fold foldTx' (MoveAbort UTxONotFound) id
+    foldTx :: Fold ReadTxRow (PerformMoveResult Api.UTxOError Api.Transaction)
+    foldTx = Fold foldTx' (MoveAbort Api.UTxONotFound) id
 
     foldTx'
-      :: PerformMoveResult UTxOError Types.Transaction
+      :: PerformMoveResult Api.UTxOError Api.Transaction
       -> ReadTxRow
-      -> PerformMoveResult UTxOError Types.Transaction
-    foldTx' (MoveAbort (UTxOSpent spendingTxId)) _ = MoveAbort $ UTxOSpent spendingTxId
-    foldTx' MoveWait _                             = MoveWait
-    foldTx' (MoveAbort UTxONotFound) row           = readFirstTxRow row
-    foldTx' (MoveArrive header tx) row             = MoveArrive header $ mergeTxRow tx row
+      -> PerformMoveResult Api.UTxOError Api.Transaction
+    foldTx' (MoveAbort (Api.UTxOSpent spendingTxId)) _ = MoveAbort $ Api.UTxOSpent spendingTxId
+    foldTx' MoveWait _                                 = MoveWait
+    foldTx' (MoveAbort Api.UTxONotFound) row           = readFirstTxRow row
+    foldTx' (MoveArrive header tx) row                 = MoveArrive header $ mergeTxRow tx row
 
-    readFirstTxRow :: ReadTxRow -> PerformMoveResult UTxOError Types.Transaction
+    readFirstTxRow :: ReadTxRow -> PerformMoveResult Api.UTxOError Api.Transaction
     readFirstTxRow
       ( Just slotNo
       , Just hash
@@ -303,14 +302,14 @@ performConsumeUTxO Types.TxOutRef{..} point = do
       , policyId
       , tokenName
       , quantity
-      ) | slotNo <= pointSlot point = MoveAbort $ UTxOSpent $ Types.TxId spendingTxId
-        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Types.Transaction
-          { txId = Types.TxId spendingTxId
+      ) | slotNo <= pointSlot point = MoveAbort $ Api.UTxOSpent $ Api.TxId spendingTxId
+        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Api.Transaction
+          { txId = Api.TxId spendingTxId
           , validityRange = case (validityLowerBound, validityUpperBound) of
-              (Nothing, Nothing) -> Types.Unbounded
-              (Just lb, Nothing) -> Types.MinBound $ decodeSlotNo lb
-              (Nothing, Just ub) -> Types.MaxBound $ decodeSlotNo ub
-              (Just lb, Just ub) -> Types.MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+              (Nothing, Nothing) -> Api.Unbounded
+              (Just lb, Nothing) -> Api.MinBound $ decodeSlotNo lb
+              (Nothing, Just ub) -> Api.MaxBound $ decodeSlotNo ub
+              (Just lb, Just ub) -> Api.MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
           , metadata = Nothing
           , inputs = Set.empty
           , outputs = []
@@ -318,28 +317,28 @@ performConsumeUTxO Types.TxOutRef{..} point = do
           }
     readFirstTxRow _ = MoveWait
 
-    mergeTxRow :: Types.Transaction -> ReadTxRow -> Types.Transaction
-    mergeTxRow tx@Types.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, tokenName, quantity) = tx
-      { Types.mintedTokens = mintedTokens <> decodeTokens policyId tokenName quantity
+    mergeTxRow :: Api.Transaction -> ReadTxRow -> Api.Transaction
+    mergeTxRow tx@Api.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, tokenName, quantity) = tx
+      { Api.mintedTokens = mintedTokens <> decodeTokens policyId tokenName quantity
       }
 
-queryTxIns :: Types.SlotNo -> Types.TxId -> Transaction (Set.Set Types.TransactionInput)
-queryTxIns slotNo txInId = HT.statement (Types.unTxId txInId, fromIntegral slotNo) $
+queryTxIns :: Api.SlotNo -> Api.TxId -> Transaction (Set.Set Api.TransactionInput)
+queryTxIns slotNo txInId = HT.statement (Api.unTxId txInId, fromIntegral slotNo) $
   [foldStatement|
     SELECT txOutId :: bytea, txOutIx :: smallint, redeemerDatumBytes :: bytea?
       FROM chain.txIn as txIn
      WHERE txInId = $1 :: bytea AND slotNo = $2 :: bigint
   |] (Fold.foldMap (Set.singleton . decodeTxIn) id)
   where
-    decodeTxIn :: ReadTxInRow -> Types.TransactionInput
-    decodeTxIn (txId, txIx, redeemerDatumBytes) = Types.TransactionInput
-      { txId = Types.TxId txId
+    decodeTxIn :: ReadTxInRow -> Api.TransactionInput
+    decodeTxIn (txId, txIx, redeemerDatumBytes) = Api.TransactionInput
+      { txId = Api.TxId txId
       , txIx = fromIntegral txIx
-      , redeemer = Types.Redeemer . Types.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
+      , redeemer = Api.Redeemer . Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
       }
 
-queryTxOuts :: Types.SlotNo -> Types.TxId -> Transaction [Types.TransactionOutput]
-queryTxOuts slotNo txId = HT.statement (Types.unTxId txId, fromIntegral slotNo) $
+queryTxOuts :: Api.SlotNo -> Api.TxId -> Transaction [Api.TransactionOutput]
+queryTxOuts slotNo txId = HT.statement (Api.unTxId txId, fromIntegral slotNo) $
   [foldStatement|
     SELECT txOut.txIx :: smallint
          , txOut.address :: bytea
@@ -356,31 +355,31 @@ queryTxOuts slotNo txId = HT.statement (Types.unTxId txId, fromIntegral slotNo) 
      ORDER BY txIx
   |] (Fold foldRow IntMap.empty (fmap snd . IntMap.toAscList))
   where
-    foldRow :: IntMap Types.TransactionOutput -> ReadTxOutRow -> IntMap Types.TransactionOutput
+    foldRow :: IntMap Api.TransactionOutput -> ReadTxOutRow -> IntMap Api.TransactionOutput
     foldRow acc (txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
       IntMap.alter (Just . maybe newTxOut mergeTxOut) (fromIntegral txIx) acc
       where
-        newTxOut = Types.TransactionOutput
-          { address = Types.Address address
-          , assets = Types.Assets
-              { ada = Types.Lovelace $ fromIntegral lovelace
+        newTxOut = Api.TransactionOutput
+          { address = Api.Address address
+          , assets = Api.Assets
+              { ada = Api.Lovelace $ fromIntegral lovelace
               , tokens = decodeTokens policyId tokenName quantity
               }
-          , datumHash = Types.DatumHash <$> datumHash
-          , datum = Types.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
+          , datumHash = Api.DatumHash <$> datumHash
+          , datum = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
           }
 
-        mergeTxOut txOut@Types.TransactionOutput{assets = assets@Types.Assets{..}} = txOut
-          { Types.assets = assets
-              { Types.tokens = tokens <> decodeTokens policyId tokenName quantity
+        mergeTxOut txOut@Api.TransactionOutput{assets = assets@Api.Assets{..}} = txOut
+          { Api.assets = assets
+              { Api.tokens = tokens <> decodeTokens policyId tokenName quantity
               }
           }
 
-decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Types.Tokens
+decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Api.Tokens
 decodeTokens (Just policyId) (Just tokenName) (Just quantity) =
-  Types.Tokens $ Map.singleton
-    (Types.AssetId (Types.PolicyId policyId) (Types.TokenName tokenName))
-    (Types.Quantity $ fromIntegral quantity)
+  Api.Tokens $ Map.singleton
+    (Api.AssetId (Api.PolicyId policyId) (Api.TokenName tokenName))
+    (Api.Quantity $ fromIntegral quantity)
 decodeTokens _ _ _ = mempty
 
 type ReadTxRow =
@@ -415,12 +414,12 @@ type ReadTxOutRow =
   , Maybe Int64      -- TxOut's Token's Quantity
   )
 
-performIntersect :: [Types.BlockHeader] -> Types.ChainPoint -> Transaction (PerformMoveResult IntersectError ())
+performIntersect :: [Api.BlockHeader] -> Api.ChainPoint -> Transaction (PerformMoveResult Api.IntersectError ())
 performIntersect points point = do
     let
       params =
-        ( V.fromList $ (\Types.BlockHeader{..} -> fromIntegral slotNo) <$> points
-        , V.fromList $ (\Types.BlockHeader{..} -> Types.unBlockHeaderHash headerHash) <$> points
+        ( V.fromList $ (\Api.BlockHeader{..} -> fromIntegral slotNo) <$> points
+        , V.fromList $ (\Api.BlockHeader{..} -> Api.unBlockHeaderHash headerHash) <$> points
         , pointSlot point
         )
     decodeAdvance <$> HT.statement params
@@ -872,22 +871,22 @@ slotNoToParam (SlotNo slotNo) = fromIntegral slotNo
 txIxToParam :: TxIx -> Int16
 txIxToParam (TxIx txIx) = fromIntegral txIx
 
-decodeBlockHader :: (Int64, ByteString, Int64) -> Types.BlockHeader
-decodeBlockHader (slotNo, hash, blockNo) = Types.BlockHeader (decodeSlotNo slotNo) (Types.BlockHeaderHash hash) (decodeBlockNo blockNo)
+decodeBlockHader :: (Int64, ByteString, Int64) -> Api.BlockHeader
+decodeBlockHader (slotNo, hash, blockNo) = Api.BlockHeader (decodeSlotNo slotNo) (Api.BlockHeaderHash hash) (decodeBlockNo blockNo)
 
-decodeChainPoint :: (Int64, ByteString, Int64) -> Types.ChainPoint
-decodeChainPoint (-1, _, _) = Types.Genesis
-decodeChainPoint row        = Types.At $ decodeBlockHader row
+decodeChainPoint :: (Int64, ByteString, Int64) -> Api.ChainPoint
+decodeChainPoint (-1, _, _) = Api.Genesis
+decodeChainPoint row        = Api.At $ decodeBlockHader row
 
-decodeSlotNo :: Int64 -> Types.SlotNo
-decodeSlotNo = Types.SlotNo . fromIntegral
+decodeSlotNo :: Int64 -> Api.SlotNo
+decodeSlotNo = Api.SlotNo . fromIntegral
 
-decodeBlockNo :: Int64 -> Types.BlockNo
-decodeBlockNo = Types.BlockNo . fromIntegral
+decodeBlockNo :: Int64 -> Api.BlockNo
+decodeBlockNo = Api.BlockNo . fromIntegral
 
-pointSlot :: Types.ChainPoint -> Int64
-pointSlot Types.Genesis                    = -1
-pointSlot (Types.At Types.BlockHeader{..}) = fromIntegral slotNo
+pointSlot :: Api.ChainPoint -> Int64
+pointSlot Api.Genesis                  = -1
+pointSlot (Api.At Api.BlockHeader{..}) = fromIntegral slotNo
 
 decodeAdvance :: Maybe (Int64, ByteString, Int64) -> PerformMoveResult err ()
 decodeAdvance Nothing    = MoveWait

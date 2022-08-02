@@ -3,8 +3,8 @@ module Main where
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.ChainSync.Protocol (Move (..), UTxOError (..), runtimeChainSeekCodec, schemaVersion1_0)
-import Language.Marlowe.Runtime.ChainSync.Types (TxOutRef (..), WithGenesis (..))
+import Language.Marlowe.Runtime.ChainSync.Api (Move (..), TxOutRef (..), UTxOError (..), WithGenesis (..),
+                                               runtimeChainSeekCodec, schemaVersion1_0)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (ChainSeekClient (ChainSeekClient), ClientStHandshake (..), ClientStIdle (..),
                                           ClientStInit (..), ClientStNext (..), chainSeekClientPeer)
