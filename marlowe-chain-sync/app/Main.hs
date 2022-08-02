@@ -53,7 +53,7 @@ run Options{..} = withSocketsDo do
       , genesisConfigHash = genesisConfigHashValue
       , genesisConfig
       , withChannel = \k ->
-          bracketOnError (accept socket) (close . fst) \(conn, _ :: SockAddr) -> do
+          bracket (accept socket) (close . fst) \(conn, _ :: SockAddr) -> do
             socketId <- atomically do
               modifyTVar socketIdVar (+1)
               readTVar socketIdVar
