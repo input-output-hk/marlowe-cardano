@@ -20,6 +20,8 @@
         marlowe = import marlowe-source.outPath { inherit system; };
         ghcWithMarlowe = marlowe.marlowe.haskell.project.ghcWithPackages (p: [
           p.marlowe
+          p.marlowe-cli
+          p.marlowe-contracts
         ]);
         ibash = pkgs.jupyterWith.kernels.bashKernel {
           name = "Marlowe";
