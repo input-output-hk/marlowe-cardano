@@ -12,7 +12,7 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
 
 import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), BlockNo, CardanoMode, ChainPoint (..),
                     ChainSyncClientPipelined (..), ChainTip (..), LocalChainSyncClient (..),
-                    LocalNodeClientProtocols (..), LocalNodeConnectInfo, SlotNo, chainPointToSlotNo, connectToLocalNode)
+                    LocalNodeClientProtocols (..), LocalNodeClientProtocolsInMode, SlotNo, chainPointToSlotNo)
 import Cardano.Api.ChainSync.ClientPipelined (ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..),
                                               ClientStNext (..), MkPipelineDecision, N (..), Nat (..),
                                               PipelineDecision (..), mapChainSyncClientPipelined,
@@ -68,9 +68,9 @@ cost Changes{..} = changesBlockCount + changesTxCount * 10
 
 -- | The set of dependencies needed by the NodeClient component.
 data NodeClientDependencies = NodeClientDependencies
-  { localNodeConnectInfo  :: !(LocalNodeConnectInfo CardanoMode) -- ^ Connection info for the local node.
-  , getHeaderAtPoint      :: !(GetHeaderAtPoint IO)              -- ^ How to load a block header at a given point.
-  , getIntersectionPoints :: !(GetIntersectionPoints IO)         -- ^ How to load the set of initial intersection points for the chain sync client.
+  { connectToLocalNode    :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ()) -- ^ Connect to the local node.
+  , getHeaderAtPoint      :: !(GetHeaderAtPoint IO)                                 -- ^ How to load a block header at a given point.
+  , getIntersectionPoints :: !(GetIntersectionPoints IO)                            -- ^ How to load the set of initial intersection points for the chain sync client.
   }
 
 -- | The public API of the NodeClient component.
@@ -96,7 +96,7 @@ mkNodeClient NodeClientDependencies{..} = do
         $ pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints
 
     runNodeClient :: IO ()
-    runNodeClient = connectToLocalNode localNodeConnectInfo LocalNodeClientProtocols
+    runNodeClient = connectToLocalNode LocalNodeClientProtocols
       { localChainSyncClient = LocalChainSyncClientPipelined pipelinedClient'
       , localTxSubmissionClient = Nothing
       , localTxMonitoringClient = Nothing

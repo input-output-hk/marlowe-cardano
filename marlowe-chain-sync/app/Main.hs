@@ -1,6 +1,7 @@
 module Main where
 
 import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
+import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
@@ -43,15 +44,14 @@ run Options{..} = withSocketsDo do
         (const "failed to read byron genesis file")
         (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
     (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
-    let genesisConfigHashValue = abstractHashToBytes hash
+    let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
     chainSync <- atomically $ mkChainSync ChainSyncDependencies
-      { localNodeConnectInfo
+      { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
-          (PostgreSQL.databaseQueries $ computeByronGenesisBlock genesisConfigHashValue genesisConfig)
+          (PostgreSQL.databaseQueries genesisBlock)
       , persistRateLimit
-      , genesisConfigHash = genesisConfigHashValue
-      , genesisConfig
+      , genesisBlock
       , withChannel = \k ->
           bracket (accept socket) (close . fst) \(conn, _ :: SockAddr) -> do
             socketId <- atomically do
@@ -82,7 +82,7 @@ run Options{..} = withSocketsDo do
 
     resolve = do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
-      head <$> getAddrInfo (Just hints) Nothing (Just "3715")
+      head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
 
     open addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1
