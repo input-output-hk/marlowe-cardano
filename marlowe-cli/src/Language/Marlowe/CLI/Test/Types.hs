@@ -88,6 +88,7 @@ import qualified Data.HashMap.Strict
 import qualified Data.Map.Strict as M (Map)
 import Data.Maybe (fromMaybe)
 import Data.Text
+import Language.Marlowe.CLI.Command.Template (TemplateCommand)
 import Ledger (CurrencySymbol)
 import Options.Applicative (optional)
 import qualified Test.QuickCheck.Property as Aeson
@@ -157,21 +158,21 @@ data PabTest =
 
 type TransactionNickname = String
 
-data ScriptContract = InlineContract Contract | TemplateContract String
+data ScriptContract = InlineContract Contract | TemplateContract TemplateCommand
     deriving stock (Eq, Generic, Show)
 
 instance ToJSON ScriptContract where
-    toJSON (InlineContract c)              = Aeson.object [("inline", toJSON c)]
-    toJSON (TemplateContract templateName) = Aeson.object [("template", toJSON templateName)]
+    toJSON (InlineContract c)                 = Aeson.object [("inline", toJSON c)]
+    toJSON (TemplateContract templateCommand) = Aeson.object [("template", toJSON templateCommand)]
 
 instance FromJSON ScriptContract where
     parseJSON json = case json of
       Aeson.Object (Data.HashMap.Strict.toList -> [("inline", contractJson)]) -> do
         parsedContract <- parseJSON contractJson
         pure $ InlineContract parsedContract
-      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateNameJson)]) -> do
-        parsedTemplateName <- parseJSON templateNameJson
-        pure $ TemplateContract parsedTemplateName
+      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateCommandJson)]) -> do
+        parsedTemplateCommand <- parseJSON templateCommandJson
+        pure $ TemplateContract parsedTemplateCommand
       _ -> fail "Expected object with a single field of either `inline` or `template`"
 
 

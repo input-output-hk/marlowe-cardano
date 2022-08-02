@@ -32,9 +32,13 @@ import Cardano.Api (AlonzoEra, CardanoMode, LocalNodeConnectInfo (..), NetworkId
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
+import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), makeContract)
 import Language.Marlowe.CLI.Test.Types (ScriptContract (InlineContract, TemplateContract), ScriptOperation (..),
                                         ScriptTest (..), TransactionNickname)
 import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract)
+import Language.Marlowe.Extended.V1 (Value (..))
+import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -81,10 +85,59 @@ interpret Initialize {..} = do
   let
     marloweParams = Client.marloweParams parsedRoleCurrency
     marloweState = initialMarloweState soOwner soMinAda
-
   testContract <- case soContract of
     InlineContract contract -> pure contract
-    TemplateContract _      -> throwError $ CliError "Not implemented yet"
+    TemplateContract templateCommand ->
+      case templateCommand of
+        TemplateTrivial{..} -> pure $ makeContract $ trivial
+                                  party
+                                  depositLovelace
+                                  withdrawalLovelace
+                                  timeout
+        template -> throwError $ CliError $ "Template not implemented: " <> show template
+        -- TemplateEscrow{..} -> makeContract $
+        --                         escrow
+        --                           (Constant price)
+        --                           seller
+        --                           buyer
+        --                           mediator
+        --                           paymentDeadline
+        --                           complaintDeadline
+        --                           disputeDeadline
+        -- TemplateSwap{..} -> makeContract $
+        --                       swap
+        --                         aParty
+        --                         aToken
+        --                         (Constant aAmount)
+        --                         aTimeout
+        --                         bParty
+        --                         bToken
+        --                         (Constant bAmount)
+        --                         bTimeout
+        --                         Close
+        -- TemplateZeroCouponBond{..} -> makeContract $
+        --                                 zeroCouponBond
+        --                                   lender
+        --                                   borrower
+        --                                   lendingDeadline
+        --                                   paybackDeadline
+        --                                   (Constant principal)
+        --                                   (Constant principal `AddValue` Constant interest)
+        --                                   ada
+        --                                   Close
+        -- TemplateCoveredCall{..} -> makeContract $
+        --                             coveredCall
+        --                               issuer
+        --                               counterparty
+        --                               Nothing
+        --                               currency
+        --                               underlying
+        --                               (Constant strike)
+        --                               (Constant amount)
+        --                               issueDate
+        --                               maturityDate
+        --                               settlementDate
+
 
   transaction <- initializeTransactionImpl
     marloweParams
@@ -101,7 +154,7 @@ interpret Initialize {..} = do
 
 interpret Prepare {..} = do
   marloweTransaction <- findMarloweTransaction soTransaction
-  preparedMarloweTransaction <- prepareTransactionImpl
+  preparedMarloweTransaction <- withError (\(CliError originalMessage) -> CliError $ originalMessage <> " - from Prepare Impl") $ prepareTransactionImpl
                                   marloweTransaction
                                   soInputs
                                   soMinimumTime
@@ -110,6 +163,10 @@ interpret Prepare {..} = do
   modify $ insertMarloweTransaction soTransaction preparedMarloweTransaction
 
 interpret (Fail message) = throwError $ CliError message
+
+withError :: MonadError e m => (e -> e) -> m a -> m a
+withError modifyError action = catchError action \e -> do
+                                throwError $ modifyError e
 
 insertMarloweTransaction :: TransactionNickname -> MarloweTransaction AlonzoEra -> ScriptState -> ScriptState
 insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
