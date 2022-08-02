@@ -101,7 +101,7 @@ library
     , vector
     , witherable
 
-executable marlowesyncd
+executable chainseekd
   import: lang
   hs-source-dirs:   app
   main-is: Main.hs

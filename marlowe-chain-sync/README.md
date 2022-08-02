@@ -36,7 +36,7 @@ You should run `sqitch deploy` whenever you pull new commits, as there may be
 new migrations that need to be run. For a detailed guide to writing and
 managing migrations, please read https://sqitch.org/docs/manual/sqitchtutorial/.
 
-To run the chain sync server, you can use the `run-marlowesyncd` command.
-Alternatively, you can directly invoke `cabal run marlowesyncd` to provide
+To run the chain sync server, you can use the `run-chainseekd` command.
+Alternatively, you can directly invoke `cabal run chainseekd` to provide
 custom command line parameters. The manual can be read by running
 `./man docs/marlowe-chain-sync.1`.
