@@ -117,10 +117,10 @@ its position to `Genesis` when it receives a `ConfirmHandshake` message.
 
 The `Idle` state is the state from which a client MAY send a query to the
 server. It does so by sending a `QueryNext` message. The payload of the
-`QueryNext` MUST include the position of the client, and a query. The
-`QueryNext` message transitions the state machine to the `Next CanAwait` state.
-The client MAY request the server terminates the connection by sending a `Done`
-message. The `Done` message transitions the state machine to the `Done` state.
+`QueryNext` MUST include a query. The `QueryNext` message transitions the state
+machine to the `Next CanAwait` state. The client MAY request the server
+terminates the connection by sending a `Done` message. The `Done` message
+transitions the state machine to the `Done` state.
 
 - Agency: client
 - Available messages:
@@ -130,37 +130,24 @@ message. The `Done` message transitions the state machine to the `Done` state.
 #### Next wait state
 
 The `Next wait` state is a state parameterized by a substate `wait` in which the
-server has agency. From any sub state, the server MAY send a `RollForward`
-message to the client. The `RollForward` message MUST include the new position
-of the client and the result of the query. The new position of the client SHOULD
-be the earliest point at which the query was satisfied. The server MUST send a
-`RollBackward` message if the client's current position has been rolled back.
-The payload of the `RollBackward` message MUST include the new position of the
-client and the new tip of the blockchain. The new position of the client MUST
-be the most recent common ancestor of the client's previous position and the new
-tip.
-
-- Agency: server
-- Available messages:
-  - `RollForward` to client
-  - `RollBackward` to client
+server has agency. 
 
 ##### Next CanAwait state
 
 The `Next CanAwait` state is a sub-state of `Next wait` in which the server MUST
 decode and decide how to handle the query receved in the `QueryNext` message.
 If the server cannot decode the query, it MUST reject the query with a
-`QueryRejected` message. The payload of the message SHOULD indicate that the
+`RejectQuery` message. The payload of the message SHOULD indicate that the
 query did not conform to the schema. The server MAY decide to send an immediate
 response. If so, the proceedure for doing so is outlined in the previous
 section. The server MAY decide to wait before responding by sending a `Wait`
 message. The server MAY decide to reject the query for other reasons by sending
-a `QueryRejected` message. The payload of the message MUST include a rejection
+a `RejectQuery` message. The payload of the message MUST include a rejection
 reason.
 
 - Agency: server
 - Available messages:
-  - `QueryRejected` to client
+  - `RejectQuery` to client
   - `RollForward` to client
   - `RollBackward` to client
   - `Wait` to client
@@ -171,10 +158,13 @@ The `Next MustAwait` state is a sub-state of `Next wait`. The server SHOULD
 respond with a `RollForward` message as soon as the query can be responded to.
 The server MUST respond with a `RollBackward` if a rollback is encountered that
 reverts the tip to a point before the client's current position. The payloads
-for these messages are described in the `Next wait` state section.
+for these messages are described in the `Next wait` state section. The server
+MAY decide to reject the query for other reasons by sending a `RejectQuery`
+message. The payload of the message MUST include a rejection reason.
 
 - Agency: server
 - Available messages:
+  - `RejectQuery` to client
   - `RollForward` to client
   - `RollBackward` to client
 
@@ -209,7 +199,7 @@ The `RequestHandshake` is sent by the client to initiate the handshake.
 The `RequestHandshake` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x01`
-- 4 octets containing the length of the following string as a big-endian 32-bit
+- 8 octets containing the length of the following string as a big-endian 64-bit
   integer.
 - A UTF-8 encoded string of octets containing the schema version.
 
@@ -233,11 +223,12 @@ The `ConfirmHandshake` message is encoded as follows, in the following order:
 #### RejectHandshake message
 
 The `RejectHandshake` is sent by the server to confirm to the client that the
-provided schema version is not supported.
+provided schema version is not supported. The payload MUST include a list of
+supported schemas
 
 - Origin State: `Handshake`
 - Target State: `Fault`
-- Payload: None
+- Payload: supported schema versions
 - Sender: server
 - Receiver: client
 
@@ -246,6 +237,10 @@ provided schema version is not supported.
 The `RejectHandshake` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x03`
+- 8 octets containing the length of the following list as a big-endian 64-bit
+  integer.
+- A sequence of supported versions encoded as described in the `RequestHandshake`
+  message (including the 8 octets of length).
 
 #### QueryNext message
 
@@ -253,7 +248,7 @@ The `QueryNext` is sent by the client to request more data from the blockchain.
 
 - Origin State: `Idle`
 - Target State: `Next CanAwait`
-- Payload: current position, query
+- Payload: query
 - Sender: client
 - Receiver: server
 
@@ -262,14 +257,12 @@ The `QueryNext` is sent by the client to request more data from the blockchain.
 The `QueryNext` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x04`
-- The octets representing the client's position. The encoding of this is
-  blockchain-specific.
 - The octets representing the query. The encoding of this is determined by the
   query schema.
 
-#### QueryRejected message
+#### RejectQuery message
 
-The `QueryRejected` is sent by the server to indicate that the query has been
+The `RejectQuery` is sent by the server to indicate that the query has been
 rejected.
 
 - Origin State: `Next CanAwait`
@@ -280,7 +273,7 @@ rejected.
 
 ##### Encoding
 
-The `QueryRejected` message is encoded as follows, in the following order:
+The `RejectQuery` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x05`
 - The octets representing the rejection reason. The encoding of this is
@@ -292,7 +285,7 @@ The `RollForward` is sent by the server with a query result.
 
 - Origin State: `Next (CanAwait | MustAwait)`
 - Target State: `Idle`
-- Payload: new position, result
+- Payload: result, new position, current tip
 - Sender: server
 - Receiver: client
 
@@ -301,10 +294,12 @@ The `RollForward` is sent by the server with a query result.
 The `RollForward` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x06`
-- The octets representing the client's new position. The encoding of this is
-  blockchain-specific.
 - The octets representing the result of the query. The encoding of this is
   determined by the query schema.
+- The octets representing the client's new position. The encoding of this is
+  blockchain-specific.
+- The octets representing the current tip of the chain. The encoding of this is
+  blockchain-specific.
 
 #### RollBackward message
 
@@ -313,7 +308,7 @@ has been rolled back.
 
 - Origin State: `Next (CanAwait | MustAwait)`
 - Target State: `Idle`
-- Payload: new position, new tip
+- Payload: new position, current tip
 - Sender: server
 - Receiver: client
 
@@ -323,8 +318,8 @@ The `RollBackward` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x07`
 - The octets representing the client's new position. The encoding of this is
-- The octets representing the new tip. The encoding of this is blockchain-
-  specific.
+- The octets representing the current tip of the chain. The encoding of this is
+  blockchain-specific.
 
 #### Wait message
 
@@ -333,7 +328,7 @@ query result.
 
 - Origin State: `Next CanAwait`
 - Target State: `Next MustAwait`
-- Payload: None
+- Payload: current tip
 - Sender: server
 - Receiver: client
 
@@ -342,6 +337,8 @@ query result.
 The `Wait` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x08`
+- The octets representing the current tip of the chain. The encoding of this is
+  blockchain-specific.
 
 #### Done message
 
@@ -377,13 +374,14 @@ stateDiagram-v2
   state Next {
     [*] --> CanAwait
     CanAwait --> MustAwait : Wait
-    CanAwait --> [*] : QueryRejected
+    CanAwait --> [*] : RejectQuery
     CanAwait --> [*] : RollForward
     CanAwait --> [*] : RollBackward
+    MustAwait --> [*] : RejectQuery
     MustAwait --> [*] : RollForward
     MustAwait --> [*] : RollBackward
   }
-  Next --> Idle : QueryRejected
+  Next --> Idle : RejectQuery
   Next --> Idle : RollForward
   Next --> Idle : RollBackward
 ```
