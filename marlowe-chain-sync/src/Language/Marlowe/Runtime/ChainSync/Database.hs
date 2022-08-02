@@ -45,8 +45,14 @@ newtype GetIntersectionPoints m = GetIntersectionPoints
 newtype GetGenesisBlock m = GetGenesisBlock
   { runGetGenesisBlock :: m (Maybe GenesisBlock) }
 
+data MoveResult err result
+  = RollForward result Api.BlockHeader Api.ChainPoint
+  | RollBack Api.ChainPoint Api.ChainPoint
+  | Reject err Api.ChainPoint
+  | Wait Api.ChainPoint
+
 newtype MoveClient m = MoveClient
-  { runMoveClient :: forall err result. Api.ChainPoint -> Api.Move err result -> m (Api.MoveResult err result) }
+  { runMoveClient :: forall err result. Api.ChainPoint -> Api.Move err result -> m (MoveResult err result) }
 
 hoistGetHeaderAtPoint :: (forall a. m a -> n a) -> GetHeaderAtPoint m -> GetHeaderAtPoint n
 hoistGetHeaderAtPoint transformation = GetHeaderAtPoint . fmap transformation . runGetHeaderAtPoint

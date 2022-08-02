@@ -28,36 +28,42 @@ import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (Read (..), pfail)
 
+-- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
   deriving stock (Show, Read, Eq, Ord, Functor, Generic)
   deriving anyclass (Binary)
 
+-- | A point in the chain, identified by a slot number, block header hash, and
+-- block numner.
 type ChainPoint = WithGenesis BlockHeader
 
+-- | A block header, consisting of a slot number, a hash, and a block number.
 data BlockHeader = BlockHeader
-  { slotNo     :: !SlotNo
-  , headerHash :: !BlockHeaderHash
-  , blockNo    :: !BlockNo
+  { slotNo     :: !SlotNo          -- ^ The slot number when this block was produced.
+  , headerHash :: !BlockHeaderHash -- ^ The hash of this block's header.
+  , blockNo    :: !BlockNo         -- ^ The ordinal number of this block.
   }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | A transaction body
 data Transaction = Transaction
-  { txId          :: !TxId
-  , validityRange :: !ValidityRange
-  , metadata      :: !(Maybe Metadata)
-  , inputs        :: !(Set TransactionInput)
-  , outputs       :: ![TransactionOutput]
-  , mintedTokens  :: !Tokens
+  { txId          :: !TxId                   -- ^ The hash of this transaction.
+  , validityRange :: !ValidityRange          -- ^ The range of slots during which this transaction is valid.
+  , metadata      :: !(Maybe Metadata)       -- ^ The metadata of this transaction (only includes Marlowe-relevant metadata).
+  , inputs        :: !(Set TransactionInput) -- ^ The inputs consumed by the transaction
+  , outputs       :: ![TransactionOutput]    -- ^ The outputs produced by the transaction.
+  , mintedTokens  :: !Tokens                 -- ^ Tokens minted by the transaction.
   }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | A validity range for a transaction
 data ValidityRange
-  = Unbounded
-  | MinBound SlotNo
-  | MaxBound SlotNo
-  | MinMaxBound SlotNo SlotNo
+  = Unbounded                 -- ^ The transaction is always valid.
+  | MinBound SlotNo           -- ^ The transaction is only valid after a specific slot.
+  | MaxBound SlotNo           -- ^ The transaction is only valid before a specific slot.
+  | MinMaxBound SlotNo SlotNo -- ^ The transaction is only valid between two slots.
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
@@ -66,27 +72,31 @@ data Metadata
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | An input of a transaction.
 data TransactionInput = TransactionInput
-  { txId     :: !TxId
-  , txIx     :: !TxIx
-  , redeemer :: !(Maybe Redeemer)
+  { txId     :: !TxId             -- ^ The txId of the TransactionOutput this input consumes.
+  , txIx     :: !TxIx             -- ^ The txIx of the TransactionOutput this input consumes.
+  , redeemer :: !(Maybe Redeemer) -- ^ The script redeemer dataum for this input (if one was provided).
   }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | An output of a transaction.
 data TransactionOutput = TransactionOutput
-  { address   :: !Address
-  , assets    :: !Assets
-  , datumHash :: !(Maybe DatumHash)
-  , datum     :: !(Maybe Datum)
+  { address   :: !Address           -- ^ The address that receives the assets of this output.
+  , assets    :: !Assets            -- ^ The assets this ouptut produces.
+  , datumHash :: !(Maybe DatumHash) -- ^ The hash of the script datum associated with this output.
+  , datum     :: !(Maybe Datum)     -- ^ The script datum associated with this output.
   }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | A script datum that is used to spend the output of a script tx.
 newtype Redeemer = Redeemer { unRedeemer :: Datum }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving newtype (Binary)
 
+-- | A datum as a sum-of-products.
 data Datum
   = Constr Integer [Datum]
   | Map [(Datum, Datum)]
@@ -96,6 +106,7 @@ data Datum
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | Convert from Plutus.V1.Ledger.Api.Data to Datum
 fromPlutusData :: Plutus.Data -> Datum
 fromPlutusData (Plutus.Constr i dats) = Constr i $ fromPlutusData <$> dats
 fromPlutusData (Plutus.Map m)         = Map $ bimap fromPlutusData fromPlutusData <$> m
@@ -103,17 +114,20 @@ fromPlutusData (Plutus.List dats)     = List $ fromPlutusData <$> dats
 fromPlutusData (Plutus.I i)           = I i
 fromPlutusData (Plutus.B b)           = B b
 
+-- | A collection of assets transferred by a trasaction output.
 data Assets = Assets
-  { ada    :: !Lovelace
-  , tokens :: !Tokens
+  { ada    :: !Lovelace -- ^ The ADA sent by the tx output.
+  , tokens :: !Tokens   -- ^ Additional tokens sent by the tx output.
   }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | A collection of token quantities by their asset ID.
 newtype Tokens = Tokens { unTokens :: Map AssetId Quantity }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid)
 
+-- | A newtype wrapper for parsing base 16 strings as byte strings.
 newtype Base16 = Base16 { unBase16 :: ByteString }
 
 instance Show Base16 where
@@ -218,33 +232,38 @@ data StakingCredential
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | The 'query' type for the Marlowe Chain Sync.
 data Move err result where
 
+  -- | Perform two moves in parallel and collect the results from the one which
+  -- resolves first (or both if they resolve simultaneously).
   Fork
     :: Move err1 result1
     -> Move err2 result2
     -> Move (These err1 err2) (These result1 result2)
 
+  -- | Advance a minimum number of slots without collecting any results..
   AdvanceSlots :: Natural -> Move Void ()
 
+  -- | Advance a fixed number of blocks without collecting any results..
   AdvanceBlocks :: Natural -> Move Void ()
 
+  -- | Jump to the lastest intersection from a list of known block headers
+  -- without collecting any results.
   Intersect :: [BlockHeader] -> Move IntersectError ()
 
+  -- | Advance to the block when a tx out is consumed and collect the tx that
+  -- consumes the tx out.
   ConsumeUTxO :: TxOutRef -> Move UTxOError Transaction
 
-data MoveResult err result
-  = RollForward result BlockHeader ChainPoint
-  | RollBack ChainPoint ChainPoint
-  | Reject err ChainPoint
-  | Wait ChainPoint
-
+-- | Reasons a 'ConsumeUTxO' request can be rejected.
 data UTxOError
   = UTxONotFound
   | UTxOSpent TxId
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | Reasons an 'Intersect' request can be rejected.
 data IntersectError = IntersectionNotFound
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)

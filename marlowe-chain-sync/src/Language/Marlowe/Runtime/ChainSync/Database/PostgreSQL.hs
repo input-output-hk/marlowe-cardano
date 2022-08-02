@@ -49,9 +49,10 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
                                                     CommitRollback (..), DatabaseQueries (DatabaseQueries),
                                                     GetGenesisBlock (..), GetHeaderAtPoint (..),
-                                                    GetIntersectionPoints (..), MoveClient (..), hoistCommitBlocks,
-                                                    hoistCommitGenesisBlock, hoistCommitRollback, hoistGetGenesisBlock,
-                                                    hoistGetHeaderAtPoint, hoistGetIntersectionPoints, hoistMoveClient)
+                                                    GetIntersectionPoints (..), MoveClient (..), MoveResult (..),
+                                                    hoistCommitBlocks, hoistCommitGenesisBlock, hoistCommitRollback,
+                                                    hoistGetGenesisBlock, hoistGetHeaderAtPoint,
+                                                    hoistGetIntersectionPoints, hoistMoveClient)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
 import Numeric.Natural (Natural)
 import Ouroboros.Network.Point (WithOrigin (..))
@@ -145,15 +146,15 @@ getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeRes
 moveClient :: MoveClient Transaction
 moveClient = MoveClient performMoveWithRollbackCheck
 
-performMoveWithRollbackCheck :: Api.ChainPoint -> Api.Move err result -> Transaction (Api.MoveResult err result)
+performMoveWithRollbackCheck :: Api.ChainPoint -> Api.Move err result -> Transaction (MoveResult err result)
 performMoveWithRollbackCheck point move = do
   tip <- getTip
   getRollbackPoint >>= \case
     Nothing -> performMove move point >>= \case
-      MoveAbort err            -> pure $ Api.Reject err tip
-      MoveArrive point' result -> pure $ Api.RollForward result point' tip
-      MoveWait                 -> pure $ Api.Wait tip
-    Just rollbackPoint -> pure $ Api.RollBack rollbackPoint tip
+      MoveAbort err            -> pure $ Reject err tip
+      MoveArrive point' result -> pure $ RollForward result point' tip
+      MoveWait                 -> pure $ Wait tip
+    Just rollbackPoint -> pure $ RollBack rollbackPoint tip
   where
     getRollbackPoint :: Transaction (Maybe Api.ChainPoint)
     getRollbackPoint = case pointParams of
