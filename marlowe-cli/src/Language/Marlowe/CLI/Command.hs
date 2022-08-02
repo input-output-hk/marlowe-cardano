@@ -31,7 +31,8 @@ import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractComm
 import Language.Marlowe.CLI.Command.Input (InputCommand, parseInputCommand, runInputCommand)
 import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRoleCommand)
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
-import Language.Marlowe.CLI.Command.Template (TemplateCommand, parseTemplateCommand, runTemplateCommand)
+import Language.Marlowe.CLI.Command.Template (OutputFiles (..), TemplateCommand, parseTemplateCommand,
+                                              parseTemplateCommandOutputFiles, runTemplateCommand)
 import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTestCommand)
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
@@ -54,7 +55,7 @@ data Command =
     -- | Role-related commands.
   | RoleCommand RoleCommand
     -- | Template-related commands.
-  | TemplateCommand TemplateCommand
+  | TemplateCommand TemplateCommand OutputFiles
     -- | Transaction-related commands.
   | TransactionCommand TransactionCommand
     -- | Miscellaneous commands.
@@ -86,14 +87,16 @@ runCommand :: MonadError CliError m
            => MonadIO m
            => Command  -- ^ The command.
            -> m ()     -- ^ Action to run the command.
-runCommand (RunCommand         command) = runRunCommand         command
-runCommand (ContractCommand    command) = runContractCommand    command
-runCommand (TestCommand        command) = runTestCommand        command
-runCommand (InputCommand       command) = runInputCommand       command
-runCommand (RoleCommand        command) = runRoleCommand        command
-runCommand (TemplateCommand    command) = runTemplateCommand    command
-runCommand (TransactionCommand command) = runTransactionCommand command
-runCommand (UtilCommand        command) = runUtilCommand        command
+runCommand (RunCommand         command)          = runRunCommand         command
+runCommand (PabCommand         command)          = runPabCommand         command
+runCommand (ContractCommand    command)          = runContractCommand    command
+runCommand (TestCommand        command)          = runTestCommand        command
+runCommand (InputCommand       command)          = runInputCommand       command
+runCommand (QueryCommand       command)          = runQueryCommand       command
+runCommand (RoleCommand        command)          = runRoleCommand        command
+runCommand (TemplateCommand command outputFiles) = runTemplateCommand command outputFiles
+runCommand (TransactionCommand command)          = runTransactionCommand command
+runCommand (UtilCommand        command)          = runUtilCommand        command
 
 
 -- | Command parseCommand for the tool version.
@@ -112,7 +115,8 @@ parseCommand networkId socketPath version =
               (
                    O.commandGroup "High-level commands:"
                 <> O.command "run"         (O.info (RunCommand      <$> parseRunCommand networkId socketPath ) $ O.progDesc "Run a contract."                   )
-                <> O.command "template"    (O.info (TemplateCommand <$> parseTemplateCommand                 ) $ O.progDesc "Create a contract from a template.")
+                <> O.command "pab"         (O.info (PabCommand      <$> parsePabCommand                      ) $ O.progDesc "Run a contract via the PAB."       )
+                <> O.command "template"    (O.info (TemplateCommand <$> parseTemplateCommand <*> parseTemplateCommandOutputFiles ) $ O.progDesc "Create a contract from a template.")
                 <> O.command "test"        (O.info (TestCommand     <$> parseTestCommand networkId socketPath) $ O.progDesc "Test contracts."                   )
               )
           , O.hsubparser

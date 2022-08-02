@@ -45,7 +45,8 @@ import Text.PrettyPrint.Leijen (parens, text)
 
 data Timeout = TimeParam String
              | POSIXTime Integer
-  deriving stock (Show,Generic)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance Pretty Timeout where
     prettyFragment (POSIXTime n)    = prettyFragment n
