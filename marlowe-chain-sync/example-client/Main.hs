@@ -3,14 +3,12 @@ module Main where
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.ChainSync.Protocol (Move (..), UTxOError (..), runtimeFilteredChainSyncCodec,
-                                                    schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Protocol (Move (..), UTxOError (..), runtimeChainSeekCodec, schemaVersion1_0)
 import Language.Marlowe.Runtime.ChainSync.Types (TxOutRef (..), WithGenesis (..))
 import Network.Channel (socketAsChannel)
+import Network.Protocol.ChainSeek.Client (ChainSeekClient (ChainSeekClient), ClientStHandshake (..), ClientStIdle (..),
+                                          ClientStInit (..), ClientStNext (..), chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
-import Network.Protocol.FilteredChainSync.Client (ClientStHandshake (..), ClientStIdle (..), ClientStInit (..),
-                                                  ClientStNext (..), FilteredChainSyncClient (FilteredChainSyncClient),
-                                                  filteredChainSyncClientPeer)
 import Network.Socket (AddrInfo (..), HostName, PortNumber, Socket, SocketType (..), close, connect, defaultHints,
                        getAddrInfo, openSocket)
 import Network.TypedProtocol (Driver (..), runPeerWithDriver)
@@ -32,10 +30,10 @@ main = do
 run :: Socket -> IO ()
 run conn = void $ runPeerWithDriver driver peer (startDState driver)
   where
-    driver = mkDriver throwIO runtimeFilteredChainSyncCodec channel
+    driver = mkDriver throwIO runtimeChainSeekCodec channel
     channel = socketAsChannel conn
-    peer = filteredChainSyncClientPeer Genesis client
-    client = FilteredChainSyncClient $ pure $ SendMsgRequestHandshake schemaVersion1_0 stHandshake
+    peer = chainSeekClientPeer Genesis client
+    client = ChainSeekClient $ pure $ SendMsgRequestHandshake schemaVersion1_0 stHandshake
     stHandshake = ClientStHandshake
       { recvMsgHandshakeRejected = \supportedVersions -> do
           putStr "Schema version not supported by server. Supported versions: "
@@ -88,5 +86,5 @@ getOptions = O.execParser $ O.info parser infoMod
       ]
     infoMod = mconcat
       [ O.fullDesc
-      , O.progDesc "Example Filtered Chain Sync client for the Marlowe Chain Sync"
+      , O.progDesc "Example Chain Seek client for the Marlowe Chain Sync"
       ]

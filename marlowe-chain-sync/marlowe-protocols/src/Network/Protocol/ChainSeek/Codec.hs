@@ -5,7 +5,7 @@
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
 
-module Network.Protocol.FilteredChainSync.Codec (DeserializeError(..), SomeQuery(..), codecFilteredChainSync) where
+module Network.Protocol.ChainSeek.Codec (DeserializeError(..), SomeQuery(..), codecChainSeek) where
 
 import Control.Exception (Exception)
 import Control.Monad (mfilter)
@@ -14,8 +14,8 @@ import Data.Binary.Get (ByteOffset, Decoder (..), runGetIncremental)
 import Data.Binary.Put (putWord8, runPut)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
-import Network.Protocol.FilteredChainSync.Types (ClientHasAgency (..), FilteredChainSync, Message (..),
-                                                 ServerHasAgency (..), TokNextKind (..))
+import Network.Protocol.ChainSeek.Types (ChainSeek, ClientHasAgency (..), Message (..), ServerHasAgency (..),
+                                         TokNextKind (..))
 import Network.TypedProtocol (PeerHasAgency (..), PeerRole, SomeMessage (..))
 import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
 import Unsafe.Coerce (unsafeCoerce)
@@ -31,7 +31,7 @@ instance Exception DeserializeError where
 
 data SomeQuery query = forall err result. SomeQuery (query err result)
 
-codecFilteredChainSync
+codecChainSeek
   :: forall query point tip m
    . Applicative m
   => (SomeQuery query -> Put)
@@ -44,8 +44,8 @@ codecFilteredChainSync
   -> Get point
   -> (tip -> Put)
   -> Get tip
-  -> Codec (FilteredChainSync query point tip) DeserializeError m LBS.ByteString
-codecFilteredChainSync
+  -> Codec (ChainSeek query point tip) DeserializeError m LBS.ByteString
+codecChainSeek
   encodeQuery
   decodeQuery
   encodeResult
@@ -60,10 +60,10 @@ codecFilteredChainSync
     encodeMsg
       :: forall
           (pr :: PeerRole)
-          (st :: FilteredChainSync query point tip)
-          (st' :: FilteredChainSync query point tip)
+          (st :: ChainSeek query point tip)
+          (st' :: ChainSeek query point tip)
        . PeerHasAgency pr st
-      -> Message (FilteredChainSync query point tip) st st'
+      -> Message (ChainSeek query point tip) st st'
       -> Put
     encodeMsg (ClientAgency TokInit) msg = case msg of
       MsgRequestHandshake schemaVersion -> do
@@ -103,7 +103,7 @@ codecFilteredChainSync
     encodeMsg (ServerAgency TokNext{}) MsgWait = putWord8 0x08
 
     decodeMsg
-      :: forall (pr :: PeerRole) (st :: FilteredChainSync query point tip)
+      :: forall (pr :: PeerRole) (st :: ChainSeek query point tip)
        . PeerHasAgency pr st
       -> Get (SomeMessage st)
     decodeMsg tok      = do

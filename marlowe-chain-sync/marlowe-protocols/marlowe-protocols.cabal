@@ -49,10 +49,10 @@ library
   exposed-modules:
     Network.Channel,
     Network.Protocol.Driver,
-    Network.Protocol.FilteredChainSync.Client,
-    Network.Protocol.FilteredChainSync.Codec,
-    Network.Protocol.FilteredChainSync.Server,
-    Network.Protocol.FilteredChainSync.Types
+    Network.Protocol.ChainSeek.Client,
+    Network.Protocol.ChainSeek.Codec,
+    Network.Protocol.ChainSeek.Server,
+    Network.Protocol.ChainSeek.Types
   build-depends:
       base >= 4.9 && < 5
     , binary

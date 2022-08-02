@@ -7,17 +7,16 @@
 -- role of the protocol. The types should be much easier to use than the
 -- underlying typed protocol types.
 
-module Network.Protocol.FilteredChainSync.Client where
+module Network.Protocol.ChainSeek.Client where
 
-import Network.Protocol.FilteredChainSync.Types (ClientHasAgency (..), FilteredChainSync (..), Message (..),
-                                                 NobodyHasAgency (..), SchemaVersion, ServerHasAgency (..),
-                                                 StNextKind (..), TokNextKind (..))
+import Network.Protocol.ChainSeek.Types (ChainSeek (..), ClientHasAgency (..), Message (..), NobodyHasAgency (..),
+                                         SchemaVersion, ServerHasAgency (..), StNextKind (..), TokNextKind (..))
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
 import Network.TypedProtocol.Core (PeerRole (..))
 
 -- | A filtered chain sync protocol client that runs in some monad 'm'.
-newtype FilteredChainSyncClient query point tip m a = FilteredChainSyncClient
-  { runFilteredChainSyncClient :: m (ClientStInit query point tip m a)
+newtype ChainSeekClient query point tip m a = ChainSeekClient
+  { runChainSeekClient :: m (ClientStInit query point tip m a)
   }
 
 -- | In the 'StInit' protocol state, the client has agency. It must send a
@@ -67,16 +66,16 @@ data ClientStNext query err result point tip m a = ClientStNext
   }
 
 -- | Transform the query, point, and tip types in the client.
-mapFilteredChainSyncClient
+mapChainSeekClient
   :: forall query query' point point' tip tip' m a
    . Functor m
   => (forall err result. query err result -> query' err result)
   -> (point' -> point)
   -> (tip' -> tip)
-  -> FilteredChainSyncClient query point tip m a
-  -> FilteredChainSyncClient query' point' tip' m a
-mapFilteredChainSyncClient mapQuery cmapPoint cmapTip FilteredChainSyncClient{..} =
-  FilteredChainSyncClient $ mapInit <$> runFilteredChainSyncClient
+  -> ChainSeekClient query point tip m a
+  -> ChainSeekClient query' point' tip' m a
+mapChainSeekClient mapQuery cmapPoint cmapTip ChainSeekClient{..} =
+  ChainSeekClient $ mapInit <$> runChainSeekClient
 
   where
     mapInit (SendMsgRequestHandshake v handshake) = SendMsgRequestHandshake v $ mapHandshake handshake
@@ -100,14 +99,14 @@ mapFilteredChainSyncClient mapQuery cmapPoint cmapTip FilteredChainSyncClient{..
       }
 
 -- | Change the underlying monad with a natural transformation.
-hoistFilteredChainSyncClient
+hoistChainSeekClient
   :: forall query point tip m n a
    . Functor m
   => (forall x. m x -> n x)
-  -> FilteredChainSyncClient query point tip m a
-  -> FilteredChainSyncClient query point tip n a
-hoistFilteredChainSyncClient f FilteredChainSyncClient{..} =
-  FilteredChainSyncClient $ f $ hoistInit <$> runFilteredChainSyncClient
+  -> ChainSeekClient query point tip m a
+  -> ChainSeekClient query point tip n a
+hoistChainSeekClient f ChainSeekClient{..} =
+  ChainSeekClient $ f $ hoistInit <$> runChainSeekClient
 
   where
     hoistInit :: ClientStInit query point tip m a -> ClientStInit query point tip n a
@@ -134,24 +133,24 @@ hoistFilteredChainSyncClient f FilteredChainSyncClient{..} =
       }
 
 -- | Interpret the client as a 'typed-protocols' 'Peer'.
-filteredChainSyncClientPeer
+chainSeekClientPeer
   :: forall query point tip m a
    . Monad m
   => point
-  -> FilteredChainSyncClient query point tip m a
-  -> Peer (FilteredChainSync query point tip) 'AsClient 'StInit m a
-filteredChainSyncClientPeer initialPoint (FilteredChainSyncClient mclient) =
+  -> ChainSeekClient query point tip m a
+  -> Peer (ChainSeek query point tip) 'AsClient 'StInit m a
+chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
   Effect $ peerInit <$> mclient
   where
   peerInit
     :: ClientStInit query point tip m a
-    -> Peer (FilteredChainSync query point tip) 'AsClient 'StInit m a
+    -> Peer (ChainSeek query point tip) 'AsClient 'StInit m a
   peerInit (SendMsgRequestHandshake schemaVersion handshake) =
     Yield (ClientAgency TokInit) (MsgRequestHandshake schemaVersion) $ peerHandshake handshake
 
   peerHandshake
     :: ClientStHandshake query point tip m a
-    -> Peer (FilteredChainSync query point tip) 'AsClient 'StHandshake m a
+    -> Peer (ChainSeek query point tip) 'AsClient 'StHandshake m a
   peerHandshake ClientStHandshake{..} =
     Await (ServerAgency TokHandshake) \case
       MsgRejectHandshake versions -> Effect $ Done TokFault <$> recvMsgHandshakeRejected versions
@@ -160,13 +159,13 @@ filteredChainSyncClientPeer initialPoint (FilteredChainSyncClient mclient) =
   peerIdle
     :: point
     -> m (ClientStIdle query point tip m a)
-    -> Peer (FilteredChainSync query point tip) 'AsClient 'StIdle m a
+    -> Peer (ChainSeek query point tip) 'AsClient 'StIdle m a
   peerIdle pos = Effect . fmap (peerIdle_ pos)
 
   peerIdle_
     :: point
     -> ClientStIdle query point tip m a
-    -> Peer (FilteredChainSync query point tip) 'AsClient 'StIdle m a
+    -> Peer (ChainSeek query point tip) 'AsClient 'StIdle m a
   peerIdle_ pos = \case
     SendMsgQueryNext query ClientStNext{..} waitNext ->
       Yield (ClientAgency TokIdle) (MsgQueryNext query) $
@@ -183,7 +182,7 @@ filteredChainSyncClientPeer initialPoint (FilteredChainSyncClient mclient) =
      . point
     -> query err result
     -> m (ClientStNext query err result point tip m a)
-    -> Peer (FilteredChainSync query point tip) 'AsClient ('StNext err result 'StMustReply) m a
+    -> Peer (ChainSeek query point tip) 'AsClient ('StNext err result 'StMustReply) m a
   peerWait pos query mnext = Effect do
     ClientStNext{..} <- mnext
     pure $ Await (ServerAgency (TokNext query TokMustReply)) \case

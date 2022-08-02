@@ -18,15 +18,13 @@ import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient (..))
-import Language.Marlowe.Runtime.ChainSync.Protocol (Move, MoveResult (..), runtimeFilteredChainSyncCodec,
-                                                    schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Protocol (Move, MoveResult (..), runtimeChainSeekCodec, schemaVersion1_0)
 import Language.Marlowe.Runtime.ChainSync.Types (BlockHeader (BlockHeader), BlockHeaderHash (unBlockHeaderHash),
                                                  ChainPoint, WithGenesis (..))
 import Network.Channel (Channel (..))
+import Network.Protocol.ChainSeek.Server (ChainSeekServer (..), ServerStHandshake (..), ServerStIdle (..),
+                                          ServerStInit (..), ServerStNext (..), chainSeekServerPeer)
 import Network.Protocol.Driver (mkDriver)
-import Network.Protocol.FilteredChainSync.Server (FilteredChainSyncServer (..), ServerStHandshake (..),
-                                                  ServerStIdle (..), ServerStInit (..), ServerStNext (..),
-                                                  filteredChainSyncServerPeer)
 import Network.TypedProtocol (Driver (..), runPeerWithDriver)
 import System.IO (stderr)
 
@@ -74,11 +72,11 @@ mkWorker WorkerDependencies{..} = do
   let
     runWorker = void $ runPeerWithDriver driver peer (startDState driver)
 
-    driver = mkDriver throwIO runtimeFilteredChainSyncCodec channel
+    driver = mkDriver throwIO runtimeChainSeekCodec channel
 
-    peer = filteredChainSyncServerPeer Genesis server
+    peer = chainSeekServerPeer Genesis server
 
-    server = FilteredChainSyncServer $ pure stInit
+    server = ChainSeekServer $ pure stInit
 
     stInit = ServerStInit \version -> pure if version == schemaVersion1_0
       then SendMsgHandshakeConfirmed $ stIdle Genesis

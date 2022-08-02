@@ -9,10 +9,10 @@ import Data.These (These (..))
 import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Types (BlockHeader, ChainPoint, Transaction, TxId, TxOutRef)
-import Network.Protocol.FilteredChainSync.Client (FilteredChainSyncClient)
-import Network.Protocol.FilteredChainSync.Codec (DeserializeError, SomeQuery (..), codecFilteredChainSync)
-import Network.Protocol.FilteredChainSync.Server (FilteredChainSyncServer)
-import Network.Protocol.FilteredChainSync.Types (FilteredChainSync, SchemaVersion (SchemaVersion))
+import Network.Protocol.ChainSeek.Client (ChainSeekClient)
+import Network.Protocol.ChainSeek.Codec (DeserializeError, SomeQuery (..), codecChainSeek)
+import Network.Protocol.ChainSeek.Server (ChainSeekServer)
+import Network.Protocol.ChainSeek.Types (ChainSeek, SchemaVersion (SchemaVersion))
 import Network.TypedProtocol.Codec (Codec)
 import Numeric.Natural (Natural)
 
@@ -47,16 +47,16 @@ data IntersectError = IntersectionNotFound
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
-type RuntimeFilteredChainSync = FilteredChainSync Move ChainPoint ChainPoint
+type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
-type RuntimeFilteredChainSyncClient = FilteredChainSyncClient Move ChainPoint ChainPoint
+type RuntimeChainSeekClient = ChainSeekClient Move ChainPoint ChainPoint
 
-type RuntimeFilteredChainSyncServer = FilteredChainSyncServer Move ChainPoint ChainPoint
+type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
 
-type RuntimeFilteredChainSyncCodec m = Codec RuntimeFilteredChainSync DeserializeError m LBS.ByteString
+type RuntimeChainSeekCodec m = Codec RuntimeChainSeek DeserializeError m LBS.ByteString
 
-runtimeFilteredChainSyncCodec :: Applicative m => RuntimeFilteredChainSyncCodec m
-runtimeFilteredChainSyncCodec = codecFilteredChainSync putMove getMove putResult getResult putError getError put get put get
+runtimeChainSeekCodec :: Applicative m => RuntimeChainSeekCodec m
+runtimeChainSeekCodec = codecChainSeek putMove getMove putResult getResult putError getError put get put get
 
 putMove :: SomeQuery Move -> Put
 putMove (SomeQuery move) = case move of

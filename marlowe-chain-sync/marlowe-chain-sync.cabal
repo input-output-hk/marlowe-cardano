@@ -5,7 +5,7 @@ synopsis:
   Cardano chain sync system for thee Marlowe Runtime
 description:
   Marlowe runtime component for Cardano node synchronization. Communicates with
-  downstream compoents using the Filtered Chain Sync protocol, which provides
+  downstream compoents using the Chain Seek protocol, which provides
   efficient push and pull-based traversal of the cardano blockchain.
 bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
 license: Apache-2.0

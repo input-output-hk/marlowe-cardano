@@ -2,23 +2,22 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A view of the filtered chain sync protocol from the point of view of the
+-- | A view of the chain seek protocol from the point of view of the
 -- server. This provides a simplified interface for implementing the server
 -- role of the protocol. The types should be much easier to use than the
 -- underlying typed protocol types.
 
-module Network.Protocol.FilteredChainSync.Server where
+module Network.Protocol.ChainSeek.Server where
 
 import Data.Bifunctor (Bifunctor (bimap))
-import Network.Protocol.FilteredChainSync.Types (ClientHasAgency (..), FilteredChainSync (..), Message (..),
-                                                 NobodyHasAgency (..), SchemaVersion, ServerHasAgency (..),
-                                                 StNextKind (..), TokNextKind (..))
+import Network.Protocol.ChainSeek.Types (ChainSeek (..), ClientHasAgency (..), Message (..), NobodyHasAgency (..),
+                                         SchemaVersion, ServerHasAgency (..), StNextKind (..), TokNextKind (..))
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
 import Network.TypedProtocol.Core (PeerRole (..))
 
--- | A filtered chain sync protocol server that runs in some monad 'm'.
-newtype FilteredChainSyncServer query point tip m a = FilteredChainSyncServer
-  { runFilteredChainSyncServer :: m (ServerStInit query point tip m a)
+-- | A chain seek protocol server that runs in some monad 'm'.
+newtype ChainSeekServer query point tip m a = ChainSeekServer
+  { runChainSeekServer :: m (ServerStInit query point tip m a)
   }
 
 -- | In the 'StInit' protocol state, the server does not have agency. Instead,
@@ -97,16 +96,16 @@ data ServerStNext query err result point tip m a where
     -> ServerStNext query err result point tip m a
 
 -- | Transform the query, point, and tip types in the server.
-mapFilteredChainSyncServer
+mapChainSeekServer
   :: forall query query' point point' tip tip' m a
    . Functor m
   => (forall err result. query' err result -> query err result)
   -> (point -> point')
   -> (tip -> tip')
-  -> FilteredChainSyncServer query point tip m a
-  -> FilteredChainSyncServer query' point' tip' m a
-mapFilteredChainSyncServer cmapQuery mapPoint mapTip =
-  FilteredChainSyncServer . fmap mapInit . runFilteredChainSyncServer
+  -> ChainSeekServer query point tip m a
+  -> ChainSeekServer query' point' tip' m a
+mapChainSeekServer cmapQuery mapPoint mapTip =
+  ChainSeekServer . fmap mapInit . runChainSeekServer
 
   where
     mapInit = ServerStInit . (fmap . fmap) mapHandshake . recvMsgRequestHandshake
@@ -130,14 +129,14 @@ mapFilteredChainSyncServer cmapQuery mapPoint mapTip =
     mapNext (SendMsgRollBackward point tip idle) = SendMsgRollBackward (mapPoint point) (mapTip tip) $ mapIdle <$> idle
 
 -- | Change the underlying monad with a natural transformation.
-hoistFilteredChainSyncServer
+hoistChainSeekServer
   :: forall query point tip m n a
    . Functor m
   => (forall x. m x -> n x)
-  -> FilteredChainSyncServer query point tip m a
-  -> FilteredChainSyncServer query point tip n a
-hoistFilteredChainSyncServer f =
-  FilteredChainSyncServer . f . fmap hoistInit . runFilteredChainSyncServer
+  -> ChainSeekServer query point tip m a
+  -> ChainSeekServer query point tip n a
+hoistChainSeekServer f =
+  ChainSeekServer . f . fmap hoistInit . runChainSeekServer
 
   where
     hoistInit :: ServerStInit query point tip m a -> ServerStInit query point tip n a
@@ -162,24 +161,24 @@ hoistFilteredChainSyncServer f =
     hoistNext (SendMsgRollBackward point tip idle)       = SendMsgRollBackward point tip $ f $ hoistIdle <$> idle
 
 -- | Interpret the server as a 'typed-protocols' 'Peer'.
-filteredChainSyncServerPeer
+chainSeekServerPeer
   :: forall query point tip m a
    . Monad m
   => point
-  -> FilteredChainSyncServer query point tip m a
-  -> Peer (FilteredChainSync query point tip) 'AsServer 'StInit m a
-filteredChainSyncServerPeer initialPoint (FilteredChainSyncServer mclient) =
+  -> ChainSeekServer query point tip m a
+  -> Peer (ChainSeek query point tip) 'AsServer 'StInit m a
+chainSeekServerPeer initialPoint (ChainSeekServer mclient) =
   Effect $ peerInit <$> mclient
   where
   peerInit
     :: ServerStInit query point tip m a
-    -> Peer (FilteredChainSync query point tip) 'AsServer 'StInit m a
+    -> Peer (ChainSeek query point tip) 'AsServer 'StInit m a
   peerInit ServerStInit{..} = Await (ClientAgency TokInit) \case
     MsgRequestHandshake version -> Effect $ peerHandshake <$> recvMsgRequestHandshake version
 
   peerHandshake
     :: ServerStHandshake query point tip m a
-    -> Peer (FilteredChainSync query point tip) 'AsServer 'StHandshake m a
+    -> Peer (ChainSeek query point tip) 'AsServer 'StHandshake m a
   peerHandshake = \case
     SendMsgHandshakeRejected versions ma ->
       Yield (ServerAgency TokHandshake) (MsgRejectHandshake versions) $
@@ -191,13 +190,13 @@ filteredChainSyncServerPeer initialPoint (FilteredChainSyncServer mclient) =
   peerIdle
     :: point
     -> m (ServerStIdle query point tip m a)
-    -> Peer (FilteredChainSync query point tip) 'AsServer 'StIdle m a
+    -> Peer (ChainSeek query point tip) 'AsServer 'StIdle m a
   peerIdle pos = Effect . fmap (peerIdle_ pos)
 
   peerIdle_
     :: point
     -> ServerStIdle query point tip m a
-    -> Peer (FilteredChainSync query point tip) 'AsServer 'StIdle m a
+    -> Peer (ChainSeek query point tip) 'AsServer 'StIdle m a
   peerIdle_ pos ServerStIdle{..} =
     Await (ClientAgency TokIdle) \case
       MsgQueryNext query -> Effect
@@ -210,7 +209,7 @@ filteredChainSyncServerPeer initialPoint (FilteredChainSyncServer mclient) =
      . point
     -> query err result
     -> m (ServerStNext query err result point tip m a)
-    -> Peer (FilteredChainSync query point tip) 'AsServer ('StNext err result 'StCanAwait) m a
+    -> Peer (ChainSeek query point tip) 'AsServer ('StNext err result 'StCanAwait) m a
   peerWait pos query mnext =
     Yield (ServerAgency (TokNext query TokCanAwait)) MsgWait $
     Effect $ peerNext TokMustReply pos query <$> mnext
@@ -222,7 +221,7 @@ filteredChainSyncServerPeer initialPoint (FilteredChainSyncServer mclient) =
     -> point
     -> query err result
     -> ServerStNext query err result point tip m a
-    -> Peer (FilteredChainSync query point tip) 'AsServer ('StNext err result wait) m a
+    -> Peer (ChainSeek query point tip) 'AsServer ('StNext err result wait) m a
   peerNext tok pos query = \case
     SendMsgQueryRejected err tip midle       -> yield pos (MsgRejectQuery err tip) midle
     SendMsgRollForward result pos' tip midle -> yield pos' (MsgRollForward result pos' tip) midle
