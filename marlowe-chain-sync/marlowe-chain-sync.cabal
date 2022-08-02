@@ -135,6 +135,8 @@ executable example-client
   hs-source-dirs: example-client
   main-is: Main.hs
   other-modules:
+    SkippingBlocks
+    FollowingUTxOs
     Paths_marlowe_chain_sync
   autogen-modules:
     Paths_marlowe_chain_sync
