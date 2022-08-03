@@ -5,7 +5,7 @@ synopsis:
   Cardano chain sync system for thee Marlowe Runtime
 description:
   Marlowe runtime component for Cardano node synchronization. Communicates with
-  downstream compoents using the Filtered Chain Sync protocol, which provides
+  downstream compoents using the Chain Seek protocol, which provides
   efficient push and pull-based traversal of the cardano blockchain.
 bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
 license: Apache-2.0
@@ -21,12 +21,6 @@ source-repository head
   type: git
   location: https://github.com/input-output-hk/marlowe-cardano
   subdir: marlowe-chain-sync
-
-flag defer-plugin-errors
-    description:
-        Defer errors from the plugin, useful for things like Haddock that can't handle it.
-    default: False
-    manual: True
 
 common lang
   default-language: Haskell2010
@@ -55,8 +49,7 @@ common lang
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
-  if flag(defer-plugin-errors)
-    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+    -threaded
 
 library
   import: lang
@@ -67,13 +60,16 @@ library
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
     Language.Marlowe.Runtime.ChainSync.Genesis
     Language.Marlowe.Runtime.ChainSync.NodeClient
+    Language.Marlowe.Runtime.ChainSync.Server
     Language.Marlowe.Runtime.ChainSync.Store
+    Language.Marlowe.Runtime.ChainSync.Api
   other-modules:
   build-depends:
       base >= 4.9 && < 5
-    , base16
     , aeson
     , async
+    , base16
+    , binary
     , bytestring
     , cborg
     , cardano-api
@@ -85,22 +81,27 @@ library
     , cardano-ledger-core
     , cardano-ledger-shelley
     , containers
+    , foldl
     , hasql
     , hasql-th
     , hasql-transaction
+    , marlowe-protocols
     , ouroboros-consensus-shelley
     , ouroboros-network
     , parallel
+    , plutus-ledger-api
     , profunctors
     , stm
     , stm-delay
     , text
+    , these
     , time
     , transformers
+    , typed-protocols
     , vector
     , witherable
 
-executable marlowesyncd
+executable chainseekd
   import: lang
   hs-source-dirs:   app
   main-is: Main.hs
@@ -118,12 +119,35 @@ executable marlowesyncd
     , cardano-crypto-wrapper
     , cardano-ledger-byron
     , hasql
+    , hasql-pool
     , marlowe-chain-sync
+    , marlowe-protocols
+    , network
     , optparse-applicative
     , ouroboros-network
     , stm
     , text
     , time
     , transformers
-  ghc-options:
-    -threaded
+
+executable example-client
+  import: lang
+  hs-source-dirs: example-client
+  main-is: Main.hs
+  other-modules:
+    SkippingBlocks
+    FollowingUTxOs
+    Paths_marlowe_chain_sync
+  autogen-modules:
+    Paths_marlowe_chain_sync
+  build-depends:
+      base >= 4.9 && < 5
+    , bytestring
+    , cardano-api
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , network
+    , optparse-applicative
+    , text
+    , these
+    , typed-protocols

@@ -6,6 +6,7 @@ module Options
 import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
@@ -16,6 +17,8 @@ data Options = Options
   , databaseUri       :: !String
   , genesisConfigHash :: !Text
   , genesisConfigFile :: !FilePath
+  , host              :: !HostName
+  , port              :: !PortNumber
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -23,7 +26,9 @@ getOptions version = do
   defaultNetworkId <- O.value . fromMaybe Mainnet <$> readNetworkId
   defaultSocketPath <- maybe mempty O.value <$> readSocketPath
   defaultDatabaseUri <- maybe mempty O.value <$> readDatabaseUri
-  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version
+  defaultHost <- O.value . fromMaybe "127.0.0.1" <$> readHost
+  defaultPort <- O.value . fromMaybe 3715 <$> readPort
+  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort version
   where
     readNetworkId :: IO (Maybe NetworkId)
     readNetworkId = do
@@ -44,13 +49,27 @@ getOptions version = do
         Just "" -> Nothing
         _       -> value
 
+    readHost :: IO (Maybe HostName)
+    readHost = do
+      value <- lookupEnv "CHAIN_SYNC_HOST"
+      pure case value of
+        Just "" -> Nothing
+        _       -> value
+
+    readPort :: IO (Maybe PortNumber)
+    readPort = do
+      value <- lookupEnv "CHAIN_SYNC_PORT"
+      pure $ readMaybe =<< value
+
 parseOptions
   :: O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.OptionFields String
+  -> O.Mod O.OptionFields HostName
+  -> O.Mod O.OptionFields PortNumber
   -> String
   -> O.ParserInfo Options
-parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.info parser infoMod
+parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort version = O.info parser infoMod
   where
     parser :: O.Parser Options
     parser = O.helper
@@ -61,11 +80,13 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               <*> databaseUriOption
               <*> genesisConfigHashOption
               <*> genesisConfigFileOption
+              <*> hostOption
+              <*> portOption
           )
       where
         versionOption :: O.Parser (a -> a)
         versionOption = O.infoOption
-          ("marlowesyncd " <> version)
+          ("chainseekd " <> version)
           (O.long "version" <> O.help "Show version.")
 
         socketPathOption :: O.Parser FilePath
@@ -74,6 +95,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
             options :: O.Mod O.OptionFields FilePath
             options = mconcat
               [ O.long "socket-path"
+              , O.short 's'
               , O.metavar "SOCKET_FILE"
               , defaultSocketPath
               , O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable."
@@ -85,6 +107,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
             options :: O.Mod O.OptionFields FilePath
             options = mconcat
               [ O.long "database-uri"
+              , O.short 'd'
               , O.metavar "DATABASE_URI"
               , defaultDatabaseUri
               , O.help "URI of the database where the chain information is saved."
@@ -119,14 +142,33 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
             options :: O.Mod O.OptionFields NetworkId
             options = mconcat
               [ O.long "testnet-magic"
+              , O.short 'm'
               , O.metavar "INTEGER"
               , defaultNetworkId
               , O.help "Testnet network ID magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable."
               ]
 
+        portOption :: O.Parser PortNumber
+        portOption = O.option O.auto $ mconcat
+          [ O.long "port-number"
+          , O.short 'p'
+          , defaultPort
+          , O.metavar "PORT_NUMBER"
+          , O.help "The port number to serve the chain seek protocol on"
+          ]
+
+        hostOption :: O.Parser HostName
+        hostOption = O.strOption $ mconcat
+          [ O.long "host"
+          , O.short 'h'
+          , defaultHost
+          , O.metavar "HOST_NAME"
+          , O.help "The hostname to serve the chain seek protocol on"
+          ]
+
     infoMod :: O.InfoMod Options
     infoMod = mconcat
       [ O.fullDesc
-      , O.progDesc "Chain sync client for Marlowe Runtime."
-      , O.header "marlowesyncd : a chain sync client for the Marlowe Runtime."
+      , O.progDesc "Chain seek server for Marlowe Runtime."
+      , O.header "chainseekd : a chain seek server for the Marlowe Runtime."
       ]

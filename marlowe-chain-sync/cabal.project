@@ -1,9 +1,13 @@
 -- run `nix flake lock --update-input hackageNix` after updating index-state.
 index-state: 2022-02-18T00:00:00Z
 
-packages: .
+packages: marlowe-chain-sync.cabal
+          marlowe-protocols/marlowe-protocols.cabal
 
 package marlowe-chain-sync
+  ghc-options: -Werror
+
+package marlowe-protocols
   ghc-options: -Werror
 
 package cardano-crypto-praos

@@ -93,8 +93,8 @@
             port = 3001;
           };
 
-          run-marlowesyncd = pkgs.writeShellScriptBin "run-marlowesyncd" ''
-            cabal run marlowesyncd -- --genesis-config-file $BYRON_GENESIS \
+          run-chainseekd = pkgs.writeShellScriptBin "run-chainseekd" ''
+            cabal run chainseekd -- --genesis-config-file $BYRON_GENESIS \
                                       --genesis-config-file-hash $BYRON_GENESIS_HASH
           '';
 
@@ -105,7 +105,7 @@
             buildInputs = with pkgs; [
               nixpkgs-fmt
               run-node
-              run-marlowesyncd
+              run-chainseekd
               docker-compose
               postgresql
               sqitchPg

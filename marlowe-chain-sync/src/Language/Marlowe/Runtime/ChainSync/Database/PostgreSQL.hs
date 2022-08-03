@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo             #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
@@ -15,48 +16,63 @@ import Cardano.Api (AddressAny, AsType (..), AssetId (..), AssetName (..), Block
                     TxMetadataInEra (..), TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..),
                     TxReturnCollateral (..), TxScriptValidity (..), TxValidityLowerBound (..),
                     TxValidityUpperBound (..), getTxBody, getTxId, hashScriptData, selectLovelace, valueToList)
-import Cardano.Api.Shelley (Hash (..), Tx (..), toShelleyTxIn)
-
-import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString)
+import Cardano.Api.Shelley (Hash (..), Tx (..), toPlutusData, toShelleyTxIn)
+import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString, unsafeDeserialize')
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
+import Control.Foldl (Fold (Fold))
+import qualified Control.Foldl as Fold
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Int (Int16, Int64)
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.These (These (..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Hasql.Session (Session, sql, statement)
+import Data.Void (Void)
+import Hasql.Session (Session)
 import Hasql.Statement (refineResult)
-import Hasql.TH (maybeStatement, resultlessStatement, vectorStatement)
+import Hasql.TH (foldStatement, maybeStatement, resultlessStatement, singletonStatement, vectorStatement)
+import Hasql.Transaction (Transaction)
+import qualified Hasql.Transaction as HT
+import qualified Hasql.Transaction.Sessions as TS
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
                                                     CommitRollback (..), DatabaseQueries (DatabaseQueries),
                                                     GetGenesisBlock (..), GetHeaderAtPoint (..),
-                                                    GetIntersectionPoints (..))
+                                                    GetIntersectionPoints (..), MoveClient (..), MoveResult (..),
+                                                    hoistCommitBlocks, hoistCommitGenesisBlock, hoistCommitRollback,
+                                                    hoistGetGenesisBlock, hoistGetHeaderAtPoint,
+                                                    hoistGetIntersectionPoints, hoistMoveClient)
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
+import Numeric.Natural (Natural)
 import Ouroboros.Network.Point (WithOrigin (..))
+import Prelude hiding (init)
 
 -- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries :: GenesisBlock -> DatabaseQueries Session
 databaseQueries genesisBlock = DatabaseQueries
- (commitRollback genesisBlock)
- commitBlocks
- commitGenesisBlock
- getHeaderAtPoint
- getIntersectionPoints
- getGenesisBlock
+  (hoistCommitRollback (TS.transaction TS.ReadCommitted TS.Write) $ commitRollback genesisBlock)
+  (hoistCommitBlocks (TS.transaction TS.ReadCommitted TS.Write) commitBlocks)
+  (hoistCommitGenesisBlock (TS.transaction TS.ReadCommitted TS.Write) commitGenesisBlock)
+  (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
+  (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
+  (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
+  (hoistMoveClient (TS.transaction TS.ReadCommitted TS.Read) moveClient)
 
 -- GetGenesisBlock
 
-getGenesisBlock :: GetGenesisBlock Session
-getGenesisBlock = GetGenesisBlock $ statement () $ refineResult (decodeResults . V.toList)
+getGenesisBlock :: GetGenesisBlock Transaction
+getGenesisBlock = GetGenesisBlock $ HT.statement () $ refineResult (decodeResults . V.toList)
   [vectorStatement|
     SELECT block.id :: bytea
          , tx.id :: bytea
@@ -82,11 +98,11 @@ getGenesisBlock = GetGenesisBlock $ statement () $ refineResult (decodeResults .
 
 -- GetHeaderAtPoint
 
-getHeaderAtPoint :: GetHeaderAtPoint Session
+getHeaderAtPoint :: GetHeaderAtPoint Transaction
 getHeaderAtPoint = GetHeaderAtPoint \case
   ChainPointAtGenesis -> pure Origin
   point@(ChainPoint slotNo hash) ->
-    statement (slotNoToParam slotNo, headerHashToParam hash) $ refineResult decodeResults
+    HT.statement (slotNoToParam slotNo, headerHashToParam hash) $ refineResult decodeResults
       [maybeStatement|
         SELECT block.blockNo :: bigint
           FROM chain.block AS block
@@ -110,8 +126,8 @@ decodeAddressAny address = case deserialiseFromRawBytes AsAddressAny address of
 
 -- GetIntersectionPoints
 
-getIntersectionPoints :: GetIntersectionPoints Session
-getIntersectionPoints = GetIntersectionPoints $ statement () $ rmap decodeResults
+getIntersectionPoints :: GetIntersectionPoints Transaction
+getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeResults
   [vectorStatement|
     SELECT slotNo :: bigint, id :: bytea
     FROM   chain.block
@@ -125,15 +141,379 @@ getIntersectionPoints = GetIntersectionPoints $ statement () $ rmap decodeResult
     decodeResult :: (Int64, ByteString) -> ChainPoint
     decodeResult (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
 
+-- MoveClient
+
+moveClient :: MoveClient Transaction
+moveClient = MoveClient performMoveWithRollbackCheck
+
+performMoveWithRollbackCheck :: Api.ChainPoint -> Api.Move err result -> Transaction (MoveResult err result)
+performMoveWithRollbackCheck point move = do
+  tip <- getTip
+  getRollbackPoint >>= \case
+    Nothing -> performMove move point >>= \case
+      MoveAbort err            -> pure $ Reject err tip
+      MoveArrive point' result -> pure $ RollForward result point' tip
+      MoveWait                 -> pure $ Wait tip
+    Just rollbackPoint -> pure $ RollBack rollbackPoint tip
+  where
+    getRollbackPoint :: Transaction (Maybe Api.ChainPoint)
+    getRollbackPoint = case pointParams of
+      Nothing -> pure Nothing
+      Just pointParams' -> fmap decodeChainPoint <$> HT.statement pointParams'
+        [maybeStatement|
+          WITH RECURSIVE rollbacks AS
+            ( SELECT *
+                FROM chain.block
+              WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
+              UNION
+              SELECT block.*
+                FROM chain.block AS block
+                JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
+            )
+          SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+            FROM rollbacks
+          WHERE rollbackToSlot IS NULL
+        |]
+
+    getTip :: Transaction Api.ChainPoint
+    getTip = decodeChainPoint <$> HT.statement ()
+      [singletonStatement|
+        SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+          FROM chain.block
+          WHERE rollbackToSlot IS NULL
+          ORDER BY slotNo DESC
+          LIMIT 1
+      |]
+
+    pointParams :: Maybe (Int64, ByteString)
+    pointParams = case point of
+      Api.Genesis                                                               -> Nothing
+      Api.At (Api.BlockHeader (Api.SlotNo slotNo) (Api.BlockHeaderHash hash) _) -> Just (fromIntegral slotNo, hash)
+
+data PerformMoveResult err result
+  = MoveWait
+  | MoveAbort err
+  | MoveArrive Api.BlockHeader result
+
+performMove :: Api.Move err result -> Api.ChainPoint -> Transaction (PerformMoveResult err result)
+performMove = \case
+  Api.Fork left right          -> performFork left right
+  Api.AdvanceSlots slots       -> performAdvanceSlots slots
+  Api.AdvanceBlocks blocks     -> performAdvanceBlocks blocks
+  Api.FindConsumingTx txOutRef -> performFindConsumingTx txOutRef
+  Api.FindTx txId              -> performFindTx txId
+  Api.Intersect points         -> performIntersect points
+
+performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
+performFork left right point = do
+  leftMoveResult <- performMove left point
+  rightMoveResult <- performMove right point
+  let
+    alignResults leftHeader leftResult rightHeader rightResult = case compare leftHeader rightHeader of
+      EQ -> MoveArrive leftHeader $ These leftResult rightResult
+      LT -> MoveArrive leftHeader $ This leftResult
+      GT -> MoveArrive rightHeader $ That rightResult
+  pure case (leftMoveResult, rightMoveResult) of
+    (MoveAbort leftErr, MoveAbort rightErr)                                -> MoveAbort $ These leftErr rightErr
+    (MoveAbort leftErr, _)                                                 -> MoveAbort $ This leftErr
+    (_, MoveAbort rightErr)                                                -> MoveAbort $ That rightErr
+    (MoveArrive leftHeader leftResult, MoveArrive rightHeader rightResult) -> alignResults leftHeader leftResult rightHeader rightResult
+    (MoveArrive leftHeader leftResult, MoveWait)                           -> MoveArrive leftHeader $ This leftResult
+    (MoveWait, MoveArrive rightHeader rightResult)                         -> MoveArrive rightHeader $ That rightResult
+    _                                                                      -> MoveWait
+
+performAdvanceSlots :: Natural -> Api.ChainPoint -> Transaction (PerformMoveResult Void ())
+performAdvanceSlots slots point = do
+  decodeAdvance <$> HT.statement (fromIntegral slots + pointSlot point)
+    [maybeStatement|
+      SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+        FROM chain.block
+      WHERE slotNo >= $1 :: bigint
+        AND rollbackToBlock IS NULL
+      ORDER BY slotNo
+      LIMIT 1
+    |]
+
+performAdvanceBlocks :: Natural -> Api.ChainPoint -> Transaction (PerformMoveResult Void ())
+performAdvanceBlocks blocks point = do
+  decodeAdvance <$> HT.statement (pointSlot point, fromIntegral blocks)
+    [maybeStatement|
+      SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+        FROM chain.block
+      WHERE slotNo >= $1 :: bigint
+        AND rollbackToBlock IS NULL
+      ORDER BY slotNo
+      LIMIT 1
+      OFFSET $2 :: int
+    |]
+
+performFindConsumingTx :: Api.TxOutRef -> Api.ChainPoint -> Transaction (PerformMoveResult Api.UTxOError Api.Transaction)
+performFindConsumingTx Api.TxOutRef{..} point = do
+  initialResult <- HT.statement (pointSlot point, Api.unTxId txId, fromIntegral txIx) $
+    [foldStatement|
+      SELECT block.slotNo :: bigint?
+           , block.id :: bytea?
+           , block.blockNo :: bigint?
+           , tx.id :: bytea?
+           , tx.validityLowerBound :: bigint?
+           , tx.validityUpperBound :: bigint?
+           , tx.metadataKey1564 :: bytea?
+           , asset.policyId :: bytea?
+           , asset.name :: bytea?
+           , assetMint.quantity :: bigint?
+        FROM chain.txOut AS txOut
+        LEFT JOIN chain.txIn      AS txIn      ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
+        LEFT JOIN chain.tx        AS tx        ON tx.id = txIn.txInId AND tx.slotNo = txIn.slotNo
+        LEFT JOIN chain.block     AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
+        LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
+        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
+        WHERE txOut.slotNo <= $1 :: bigint
+          AND block.rollbackToBlock IS NULL
+          AND txOut.txId = $2 :: bytea
+          AND txOut.txIx = $3 :: smallint
+    |] foldTx
+  case initialResult of
+    MoveWait -> pure MoveWait
+    MoveAbort err -> pure $ MoveAbort err
+    MoveArrive header@Api.BlockHeader{..} tx@Api.Transaction{txId = spendingTxId} ->  do
+      txIns <- queryTxIns slotNo spendingTxId
+      txOuts <- queryTxOuts slotNo spendingTxId
+      pure $ MoveArrive header tx { Api.inputs = txIns, Api.outputs = txOuts }
+  where
+    foldTx :: Fold ReadTxRow (PerformMoveResult Api.UTxOError Api.Transaction)
+    foldTx = Fold foldTx' (MoveAbort Api.UTxONotFound) id
+
+    foldTx'
+      :: PerformMoveResult Api.UTxOError Api.Transaction
+      -> ReadTxRow
+      -> PerformMoveResult Api.UTxOError Api.Transaction
+    foldTx' (MoveAbort (Api.UTxOSpent spendingTxId)) _ = MoveAbort $ Api.UTxOSpent spendingTxId
+    foldTx' MoveWait _                                 = MoveWait
+    foldTx' (MoveAbort Api.UTxONotFound) row           = readFirstTxRow row
+    foldTx' (MoveArrive header tx) row                 = MoveArrive header $ mergeTxRow tx row
+
+    readFirstTxRow :: ReadTxRow -> PerformMoveResult Api.UTxOError Api.Transaction
+    readFirstTxRow
+      ( Just slotNo
+      , Just hash
+      , Just blockNo
+      , Just spendingTxId
+      , validityLowerBound
+      , validityUpperBound
+      , _
+      , policyId
+      , tokenName
+      , quantity
+      ) | slotNo <= pointSlot point = MoveAbort $ Api.UTxOSpent $ Api.TxId spendingTxId
+        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Api.Transaction
+          { txId = Api.TxId spendingTxId
+          , validityRange = case (validityLowerBound, validityUpperBound) of
+              (Nothing, Nothing) -> Api.Unbounded
+              (Just lb, Nothing) -> Api.MinBound $ decodeSlotNo lb
+              (Nothing, Just ub) -> Api.MaxBound $ decodeSlotNo ub
+              (Just lb, Just ub) -> Api.MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+          , metadata = Nothing
+          , inputs = Set.empty
+          , outputs = []
+          , mintedTokens = decodeTokens policyId tokenName quantity
+          }
+    readFirstTxRow _ = MoveWait
+
+performFindTx :: Api.TxId -> Api.ChainPoint -> Transaction (PerformMoveResult Api.TxError Api.Transaction)
+performFindTx txId point = do
+  initialResult <- HT.statement (Api.unTxId txId) $
+    [foldStatement|
+      SELECT block.slotNo :: bigint?
+           , block.id :: bytea?
+           , block.blockNo :: bigint?
+           , tx.id :: bytea?
+           , tx.validityLowerBound :: bigint?
+           , tx.validityUpperBound :: bigint?
+           , tx.metadataKey1564 :: bytea?
+           , asset.policyId :: bytea?
+           , asset.name :: bytea?
+           , assetMint.quantity :: bigint?
+        FROM chain.tx             AS tx
+        JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
+        LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
+        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
+        WHERE block.rollbackToBlock IS NULL
+          AND tx.id = $1 :: bytea
+    |] foldTx
+  case initialResult of
+    MoveWait -> pure MoveWait
+    MoveAbort err -> pure $ MoveAbort err
+    MoveArrive header@Api.BlockHeader{..} tx ->  do
+      txIns <- queryTxIns slotNo txId
+      txOuts <- queryTxOuts slotNo txId
+      pure $ MoveArrive header tx { Api.inputs = txIns, Api.outputs = txOuts }
+  where
+    foldTx :: Fold ReadTxRow (PerformMoveResult Api.TxError Api.Transaction)
+    foldTx = Fold foldTx' (MoveAbort Api.TxNotFound) id
+
+    foldTx'
+      :: PerformMoveResult Api.TxError Api.Transaction
+      -> ReadTxRow
+      -> PerformMoveResult Api.TxError Api.Transaction
+    foldTx' (MoveAbort (Api.TxInPast header)) _ = MoveAbort $ Api.TxInPast header
+    foldTx' MoveWait _                          = MoveWait
+    foldTx' (MoveAbort Api.TxNotFound) row      = readFirstTxRow row
+    foldTx' (MoveArrive header tx) row          = MoveArrive header $ mergeTxRow tx row
+
+    readFirstTxRow :: ReadTxRow -> PerformMoveResult Api.TxError Api.Transaction
+    readFirstTxRow
+      ( Just slotNo
+      , Just hash
+      , Just blockNo
+      , Just spendingTxId
+      , validityLowerBound
+      , validityUpperBound
+      , _
+      , policyId
+      , tokenName
+      , quantity
+      ) | slotNo <= pointSlot point = MoveAbort $ Api.TxInPast $ decodeBlockHader (slotNo, hash, blockNo)
+        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Api.Transaction
+          { txId = Api.TxId spendingTxId
+          , validityRange = case (validityLowerBound, validityUpperBound) of
+              (Nothing, Nothing) -> Api.Unbounded
+              (Just lb, Nothing) -> Api.MinBound $ decodeSlotNo lb
+              (Nothing, Just ub) -> Api.MaxBound $ decodeSlotNo ub
+              (Just lb, Just ub) -> Api.MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+          , metadata = Nothing
+          , inputs = Set.empty
+          , outputs = []
+          , mintedTokens = decodeTokens policyId tokenName quantity
+          }
+    readFirstTxRow _ = MoveWait
+
+mergeTxRow :: Api.Transaction -> ReadTxRow -> Api.Transaction
+mergeTxRow tx@Api.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, tokenName, quantity) = tx
+  { Api.mintedTokens = mintedTokens <> decodeTokens policyId tokenName quantity
+  }
+
+queryTxIns :: Api.SlotNo -> Api.TxId -> Transaction (Set.Set Api.TransactionInput)
+queryTxIns slotNo txInId = HT.statement (Api.unTxId txInId, fromIntegral slotNo) $
+  [foldStatement|
+    SELECT txOutId :: bytea, txOutIx :: smallint, redeemerDatumBytes :: bytea?
+      FROM chain.txIn as txIn
+     WHERE txInId = $1 :: bytea AND slotNo = $2 :: bigint
+  |] (Fold.foldMap (Set.singleton . decodeTxIn) id)
+  where
+    decodeTxIn :: ReadTxInRow -> Api.TransactionInput
+    decodeTxIn (txId, txIx, redeemerDatumBytes) = Api.TransactionInput
+      { txId = Api.TxId txId
+      , txIx = fromIntegral txIx
+      , redeemer = Api.Redeemer . Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
+      }
+
+queryTxOuts :: Api.SlotNo -> Api.TxId -> Transaction [Api.TransactionOutput]
+queryTxOuts slotNo txId = HT.statement (Api.unTxId txId, fromIntegral slotNo) $
+  [foldStatement|
+    SELECT txOut.txIx :: smallint
+         , txOut.address :: bytea
+         , txOut.lovelace :: bigint
+         , txOut.datumHash :: bytea?
+         , txOut.datumBytes :: bytea?
+         , asset.policyId :: bytea?
+         , asset.name :: bytea?
+         , assetOut.quantity :: bigint?
+      FROM chain.txOut         AS txOut
+      LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+      LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+     WHERE txOut.txId = $1 :: bytea AND txOut.slotNo = $2 :: bigint
+     ORDER BY txIx
+  |] (Fold foldRow IntMap.empty (fmap snd . IntMap.toAscList))
+  where
+    foldRow :: IntMap Api.TransactionOutput -> ReadTxOutRow -> IntMap Api.TransactionOutput
+    foldRow acc (txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
+      IntMap.alter (Just . maybe newTxOut mergeTxOut) (fromIntegral txIx) acc
+      where
+        newTxOut = Api.TransactionOutput
+          { address = Api.Address address
+          , assets = Api.Assets
+              { ada = Api.Lovelace $ fromIntegral lovelace
+              , tokens = decodeTokens policyId tokenName quantity
+              }
+          , datumHash = Api.DatumHash <$> datumHash
+          , datum = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
+          }
+
+        mergeTxOut txOut@Api.TransactionOutput{assets = assets@Api.Assets{..}} = txOut
+          { Api.assets = assets
+              { Api.tokens = tokens <> decodeTokens policyId tokenName quantity
+              }
+          }
+
+decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Api.Tokens
+decodeTokens (Just policyId) (Just tokenName) (Just quantity) =
+  Api.Tokens $ Map.singleton
+    (Api.AssetId (Api.PolicyId policyId) (Api.TokenName tokenName))
+    (Api.Quantity $ fromIntegral quantity)
+decodeTokens _ _ _ = mempty
+
+type ReadTxRow =
+  ( Maybe Int64      -- Tx's Block's SlotNo
+  , Maybe ByteString -- Tx's Block's BlockHeaderHash
+  , Maybe Int64      -- Tx's Block's BlockNo
+
+  , Maybe ByteString -- Tx's id
+  , Maybe Int64      -- Tx's validityLowerBound
+  , Maybe Int64      -- Tx's validityUpperBound
+  , Maybe ByteString -- Tx's metadataKey1564
+
+  , Maybe ByteString -- Tx's minted Token's PolicyId
+  , Maybe ByteString -- Tx's minted Token's TokenName
+  , Maybe Int64      -- Tx's minted Token's Quantity
+  )
+
+type ReadTxInRow =
+  ( ByteString       -- TxIn's TxId
+  , Int16            -- TxIn's TxIx
+  , Maybe ByteString -- TxIn's redeemerDatumBytes
+  )
+
+type ReadTxOutRow =
+  ( Int16            -- TxOut's TxIx
+  , ByteString       -- TxOut's Address
+  , Int64            -- TxOut's Lovelace
+  , Maybe ByteString -- TxOut's DatumHash
+  , Maybe ByteString -- TxOut's datumBytes
+  , Maybe ByteString -- TxOut's Token's PolicyId
+  , Maybe ByteString -- TxOut's Token's TokenName
+  , Maybe Int64      -- TxOut's Token's Quantity
+  )
+
+performIntersect :: [Api.BlockHeader] -> Api.ChainPoint -> Transaction (PerformMoveResult Api.IntersectError ())
+performIntersect points point = do
+    let
+      params =
+        ( V.fromList $ (\Api.BlockHeader{..} -> fromIntegral slotNo) <$> points
+        , V.fromList $ (\Api.BlockHeader{..} -> Api.unBlockHeaderHash headerHash) <$> points
+        , pointSlot point
+        )
+    decodeAdvance <$> HT.statement params
+      [maybeStatement|
+        WITH points (slotNo, id) AS
+          ( SELECT * FROM UNNEST ($1 :: bigint[], $2 :: bytea[])
+          )
+        SELECT block.slotNo :: bigint, block.id :: bytea, block.blockNo :: bigint
+          FROM chain.block AS block
+          JOIN points AS point USING (slotNo, id)
+          WHERE rollbackToBlock IS NULL
+            AND block.slotNo > $3 :: bigint
+          ORDER BY slotNo DESC
+          LIMIT 1
+      |]
+
 -- CommitRollback
 
-commitRollback :: GenesisBlock -> CommitRollback Session
+commitRollback :: GenesisBlock -> CommitRollback Transaction
 commitRollback genesisBlock = CommitRollback \case
   ChainPointAtGenesis -> do
     -- truncate all tables
-    sql $ BS.intercalate "\n"
-      [ "BEGIN;"
-      , "TRUNCATE TABLE chain.tx;"
+    HT.sql $ BS.intercalate "\n"
+      [ "TRUNCATE TABLE chain.tx;"
       , "TRUNCATE TABLE chain.txOut;"
       , "TRUNCATE TABLE chain.txIn;"
       , "TRUNCATE TABLE chain.asset RESTART IDENTITY CASCADE;"
@@ -141,9 +521,7 @@ commitRollback genesisBlock = CommitRollback \case
       ]
     -- re-add the genesis block (faster than excluding the info using DELETE FROM ... WHERE ...)
     runCommitGenesisBlock commitGenesisBlock genesisBlock
-    -- commit the transaction
-    sql "COMMIT;"
-  ChainPoint slotNo hash -> statement (slotNoToParam slotNo, headerHashToParam hash)
+  ChainPoint slotNo hash -> HT.statement (slotNoToParam slotNo, headerHashToParam hash)
     [resultlessStatement|
       WITH blockUpdates AS
         ( UPDATE chain.block
@@ -178,7 +556,7 @@ commitRollback genesisBlock = CommitRollback \case
 
 -- CommitGenesisBlock
 
-commitGenesisBlock :: CommitGenesisBlock Session
+commitGenesisBlock :: CommitGenesisBlock Transaction
 commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
   let
     genesisBlockTxsList = Set.toList genesisBlockTxs
@@ -189,7 +567,7 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
       , V.fromList $ lovelaceToParam . genesisTxLovelace <$> genesisBlockTxsList
       )
   in
-    statement params
+    HT.statement params
       [resultlessStatement|
         WITH newBlock AS
           ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
@@ -279,7 +657,12 @@ data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
 -- For how to do this with postgresql-libpg. You can expose the underlying
 -- libpg connection from a `Session` using `withLibPQConnection`
 -- (see https://hackage.haskell.org/package/hasql-1.6.0.1/docs/Hasql-Connection.html#v:withLibPQConnection)
-commitBlocks :: CommitBlocks Session
+--
+-- NOTE: If this query ever gets refactored, it is extremely important that all
+-- writes are atomic at the block level (i.e. it should be impossible for a
+-- block to be partially saved). This is because the server may be shut down at
+-- any moment, and the connection to the database will be severed.
+commitBlocks :: CommitBlocks Transaction
 commitBlocks = CommitBlocks \blocks ->
   let
     txs = extractTxs =<< blocks
@@ -288,7 +671,7 @@ commitBlocks = CommitBlocks \blocks ->
     assetOuts = extractAssetOuts =<< txOuts
     assetMints = extractAssetMints =<< txs
    in
-    statement (params blocks txs txOuts txIns assetOuts assetMints)
+    HT.statement (params blocks txs txOuts txIns assetOuts assetMints)
       [resultlessStatement|
         WITH blockInputs (id, slotNo, blockNo) AS
           ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bigint[], $3 :: bigint[])
@@ -562,3 +945,24 @@ slotNoToParam (SlotNo slotNo) = fromIntegral slotNo
 
 txIxToParam :: TxIx -> Int16
 txIxToParam (TxIx txIx) = fromIntegral txIx
+
+decodeBlockHader :: (Int64, ByteString, Int64) -> Api.BlockHeader
+decodeBlockHader (slotNo, hash, blockNo) = Api.BlockHeader (decodeSlotNo slotNo) (Api.BlockHeaderHash hash) (decodeBlockNo blockNo)
+
+decodeChainPoint :: (Int64, ByteString, Int64) -> Api.ChainPoint
+decodeChainPoint (-1, _, _) = Api.Genesis
+decodeChainPoint row        = Api.At $ decodeBlockHader row
+
+decodeSlotNo :: Int64 -> Api.SlotNo
+decodeSlotNo = Api.SlotNo . fromIntegral
+
+decodeBlockNo :: Int64 -> Api.BlockNo
+decodeBlockNo = Api.BlockNo . fromIntegral
+
+pointSlot :: Api.ChainPoint -> Int64
+pointSlot Api.Genesis                  = -1
+pointSlot (Api.At Api.BlockHeader{..}) = fromIntegral slotNo
+
+decodeAdvance :: Maybe (Int64, ByteString, Int64) -> PerformMoveResult err ()
+decodeAdvance Nothing    = MoveWait
+decodeAdvance (Just row) = MoveArrive (decodeBlockHader row) ()
