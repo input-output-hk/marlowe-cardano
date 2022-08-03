@@ -3,9 +3,9 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  # inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli cardano-wallet dev-scripts;
-  inherit (packages) pkgs marlowe docs cardano-wallet marlowe-cli dev-scripts;
-  inherit (dev-scripts) start-cardano-node start-wallet;
+  # inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli dev-scripts;
+  inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts;
+  inherit (dev-scripts) start-cardano-node;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
@@ -100,9 +100,7 @@ let
     easyPS.purs-tidy
     easyPS.purescript-language-server
     start-cardano-node
-    start-wallet
     cardano-repo-tool
-    cardano-wallet
     fixPngOptimization
     fix-prettier
     fix-purs-tidy

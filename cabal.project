@@ -166,23 +166,6 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-wallet
-  tag: v2022-07-01
-  --sha256: 0ii631ak757kjzs7jm625zfv2g28ffjrfkmgslxbbgvwpqxkdbaj
-  subdir:
-    lib/cli
-    lib/core
-    lib/core-integration
-    lib/dbvar
-    lib/launcher
-    lib/numeric
-    lib/shelley
-    lib/strict-non-empty-containers
-    lib/test-utils
-    lib/text-class
-
-source-repository-package
-  type: git
   location: https://github.com/input-output-hk/cardano-node
   tag: 1.35.2
   --sha256: 01a5qdrmsag18s2mlf8axfbrag59j2fp6xyc89pwmzgs7x77ldsr
@@ -376,54 +359,7 @@ source-repository-package
   tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
   --sha256: 1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm
 
-
--- cardano-wallet dependencies:
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/hjsonpointer
-  tag: bb99294424e0c5b3c2942c743b545e4b01c12ce8
-  --sha256: 11z5s4xmm6cxy6sdcf9ly4lr0qh3c811hpm0bmlp4c3yq8v3m9rk
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/hjsonschema
-  tag: 1546af7fc267d5eea805ef223dd2b59ac120b784
-  --sha256: 0sdikhsq6nnhmmvcpwzzrwfn9cn7rg75629qnrx01i5vm5ci4314
-
-source-repository-package
-  type: git
-  location: https://github.com/haskell-works/hw-aeson
-  tag: d99d2f3e39a287607418ae605b132a3deb2b753f
-  --sha256: 1vxqcwjg9q37wbwi27y9ba5163lzfz51f1swbi0rp681yg63zvn4
-
-source-repository-package
-  type: git
-  location: https://github.com/biocad/servant-openapi3
-  tag: 4165b837d3a71debd1059c3735460075840000b5
-  --sha256: 1dngrr353kjhmwhn0b289jzqz5rf32llwcv79zcyq15ldpqpbib9
-
-source-repository-package
-  type: git
-  location: https://github.com/paolino/openapi3
-  tag: c30d0de6875d75edd64d1aac2272886528bc492d
-  --sha256: 0b0fzj5vrnfrc8qikabxhsnp4p8lrjpssblbh2rb7aji5hzzfli9
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-addresses
-  tag: b6f2f3cef01a399376064194fd96711a5bdba4a7
-  --sha256: 10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045
-  subdir: command-line
-          core
-
-source-repository-package
-    type: git
-    location: https://github.com/input-output-hk/bech32
-    tag: ab61914443e5f53624d3b2995767761b3f68e576
-    --sha256: 0isqh5s6rdhmqa3jhvc32zb3kvzy149hmzddx1ld9f9jhls4f3wg
-    subdir: bech32
-            bech32-th
+-- marlowe-cli only
 
 source-repository-package
   type: git
@@ -433,11 +369,11 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-sl-x509
-  tag: a91add165152fa36f08e95fafe7da24f1dba4690
-  --sha256: 1ia8vlqghis92cla8qmqa6kh8f3jn29b01fshyk5hmgy5373s684
-
-
+  location: https://github.com/input-output-hk/cardano-addresses
+  tag: b6f2f3cef01a399376064194fd96711a5bdba4a7
+  --sha256: 10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045
+  subdir: command-line
+          core
 
 constraints:
     hedgehog >= 1.0

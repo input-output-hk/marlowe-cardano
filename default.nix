@@ -29,10 +29,9 @@
 let
   inherit (packages) pkgs marlowe sources;
   inherit (marlowe) haskell;
-  inherit (haskell.packages.cardano-wallet.components.exes) cardano-wallet;
 in
 rec {
-  inherit pkgs marlowe cardano-wallet;
+  inherit pkgs marlowe;
 
   inherit (marlowe) cardano-node cardano-cli;
 

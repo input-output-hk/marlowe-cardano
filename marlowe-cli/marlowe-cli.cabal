@@ -86,8 +86,6 @@ library
     cardano-ledger-alonzo,
     cardano-ledger-core,
     cardano-slotting,
-    cardano-wallet,
-    cardano-wallet-core,
     cborg,
     cborg-json,
     containers,

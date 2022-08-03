@@ -60,6 +60,10 @@ import Data.Maybe (fromMaybe)
 import Data.Text
 import Ledger (CurrencySymbol)
 import Options.Applicative (optional)
+import Cardano.Api (AddressAny, NetworkId)
+import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
+import GHC.Generics (Generic)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
 
 
 -- | Configuration for a set of Marlowe tests.
