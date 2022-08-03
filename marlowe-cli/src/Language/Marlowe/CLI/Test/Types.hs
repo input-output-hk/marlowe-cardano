@@ -28,13 +28,11 @@ module Language.Marlowe.CLI.Test.Types (
   MarloweTests(..)
 , ScriptTest(..)
 , ScriptOperation(..)
-, CompanionInstanceInfo(..)
 , TransactionNickname
 ) where
 
 
 import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, StakeAddressReference, Value)
-import Cardano.Wallet.Primitive.Passphrase (Passphrase)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Chan (Chan)
 import Control.Lens (makeLenses)
@@ -44,26 +42,22 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Types (CliError, SomePaymentSigningKey)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input, State, TimeInterval)
-import Plutus.Contract (ContractInstanceId)
-import Plutus.PAB.Webserver.Client (PabClient)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, State, TimeInterval)
 import Plutus.V1.Ledger.Api (PubKeyHash)
 import Plutus.V1.Ledger.Time (DiffMilliSeconds, POSIXTime)
 import Servant.Client (BaseUrl, ClientM)
 
-import qualified Cardano.Wallet.Primitive.Types as W (WalletId)
+import Cardano.Api (AddressAny, NetworkId)
 import Control.Lens.Combinators (Lens')
 import Control.Lens.Lens (lens)
+import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.Map.Strict as M (Map)
 import Data.Maybe (fromMaybe)
 import Data.Text
-import Ledger (CurrencySymbol)
-import Options.Applicative (optional)
-import Cardano.Api (AddressAny, NetworkId)
-import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
+import Ledger (CurrencySymbol)
+import Options.Applicative (optional)
 
 
 -- | Configuration for a set of Marlowe tests.

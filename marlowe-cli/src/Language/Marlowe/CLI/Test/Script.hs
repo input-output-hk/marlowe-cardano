@@ -48,7 +48,6 @@ import qualified Data.Map.Strict as M (lookup)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl)
 import qualified Language.Marlowe.Client as Client
-import Ledger.TimeSlot (SlotConfig)
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo (..), NetworkId (..))
 import Control.Monad.Except (MonadError, throwError)

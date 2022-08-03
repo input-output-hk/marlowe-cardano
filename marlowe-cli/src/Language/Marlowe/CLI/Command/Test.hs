@@ -49,12 +49,10 @@ runTestCommand = runTests
 parseTestCommand :: O.Mod O.OptionFields NetworkId
                  -> O.Mod O.OptionFields FilePath
                  -> O.Parser TestCommand
-parseTestCommand _ _ =
+parseTestCommand network socket =
   O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
-<<<<<<< HEAD
     <> scriptsCommand network socket
-    <> pabsCommand network socket
 
 
 -- | Parser for the "scripts" command.
