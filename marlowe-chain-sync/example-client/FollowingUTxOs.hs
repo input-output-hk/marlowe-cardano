@@ -25,7 +25,7 @@ client = ChainSeekClient stInit
           (TxOutRef "0a3eecbba8c47b5d941a4a06b3661a664c7290c071212365bb0fbc2e8ccd4112" 0, [])
           $ uncons hist
       putStrLn $ "Waiting for UTxO to be consumed: " <> show txOut
-      pure $ SendMsgQueryNext (ConsumeUTxO txOut) (stNext txOut hist') $ pure $ stNext txOut hist'
+      pure $ SendMsgQueryNext (FindConsumingTx txOut) (stNext txOut hist') $ pure $ stNext txOut hist'
 
     stNext txOut hist = ClientStNext
       { recvMsgQueryRejected = \err _ -> case err of

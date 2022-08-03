@@ -197,11 +197,11 @@ data PerformMoveResult err result
 
 performMove :: Api.Move err result -> Api.ChainPoint -> Transaction (PerformMoveResult err result)
 performMove = \case
-  Api.Fork left right      -> performFork left right
-  Api.AdvanceSlots slots   -> performAdvanceSlots slots
-  Api.AdvanceBlocks blocks -> performAdvanceBlocks blocks
-  Api.ConsumeUTxO txOutRef -> performConsumeUTxO txOutRef
-  Api.Intersect points     -> performIntersect points
+  Api.Fork left right          -> performFork left right
+  Api.AdvanceSlots slots       -> performAdvanceSlots slots
+  Api.AdvanceBlocks blocks     -> performAdvanceBlocks blocks
+  Api.FindConsumingTx txOutRef -> performFindConsumingTx txOutRef
+  Api.Intersect points         -> performIntersect points
 
 performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
 performFork left right point = do
@@ -246,8 +246,8 @@ performAdvanceBlocks blocks point = do
       OFFSET $2 :: int
     |]
 
-performConsumeUTxO :: Api.TxOutRef -> Api.ChainPoint -> Transaction (PerformMoveResult Api.UTxOError Api.Transaction)
-performConsumeUTxO Api.TxOutRef{..} point = do
+performFindConsumingTx :: Api.TxOutRef -> Api.ChainPoint -> Transaction (PerformMoveResult Api.UTxOError Api.Transaction)
+performFindConsumingTx Api.TxOutRef{..} point = do
   initialResult <- HT.statement (pointSlot point, Api.unTxId txId, fromIntegral txIx) $
     [foldStatement|
       SELECT block.slotNo :: bigint?
@@ -588,6 +588,11 @@ data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
 -- For how to do this with postgresql-libpg. You can expose the underlying
 -- libpg connection from a `Session` using `withLibPQConnection`
 -- (see https://hackage.haskell.org/package/hasql-1.6.0.1/docs/Hasql-Connection.html#v:withLibPQConnection)
+--
+-- NOTE: If this query ever gets refactored, it is extremely important that all
+-- writes are atomic at the block level (i.e. it should be impossible for a
+-- block to be partially saved). This is because the server may be shut down at
+-- any moment, and the connection to the database will be severed.
 commitBlocks :: CommitBlocks Transaction
 commitBlocks = CommitBlocks \blocks ->
   let

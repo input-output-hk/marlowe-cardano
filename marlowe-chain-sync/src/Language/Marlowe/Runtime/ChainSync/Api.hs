@@ -114,6 +114,14 @@ fromPlutusData (Plutus.List dats)     = List $ fromPlutusData <$> dats
 fromPlutusData (Plutus.I i)           = I i
 fromPlutusData (Plutus.B b)           = B b
 
+-- | Convert to Plutus.V1.Ledger.Api.Data to Datum
+toPlutusData :: Datum -> Plutus.Data
+toPlutusData (Constr i dats) = Plutus.Constr i $ toPlutusData <$> dats
+toPlutusData (Map m)         = Plutus.Map $ bimap toPlutusData toPlutusData <$> m
+toPlutusData (List dats)     = Plutus.List $ toPlutusData <$> dats
+toPlutusData (I i)           = Plutus.I i
+toPlutusData (B b)           = Plutus.B b
+
 -- | A collection of assets transferred by a trasaction output.
 data Assets = Assets
   { ada    :: !Lovelace -- ^ The ADA sent by the tx output.
@@ -254,9 +262,9 @@ data Move err result where
 
   -- | Advance to the block when a tx out is consumed and collect the tx that
   -- consumes the tx out.
-  ConsumeUTxO :: TxOutRef -> Move UTxOError Transaction
+  FindConsumingTx :: TxOutRef -> Move UTxOError Transaction
 
--- | Reasons a 'ConsumeUTxO' request can be rejected.
+-- | Reasons a 'FindConsumingTx' request can be rejected.
 data UTxOError
   = UTxONotFound
   | UTxOSpent TxId
@@ -294,7 +302,7 @@ putMove (SomeQuery move) = case move of
     putWord8 0x03
     put blocks
 
-  ConsumeUTxO txOutRef -> do
+  FindConsumingTx txOutRef -> do
     putWord8 0x04
     put txOutRef
 
@@ -312,7 +320,7 @@ getMove = do
       pure $ SomeQuery $ Fork m1 m2
     0x02 -> SomeQuery . AdvanceSlots <$> get
     0x03 -> SomeQuery . AdvanceBlocks <$> get
-    0x04 -> SomeQuery . ConsumeUTxO <$> get
+    0x04 -> SomeQuery . FindConsumingTx <$> get
     0x05 -> SomeQuery . Intersect <$> get
     _ -> fail $ "Invalid move tag " <> show tag
 
@@ -331,7 +339,7 @@ putResult = \case
       putResult m2 r2
   AdvanceSlots _ -> mempty
   AdvanceBlocks _ -> mempty
-  ConsumeUTxO _ -> put
+  FindConsumingTx _ -> put
   Intersect _ -> mempty
 
 getResult :: forall err result. Move err result -> Get result
@@ -345,7 +353,7 @@ getResult = \case
       _    -> fail $ "Invalid align result tag " <> show tag
   AdvanceSlots _ -> get
   AdvanceBlocks _ -> get
-  ConsumeUTxO _ -> get
+  FindConsumingTx _ -> get
   Intersect _ -> get
 
 putError :: forall err result. Move err result -> err -> Put
@@ -363,7 +371,7 @@ putError = \case
       putError m2 e2
   AdvanceSlots _ -> put
   AdvanceBlocks _ -> put
-  ConsumeUTxO _ -> put
+  FindConsumingTx _ -> put
   Intersect _ -> put
 
 getError :: forall err result. Move err result -> Get err
@@ -377,7 +385,7 @@ getError = \case
       _    -> fail $ "Invalid fork error tag " <> show tag
   AdvanceSlots _ -> get
   AdvanceBlocks _ -> get
-  ConsumeUTxO _ -> get
+  FindConsumingTx _ -> get
   Intersect _ -> get
 
 schemaVersion1_0 :: SchemaVersion
