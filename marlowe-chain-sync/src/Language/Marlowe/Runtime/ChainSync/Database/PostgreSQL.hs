@@ -201,6 +201,7 @@ performMove = \case
   Api.AdvanceSlots slots       -> performAdvanceSlots slots
   Api.AdvanceBlocks blocks     -> performAdvanceBlocks blocks
   Api.FindConsumingTx txOutRef -> performFindConsumingTx txOutRef
+  Api.FindTx txId              -> performFindTx txId
   Api.Intersect points         -> performIntersect points
 
 performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
@@ -318,10 +319,78 @@ performFindConsumingTx Api.TxOutRef{..} point = do
           }
     readFirstTxRow _ = MoveWait
 
-    mergeTxRow :: Api.Transaction -> ReadTxRow -> Api.Transaction
-    mergeTxRow tx@Api.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, tokenName, quantity) = tx
-      { Api.mintedTokens = mintedTokens <> decodeTokens policyId tokenName quantity
-      }
+performFindTx :: Api.TxId -> Api.ChainPoint -> Transaction (PerformMoveResult Api.TxError Api.Transaction)
+performFindTx txId point = do
+  initialResult <- HT.statement (Api.unTxId txId) $
+    [foldStatement|
+      SELECT block.slotNo :: bigint?
+           , block.id :: bytea?
+           , block.blockNo :: bigint?
+           , tx.id :: bytea?
+           , tx.validityLowerBound :: bigint?
+           , tx.validityUpperBound :: bigint?
+           , tx.metadataKey1564 :: bytea?
+           , asset.policyId :: bytea?
+           , asset.name :: bytea?
+           , assetMint.quantity :: bigint?
+        FROM chain.tx             AS tx
+        JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
+        LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
+        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
+        WHERE block.rollbackToBlock IS NULL
+          AND tx.id = $1 :: bytea
+    |] foldTx
+  case initialResult of
+    MoveWait -> pure MoveWait
+    MoveAbort err -> pure $ MoveAbort err
+    MoveArrive header@Api.BlockHeader{..} tx ->  do
+      txIns <- queryTxIns slotNo txId
+      txOuts <- queryTxOuts slotNo txId
+      pure $ MoveArrive header tx { Api.inputs = txIns, Api.outputs = txOuts }
+  where
+    foldTx :: Fold ReadTxRow (PerformMoveResult Api.TxError Api.Transaction)
+    foldTx = Fold foldTx' (MoveAbort Api.TxNotFound) id
+
+    foldTx'
+      :: PerformMoveResult Api.TxError Api.Transaction
+      -> ReadTxRow
+      -> PerformMoveResult Api.TxError Api.Transaction
+    foldTx' (MoveAbort (Api.TxInPast header)) _ = MoveAbort $ Api.TxInPast header
+    foldTx' MoveWait _                          = MoveWait
+    foldTx' (MoveAbort Api.TxNotFound) row      = readFirstTxRow row
+    foldTx' (MoveArrive header tx) row          = MoveArrive header $ mergeTxRow tx row
+
+    readFirstTxRow :: ReadTxRow -> PerformMoveResult Api.TxError Api.Transaction
+    readFirstTxRow
+      ( Just slotNo
+      , Just hash
+      , Just blockNo
+      , Just spendingTxId
+      , validityLowerBound
+      , validityUpperBound
+      , _
+      , policyId
+      , tokenName
+      , quantity
+      ) | slotNo <= pointSlot point = MoveAbort $ Api.TxInPast $ decodeBlockHader (slotNo, hash, blockNo)
+        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Api.Transaction
+          { txId = Api.TxId spendingTxId
+          , validityRange = case (validityLowerBound, validityUpperBound) of
+              (Nothing, Nothing) -> Api.Unbounded
+              (Just lb, Nothing) -> Api.MinBound $ decodeSlotNo lb
+              (Nothing, Just ub) -> Api.MaxBound $ decodeSlotNo ub
+              (Just lb, Just ub) -> Api.MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+          , metadata = Nothing
+          , inputs = Set.empty
+          , outputs = []
+          , mintedTokens = decodeTokens policyId tokenName quantity
+          }
+    readFirstTxRow _ = MoveWait
+
+mergeTxRow :: Api.Transaction -> ReadTxRow -> Api.Transaction
+mergeTxRow tx@Api.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, tokenName, quantity) = tx
+  { Api.mintedTokens = mintedTokens <> decodeTokens policyId tokenName quantity
+  }
 
 queryTxIns :: Api.SlotNo -> Api.TxId -> Transaction (Set.Set Api.TransactionInput)
 queryTxIns slotNo txInId = HT.statement (Api.unTxId txInId, fromIntegral slotNo) $

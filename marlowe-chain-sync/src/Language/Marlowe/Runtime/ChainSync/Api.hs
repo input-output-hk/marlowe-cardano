@@ -264,10 +264,20 @@ data Move err result where
   -- consumes the tx out.
   FindConsumingTx :: TxOutRef -> Move UTxOError Transaction
 
+  -- | Advance to the block containing a transaction.
+  FindTx :: TxId -> Move TxError Transaction
+
 -- | Reasons a 'FindConsumingTx' request can be rejected.
 data UTxOError
   = UTxONotFound
   | UTxOSpent TxId
+  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving anyclass (Binary)
+
+-- | Reasons a 'FindTx' request can be rejected.
+data TxError
+  = TxNotFound
+  | TxInPast BlockHeader
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
@@ -310,6 +320,10 @@ putMove (SomeQuery move) = case move of
     putWord8 0x05
     put points
 
+  FindTx txId -> do
+    putWord8 0x06
+    put txId
+
 getMove :: Get (SomeQuery Move)
 getMove = do
   tag <- getWord8
@@ -322,6 +336,7 @@ getMove = do
     0x03 -> SomeQuery . AdvanceBlocks <$> get
     0x04 -> SomeQuery . FindConsumingTx <$> get
     0x05 -> SomeQuery . Intersect <$> get
+    0x06 -> SomeQuery . Intersect <$> get
     _ -> fail $ "Invalid move tag " <> show tag
 
 putResult :: forall err result. Move err result -> result -> Put
@@ -340,6 +355,7 @@ putResult = \case
   AdvanceSlots _ -> mempty
   AdvanceBlocks _ -> mempty
   FindConsumingTx _ -> put
+  FindTx _ -> put
   Intersect _ -> mempty
 
 getResult :: forall err result. Move err result -> Get result
@@ -354,6 +370,7 @@ getResult = \case
   AdvanceSlots _ -> get
   AdvanceBlocks _ -> get
   FindConsumingTx _ -> get
+  FindTx _ -> get
   Intersect _ -> get
 
 putError :: forall err result. Move err result -> err -> Put
@@ -372,6 +389,7 @@ putError = \case
   AdvanceSlots _ -> put
   AdvanceBlocks _ -> put
   FindConsumingTx _ -> put
+  FindTx _ -> put
   Intersect _ -> put
 
 getError :: forall err result. Move err result -> Get err
@@ -386,6 +404,7 @@ getError = \case
   AdvanceSlots _ -> get
   AdvanceBlocks _ -> get
   FindConsumingTx _ -> get
+  FindTx _ -> get
   Intersect _ -> get
 
 schemaVersion1_0 :: SchemaVersion
