@@ -2,8 +2,7 @@
   # 'supportedSystems' restricts the set of systems that we will evaluate for. Useful when you're evaluting
   # on a machine with e.g. no way to build the Darwin IFDs you need!
   # TODO re-enable Darwin after Hydra Darwin build issues are resolved.
-  # FIXME: paluh
-  supportedSystems ? [ "x86_64-linux" ] # "x86_64-darwin" ]
+  supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
 , rootsOnly ? false
   # We explicitly pass true here in the GitHub action but don't want to slow down hydra
 , checkMaterialization ? false
@@ -101,7 +100,6 @@ let
         }));
     in
     dimension "System" systems (name: sys: _select name sys null);
-  # FIXME: paluh
-  # // dimension "Cross System" crossSystems (name: crossSys: _select name "x86_64-linux" crossSys);
-in
-mkSystemDimension systems
+  // dimension "Cross System" crossSystems (name: crossSys: _select name "x86_64-linux" crossSys);
+  in
+  mkSystemDimension systems
