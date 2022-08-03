@@ -46,6 +46,9 @@ jobs:
     env:
       CLIENT_CERT: ${{ secrets.DEV_CI_CLIENT_CERT }}
       SERVER_CERT: ${{ secrets.DEV_CI_SERVER_CERT }}
+      TREASURY_ADDR: ${{ secrets.TREASURY_ADDR }}
+      TREASURY_VKEY: ${{ secrets.TREASURY_VKEY }}
+      TREASURY_SKEY: ${{ secrets.TREASURY_SKEY }}
     steps:
       - uses: actions/checkout@v2.3.4
       - uses: cachix/install-nix-action@v17
@@ -66,6 +69,16 @@ jobs:
           EOF
           cat > server.crt <<EOF
           $SERVER_CERT
+          EOF
+          mkdir keys
+          cat > keys/treasury.addr <<EOF
+          $TREASURY_ADDR
+          EOF
+          cat > keys/treasury.vkey <<EOF
+          $TREASURY_VKEY
+          EOF
+          cat > keys/treasury.skey <<EOF
+          $TREASURY_SKEY
           EOF
           nix-shell -p socat --command "socat UNIX-LISTEN:node.sock,fork OPENSSL-CONNECT:dev-ci-node.marlowe-finance.io:443,cert=client.pem,cafile=server.crt,openssl-commonname=marlowe-node-server,snihost=dev-ci-node.marlowe-finance.io" &>socat-log &
           export CARDANO_NODE_SOCKET_PATH=node.sock
