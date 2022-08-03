@@ -46,7 +46,7 @@ rec {
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;
     inherit (marlowe.lib) gitignore-nix;
-    inherit (marlowe) fixStylishHaskell fix-purs-tidy fix-prettier fixPngOptimization;
+    inherit (marlowe) fixStylishHaskell fix-prettier;
     src = ./.;
   };
 
@@ -56,7 +56,7 @@ rec {
   inherit (sources) actus-tests;
 
   # Packages needed for the bitte deployment
-  # bitte-packages = import ./bitte {
-  #   inherit (marlowe) cardano-node;
-  # };
+  bitte-packages = import ./bitte {
+    inherit cardano-node docs pkgs sources;
+  };
 }

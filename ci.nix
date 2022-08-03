@@ -2,7 +2,8 @@
   # 'supportedSystems' restricts the set of systems that we will evaluate for. Useful when you're evaluting
   # on a machine with e.g. no way to build the Darwin IFDs you need!
   # TODO re-enable Darwin after Hydra Darwin build issues are resolved.
-  supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
+  # FIXME: paluh
+  supportedSystems ? [ "x86_64-linux" ] # "x86_64-darwin" ]
 , rootsOnly ? false
   # We explicitly pass true here in the GitHub action but don't want to slow down hydra
 , checkMaterialization ? false
@@ -81,7 +82,7 @@ let
           inherit (marlowe.haskell.project) roots;
         } // pkgs.lib.optionalAttrs (!rootsOnly) (filterCross {
           # build relevant top level attributes from default.nix
-          inherit (packages) tests marlowe-playground marlowe-dashboard;
+          inherit (packages) tests;
 
           # Build the shell expression to be sure it works on all platforms
           #
@@ -99,7 +100,8 @@ let
           haskell = pkgs.recurseIntoAttrs (mkHaskellDimension pkgs marlowe.haskell.projectPackages);
         }));
     in
-    dimension "System" systems (name: sys: _select name sys null)
-    // dimension "Cross System" crossSystems (name: crossSys: _select name "x86_64-linux" crossSys);
+    dimension "System" systems (name: sys: _select name sys null);
+  # FIXME: paluh
+  # // dimension "Cross System" crossSystems (name: crossSys: _select name "x86_64-linux" crossSys);
 in
 mkSystemDimension systems

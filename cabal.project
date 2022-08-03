@@ -153,12 +153,12 @@ package cardano-ledger-alonzo-test
 
 -- marlowe-cardano specific dependencies:
 
--- on branch: PLT-568-BabbageEra
+-- on branch: next-node
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
-  tag: 4dae07240e1e4cfbcc5a6be75e5599f38ea650cc
-  --sha256: 15l98qjpgsns4qcxklgian035mc83fqabcwsvawlr8d3rv2gzx30
+  tag: 1a7047989a8ce0dffad1bb629728312935f32cb9
+  --sha256: 146cs9w5cf4z9bv63rdhhnbhb74j1lzyxfi8ig1xx726dgjxckfh
   subdir:
     plutus-script-utils
     plutus-ledger

@@ -49,6 +49,10 @@
       url = "github:tweag/npmlock2nix";
       flake = false;
     };
+    iohk-nix = {
+      url = "github:input-output-hk/iohk-nix/marlowe-dev-testnet";
+      flake = false;
+    };
     plutus-core = {
       url = "github:input-output-hk/plutus";
       flake = false;

@@ -38,7 +38,6 @@ let
       shellcheck = pkgs.shellcheck;
     };
     hooks = {
-      inherit (marlowe) dhall-hook purs-tidy-hook;
       prettier = {
         enable = true;
         types_or = [ "javascript" "css" "html" ];
@@ -91,20 +90,9 @@ let
   localInputs = (with marlowe; [
     cabal-install
     cardano-node
-    easyPS.psa
-    easyPS.spago
-    easyPS.psc-package
-    easyPS.psc-package2nix
-    easyPS.pulp
-    easyPS.purs
-    easyPS.purs-tidy
-    easyPS.purescript-language-server
     start-cardano-node
     cardano-repo-tool
-    fixPngOptimization
     fix-prettier
-    fix-purs-tidy
-    fix-dhall
     fixStylishHaskell
     haskell-language-server
     haskell-language-server-wrapper
@@ -112,7 +100,6 @@ let
     hlint
     stylish-haskell
     updateMaterialized
-    updateClientDeps
     docs.build-and-serve-docs
     marlowe-cli
     cardano-cli
