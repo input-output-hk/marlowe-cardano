@@ -57,9 +57,7 @@ library
   ------------------------
   build-depends:
     , aeson
-    , array
     , base               >=4.9  && <5
-    , base16-bytestring
     , bytestring
     , cborg
     , containers
@@ -72,12 +70,10 @@ library
     , prettyprinter
     , scientific
     , serialise
-    , strict-containers
     , tagged
     , template-haskell
     , text
     , time
-    , time-units
     , transformers
 
   ghc-options:        -fprint-potential-instances

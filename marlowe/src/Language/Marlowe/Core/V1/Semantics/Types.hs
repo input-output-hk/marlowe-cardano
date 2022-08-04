@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE NoImplicitPrelude          #-}
@@ -28,6 +29,7 @@ module Language.Marlowe.Core.V1.Semantics.Types where
 
 import Control.Applicative ((<*>), (<|>))
 import Control.Newtype.Generics (Newtype)
+import qualified Data.Aeson as A
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types hiding (Error, Value)
@@ -35,16 +37,17 @@ import qualified Data.Aeson.Types as JSON
 import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
 import qualified Data.ByteString.Base16.Aeson as Base16.Aeson
 import qualified Data.Foldable as F
+import Data.Scientific (floatingOrInteger, scientific)
 import Data.String (IsString (..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Ledger.Orphans ()
-import qualified Ledger.Value as Val
+-- import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol (unCurrencySymbol), POSIXTime (..), PubKeyHash (PubKeyHash, getPubKeyHash),
                              TokenName (unTokenName))
+import qualified Plutus.V1.Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
@@ -273,9 +276,15 @@ data Input = NormalInput InputContent
 instance FromJSON Input where
   parseJSON (String s) = NormalInput <$> parseJSON (String s)
   parseJSON (Object v) = do
-    MerkleizedInput <$> parseJSON (Object v) <*> v .: "continuation_hash" <*> v .: "merkleized_continuation"
-      <|> MerkleizedInput INotify <$> v .: "continuation_hash" <*> v .: "merkleized_continuation"
+    let
+      parseContinuationHash = do
+        h <- v .: "continuation_hash"
+        EncodeBase16 bs <- parseJSON h
+        return $ toBuiltin bs
+    MerkleizedInput <$> parseJSON (Object v) <*> parseContinuationHash <*> v .: "merkleized_continuation"
+      <|> MerkleizedInput INotify <$> parseContinuationHash <*> v .: "merkleized_continuation"
       <|> NormalInput <$> parseJSON (Object v)
+
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
 instance ToJSON Input where
@@ -287,7 +296,7 @@ instance ToJSON Input where
         _          -> KeyMap.empty
     in Object $ obj `KeyMap.union` KeyMap.fromList
         [ ("merkleized_continuation", toJSON continuation)
-        , ("continuation_hash", toJSON hash)
+        , ("continuation_hash", toJSON $ EncodeBase16 $ fromBuiltin hash)
         ]
 
 
@@ -304,7 +313,40 @@ getInputContent (MerkleizedInput inputContent _ _) = inputContent
 data IntervalError = InvalidInterval TimeInterval
                    | IntervalInPastError POSIXTime TimeInterval
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
-  deriving anyclass (ToJSON, FromJSON)
+
+posixTimeFromJSON :: JSON.Value -> Parser POSIXTime
+posixTimeFromJSON = \case
+  v@(JSON.Number n) ->
+      either (\_ -> JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Integer" v))
+             (return . POSIXTime)
+             (floatingOrInteger n :: Either Haskell.Double Integer)
+  invalid ->
+      JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Number" invalid)
+
+posixTimeToJSON :: POSIXTime -> JSON.Value
+posixTimeToJSON (POSIXTime n) = JSON.Number $ scientific n 0
+
+instance ToJSON IntervalError where
+  toJSON (InvalidInterval (s, e)) = A.object
+    [ ("invalidInterval", toJSON (posixTimeToJSON s, posixTimeToJSON e)) ]
+  toJSON (IntervalInPastError t (s, e)) = A.object
+    [ ("intervalInPastError", toJSON (posixTimeToJSON t, posixTimeToJSON s, posixTimeToJSON e)) ]
+
+instance FromJSON IntervalError where
+  parseJSON (JSON.Object v) =
+    let
+      parseInvalidInterval = do
+        (s, e) <- v .: "invalidInterval"
+        InvalidInterval <$> ((,) <$> posixTimeFromJSON s <*> posixTimeFromJSON e)
+      parseIntervalInPastError = do
+        (t, s, e) <- v .: "intervalInPastError"
+        IntervalInPastError
+          <$> posixTimeFromJSON t
+          <*> ((,) <$> posixTimeFromJSON s <*> posixTimeFromJSON e)
+    in
+      parseIntervalInPastError <|> parseInvalidInterval
+  parseJSON invalid =
+      JSON.prependFailure "parsing IntervalError failed, " (JSON.typeMismatch "Object" invalid)
 
 
 -- | Result of 'fixInterval'

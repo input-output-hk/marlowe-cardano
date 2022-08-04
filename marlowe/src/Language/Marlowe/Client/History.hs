@@ -12,15 +12,15 @@
 module Language.Marlowe.Client.History where
 
 
-import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (MarloweData, TransactionInput)
 import Language.Marlowe.Scripts (TypedMarloweValidator, TypedRolePayoutValidator)
-import Ledger.Orphans ()
-import qualified Ledger.Value (TokenName, Value)
+-- import Ledger.Orphans ()
+-- import qualified Ledger.Value (TokenName, Value)
 import Plutus.V1.Ledger.Api (TxId (..), TxOutRef (..))
 
 import Plutus.Script.Utils.V1.Typed.Scripts
+import qualified Plutus.V1.Ledger.Value as Val
 
 
 -- | A transaction-output reference specific to Marlowe.
@@ -55,7 +55,11 @@ data History =
     , historyTxId  :: TxId              -- ^ The transaction that resulted from the input being applied.
     }
     deriving stock (Eq, Generic, Show)
-    deriving anyclass (ToJSON, FromJSON)
+    -- FIXME:
+    -- Ideally we want to drop all orphans but
+    -- we are going to move this module to `marlowe-scripts`
+    -- which can depend on `plutus-ledger` as a shortcut.
+    -- deriving anyclass (ToJSON, FromJSON)
 
 
 nextEntry :: History -> Maybe History
@@ -84,11 +88,11 @@ data RolePayout =
     RolePayout
     {
       rolePayoutTxOutRef :: TxOutRef
-    , rolePayoutName     :: Ledger.Value.TokenName
-    , rolePayoutValue    :: Ledger.Value.Value
+    , rolePayoutName     :: Val.TokenName
+    , rolePayoutValue    :: Val.Value
     }
     deriving stock (Eq, Generic, Show)
-    deriving anyclass (ToJSON, FromJSON)
+    -- deriving anyclass (ToJSON, FromJSON)
 
 newtype IncludePkhTxns = IncludePkhTxns Bool
 
