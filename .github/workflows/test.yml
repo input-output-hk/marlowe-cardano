@@ -81,8 +81,8 @@ jobs:
           $TREASURY_SKEY
           EOF
           nix-shell -p socat --command "socat UNIX-LISTEN:node.sock,fork OPENSSL-CONNECT:dev-ci-node.marlowe-finance.io:443,cert=client.pem,cafile=server.crt,openssl-commonname=marlowe-node-server,snihost=dev-ci-node.marlowe-finance.io" &>socat-log &
+          cd marlowe-cli
           export CARDANO_NODE_SOCKET_PATH=node.socket
           export CARDANO_TESTNET_MAGIC=1566
-          export TREASURY=keys/
-          cd marlowe-cli
+          export TREASURY=../keys/
           . ./run-nonpab-tests.sh
