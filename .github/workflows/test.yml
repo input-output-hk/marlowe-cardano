@@ -84,4 +84,4 @@ jobs:
           export CARDANO_NODE_SOCKET_PATH=node.sock
           export CARDANO_TESTNET_MAGIC=1566
           export TREASURY=keys/
-          nix-shell --command "cardano-cli query tip --testnet-magic 1566"
+          nix-shell --command "cd marlowe-cli && cabal install exe:marlowe-cli && . ./run-nonpab-tests.h"
