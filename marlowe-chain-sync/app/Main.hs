@@ -52,14 +52,15 @@ run Options{..} = withSocketsDo do
           (PostgreSQL.databaseQueries genesisBlock)
       , persistRateLimit
       , genesisBlock
-      , withChannel = \k ->
-          bracket (accept socket) (close . fst) \(conn, _ :: SockAddr) -> do
-            socketId <- atomically do
-              modifyTVar socketIdVar (+1)
-              readTVar socketIdVar
-            k
-              $ effectChannel (logSend socketId) (logRecv socketId)
-              $ socketAsChannel conn
+      , acceptChannel = do
+        socketId <- atomically do
+          modifyTVar socketIdVar (+1)
+          readTVar socketIdVar
+        (conn, _ :: SockAddr) <- accept socket
+        pure
+          ( effectChannel (logSend socketId) (logRecv socketId) $ socketAsChannel conn
+          , close conn
+          )
       }
     runChainSync chainSync
   where

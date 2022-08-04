@@ -25,7 +25,7 @@ data ChainSyncDependencies = ChainSyncDependencies
   , databaseQueries    :: !(DatabaseQueries IO)
   , persistRateLimit   :: !NominalDiffTime
   , genesisBlock       :: !GenesisBlock
-  , withChannel        :: !(forall a. (Channel IO LBS.ByteString -> IO a) -> IO a)
+  , acceptChannel      :: IO (Channel IO LBS.ByteString, IO ())
   }
 
 newtype ChainSync = ChainSync { runChainSync :: IO () }

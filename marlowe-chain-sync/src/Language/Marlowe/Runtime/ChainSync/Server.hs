@@ -29,9 +29,9 @@ import Network.TypedProtocol (Driver (..), runPeerWithDriver)
 import System.IO (stderr)
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
-  { withChannel :: !(forall a. (Channel IO LBS.ByteString -> IO a) -> IO a)
-  , moveClient  :: !(MoveClient IO)
-  , localTip    :: !(STM Cardano.ChainTip)
+  { acceptChannel :: IO (Channel IO LBS.ByteString, IO ())
+  , moveClient    :: !(MoveClient IO)
+  , localTip      :: !(STM Cardano.ChainTip)
   }
 
 newtype ChainSyncServer = ChainSyncServer
@@ -41,12 +41,14 @@ newtype ChainSyncServer = ChainSyncServer
 mkChainSyncServer :: ChainSyncServerDependencies -> STM ChainSyncServer
 mkChainSyncServer ChainSyncServerDependencies{..} = do
   let
-    runChainSyncServer = withChannel \channel -> do
+    runChainSyncServer = do
+      (channel, close) <- acceptChannel
       hPutStrLn stderr "New client connected"
       worker <- atomically $ mkWorker WorkerDependencies {..}
       withAsync (runWorker worker) \aworker ->
         withAsync runChainSyncServer \aserver -> do
           result <- waitEitherCatch aworker aserver
+          close
           case result of
             Right (Left ex) -> throwIO ex
             Right (Right x) -> absurd x
