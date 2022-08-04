@@ -189,3 +189,4 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
       MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
       MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
       MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
+      MsgPing                        -> Yield (ClientAgency TokPing) MsgPong $ peerWait pos query mnext

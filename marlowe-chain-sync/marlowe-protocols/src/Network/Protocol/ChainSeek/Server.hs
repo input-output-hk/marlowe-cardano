@@ -1,6 +1,7 @@
-{-# LANGUAGE DataKinds  #-}
-{-# LANGUAGE GADTs      #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds      #-}
+{-# LANGUAGE GADTs          #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes     #-}
 
 -- | A view of the chain seek protocol from the point of view of the
 -- server. This provides a simplified interface for implementing the server
@@ -9,7 +10,6 @@
 
 module Network.Protocol.ChainSeek.Server where
 
-import Data.Bifunctor (Bifunctor (bimap))
 import Network.Protocol.ChainSeek.Types (ChainSeek (..), ClientHasAgency (..), Message (..), NobodyHasAgency (..),
                                          SchemaVersion, ServerHasAgency (..), StNextKind (..), TokNextKind (..))
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
@@ -57,10 +57,7 @@ data ServerStIdle query point tip m a = ServerStIdle
   { recvMsgQueryNext
     :: forall err result
      . query err result
-    -> m ( Either
-            (ServerStNext query err result point tip m a)
-            (m (ServerStNext query err result point tip m a))
-         )
+    -> m (ServerStNext query err result point tip 'StCanAwait m a)
   , recvMsgDone :: m a
   }
 
@@ -70,14 +67,14 @@ data ServerStIdle query point tip m a = ServerStIdle
 -- * A query rejection response
 -- * A roll forward response
 -- * A roll backward response
-data ServerStNext query err result point tip m a where
+data ServerStNext query err result point tip (k :: StNextKind) m a where
 
   -- | Reject the query with an error message.
   SendMsgQueryRejected
     :: err
     -> tip
     -> m (ServerStIdle query point tip m a)
-    -> ServerStNext query err result point tip m a
+    -> ServerStNext query err result point tip k m a
 
   -- | Send a query response and advance the client to a new point in the
   -- chain.
@@ -86,14 +83,24 @@ data ServerStNext query err result point tip m a where
     -> point
     -> tip
     -> m (ServerStIdle query point tip m a)
-    -> ServerStNext query err result point tip m a
+    -> ServerStNext query err result point tip k m a
 
   -- | Roll the client back to a previous point.
   SendMsgRollBackward
     :: point
     -> tip
     -> m (ServerStIdle query point tip m a)
-    -> ServerStNext query err result point tip m a
+    -> ServerStNext query err result point tip k m a
+
+  -- | Tell the client to wait
+  SendMsgWait
+    :: m (ServerStNext query err result point tip 'StMustReply m a)
+    -> ServerStNext query err result point tip 'StCanAwait m a
+
+  -- | Check if the client is still waiting
+  SendMsgPing
+    :: m (ServerStNext query err result point tip 'StMustReply m a)
+    -> ServerStNext query err result point tip 'StMustReply m a
 
 -- | Transform the query, point, and tip types in the server.
 mapChainSeekServer
@@ -116,17 +123,19 @@ mapChainSeekServer cmapQuery mapPoint mapTip =
 
     mapIdle :: ServerStIdle query point tip m a -> ServerStIdle query' point' tip' m a
     mapIdle ServerStIdle{..} = ServerStIdle
-      { recvMsgQueryNext = fmap (bimap mapNext (fmap mapNext)) . recvMsgQueryNext . cmapQuery
+      { recvMsgQueryNext = fmap mapNext . recvMsgQueryNext . cmapQuery
       , recvMsgDone
       }
 
     mapNext
-      :: forall err result
-       . ServerStNext query err result point tip m a
-       -> ServerStNext query' err result point' tip' m a
+      :: forall err result k
+       . ServerStNext query err result point tip k m a
+       -> ServerStNext query' err result point' tip' k m a
     mapNext (SendMsgQueryRejected err tip idle) = SendMsgQueryRejected err (mapTip tip) $ mapIdle <$> idle
     mapNext (SendMsgRollForward result point tip idle) = SendMsgRollForward result (mapPoint point) (mapTip tip) $ mapIdle <$> idle
     mapNext (SendMsgRollBackward point tip idle) = SendMsgRollBackward (mapPoint point) (mapTip tip) $ mapIdle <$> idle
+    mapNext (SendMsgWait mnext) = SendMsgWait $ mapNext <$> mnext
+    mapNext (SendMsgPing mnext) = SendMsgPing $ mapNext <$> mnext
 
 -- | Change the underlying monad with a natural transformation.
 hoistChainSeekServer
@@ -148,17 +157,19 @@ hoistChainSeekServer f =
 
     hoistIdle :: ServerStIdle query point tip m a -> ServerStIdle query point tip n a
     hoistIdle ServerStIdle{..} = ServerStIdle
-      { recvMsgQueryNext =  f . fmap (bimap hoistNext (f . fmap hoistNext)) . recvMsgQueryNext
+      { recvMsgQueryNext =  f . fmap hoistNext . recvMsgQueryNext
       , recvMsgDone = f recvMsgDone
       }
 
     hoistNext
-      :: forall err result
-       . ServerStNext query err result point tip m a
-       -> ServerStNext query err result point tip n a
+      :: forall err result k
+       . ServerStNext query err result point tip k m a
+       -> ServerStNext query err result point tip k n a
     hoistNext (SendMsgQueryRejected err tip idle)        = SendMsgQueryRejected err tip $ f $ hoistIdle <$> idle
     hoistNext (SendMsgRollForward result point tip idle) = SendMsgRollForward result point tip $ f $ hoistIdle <$> idle
     hoistNext (SendMsgRollBackward point tip idle)       = SendMsgRollBackward point tip $ f $ hoistIdle <$> idle
+    hoistNext (SendMsgWait mnext)                        = SendMsgWait $ f $ hoistNext <$> mnext
+    hoistNext (SendMsgPing mnext)                        = SendMsgPing $ f $ hoistNext <$> mnext
 
 -- | Interpret the server as a 'typed-protocols' 'Peer'.
 chainSeekServerPeer
@@ -200,31 +211,27 @@ chainSeekServerPeer initialPoint (ChainSeekServer mclient) =
   peerIdle_ pos ServerStIdle{..} =
     Await (ClientAgency TokIdle) \case
       MsgQueryNext query -> Effect
-        $ fmap (either (peerNext TokCanAwait pos query) (peerWait pos query))
+        $ fmap (peerNext TokCanAwait pos query)
         $ recvMsgQueryNext query
       MsgDone -> Effect $ Done TokDone <$> recvMsgDone
-
-  peerWait
-    :: forall err result
-     . point
-    -> query err result
-    -> m (ServerStNext query err result point tip m a)
-    -> Peer (ChainSeek query point tip) 'AsServer ('StNext err result 'StCanAwait) m a
-  peerWait pos query mnext =
-    Yield (ServerAgency (TokNext query TokCanAwait)) MsgWait $
-    Effect $ peerNext TokMustReply pos query <$> mnext
-
 
   peerNext
     :: forall err result wait
      . TokNextKind wait
     -> point
     -> query err result
-    -> ServerStNext query err result point tip m a
+    -> ServerStNext query err result point tip wait m a
     -> Peer (ChainSeek query point tip) 'AsServer ('StNext err result wait) m a
   peerNext tok pos query = \case
     SendMsgQueryRejected err tip midle       -> yield pos (MsgRejectQuery err tip) midle
     SendMsgRollForward result pos' tip midle -> yield pos' (MsgRollForward result pos' tip) midle
     SendMsgRollBackward pos' tip midle       -> yield pos' (MsgRollBackward pos' tip) midle
+    SendMsgWait mnext                    ->
+      Yield (ServerAgency (TokNext query TokCanAwait)) MsgWait $
+      Effect $ peerNext TokMustReply pos query <$> mnext
+    SendMsgPing mnext                        ->
+      Yield (ServerAgency (TokNext query TokMustReply)) MsgPing $
+      Await (ClientAgency TokPing) \MsgPong ->
+      Effect $ peerNext TokMustReply pos query <$> mnext
     where
       yield pos' msg = Yield (ServerAgency (TokNext query tok)) msg . peerIdle pos'

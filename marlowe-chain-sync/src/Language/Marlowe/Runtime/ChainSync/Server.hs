@@ -95,21 +95,21 @@ mkWorker WorkerDependencies{..} = do
                   (Cardano.SlotNo $ fromIntegral slotNo)
                   (Cardano.HeaderHash $ toShort $ unBlockHeaderHash hash)
                   (Cardano.BlockNo $ fromIntegral blockNo)
-              pollQuery pure goWait
+              pure $ SendMsgPing $ pollQuery goWait
 
             awaitTipChange lastTip = do
               newTip <- localTip
               guard $ lastTip /= newTip
 
-            pollQuery onReply onWait = do
+            pollQuery onWait = do
               qResult <- runMoveClient moveClient pos query
               case qResult of
-                RollForward result pos' tip -> onReply $ SendMsgRollForward result (At pos') tip $ stIdle $ At pos'
-                RollBack pos' tip           -> onReply $ SendMsgRollBackward pos' tip $ stIdle pos'
-                Reject err tip              -> onReply $ SendMsgQueryRejected err tip $ stIdle pos
+                RollForward result pos' tip -> pure $ SendMsgRollForward result (At pos') tip $ stIdle $ At pos'
+                RollBack pos' tip           -> pure $ SendMsgRollBackward pos' tip $ stIdle pos'
+                Reject err tip              -> pure $ SendMsgQueryRejected err tip $ stIdle pos
                 Wait tip                    -> onWait tip
 
-          pollQuery (pure . Left) (pure . Right . goWait)
+          pollQuery $ pure . SendMsgWait . goWait
       , recvMsgDone = pure ()
       }
 

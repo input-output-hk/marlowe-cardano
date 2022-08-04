@@ -102,6 +102,10 @@ codecChainSeek
 
     encodeMsg (ServerAgency TokNext{}) MsgWait = putWord8 0x08
 
+    encodeMsg (ServerAgency TokNext{}) MsgPing = putWord8 0x0a
+
+    encodeMsg (ClientAgency TokPing) MsgPong = putWord8 0x0b
+
     decodeMsg
       :: forall (pr :: PeerRole) (st :: ChainSeek query point tip)
        . PeerHasAgency pr st
@@ -140,6 +144,10 @@ codecChainSeek
           pure $ SomeMessage $ MsgRollBackward point tip
 
         (0x08, ServerAgency (TokNext _ TokCanAwait)) -> pure $ SomeMessage MsgWait
+
+        (0x0a, ServerAgency (TokNext _ TokMustReply)) -> pure $ SomeMessage MsgPing
+
+        (0x0b, ClientAgency TokPing) -> pure $ SomeMessage MsgPong
 
         _ -> fail $ "Unexpected tag " <> show tag
 

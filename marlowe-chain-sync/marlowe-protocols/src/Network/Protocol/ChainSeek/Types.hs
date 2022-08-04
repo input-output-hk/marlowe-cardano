@@ -32,6 +32,10 @@ data ChainSeek (query :: Type -> Type -> Type) point tip where
   -- at some point in the future.
   StNext :: err -> result -> StNextKind -> ChainSeek query point tip
 
+  -- | The server has sent a ping to the client to determine if it is still
+  -- connected and is waiting for a pong.
+  StPing :: err -> result -> ChainSeek query point tip
+
   -- | The failed state of the protocol.
   StFault :: ChainSeek query point tip
 
@@ -108,9 +112,20 @@ instance Protocol (ChainSeek query point tip) where
       'StIdle
       'StDone
 
+    -- | Check if the client is still waiting.
+    MsgPing :: Message (ChainSeek query point tip)
+      ('StNext err result 'StMustReply)
+      ('StPing err result)
+
+    -- | Reassure the server we are still waiting.
+    MsgPong :: Message (ChainSeek query point tip)
+      ('StPing err result)
+      ('StNext err result 'StMustReply)
+
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
     TokIdle :: ClientHasAgency 'StIdle
+    TokPing :: ClientHasAgency ('StPing err result)
 
   data ServerHasAgency st where
     TokHandshake :: ServerHasAgency 'StHandshake
@@ -122,6 +137,7 @@ instance Protocol (ChainSeek query point tip) where
 
   exclusionLemma_ClientAndServerHaveAgency TokInit = \case
   exclusionLemma_ClientAndServerHaveAgency TokIdle = \case
+  exclusionLemma_ClientAndServerHaveAgency TokPing = \case
 
   exclusionLemma_NobodyAndClientHaveAgency TokFault = \case
   exclusionLemma_NobodyAndClientHaveAgency TokDone  = \case
