@@ -71,13 +71,13 @@ jobs:
           $SERVER_CERT
           EOF
           mkdir keys
-          cat > keys/treasury.addr <<EOF
+          cat > keys/payment.addr <<EOF
           $TREASURY_ADDR
           EOF
-          cat > keys/treasury.vkey <<EOF
+          cat > keys/payment.vkey <<EOF
           $TREASURY_VKEY
           EOF
-          cat > keys/treasury.skey <<EOF
+          cat > keys/payment.skey <<EOF
           $TREASURY_SKEY
           EOF
           nix-shell -p socat --command "socat UNIX-LISTEN:node.sock,fork OPENSSL-CONNECT:dev-ci-node.marlowe-finance.io:443,cert=client.pem,cafile=server.crt,openssl-commonname=marlowe-node-server,snihost=dev-ci-node.marlowe-finance.io" &>socat-log &
@@ -85,4 +85,3 @@ jobs:
           export CARDANO_TESTNET_MAGIC=1566
           export TREASURY=keys/
           . ./run-nonpab-tests.sh
-          nix-shell --command "cardano-cli query tip --testnet-magic 1566"
