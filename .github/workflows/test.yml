@@ -84,5 +84,5 @@ jobs:
           cd marlowe-cli
           export CARDANO_NODE_SOCKET_PATH=node.socket
           export CARDANO_TESTNET_MAGIC=1566
-          export TREASURY=../keys/
+          export TREASURY=keys/
           . ./run-nonpab-tests.sh
