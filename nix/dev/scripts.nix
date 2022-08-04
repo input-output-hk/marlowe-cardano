@@ -41,12 +41,13 @@ let
       socket-path = "/tmp/node.socket";
       database-path = "db/node.db";
     };
-    wallet = {
-      testnet = network.nodeConfig.ByronGenesisFile;
-      database-path = "db/wallet.db";
-      port = 8090;
-    };
   };
+
+  run-chainseekd = pkgs.writeShellScriptBin "run-chainseekd" ''
+    cabal run chainseekd --
+      --genesis-config-file ${network.nodeConfig.ByronGenesisFile} \
+      --genesis-config-file-hash ${network.nodeConfig.ByronGenesisHash}
+  '';
 
   start-cardano-node = writeShellScriptBinInRepoRoot "start-cardano-node" ''
     echo "socket path = ${devNetworkConfig.node.socket-path}"
@@ -57,20 +58,6 @@ let
             --port ${toString devNetworkConfig.node.port} \
             --socket-path ${devNetworkConfig.node.socket-path} \
             --database-path ${devNetworkConfig.node.database-path}
-  '';
-
-  start-wallet = writeShellScriptBinInRepoRoot "start-cardano-wallet" ''
-    echo "Waiting for cardano-node socket connection"
-    until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${devNetworkConfig.node.socket-path} 2> /dev/null; do :; done
-    echo "Connection ready"
-
-    mkdir -p ${devNetworkConfig.wallet.database-path}
-
-    cardano-wallet serve \
-      --testnet ${devNetworkConfig.wallet.testnet} \
-      --database ${devNetworkConfig.wallet.database-path} \
-      --node-socket ${devNetworkConfig.node.socket-path} \
-      --port ${toString devNetworkConfig.wallet.port}
   '';
 
   #
@@ -84,5 +71,5 @@ let
 
 in
 {
-  inherit start-cardano-node start-wallet;
+  inherit start-cardano-node run-chainseekd;
 }

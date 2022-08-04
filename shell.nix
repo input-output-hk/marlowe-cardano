@@ -5,8 +5,8 @@
 let
   # inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli dev-scripts;
   inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts;
-  inherit (dev-scripts) start-cardano-node;
-  inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
+  inherit (dev-scripts) start-cardano-node run-chainseekd;
+  inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
 
@@ -84,47 +84,63 @@ let
     zlib
     nodePackages.prettier
     tmux
+
+    # marlowe-chain-sync
+    docker-compose
+    postgresql
+    sqitchPg
   ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
   # local build inputs ( -> ./nix/pkgs/default.nix )
   localInputs = (with marlowe; [
     cabal-install
+    cardano-cli
     cardano-node
-    start-cardano-node
     cardano-repo-tool
+    docs.build-and-serve-docs
     fix-prettier
     fixStylishHaskell
     haskell-language-server
     haskell-language-server-wrapper
     hie-bios
     hlint
+    marlowe-cli
+    run-chainseekd
+    start-cardano-node
     stylish-haskell
     updateMaterialized
-    docs.build-and-serve-docs
-    marlowe-cli
-    cardano-cli
+
   ]);
 
-in
-haskell.project.shellFor {
-  nativeBuildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
-  # We don't currently use this, and it's a pain to materialize, and otherwise
-  # costs a fair bit of eval time.
-  withHoogle = false;
+  defaultShell = haskell.project.shellFor {
+    nativeBuildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
+    # We don't currently use this, and it's a pain to materialize, and otherwise
+    # costs a fair bit of eval time.
+    withHoogle = false;
 
-  shellHook = ''
-    ${pre-commit-check.shellHook}
-  ''
-  # Work around https://github.com/NixOS/nix/issues/3345, which makes
-  # tests etc. run single-threaded in a nix-shell.
-  # Sets the affinity to cores 0-1000 for $$ (current PID in bash)
-  # Only necessary for linux - darwin doesn't even expose thread
-  # affinity APIs!
-  + lib.optionalString stdenv.isLinux ''
-    ${utillinux}/bin/taskset -pc 0-1000 $$
-  ''
-  # Point to some source dependencies
-  + ''
-    export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-  '';
+    shellHook = ''
+      ${pre-commit-check.shellHook}
+    ''
+    # Work around https://github.com/NixOS/nix/issues/3345, which makes
+    # tests etc. run single-threaded in a nix-shell.
+    # Sets the affinity to cores 0-1000 for $$ (current PID in bash)
+    # Only necessary for linux - darwin doesn't even expose thread
+    # affinity APIs!
+    + lib.optionalString stdenv.isLinux ''
+      ${utillinux}/bin/taskset -pc 0-1000 $$
+    ''
+    # Point to some source dependencies
+    + ''
+      export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
+    '';
+  };
+  chainSyncShell = haskell.project.shellFor {
+    buildInputs = [ run-chainseekd ];
+    nativeBuildInputs = nixpkgsInputs ++ localInputs;
+    shellHook = '' ${pre-commit-check.shellHook} '';
+    withHoogle = false;
+  };
+in
+defaultShell // {
+  chain-sync = chainSyncShell;
 }

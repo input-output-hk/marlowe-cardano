@@ -1,7 +1,5 @@
 { cardano-node, docs, pkgs, sources }:
 let
-  staticSite = pkgs.callPackage (sources.plutus-apps + "/bitte/static-site.nix") { };
-  playgroundStatic = pkgs.callPackage (sources.plutus-apps + "/bitte/playground-static.nix") { inherit staticSite; docs = docs.site; };
   wait-for-socket = pkgs.writeShellScriptBin "wait-for-socket" ''
     set -eEuo pipefail
 
