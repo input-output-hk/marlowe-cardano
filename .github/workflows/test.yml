@@ -82,5 +82,7 @@ jobs:
           EOF
           nix-shell -p socat --command "socat UNIX-LISTEN:node.sock,fork OPENSSL-CONNECT:dev-ci-node.marlowe-finance.io:443,cert=client.pem,cafile=server.crt,openssl-commonname=marlowe-node-server,snihost=dev-ci-node.marlowe-finance.io" &>socat-log &
           export CARDANO_NODE_SOCKET_PATH=node.sock
-          # Put your actual test commands here (and rename this step to not include "stub")
+          export CARDANO_TESTNET_MAGIC=1566
+          export TREASURY=keys/
+          . ./run-nonpab-tests.sh
           nix-shell --command "cardano-cli query tip --testnet-magic 1566"
