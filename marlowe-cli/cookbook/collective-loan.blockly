@@ -1,0 +1,154 @@
+When
+    [Case
+        (Deposit
+            (Role "Administrator")
+            (Role "Administrator")
+            (Token "cafe" "Liquidity")
+            (ConstantParam "Maximum Investment")
+        )
+        (When
+            [Case
+                (Choice
+                    (ChoiceId
+                        "Lender Deposit"
+                        (Role "Administrator")
+                    )
+                    [Bound 100000 5000000]
+                )
+                (When
+                    [Case
+                        (Deposit
+                            (Role "Administrator")
+                            (Role "Lender Deposit 1")
+                            (Token "1f4cc97451944ce039366dee5d9acd36a2784dd22e7c3431e50264e8446a6564555344" "DjedUSD")
+                            (ChoiceValue
+                                (ChoiceId
+                                    "Lender Deposit"
+                                    (Role "Administrator")
+                                ))
+                        )
+                        (Pay
+                            (Role "Administrator")
+                            (Party (Role "Lender Deposit 1"))
+                            (Token "cafe" "Liquidity")
+                            (ChoiceValue
+                                (ChoiceId
+                                    "Lender Deposit"
+                                    (Role "Administrator")
+                                ))
+                            (Let
+                                "Liability"
+                                (AvailableMoney
+                                    (Role "Administrator")
+                                    (Token "1f4cc97451944ce039366dee5d9acd36a2784dd22e7c3431e50264e8446a6564555344" "DjedUSD")
+                                )
+                                (When
+                                    [Case
+                                        (Choice
+                                            (ChoiceId
+                                                "Borrower Withdrawal"
+                                                (Role "Administrator")
+                                            )
+                                            [Bound 50000 1000000]
+                                        )
+                                        (Pay
+                                            (Role "Administrator")
+                                            (Party (Role "Borrower Withdrawal 1"))
+                                            (Token "1f4cc97451944ce039366dee5d9acd36a2784dd22e7c3431e50264e8446a6564555344" "DjedUSD")
+                                            (ChoiceValue
+                                                (ChoiceId
+                                                    "Borrower Withdrawal"
+                                                    (Role "Administrator")
+                                                ))
+                                            (When
+                                                [Case
+                                                    (Choice
+                                                        (ChoiceId
+                                                            "Borrower Deposit"
+                                                            (Role "Administrator")
+                                                        )
+                                                        [Bound 1 2000000]
+                                                    )
+                                                    (When
+                                                        [Case
+                                                            (Deposit
+                                                                (Role "Administrator")
+                                                                (Role "Borrower Deposit 1")
+                                                                (Token "1f4cc97451944ce039366dee5d9acd36a2784dd22e7c3431e50264e8446a6564555344" "DjedUSD")
+                                                                (ChoiceValue
+                                                                    (ChoiceId
+                                                                        "Borrower Deposit"
+                                                                        (Role "Administrator")
+                                                                    ))
+                                                            )
+                                                            (Let
+                                                                "Equity"
+                                                                (AvailableMoney
+                                                                    (Role "Administrator")
+                                                                    (Token "1f4cc97451944ce039366dee5d9acd36a2784dd22e7c3431e50264e8446a6564555344" "DjedUSD")
+                                                                )
+                                                                (When
+                                                                    [Case
+                                                                        (Choice
+                                                                            (ChoiceId
+                                                                                "Lender Withdrawal"
+                                                                                (Role "Administrator")
+                                                                            )
+                                                                            [Bound 1 5000000]
+                                                                        )
+                                                                        (When
+                                                                            [Case
+                                                                                (Deposit
+                                                                                    (Role "Administrator")
+                                                                                    (Role "Lender Withdrawal")
+                                                                                    (Token "cafe" "Liquidity")
+                                                                                    (ChoiceValue
+                                                                                        (ChoiceId
+                                                                                            "Lender Withdrawal"
+                                                                                            (Role "Administrator")
+                                                                                        ))
+                                                                                )
+                                                                                (Pay
+                                                                                    (Role "Administrator")
+                                                                                    (Party (Role "Lender Withdrawal 1"))
+                                                                                    (Token "1f4cc97451944ce039366dee5d9acd36a2784dd22e7c3431e50264e8446a6564555344" "DjedUSD")
+                                                                                    (DivValue
+                                                                                        (MulValue
+                                                                                            (ChoiceValue
+                                                                                                (ChoiceId
+                                                                                                    "Lender Withdrawal"
+                                                                                                    (Role "Administrator")
+                                                                                                ))
+                                                                                            (UseValue "Equity")
+                                                                                        )
+                                                                                        (UseValue "Liability")
+                                                                                    )
+                                                                                    Close 
+                                                                                )]
+                                                                            (TimeParam "Lender Withdrawal 1 Deadline")
+                                                                            Close 
+                                                                        )]
+                                                                    (TimeParam "Lender Withdrawal 1 Deadline")
+                                                                    Close 
+                                                                )
+                                                            )]
+                                                        (TimeParam "Borrower Deposit 1 Deadline")
+                                                        Close 
+                                                    )]
+                                                (TimeParam "Borrower Deposit 1 Deadline")
+                                                Close 
+                                            )
+                                        )]
+                                    (TimeParam "Borrower Withdrawal 1 Deadline")
+                                    Close 
+                                )
+                            )
+                        )]
+                    (TimeParam "Lender Deposit 1 Deadline")
+                    Close 
+                )]
+            (TimeParam "Lender Deposit 1 Deadline")
+            Close 
+        )]
+    (TimeParam "Setup Deadline")
+    Close 

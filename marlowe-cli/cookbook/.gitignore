@@ -1,7 +1,13 @@
 node.socket
+*.prv
 *.skey
 *.vkey
 *.address
 english-auction*
 revenue-based-loan*
 guessing-game*
+collective-loan-*.contract
+collective-loan-*.state
+collective-loan-*.partial
+collective-loan-*.marlowe
+collective-loan.merkleization
