@@ -35,7 +35,7 @@
     "easy-purescript-nix": {
       "flake": false,
       "locked": {
-        "lastModified": 1646209831,
+        "lastModified": 1654121141,
         "narHash": "sha256-mkHIyWk5Xh54FqCU7CT3G/tnHF7mLbQt3EfnNCMCTO8=",
         "owner": "justinwoo",
         "repo": "easy-purescript-nix",
