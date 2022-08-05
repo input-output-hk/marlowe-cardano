@@ -165,6 +165,11 @@ interpret Prepare {..} = do
 
 interpret Fail message = throwError $ CliError message
 
+anotateCliError :: String -> CliError -> CliError
+anotateCliError anotation (CliError msg) = CliError $ annotation <> msg
+
+asPrepareError = annotateError "Prepare: "
+
 withError :: MonadError e m => (e -> e) -> m a -> m a
 withError modifyError action = catchError action \e -> do
                                 throwError $ modifyError e
