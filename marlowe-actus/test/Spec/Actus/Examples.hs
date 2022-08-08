@@ -146,11 +146,34 @@ ex_nam1 =
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
           let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
-                    (mapMaybe cashFlowToInput cashFlows)
+                    -- NOTE: projected cash flows generated from ACTUS core based on doubles
+                    -- produced slightly different numbers due to different rounding behaviour
+                    -- for division.
+                    -- See also https://github.com/input-output-hk/marlowe-cardano/pull/205
+                    [ counterpartyDeposit 10000000000
+                    , partyDeposit 800000000
+                    , partyDeposit 200000000
+                    , partyDeposit 816000000
+                    , partyDeposit 184000000
+                    , partyDeposit 832320000
+                    , partyDeposit 167680000
+                    , partyDeposit 848966400
+                    , partyDeposit 151033600
+                    , partyDeposit 865945728
+                    , partyDeposit 134054272
+                    , partyDeposit 883264643
+                    , partyDeposit 116735357
+                    , partyDeposit 900929936
+                    , partyDeposit 99070064
+                    , partyDeposit 918948535
+                    , partyDeposit 81051465
+                    , partyDeposit 937327505
+                    , partyDeposit 62672495
+                    , partyDeposit 43925945
+                    , partyDeposit 2196297253]
                 )
                 (emptyState 0)
                 contract of
@@ -191,11 +214,34 @@ ex_ann1 =
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
           let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
-                    (mapMaybe cashFlowToInput cashFlows)
+                    -- NOTE: projected cash flows generated from ACTUS core based on doubles
+                    -- produced slightly different numbers due to different rounding behaviour
+                    -- for division.
+                    -- See also https://github.com/input-output-hk/marlowe-cardano/pull/205
+                    [ counterpartyDeposit 10000000000
+                    , partyDeposit 800000000
+                    , partyDeposit 200000000
+                    , partyDeposit 816000000
+                    , partyDeposit 184000000
+                    , partyDeposit 832320000
+                    , partyDeposit 167680000
+                    , partyDeposit 848966400
+                    , partyDeposit 151033600
+                    , partyDeposit 865945728
+                    , partyDeposit 134054272
+                    , partyDeposit 883264643
+                    , partyDeposit 116735357
+                    , partyDeposit 900929936
+                    , partyDeposit 99070064
+                    , partyDeposit 918948535
+                    , partyDeposit 81051465
+                    , partyDeposit 937327505
+                    , partyDeposit 62672495
+                    , partyDeposit 43925945
+                    , partyDeposit 2196297253]
                 )
                 (emptyState 0)
                 contract of

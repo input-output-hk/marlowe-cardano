@@ -18,12 +18,8 @@ module Actus.Marlowe.Instance
 where
 
 import Actus.Domain (CashFlow, ContractState, ContractTerms, RiskFactors)
-import Data.Maybe (fromMaybe)
 import GHC.Real (Ratio (..))
-import qualified Language.Marlowe.Core.V1.Semantics as Core
-import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Extended.V1
-import qualified Ledger
 
 type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value
@@ -101,22 +97,18 @@ evalObs FalseObs           = False
 
 evalVal :: Value -> Integer
 evalVal (AvailableMoney _ _) = error "evalVal not implemented for AvailableMoney"
-evalVal (Constant n) = n
-evalVal (ConstantParam _) = error "evalVal not implemented for ConstantParam"
-evalVal (NegValue val) = negate (evalVal val)
-evalVal (AddValue lhs rhs) = evalVal lhs + evalVal rhs
-evalVal (SubValue lhs rhs) = evalVal lhs - evalVal rhs
-evalVal (MulValue lhs rhs) = evalVal lhs * evalVal rhs
-evalVal d@(DivValue (Constant _) (Constant _)) = Core.evalValue env state (fromMaybe (error "toCore") $ toCore d)
-  where
-    env = Core.Environment {Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
-    state = Core.emptyState $ Ledger.POSIXTime 0
-evalVal (DivValue n m) = evalVal $ DivValue (reduceValue n) (reduceValue m)
-evalVal (ChoiceValue _) = error "evalVal not implemented for ChoiceValue"
-evalVal TimeIntervalStart = error "evalVal not implemented for TimeIntervalStart"
-evalVal TimeIntervalEnd = error "evalVal not implemented for TimeIntervalEnd"
-evalVal (UseValue _) = error "evalVal not implemented for UseValue"
-evalVal (Cond o a b) = if evalObs o then evalVal a else evalVal b
+evalVal (Constant n)         = n
+evalVal (ConstantParam _)    = error "evalVal not implemented for ConstantParam"
+evalVal (NegValue val)       = negate (evalVal val)
+evalVal (AddValue lhs rhs)   = evalVal lhs + evalVal rhs
+evalVal (SubValue lhs rhs)   = evalVal lhs - evalVal rhs
+evalVal (MulValue lhs rhs)   = evalVal lhs * evalVal rhs
+evalVal (DivValue lhs rhs)   = evalVal lhs `quot` evalVal rhs
+evalVal (ChoiceValue _)      = error "evalVal not implemented for ChoiceValue"
+evalVal TimeIntervalStart    = error "evalVal not implemented for TimeIntervalStart"
+evalVal TimeIntervalEnd      = error "evalVal not implemented for TimeIntervalEnd"
+evalVal (UseValue _)         = error "evalVal not implemented for UseValue"
+evalVal (Cond o a b)         = if evalObs o then evalVal a else evalVal b
 
 reduceObs :: Observation -> Observation
 reduceObs (AndObs a b)  = AndObs (reduceObs a) (reduceObs b)
