@@ -133,4 +133,4 @@ haskell.project.shellFor {
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
     export PGUSER=postgres
   '';
-};
+}
