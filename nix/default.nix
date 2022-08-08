@@ -23,18 +23,16 @@ let
 
   iohkNixMain = import sources.iohk-nix { };
 
-  extraOverlays =
-    # Haskell.nix (https://github.com/input-output-hk/haskell.nix)
-    haskellNix.nixpkgsArgs.overlays
-    # our own overlays:
-    # needed for cardano-api wich uses a patched libsodium
-    ++ iohkNixMain.overlays.crypto
-    ++ iohkNixMain.overlays.iohkNix
-    ++ ownOverlays;
-
-
   nixpkgsArgs = haskellNix.nixpkgsArgs // {
-    overlays = haskellNix.nixpkgsArgs.overlays ++ extraOverlays ++ overlays;
+    overlays =
+      # Haskell.nix (https://github.com/input-output-hk/haskell.nix)
+      haskellNix.nixpkgsArgs.overlays
+        # our own overlays:
+        # needed for cardano-api wich uses a patched libsodium
+        ++ iohkNixMain.overlays.crypto
+        ++ iohkNixMain.overlays.iohkNix
+        ++ ownOverlays
+        ++ overlays;
     config = haskellNix.nixpkgsArgs.config // config;
     # In nixpkgs versions older than 21.05, if we don't explicitly pass
     # in localSystem we will hit a code path that uses builtins.currentSystem,

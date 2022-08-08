@@ -109,39 +109,28 @@ let
     start-cardano-node
     stylish-haskell
     updateMaterialized
-
   ]);
 
-  defaultShell = haskell.project.shellFor {
-    nativeBuildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
-    # We don't currently use this, and it's a pain to materialize, and otherwise
-    # costs a fair bit of eval time.
-    withHoogle = false;
-
-    shellHook = ''
-      ${pre-commit-check.shellHook}
-    ''
-    # Work around https://github.com/NixOS/nix/issues/3345, which makes
-    # tests etc. run single-threaded in a nix-shell.
-    # Sets the affinity to cores 0-1000 for $$ (current PID in bash)
-    # Only necessary for linux - darwin doesn't even expose thread
-    # affinity APIs!
-    + lib.optionalString stdenv.isLinux ''
-      ${utillinux}/bin/taskset -pc 0-1000 $$
-    ''
-    # Point to some source dependencies
-    + ''
-      export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-      export PGUSER=postgres
-    '';
-  };
-  chainSyncShell = haskell.project.shellFor {
-    buildInputs = [ run-chainseekd ];
-    nativeBuildInputs = nixpkgsInputs ++ localInputs;
-    shellHook = pre-commit-check.shellHook;
-    withHoogle = false;
-  };
 in
-defaultShell // {
-  chain-sync = chainSyncShell;
-}
+haskell.project.shellFor {
+  nativeBuildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
+  # We don't currently use this, and it's a pain to materialize, and otherwise
+  # costs a fair bit of eval time.
+  withHoogle = false;
+  shellHook = ''
+    ${pre-commit-check.shellHook}
+  ''
+  # Work around https://github.com/NixOS/nix/issues/3345, which makes
+  # tests etc. run single-threaded in a nix-shell.
+  # Sets the affinity to cores 0-1000 for $$ (current PID in bash)
+  # Only necessary for linux - darwin doesn't even expose thread
+  # affinity APIs!
+  + lib.optionalString stdenv.isLinux ''
+    ${utillinux}/bin/taskset -pc 0-1000 $$
+  ''
+  # Point to some source dependencies
+  + ''
+    export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
+    export PGUSER=postgres
+  '';
+};
