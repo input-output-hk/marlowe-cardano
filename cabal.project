@@ -252,6 +252,7 @@ source-repository-package
     eras/shelley-ma/test-suite
     libs/cardano-ledger-core
     libs/cardano-ledger-pretty
+    libs/cardano-ledger-test
     libs/cardano-protocol-tpraos
     libs/cardano-data
     libs/vector-map
@@ -312,7 +313,6 @@ source-repository-package
     ouroboros-network
     ouroboros-network-framework
     ouroboros-network-testing
-    ntp-client
 
 source-repository-package
   type: git
@@ -360,27 +360,12 @@ source-repository-package
   tag: 4ec92ded05ccf59ba4a874be4b404ac1b6d666b6
   --sha256: 00fvvaf4ir4hskq4a6gggbh2wmdvy8j8kn6s4m1p1vlh8m8mq514
 
+-- Drops an instance breaking our code. Should be released to Hackage eventually.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/flat
   tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
   --sha256: 1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm
-
--- marlowe-cli only
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-config
-  tag: 1646e9167fab36c0bff82317743b96efa2d3adaa
-  --sha256: 11kf65x38laqhwspsl28j2x5a4rky8mfr6356w0li5g53sfykmjc
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-addresses
-  tag: b6f2f3cef01a399376064194fd96711a5bdba4a7
-  --sha256: 10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045
-  subdir: command-line
-          core
 
 constraints:
     hedgehog >= 1.0
@@ -405,3 +390,20 @@ allow-newer:
   *:aeson,
   monoidal-containers:aeson,
   size-based:template-haskell
+
+-- marlowe-cli only
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-config
+  tag: 1646e9167fab36c0bff82317743b96efa2d3adaa
+  --sha256: 11kf65x38laqhwspsl28j2x5a4rky8mfr6356w0li5g53sfykmjc
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-addresses
+  tag: b6f2f3cef01a399376064194fd96711a5bdba4a7
+  --sha256: 10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045
+  subdir: command-line
+          core
+
