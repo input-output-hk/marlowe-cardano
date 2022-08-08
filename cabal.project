@@ -7,7 +7,7 @@ packages:
   marlowe
   marlowe-actus
   marlowe-chain-sync
-  marlowe-chain-sync/marlowe-protocols
+  marlowe-protocols
   marlowe-cli
   marlowe-contracts
   marlowe-runtime
@@ -25,6 +25,12 @@ tests: False
 test-show-details: direct
 
 -- Then enable specific tests in this repo
+
+package marlowe-chain-sync
+  ghc-options: -Werror
+
+package marlowe-protocols
+  ghc-options: -Werror
 
 package cardano-api
   ghc-options: -Werror

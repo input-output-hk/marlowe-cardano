@@ -16,7 +16,7 @@ license-files:
 source-repository head
   type: git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir: marlowe-chain-sync/marlowe-protocols
+  subdir: marlowe-protocols
 
 library
   default-language: Haskell2010
