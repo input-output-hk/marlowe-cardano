@@ -24,6 +24,7 @@
   # Whether to build our Haskell packages (and their dependencies) with profiling enabled.
 , enableHaskellProfiling ? false
 , source-repo-override ? { }
+, networkNixName ? "testnet"
 }:
 let
   inherit (packages) pkgs marlowe sources;
@@ -36,10 +37,10 @@ rec {
 
   inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
 
+  network = pkgs.networks.${networkNixName};
+
   dev-scripts = import ./nix/dev/scripts.nix {
-    inherit pkgs;
-    inherit cardano-cli cardano-node;
-    network = pkgs.networks.testnet-dev;
+    inherit pkgs network cardano-cli cardano-node;
   };
 
   tests = import ./nix/tests/default.nix {

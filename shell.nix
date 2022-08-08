@@ -4,7 +4,7 @@
 }:
 let
   # inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli dev-scripts;
-  inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts;
+  inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
   inherit (dev-scripts) start-cardano-node run-chainseekd;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
