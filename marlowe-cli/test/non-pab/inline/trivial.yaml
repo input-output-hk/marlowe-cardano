@@ -29,6 +29,8 @@ stScriptOperations:
             timeout_continuation: close
         timeout: 1929587625000
         timeout_continuation: close
+  - tag: Execute
+    soTransaction: "TestTransaction-1"
 
   - tag: Prepare
     soTransaction: "TestTransaction-1"
