@@ -184,9 +184,9 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
     -> m (ClientStNext query err result point tip m a)
     -> Peer (ChainSeek query point tip) 'AsClient ('StNext err result 'StMustReply) m a
   peerWait pos query mnext = Effect do
-    ClientStNext{..} <- mnext
+    next@ClientStNext{..} <- mnext
     pure $ Await (ServerAgency (TokNext query TokMustReply)) \case
       MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
       MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
       MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
-      MsgPing                        -> Yield (ClientAgency TokPing) MsgPong $ peerWait pos query mnext
+      MsgPing                        -> Yield (ClientAgency TokPing) MsgPong $ peerWait pos query $ pure next
