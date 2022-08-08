@@ -1,21 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 module Main(main) where
 
 -- import qualified Spec.Marlowe.AutoExecute
--- import qualified Spec.Marlowe.Marlowe
+import qualified Spec.Marlowe.Marlowe
 import qualified Spec.Marlowe.Semantics (tests)
 
-import Test.Tasty
+import Test.Tasty (TestTree, defaultMain, testGroup)
 -- import Test.Tasty.QuickCheck
 
 main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Marlowe"
-    -- [ -- Rely on plutus-apps stuff - investigate how to migrate
-    -- [ testGroup "Contracts"
-    --     -- Spec.Marlowe.Marlowe.tests
+tests = testGroup "Marlowe" $
+    -- [ -- Relied on plutus-apps stuff - investigate how to migrate
+    [ testGroup "Contracts"
+        [ Spec.Marlowe.Marlowe.tests ]
     --     -- , Spec.Marlowe.AutoExecute.tests
     --     -- Does not work when invoking it from nix
     --     -- , testProperty "Correct Show instance for Contract"
@@ -27,6 +28,6 @@ tests = testGroup "Marlowe"
     -- , testGroup "Marlowe JSON"
     --     [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
     --     ]
-    -- ]
-    -- <>
-    Spec.Marlowe.Semantics.tests
+    ]
+    -- <> Spec.Marlowe.Semantics.tests
+

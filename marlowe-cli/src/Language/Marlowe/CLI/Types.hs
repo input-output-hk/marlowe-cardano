@@ -55,7 +55,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Core.V1.Semantics (Payment)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
--- import Plutus.V1.Ledger.Aeson ()
+import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 

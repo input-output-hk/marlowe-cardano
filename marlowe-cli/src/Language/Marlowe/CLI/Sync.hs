@@ -171,6 +171,7 @@ walkBlocks connection start record notifyIdle revertPoint processBlock =
         localChainSyncClient    = LocalChainSyncClient
                                     $ client start record notifyIdle revertPoint processBlock
       , localTxSubmissionClient = Nothing
+      , localTxMonitoringClient = Nothing
       , localStateQueryClient   = Nothing
       }
   in
@@ -259,6 +260,7 @@ processChain :: BlockHandler             -- ^ Handle blocks.
              -> BlockInMode CardanoMode  -- ^ The block.
              -> ChainTip                 -- ^ The chain tip.
              -> IO ()                    -- ^ Action to process transactions.
+processChain blockHandler txHandler (BlockInMode block BabbageEraInCardanoMode ) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block AlonzoEraInCardanoMode ) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block MaryEraInCardanoMode   ) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block AllegraEraInCardanoMode) = processChain' blockHandler txHandler block

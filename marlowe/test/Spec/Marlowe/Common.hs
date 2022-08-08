@@ -7,13 +7,17 @@ module Spec.Marlowe.Common where
 
 import Data.Map.Strict (Map)
 
+import Data.Ratio (Ratio)
 import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
                                                  Observation (..), Party (..), Payee (..), Token (..), Value (..),
                                                  ValueId (..))
+import Language.Marlowe.Extended.V1 (ada)
 import qualified Language.Marlowe.Extended.V1 as Extended
+import Language.Marlowe.Util (merkleizedCase)
+import Ledger.Crypto (pubKeyHash)
+import Plutus.V1.Ledger.Api (PubKeyHash (PubKeyHash))
 import qualified Plutus.V1.Ledger.Api as Ledger
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-import qualified PlutusTx.Ratio as P
 import Test.QuickCheck
 -- import Wallet (PubKey (..))
 -- import Wallet.Emulator
@@ -33,7 +37,7 @@ positiveAmount = choose (1, 100)
 partyGen :: Gen Party
 partyGen = oneof [ return $ Role "alice"
                  , return $ Role "bob"
-                 , return $ PK (pubKeyHash "6361726f6c")
+                 , return $ PK (PubKeyHash "6361726f6c")
                  ]
 
 
@@ -84,6 +88,9 @@ shrinkSimpleInteger :: Integer -> [Integer]
 shrinkSimpleInteger 0 = []
 shrinkSimpleInteger v = [0, v `quot` 2]
 
+shrinkPOSIXTime :: Ledger.POSIXTime -> [Ledger.POSIXTime]
+shrinkPOSIXTime (Ledger.POSIXTime t) = map Ledger.POSIXTime (shrinkSimpleInteger t)
+
 
 choiceIdGen :: Gen ChoiceId
 choiceIdGen = do choName <- oneof [ return "first"
@@ -112,11 +119,11 @@ shrinkValueId "alpha" = []
 shrinkValueId _       = []
 
 
-rationalGen :: Gen P.Rational
+rationalGen :: Gen (Ratio Integer)
 rationalGen = do
     a <- simpleIntegerGen
     b <- positiveAmount
-    return $ a % b
+    return $ a Extended.% b
 
 
 valueGenSized :: Int -> Gen (Value Observation)
@@ -328,13 +335,13 @@ shrinkContract cont = case cont of
         Close:cont1:cont2:([If obs x cont2 | x <- shrinkContract cont1]
                       ++ [If obs cont1 y | y <- shrinkContract cont2]
                       ++ [If z cont1 cont2 | z <- shrinkObservation obs])
-    When [] (Extended.POSIXTime tim) cont ->
-        Close:cont:([When [] (Extended.POSIXTime tim) x | x <- shrinkContract cont]
-              ++ [When [] (Extended.POSIXTime y) cont | y <- shrinkSimpleInteger tim])
-    When l (Extended.POSIXTime tim) cont ->
-        Close:cont:([When nl (Extended.POSIXTime tim) cont | nl <- shrinkList shrinkCase l]
-              ++ [When l (Extended.POSIXTime tim) x | x <- shrinkContract cont]
-              ++ [When l (Extended.POSIXTime y) cont | y <- shrinkSimpleInteger tim])
+    When [] (Ledger.POSIXTime tim) cont ->
+        Close:cont:([When [] (Ledger.POSIXTime tim) x | x <- shrinkContract cont]
+              ++ [When [] (Ledger.POSIXTime y) cont | y <- shrinkSimpleInteger tim])
+    When l (Ledger.POSIXTime tim) cont ->
+        Close:cont:([When nl (Ledger.POSIXTime tim) cont | nl <- shrinkList shrinkCase l]
+              ++ [When l (Ledger.POSIXTime tim) x | x <- shrinkContract cont]
+              ++ [When l (Ledger.POSIXTime y) cont | y <- shrinkSimpleInteger tim])
     Assert obs cont ->
         Close:cont:([Assert x cont | x <- shrinkObservation obs]
               ++ [Assert obs y | y <- shrinkContract cont])
@@ -342,7 +349,7 @@ shrinkContract cont = case cont of
 
 pangramContract :: Contract
 pangramContract = let
-    alicePk = PK (pubKeyHash "8361726f6c")
+    alicePk = PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
     aliceAcc = alicePk
     bobRole = Role "Bob"
     constant = Constant 100
@@ -358,9 +365,9 @@ pangramContract = let
                 (Pay aliceAcc (Account aliceAcc) token (DivValue (AvailableMoney aliceAcc token) constant) Close)
                 Close)
         , Case (Notify (AndObs (TimeIntervalStart `ValueLT` TimeIntervalEnd) TrueObs)) Close
-        ] (Extended.POSIXTime 100) Close
+        ] (Ledger.POSIXTime 100) Close
 
 
 secondsSinceShelley :: SlotConfig -> Integer -> Ledger.POSIXTime
 secondsSinceShelley SlotConfig {scSlotZeroTime} seconds =
-    scSlotZeroTime + Extended.POSIXTime (seconds * 1000)
+    scSlotZeroTime + Ledger.POSIXTime (seconds * 1000)

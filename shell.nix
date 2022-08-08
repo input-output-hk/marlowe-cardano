@@ -65,9 +65,7 @@ let
     ln -sv ${pkgs.nixFlakes}/bin/nix $out/bin/nix-flakes
   '';
 
-  # build inputs from nixpkgs ( -> ./nix/default.nix )
   nixpkgsInputs = (with pkgs; [
-    arion
     cacert
     editorconfig-core-c
     ghcid
@@ -81,13 +79,8 @@ let
     zlib
     tmux
 
-    # marlowe-chain-sync
-    docker-compose
-    postgresql
-    sqitchPg
   ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
-  # local build inputs ( -> ./nix/pkgs/default.nix )
   localInputs = (with marlowe; [
     cabal-install
     cardano-cli
@@ -120,7 +113,7 @@ let
   '';
 
   defaultShell = haskell.project.shellFor {
-    nativeBuildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
+    buildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
     # We don't currently use this, and it's a pain to materialize, and otherwise
     # costs a fair bit of eval time.
     withHoogle = false;

@@ -11,7 +11,6 @@ module Spec.Marlowe.Semantics (
 import Data.Maybe (fromMaybe, isNothing)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
-import Ledger.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
 import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Orphans ()
@@ -21,6 +20,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
+import Plutus.Script.Utils.V1.Scripts (dataHash)
 import qualified PlutusTx.AssocMap as AM
 
 
