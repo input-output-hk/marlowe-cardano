@@ -6,10 +6,9 @@ services:
     environment:
       - POSTGRES_LOGGING=true
       - POSTGRES_DB_FILE=/run/secrets/postgres_db
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
       - POSTGRES_USER_FILE=/run/secrets/postgres_user
+      - POSTGRES_HOST_AUTH_METHOD=trust # Do not use this in production!
     secrets:
-      - postgres_password
       - postgres_user
       - postgres_db
     ports:
@@ -31,8 +30,6 @@ services:
 secrets:
   postgres_db:
     file: ./secrets/postgres_db
-  postgres_password:
-    file: ./secrets/postgres_password
   postgres_user:
     file: ./secrets/postgres_user
 

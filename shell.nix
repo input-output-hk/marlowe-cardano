@@ -132,12 +132,13 @@ let
     # Point to some source dependencies
     + ''
       export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
+      export PGUSER=postgres
     '';
   };
   chainSyncShell = haskell.project.shellFor {
     buildInputs = [ run-chainseekd ];
     nativeBuildInputs = nixpkgsInputs ++ localInputs;
-    shellHook = '' ${pre-commit-check.shellHook} '';
+    shellHook = pre-commit-check.shellHook;
     withHoogle = false;
   };
 in

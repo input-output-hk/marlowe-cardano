@@ -43,8 +43,12 @@ let
     };
   };
 
-  run-chainseekd = pkgs.writeShellScriptBin "run-chainseekd" ''
-    cabal run chainseekd --
+  run-chainseekd = writeShellScriptBinInRepoRoot "run-chainseekd" ''
+    cd marlowe-chain-sync
+    cabal run chainseekd -- \
+      --testnet-magic ${builtins.toString network.magic} \
+      --socket-path ${devNetworkConfig.node.socket-path} \
+      --database-uri postgresql://postgres@0.0.0.0/chain \
       --genesis-config-file ${network.nodeConfig.ByronGenesisFile} \
       --genesis-config-file-hash ${network.nodeConfig.ByronGenesisHash}
   '';
