@@ -11,7 +11,6 @@
 , sourcesOverride ? { }
 , sources ? import ./nix/sources.nix { inherit system; } // sourcesOverride
 , haskellNix ? import sources.haskell-nix {
-    pkgs = import sources.nixpkgs { inherit system; };
     sourcesOverride = {
       hackage = sources.hackage-nix;
       stackage = sources.stackage-nix;

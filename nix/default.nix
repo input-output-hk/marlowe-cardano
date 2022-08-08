@@ -33,15 +33,16 @@ let
     ++ ownOverlays;
 
 
-  pkgs = import sources.nixpkgs {
-    inherit crossSystem;
+  nixpkgsArgs = haskellNix.nixpkgsArgs // {
+    overlays = haskellNix.nixpkgsArgs.overlays ++ extraOverlays ++ overlays;
+    config = haskellNix.nixpkgsArgs.config // config;
     # In nixpkgs versions older than 21.05, if we don't explicitly pass
     # in localSystem we will hit a code path that uses builtins.currentSystem,
     # which breaks flake's pure evaluation.
     localSystem = { inherit system; };
-    overlays = extraOverlays ++ overlays;
-    config = haskellNix.nixpkgsArgs.config // config;
   };
+
+  pkgs = import haskellNix.sources.nixpkgs-unstable nixpkgsArgs;
 
   marlowe = import ./pkgs { inherit pkgs checkMaterialization enableHaskellProfiling sources source-repo-override; };
 
