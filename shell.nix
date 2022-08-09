@@ -3,7 +3,6 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  # inherit (packages) pkgs marlowe docs webCommon bitte-packages marlowe-cli dev-scripts;
   inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
   inherit (dev-scripts) start-cardano-node run-chainseekd;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
@@ -75,14 +74,11 @@ let
     jq
     nixFlakesAlias
     nixpkgs-fmt
-    nodejs
     shellcheck
     sqlite-interactive
-    stack
     yq
     z3
     zlib
-    nodePackages.prettier
     tmux
 
     # marlowe-chain-sync
@@ -111,13 +107,7 @@ let
     updateMaterialized
   ]);
 
-in
-haskell.project.shellFor {
-  nativeBuildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
-  # We don't currently use this, and it's a pain to materialize, and otherwise
-  # costs a fair bit of eval time.
-  withHoogle = false;
-  shellHook = ''
+  defaultShellHook = ''
     ${pre-commit-check.shellHook}
   ''
   # Work around https://github.com/NixOS/nix/issues/3345, which makes
@@ -127,10 +117,75 @@ haskell.project.shellFor {
   # affinity APIs!
   + lib.optionalString stdenv.isLinux ''
     ${utillinux}/bin/taskset -pc 0-1000 $$
-  ''
-  # Point to some source dependencies
-  + ''
-    export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-    export PGUSER=postgres
   '';
+
+  defaultShell = haskell.project.shellFor {
+    nativeBuildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
+    # We don't currently use this, and it's a pain to materialize, and otherwise
+    # costs a fair bit of eval time.
+    withHoogle = false;
+    shellHook = ''
+      export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
+      export PGUSER=postgres
+      ${defaultShellHook}
+    '';
+  };
+
+  develShells =
+    let
+      libs = [
+        pkgs.glibcLocales
+        pkgs.libsodium-vrf
+        pkgs.lzma
+        pkgs.openssl
+        pkgs.secp256k1
+        pkgs.zlib
+      ];
+      marloweCoreBuildInputs = (with marlowe; libs ++ [
+        cabal-install
+        docs.build-and-serve-docs
+        fix-prettier
+        fixStylishHaskell
+        pkgs.ghc
+        pkgs.ghcid
+        pkgs.git
+        haskell-language-server
+        haskell-language-server-wrapper
+        hie-bios
+        hlint
+        pkgs.pre-commit
+        pkgs.pkgconfig
+        stylish-haskell
+        updateMaterialized
+      ]);
+      marloweCliBuildInputs = marloweCoreBuildInputs ++ [
+        cardano-node
+        cardano-cli
+        start-cardano-node
+      ];
+      develShell = { buildInputs, shellHook ? "" }: pkgs.mkShell {
+        name = "marlowe-core-shell";
+        buildInputs = buildInputs;
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libs;
+        shellHook = ''
+          ${defaultShellHook}
+          ${shellHook}
+        '';
+      };
+    in
+    {
+      marloweActus = develShell {
+        buildInputs = marloweCoreBuildInputs;
+        shellHook = ''
+          export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
+        '';
+      };
+      marloweCli = develShell { buildInputs = marloweCliBuildInputs; };
+      marloweCore = develShell { buildInputs = marloweCoreBuildInputs; };
+    };
+in
+defaultShell // {
+  marlowe-actus = develShells.marloweActus;
+  marlowe-cli = develShells.marloweCli;
+  marlowe-core = develShells.marloweCore;
 }
