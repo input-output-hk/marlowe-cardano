@@ -133,8 +133,6 @@ let
 
   develShells =
     let
-      # FIXME: Can we not hard code the version of ghc here?
-      compiler = "ghc8107";
       libs = [
         pkgs.glibcLocales
         pkgs.libsodium-vrf
@@ -142,7 +140,8 @@ let
         pkgs.openssl
         pkgs.secp256k1
         pkgs.zlib
-      ];
+      ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
+
       marloweCoreBuildInputs = (with marlowe; libs ++ [
         cabal-install
         docs.build-and-serve-docs
@@ -150,7 +149,7 @@ let
         fixStylishHaskell
         pkgs.ghcid
         pkgs.git
-        pkgs.haskell.compiler.${compiler}
+        pkgs.ghc
         haskell-language-server
         haskell-language-server-wrapper
         hie-bios
