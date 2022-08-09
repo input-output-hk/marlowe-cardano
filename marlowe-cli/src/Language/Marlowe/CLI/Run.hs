@@ -35,14 +35,13 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, BabbageEra, CardanoMode,
-                    LocalNodeConnectInfo (localNodeNetworkId), MultiAssetSupportedInEra (MultiAssetInBabbageEra),
-                    NetworkId, QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO),
-                    QueryUTxOFilter (QueryUTxOByAddress), Script (..), ScriptDataSupportedInEra (..),
-                    ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..), StakeAddressReference (..), TxId, TxIn,
-                    TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
-                    anyAddressInShelleyBasedEra, calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace,
-                    toAddressAny, txOutValueToValue, writeFileTextEnvelope)
+import Cardano.Api (AddressAny, AddressInEra (..), BabbageEra, CardanoMode, LocalNodeConnectInfo (localNodeNetworkId),
+                    MultiAssetSupportedInEra (MultiAssetInBabbageEra), NetworkId,
+                    QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
+                    Script (..), ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..),
+                    StakeAddressReference (..), TxId, TxIn, TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..),
+                    TxOutValue (..), UTxO (..), anyAddressInShelleyBasedEra, calculateMinimumUTxO, getTxId,
+                    lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
@@ -58,7 +57,7 @@ import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, b
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, hashSigningKey, queryAlonzo,
+import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, hashSigningKey, queryBabbage,
                                          submitBody)
 import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
                                    ValidatorInfo (..))
@@ -152,7 +151,7 @@ initializeTransactionImpl :: MonadError CliError m
                           -> State                              -- ^ The initial Marlowe state.
                           -> Bool                               -- ^ Whether to deeply merkleize the contract.
                           -> Bool                               -- ^ Whether to print statistics about the validator.
-                          -> m (MarloweTransaction AlonzoEra)   -- ^ Action to return a MarloweTransaction
+                          -> m (MarloweTransaction BabbageEra)  -- ^ Action to return a MarloweTransaction
 initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState merkleize printStats =
   do
     let
@@ -160,7 +159,7 @@ initializeTransactionImpl marloweParams mtSlotConfig costModelParams network sta
     mtValidator <- liftCli $ buildValidator marloweParams costModelParams network stake
     mtRoleValidator <- liftCli $ buildRoleValidator mtRoles costModelParams network stake
     let
-      ValidatorInfo{..} = mtValidator :: ValidatorInfo AlonzoEra  -- FIXME: Generalize eras.
+      ValidatorInfo{..} = mtValidator :: ValidatorInfo BabbageEra  -- FIXME: Generalize eras.
       mtContinuations = mempty
       mtRange         = Nothing
       mtInputs        = []
@@ -194,19 +193,19 @@ prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile print
 -- | Implementation of Prepare function
 prepareTransactionImpl :: MonadError CliError m
                => MonadIO m
-               => MarloweTransaction AlonzoEra      -- ^ Marlowe transaction to be prepared.
+               => MarloweTransaction BabbageEra     -- ^ Marlowe transaction to be prepared.
                -> [Input]                           -- ^ The contract's inputs.
                -> POSIXTime                         -- ^ The first valid time for the transaction.
                -> POSIXTime                         -- ^ The last valid time for the transaction.
                -> Bool                              -- ^ Whether to print statistics about the result.
-               -> m (MarloweTransaction AlonzoEra)  -- ^ Action to compute the next step in the contract.
+               -> m (MarloweTransaction BabbageEra) -- ^ Action to compute the next step in the contract.
 prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats =
   do
     let
       txInterval = (minimumTime, maximumTime)
     (warnings, marloweOut@MarloweTransaction{..}) <-
       makeMarlowe
-        (marloweIn :: MarloweTransaction AlonzoEra)  -- FIXME: Generalize eras.
+        (marloweIn :: MarloweTransaction BabbageEra)  -- FIXME: Generalize eras.
         (TransactionInput txInterval txInputs)
     liftIO
       $ do
@@ -286,7 +285,7 @@ runTransaction :: MonadError CliError m
 runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
   do
     metadata <- readMaybeMetadata metadataFile
-    protocol <- queryAlonzo connection QueryProtocolParameters
+    protocol <- queryBabbage connection QueryProtocolParameters
     marloweOut <- decodeFileStrict marloweOutFile
     (spend, collateral, datumOutputs) <-
       case marloweInBundle of
@@ -327,8 +326,8 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
       scriptAddress :: AddressInEra BabbageEra
       scriptAddress = viAddress $ mtValidator marloweOut
 
-      scriptAddressInAlonzo :: AddressInEra AlonzoEra
-      scriptAddressInAlonzo =  anyAddressInShelleyBasedEra (babbageToAddressAny' scriptAddress)
+      scriptAddressInBabbage :: AddressInEra BabbageEra
+      scriptAddressInBabbage =  anyAddressInShelleyBasedEra (babbageToAddressAny' scriptAddress)
 
       outputDatum = diDatum $ buildDatum (mtContract marloweOut) (mtState marloweOut)
     outputValue <-
@@ -344,7 +343,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
         do
           guard (outputValue /= mempty)
           pure
-            $ buildPayToScript scriptAddressInAlonzo outputValue outputDatum
+            $ buildPayToScript scriptAddressInBabbage outputValue outputDatum
 
       roleAddress = viAddress $ mtRoleValidator marloweOut :: AddressInEra BabbageEra
     payments <-
@@ -452,12 +451,12 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
     signingKeys <- mapM readSigningKey signingKeyFiles
     roleHash <- liftCli . toCardanoScriptDataHash . diHash $ buildRoleDatum roleName
     let
-      toAddressAny' :: AddressInEra AlonzoEra -> AddressAny
+      toAddressAny' :: AddressInEra BabbageEra -> AddressAny
       toAddressAny' (AddressInEra _ address) = toAddressAny address
 
       validatorInfo = mtRoleValidator marloweOut
       PlutusScript _ roleScript = viScript validatorInfo
-      roleAddress = viAddress validatorInfo :: AddressInEra AlonzoEra
+      roleAddress = viAddress validatorInfo :: AddressInEra BabbageEra
       roleDatum = diDatum $ buildRoleDatum roleName
       roleRedeemer = riRedeemer buildRoleRedeemer
       checkRole (TxOut _ _ datum _) =
@@ -467,7 +466,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
           TxOutDatumHash _ datumHash -> datumHash == roleHash
     utxos <-
       fmap (filter (checkRole . snd) . M.toList . unUTxO)
-        . queryAlonzo connection
+        . queryBabbage connection
         . QueryUTxO
         . QueryUTxOByAddress
         . S.singleton

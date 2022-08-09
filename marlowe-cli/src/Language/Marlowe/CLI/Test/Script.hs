@@ -27,7 +27,7 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (AlonzoEra, CardanoMode, LocalNodeConnectInfo (..), NetworkId,
+import Cardano.Api (BabbageEra, CardanoMode, LocalNodeConnectInfo (..), NetworkId,
                     StakeAddressReference (NoStakeAddress))
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
@@ -56,7 +56,7 @@ import Language.Marlowe.CLI.Types (CliError (..))
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
 newtype ScriptState = ScriptState
-  { transactions :: Map String (MarloweTransaction AlonzoEra)
+  { transactions :: Map String (MarloweTransaction BabbageEra)
   }
 
 data ScriptEnv = ScriptEnv
@@ -111,7 +111,7 @@ interpret Prepare {..} = do
 
 interpret (Fail message) = throwError $ CliError message
 
-insertMarloweTransaction :: TransactionNickname -> MarloweTransaction AlonzoEra -> ScriptState -> ScriptState
+insertMarloweTransaction :: TransactionNickname -> MarloweTransaction BabbageEra -> ScriptState -> ScriptState
 insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
   scriptState{ transactions = Map.insert nickname transaction transactions }
 
@@ -119,7 +119,7 @@ insertMarloweTransaction nickname transaction scriptState@ScriptState { transact
 findMarloweTransaction :: MonadError CliError m
                 => MonadState ScriptState m
                 => TransactionNickname   -- ^ The nickname.
-                -> m (MarloweTransaction AlonzoEra) -- ^ Action returning the instance.
+                -> m (MarloweTransaction BabbageEra) -- ^ Action returning the instance.
 findMarloweTransaction nickname = do
   ScriptState { transactions } <- get
   case M.lookup nickname transactions of
