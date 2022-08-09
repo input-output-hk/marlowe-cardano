@@ -52,6 +52,4 @@
         hsSourceDirs = [ "src" ];
         };
       };
-    } // rec {
-    src = (pkgs.lib).mkDefault ../marlowe-chain-sync/marlowe-protocols;
-    }
+    } // rec { src = (pkgs.lib).mkDefault ../marlowe-protocols; }
