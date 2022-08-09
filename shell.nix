@@ -133,6 +133,8 @@ let
 
   develShells =
     let
+      # FIXME: Can we not hard code the version of ghc here?
+      compiler = "ghc8107";
       libs = [
         pkgs.glibcLocales
         pkgs.libsodium-vrf
@@ -146,9 +148,9 @@ let
         docs.build-and-serve-docs
         fix-prettier
         fixStylishHaskell
-        pkgs.ghc
         pkgs.ghcid
         pkgs.git
+        pkgs.haskell.compiler.${compiler}
         haskell-language-server
         haskell-language-server-wrapper
         hie-bios
