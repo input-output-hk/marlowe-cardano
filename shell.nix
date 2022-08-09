@@ -140,7 +140,7 @@ let
         pkgs.openssl
         pkgs.secp256k1
         pkgs.zlib
-      ];
+      ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
 
       marloweCoreBuildInputs = (with marlowe; libs ++ [
         cabal-install
