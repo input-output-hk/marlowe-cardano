@@ -21,7 +21,7 @@
 
 module Language.Marlowe.CLI.Transaction (
 -- * Types
-  TxInAlonzo
+  TxInBabbage
 -- * Building
 , buildSimple
 , buildIncoming
@@ -39,7 +39,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildPayFromScript
 , buildPayToScript
 , hashSigningKey
-, queryAlonzo
+, queryBabbage
 , queryUtxos
 , selectUtxos
 , submitBody
@@ -47,7 +47,7 @@ module Language.Marlowe.CLI.Transaction (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), AssetId (..), AssetName (..),
+import Cardano.Api (AddressAny, AddressInEra (..), AsType (..), AssetId (..), AssetName (..), BabbageEra,
                     BalancedTxBody (..), BuildTx, BuildTxWith (..), CardanoEra (..), CardanoMode,
                     CollateralSupportedInEra (..), ConsensusModeIsMultiEra (..), CtxTx, EraHistory (..), EraInMode (..),
                     ExecutionUnits (..), Hash, KeyWitnessInCtx (..), LocalNodeConnectInfo (..), Lovelace,
@@ -62,10 +62,10 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), Asset
                     TxCertificates (..), TxExtraKeyWitnesses (..), TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
                     TxFeesExplicitInEra (..), TxId, TxIn (..), TxInMode (..), TxInsCollateral (..),
                     TxInsReference (TxInsReferenceNone), TxIx (..), TxMetadataInEra (..),
-                    TxMetadataJsonSchema (TxMetadataJsonNoSchema), TxMetadataSupportedInEra (TxMetadataInAlonzoEra),
+                    TxMetadataJsonSchema (TxMetadataJsonNoSchema), TxMetadataSupportedInEra (TxMetadataInBabbageEra),
                     TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..),
                     TxReturnCollateral (TxReturnCollateralNone), TxScriptValidity (..),
-                    TxScriptValiditySupportedInEra (TxScriptValiditySupportedInAlonzoEra),
+                    TxScriptValiditySupportedInEra (TxScriptValiditySupportedInBabbageEra),
                     TxTotalCollateral (TxTotalCollateralNone), TxUpdateProposal (..), TxValidityLowerBound (..),
                     TxValidityUpperBound (..), TxWithdrawals (..), UTxO (..), ValidityLowerBoundSupportedInEra (..),
                     ValidityNoUpperBoundSupportedInEra (..), ValidityUpperBoundSupportedInEra (..), Value, WitCtxTxIn,
@@ -155,8 +155,8 @@ buildClean :: MonadError CliError m
            -> Lovelace                          -- ^ The value to be sent to addresses with tokens.
            -> AddressAny                        -- ^ The change address.
            -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
-           -> TxMintValue BuildTx AlonzoEra     -- ^ The mint value.
-           -> TxMetadataInEra AlonzoEra         -- ^ The metadata.
+           -> TxMintValue BuildTx BabbageEra    -- ^ The mint value.
+           -> TxMetadataInEra BabbageEra        -- ^ The metadata.
            -> FilePath                          -- ^ The output file for the transaction body.
            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
            -> m TxId                            -- ^ Action to build the transaction body.
@@ -165,7 +165,7 @@ buildClean connection signingKeyFiles lovelace changeAddress range mintValue met
     signingKeys <- mapM readSigningKey signingKeyFiles
     utxos <-
       fmap (M.toList . unUTxO)
-        .  queryAlonzo connection
+        .  queryBabbage connection
         . QueryUTxO
         . QueryUTxOByAddress
         . S.singleton
@@ -209,35 +209,35 @@ buildFaucet :: MonadError CliError m
             => MonadIO m
             => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
             -> Value                             -- ^ The value to be sent to the funded addresses.
-            -> AddressAny                        -- ^ The funded address.
+            -> [AddressAny]                      -- ^ The addresses to receive funds.
             -> AddressAny                        -- ^ The faucet address.
-            -> SomePaymentSigningKey             -- ^ The required signing key.
+            -> FilePath                          -- ^ The required signing key.
             -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> m TxId                            -- ^ Action to build the transaction body.
-buildFaucet connection value fundedAddress changeAddress signingKey timeout =
+buildFaucet connection value destAddresses fundAddress fundSigningKeyFile timeout =
   do
     utxos <-
       fmap (M.toList . unUTxO)
-        . queryAlonzo connection
+        . queryBabbage connection
         . QueryUTxO
         . QueryUTxOByAddress
         . S.singleton
-        $ changeAddress
+        $ fundAddress
+    fundSigningKey <- readSigningKey fundSigningKeyFile
     let
       inputs = fst <$> utxos
       extractValue (TxOut _ v _ _) = txOutValueToValue v
       total = mconcat $ extractValue . snd <$> utxos
       lovelace = lovelaceToValue . toEnum . (`div` 2) . fromEnum $ selectLovelace total
+      value' = mconcat $ replicate (length destAddresses) value
       outputs =
-        [
-          (fundedAddress, Nothing, value)
-        , (changeAddress, Nothing, total <> negateValue value <> negateValue lovelace)
-        ]
+        (fundAddress, Nothing, total <> negateValue value' <> negateValue lovelace)
+          : [(destAddress, Nothing, value) | destAddress <- destAddresses]
     body <-
       buildBody connection
         []
         Nothing
-        [] inputs outputs Nothing changeAddress
+        [] inputs outputs Nothing fundAddress
         Nothing
         []
         TxMintNone
@@ -245,7 +245,7 @@ buildFaucet connection value fundedAddress changeAddress signingKey timeout =
         False
         False
     forM_ timeout
-      $ submitBody connection body [signingKey]
+      $ submitBody connection body [fundSigningKey]
     pure
       $ getTxId body
 
@@ -262,14 +262,14 @@ buildFaucet' :: MonadError CliError m
 buildFaucet' connection value addresses bodyFile timeout =
   do
     let
-      toAddressAny' :: AddressInEra AlonzoEra -> AddressAny
+      toAddressAny' :: AddressInEra BabbageEra -> AddressAny
       toAddressAny' (AddressInEra _ address) = toAddressAny address
       network = localNodeNetworkId connection
       script = RequireAllOf []
       witness =
         BuildTxWith
           . ScriptWitness ScriptWitnessForSpending
-          $ SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 (SScript script)
+          $ SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript script)
       changeAddress =
         toAddressAny'
           $ makeShelleyAddressInEra
@@ -278,7 +278,7 @@ buildFaucet' connection value addresses bodyFile timeout =
           NoStakeAddress
     utxos <-
       fmap (M.toList . unUTxO)
-        . queryAlonzo connection
+        . queryBabbage connection
         . QueryUTxO
         . QueryUTxOByAddress
         . S.singleton
@@ -348,13 +348,13 @@ buildMinting connection signingKeyFile tokenNames metadataFile count expires lov
             TokenName name <- tokenNames
           ]
       mintValue =
-        TxMintValue MultiAssetInAlonzoEra minting
+        TxMintValue MultiAssetInBabbageEra minting
           . BuildTxWith
           . M.singleton policy
-          $ SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 (SScript script)
+          $ SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript script)
     metadata' <-
       case metadata of
-        Just (A.Object metadata'') -> fmap (TxMetadataInEra TxMetadataInAlonzoEra)
+        Just (A.Object metadata'') -> fmap (TxMetadataInEra TxMetadataInBabbageEra)
                                         . liftCli
                                         . metadataFromJson TxMetadataJsonNoSchema
                                         . A.Object
@@ -424,7 +424,7 @@ buildIncoming :: MonadError CliError m
 buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress metadataFile bodyFile timeout printStats invalid =
   do
     metadata <- readMaybeMetadata metadataFile
-    scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
+    scriptAddress' <- asBabbageAddress "Failed to converting script address to Babbage era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
@@ -475,7 +475,7 @@ buildContinuing :: MonadError CliError m
 buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot metadataFile bodyFile timeout printStats invalid =
   do
     metadata <- readMaybeMetadata metadataFile
-    scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
+    scriptAddress' <- asBabbageAddress "Failed to converting script address to Babbage era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
@@ -587,44 +587,44 @@ buildBody :: MonadError CliError m
           => MonadIO m
           => LocalNodeConnectInfo CardanoMode    -- ^ The connection info for the local node.
           -> [PayFromScript]                     -- ^ Payment information from the script, if any.
-          -> Maybe (PayToScript AlonzoEra)       -- ^ Payment information to the script, if any.
-          -> [TxInAlonzo]                        -- ^ Transaction inputs.
+          -> Maybe (PayToScript BabbageEra)      -- ^ Payment information to the script, if any.
+          -> [TxInBabbage]                       -- ^ Transaction inputs.
           -> [TxIn]                              -- ^ Transaction inputs.
           -> [(AddressAny, Maybe Datum, Value)]  -- ^ Transaction outputs.
           -> Maybe TxIn                          -- ^ Collateral, if any.
           -> AddressAny                          -- ^ The change address.
           -> Maybe (SlotNo, SlotNo)              -- ^ The valid slot range, if any.
           -> [Hash PaymentKey]                   -- ^ The extra required signatures.
-          -> TxMintValue BuildTx AlonzoEra       -- ^ The mint value.
-          -> TxMetadataInEra AlonzoEra           -- ^ The metadata.
+          -> TxMintValue BuildTx BabbageEra      -- ^ The mint value.
+          -> TxMetadataInEra BabbageEra          -- ^ The metadata.
           -> Bool                                -- ^ Whether to print statistics about the transaction.
           -> Bool                                -- ^ Assertion that the transaction is invalid.
-          -> m (TxBody AlonzoEra)                -- ^ The action to build the transaction body.
+          -> m (TxBody BabbageEra)               -- ^ The action to build the transaction body.
 buildBody connection payFromScript payToScript extraInputs inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid =
   do
-    changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
+    changeAddress' <- asBabbageAddress "Failed converting change address to Babbage era." changeAddress
     start <- queryAny connection   QuerySystemStart
     history <- queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
-    protocol <- queryAlonzo connection QueryProtocolParameters
+    protocol <- queryBabbage connection QueryProtocolParameters
     let
       protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
-      txInsCollateral    = TxInsCollateral CollateralInAlonzoEra $ maybeToList collateral
+      txInsCollateral    = TxInsCollateral CollateralInBabbageEra $ maybeToList collateral
       txReturnCollateral = TxReturnCollateralNone
       txTotalCollateral  = TxTotalCollateralNone
-      txFee              = TxFeeExplicit TxFeesExplicitInAlonzoEra 0
+      txFee              = TxFeeExplicit TxFeesExplicitInBabbageEra 0
       txValidityRange    = (
                              maybe
                                TxValidityNoLowerBound
-                               (TxValidityLowerBound ValidityLowerBoundInAlonzoEra . fst)
+                               (TxValidityLowerBound ValidityLowerBoundInBabbageEra . fst)
                                slotRange
                            , maybe
-                               (TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra)
-                               (TxValidityUpperBound ValidityUpperBoundInAlonzoEra . snd)
+                               (TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra)
+                               (TxValidityUpperBound ValidityUpperBoundInBabbageEra . snd)
                                slotRange
                            )
       txMetadata         = metadata
       txAuxScripts       = TxAuxScriptsNone
-      txExtraKeyWits     = TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra extraSigners
+      txExtraKeyWits     = TxExtraKeyWitnesses ExtraKeyWitnessesInBabbageEra extraSigners
       txProtocolParams   = BuildTxWith $ Just protocol'
       txWithdrawals      = TxWithdrawalsNone
       txCertificates     = TxCertificatesNone
@@ -632,14 +632,14 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
       txInsReference     = TxInsReferenceNone
       txMintValue        = mintValue
       txScriptValidity   = if invalid
-                             then TxScriptValidity TxScriptValiditySupportedInAlonzoEra ScriptInvalid
+                             then TxScriptValidity TxScriptValiditySupportedInBabbageEra ScriptInvalid
                              else TxScriptValidityNone
       scriptTxIn = redeemScript <$> payFromScript
       txIns = extraInputs <> scriptTxIn <> fmap makeTxIn inputs
       scriptTxOut = maybe [] payScript payToScript
     txOuts <- (scriptTxOut <>) <$> mapM (uncurry3 makeTxOut) outputs
     utxo <-
-      queryAlonzo connection
+      queryBabbage connection
         . QueryUTxO
         . QueryUTxOByTxIn
         . S.fromList
@@ -649,7 +649,7 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
     BalancedTxBody _ change _ <-
       liftCli
         $ makeTransactionBodyAutoBalance
-            AlonzoEraInCardanoMode
+            BabbageEraInCardanoMode
             start
             history
             protocol'
@@ -662,7 +662,7 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
       -- Recompute execution units with full set of UTxOs, including change.
       trial =
         makeTransactionBodyAutoBalance
-          AlonzoEraInCardanoMode
+          BabbageEraInCardanoMode
           start
           history
           protocol'
@@ -675,13 +675,13 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
       change' =
         case (change, trial) of
           (TxOut _ (TxOutValue _ value) _ _, Left (TxBodyErrorAdaBalanceNegative delta)) ->
-            TxOut changeAddress' (TxOutValue MultiAssetInAlonzoEra $ value <> lovelaceToValue delta) TxOutDatumNone ReferenceScriptNone
+            TxOut changeAddress' (TxOutValue MultiAssetInBabbageEra $ value <> lovelaceToValue delta) TxOutDatumNone ReferenceScriptNone
           _ -> change
     -- Construct the body with correct execution units and fees.
     BalancedTxBody txBody _ lovelace <-
       liftCli
         $ makeTransactionBodyAutoBalance
-            AlonzoEraInCardanoMode
+            BabbageEraInCardanoMode
             start
             history
             protocol'
@@ -712,9 +712,9 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
 
 
 -- | Total the execution units in a transaction.
-findExUnits :: TxBody AlonzoEra  -- ^ The transaction body.
-            -> ExUnits           -- ^ The execution units.
-findExUnits (ShelleyTxBody ShelleyBasedEraAlonzo  _ _ (TxBodyScriptData _ _ (Redeemers redeemers)) _ _) =
+findExUnits :: TxBody BabbageEra  -- ^ The transaction body.
+            -> ExUnits            -- ^ The execution units.
+findExUnits (ShelleyTxBody ShelleyBasedEraBabbage  _ _ (TxBodyScriptData _ _ (Redeemers redeemers)) _ _) =
   mconcat . fmap snd . M.elems $ redeemers
 findExUnits _ = mempty
 
@@ -729,7 +729,7 @@ submit :: MonadError CliError m
        -> m TxId                            -- ^ The action to submit the transaction.
 submit connection bodyFile signingKeyFiles timeout =
   do
-    body <- liftCliIO $ readFileTextEnvelope (AsTxBody AsAlonzoEra) bodyFile
+    body <- liftCliIO $ readFileTextEnvelope (AsTxBody AsBabbageEra) bodyFile
     signings <- mapM readSigningKey signingKeyFiles
     submitBody connection body signings timeout
 
@@ -738,7 +738,7 @@ submit connection bodyFile signingKeyFiles timeout =
 submitBody :: MonadError CliError m
            => MonadIO m
            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-           -> TxBody AlonzoEra                  -- ^ The transaction body.
+           -> TxBody BabbageEra                 -- ^ The transaction body.
            -> [SomePaymentSigningKey]           -- ^ The signing keys.
            -> Int                               -- ^ Number of seconds to wait for the transaction to be confirmed.
            -> m TxId                            -- ^ The action to submit the transaction.
@@ -752,7 +752,7 @@ submitBody connection body signings timeout =
     result <-
       liftIO
         . submitTxToNodeLocal connection
-        $ TxInMode tx AlonzoEraInCardanoMode
+        $ TxInMode tx BabbageEraInCardanoMode
     case result of
       SubmitSuccess     -> do
                              let
@@ -778,7 +778,7 @@ waitForUtxos connection timeout txIns =
     go n = do
              liftIO . threadDelay $ pause * 1_000_000
              utxos <-
-               queryAlonzo connection
+               queryBabbage connection
                  . QueryUTxO
                  . QueryUTxOByTxIn
                  $ txIns'
@@ -789,20 +789,20 @@ waitForUtxos connection timeout txIns =
     go . ceiling $ fromIntegral timeout / (fromIntegral pause :: Double)
 
 
--- | TxIn for Alonzo transaction body.
-type TxInAlonzo = (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))
+-- | TxIn for Babbage transaction body.
+type TxInBabbage = (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn BabbageEra))
 
 
 -- | Compute the transaction input for paying from a script.
 redeemScript :: PayFromScript  -- ^ The payment information.
-             -> TxInAlonzo     -- ^ The transaction input.
+             -> TxInBabbage    -- ^ The transaction input.
 redeemScript PayFromScript{..} =
   (
     txIn
   , BuildTxWith
       . ScriptWitness ScriptWitnessForSpending
       $ PlutusScriptWitness
-        PlutusScriptV1InAlonzo
+        PlutusScriptV1InBabbage
         PlutusScriptV1
         (PScript script)
         (ScriptDatumForTxIn . fromPlutusData $ toData datum)
@@ -812,21 +812,21 @@ redeemScript PayFromScript{..} =
 
 
 -- | Compute the transaction output for paying to a script.
-payScript :: PayToScript AlonzoEra  -- ^ The payment information.
-          -> [TxOut CtxTx AlonzoEra]      -- ^ The transaction input.
+payScript :: PayToScript BabbageEra   -- ^ The payment information.
+          -> [TxOut CtxTx BabbageEra] -- ^ The transaction input.
 payScript PayToScript{..} =
   [
     TxOut
       address
-      (TxOutValue MultiAssetInAlonzoEra value)
-      (TxOutDatumInTx ScriptDataInAlonzoEra datumOut)
+      (TxOutValue MultiAssetInBabbageEra value)
+      (TxOutDatumInTx ScriptDataInBabbageEra datumOut)
       ReferenceScriptNone
   ]
 
 
 -- | Compute transaction input for building a transaction.
 makeTxIn :: TxIn                                                        -- ^ The transaction input.
-         -> (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))  -- ^ The building for the transaction input.
+         -> (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn BabbageEra)) -- ^ The building for the transaction input.
 makeTxIn = (, BuildTxWith $ KeyWitness KeyWitnessForSpending)
 
 
@@ -842,27 +842,27 @@ makeTxOut :: MonadError CliError m
           => AddressAny                 -- ^ The output address.
           -> Maybe Datum                -- ^ The datum, if any.
           -> Value                      -- ^ The output value.
-          -> m (TxOut CtxTx AlonzoEra)  -- ^ Action for building the transaction output.
+          -> m (TxOut CtxTx BabbageEra) -- ^ Action for building the transaction output.
 makeTxOut address datum value =
   do
-    address' <- asAlonzoAddress "Failed converting output address to Alonzo era." address
+    address' <- asBabbageAddress "Failed converting output address to Babbage era." address
     pure
       $ TxOut
         address'
-        (TxOutValue MultiAssetInAlonzoEra value)
-        (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
+        (TxOutValue MultiAssetInBabbageEra value)
+        (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInBabbageEra . fromPlutusData . toData) datum)
         ReferenceScriptNone
 
 
--- | Convert an address to Alonzo era.
-asAlonzoAddress :: MonadError CliError m
-                => String                     -- ^ The error message.
-                -> AddressAny                 -- ^ The address.
-                -> m (AddressInEra AlonzoEra) -- ^ Action for converting the address.
-asAlonzoAddress message =
+-- | Convert an address to Babbage era.
+asBabbageAddress :: MonadError CliError m
+                => String                       -- ^ The error message.
+                -> AddressAny                   -- ^ The address.
+                -> m (AddressInEra BabbageEra)  -- ^ Action for converting the address.
+asBabbageAddress message =
   liftCli
     . maybe (Left message) Right
-    . anyAddressInEra AlonzoEra
+    . anyAddressInEra BabbageEra
 
 
 -- | Query a node.
@@ -876,19 +876,19 @@ queryAny connection =
    . queryNodeLocalState connection Nothing
 
 
--- | Query an Alonzo-era node.
-queryAlonzo :: MonadError CliError m
+-- | Query an Babbage-era node.
+queryBabbage :: MonadError CliError m
             => MonadIO m
-            => LocalNodeConnectInfo CardanoMode   -- ^ The connection info for the local node.
-            -> QueryInShelleyBasedEra AlonzoEra a -- ^ The query.
-            -> m a                                -- ^ Action for running the query.
-queryAlonzo connection =
+            => LocalNodeConnectInfo CardanoMode     -- ^ The connection info for the local node.
+            -> QueryInShelleyBasedEra BabbageEra a  -- ^ The query.
+            -> m a                                  -- ^ Action for running the query.
+queryBabbage connection =
   liftCli
     <=< (
           liftCliIO
           . queryNodeLocalState connection Nothing
-          . QueryInEra AlonzoEraInCardanoMode
-          . QueryInShelleyBasedEra ShelleyBasedEraAlonzo
+          . QueryInEra BabbageEraInCardanoMode
+          . QueryInShelleyBasedEra ShelleyBasedEraBabbage
         )
 
 
@@ -897,9 +897,9 @@ queryUtxos :: MonadError CliError m
            => MonadIO m
            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
            -> AddressAny                        -- ^ The address.
-           -> m (UTxO AlonzoEra)                -- ^ Action query the UTxOs.
+           -> m (UTxO BabbageEra)               -- ^ Action query the UTxOs.
 queryUtxos connection =
-  queryAlonzo connection
+  queryBabbage connection
     . QueryUTxO
     . QueryUTxOByAddress
     . S.singleton
@@ -938,7 +938,7 @@ querySlotConfig :: MonadError CliError m
                 -> m SlotConfig                      -- ^ Action to extract the slot configuration.
 querySlotConfig connection =
   do
-    epochNo <- queryAlonzo connection QueryEpoch
+    epochNo <- queryBabbage connection QueryEpoch
     systemStart <-
       liftCliIO
         $ queryNodeLocalState connection Nothing QuerySystemStart

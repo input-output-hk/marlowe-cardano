@@ -33,7 +33,7 @@ import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, pars
                                            parseTokenName)
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
-import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, querySlotting, selectUtxos)
+import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, querySlotting, selectUtxos)
 import Language.Marlowe.CLI.Types (CliError, OutputQuery)
 import Plutus.V1.Ledger.Api (TokenName)
 
@@ -71,12 +71,14 @@ data UtilCommand =
     -- | Fund an address from a faucet.
   | Faucet
     {
-      network       :: NetworkId     -- ^ The network ID, if any.
-    , socketPath    :: FilePath      -- ^ The path to the node socket.
-    , lovelace      :: Lovelace      -- ^ The lovelace to send to the address.
-    , bodyFile      :: FilePath      -- ^ The output file for the transaction body.
-    , submitTimeout :: Maybe Int     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , addresses     :: [AddressAny]  -- ^ The addresses.
+      network            :: NetworkId     -- ^ The network ID, if any.
+    , socketPath         :: FilePath      -- ^ The path to the node socket.
+    , lovelace           :: Lovelace      -- ^ The lovelace to send to the address.
+    , bodyFile           :: FilePath      -- ^ The output file for the transaction body.
+    , submitTimeout      :: Maybe Int     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , fundAddr           :: AddressAny    -- ^ The change address.
+    , fundSigningKeyFile :: FilePath      -- ^ The files containing the required signing keys.
+    , destAddresses      :: [AddressAny]  -- ^ The addresses.
     }
     -- | Select UTxO by asset.
   | Output
@@ -169,11 +171,12 @@ runUtilCommand command =
                             change
                             bodyFile
                             submitTimeout
-      Faucet{..}       -> buildFaucet'
+      Faucet{..}       -> buildFaucet
                             connection
                             (lovelaceToValue lovelace)
-                            addresses
-                            bodyFile
+                            destAddresses
+                            fundAddr
+                            fundSigningKeyFile
                             submitTimeout
                             >>= printTxId
       Output{..}       -> selectUtxos
@@ -278,12 +281,14 @@ faucetCommand network socket =
 faucetOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
 faucetOptions network socket =
   Faucet
-    <$> O.option parseNetworkId            (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
-    <*> O.strOption                        (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> (O.option $ Lovelace <$> O.auto)   (O.long "lovelace"      <> O.metavar "LOVELACE"    <> O.value 1_000_000_000 <> O.help "The lovelace to send to each address."                                                                           )
-    <*> O.strOption                        (O.long "out-file"      <> O.metavar "FILE"                                 <> O.help "Output file for transaction body."                                                                               )
-    <*> (O.optional . O.option O.auto)     (O.long "submit"        <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
-    <*> O.some (O.argument parseAddressAny $                          O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                             )
+    <$> O.option parseNetworkId            (O.long "testnet-magic"   <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                        (O.long "socket-path"     <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> (O.option $ Lovelace <$> O.auto)   (O.long "lovelace"        <> O.metavar "LOVELACE"    <> O.value 1_000_000_000 <> O.help "The lovelace to send to each address."                                                                           )
+    <*> O.strOption                        (O.long "out-file"        <> O.metavar "FILE"                                 <> O.help "Output file for transaction body."                                                                               )
+    <*> (O.optional . O.option O.auto)     (O.long "submit"          <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> O.option parseAddressAny           (O.long "faucet-address"  <> O.metavar "ADDRESS"                              <> O.help "The faucet addresses to provide funds."                                                                          )
+    <*> O.strOption                        (O.long "required-signer" <> O.metavar "SIGNING_FILE"                         <> O.help "File containing a required signing key."                                                                         )
+    <*> O.some (O.argument parseAddressAny $                            O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                             )
 
 
 -- | Parser for the "select" command.
