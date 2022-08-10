@@ -6,85 +6,59 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
-module Spec.Marlowe.Marlowe (tests) where
---     ( prop_noFalsePositives, tests, prop_showWorksForContracts, prop_jsonLoops
---     )
--- where
---
-import Cardano.Api (AddressInEra (..), AsType (..), ShelleyEra, deserialiseFromRawBytes, makeShelleyAddressInEra)
-import qualified Cardano.Api.Shelley as Shelley
-import qualified Codec.CBOR.Write as Write
+module Spec.Marlowe.Marlowe
+    ( prop_noFalsePositives, tests, prop_showWorksForContracts, prop_jsonLoops
+    )
+    where
+
 import qualified Codec.Serialise as Serialise
 import Control.Exception (SomeException, catch)
-import Control.Lens ((&), (.~))
-import Control.Monad (void)
-import Control.Monad.Freer (run)
-import Control.Monad.Freer.Error (runError)
 import Data.Aeson (decode, eitherDecode, encode)
 import Data.Aeson.Text (encodeToLazyText)
-import qualified Data.ByteString as BS
+import Data.Bifunctor (first)
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as SBS
-import Data.Default (Default (..))
-import Data.Either (fromRight, isRight)
-import qualified Data.Map.Strict as Map
+import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
-import Data.Monoid (First (..))
-import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.String
+import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Text.Lazy (toStrict)
-import Data.UUID (UUID)
-import qualified Data.UUID as UUID
-import Debug.Trace
+import Debug.Trace ()
+import GHC.IO (unsafePerformIO)
 import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
                                      languageExtensions, runInterpreter, set, setImports)
--- import qualified Language.Marlowe as M ((%))
--- import Language.Marlowe.Analysis.FSSemantics
--- import Language.Marlowe.Client
--- import Language.Marlowe.Core.V1.Semantics
--- import Language.Marlowe.Core.V1.Semantics.Types
--- import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValidator, smallUntypedValidator)
--- import Language.Marlowe.Util
--- import Ledger (POSIXTime (..), PaymentPubKeyHash (..), PubKeyHash (..), pubKeyHash, validatorHash)
--- import Ledger.Ada (adaValueOf, lovelaceValueOf)
--- import Ledger.Constraints.TxConstraints (TxConstraints)
--- import Ledger.TimeSlot (SlotConfig (..))
--- import qualified Ledger.Value as Val
--- import qualified Plutus.Contract.StateMachine as SM
--- import Plutus.Contract.Test hiding ((.&&.))
--- import qualified Plutus.Contract.Test as T
--- import Plutus.Contract.Types (_observableState)
--- import qualified Plutus.Trace.Emulator as Trace
--- import Plutus.Trace.Emulator.Types (instContractState)
--- import qualified PlutusTx.AssocMap as AssocMap
--- import PlutusTx.Builtins (emptyByteString, sha2_256)
--- import PlutusTx.Lattice
--- import qualified PlutusTx.Prelude as P
--- import qualified PlutusTx.Ratio as P
--- import Spec.Marlowe.Common
--- import qualified Streaming.Prelude as S
--- import System.IO.Unsafe (unsafePerformIO)
 import qualified Language.Marlowe as M
+import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
+import Language.Marlowe.Core.V1.Semantics (TransactionInput (TransactionInput, txInputs, txInterval),
+                                           TransactionOutput (TransactionOutput, txOutState), computeTransaction,
+                                           evalValue)
+import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound (Bound), Case (Case),
+                                                 ChoiceId (ChoiceId), Contract (Close, If, Pay, When),
+                                                 Environment (Environment), Observation (ValueGE), Party (Role),
+                                                 Payee (Account, Party),
+                                                 State (State, accounts, boundValues, choices, minTime), Token (Token),
+                                                 Value (AddValue, Constant, DivValue, MulValue, NegValue, SubValue, UseValue),
+                                                 ValueId (ValueId), emptyState)
 import Language.Marlowe.Scripts (smallTypedValidator, smallUntypedValidator)
-import Language.Marlowe.Util (ada)
+import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as TS
+import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime))
+import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
-import Spec.Marlowe.Common (pangramContract)
+import qualified PlutusTx.Ratio as P
+import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
+import Test.QuickCheck (counterexample, forAll, forAllShrink, property, suchThat, tabulate, withMaxSuccess, (.&&.),
+                        (=/=), (===))
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
--- import qualified Plutus.Script.Utils.V1.Scripts as Scripts
--- import Test.Tasty.HUnit
--- import Test.Tasty.QuickCheck
--- import qualified Wallet.Emulator.Folds as Folds
--- import Wallet.Emulator.Stream (foldEmulatorStreamM, takeUntilSlot)
---
+import Test.Tasty.QuickCheck (Property, testProperty)
+
 -- {- HLINT ignore "Reduce duplication" -}
--- {- HLINT ignore "Redundant if" -}
+{- HLINT ignore "Redundant if" -}
 
 tests :: TestTree
 tests = testGroup "Marlowe"
@@ -98,26 +72,26 @@ tests = testGroup "Marlowe"
       , testCase "Untyped validator size" untypedValidatorSize
       ]
   , testCase "Mul analysis" mulAnalysisTest
-  -- , testCase "Div analysis" divAnalysisTest
---     , testCase "Div tests" divTest
---     , testCase "Transfers between accounts work" transferBetweenAccountsTest
---     , testCase "extractContractRoles" extractContractRolesTest
---     , testProperty "Value equality is reflexive, symmetric, and transitive" checkEqValue
---     , testProperty "Value double negation" doubleNegation
---     , testProperty "Values form abelian group" valuesFormAbelianGroup
---     , testProperty "Values can be serialized to JSON" valueSerialization
---     , testProperty "Multiply by zero" mulTest
---     , testProperty "Divide zero and by zero" divZeroTest
---     , testProperty "DivValue rounding" divisionRoundingTest
---     , zeroCouponBondTest
---     , merkleizedZeroCouponBondTest
---     , errorHandlingTest
---     , trustFundTest
+  , testCase "Div analysis" divAnalysisTest
+  , testCase "Div tests" divTest
+  , testCase "Transfers between accounts work" transferBetweenAccountsTest
+  , testCase "extractContractRoles" extractContractRolesTest
+  , testProperty "Value equality is reflexive, symmetric, and transitive" checkEqValue
+  , testProperty "Value double negation" doubleNegation
+  , testProperty "Values form abelian group" valuesFormAbelianGroup
+  , testProperty "Values can be serialized to JSON" valueSerialization
+  , testProperty "Multiply by zero" mulTest
+  , testProperty "Divide zero and by zero" divZeroTest
+  , testProperty "DivValue rounding" divisionRoundingTest
+-- PAB tests
+--  , zeroCouponBondTest
+--  , merkleizedZeroCouponBondTest
+--  , errorHandlingTest
+--  , trustFundTest
   ]
 --
 -- alicePk ::
 -- alicePk = M.PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
-
 -- alice, bob :: Wallet
 -- alice = w1
 -- bob = w2
@@ -135,7 +109,6 @@ tests = testGroup "Marlowe"
 --     paymentCredential = case deserialiseFromRawBytes (AsHash AsPaymentKey) $ P.fromBuiltin $ getPubKeyHash $ walletPubKeyHash wallet of
 --         Nothing   -> error "Failed to deserialize pub key hash"
 --         Just hash -> Shelley.PaymentCredentialByKey hash
---
 -- zeroCouponBondTest :: TestTree
 -- zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond Contract"
 --     (assertNoFailedTransactions
@@ -178,7 +151,7 @@ tests = testGroup "Marlowe"
 --     Trace.callEndpoint @"close" aliceHdl reqId
 --     Trace.callEndpoint @"close" bobHdl reqId
 --     void $ Trace.waitNSlots 2
---
+
 -- merkleizedZeroCouponBondTest :: TestTree
 -- merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkleized Zero Coupon Bond Contract"
 --     (assertNoFailedTransactions
@@ -378,156 +351,155 @@ untypedValidatorSize = do
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
     assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
 
--- extractContractRolesTest :: IO ()
--- extractContractRolesTest = do
---     extractNonMerkleizedContractRoles Close @=? mempty
---     extractNonMerkleizedContractRoles
---         (Pay (Role "Alice") (Party (Role "Bob")) ada (Constant 1) Close)
---             @=? Set.fromList ["Alice", "Bob"]
---     extractNonMerkleizedContractRoles
---         (When [Case (Deposit (Role "Bob") (Role "Alice") ada (Constant 10)) Close] 10 Close)
---             @=? Set.fromList ["Alice", "Bob"]
---     extractNonMerkleizedContractRoles
---         (When [Case (Choice (ChoiceId "test" (Role "Alice")) [Bound 0 1]) Close] 10 Close)
---             @=? Set.fromList ["Alice"]
---
---
--- checkEqValue :: Property
--- checkEqValue = property $ do
---     let gen = do
---             a <- valueGen
---             b <- valueGen
---             c <- valueGen
---             return (a, b, c)
---     forAll gen $ \(a, b, c) ->
---         (a P.== a) -- reflective
---             .&&. ((a P.== b) == (b P.== a)) -- symmetric
---             .&&. (if a P.== b && b P.== c then a P.== c else True) -- transitive
---
---
--- doubleNegation :: Property
--- doubleNegation = property $ do
---     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
---     forAll valueGen $ \a -> eval (NegValue (NegValue a)) === eval a
---
---
--- valuesFormAbelianGroup :: Property
--- valuesFormAbelianGroup = property $ do
---     let gen = do
---             a <- valueGen
---             b <- valueGen
---             c <- valueGen
---             return (a, b, c)
---     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
---     forAll gen $ \(a, b, c) ->
---         -- associativity of addition
---         eval (AddValue (AddValue a b) c) === eval (AddValue a (AddValue b c)) .&&.
---         -- commutativity of addition
---         eval (AddValue a b) === eval (AddValue b a) .&&.
---         -- additive identity
---         eval (AddValue a (Constant 0)) === eval a .&&.
---         -- additive inverse
---         eval (AddValue a (NegValue a)) === 0 .&&.
---         -- substraction works
---         eval (SubValue (AddValue a b) b) === eval a
---
---
--- divisionRoundingTest :: Property
--- divisionRoundingTest = property $ do
---     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
---     -- test half-even rounding
---     let gen = do
---             n <- amount
---             d <- suchThat amount (/= 0)
---             return (n, d)
---     forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === roundToZero (n M.% d)
---     where
---       roundToZero = P.truncate
---
---
--- mulTest :: Property
--- mulTest = property $ do
---     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
---     forAll valueGen $ \a ->
---         eval (MulValue (Constant 0) a) === 0
---
---
--- divZeroTest :: Property
--- divZeroTest = property $ do
---     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
---     forAll valueGen $ \a ->
---         eval (DivValue (Constant 0) a) === 0 .&&.
---         eval (DivValue a (Constant 0)) === 0
---
---
--- valueSerialization :: Property
--- valueSerialization = property $
---     forAll valueGen $ \a ->
---         let decoded :: Maybe (Value Observation)
---             decoded = decode $ encode a
---         in Just a === decoded
---
---
+extractContractRolesTest :: IO ()
+extractContractRolesTest = do
+    extractNonMerkleizedContractRoles Close @=? mempty
+    extractNonMerkleizedContractRoles
+        (Pay (Role "Alice") (Party (Role "Bob")) ada (Constant 1) Close)
+            @=? Set.fromList ["Alice", "Bob"]
+    extractNonMerkleizedContractRoles
+        (When [Case (Deposit (Role "Bob") (Role "Alice") ada (Constant 10)) Close] 10 Close)
+            @=? Set.fromList ["Alice", "Bob"]
+    extractNonMerkleizedContractRoles
+        (When [Case (Choice (ChoiceId "test" (Role "Alice")) [Bound 0 1]) Close] 10 Close)
+            @=? Set.fromList ["Alice"]
+
+
+checkEqValue :: Property
+checkEqValue = property $ do
+    let gen = do
+            a <- valueGen
+            b <- valueGen
+            c <- valueGen
+            return (a, b, c)
+    forAll gen $ \(a, b, c) ->
+        (a P.== a) -- reflective
+            .&&. ((a P.== b) == (b P.== a)) -- symmetric
+            --   (a == b && b == c) => (a == c)
+            .&&. (not (a P.== b && b P.== c) || a P.== c) -- transitive
+
+
+doubleNegation :: Property
+doubleNegation = property $ do
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    forAll valueGen $ \a -> eval (NegValue (NegValue a)) === eval a
+
+
+valuesFormAbelianGroup :: Property
+valuesFormAbelianGroup = property $ do
+    let gen = do
+            a <- valueGen
+            b <- valueGen
+            c <- valueGen
+            return (a, b, c)
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    forAll gen $ \(a, b, c) ->
+        -- associativity of addition
+        eval (AddValue (AddValue a b) c) === eval (AddValue a (AddValue b c)) .&&.
+        -- commutativity of addition
+        eval (AddValue a b) === eval (AddValue b a) .&&.
+        -- additive identity
+        eval (AddValue a (Constant 0)) === eval a .&&.
+        -- additive inverse
+        eval (AddValue a (NegValue a)) === 0 .&&.
+        -- substraction works
+        eval (SubValue (AddValue a b) b) === eval a
+
+
+divisionRoundingTest :: Property
+divisionRoundingTest = property $ do
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    -- test half-even rounding
+    let gen = do
+            n <- amount
+            d <- suchThat amount (/= 0)
+            return (n, d)
+    forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === roundToZero (n M.% d)
+    where
+      roundToZero = P.truncate
+
+
+mulTest :: Property
+mulTest = property $ do
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    forAll valueGen $ \a ->
+        eval (MulValue (Constant 0) a) === 0
+
+
+divZeroTest :: Property
+divZeroTest = property $ do
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    forAll valueGen $ \a ->
+        eval (DivValue (Constant 0) a) === 0 .&&.
+        eval (DivValue a (Constant 0)) === 0
+
+
+valueSerialization :: Property
+valueSerialization = property $
+    forAll valueGen $ \a ->
+        let decoded :: Maybe (Value Observation)
+            decoded = decode $ encode a
+        in Just a === decoded
+
+
 mulAnalysisTest :: IO ()
 mulAnalysisTest = do
-    let muliply = foldl (\a _ -> M.MulValue (M.UseValue $ M.ValueId "a") a) (M.Constant 1) [1..100]
-        alicePk = M.PK $ walletPubKeyHash alice
-        contract = M.If (muliply `M.ValueGE` M.Constant 10000) M.Close (M.Pay alicePk (M.Party alicePk) ada (M.Constant (-100)) M.Close)
+    let muliply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1..100] :: [Int])
+        contract = If (muliply `M.ValueGE` Constant 10000) Close (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
     result <- warningsTrace contract
-    --print result
+    print result
     assertBool "Analysis ok" $ isRight result
 
 
--- transferBetweenAccountsTest :: IO ()
--- transferBetweenAccountsTest = do
---     let state = State
---             { accounts = AssocMap.fromList [((Role "alice", Token "" ""), 100)]
---             , choices  = AssocMap.empty
---             , boundValues = AssocMap.empty
---             , minTime = 10 }
---     let contract = Pay "alice" (Account "bob") (Token "" "") (Constant 100) (When [] 100 Close)
---     let txInput = TransactionInput {
---                     txInterval = (20, 30),
---                     txInputs = [] }
---     case computeTransaction txInput state contract of
---         TransactionOutput {txOutPayments, txOutState = State{accounts}, txOutContract} -> do
---             assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
---         e -> fail $ show e
---
---
--- divAnalysisTest :: IO ()
--- divAnalysisTest = do
---     let
---         alicePk = PK $ walletPubKeyHash alice
---         contract n d = If (DivValue (Constant n) (Constant d) `ValueGE` Constant 5)
---             Close
---             (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
---     result <- warningsTrace (contract 11 2)
---     assertBool "Analysis ok" $ isRight result && either (const False) isNothing result
---     result <- warningsTrace (contract 9 2)
---     assertBool "Analysis ok" $ isRight result && either (const False) isJust result
---
---     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
---     eval (DivValue (Constant 0) (Constant 2)) @=? 0
---     eval (DivValue (Constant 1) (Constant 0)) @=? 0
---     eval (DivValue (Constant 5) (Constant 2)) @=? 2
---     eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
---     eval (DivValue (Constant 7) (Constant 2)) @=? 3
---     eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
---
---
--- divTest :: IO ()
--- divTest = do
---     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
---     eval (DivValue (Constant 0) (Constant 2)) @=? 0
---     eval (DivValue (Constant 1) (Constant 0)) @=? 0
---     eval (DivValue (Constant 5) (Constant 2)) @=? 2
---     eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
---     eval (DivValue (Constant 7) (Constant 2)) @=? 3
---     eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
---
---
---
+transferBetweenAccountsTest :: IO ()
+transferBetweenAccountsTest = do
+    let state = State
+            { accounts = AssocMap.fromList [((Role "alice", Token "" ""), 100)]
+            , choices  = AssocMap.empty
+            , boundValues = AssocMap.empty
+            , minTime = 10 }
+    let contract = Pay "alice" (Account "bob") (Token "" "") (Constant 100) (When [] 100 Close)
+    let txInput = TransactionInput {
+                    txInterval = (20, 30),
+                    txInputs = [] }
+    case computeTransaction txInput state contract of
+        TransactionOutput {txOutState = State{accounts}} -> do
+            assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
+        e -> fail $ show e
+
+
+divAnalysisTest :: IO ()
+divAnalysisTest = do
+    let
+        contract n d = If (DivValue (Constant n) (Constant d) `ValueGE` Constant 5)
+            Close
+            (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
+    result <- warningsTrace (contract 11 2)
+    assertBool "Analysis ok" $ isRight result && either (const False) isNothing result
+    result' <- warningsTrace (contract 9 2)
+    assertBool "Analysis ok" $ isRight result' && either (const False) isJust result'
+
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    eval (DivValue (Constant 0) (Constant 2)) @=? 0
+    eval (DivValue (Constant 1) (Constant 0)) @=? 0
+    eval (DivValue (Constant 5) (Constant 2)) @=? 2
+    eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
+    eval (DivValue (Constant 7) (Constant 2)) @=? 3
+    eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
+
+
+divTest :: IO ()
+divTest = do
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    eval (DivValue (Constant 0) (Constant 2)) @=? 0
+    eval (DivValue (Constant 1) (Constant 0)) @=? 0
+    eval (DivValue (Constant 5) (Constant 2)) @=? 2
+    eval (DivValue (Constant (-5)) (Constant 2)) @=? -2
+    eval (DivValue (Constant 7) (Constant 2)) @=? 3
+    eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
+
+
+
 pangramContractSerialization :: IO ()
 pangramContractSerialization = do
     let json = toStrict (encodeToLazyText pangramContract)
@@ -577,54 +549,47 @@ stateSerialization = do
                 Nothing  -> assertFailure "Nope"
         Nothing -> assertFailure "Nope"
 
--- prop_showWorksForContracts :: Property
--- prop_showWorksForContracts = forAllShrink contractGen shrinkContract showWorksForContract
---
---
--- showWorksForContract :: Contract -> Property
--- showWorksForContract contract = unsafePerformIO $ do
---   res <- runInterpreter $ setImports ["Language.Marlowe"]
---                         >> set [ languageExtensions := [ OverloadedStrings ] ]
---                         >> interpretContractString (show contract)
---   return (case res of
---             Right x  -> x === contract
---             Left err -> counterexample (show err) False)
---
---
--- interpretContractString :: MonadInterpreter m => String -> m Contract
--- interpretContractString contractStr = interpret contractStr (as :: Contract)
---
---
--- noFalsePositivesForContract :: Contract -> Property
--- noFalsePositivesForContract cont =
---   unsafePerformIO (do res <- catch (wrapLeft $ warningsTrace cont)
---                                    (\exc -> return $ Left (Left (exc :: SomeException)))
---                       return (case res of
---                                 Left err -> counterexample (show err) False
---                                 Right answer ->
---                                    tabulate "Has counterexample" [show (isJust answer)]
---                                    (case answer of
---                                       Nothing ->
---                                          tabulate "Is empty contract" [show (cont == Close)]
---                                                   True
---                                       Just (is, li, warns) ->
---                                          counterexample ("Trace: " ++ show (is, li)) $
---                                          tabulate "Number of warnings" [show (length warns)]
---                                                   (warns =/= []))))
---
---
--- wrapLeft :: IO (Either a b) -> IO (Either (Either c a) b)
--- wrapLeft r = do tempRes <- r
---                 return (case tempRes of
---                           Left x  -> Left (Right x)
---                           Right y -> Right y)
---
---
--- prop_noFalsePositives :: Property
--- prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
---
--- jsonLoops :: Contract -> Property
--- jsonLoops cont = decode (encode cont) === Just cont
---
--- prop_jsonLoops :: Property
--- prop_jsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract jsonLoops
+prop_showWorksForContracts :: Property
+prop_showWorksForContracts = forAllShrink contractGen shrinkContract showWorksForContract
+
+
+showWorksForContract :: Contract -> Property
+showWorksForContract contract = unsafePerformIO $ do
+  res <- runInterpreter $ setImports ["Language.Marlowe"]
+                        >> set [ languageExtensions := [ OverloadedStrings ] ]
+                        >> interpretContractString (show contract)
+  return (case res of
+            Right x  -> x === contract
+            Left err -> counterexample (show err) False)
+
+
+interpretContractString :: MonadInterpreter m => String -> m Contract
+interpretContractString contractStr = interpret contractStr (as :: Contract)
+
+
+noFalsePositivesForContract :: Contract -> Property
+noFalsePositivesForContract cont =
+  unsafePerformIO (do res <- catch (first Right <$> warningsTrace cont)
+                                   (\exc -> return $ Left (Left (exc :: SomeException)))
+                      return (case res of
+                                Left err -> counterexample (show err) False
+                                Right answer ->
+                                   tabulate "Has counterexample" [show (isJust answer)]
+                                   (case answer of
+                                      Nothing ->
+                                         tabulate "Is empty contract" [show (cont == Close)]
+                                                  True
+                                      Just (is, li, warns) ->
+                                         counterexample ("Trace: " ++ show (is, li)) $
+                                         tabulate "Number of warnings" [show (length warns)]
+                                                  (warns =/= []))))
+
+
+prop_noFalsePositives :: Property
+prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
+
+jsonLoops :: Contract -> Property
+jsonLoops cont = decode (encode cont) === Just cont
+
+prop_jsonLoops :: Property
+prop_jsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract jsonLoops

@@ -14,7 +14,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Bound (..), Case (
 import Language.Marlowe.Extended.V1 (ada)
 import qualified Language.Marlowe.Extended.V1 as Extended
 import Language.Marlowe.Util (merkleizedCase)
-import Ledger.Crypto (pubKeyHash)
 import Plutus.V1.Ledger.Api (PubKeyHash (PubKeyHash))
 import qualified Plutus.V1.Ledger.Api as Ledger
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
@@ -347,9 +346,11 @@ shrinkContract cont = case cont of
               ++ [Assert obs y | y <- shrinkContract cont])
 
 
+alicePk :: Party
+alicePk = PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
+
 pangramContract :: Contract
 pangramContract = let
-    alicePk = PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
     aliceAcc = alicePk
     bobRole = Role "Bob"
     constant = Constant 100

@@ -4,17 +4,15 @@ module Main(main) where
 
 -- import qualified Spec.Marlowe.AutoExecute
 import qualified Spec.Marlowe.Marlowe
-import qualified Spec.Marlowe.Semantics (tests)
 
 import Test.Tasty (TestTree, defaultMain, testGroup)
--- import Test.Tasty.QuickCheck
+import Test.Tasty.QuickCheck (testProperty)
 
 main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Marlowe" $
-    -- [ -- Relied on plutus-apps stuff - investigate how to migrate
+tests = testGroup "Marlowe"
     [ testGroup "Contracts"
         [ Spec.Marlowe.Marlowe.tests ]
     --     -- , Spec.Marlowe.AutoExecute.tests
@@ -22,12 +20,12 @@ tests = testGroup "Marlowe" $
     --     -- , testProperty "Correct Show instance for Contract"
     --     --  Spec.Marlowe.Marlowe.prop_showWorksForContracts
     --     ]
-    -- , testGroup "Static Analysis"
-    --     [ testProperty "No false positives" Spec.Marlowe.Marlowe.prop_noFalsePositives
-    --     ]
-    -- , testGroup "Marlowe JSON"
-    --     [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
-    --     ]
+    , testGroup "Static Analysis"
+        [ testProperty "No false positives" Spec.Marlowe.Marlowe.prop_noFalsePositives
+        ]
+    , testGroup "Marlowe JSON"
+        [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
+        ]
     ]
     -- <> Spec.Marlowe.Semantics.tests
 
