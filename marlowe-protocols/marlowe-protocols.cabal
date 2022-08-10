@@ -52,7 +52,11 @@ library
     Network.Protocol.ChainSeek.Client,
     Network.Protocol.ChainSeek.Codec,
     Network.Protocol.ChainSeek.Server,
-    Network.Protocol.ChainSeek.Types
+    Network.Protocol.ChainSeek.Types,
+    Network.Protocol.Command.Client,
+    Network.Protocol.Command.Codec,
+    Network.Protocol.Command.Server,
+    Network.Protocol.Command.Types
   build-depends:
       base >= 4.9 && < 5
     , binary
