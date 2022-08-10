@@ -17,16 +17,16 @@ import Network.TypedProtocol.Codec
 import Unsafe.Coerce (unsafeCoerce)
 
 data SomeCommand cmd = forall status err result. SomeCommand (cmd status err result)
-data SomeCommandId cmd = forall status err result. SomeCommandId (CommandId cmd status err result)
+data SomeJobId cmd = forall status err result. SomeJobId (JobId cmd status err result)
 
 codecCommand
   :: forall cmd m
    . (Applicative m, IsCommand cmd)
   => (SomeCommand cmd -> Put)
   -> Get (SomeCommand cmd)
-  -> (SomeCommandId cmd -> Put)
-  -> Get (SomeCommandId cmd)
-  -> (forall status err result. TokCommand cmd status err result -> Get (CommandId cmd status err result))
+  -> (SomeJobId cmd -> Put)
+  -> Get (SomeJobId cmd)
+  -> (forall status err result. TokCommand cmd status err result -> Get (JobId cmd status err result))
   -> (forall status err result. TokCommand cmd status err result -> status -> Put)
   -> (forall status err result. TokCommand cmd status err result -> Get status)
   -> (forall status err result. TokCommand cmd status err result -> err -> Put)
@@ -47,9 +47,9 @@ codecCommand putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus pu
         MsgExec cmd -> do
           putWord8 0x01
           putCmd $ SomeCommand cmd
-        MsgResume cmdId -> do
+        MsgAttach cmdId -> do
           putWord8 0x02
-          putCmdId $ SomeCommandId cmdId
+          putCmdId $ SomeJobId cmdId
       ServerAgency (TokCmd _) -> \case
         MsgFail tokCmd err -> do
           putWord8 0x03
@@ -60,10 +60,10 @@ codecCommand putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus pu
         MsgAwait status cmdId -> do
           putWord8 0x05
           putStatus (tokFromId cmdId) status
-          putCmdId $ SomeCommandId cmdId
+          putCmdId $ SomeJobId cmdId
       ClientAgency (TokAwait _) -> \case
-        MsgPoll -> putWord8 0x06
-        MsgDone -> putWord8 0x07
+        MsgPoll   -> putWord8 0x06
+        MsgDetach -> putWord8 0x07
 
     getMsg
       :: forall (pr :: PeerRole) (st :: Command cmd)
@@ -79,9 +79,9 @@ codecCommand putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus pu
           _ -> fail "Invalid protocol state for MsgExec"
         0x02 -> case tok of
           ClientAgency TokInit -> do
-            SomeCommandId cmdId <- getSomeCmdId
-            pure $ SomeMessage $ MsgResume cmdId
-          _ -> fail "Invalid protocol state for MsgResume"
+            SomeJobId cmdId <- getSomeCmdId
+            pure $ SomeMessage $ MsgAttach cmdId
+          _ -> fail "Invalid protocol state for MsgAttach"
         0x03 -> case tok of
           ServerAgency (TokCmd tokCmd) -> do
             err <- getErr $ unsafeCoerce tokCmd
@@ -102,8 +102,8 @@ codecCommand putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus pu
           ClientAgency (TokAwait _) -> pure $ SomeMessage MsgPoll
           _                         -> fail "Invalid protocol state for MsgPoll"
         0x07 -> case tok of
-          ClientAgency (TokAwait _) -> pure $ SomeMessage MsgDone
-          _                         -> fail "Invalid protocol state for MsgDone"
+          ClientAgency (TokAwait _) -> pure $ SomeMessage MsgDetach
+          _                         -> fail "Invalid protocol state for MsgDetach"
         _ -> fail $ "Invalid msg tag " <> show tag
 
 encodePut :: (a -> Put) -> a -> LBS.ByteString
