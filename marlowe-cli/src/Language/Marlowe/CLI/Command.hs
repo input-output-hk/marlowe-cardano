@@ -88,11 +88,11 @@ runCommand :: MonadError CliError m
            => Command  -- ^ The command.
            -> m ()     -- ^ Action to run the command.
 runCommand (RunCommand         command)          = runRunCommand         command
-runCommand (PabCommand         command)          = runPabCommand         command
+-- runCommand (PabCommand         command)          = runPabCommand         command
 runCommand (ContractCommand    command)          = runContractCommand    command
 runCommand (TestCommand        command)          = runTestCommand        command
 runCommand (InputCommand       command)          = runInputCommand       command
-runCommand (QueryCommand       command)          = runQueryCommand       command
+-- runCommand (QueryCommand       command)          = runQueryCommand       command
 runCommand (RoleCommand        command)          = runRoleCommand        command
 runCommand (TemplateCommand command outputFiles) = runTemplateCommand command outputFiles
 runCommand (TransactionCommand command)          = runTransactionCommand command
@@ -115,7 +115,7 @@ parseCommand networkId socketPath version =
               (
                    O.commandGroup "High-level commands:"
                 <> O.command "run"         (O.info (RunCommand      <$> parseRunCommand networkId socketPath ) $ O.progDesc "Run a contract."                   )
-                <> O.command "pab"         (O.info (PabCommand      <$> parsePabCommand                      ) $ O.progDesc "Run a contract via the PAB."       )
+                -- <> O.command "pab"         (O.info (PabCommand      <$> parsePabCommand                      ) $ O.progDesc "Run a contract via the PAB."       )
                 <> O.command "template"    (O.info (TemplateCommand <$> parseTemplateCommand <*> parseTemplateCommandOutputFiles ) $ O.progDesc "Create a contract from a template.")
                 <> O.command "test"        (O.info (TestCommand     <$> parseTestCommand networkId socketPath) $ O.progDesc "Test contracts."                   )
               )

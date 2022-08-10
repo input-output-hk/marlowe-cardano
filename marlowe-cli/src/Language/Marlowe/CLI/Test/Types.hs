@@ -31,23 +31,11 @@ module Language.Marlowe.CLI.Test.Types (
 , ScriptOperation(..)
 , TransactionNickname
 , ScriptContract(..)
-
--- * Lenses
-, psFaucetKey
-, psFaucetAddress
-, psBurnAddress
-, psPassphrase
-, psWallets
-, psAppInstances
-, psFollowerInstances
-, psCompanionInstances
-, prComparison
-, prRetry
-, comparisonJSON
 ) where
 
 
 import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, StakeAddressReference, Value)
+import Cardano.Api.Shelley (SigningKey, VerificationKey)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Chan (Chan)
 import Control.Lens (makeLenses)
@@ -61,19 +49,20 @@ import Plutus.V1.Ledger.Api (PubKeyHash)
 import Plutus.V1.Ledger.Time (DiffMilliSeconds, POSIXTime)
 import Servant.Client (BaseUrl, ClientM)
 
-import Cardano.Api (AddressAny, NetworkId)
+import Cardano.Api.Shelley (PaymentKey)
 import Control.Lens.Combinators (Lens')
 import Control.Lens.Lens (lens)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.HashMap.Strict
 import qualified Data.Map.Strict as M (Map)
 import Data.Maybe (fromMaybe)
 import Data.Text
 import GHC.Generics (Generic)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
 import Ledger (CurrencySymbol)
 import Options.Applicative (optional)
 import qualified Test.QuickCheck.Property as Aeson
@@ -110,19 +99,6 @@ data ScriptTest =
     deriving anyclass (FromJSON, ToJSON)
 
 
--- | An on- and off-chain test of the Marlowe contracts, via the Marlowe PAB.
-data PabTest =
-  PabTest
-  {
-    ptTestName      :: String          -- ^ The name of the test.
-  , ptPabOperations :: [PabOperation]  -- ^ The sequence of test operations.
-  }
-    deriving stock (Eq, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
-
-
-type TransactionNickname = String
-
 data ScriptContract = InlineContract Contract | TemplateContract TemplateCommand
     deriving stock (Eq, Generic, Show)
 
@@ -132,10 +108,10 @@ instance ToJSON ScriptContract where
 
 instance FromJSON ScriptContract where
     parseJSON json = case json of
-      Aeson.Object (Data.HashMap.Strict.toList -> [("inline", contractJson)]) -> do
+      Aeson.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
         parsedContract <- parseJSON contractJson
         pure $ InlineContract parsedContract
-      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateCommandJson)]) -> do
+      Aeson.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
         parsedTemplateCommand <- parseJSON templateCommandJson
         pure $ TemplateContract parsedTemplateCommand
       _ -> fail "Expected object with a single field of either `inline` or `template`"
@@ -165,6 +141,10 @@ data ScriptOperation =
     {
       soTransaction :: TransactionNickname
     }
+  | CreateWallet
+    {
+      soOwner       :: AccountId
+    }
   | Fail
     {
       soFailureMessage :: String
@@ -172,4 +152,10 @@ data ScriptOperation =
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
-
+data Wallet =
+  Wallet
+  {
+    verificationKey :: VerificationKey PaymentKey
+  , signingKey      :: SigningKey PaymentKey
+  -- , address         :: AddressKeyShelley
+  }
