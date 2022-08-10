@@ -7,15 +7,22 @@
 {-# LANGUAGE TypeApplications    #-}
 
 module Spec.Marlowe.Marlowe
-    ( prop_noFalsePositives, tests, prop_showWorksForContracts, prop_jsonLoops
+    ( prop_noFalsePositives
+    , tests
+    , prop_showWorksForContracts
+    , prop_contractJsonLoops
+    , prop_marloweParamsJsonLoops
+    , prop_intervalErrorJsonLoops
     )
     where
 
 import qualified Codec.Serialise as Serialise
+import Control.Arrow (Arrow ((***)))
 import Control.Exception (SomeException, catch)
 import Data.Aeson (decode, eitherDecode, encode)
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Bifunctor (first)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as SBS
 import Data.Either (isRight)
@@ -32,13 +39,15 @@ import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpr
 import qualified Language.Marlowe as M
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
-import Language.Marlowe.Core.V1.Semantics (TransactionInput (TransactionInput, txInputs, txInterval),
+import Language.Marlowe.Core.V1.Semantics (MarloweParams (MarloweParams),
+                                           TransactionInput (TransactionInput, txInputs, txInterval),
                                            TransactionOutput (TransactionOutput, txOutState), computeTransaction,
                                            evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound (Bound), Case (Case),
                                                  ChoiceId (ChoiceId), Contract (Close, If, Pay, When),
-                                                 Environment (Environment), Observation (ValueGE), Party (Role),
-                                                 Payee (Account, Party),
+                                                 Environment (Environment),
+                                                 IntervalError (IntervalInPastError, InvalidInterval),
+                                                 Observation (ValueGE), Party (Role), Payee (Account, Party),
                                                  State (State, accounts, boundValues, choices, minTime), Token (Token),
                                                  Value (AddValue, Constant, DivValue, MulValue, NegValue, SubValue, UseValue),
                                                  ValueId (ValueId), emptyState)
@@ -46,13 +55,15 @@ import Language.Marlowe.Scripts (smallTypedValidator, smallUntypedValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as TS
-import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime))
+import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), ValidatorHash (ValidatorHash),
+                             toBuiltin)
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
-import Test.QuickCheck (counterexample, forAll, forAllShrink, property, suchThat, tabulate, withMaxSuccess, (.&&.),
-                        (=/=), (===))
+import Test.QuickCheck (Gen, arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate,
+                        withMaxSuccess, (.&&.), (=/=), (===))
+import Test.QuickCheck.Instances.ByteString ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
 import Test.Tasty.QuickCheck (Property, testProperty)
@@ -585,8 +596,38 @@ noFalsePositivesForContract cont =
 prop_noFalsePositives :: Property
 prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
 
-jsonLoops :: Contract -> Property
-jsonLoops cont = decode (encode cont) === Just cont
+contractJsonLoops :: Contract -> Property
+contractJsonLoops cont = decode (encode cont) === Just cont
 
-prop_jsonLoops :: Property
-prop_jsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract jsonLoops
+prop_contractJsonLoops :: Property
+prop_contractJsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract contractJsonLoops
+
+marloweParamsJsonLoops :: MarloweParams -> Property
+marloweParamsJsonLoops mp = decode (encode mp) === Just mp
+
+prop_marloweParamsJsonLoops :: Property
+prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJsonLoops
+  where
+    gen = do
+      b <- toBuiltin <$> (arbitrary :: Gen ByteString)
+      c <- toBuiltin <$> (arbitrary :: Gen ByteString)
+      return $ MarloweParams (ValidatorHash b) (CurrencySymbol c)
+
+
+intervalErrorJsonLoops :: IntervalError -> Property
+intervalErrorJsonLoops ie = decode (encode ie) === Just ie
+
+prop_intervalErrorJsonLoops :: Property
+prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJsonLoops
+  where
+    gen = do
+      b <- arbitrary
+      if b
+      then do
+        t <- (POSIXTime *** POSIXTime) <$> arbitrary
+        return $ InvalidInterval t
+      else do
+        s <- POSIXTime <$> arbitrary
+        t <- (POSIXTime *** POSIXTime) <$> arbitrary
+        return $ IntervalInPastError s t
+

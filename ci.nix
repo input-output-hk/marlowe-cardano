@@ -99,7 +99,7 @@ let
           haskell = pkgs.recurseIntoAttrs (mkHaskellDimension pkgs marlowe.haskell.projectPackages);
         }));
     in
-    dimension "System" systems (name: sys: _select name sys null)
-    // dimension "Cross System" crossSystems (name: crossSys: _select name "x86_64-linux" crossSys);
-in
-mkSystemDimension systems
+    dimension "System" systems (name: sys: _select name sys null);
+  // dimension "Cross System" crossSystems (name: crossSys: _select name "x86_64-linux" crossSys);
+  in
+  mkSystemDimension systems

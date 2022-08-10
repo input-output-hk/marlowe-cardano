@@ -63,6 +63,7 @@ let
   # marlowe and subproject independent dev tools
   devToolsInputs = (with pkgs; with marlowe; [
     cabal-install
+    curl
     docs.build-and-serve-docs
     editorconfig-core-c
     fix-prettier

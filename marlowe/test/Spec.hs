@@ -26,7 +26,8 @@ tests = testGroup "Marlowe"
         [ testProperty "No false positives" Spec.Marlowe.Marlowe.prop_noFalsePositives
         ]
     , testGroup "Marlowe JSON"
-        [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
+        [ testProperty "Serialise deserialise Contract loops" Spec.Marlowe.Marlowe.prop_contractJsonLoops
+        , testProperty "Serialise deserialise MarloweParams loops" Spec.Marlowe.Marlowe.prop_marloweParamsJsonLoops
         ]
     , Spec.Marlowe.Semantics.tests
     ]
