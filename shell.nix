@@ -141,11 +141,12 @@ let
         cardano-cli
         start-cardano-node
       ];
-      develShell = { buildInputs, shellHook ? "" }: pkgs.mkShell {
+      develShell = { buildInputs, name, shellHook ? "" }: pkgs.mkShell {
         name = "marlowe-core-shell";
         buildInputs = buildInputs;
         LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libs;
         shellHook = ''
+          export MARLOWE_NIX_SHELL="${name}"
           ${defaultShellHook}
           ${shellHook}
         '';
@@ -154,12 +155,13 @@ let
     {
       marloweActus = develShell {
         buildInputs = marloweCoreBuildInputs;
+        name = "actus";
         shellHook = ''
           export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
         '';
       };
-      marloweCli = develShell { buildInputs = marloweCliBuildInputs; };
-      marloweCore = develShell { buildInputs = marloweCoreBuildInputs; };
+      marloweCli = develShell { buildInputs = marloweCliBuildInputs; name = "cli"; };
+      marloweCore = develShell { buildInputs = marloweCoreBuildInputs; name = "core"; };
     };
 in
 defaultShell // {

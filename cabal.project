@@ -39,7 +39,8 @@ package cardano-git-rev
 
 package cardano-node
   tests: True
-  -- Build still requires libsystemd even if this is uncommented:
+  -- It seems that haskell-language-server ignores this flag.
+  -- We add libsystemd to the devel shells to overcome this problem.
   -- flags: -systemd
   ghc-options: -Werror
 
