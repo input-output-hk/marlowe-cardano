@@ -2,44 +2,74 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- | A generc server for the command protocol. Includes a function for
+-- interpreting a server as a typed-protocols peer that can be executed with a
+-- driver and a codec.
+
 module Network.Protocol.Command.Server where
 
 import Network.Protocol.Command.Types
 import Network.TypedProtocol
 
+-- | A generic server for the command protocol.
 newtype CommandServer cmd m a = CommandServer { runCommandServer :: m (ServerStInit cmd m a) }
 
+-- | In the 'StInit' state, the client has agency. The server must be prepared
+-- to handle either:
+--
+-- * An exec message
+-- * An attach message
 data ServerStInit cmd m a = ServerStInit
   { recvMsgExec
     :: forall status err result
      . cmd status err result
     -> m (ServerStCmd cmd status err result m a)
-  , recvMsgResume
+  , recvMsgAttach
     :: forall status err result
-     . CommandId cmd status err result
+     . JobId cmd status err result
     -> m (ServerStCmd cmd status err result m a)
   }
 
 deriving instance Functor m => Functor (ServerStInit cmd m)
 
+-- | In the 'StCmd' state, the server has agency. It is obtaining the status of
+-- the job associated with a previously issued command, and may send:
+--
+-- * A failure message with an error
+-- * A success message with a result
+-- * An await message with the current status and job ID
 data ServerStCmd cmd status err result m a where
+
+  -- | Send a failure message to the client and terminate the protocol.
   SendMsgFail    :: err -> a -> ServerStCmd cmd status err result m a
+
+  -- | Send a success message to the client and terminate the protocol.
   SendMsgSucceed :: result -> a -> ServerStCmd cmd status err result m a
+
+  -- | Send an await message to the client and await a follow-up message from
+  -- the client.
   SendMsgAwait
     :: status
-    -> CommandId cmd status err result
+    -> JobId cmd status err result
     -> ServerStAwait cmd status err result m a
     -> ServerStCmd cmd status err result m a
 
 deriving instance Functor m => Functor (ServerStCmd cmd status err result m)
 
+-- | In the 'StAwait' state, the client has agency. The server must be prepared
+-- to handle either:
+--
+-- * A poll message
+-- * A detach message
 data ServerStAwait cmd status err result m a = ServerStAwait
-  { recvMsgPoll :: m (ServerStCmd cmd status err result m a)
-  , recvMsgDone :: m a
+  { recvMsgPoll   :: m (ServerStCmd cmd status err result m a)
+  , recvMsgDetach :: m a
   }
 
 deriving instance Functor m => Functor (ServerStAwait cmd status err result m)
 
+-- | Change the underlying monad type a server runs in with a natural
+-- transformation.
 hoistCommandServer
   :: forall cmd m n a
    . Functor m
@@ -50,7 +80,7 @@ hoistCommandServer phi = CommandServer . phi . fmap hoistInit . runCommandServer
   where
   hoistInit ServerStInit{..} = ServerStInit
     { recvMsgExec = phi . fmap hoistCmd . recvMsgExec
-    , recvMsgResume = phi . fmap hoistCmd . recvMsgResume
+    , recvMsgAttach = phi . fmap hoistCmd . recvMsgAttach
     }
 
   hoistCmd
@@ -66,9 +96,10 @@ hoistCommandServer phi = CommandServer . phi . fmap hoistInit . runCommandServer
     -> ServerStAwait cmd status err result n a
   hoistAwait ServerStAwait{..} = ServerStAwait
     { recvMsgPoll = phi $ hoistCmd <$> recvMsgPoll
-    , recvMsgDone = phi recvMsgDone
+    , recvMsgDetach = phi recvMsgDetach
     }
 
+-- | Interpret a server as a typed-protocols peer.
 commandServerPeer
   :: forall cmd m a
    . (Monad m, IsCommand cmd)
@@ -81,15 +112,15 @@ commandServerPeer CommandServer{..} =
   peerInit ServerStInit{..} =
     Await (ClientAgency TokInit) $ Effect . \case
       MsgExec cmd     -> peerCmd (tokFromCmd cmd) <$> recvMsgExec cmd
-      MsgResume cmdId -> peerCmd (tokFromId cmdId) <$> recvMsgResume cmdId
+      MsgAttach cmdId -> peerCmd (tokFromId cmdId) <$> recvMsgAttach cmdId
 
   peerCmd
     :: TokCommand cmd status err result
     -> ServerStCmd cmd status err result m a
     -> Peer (Command cmd) 'AsServer ('StCmd status err result) m a
   peerCmd tokCmd = \case
-    SendMsgFail err a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgFail err) $ Done TokDone a
-    SendMsgSucceed result a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgSucceed result) $ Done TokDone a
+    SendMsgFail err a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgFail tokCmd err) $ Done TokDone a
+    SendMsgSucceed result a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgSucceed tokCmd result) $ Done TokDone a
     SendMsgAwait status cmdId await -> Yield (ServerAgency (TokCmd tokCmd)) (MsgAwait status cmdId) $ peerAwait tokCmd await
 
   peerAwait
@@ -98,5 +129,23 @@ commandServerPeer CommandServer{..} =
     -> Peer (Command cmd) 'AsServer ('StAwait status err result) m a
   peerAwait tokCmd ServerStAwait{..} =
     Await (ClientAgency (TokAwait tokCmd)) $ Effect . \case
-      MsgPoll -> peerCmd tokCmd <$> recvMsgPoll
-      MsgDone -> Done TokDone <$> recvMsgDone
+      MsgPoll   -> peerCmd tokCmd <$> recvMsgPoll
+      MsgDetach -> Done TokDone <$> recvMsgDetach
+
+-- | Lift a function that executes a command directly into a command server.
+liftCommandHandler
+  :: Monad m
+  => (forall status err result. Either (cmd status err result) (JobId cmd status err result) -> m (a, Either err result))
+  -> CommandServer cmd m a
+liftCommandHandler handle = CommandServer $ pure $ ServerStInit
+  { recvMsgExec = \cmd -> do
+      (a, e) <- handle $ Left cmd
+      pure case e of
+        Left err     -> SendMsgFail err a
+        Right result -> SendMsgSucceed result a
+  , recvMsgAttach = \cmdId -> do
+      (a, e) <- handle $ Right cmdId
+      pure case e of
+        Left err     -> SendMsgFail err a
+        Right result -> SendMsgSucceed result a
+  }
