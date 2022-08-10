@@ -57,11 +57,8 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
 import Test.Tasty.QuickCheck (Property, testProperty)
 
--- {- HLINT ignore "Reduce duplication" -}
-{- HLINT ignore "Redundant if" -}
-
 tests :: TestTree
-tests = testGroup "Marlowe"
+tests = testGroup "Semantics"
   [ testCase "Contracts with different creators have different hashes" uniqueContractHash
   , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
   , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization

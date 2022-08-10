@@ -4,8 +4,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
-{-# OPTIONS_GHC -w #-}
 module Spec.Marlowe.AutoExecute where
+
+-- The whole test suite here is PAB dependent.
 
 -- module Spec.Marlowe.AutoExecute
 --     ( tests
