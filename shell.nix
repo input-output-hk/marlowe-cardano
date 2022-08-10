@@ -4,7 +4,7 @@
 }:
 let
   inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
-  inherit (dev-scripts) start-cardano-node run-chainseekd;
+  inherit (dev-scripts) nix-flakes-alias start-cardano-node run-chainseekd;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
@@ -60,44 +60,32 @@ let
     };
   };
 
-  nixFlakesAlias = pkgs.runCommand "nix-flakes-alias" { } ''
-    mkdir -p $out/bin
-    ln -sv ${pkgs.nixFlakes}/bin/nix $out/bin/nix-flakes
-  '';
-
-  nixpkgsInputs = (with pkgs; [
-    cacert
-    editorconfig-core-c
-    ghcid
-    jq
-    nixFlakesAlias
-    nixpkgs-fmt
-    shellcheck
-    sqlite-interactive
-    yq
-    z3
-    zlib
-    tmux
-
-  ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
-
-  localInputs = (with marlowe; [
+  # marlowe and subproject independent dev tools
+  devToolsInputs = (with pkgs; with marlowe; [
     cabal-install
-    cardano-cli
-    cardano-node
-    cardano-repo-tool
     docs.build-and-serve-docs
+    editorconfig-core-c
     fix-prettier
     fixStylishHaskell
+    ghc
+    ghcid
+    git
     haskell-language-server
     haskell-language-server-wrapper
     hie-bios
     hlint
-    marlowe-cli
-    run-chainseekd
-    start-cardano-node
+    jq
+    nix-flakes-alias
+    nixpkgs-fmt
+    pkgconfig
+    pre-commit
+    shellcheck
+    sqlite-interactive
     stylish-haskell
+    tmux
     updateMaterialized
+    yq
+    zlib
   ]);
 
   defaultShellHook = ''
@@ -113,7 +101,19 @@ let
   '';
 
   defaultShell = haskell.project.shellFor {
-    buildInputs = nixpkgsInputs ++ localInputs ++ [ sphinxTools ];
+    buildInputs = devToolsInputs ++ (with marlowe; [
+      cabal-install
+      cardano-cli
+      cardano-node
+      cardano-repo-tool
+      marlowe-cli
+      run-chainseekd
+      start-cardano-node
+      sphinxTools
+      pkgs.z3
+      # plotly is pretty heavy (openjdk) - do we use it?
+    ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
+
     # We don't currently use this, and it's a pain to materialize, and otherwise
     # costs a fair bit of eval time.
     withHoogle = false;
@@ -135,24 +135,8 @@ let
         pkgs.zlib
       ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
 
-      marloweCoreBuildInputs = (with marlowe; libs ++ [
-        cabal-install
-        docs.build-and-serve-docs
-        fix-prettier
-        fixStylishHaskell
-        pkgs.ghcid
-        pkgs.git
-        pkgs.ghc
-        haskell-language-server
-        haskell-language-server-wrapper
-        hie-bios
-        hlint
-        pkgs.pre-commit
-        pkgs.pkgconfig
-        stylish-haskell
-        updateMaterialized
-      ]);
-      marloweCliBuildInputs = marloweCoreBuildInputs ++ [
+      marloweCoreBuildInputs = libs ++ devToolsInputs ++ [ pkgs.z3 ];
+      marloweCliBuildInputs = devToolsInputs ++ [
         cardano-node
         cardano-cli
         start-cardano-node

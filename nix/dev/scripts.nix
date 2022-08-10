@@ -72,8 +72,12 @@ let
     ${script}
   '';
 
+  nix-flakes-alias = pkgs.runCommand "nix-flakes-alias" { } ''
+    mkdir -p $out/bin
+    ln -sv ${pkgs.nixFlakes}/bin/nix $out/bin/nix-flakes
+  '';
 
 in
 {
-  inherit start-cardano-node run-chainseekd;
+  inherit nix-flakes-alias run-chainseekd start-cardano-node;
 }
