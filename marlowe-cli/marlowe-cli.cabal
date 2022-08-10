@@ -100,6 +100,7 @@ library
     http-client,
     lens,
     marlowe,
+    marlowe-actus,
     marlowe-contracts,
     memory,
     mtl,
