@@ -112,8 +112,8 @@ let
       start-cardano-node
       sphinxTools
       pkgs.z3
-      # plotly is pretty heavy (openjdk) - do we use it?
-    ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
+      # FIXME: I'm not sure why I'm not able to grap rPackages here
+    ]); # ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
     # We don't currently use this, and it's a pain to materialize, and otherwise
     # costs a fair bit of eval time.
