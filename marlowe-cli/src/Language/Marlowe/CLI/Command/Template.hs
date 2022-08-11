@@ -189,7 +189,7 @@ runTemplateCommand TemplateCoveredCall{..}    = do marloweContract <- makeContra
                                                    let marloweState = initialMarloweState issuer minAda
                                                    makeExample contractFile stateFile MarloweData{..}
 runTemplateCommand TemplateActus{..}          = do ct <- decodeFileStrict actusTermsFile
-                                                   marloweContract <- makeContract $ genContract' defaultRiskFactors (toMarlowe ct)
+                                                   marloweContract <- makeContract $ genContract' (party, counterparty) defaultRiskFactors (toMarlowe ct)
                                                    let marloweState = initialMarloweState party minAda
                                                    makeExample contractFile stateFile MarloweData{..}
 

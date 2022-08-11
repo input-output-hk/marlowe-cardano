@@ -32,36 +32,38 @@ import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactor
                                reduceContract, toMarloweFixedPoint)
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
-import Data.String (IsString (fromString))
 import Data.Time (LocalTime (..), UTCTime (UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
 import Data.Time.Clock.POSIX
 import Data.Validation (Validation (..))
 import Language.Marlowe.Extended.V1
-import Ledger.Value (TokenName (TokenName))
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point
 -- in time
 genContract ::
+  -- | Party and Counter-party for the contract
+  (Party, Party) ->
   -- | Risk factors per event and time
   (EventType -> LocalTime -> RiskFactorsMarlowe) ->
   -- | ACTUS contract terms
   ContractTermsMarlowe ->
   -- | Marlowe contract or applicabilty errors
   Validation [TermValidationError] Contract
-genContract rf = fmap (genContract' rf) . validateTerms
+genContract p rf = fmap (genContract' p rf) . validateTerms
 
 -- | Same as 'getContract', but does not validate the applicabilty of the contract
 -- terms.
 genContract' ::
+  -- | Party and Counter-party for the contract
+  (Party, Party) ->
   -- | Risk factors per event and time
   (EventType -> LocalTime -> RiskFactorsMarlowe) ->
   -- | ACTUS contract terms
   ContractTermsMarlowe ->
   -- | Marlowe contract
   Contract
-genContract' rf ct =
+genContract' (party, couterparty) rf ct =
   let cfs = genProjectedCashflows rf ct []
    in foldl' gen Close $ reverse cfs
   where
@@ -84,8 +86,8 @@ genContract' rf ct =
             If
               (0 `ValueLT` amount)
               ( invoice
-                  "party"
-                  "counterparty"
+                  couterparty
+                  party
                   amount
                   t
                   c
@@ -93,8 +95,8 @@ genContract' rf ct =
               ( If
                   (amount `ValueLT` 0)
                   ( invoice
-                      "counterparty"
-                      "party"
+                      party
+                      couterparty
                       (NegValue amount)
                       t
                       c
@@ -102,23 +104,21 @@ genContract' rf ct =
                   c
               )
 
-    invoice :: String -> String -> Value -> Timeout -> Contract -> Contract
-    invoice from to amount timeout continue =
-      let party = Role $ TokenName $ fromString from
-          counterparty = Role $ TokenName $ fromString to
-       in When
-            [ Case
-                (Deposit party party ada amount)
-                ( Pay
-                    party
-                    (Party counterparty)
-                    ada
-                    amount
-                    continue
-                )
-            ]
-            timeout
-            Close
+    invoice :: Party -> Party -> Value -> Timeout -> Contract -> Contract
+    invoice a b amount timeout continue =
+      When
+        [ Case
+            (Deposit a a ada amount)
+            ( Pay
+                a
+                (Party b)
+                ada
+                amount
+                continue
+            )
+        ]
+        timeout
+        Close
 
 cashFlowToChoiceId :: CashFlow a -> ChoiceId
 cashFlowToChoiceId CashFlow {..} =

@@ -57,7 +57,7 @@ ex_pam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
               cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
@@ -71,8 +71,8 @@ ex_pam1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
-                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 12_000)
+                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 10_000)
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 12_000)
       )
 
 -- |ex_lam1 defines a contract of type LAM
@@ -100,7 +100,7 @@ ex_lam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
               cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
@@ -114,9 +114,9 @@ ex_lam1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
-                  let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_100)
+                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 10_000)
+                  let tc = totalPayments (Party "party") txPay
+                  assertBool ("total payments to party: " ++ show tc) (tc == 11_100)
       )
 
 
@@ -145,7 +145,7 @@ ex_nam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
               cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
@@ -159,9 +159,9 @@ ex_nam1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
-                  let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240)
+                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 10_000)
+                  let tc = totalPayments (Party "party") txPay
+                  assertBool ("total payments to party: " ++ show tc) (tc == 11_240)
       )
 
 
@@ -190,7 +190,7 @@ ex_ann1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
               cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
@@ -204,9 +204,9 @@ ex_ann1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10_000)
-                  let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 11_240)
+                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 10_000)
+                  let tc = totalPayments (Party "party") txPay
+                  assertBool ("total payments to party: " ++ show tc) (tc == 11_240)
       )
 
 -- |ex_optns1 defines a contract of type OPTNS
@@ -216,7 +216,7 @@ ex_optns1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' rf (toMarlowe ct)
+          let Just contract = toCore $ genContract' ("party", "counterparty") rf (toMarlowe ct)
               rf :: Num a => EventType -> LocalTime -> RiskFactors a
               rf XD d
                 | d == (fromJust $ maturityDate ct) =
@@ -250,9 +250,9 @@ ex_optns1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10)
-                  let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 40)
+                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 10)
+                  let tc = totalPayments (Party "party") txPay
+                  assertBool ("total payments to party: " ++ show tc) (tc == 40)
       )
 
 -- |ex_com1 defines a contract of type COM
@@ -262,7 +262,7 @@ ex_com1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' emptyRiskFactors (toMarlowe ct)
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
               cashFlows = genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
@@ -276,9 +276,9 @@ ex_com1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 0)
-                  let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 1_400)
+                  assertBool "total payments to counterparty" (totalPayments (Party "counterparty") txPay == 0)
+                  let tc = totalPayments (Party "party") txPay
+                  assertBool ("total payments to party: " ++ show tc) (tc == 1_400)
       )
 
 emptyRiskFactors :: Num a => EventType -> LocalTime -> RiskFactors a
@@ -309,6 +309,6 @@ counterpartyDeposit :: Integer -> Input
 counterpartyDeposit = NormalInput . IDeposit (Role "counterparty") "counterparty" ada
 
 cashFlowToInput :: CashFlow Double -> Maybe Input
-cashFlowToInput CashFlow{..} | amount < 0 = Just $ counterpartyDeposit $ toMarloweFixedPoint (-amount)
-cashFlowToInput CashFlow{..} | amount > 0 = Just $ partyDeposit $ toMarloweFixedPoint amount
+cashFlowToInput CashFlow{..} | amount < 0 = Just $ partyDeposit $ toMarloweFixedPoint (-amount)
+cashFlowToInput CashFlow{..} | amount > 0 = Just $ counterpartyDeposit $ toMarloweFixedPoint amount
 cashFlowToInput _                         = Nothing
