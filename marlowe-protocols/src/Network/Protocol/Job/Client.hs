@@ -2,18 +2,18 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc client for the command protocol. Includes a function for
+-- | A generc client for the job protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Command.Client where
+module Network.Protocol.Job.Client where
 
 import Data.Void (Void, absurd)
-import Network.Protocol.Command.Types
+import Network.Protocol.Job.Types
 import Network.TypedProtocol
 
--- | A generic client for the command protocol.
-newtype CommandClient cmd m a = CommandClient { runCommandClient :: m (ClientStInit cmd m a) }
+-- | A generic client for the job protocol.
+newtype JobClient cmd m a = JobClient { runJobClient :: m (ClientStInit cmd m a) }
 
 -- | In the 'StInit' state, the client has agency. It can send:
 --
@@ -64,13 +64,13 @@ deriving instance Functor m => Functor (ClientStAwait cmd status err result m)
 
 -- | Change the underlying monad type a server runs in with a natural
 -- transformation.
-hoistCommandClient
+hoistJobClient
   :: forall cmd m n a
    . Functor m
   => (forall x. m x -> n x)
-  -> CommandClient cmd m a
-  -> CommandClient cmd n a
-hoistCommandClient phi = CommandClient . phi . fmap hoistInit . runCommandClient
+  -> JobClient cmd m a
+  -> JobClient cmd n a
+hoistJobClient phi = JobClient . phi . fmap hoistInit . runJobClient
   where
   hoistInit = \case
     SendMsgExec cmd stCmd     -> SendMsgExec cmd $ hoistCmd stCmd
@@ -95,13 +95,13 @@ hoistCommandClient phi = CommandClient . phi . fmap hoistInit . runCommandClient
 -- | Interpret a client as a typed-protocols peer.
 commandClientPeer
   :: forall cmd m a
-   . (Monad m, IsCommand cmd)
-  => CommandClient cmd m a
-  -> Peer (Command cmd) 'AsClient 'StInit m a
-commandClientPeer CommandClient{..} =
-  Effect $ peerInit <$> runCommandClient
+   . (Monad m, Command cmd)
+  => JobClient cmd m a
+  -> Peer (Job cmd) 'AsClient 'StInit m a
+commandClientPeer JobClient{..} =
+  Effect $ peerInit <$> runJobClient
   where
-  peerInit :: ClientStInit cmd m a -> Peer (Command cmd) 'AsClient 'StInit m a
+  peerInit :: ClientStInit cmd m a -> Peer (Job cmd) 'AsClient 'StInit m a
   peerInit = \case
     SendMsgExec cmd stCmd     -> Yield (ClientAgency TokInit) (MsgExec cmd) $ peerCmd (tokFromCmd cmd) stCmd
     SendMsgAttach jobId stCmd -> Yield (ClientAgency TokInit) (MsgAttach jobId) $ peerCmd (tokFromId jobId) stCmd
@@ -109,7 +109,7 @@ commandClientPeer CommandClient{..} =
   peerCmd
     :: TokCommand cmd status err result
     -> ClientStCmd cmd status err result m a
-    -> Peer (Command cmd) 'AsClient ('StCmd status err result) m a
+    -> Peer (Job cmd) 'AsClient ('StCmd status err result) m a
   peerCmd tokCmd ClientStCmd{..} =
     Await (ServerAgency (TokCmd tokCmd)) $ Effect . \case
       MsgFail _ err         -> Done TokDone <$> recvMsgFail err
@@ -119,15 +119,15 @@ commandClientPeer CommandClient{..} =
   peerAwait
     :: TokCommand cmd status err result
     -> ClientStAwait cmd status err result m a
-    -> Peer (Command cmd) 'AsClient ('StAwait status err result) m a
+    -> Peer (Job cmd) 'AsClient ('StAwait status err result) m a
   peerAwait tokCmd = \case
     SendMsgPoll stCmd -> Yield (ClientAgency (TokAwait tokCmd)) MsgPoll $ peerCmd tokCmd stCmd
     SendMsgDetach a   -> Yield (ClientAgency (TokAwait tokCmd)) MsgDetach $ Done TokDone a
 
 -- | Create a client that runs a command that cannot await to completion and
 -- returns the result.
-liftCommand :: Monad m => cmd Void err result -> CommandClient cmd m (Either err result)
-liftCommand = CommandClient . pure . ($ stCmd) . SendMsgExec
+liftCommand :: Monad m => cmd Void err result -> JobClient cmd m (Either err result)
+liftCommand = JobClient . pure . ($ stCmd) . SendMsgExec
   where
     stCmd = ClientStCmd
       { recvMsgAwait = absurd

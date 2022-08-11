@@ -2,17 +2,17 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc server for the command protocol. Includes a function for
+-- | A generc server for the job protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Command.Server where
+module Network.Protocol.Job.Server where
 
-import Network.Protocol.Command.Types
+import Network.Protocol.Job.Types
 import Network.TypedProtocol
 
--- | A generic server for the command protocol.
-newtype CommandServer cmd m a = CommandServer { runCommandServer :: m (ServerStInit cmd m a) }
+-- | A generic server for the job protocol.
+newtype JobServer cmd m a = JobServer { runJobServer :: m (ServerStInit cmd m a) }
 
 -- | In the 'StInit' state, the client has agency. The server must be prepared
 -- to handle either:
@@ -70,13 +70,13 @@ deriving instance Functor m => Functor (ServerStAwait cmd status err result m)
 
 -- | Change the underlying monad type a server runs in with a natural
 -- transformation.
-hoistCommandServer
+hoistJobServer
   :: forall cmd m n a
    . Functor m
   => (forall x. m x -> n x)
-  -> CommandServer cmd m a
-  -> CommandServer cmd n a
-hoistCommandServer phi = CommandServer . phi . fmap hoistInit . runCommandServer
+  -> JobServer cmd m a
+  -> JobServer cmd n a
+hoistJobServer phi = JobServer . phi . fmap hoistInit . runJobServer
   where
   hoistInit ServerStInit{..} = ServerStInit
     { recvMsgExec = phi . fmap hoistCmd . recvMsgExec
@@ -102,13 +102,13 @@ hoistCommandServer phi = CommandServer . phi . fmap hoistInit . runCommandServer
 -- | Interpret a server as a typed-protocols peer.
 commandServerPeer
   :: forall cmd m a
-   . (Monad m, IsCommand cmd)
-  => CommandServer cmd m a
-  -> Peer (Command cmd) 'AsServer 'StInit m a
-commandServerPeer CommandServer{..} =
-  Effect $ peerInit <$> runCommandServer
+   . (Monad m, Command cmd)
+  => JobServer cmd m a
+  -> Peer (Job cmd) 'AsServer 'StInit m a
+commandServerPeer JobServer{..} =
+  Effect $ peerInit <$> runJobServer
   where
-  peerInit :: ServerStInit cmd m a -> Peer (Command cmd) 'AsServer 'StInit m a
+  peerInit :: ServerStInit cmd m a -> Peer (Job cmd) 'AsServer 'StInit m a
   peerInit ServerStInit{..} =
     Await (ClientAgency TokInit) $ Effect . \case
       MsgExec cmd     -> peerCmd (tokFromCmd cmd) <$> recvMsgExec cmd
@@ -117,7 +117,7 @@ commandServerPeer CommandServer{..} =
   peerCmd
     :: TokCommand cmd status err result
     -> ServerStCmd cmd status err result m a
-    -> Peer (Command cmd) 'AsServer ('StCmd status err result) m a
+    -> Peer (Job cmd) 'AsServer ('StCmd status err result) m a
   peerCmd tokCmd = \case
     SendMsgFail err a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgFail tokCmd err) $ Done TokDone a
     SendMsgSucceed result a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgSucceed tokCmd result) $ Done TokDone a
@@ -126,7 +126,7 @@ commandServerPeer CommandServer{..} =
   peerAwait
     :: TokCommand cmd status err result
     -> ServerStAwait cmd status err result m a
-    -> Peer (Command cmd) 'AsServer ('StAwait status err result) m a
+    -> Peer (Job cmd) 'AsServer ('StAwait status err result) m a
   peerAwait tokCmd ServerStAwait{..} =
     Await (ClientAgency (TokAwait tokCmd)) $ Effect . \case
       MsgPoll   -> peerCmd tokCmd <$> recvMsgPoll
@@ -136,8 +136,8 @@ commandServerPeer CommandServer{..} =
 liftCommandHandler
   :: Monad m
   => (forall status err result. Either (cmd status err result) (JobId cmd status err result) -> m (a, Either err result))
-  -> CommandServer cmd m a
-liftCommandHandler handle = CommandServer $ pure $ ServerStInit
+  -> JobServer cmd m a
+liftCommandHandler handle = JobServer $ pure $ ServerStInit
   { recvMsgExec = \cmd -> do
       (a, e) <- handle $ Left cmd
       pure case e of
