@@ -90,8 +90,7 @@ test-suite marlowe-test
       ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
     import: lang
-    hs-source-dirs:
-      test
+    hs-source-dirs: test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
