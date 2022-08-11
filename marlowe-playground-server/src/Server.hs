@@ -55,7 +55,7 @@ import Webghc.Server (CompileRequest)
 
 genActusContract :: ContractTerms Double -> Handler String
 genActusContract terms =
-    case genContract emptyRiskFactors (toMarlowe terms) of
+    case genContract ("party", "counterparty") emptyRiskFactors (toMarlowe terms) of
         -- Should probably send this as a server error and handle it properly on the front end
         Validation.Failure errs -> pure (unlines . (:) "ACTUS Term Validation Failed:" . map ((++) "    " . show) $ errs)
         Validation.Success c -> pure . show . pretty $ c
