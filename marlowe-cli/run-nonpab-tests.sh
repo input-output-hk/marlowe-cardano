@@ -1,78 +1,95 @@
 #!/usr/bin/env bash
 
-USAGE=\
-"USAGE:
-  run-nonpab-tests.sh [OPTIONS]
+
+basename=$(basename "$0")
+
+DEFAULT_MAGIC="1097911063"
+DEFAULT_CARDANO_NODE_SOCKET_PATH="./node.socket"
+DEFAULT_TREASURY="."
+
+USAGE=$(cat <<USAGE
+Run the non-PAB marlowe-cli tests
+
+USAGE:
+  $basename OPTIONS
 
 OPTIONS:
-  -m, --testnet-magic <CARDANO_TESTNET_MAGIC>
-          Falls back to the $CARDANO_TESTNET_MAGIC env variable.
-          Default is 1567.
-  -s, --node-socket-path
-          Falls back to the $CARDANO_NODE_SOCKET_PATH env variable.
-          We fallback to \`./node.socket\` when as a least resort.
-  -t, --treasury
-          Directory which should be used as a store for test suite treasury account.
+  -m, --magic <INT>
+          Magic number of the Cardano network.
+          Falls back to the CARDANO_TESTNET_MAGIC env variable.
+          Default is $DEFAULT_MAGIC (the Cardano public testnet)
+  -s, --node-socket-path <PATH>
+          Falls back to the CARDANO_NODE_SOCKET_PATH env variable.
+          Default is '$DEFAULT_CARDANO_NODE_SOCKET_PATH'
+  -t, --treasury <PATH>
+          Directory which should be used as a store for test suite treasury accounts.
           We expect two files there: \`payment.skey\`, \`payment.vkey\`
           If given directory is empty this runner will create them.
-          We fallback to $TREASURY env variable and to \`./\` at the end.
+          Falls back to the TREASURY env variable.
+          Default is '$DEFAULT_TREASURY'
+  -a, --faucet-address <ADDRESS>
+          Address with ADA to fund the tests.
+  -p, --faucet-skey-file <PATH>
+          Payment signing key for the address above for funding test accounts.
   -h, --help
-"
 
-set -e
+If running this script against a cabal-compiled binary (not made with
+nix-build), prefix this command setting the MARLOWE_CLI_BIN variable:
 
-NODE_SOCKET_PATH=$CARDANO_NODE_SOCKET_PATH
-MAGIC=$CARDANO_TESTNET_MAGIC
+    $ MARLOWE_CLI_BIN="cabal run marlowe-cli" $basename ...
+USAGE
+)
 
-PARSED_ARGUMENTS=$(getopt -a -n "marlowe-cli/run-nonpab-tests" -o "m:s:bvt:fh" --long "testnet-magic:,node-socket-path:,build,verbose,treasury:,fund,help" --)
-VALID_ARGUMENTS=$?
-if [ "$VALID_ARGUMENTS" != "0" ]; then
-  echo "$USAGE"
-fi
+
+die () {
+  rc="$1"
+  shift
+  echo "$basename:" "$@" >&2
+  exit "$rc"
+}
+
+
+PARSED_ARGUMENTS=$(getopt -a -n "$basename" -o m:s:t:a:p:h --long magic:,node-socket-path:,treasury:,faucet-address:,faucet-skey-file:,help -- "$@") \
+  || die 1 "$USAGE"
+
 eval set -- "$PARSED_ARGUMENTS"
 
-while :
-do
-    case "$1" in
-      -s | --node-socket-path)          NODE_SOCKET_PATH="$2";  shift 2 ;;
-      -n | --testnet-magic)             MAGIC="$2";             shift 2 ;;
-      -t | --treasury)                  TREASURY="$2";          shift 2 ;;
-      -h | --help)                      echo "$USAGE";          exit  0 ;;
-      --) shift; break ;;
-      *) echo "Unrecognized option: $1" 1>&2; echo "$USAGE"; exit 1;;
-    esac
+MAGIC="$CARDANO_TESTNET_MAGIC"
+OPTHELP=false
+
+while true ; do
+  case "$1" in
+    -m|--magic) MAGIC="$2"; shift 2 ;;
+    -s|--node-socket-path) CARDANO_NODE_SOCKET_PATH="$2"; shift 2 ;;
+    -t|--treasury) TREASURY="$2"; shift 2 ;;
+    -a|--faucet-address) FAUCET_ADDRESS="$2"; shift 2 ;;
+    -p|--faucet-skey-file) FAUCET_SKEY_FILE="$2"; shift 2 ;;
+    -h|--help) OPTHELP=true; shift;;
+    --) shift; break;;
+  esac
 done
 
-if [[ -z "$MAGIC" ]]; then
-  MAGIC=1567
-fi
+$OPTHELP && die 0 "$USAGE"
+: ${MAGIC:=$DEFAULT_CARDANO_TESTNET_MAGIC}
+: ${CARDANO_NODE_SOCKET_PATH:=$DEFAULT_CARDANO_NODE_SOCKET_PATH}
+: ${TREASURY:=$DEFAULT_TREASURY}
+[ -z $FAUCET_ADDRESS ] && die 1 "Missing required --faucet-address"
+[ -z $FAUCET_SKEY_FILE ] && die 1 "Missing required --faucet-skey-file"
 
-if [[ -z "$NODE_SOCKET_PATH" ]]; then
-  NODE_SOCKET_PATH="./node.socket"
-fi
+# These will be needed by the test scripts we're about to run
 
-if [[ -z $TREASURY ]]; then
-  TREASURY="."
-fi
-
-
-export CARDANO_NODE_SOCKET_PATH
 export MAGIC
+export CARDANO_NODE_SOCKET_PATH
 export TREASURY
+export FAUCET_ADDRESS
+export FAUCET_SKEY_FILE
 
-if bash -ve "test/double-satisfaction.sh" >& "test/double-satisfaction.log"
-then
-    echo "PASS: test/double-satisfaction.sh"
-else
-    echo "FAIL: test/double-satisfaction.sh"
-fi
-
-for t in examples/*/run-*.sh
+# for t in {test/double-satisfaction.sh,examples/*/run-*.sh}
+for t in test/double-satisfaction.sh
+# for t in examples/cfd/run-*.sh
 do
   if bash -ve "$t" >& "${t%%.sh}.log"
-  then
-    echo "PASS: $t"
-  else
-    echo "FAIL: $t"
+    then echo "PASS: $t"
+    else echo "FAIL: $t"
   fi
 done
