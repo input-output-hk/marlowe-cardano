@@ -23,18 +23,13 @@ module Language.Marlowe.CLI.Test (
 
 import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..))
 import Control.Monad.Error.Class (throwError)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
-import Data.Bifunctor (first)
-import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
+import Control.Monad.Except (MonadError, MonadIO)
+import Language.Marlowe.CLI.IO (decodeFileStrict)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
 import Language.Marlowe.CLI.Test.Types (MarloweTests (..))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliError (..))
-import Network.HTTP.Client (defaultManagerSettings, newManager)
-import Network.Socket (withSocketsDo)
-import Network.WebSockets (runClient)
 import PlutusCore (defaultCostModelParams)
-import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
 
 
 -- | Run tests of a Marlowe contract.

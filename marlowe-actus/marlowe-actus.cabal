@@ -44,15 +44,12 @@ library
   build-depends:
     aeson -any,
     base -any,
-    bytestring,
-    plutus-ledger-api,
-    plutus-tx -any,
-    text,
-    vector,
     marlowe,
     mtl -any,
-    time -any,
+    plutus-ledger-api,
     sort -any,
+    text,
+    time -any,
     validation -any
   default-language: Haskell2010
   default-extensions: ExplicitForAll ScopedTypeVariables

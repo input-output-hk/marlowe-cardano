@@ -32,32 +32,14 @@ module Language.Marlowe.CLI.Test.Types (
 ) where
 
 
-import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, StakeAddressReference, Value)
-import Control.Applicative ((<|>))
-import Control.Concurrent.Chan (Chan)
-import Control.Lens (makeLenses)
-import Data.Aeson (FromJSON (..), ToJSON (..), object, (.:), (.=))
+import Cardano.Api (AddressAny, NetworkId)
 import GHC.Generics (Generic)
 -- import Language.Marlowe.CLI.PAB (WsRunner)
-import Language.Marlowe.CLI.Types (CliError, SomePaymentSigningKey)
-import Language.Marlowe.Core.V1.Semantics (MarloweParams)
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input, State, TimeInterval)
-import Plutus.V1.Ledger.Api (PubKeyHash)
-import Plutus.V1.Ledger.Time (DiffMilliSeconds, POSIXTime)
-import Servant.Client (BaseUrl, ClientM)
-
-import Cardano.Api (AddressAny, NetworkId)
-import Control.Lens.Combinators (Lens')
-import Control.Lens.Lens (lens)
-import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
-import qualified Data.Aeson as A (Value (..))
-import qualified Data.Map.Strict as M (Map)
-import Data.Maybe (fromMaybe)
-import Data.Text
-import GHC.Generics (Generic)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
-import Ledger (CurrencySymbol)
-import Options.Applicative (optional)
+import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Text (Text)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input)
+import Ledger.Orphans ()
+import Plutus.V1.Ledger.Time (POSIXTime)
 
 
 -- | Configuration for a set of Marlowe tests.

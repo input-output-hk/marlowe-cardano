@@ -106,15 +106,13 @@ library
     ouroboros-consensus,
     ouroboros-network,
     plutus-core,
+    plutus-ledger,
     plutus-ledger-ada,
     plutus-ledger-api,
-    -- Used solely for a few cardano-api <-> plutus-ledger-api conversions
-    plutus-ledger,
-    -- If we drop plutus-ledger we should bring back this.
-    -- plutus-ledger-aeson,
     plutus-ledger-slot,
     plutus-script-utils,
     plutus-tx,
+    plutus-tx-plugin,
     prettyprinter,
     QuickCheck,
     regex-posix,
@@ -142,6 +140,7 @@ executable marlowe-cli
     base >= 4.9 && < 5,
     cardano-config,
     marlowe-cli,
+    plutus-tx-plugin,
     text
   ghc-options:
     -threaded

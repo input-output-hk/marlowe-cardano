@@ -80,7 +80,7 @@ let
     nix-flakes-alias
     nixpkgs-fmt
     openssl
-    pkgconfig
+    pkg-config
     pre-commit
     shellcheck
     sqlite-interactive
@@ -129,31 +129,34 @@ let
 
   develShells =
     let
-      libs = [
-        pkgs.glibcLocales
-        pkgs.libsodium-vrf
-        pkgs.lzma
-        pkgs.openssl.dev
-        pkgs.secp256k1
-        pkgs.zlib
-      ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
 
-      marloweCoreBuildInputs = libs ++ devToolsInputs ++ [ pkgs.z3 ];
-      marloweCliBuildInputs = libs ++ devToolsInputs ++ [
+      marloweCoreBuildInputs = devToolsInputs ++ [ pkgs.z3 ];
+      marloweCliBuildInputs = devToolsInputs ++ [
         cardano-node
         cardano-cli
         start-cardano-node
       ];
-      develShell = { buildInputs, name, shellHook ? "" }: pkgs.mkShell {
-        name = "marlowe-core-shell";
-        buildInputs = buildInputs;
-        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libs;
-        shellHook = ''
-          export MARLOWE_NIX_SHELL="${name}"
-          ${defaultShellHook}
-          ${shellHook}
-        '';
-      };
+      develShell = { buildInputs, name, shellHook ? "" }:
+        let
+          libs = [
+            pkgs.glibcLocales
+            pkgs.libsodium-vrf
+            pkgs.lzma
+            pkgs.openssl_3_0.dev
+            pkgs.secp256k1
+            pkgs.zlib
+          ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
+        in
+        pkgs.mkShell {
+          name = "marlowe-core-shell";
+          buildInputs = libs ++ buildInputs;
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libs;
+          shellHook = ''
+            export MARLOWE_NIX_SHELL="${name}"
+            ${defaultShellHook}
+            ${shellHook}
+          '';
+        };
     in
     {
       marloweActus = develShell {

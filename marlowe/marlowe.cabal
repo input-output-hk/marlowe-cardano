@@ -48,30 +48,18 @@ library
   ghc-options:
     -Wunused-packages
 
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
-
   build-depends:
     aeson <2,
     base16-aeson,
     base -any,
     bytestring,
-    cardano-api -any,
-    cardano-binary -any,
-    cardano-ledger-alonzo -any,
-    cardano-ledger-core -any,
     containers -any,
     deriving-aeson -any,
-    lens,
     mtl,
     newtype-generics,
     template-haskell -any,
     plutus-ledger-ada,
     plutus-ledger-api -any,
-    -- We use plutus-ledger here because because marlowe-cli depens on it
-    -- currently and we have collision between orphans.
-    -- plutus-ledger,
-    -- plutus-ledger-aeson,
     plutus-ledger-slot,
     plutus-script-utils,
     plutus-tx -any,

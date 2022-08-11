@@ -27,13 +27,12 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (BabbageEra, CardanoMode, LocalNodeConnectInfo (..), NetworkId,
+import Cardano.Api (BabbageEra, CardanoMode, LocalNodeConnectInfo (..), NetworkId (..),
                     StakeAddressReference (NoStakeAddress))
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
-import Language.Marlowe.CLI.Test.Types (ScriptOperation (..), ScriptTest (..), TransactionNickname)
-import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction))
+import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -47,12 +46,8 @@ import qualified Data.Map as Map
 import qualified Data.Map.Strict as M (lookup)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl)
-import qualified Language.Marlowe.Client as Client
-
-import Cardano.Api (CardanoMode, LocalNodeConnectInfo (..), NetworkId (..))
-import Control.Monad.Except (MonadError, throwError)
 import Language.Marlowe.CLI.Test.Types
-import Language.Marlowe.CLI.Types (CliError (..))
+import qualified Language.Marlowe.Client as Client
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
 newtype ScriptState = ScriptState
@@ -135,7 +130,7 @@ scriptTest  :: MonadError CliError m
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest costModel networkId connection slotConfig ScriptTest{..} =
+scriptTest costModel networkId _ slotConfig ScriptTest{..} =
   do
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
@@ -146,13 +141,13 @@ scriptTest costModel networkId connection slotConfig ScriptTest{..} =
                     => MonadReader ScriptEnv m
                     => MonadIO m
                     => m ()
-      interpretLoop = for_ stScriptOperations \operation -> do
+      interpretLoop = for_ stScriptOperations \operation ->
         interpret operation
     void $ catchError
       ( runReaderT (execStateT interpretLoop (ScriptState mempty)) (ScriptEnv networkId slotConfig costModel))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
-        liftIO (putStrLn $ show e)
+        liftIO (print e)
         liftIO (putStrLn "***** FAILED *****")
         throwError (e :: CliError)
     liftIO $ putStrLn "***** PASSED *****"

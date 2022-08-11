@@ -74,15 +74,21 @@ package locli
 
 package marlowe
   tests: True
+  ghc-options: -Werror
 
 package marlowe-actus
   tests: True
+  ghc-options: -Werror
 
 package marlowe-chain-sync
   ghc-options: -Werror
 
 package marlowe-contracts
   tests: True
+  ghc-options: -Werror
+
+package marlowe-cli
+  ghc-options: -Werror
 
 package marlowe-protocols
   ghc-options: -Werror
