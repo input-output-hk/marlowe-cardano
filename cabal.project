@@ -72,21 +72,27 @@ package cryptonite
 package locli
   tests: True
 
-package marlowe-chain-sync
-  ghc-options: -Werror
-
-package marlowe-protocols
-  ghc-options: -Werror
-
 package marlowe
   tests: True
+
+package marlowe-actus
+  tests: True
+
+package marlowe-chain-sync
+  ghc-options: -Werror
 
 package marlowe-contracts
   tests: True
 
+package marlowe-protocols
+  ghc-options: -Werror
+
 -- You have to copy ghc-options manually to `nix/pkgs/haskell/haskell.nix`
 package plutus-core
   ghc-options: -Wno-unused-packages -Wno-name-shadowing
+
+package snap-server
+  flags: +openssl
 
 package trace-dispatcher
   ghc-options: -Werror
@@ -99,9 +105,6 @@ package tx-generator
 
 package vector-map
   ghc-options: -Werror
-
-package snap-server
-  flags: +openssl
 
 
 -- marlowe-cardano specific dependencies:

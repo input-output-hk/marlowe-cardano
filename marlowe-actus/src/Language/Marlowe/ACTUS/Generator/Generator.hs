@@ -11,8 +11,10 @@ where
 
 import Data.String (IsString (fromString))
 import Language.Marlowe (Action (..), Case (..), Contract (..), Observation (..), POSIXTime (..), Party (..),
-                         Payee (..), Value (..), ada)
-import Ledger.Value (TokenName (TokenName))
+                         Payee (..), Value (..))
+import Language.Marlowe.Util (ada)
+import Plutus.V1.Ledger.Value (TokenName (TokenName))
+--import Ledger.Value (TokenName (TokenName))
 
 invoice :: String -> String -> Value Observation -> POSIXTime -> Contract -> Contract
 invoice from to amount timeout continue =

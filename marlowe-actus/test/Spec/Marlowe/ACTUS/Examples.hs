@@ -17,7 +17,8 @@ import Language.Marlowe.ACTUS.Domain.Ops
 import Language.Marlowe.ACTUS.Generator.GeneratorFs
 import Language.Marlowe.ACTUS.Generator.GeneratorStatic
 import Language.Marlowe.ACTUS.Generator.MarloweCompat (toMarlowe)
-import qualified Ledger.Value as Val
+import Language.Marlowe.Util (ada)
+import Plutus.V1.Ledger.Value (valueOf)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -378,5 +379,5 @@ defaultRiskFactors _ _ =
 totalPayments :: Payee -> [Payment] -> Integer
 totalPayments payee = sum . map m . filter f
   where
-    m (Payment _ _ mon) = Val.valueOf mon "" ""
+    m (Payment _ _ mon) = valueOf mon "" ""
     f (Payment _ pay _) = pay == payee

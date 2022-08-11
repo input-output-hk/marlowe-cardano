@@ -62,6 +62,7 @@ let
 
   # marlowe and subproject independent dev tools
   devToolsInputs = (with pkgs; with marlowe; [
+    coreutils
     cabal-install
     curl
     docs.build-and-serve-docs
@@ -78,6 +79,7 @@ let
     jq
     nix-flakes-alias
     nixpkgs-fmt
+    openssl
     pkgconfig
     pre-commit
     shellcheck
@@ -131,13 +133,13 @@ let
         pkgs.glibcLocales
         pkgs.libsodium-vrf
         pkgs.lzma
-        pkgs.openssl
+        pkgs.openssl.dev
         pkgs.secp256k1
         pkgs.zlib
       ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
 
       marloweCoreBuildInputs = libs ++ devToolsInputs ++ [ pkgs.z3 ];
-      marloweCliBuildInputs = devToolsInputs ++ [
+      marloweCliBuildInputs = libs ++ devToolsInputs ++ [
         cardano-node
         cardano-cli
         start-cardano-node
