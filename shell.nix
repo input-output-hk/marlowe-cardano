@@ -61,8 +61,9 @@ let
   };
 
   # marlowe and subproject independent dev tools
-  # IMPORTANT: Do not add git to this dev shell!!!! It breaks Lorri. People
-  # should have git installed locally anyway!
+  # ---------------------------------------------------------------------------
+  # IMPORTANT: Do not add git to the dev shell, It breaks Lorri!
+  # ---------------------------------------------------------------------------
   devToolsInputs = (with pkgs; with marlowe; [
     coreutils
     cabal-install
