@@ -83,11 +83,11 @@ package marlowe-actus
 package marlowe-chain-sync
   ghc-options: -Werror
 
-package marlowe-contracts
-  tests: True
+package marlowe-cli
   ghc-options: -Werror
 
-package marlowe-cli
+package marlowe-contracts
+  tests: True
   ghc-options: -Werror
 
 package marlowe-protocols

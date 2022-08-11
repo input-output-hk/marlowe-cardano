@@ -89,6 +89,7 @@ let
     updateMaterialized
     yq
     zlib
+    z3
   ]);
 
   defaultShellHook = ''
@@ -113,7 +114,6 @@ let
       run-chainseekd
       start-cardano-node
       sphinxTools
-      pkgs.z3
       # FIXME: I'm not sure why I'm not able to grap rPackages here
     ]); # ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
@@ -130,10 +130,11 @@ let
   develShells =
     let
 
-      marloweCoreBuildInputs = devToolsInputs ++ [ pkgs.z3 ];
+      marloweCoreBuildInputs = devToolsInputs;
       marloweCliBuildInputs = devToolsInputs ++ [
         cardano-node
         cardano-cli
+        marlowe-cli
         start-cardano-node
       ];
       develShell = { buildInputs, name, shellHook ? "" }:

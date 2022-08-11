@@ -21,9 +21,7 @@
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
--- Uncomment this if you would like to ignore Plutus errors and have partial LSP support during coding
--- BUT never commit it back ;-)
--- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
 
 
 module Language.Marlowe.Scripts where
@@ -31,6 +29,7 @@ import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Pretty (Pretty (..))
+-- Added to silence cabal about unused plutus-tx-plugin
 import Plutus.Script.Utils.V1.Typed.Scripts as Scripts
 import qualified Plutus.Script.Utils.V1.Typed.TypeUtils as Scripts
 import Plutus.V1.Ledger.Address (scriptHashAddress)
@@ -47,6 +46,7 @@ import qualified Plutus.V1.Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
+import PlutusTx.Plugin ()
 import PlutusTx.Prelude as PlutusTxPrelude
 import qualified Prelude as Haskell
 import Unsafe.Coerce (unsafeCoerce)

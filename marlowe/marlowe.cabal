@@ -39,14 +39,14 @@ common lang
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
 
-  if flag(defer-plugin-errors)
-    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
-
 library
   import: lang
   hs-source-dirs: src
   ghc-options:
     -Wunused-packages
+
+  if !(impl(ghcjs) || os(ghcjs))
+    build-depends: plutus-tx-plugin -any
 
   build-depends:
     aeson <2,
@@ -62,7 +62,7 @@ library
     plutus-ledger-api -any,
     plutus-ledger-slot,
     plutus-script-utils,
-    plutus-tx -any,
+    plutus-tx,
     serialise -any,
     base16-bytestring -any,
     text,
@@ -84,9 +84,11 @@ library
     Language.Marlowe.Pretty
     Language.Marlowe.Analysis.FSSemantics
     Plutus.Debug
-  other-modules:
 
 test-suite marlowe-test
+    if flag(defer-plugin-errors)
+      ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
     import: lang
     hs-source-dirs:
       test
