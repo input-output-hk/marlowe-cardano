@@ -14,7 +14,7 @@ module Actus.Core
   )
 where
 
-import Actus.Domain (CT (..), CashFlow (..), ContractState (..), ContractStructure (..), ContractTerms (..),
+import Actus.Domain (ActusFrac, CT (..), CashFlow (..), ContractState (..), ContractStructure (..), ContractTerms (..),
                      EventType (..), Reference (..), RiskFactors (..), ShiftedDay (..))
 import Actus.Model (CtxPOF (CtxPOF), CtxSTF (..), initializeState, maturity, payoff, schedule, stateTransition)
 import Control.Applicative ((<|>))
@@ -29,7 +29,7 @@ import Data.Time (LocalTime)
 -- given contract terms and provided risk factors. The function returns
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
-genProjectedCashflows :: RealFrac a =>
+genProjectedCashflows :: ActusFrac a =>
   (EventType -> LocalTime -> RiskFactors a) -- ^ Risk factors as a function of event type and time
   -> ContractTerms a                        -- ^ Contract terms
   -> [(String, EventType, ShiftedDay)]      -- ^ Unscheduled events
@@ -40,7 +40,7 @@ genProjectedCashflows rf ct us =
    in genCashflow ct <$> runReader (genProjectedPayoffs unscheduled) ctx
 
 -- |Bulid the context allowing the perform state transitions
-buildCtx :: RealFrac a =>
+buildCtx :: ActusFrac a =>
   (EventType -> LocalTime -> RiskFactors a) -- ^ Risk factors as a function of event type and time
   -> ContractTerms a                        -- ^ Contract terms
   -> [(String, EventType, ShiftedDay)]      -- ^ Unscheduled events
@@ -94,7 +94,7 @@ genCashflow ct (ev, t, ContractState {..}, am) =
     }
 
 -- |Generate projected cash flows
-genProjectedPayoffs :: RealFrac a =>
+genProjectedPayoffs :: ActusFrac a =>
   [(EventType, ShiftedDay)]              -- ^ Unscheduled events
   -> Reader (CtxSTF a) [(EventType, ShiftedDay, ContractState a, a)]
 genProjectedPayoffs us =
@@ -114,13 +114,13 @@ genProjectedPayoffs us =
     trans = withReader (\c -> CtxPOF (contractTerms c) (riskFactors c))
 
 -- |Generate schedules
-genSchedule :: RealFrac a =>
+genSchedule :: ActusFrac a =>
      ContractTerms a           -- ^ Contract terms
   -> [(EventType, ShiftedDay)] -- ^ Schedule
   -> [(EventType, ShiftedDay)] -- ^ Schedule
 genSchedule ct us = sortOn snd $ genFixedSchedule ct <> us
 
-genFixedSchedule :: RealFrac a =>
+genFixedSchedule :: ActusFrac a =>
      ContractTerms a           -- ^ Contract terms
   -> [(EventType, ShiftedDay)] -- ^ Schedule
 genFixedSchedule ct@ContractTerms {..} =
@@ -154,7 +154,7 @@ mapAccumLM' f = go
 
 -- |Generate states
 genStates ::
-  RealFrac a =>
+  ActusFrac a =>
   -- | Schedules
   [(EventType, ShiftedDay)] ->
   -- | Initial state
@@ -171,7 +171,7 @@ genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
     st0 = (AD, ShiftedDay (sd stn) (sd stn), stn)
 
     filtersStates ::
-      RealFrac a =>
+      ActusFrac a =>
       (EventType, ShiftedDay, ContractState a) ->
       Reader (CtxSTF a) Bool
     filtersStates (ev, ShiftedDay {..}, _) =
@@ -190,7 +190,7 @@ genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
           _ -> True
 
 -- |Generate payoffs
-genPayoffs :: RealFrac a =>
+genPayoffs :: ActusFrac a =>
   [(EventType, ShiftedDay, ContractState a)] -- ^ States with schedule
   -> Reader (CtxPOF a) [a]                   -- ^ Payoffs
 genPayoffs = mapM calculatePayoff

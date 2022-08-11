@@ -8,8 +8,8 @@ module Actus.Model.Payoff
   )
 where
 
-import Actus.Domain (CT (..), ContractState (..), ContractTerms (..), EventType (..), FEB (..), PYTP (..),
-                     RiskFactors (..), sign)
+import Actus.Domain (ActusFrac, ActusOps (..), CT (..), ContractState (..), ContractTerms (..), EventType (..),
+                     FEB (..), PYTP (..), RiskFactors (..), sign)
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Monad.Reader (Reader, reader)
 import Data.Time.LocalTime (LocalTime)
@@ -21,7 +21,7 @@ data CtxPOF a = CtxPOF
   }
 
 -- |The payoff function
-payoff :: RealFrac a =>
+payoff :: ActusFrac a =>
      EventType           -- ^ Event type
   -> LocalTime           -- ^ Time
   -> ContractState a     -- ^ Contract state
@@ -31,7 +31,7 @@ payoff ev t st = reader payoff'
     payoff' CtxPOF {..} = pof ev (riskFactors ev t) contractTerms st
       where
         pof ::
-          RealFrac a =>
+          ActusFrac a =>
             EventType -> RiskFactors a -> ContractTerms a -> ContractState a -> a
         ----------------------------
         -- Initial Exchange (IED) --
@@ -97,7 +97,7 @@ payoff ev t st = reader payoff'
               nsc,
               prnxt
             } =
-            let redemption = prnxt - sign contractRole * max 0 (abs prnxt - abs nt)
+            let redemption = prnxt - sign contractRole * _max 0 (abs prnxt - abs nt)
              in o_rf_CURS * sign contractRole * nsc * redemption
         -- POF_PR_NAM
         -- POF_PR_ANN
@@ -124,7 +124,7 @@ payoff ev t st = reader payoff'
             | contractType `elem` [NAM, ANN] =
               let timeFromLastEvent = yearFraction dcc sd t maturityDate
                   ra = prnxt - sign contractRole * (ipac + timeFromLastEvent * ipnr * ipcb)
-                  r = ra - max 0 (ra - abs nt)
+                  r = ra - _max 0 (ra - abs nt)
                in o_rf_CURS * sign contractRole * nsc * r
         -- POF_PR_SWPPV
         pof
@@ -199,7 +199,7 @@ payoff ev t st = reader payoff'
              in case pytp of
                   PYTP_A -> o_rf_CURS * sign contractRole * pyrt
                   PYTP_N -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * pyrt
-                  PYTP_I -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * max 0 (ipnr - o_rf_RRMO)
+                  PYTP_I -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * _max 0 (ipnr - o_rf_RRMO)
                   PYTP_O -> undefined
         ----------------------
         -- Fee Payment (FP) --

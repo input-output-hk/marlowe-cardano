@@ -15,8 +15,8 @@ module Actus.Model.StateInitialization
   )
 where
 
-import Actus.Domain (CEGE (..), CT (..), ContractState (..), ContractStructure (..), ContractTerms (..), Cycle (..),
-                     FEB (..), IPCB (..), PRF (..), Reference (..), SCEF (..), sign)
+import Actus.Domain (ActusFrac, CEGE (..), CT (..), ContractState (..), ContractStructure (..), ContractTerms (..),
+                     Cycle (..), FEB (..), IPCB (..), PRF (..), Reference (..), SCEF (..), sign)
 import Actus.Model.StateTransition (CtxSTF (..))
 import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup, yearFraction)
 import Control.Applicative ((<|>))
@@ -28,10 +28,10 @@ import GHC.Records (getField)
 
 -- |'initializeState' initializes the state variables at t0 based on the
 -- provided context
-initializeState :: RealFrac a => Reader (CtxSTF a) (ContractState a)
+initializeState :: ActusFrac a => Reader (CtxSTF a) (ContractState a)
 initializeState = reader initializeState'
   where
-    initializeState' :: RealFrac a => CtxSTF a -> ContractState a
+    initializeState' :: ActusFrac a => CtxSTF a -> ContractState a
     initializeState' CtxSTF {..} =
       ContractState
         { sd = t0,

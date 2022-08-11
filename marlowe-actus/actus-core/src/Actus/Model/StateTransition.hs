@@ -8,8 +8,8 @@ module Actus.Model.StateTransition
   )
 where
 
-import Actus.Domain (CEGE (..), CT (..), ContractState (..), ContractTerms (..), EventType (..), FEB (..), IPCB (..),
-                     OPTP (..), RiskFactors (..), SCEF (..), ShiftedDay (..), sign)
+import Actus.Domain (ActusFrac (..), ActusOps (..), CEGE (..), CT (..), ContractState (..), ContractTerms (..),
+                     EventType (..), FEB (..), IPCB (..), OPTP (..), RiskFactors (..), SCEF (..), ShiftedDay (..), sign)
 import qualified Actus.Domain.ContractState as L (accruedFees, accruedInterest, accruedInterestFirstLeg,
                                                   accruedInterestSecondLeg, exerciseAmount, interestCalculationBase,
                                                   interestScalingMultiplier, lastInterestPeriod,
@@ -37,7 +37,7 @@ data CtxSTF a = CtxSTF
 
 -- |A state transition updates the contract state based on the type of event and the time.
 -- `CtxSTF` provides in particular the contract terms and risk factors.
-stateTransition :: RealFrac a =>
+stateTransition :: ActusFrac a =>
      EventType                           -- ^ Event type
   -> LocalTime                           -- ^ Time
   -> ContractState a                     -- ^ Contract state
@@ -151,7 +151,7 @@ thisOr0 = fromMaybe 0
 _STF_AD_CSH :: ContractState a -> LocalTime -> ContractState a
 _STF_AD_CSH s t = s & L.statusDate .~ t
 
-_STF_AD_ALL :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_AD_ALL :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_AD_ALL
   ContractTerms
     { dayCountConvention = Just dcc,
@@ -168,7 +168,7 @@ _STF_AD_ALL _ s _ = s
 -- Initial Exchange (IED) --
 ----------------------------
 
-_STF_IED_PAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IED_PAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IED_PAM
   ContractTerms
     { nominalInterestRate,
@@ -214,7 +214,7 @@ _STF_IED_PAM
       & L.statusDate .~ t
 _STF_IED_PAM _ s _ = s
 
-_STF_IED_SWPPV :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IED_SWPPV :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IED_SWPPV
   ContractTerms
     { notionalPrincipal = Just nt,
@@ -231,7 +231,7 @@ _STF_IED_SWPPV
       & L.statusDate .~ t
 _STF_IED_SWPPV _ s _ = s
 
-_STF_IED_LAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IED_LAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IED_LAM
   ct@ContractTerms
     { notionalPrincipal = Just nt,
@@ -267,7 +267,7 @@ _STF_IED_LAM _ s _ = s
 -- Principal Redemption (PR) --
 -------------------------------
 
-_STF_PR_LAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_PR_LAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_PR_LAM
   ct@ContractTerms
     { dayCountConvention = Just dcc,
@@ -280,7 +280,7 @@ _STF_PR_LAM
     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
         nt' = (s ^. L.notionalPrincipal)
                   - sign contractRole * ((s ^. L.nextPrincipalRedemptionPayment)
-                  - sign contractRole * max 0 (abs (s ^. L.nextPrincipalRedemptionPayment) - abs (s ^. L.notionalPrincipal)))
+                  - sign contractRole * _max 0 (abs (s ^. L.nextPrincipalRedemptionPayment) - abs (s ^. L.notionalPrincipal)))
         ipcb' = interestCalculationBase' ct
           where
             interestCalculationBase' ContractTerms {interestCalculationBase = Just IPCB_NTL} = s ^. L.interestCalculationBase
@@ -292,7 +292,7 @@ _STF_PR_LAM
           & L.statusDate .~ t
 _STF_PR_LAM _ s _ = s
 
-_STF_PR_NAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_PR_NAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_PR_NAM
   ct@ContractTerms
     { dayCountConvention = Just dcc,
@@ -306,7 +306,7 @@ _STF_PR_NAM
         ipac' = (s ^. L.accruedInterest) + (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase) * timeFromLastEvent
         nt' = (s ^. L.notionalPrincipal) - sign contractRole * r
           where
-            r = ra - max 0 (ra - abs (s ^. L.notionalPrincipal))
+            r = ra - _max 0 (ra - abs (s ^. L.notionalPrincipal))
             ra = (s ^. L.nextPrincipalRedemptionPayment) - sign contractRole * ipac'
         ipcb' = interestCalculationBase' ct
           where
@@ -323,7 +323,7 @@ _STF_PR_NAM _ s _ = s
 -- Maturity (MD) --
 -------------------
 
-_STF_MD_ALL :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_MD_ALL :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_MD_ALL _ s t =
   s & L.notionalPrincipal .~ 0
     & L.accruedInterest .~ 0
@@ -334,7 +334,7 @@ _STF_MD_ALL _ s t =
 -- Principal Prepayment (PP) --
 -------------------------------
 
-_STF_PP_PAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_PP_PAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_PP_PAM
   fs
   RiskFactors
@@ -344,7 +344,7 @@ _STF_PP_PAM
   s
   t = _STF_PY_PAM fs ct s t & L.notionalPrincipal -~ pp_payoff
 
-_STF_PP_LAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_PP_LAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_PP_LAM
   fs
   RiskFactors
@@ -372,7 +372,7 @@ _STF_PP_LAM
 -- Penalty Payment (PY) --
 --------------------------
 
-_STF_PY_PAM :: RealFrac a => FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_PY_PAM :: ActusFrac a => FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_PY_PAM
   _
   ContractTerms
@@ -402,11 +402,11 @@ _STF_PY_PAM
         timeFromLatestFeePayment = yearFraction dcc latestFeePayment t maturityDate
         timeFromLatestToNextFeePayment = yearFraction dcc latestFeePayment nextFeePayment maturityDate
      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
-          & L.accruedFees .~ max 0 (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
+          & L.accruedFees .~ _max 0 (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
           & L.statusDate .~ t
 _STF_PY_PAM _ _ s _ = s
 
-_STF_PY_LAM :: RealFrac a => FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_PY_LAM :: ActusFrac a => FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_PY_LAM
   FeeSchedule {..}
   ct@ContractTerms
@@ -450,7 +450,7 @@ _STF_PY_LAM _ _ s _ = s
 -- Fee Payment (FP) --
 ----------------------
 
-_STF_FP_PAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_FP_PAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_FP_PAM
   ContractTerms
     { dayCountConvention = Just dcc,
@@ -464,7 +464,7 @@ _STF_FP_PAM
           & L.statusDate .~ t
 _STF_FP_PAM _ s _ = s
 
-_STF_FP_LAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_FP_LAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_FP_LAM
   ContractTerms
     { dayCountConvention = Just dcc,
@@ -506,7 +506,7 @@ _STF_PRD_CEG _ s _ = s
 -- Termination (TD) --
 ----------------------
 
-_STF_TD_ALL :: RealFrac a => ContractState a -> LocalTime -> ContractState a
+_STF_TD_ALL :: ActusFrac a => ContractState a -> LocalTime -> ContractState a
 _STF_TD_ALL
   s
   t =
@@ -520,12 +520,12 @@ _STF_TD_ALL
 -- Interest Payment (IP) --
 ---------------------------
 
-_STF_IP_SWPPV :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IP_SWPPV :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IP_SWPPV _ s t =
   s & L.accruedInterest .~ 0
     & L.statusDate .~ t
 
-_STF_IP_PAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IP_PAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IP_PAM
   ContractTerms
     { dayCountConvention = Just dcc,
@@ -544,7 +544,7 @@ _STF_IP_PAM _ s _ = s
 -- Interest Payment Fixed Leg (IPFX) --
 ---------------------------------------
 
-_STF_IPFX_SWPPV :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IPFX_SWPPV :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IPFX_SWPPV
   ContractTerms
     { dayCountConvention = Just dcc,
@@ -561,7 +561,7 @@ _STF_IPFX_SWPPV _ s _ = s
 -- Interest Payment Floating Leg (IPFL) --
 ------------------------------------------
 
-_STF_IPFL_SWPPV :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IPFL_SWPPV :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IPFL_SWPPV
   ContractTerms
     { contractType = SWPPV
@@ -576,7 +576,7 @@ _STF_IPFL_SWPPV _ s _ = s
 -- Interest Capitalization (IPCI) --
 ------------------------------------
 
-_STF_IPCI_PAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IPCI_PAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IPCI_PAM
   ct@ContractTerms
     { dayCountConvention = Just dcc,
@@ -588,7 +588,7 @@ _STF_IPCI_PAM
      in _STF_IP_PAM ct s t & L.notionalPrincipal .~ (s ^. L.notionalPrincipal) + (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
 _STF_IPCI_PAM _ s _ = s
 
-_STF_IPCI_LAM :: RealFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IPCI_LAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IPCI_LAM
           ct@ContractTerms
             { dayCountConvention = Just dcc,
@@ -609,14 +609,14 @@ _STF_IPCI_LAM _ s _ = s
 -- Interest Calculation Base Fixing (IPCB) --
 ---------------------------------------------
 
-_STF_IPCB_LAM :: RealFrac a => FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_IPCB_LAM :: ActusFrac a => FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IPCB_LAM fs ct s t = _STF_PY_LAM fs ct s t & L.interestCalculationBase .~ (s ^. L.notionalPrincipal)
 
 -------------------------------
 -- Rate Reset (RR) --
 -------------------------------
 
-_STF_RR_PAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_RR_PAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_RR_PAM
   fs
   RiskFactors
@@ -637,8 +637,8 @@ _STF_RR_PAM
   s
   t =
     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
-        delta_r = min (max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
-        ipnr' = min (max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
+        delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+        ipnr' = _min (_max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
      in _STF_PY_PAM fs ct s t
           & L.accruedInterest .~ (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
           & L.accruedFees .~ (s ^. L.accruedFees) + timeFromLastEvent * fer * (s ^. L.notionalPrincipal)
@@ -666,16 +666,16 @@ _STF_RR_PAM
     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
         timeFromLatestFeePayment = yearFraction dcc latestFeePayment t maturityDate
         timeFromLatestToNextFeePayment = yearFraction dcc latestFeePayment nextFeePayment maturityDate
-        delta_r = min (max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
-        ipnr' = min (max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
+        delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+        ipnr' = _min (_max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
      in _STF_PY_PAM fs ct s t
           & L.accruedInterest .~ (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
-          & L.accruedFees .~ (if timeFromLatestToNextFeePayment == 0 then 0 else (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer)
+          & L.accruedFees .~ (if latestFeePayment == nextFeePayment then 0 else (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer)
           & L.nominalInterest .~ ipnr'
           & L.statusDate .~ t
 _STF_RR_PAM _ _ _ s _ = s
 
-_STF_RR_LAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_RR_LAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_RR_LAM
   fs
   RiskFactors
@@ -691,14 +691,14 @@ _STF_RR_LAM
     }
   s
   t =
-    let delta_r = min (max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
-        ipnr' = min (max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
+    let delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+        ipnr' = _min (_max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
      in _STF_PY_LAM fs ct s t
           & L.nominalInterest .~ ipnr'
           & L.statusDate .~ t
 _STF_RR_LAM _ _ _ s _ = s
 
-_STF_RR_ANN :: RealFrac a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_RR_ANN :: ActusFrac a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_RR_ANN
   PrincipalRedemptionSchedule {..}
   FeeSchedule {..}
@@ -730,9 +730,9 @@ _STF_RR_ANN
             feeAccrued' ContractTerms {feeBasis = Just FEB_N} = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
             feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 feeRate
 
-        ipnr' = min (max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
+        ipnr' = _min (_max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
           where
-            delta_r = min (max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+            delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
 
         prnxt' = annuity ipnr' ti
      in s & L.accruedInterest .~ ipac'
@@ -742,7 +742,7 @@ _STF_RR_ANN
           & L.statusDate .~ t
 _STF_RR_ANN _ _ _ _ s _ = s
 
-_STF_RR_SWPPV :: RealFrac a => RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_RR_SWPPV :: ActusFrac a => RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_RR_SWPPV
   RiskFactors
     { o_rf_RRMO
@@ -768,7 +768,7 @@ _STF_RR_SWPPV _ _ s _ = s
 -- Rate Reset Fixing (RRF) --
 -----------------------------
 
-_STF_RRF_PAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_RRF_PAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_RRF_PAM
   fs
   _
@@ -780,7 +780,7 @@ _STF_RRF_PAM
     _STF_PY_PAM fs ct s t
       & L.nominalInterest .~ thisOr0 rrnxt
 
-_STF_RRF_LAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_RRF_LAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_RRF_LAM
   fs
   _
@@ -792,7 +792,7 @@ _STF_RRF_LAM
     _STF_PY_LAM fs ct s t
       & L.nominalInterest .~ thisOr0 rrnxt
 
-_STF_RRF_ANN :: RealFrac a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_RRF_ANN :: ActusFrac a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_RRF_ANN
   PrincipalRedemptionSchedule {..}
   FeeSchedule {..}
@@ -829,7 +829,7 @@ _STF_RRF_ANN _ _ _ _ s _ = s
 -- Principal Payment Amount Fixing (PRF) --
 -------------------------------------------
 
-_STF_PRF_ANN :: RealFrac a => PrincipalRedemptionSchedule -> FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_PRF_ANN :: ActusFrac a => PrincipalRedemptionSchedule -> FeeSchedule -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_PRF_ANN
   PrincipalRedemptionSchedule {..}
   FeeSchedule {..}
@@ -866,7 +866,7 @@ _STF_PRF_ANN _ _ _ s _ = s
 -- Scaling Index Fixing (SC) --
 -------------------------------
 
-_STF_SC_PAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_SC_PAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_SC_PAM
   fs
   RiskFactors
@@ -892,7 +892,7 @@ _STF_SC_PAM
           & L.interestScalingMultiplier .~ isc'
 _STF_SC_PAM _ _ _ s _ = s
 
-_STF_SC_LAM :: RealFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_SC_LAM :: ActusFrac a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_SC_LAM
   fs
   RiskFactors
@@ -913,7 +913,7 @@ _STF_SC_LAM _ _ _ s _ = s
 -- Exercise (XD) --
 -------------------
 
-_STF_XD_OPTNS :: RealFrac a => RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_XD_OPTNS :: ActusFrac a => RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_XD_OPTNS
   RiskFactors
     { xd_payoff
@@ -925,7 +925,7 @@ _STF_XD_OPTNS
     }
   s
   t =
-    s & L.exerciseAmount ?~ max (xd_payoff - ops1) 0
+    s & L.exerciseAmount ?~ _max (xd_payoff - ops1) 0
       & L.statusDate .~ t
 _STF_XD_OPTNS
   RiskFactors
@@ -938,7 +938,7 @@ _STF_XD_OPTNS
     }
   s
   t =
-    s & L.exerciseAmount ?~ max (ops1 - xd_payoff) 0
+    s & L.exerciseAmount ?~ _max (ops1 - xd_payoff) 0
       & L.statusDate .~ t
 _STF_XD_OPTNS
   RiskFactors
@@ -951,11 +951,11 @@ _STF_XD_OPTNS
     }
   s
   t =
-    s & L.exerciseAmount ?~ max (xd_payoff - ops1) 0 + max (ops1 - xd_payoff) 0
+    s & L.exerciseAmount ?~ _max (xd_payoff - ops1) 0 + _max (ops1 - xd_payoff) 0
       & L.statusDate .~ t
 _STF_XD_OPTNS _ _ s _ = s
 
-_STF_XD_FUTUR :: RealFrac a => RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_XD_FUTUR :: ActusFrac a => RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_XD_FUTUR
   RiskFactors
     { xd_payoff
@@ -970,7 +970,7 @@ _STF_XD_FUTUR
       & L.statusDate .~ t
 _STF_XD_FUTUR _ _ s _ = s
 
-_STF_XD_CEG :: RealFrac a => [[(EventType, ShiftedDay, ContractState a)]] -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_XD_CEG :: ActusFrac a => [[(EventType, ShiftedDay, ContractState a)]] -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_XD_CEG
   referenceStates
   ContractTerms
@@ -1035,7 +1035,7 @@ _STF_XD_CEG
     s & L.exerciseAmount ?~ (s ^. L.notionalPrincipal)
       & L.statusDate .~ t
 
-_STF_XD_CEC :: RealFrac a => [[(EventType, ShiftedDay, ContractState a)]] -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_XD_CEC :: ActusFrac a => [[(EventType, ShiftedDay, ContractState a)]] -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_XD_CEC
   referenceStates
   RiskFactors
@@ -1052,7 +1052,7 @@ _STF_XD_CEC
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c
-     in s & L.exerciseAmount ?~ min xd_payoff nt'
+     in s & L.exerciseAmount ?~ _min xd_payoff nt'
           & L.notionalPrincipal .~ nt'
           & L.statusDate .~ t
 _STF_XD_CEC
@@ -1071,7 +1071,7 @@ _STF_XD_CEC
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, _, x) -> sd x <= t) cs
            in nt c + ipac c
-     in s & L.exerciseAmount ?~ min xd_payoff nt'
+     in s & L.exerciseAmount ?~ _min xd_payoff nt'
           & L.notionalPrincipal .~ nt'
           & L.statusDate .~ t
 _STF_XD_CEC
@@ -1090,5 +1090,5 @@ _STF_XD_CEC
         f cs =
           let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
            in nt c
-     in s & L.exerciseAmount ?~ min xd_payoff nt'
+     in s & L.exerciseAmount ?~ _min xd_payoff nt'
           & L.statusDate .~ t

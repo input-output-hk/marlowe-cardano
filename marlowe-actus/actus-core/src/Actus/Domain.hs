@@ -13,6 +13,8 @@ module Actus.Domain
   , CashFlow (..)
   , sign
   , setDefaultContractTermValues
+  , ActusFrac (..)
+  , ActusOps (..)
   )
   where
 
@@ -25,6 +27,20 @@ import Control.Monad (guard)
 import Data.Aeson.Types (FromJSON, ToJSON)
 import Data.Time (LocalTime)
 import GHC.Generics (Generic)
+
+class (Fractional a, ActusOps a) => ActusFrac a where
+  _ceiling :: a -> Integer
+
+class ActusOps a where
+  _min :: a -> a -> a
+  _max :: a -> a -> a
+
+instance ActusOps Double where
+  _min = min
+  _max = max
+
+instance ActusFrac Double where
+  _ceiling = ceiling
 
 {-| Risk factor observer
 -}

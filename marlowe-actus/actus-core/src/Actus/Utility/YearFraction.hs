@@ -5,14 +5,15 @@ module Actus.Utility.YearFraction
   )
 where
 
+import Actus.Domain (ActusFrac (..))
 import Actus.Domain.ContractTerms (DCC (..))
 import Data.Time (Day, LocalTime (..), TimeOfDay (..), addLocalTime, diffDays, fromGregorian, gregorianMonthLength,
                   isLeapYear, toGregorian)
 
-yearFraction :: RealFrac a => DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> a
-yearFraction dcc x y o = yearFraction' dcc (localDay x) (localDay $ clipToMidnight y) (localDay <$> o)
+yearFraction :: ActusFrac a => DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> a
+yearFraction dcc x y o = fromRational $ yearFraction' dcc (localDay x) (localDay $ clipToMidnight y) (localDay <$> o)
 
-yearFraction' :: RealFrac a => DCC -> Day -> Day -> Maybe Day -> a
+yearFraction' :: DCC -> Day -> Day -> Maybe Day -> Rational
 yearFraction' DCC_A_AISDA startDay endDay _
   | startDay <= endDay
   = let
@@ -21,7 +22,7 @@ yearFraction' DCC_A_AISDA startDay endDay _
       d1YearFraction = (if isLeapYear d1Year then 366 else 365)
     in
       if d1Year == d2Year
-        then fromIntegral (diffDays endDay startDay) / d1YearFraction
+        then fromInteger (diffDays endDay startDay) / d1YearFraction
         else
           let
             d2YearFraction = (if isLeapYear d2Year then 366 else 365)

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -17,10 +18,14 @@ module Actus.Marlowe.Instance
   )
 where
 
-import Actus.Domain (CashFlow, ContractState, ContractTerms, RiskFactors)
-import Control.Applicative (liftA2)
+import Actus.Domain (ActusFrac (..), ActusOps (..), CashFlow, ContractState, ContractTerms, RiskFactors)
+import Data.Functor ((<&>))
+import Data.Maybe (fromMaybe)
 import GHC.Real (Ratio (..))
+import qualified Language.Marlowe.Core.V1.Semantics as Core
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Extended.V1
+import qualified Ledger
 
 type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value
@@ -44,37 +49,36 @@ instance Num Value where
   x - y = reduceValue $ SubValue x y
   x * y = reduceValue $ DivValue (MulValue x y) (Constant marloweFixedPoint)
   abs a = _max a (NegValue a)
-    where _max x y = Cond (ValueGT x y) x y
+    where
+      _max x y = Cond (ValueGT x y) x y
   fromInteger n = Constant $ n * marloweFixedPoint
   negate a = NegValue a
-  signum a | evalVal a > Just 0 = 1
-  signum a | evalVal a < Just 0 = -1
-  signum a | evalVal a == Just 0 = 0
-  signum _ = error "Num partially implemented"
+  signum a =
+    Cond (ValueLT a 0) (-1) $
+      Cond (ValueGT a 0) 1 0
+
+instance ActusOps Value where
+  _min x y = Cond (ValueLT x y) x y
+  _max x y = Cond (ValueGT x y) x y
+
+instance ActusFrac Value where
+  _ceiling x = fromMaybe (error "ActusFrac partially implemented") (evalVal x)
 
 instance Fractional Value where
   x / y = reduceValue $ DivValue (MulValue (Constant marloweFixedPoint) x) y
-  fromRational (x:%y) = DivValue (fromInteger (marloweFixedPoint * x)) (fromInteger y)
+  fromRational (x :% y) = DivValue (fromInteger (marloweFixedPoint * x)) (fromInteger y)
 
-instance Eq Value where
-  m == n = equals (evalVal m) (evalVal n)
-    where
-      equals :: Maybe Integer -> Maybe Integer -> Bool
-      equals (Just i) (Just j) = i == j
-      equals _ _               = error "Eq partially implemented"
+evalVal :: Value -> Maybe Integer
+evalVal d = toCore d <&> Core.evalValue env state
+  where
+    env = Core.Environment {Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
+    state = Core.emptyState $ Ledger.POSIXTime 0
 
-instance Ord Value where
-  m `compare` n | evalVal m < evalVal n = LT
-  m `compare` n | evalVal m > evalVal n = GT
-  m `compare` n | evalVal m == evalVal n = EQ
-  compare _ _ = error "Ord partially implemented"
-
-instance Real Value where
-  toRational _ = error "Real partially implemented"
-
-instance RealFrac Value where
-  properFraction _ = error "RealFrac partially implemented"
-  ceiling _ = error "RealFrac partially implemented"
+evalObs :: Observation -> Maybe Bool
+evalObs d = toCore d <&> Core.evalObservation env state
+  where
+    env = Core.Environment {Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
+    state = Core.emptyState $ Ledger.POSIXTime 0
 
 -- | Reduce the contract representation in size, the semantics of the
 -- contract are not changed. TODO: formal verification
@@ -89,34 +93,6 @@ reduceContract i@(If obs a b) = case evalObs obs of
   Nothing -> i
 reduceContract (Let v o c) = Let v (reduceValue o) (reduceContract c)
 reduceContract (Assert o c) = Assert (reduceObs o) (reduceContract c)
-
-evalObs :: Observation -> Maybe Bool
-evalObs (AndObs lhs rhs)   = liftA2 (&&) (evalObs lhs) (evalObs rhs)
-evalObs (OrObs lhs rhs)    = liftA2 (||) (evalObs lhs) (evalObs rhs)
-evalObs (NotObs subObs)    = not <$> evalObs subObs
-evalObs (ChoseSomething _) = Nothing
-evalObs (ValueGT lhs rhs)  = liftA2 (>) (evalVal lhs) (evalVal rhs)
-evalObs (ValueLT lhs rhs)  = liftA2 (<) (evalVal lhs) (evalVal rhs)
-evalObs (ValueGE lhs rhs)  = liftA2 (>=) (evalVal lhs) (evalVal rhs)
-evalObs (ValueLE lhs rhs)  = liftA2 (<=) (evalVal lhs) (evalVal rhs)
-evalObs (ValueEQ lhs rhs)  = liftA2 (==) (evalVal lhs) (evalVal rhs)
-evalObs TrueObs            = Just True
-evalObs FalseObs           = Just False
-
-evalVal :: Value -> Maybe Integer
-evalVal (AvailableMoney _ _) = Nothing
-evalVal (Constant n)         = Just n
-evalVal (ConstantParam _)    = Nothing
-evalVal (NegValue val)       = negate <$> evalVal val
-evalVal (AddValue lhs rhs)   = liftA2 (+) (evalVal lhs) (evalVal rhs)
-evalVal (SubValue lhs rhs)   = liftA2 (-) (evalVal lhs) (evalVal rhs)
-evalVal (MulValue lhs rhs)   = liftA2 (*) (evalVal lhs) (evalVal rhs)
-evalVal (DivValue lhs rhs)   = liftA2 quot (evalVal lhs) (evalVal rhs)
-evalVal (ChoiceValue _)      = Nothing
-evalVal TimeIntervalStart    = Nothing
-evalVal TimeIntervalEnd      = Nothing
-evalVal (UseValue _)         = Nothing
-evalVal (Cond o a b)         = evalObs o >>= \obs -> if obs then evalVal a else evalVal b
 
 reduceObs :: Observation -> Observation
 reduceObs (AndObs a b)  = AndObs (reduceObs a) (reduceObs b)
