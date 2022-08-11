@@ -24,24 +24,24 @@ module Language.Marlowe.CLI.Command.Util (
 ) where
 
 
-import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
-                    Lovelace (..), NetworkId (..), SlotNo, TxMetadataInEra (TxMetadataNone), TxMintValue (TxMintNone),
-                    lovelaceToValue)
+import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
+                    LocalNodeConnectInfo (..), Lovelace (..), NetworkId (..), SlotNo, TxMetadataInEra (TxMetadataNone),
+                    TxMintValue (TxMintNone), lovelaceToValue)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseOutputQuery, parseSlotNo,
-                                           parseTokenName)
+import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseOutputQuery, parseSlotNo, parseTokenName)
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
 import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, querySlotting, selectUtxos)
-import Language.Marlowe.CLI.Types (CliError, OutputQuery)
+import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery)
 import Plutus.V1.Ledger.Api (TokenName)
 
+import Control.Monad.Reader (MonadReader)
 import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options.
-data UtilCommand =
+data UtilCommand era =
     -- | Clean UTxOs at an address.
     Clean
     {
@@ -49,7 +49,7 @@ data UtilCommand =
     , socketPath      :: FilePath    -- ^ The path to the node socket.
     , signingKeyFiles :: [FilePath]  -- ^ The files containing the required signing keys.
     , lovelace        :: Lovelace    -- ^ The lovelace to send with each bundle of tokens.
-    , change          :: AddressAny  -- ^ The change address.
+    , change          :: AddressInEra era  -- ^ The change address.
     , bodyFile        :: FilePath    -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int   -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
@@ -63,7 +63,7 @@ data UtilCommand =
     , count          :: Integer         -- ^ The number of each token to mint.
     , expires        :: Maybe SlotNo    -- ^ The slot number after which minting is no longer possible.
     , lovelace       :: Lovelace        -- ^ The lovelace to send with each token.
-    , change         :: AddressAny      -- ^ The change address.
+    , change         :: AddressInEra era      -- ^ The change address.
     , bodyFile       :: FilePath        -- ^ The output file for the transaction body.
     , submitTimeout  :: Maybe Int       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , tokenNames     :: [TokenName]     -- ^ The token names.
@@ -76,9 +76,9 @@ data UtilCommand =
     , lovelace           :: Lovelace      -- ^ The lovelace to send to the address.
     , bodyFile           :: FilePath      -- ^ The output file for the transaction body.
     , submitTimeout      :: Maybe Int     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , fundAddr           :: AddressAny    -- ^ The change address.
+    , fundAddr           :: AddressInEra era    -- ^ The change address.
     , fundSigningKeyFile :: FilePath      -- ^ The files containing the required signing keys.
-    , destAddresses      :: [AddressAny]  -- ^ The addresses.
+    , destAddresses      :: [AddressInEra era]  -- ^ The addresses.
     }
     -- | Select UTxO by asset.
   | Output
@@ -86,7 +86,7 @@ data UtilCommand =
       network    :: NetworkId    -- ^ The network ID, if any.
     , socketPath :: FilePath     -- ^ The path to the node socket.
     , query      :: OutputQuery  -- ^ Filter the query results.
-    , address    :: AddressAny   -- ^ The addresses.
+    , address    :: AddressInEra era   -- ^ The addresses.
     }
     -- | Decode Bech32.
   | DecodeBech32
@@ -132,9 +132,9 @@ data UtilCommand =
 
 
 -- | Run a miscellaneous command.
-runUtilCommand :: MonadError CliError m
+runUtilCommand :: (MonadError CliError m, MonadReader (CliEnv era) m)
                => MonadIO m
-               => UtilCommand  -- ^ The command.
+               => UtilCommand era -- ^ The command.
                -> m ()         -- ^ Action for running the command.
 runUtilCommand command =
   do
@@ -207,7 +207,7 @@ runUtilCommand command =
 
 
 -- | Parser for miscellaneous commands.
-parseUtilCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+parseUtilCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 parseUtilCommand network socket =
   O.hsubparser
     $ O.commandGroup "Miscellaneous low-level commands:"
@@ -224,7 +224,7 @@ parseUtilCommand network socket =
 
 
 -- | Parser for the "clean" command.
-cleanCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+cleanCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
 cleanCommand network socket =
   O.command "clean"
     $ O.info (cleanOptions network socket)
@@ -232,20 +232,20 @@ cleanCommand network socket =
 
 
 -- | Parser for the "clean" options.
-cleanOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+cleanOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 cleanOptions network socket =
   Clean
     <$> O.option parseNetworkId           (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                       (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> (O.some . O.strOption)            (O.long "required-signer"                      <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key."                                                                         )
     <*> (O.option $ Lovelace <$> O.auto)  (O.long "lovelace"        <> O.value 2_000_000 <> O.metavar "LOVELACE"     <> O.help "The lovelace to send with each bundle of tokens."                                                                )
-    <*> O.option parseAddressAny          (O.long "change-address"                       <> O.metavar "ADDRESS"      <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress             (O.long "change-address"                       <> O.metavar "ADDRESS"      <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> O.strOption                       (O.long "out-file"                             <> O.metavar "FILE"         <> O.help "Output file for transaction body."                                                                               )
     <*> (O.optional . O.option O.auto)    (O.long "submit"                               <> O.metavar "SECONDS"      <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
 
 
 -- | Parser for the "mint" command.
-mintCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+mintCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
 mintCommand network socket =
   O.command "mint"
     $ O.info (mintOptions network socket)
@@ -253,7 +253,7 @@ mintCommand network socket =
 
 
 -- | Parser for the "mint" options.
-mintOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+mintOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 mintOptions network socket =
   Mint
     <$> O.option parseNetworkId              (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network            <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -263,14 +263,14 @@ mintOptions network socket =
     <*> O.option O.auto                      (O.long "count"           <> O.metavar "INTEGER"      <> O.value 1          <> O.help "The number of each token to mint."                                                                               )
     <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                     )
     <*> (O.option $ Lovelace <$> O.auto)     (O.long "lovelace"        <> O.metavar "LOVELACE"     <> O.value 10_000_000 <> O.help "The lovelace to send with each bundle of tokens."                                                                )
-    <*> O.option parseAddressAny             (O.long "change-address"  <> O.metavar "ADDRESS"                            <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress                (O.long "change-address"  <> O.metavar "ADDRESS"                            <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> O.strOption                          (O.long "out-file"        <> O.metavar "FILE"                               <> O.help "Output file for transaction body."                                                                               )
     <*> (O.optional . O.option O.auto)       (O.long "submit"          <> O.metavar "SECONDS"                            <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.some (O.argument parseTokenName    $                            O.metavar "TOKEN_NAME"                         <> O.help "The name of the token."                                                                                          )
 
 
 -- | Parser for the "faucet" command.
-faucetCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+faucetCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
 faucetCommand network socket =
   O.command "faucet"
     $ O.info (faucetOptions network socket)
@@ -278,7 +278,7 @@ faucetCommand network socket =
 
 
 -- | Parser for the "faucet" options.
-faucetOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+faucetOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 faucetOptions network socket =
   Faucet
     <$> O.option parseNetworkId            (O.long "testnet-magic"   <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -286,13 +286,13 @@ faucetOptions network socket =
     <*> (O.option $ Lovelace <$> O.auto)   (O.long "lovelace"        <> O.metavar "LOVELACE"    <> O.value 1_000_000_000 <> O.help "The lovelace to send to each address."                                                                           )
     <*> O.strOption                        (O.long "out-file"        <> O.metavar "FILE"                                 <> O.help "Output file for transaction body."                                                                               )
     <*> (O.optional . O.option O.auto)     (O.long "submit"          <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
-    <*> O.option parseAddressAny           (O.long "faucet-address"  <> O.metavar "ADDRESS"                              <> O.help "The faucet addresses to provide funds."                                                                          )
+    <*> O.option parseAddress              (O.long "faucet-address"  <> O.metavar "ADDRESS"                              <> O.help "The faucet addresses to provide funds."                                                                          )
     <*> O.strOption                        (O.long "required-signer" <> O.metavar "SIGNING_FILE"                         <> O.help "File containing a required signing key."                                                                         )
-    <*> O.some (O.argument parseAddressAny $                            O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                             )
+    <*> O.some (O.argument parseAddress $                            O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                             )
 
 
 -- | Parser for the "select" command.
-selectCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+selectCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
 selectCommand network socket =
   O.command "select"
     $ O.info (selectOptions network socket)
@@ -300,17 +300,17 @@ selectCommand network socket =
 
 
 -- | Parser for the "select" options.
-selectOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+selectOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 selectOptions network socket =
   Output
     <$> O.option parseNetworkId    (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                               )
     <*> O.strOption                (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value." )
     <*> parseOutputQuery
-    <*> O.argument parseAddressAny (                          O.metavar "ADDRESS"                <> O.help "The address."                                                                                                     )
+    <*> O.argument parseAddress    (                          O.metavar "ADDRESS"                <> O.help "The address."                                                                                                     )
 
 
 -- | Parser for the "decode-bech32" command.
-decodeBechCommand :: O.Mod O.CommandFields UtilCommand
+decodeBechCommand :: O.Mod O.CommandFields (UtilCommand era)
 decodeBechCommand =
   O.command "decode-bech32"
     $ O.info decodeBechOptions
@@ -318,14 +318,14 @@ decodeBechCommand =
 
 
 -- | Parser for the "decode-bech32" options.
-decodeBechOptions :: O.Parser UtilCommand
+decodeBechOptions :: O.Parser (UtilCommand era)
 decodeBechOptions =
   DecodeBech32
     <$> O.strArgument (O.metavar "BECH32" <> O.help "The Bech32 text.")
 
 
 -- | Parser for the "encode-bech32" command.
-encodeBechCommand :: O.Mod O.CommandFields UtilCommand
+encodeBechCommand :: O.Mod O.CommandFields (UtilCommand era)
 encodeBechCommand =
   O.command "encode-bech32"
     $ O.info encodeBechOptions
@@ -333,7 +333,7 @@ encodeBechCommand =
 
 
 -- | Parser for the "encode-bech32" options.
-encodeBechOptions :: O.Parser UtilCommand
+encodeBechOptions :: O.Parser (UtilCommand era)
 encodeBechOptions =
   EncodeBech32
     <$> O.strArgument (O.metavar "PREFIX" <> O.help "The Bech32 human-readable prefix.")
@@ -341,7 +341,7 @@ encodeBechOptions =
 
 
 -- | Parser for the "slotting" command.
-slottingCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+slottingCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
 slottingCommand network socket =
   O.command "slotting"
     $ O.info (slottingOptions network socket)
@@ -349,7 +349,7 @@ slottingCommand network socket =
 
 
 -- | Parser for the "slotting" options.
-slottingOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+slottingOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 slottingOptions network socket =
   Slotting
     <$> O.option parseNetworkId   (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -358,7 +358,7 @@ slottingOptions network socket =
 
 
 -- | Parser for the "watch" command.
-watchCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields UtilCommand
+watchCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
 watchCommand network socket =
   O.command "watch"
     $ O.info (watchOptions network socket)
@@ -366,7 +366,7 @@ watchCommand network socket =
 
 
 -- | Parser for the "watch" options.
-watchOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser UtilCommand
+watchOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 watchOptions network socket =
   Watch
     <$> O.option parseNetworkId    (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -379,7 +379,7 @@ watchOptions network socket =
 
 
 -- | Parser for the "merkleize" command.
-merkleizeCommand :: O.Mod O.CommandFields UtilCommand
+merkleizeCommand :: O.Mod O.CommandFields (UtilCommand era)
 merkleizeCommand =
   O.command "merkleize"
     $ O.info merkleizeOptions
@@ -387,7 +387,7 @@ merkleizeCommand =
 
 
 -- | Parser for the "merkleize" options.
-merkleizeOptions :: O.Parser UtilCommand
+merkleizeOptions :: O.Parser (UtilCommand era)
 merkleizeOptions =
   Merkleize
     <$> O.strOption                (O.long "in-file"  <> O.metavar "MARLOWE_FILE"  <> O.help "The Marlowe JSON file containing the contract to be merkleized.")
@@ -395,7 +395,7 @@ merkleizeOptions =
 
 
 -- | Parser for the "demerkleize" command.
-demerkleizeCommand :: O.Mod O.CommandFields UtilCommand
+demerkleizeCommand :: O.Mod O.CommandFields (UtilCommand era)
 demerkleizeCommand =
   O.command "demerkleize"
     $ O.info demerkleizeOptions
@@ -403,7 +403,7 @@ demerkleizeCommand =
 
 
 -- | Parser for the "demerkleize" options.
-demerkleizeOptions :: O.Parser UtilCommand
+demerkleizeOptions :: O.Parser (UtilCommand era)
 demerkleizeOptions =
   Demerkleize
     <$> O.strOption                (O.long "in-file"  <> O.metavar "MARLOWE_FILE"  <> O.help "The Marlowe JSON file containing the contract to be demerkleized.")

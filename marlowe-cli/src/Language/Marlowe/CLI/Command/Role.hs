@@ -30,10 +30,11 @@ import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference,
                                            parseTokenName)
 import Language.Marlowe.CLI.Export (exportRoleAddress, exportRoleDatum, exportRoleRedeemer, exportRoleValidator)
-import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import PlutusCore (defaultCostModelParams)
 
+import Control.Monad.Reader.Class (MonadReader)
 import qualified Options.Applicative as O
 
 
@@ -72,7 +73,7 @@ data RoleCommand =
 
 
 -- | Run a related command.
-runRoleCommand :: MonadError CliError m
+runRoleCommand :: (MonadError CliError m, MonadReader (CliEnv era000) m)
                => MonadIO m
                => RoleCommand  -- ^ The command.
                -> m ()         -- ^ Action for running the command.
@@ -87,12 +88,8 @@ runRoleCommand command =
       network' = network command
       stake'         = fromMaybe NoStakeAddress $ stake command
     case command of
-      ExportAddress{..}   -> exportRoleAddress
-                               rolesCurrency' network' stake'
-      ExportValidator{..} -> exportRoleValidator
-                               rolesCurrency' costModel network' stake'
-                               outputFile
-                               printHash printStats
+      ExportAddress{..}   -> exportRoleAddress rolesCurrency' network' stake'
+      ExportValidator{..} -> exportRoleValidator rolesCurrency' costModel network' stake' outputFile printHash printStats
       ExportDatum{..}     -> exportRoleDatum
                                roleName
                                outputFile

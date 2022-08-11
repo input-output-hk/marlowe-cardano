@@ -71,7 +71,7 @@ import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Language.Marlowe.CLI.Sync.Types (MarloweAddress (..), MarloweEvent (..), MarloweIn (..), MarloweOut (..),
                                         SavedPoint (..))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliError (..))
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
@@ -89,6 +89,7 @@ import System.IO (BufferMode (LineBuffering), Handle, IOMode (WriteMode), hClose
                   stdout)
 
 import Cardano.Ledger.Era (Era)
+import Control.Monad.Reader (MonadReader)
 import qualified Data.Aeson as A (Value)
 import qualified Data.ByteArray as BA (length)
 import qualified Data.ByteString as BS (hPutStr)
@@ -287,6 +288,7 @@ processChain' blockHandler txHandler (Block header txs) tip =
 -- | Watch for Marlowe transactions.
 watchMarlowe :: MonadError CliError m
              => MonadIO m
+             => MonadReader (CliEnv era) m
              => LocalNodeConnectInfo CardanoMode  -- ^ The local node connection.
              -> Bool                              -- ^ Include non-Marlowe transactions.
              -> Bool                              -- ^ Whether to output CBOR instead of JSON.
@@ -342,6 +344,7 @@ printCBOR hOut =
 -- | Watch for Marlowe transactions.
 watchMarloweWithPrinter :: MonadError CliError m
                         => MonadIO m
+                        => MonadReader (CliEnv era) m
                         => LocalNodeConnectInfo CardanoMode  -- ^ The local node connection.
                         -> Bool                              -- ^ Include non-Marlowe transactions.
                         -> Bool                              -- ^ Whether to continue processing when the tip is reached.
@@ -350,7 +353,6 @@ watchMarloweWithPrinter :: MonadError CliError m
                         -> m ()                              -- ^ Action for watching for potential Marlowe transactions.
 watchMarloweWithPrinter connection includeAll continue pointFile printer =
   do
-    -- FIXME: This query should be specific to the era of each block.
     slotConfig <- querySlotConfig connection
     (start, state) <- loadPoint pointFile
     stateRef <- liftIO $ newIORef state

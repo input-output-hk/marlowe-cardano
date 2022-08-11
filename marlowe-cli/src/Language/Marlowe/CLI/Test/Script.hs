@@ -27,12 +27,12 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (BabbageEra, CardanoMode, LocalNodeConnectInfo (..), NetworkId (..),
+import Cardano.Api (CardanoMode, LocalNodeConnectInfo (..), NetworkId (..), ScriptDataSupportedInEra,
                     StakeAddressReference (NoStakeAddress))
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
-import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction)
+import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..), MarloweTransaction)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -50,71 +50,73 @@ import Language.Marlowe.CLI.Test.Types
 import qualified Language.Marlowe.Client as Client
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
-newtype ScriptState = ScriptState
-  { transactions :: Map String (MarloweTransaction BabbageEra)
+newtype ScriptState era = ScriptState
+  { transactions :: Map String (MarloweTransaction era)
   }
 
-data ScriptEnv = ScriptEnv
+data ScriptEnv era = ScriptEnv
   { seNetworkId        :: NetworkId
   , seSlotConfig       :: SlotConfig
   , seConstModelParams :: CostModelParams
+  , seEra              :: ScriptDataSupportedInEra era
   }
 
 interpret :: MonadError CliError m
-          => MonadState ScriptState m
-          => MonadReader ScriptEnv m
+          => MonadState (ScriptState era) m
+          => MonadReader (ScriptEnv era) m
           => MonadIO m
           => ScriptOperation
           -> m ()
-interpret Initialize {..} = do
-  ScriptEnv {..} <- ask
-  let
-    roleCurrencyJson = JSON.object
-      [ ( "unCurrencySymbol"
-        , JSON.String soRoleCurrency
-        )
-      ]
-  parsedRoleCurrency <- case JSON.fromJSON roleCurrencyJson of
-    JSON.Error message          -> throwError $ CliError message
-    JSON.Success currencySymbol -> pure currencySymbol
-  let
-    marloweParams = Client.marloweParams parsedRoleCurrency
-    marloweState = initialMarloweState soOwner soMinAda
+interpret = \case
+  Initialize {..} -> do
+    ScriptEnv {..} <- ask
+    let
+      roleCurrencyJson = JSON.object
+        [ ( "unCurrencySymbol"
+          , JSON.String soRoleCurrency
+          )
+        ]
+    parsedRoleCurrency <- case JSON.fromJSON roleCurrencyJson of
+      JSON.Error message          -> throwError $ CliError message
+      JSON.Success currencySymbol -> pure currencySymbol
+    let
+      marloweParams = Client.marloweParams parsedRoleCurrency
+      marloweState = initialMarloweState soOwner soMinAda
 
-  transaction <- initializeTransactionImpl
-    marloweParams
-    seSlotConfig
-    seConstModelParams
-    seNetworkId
-    NoStakeAddress
-    soContract
-    marloweState
-    True
-    True
+    transaction <- flip runReaderT (CliEnv seEra) $ initializeTransactionImpl
+      marloweParams
+      seSlotConfig
+      seConstModelParams
+      seNetworkId
+      NoStakeAddress
+      soContract
+      marloweState
+      True
+      True
 
-  modify $ insertMarloweTransaction soTransaction transaction
+    modify $ insertMarloweTransaction soTransaction transaction
 
-interpret Prepare {..} = do
-  marloweTransaction <- findMarloweTransaction soTransaction
-  preparedMarloweTransaction <- prepareTransactionImpl
-                                  marloweTransaction
-                                  soInputs
-                                  soMinimumTime
-                                  soMaximumTime
-                                  True
-  modify $ insertMarloweTransaction soTransaction preparedMarloweTransaction
+  Prepare {..} -> do
+    marloweTransaction <- findMarloweTransaction soTransaction
+    preparedMarloweTransaction <- prepareTransactionImpl
+                                    marloweTransaction
+                                    soInputs
+                                    soMinimumTime
+                                    soMaximumTime
+                                    True
+    modify $ insertMarloweTransaction soTransaction preparedMarloweTransaction
 
-interpret (Fail message) = throwError $ CliError message
+  Fail message -> throwError $ CliError message
 
-insertMarloweTransaction :: TransactionNickname -> MarloweTransaction BabbageEra -> ScriptState -> ScriptState
+insertMarloweTransaction :: TransactionNickname -> MarloweTransaction era -> ScriptState era -> ScriptState era
 insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
   scriptState{ transactions = Map.insert nickname transaction transactions }
 
 -- | Find Marlowe Transaction corresponding to a transaction nickname.
 findMarloweTransaction :: MonadError CliError m
-                => MonadState ScriptState m
+                => MonadState (ScriptState era) m
                 => TransactionNickname   -- ^ The nickname.
-                -> m (MarloweTransaction BabbageEra) -- ^ Action returning the instance.
+                -> m (MarloweTransaction era) -- ^ Action returning the instance.
 findMarloweTransaction nickname = do
   ScriptState { transactions } <- get
   case M.lookup nickname transactions of
@@ -122,36 +124,29 @@ findMarloweTransaction nickname = do
     Just marloweTransaction -> pure marloweTransaction
 
 -- | Test a Marlowe contract.
-scriptTest  :: MonadError CliError m
+scriptTest  :: forall era m
+             . MonadError CliError m
             => MonadIO m
-            => CostModelParams
+            => ScriptDataSupportedInEra era
+            -> CostModelParams
             -> NetworkId                         -- ^ The network magic.
             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest costModel networkId _ slotConfig ScriptTest{..} =
+scriptTest era costModel networkId _ slotConfig ScriptTest{..} =
   do
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
 
     let
-      interpretLoop :: MonadError CliError m
-                    => MonadState ScriptState m
-                    => MonadReader ScriptEnv m
-                    => MonadIO m
-                    => m ()
       interpretLoop = for_ stScriptOperations \operation ->
         interpret operation
     void $ catchError
-      ( runReaderT (execStateT interpretLoop (ScriptState mempty)) (ScriptEnv networkId slotConfig costModel))
+      ( runReaderT (execStateT interpretLoop (ScriptState mempty)) (ScriptEnv networkId slotConfig costModel era))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
         liftIO (putStrLn "***** FAILED *****")
         throwError (e :: CliError)
     liftIO $ putStrLn "***** PASSED *****"
-
-
-
-

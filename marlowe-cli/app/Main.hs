@@ -44,4 +44,3 @@ fromGit = Nothing
 #else
 fromGit = Just ((\v -> if null v then mempty else " @ " <> v) . unpack . strip $ pack $(gitRevFromGit))
 #endif
-
