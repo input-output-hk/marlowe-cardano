@@ -7,9 +7,9 @@ packages:
   marlowe
   marlowe-actus
   marlowe-chain-sync
-  marlowe-protocols
   marlowe-cli
   marlowe-contracts
+  marlowe-protocols
   marlowe-runtime
 
   libs/aeson-via-serialise
@@ -79,6 +79,9 @@ package marlowe-protocols
   ghc-options: -Werror
 
 package marlowe
+  tests: True
+
+package marlowe-contracts
   tests: True
 
 -- You have to copy ghc-options manually to `nix/pkgs/haskell/haskell.nix`

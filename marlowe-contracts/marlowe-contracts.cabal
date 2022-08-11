@@ -84,6 +84,7 @@ test-suite marlowe-contracts-test
         tasty-quickcheck,
         text -any,
         plutus-ledger-api -any,
+        plutus-ledger-ada,
         marlowe,
         marlowe-contracts,
         plutus-tx -any,

@@ -21,9 +21,9 @@
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
--- | Uncomment this if you would like to ignore Plutus errors and have partial LSP support during coding
--- | BUT never commit it back ;-)
-{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
+-- Uncomment this if you would like to ignore Plutus errors and have partial LSP support during coding
+-- BUT never commit it back ;-)
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
 
 
 module Language.Marlowe.Scripts where
