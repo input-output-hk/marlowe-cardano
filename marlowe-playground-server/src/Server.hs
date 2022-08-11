@@ -63,7 +63,7 @@ genActusContract terms =
 genActusCashflows :: ContractTerms Double -> Handler [CashFlow Double]
 genActusCashflows terms = pure $ genProjectedCashflows emptyRiskFactors terms []
 
-emptyRiskFactors :: RealFrac a => EventType -> LocalTime -> RiskFactors a
+emptyRiskFactors :: ActusFrac a => EventType -> LocalTime -> RiskFactors a
 emptyRiskFactors _ _ =
     RiskFactors
         { o_rf_CURS = 1,
