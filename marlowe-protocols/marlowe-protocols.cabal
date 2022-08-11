@@ -53,10 +53,10 @@ library
     Network.Protocol.ChainSeek.Codec,
     Network.Protocol.ChainSeek.Server,
     Network.Protocol.ChainSeek.Types,
-    Network.Protocol.Command.Client,
-    Network.Protocol.Command.Codec,
-    Network.Protocol.Command.Server,
-    Network.Protocol.Command.Types
+    Network.Protocol.Job.Client,
+    Network.Protocol.Job.Codec,
+    Network.Protocol.Job.Server,
+    Network.Protocol.Job.Types
   build-depends:
       base >= 4.9 && < 5
     , binary
