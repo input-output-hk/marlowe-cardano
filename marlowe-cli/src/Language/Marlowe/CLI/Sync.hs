@@ -14,6 +14,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -51,7 +52,8 @@ import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), CardanoMode,
                     TxValidityLowerBound (..), TxValidityUpperBound (..), ValueNestedBundle (..), ValueNestedRep (..),
                     connectToLocalNode, getTxBody, getTxId, metadataToJson, txOutValueToValue, valueToNestedRep)
 import Cardano.Api.ChainSync.Client (ChainSyncClient (..), ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), TxBodyScriptData (..), fromAlonzoData, toPlutusData)
+import Cardano.Api.Shelley (ShelleyLedgerEra, TxBody (ShelleyTxBody), TxBodyScriptData (..), fromAlonzoData,
+                            toPlutusData)
 import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr (..), Redeemers (..), TxDats (..))
 import Codec.CBOR.Encoding (encodeBreak, encodeListLenIndef)
 import Codec.CBOR.JSON (encodeValue)
@@ -86,6 +88,7 @@ import System.Directory (doesFileExist, renameFile)
 import System.IO (BufferMode (LineBuffering), Handle, IOMode (WriteMode), hClose, hSetBuffering, openFile, stderr,
                   stdout)
 
+import Cardano.Ledger.Era (Era)
 import qualified Data.Aeson as A (Value)
 import qualified Data.ByteArray as BA (length)
 import qualified Data.ByteString as BS (hPutStr)
@@ -579,32 +582,41 @@ extractMints (TxMintValue _ value _) =
 
 
 -- | Find the datums input to scripts in a transaction.
-inDatums :: FromData a
+inDatums :: forall a era
+          . FromData a
          => TxBody era                -- ^ The transaction.
          -> [(BuiltinByteString, a)]  -- ^ The datums.
-inDatums (ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _) =
-  case scriptData of
-    TxBodyScriptData _ (TxDats datumMap) _ -> catMaybes
-                                                [
-                                                  (dataHash $ dataToBuiltinData dat, ) <$> fromData dat
-                                                |
-                                                  dat <- toPlutusData . fromAlonzoData <$> M.elems datumMap
-                                                ]
-    _                                      -> mempty
-inDatums _ = mempty
+inDatums = \case
+  ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _  -> inDatums' scriptData
+  ShelleyTxBody ShelleyBasedEraBabbage _ _ scriptData _ _ -> inDatums' scriptData
+  _                                                       -> mempty
+  where
+    inDatums' :: Era (ShelleyLedgerEra era) => TxBodyScriptData era -> [(BuiltinByteString, a)]
+    inDatums' (TxBodyScriptData _ (TxDats datumMap) _) = catMaybes
+      [
+        (dataHash $ dataToBuiltinData dat, ) <$> fromData dat
+      |
+        dat <- toPlutusData . fromAlonzoData <$> M.elems datumMap
+      ]
+    inDatums' _ = mempty
 
 
 -- | Find the redeemers input to scripts in a transaction.
-inRedeemers :: FromData a
+inRedeemers :: forall era a
+             . FromData a
             => TxBody era  -- ^ The transaction.
             -> [(Int, a)]  -- ^ The redeemers for each input.
-inRedeemers (ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _) =
-  case scriptData of
-    TxBodyScriptData _ _ (Redeemers redeemerMap) -> catMaybes
-                                                      [
-                                                        (fromEnum i, ) <$> fromData (toPlutusData $ fromAlonzoData dat)
-                                                      |
-                                                        (RdmrPtr _ i, (dat, _)) <- M.toList redeemerMap
-                                                      ]
-    _                                            -> []
-inRedeemers _ = []
+inRedeemers = \case
+  ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _  -> inRedeemers' scriptData
+  ShelleyTxBody ShelleyBasedEraBabbage _ _ scriptData _ _ -> inRedeemers' scriptData
+  _                                                       -> mempty
+  where
+    inRedeemers' :: Era (ShelleyLedgerEra era) => TxBodyScriptData era -> [(Int, a)]
+    inRedeemers' = \case
+      TxBodyScriptData _ _ (Redeemers redeemerMap) -> catMaybes
+        [
+          (fromEnum i, ) <$> fromData (toPlutusData $ fromAlonzoData dat)
+        |
+          (RdmrPtr _ i, (dat, _)) <- M.toList redeemerMap
+        ]
+      _                                            -> []
