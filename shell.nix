@@ -61,6 +61,8 @@ let
   };
 
   # marlowe and subproject independent dev tools
+  # IMPORTANT: Do not add git to this dev shell!!!! It breaks Lorri. People
+  # should have git installed locally anyway!
   devToolsInputs = (with pkgs; with marlowe; [
     coreutils
     cabal-install
@@ -71,7 +73,6 @@ let
     fixStylishHaskell
     ghc
     ghcid
-    git
     haskell-language-server
     haskell-language-server-wrapper
     hie-bios
