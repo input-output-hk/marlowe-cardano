@@ -138,6 +138,7 @@ let
             plutus-benchmark.doHaddock = false;
             # FIXME: Haddock mysteriously gives a spurious missing-home-modules warning
             plutus-tx-plugin.doHaddock = false;
+            plutus-script-utils.doHaddock = false;
 
             # Fix missing executables on the paths of the test runners. This is arguably
             # a bug, and the fix is a bit of a hack.

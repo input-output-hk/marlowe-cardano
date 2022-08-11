@@ -40,7 +40,7 @@ package cardano-git-rev
 package cardano-node
   tests: True
   -- It seems that haskell-language-server ignores this flag.
-  -- We add libsystemd to the devel shells to overcome this problem.
+  -- libsystemd is a part of the devel shells to overcome this problem.
   -- flags: -systemd
   ghc-options: -Werror
 
