@@ -33,8 +33,8 @@ import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactor
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
 import Data.String (IsString (fromString))
-import Data.Time (LocalTime (..), UTCTime (UTCTime), timeOfDayToTime)
-import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
+import Data.Time (LocalTime (..), UTCTime (UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
+import Data.Time.Clock.POSIX
 import Data.Validation (Validation (..))
 import Language.Marlowe.Extended.V1
 import Ledger.Value (TokenName (TokenName))
@@ -193,8 +193,8 @@ constant = Constant . toMarloweFixedPoint
 
 toTimeout :: LocalTime -> Timeout
 toTimeout LocalTime {..} =
-  let (MkSystemTime secs _) = utcToSystemTime (UTCTime localDay (timeOfDayToTime localTimeOfDay))
-   in POSIXTime (toInteger secs)
+  let secs = nominalDiffTimeToSeconds $ utcTimeToPOSIXSeconds (UTCTime localDay (timeOfDayToTime localTimeOfDay))
+   in POSIXTime (floor $ 1000 * secs)
 
 toMarlowe :: ContractTerms Double -> ContractTermsMarlowe
 toMarlowe ct =
