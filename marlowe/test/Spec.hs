@@ -5,7 +5,7 @@ module Main(main) where
 -- import qualified Spec.Marlowe.AutoExecute
 import qualified Spec.Marlowe.Marlowe
 
-import qualified Spec.Marlowe.Marlowe as Spec.Marlowe.Semantics
+import qualified Spec.Marlowe.Semantics (tests)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 
@@ -13,7 +13,7 @@ main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Marlowe"
+tests = testGroup "Marlowe" $
     [ testGroup "Contracts"
         [ Spec.Marlowe.Marlowe.tests
     --    PAB tests
@@ -29,6 +29,6 @@ tests = testGroup "Marlowe"
         [ testProperty "Serialise deserialise Contract loops" Spec.Marlowe.Marlowe.prop_contractJsonLoops
         , testProperty "Serialise deserialise MarloweParams loops" Spec.Marlowe.Marlowe.prop_marloweParamsJsonLoops
         ]
-    , Spec.Marlowe.Semantics.tests
     ]
+    <> Spec.Marlowe.Semantics.tests
 
