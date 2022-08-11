@@ -33,7 +33,6 @@ import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Text.Lazy (toStrict)
-import Debug.Trace ()
 import GHC.IO (unsafePerformIO)
 import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
                                      languageExtensions, runInterpreter, set, setImports)
@@ -456,7 +455,7 @@ mulAnalysisTest = do
     let muliply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1..100] :: [Int])
         contract = If (muliply `M.ValueGE` Constant 10000) Close (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
     result <- warningsTrace contract
-    print result
+--  print result
     assertBool "Analysis ok" $ isRight result
 
 
@@ -513,9 +512,9 @@ pangramContractSerialization :: IO ()
 pangramContractSerialization = do
     let json = toStrict (encodeToLazyText pangramContract)
     -- uncomment to generate json after updating pangramContract
-    T.putStrLn json
+--  T.putStrLn json
     Just pangramContract @=? (decode $ encode pangramContract)
-    T.putStrLn . T.pack . show $ pangramContract
+--  T.putStrLn . T.pack . show $ pangramContract
     contract <- readFile "test/contract.json"
     let decoded :: Maybe M.Contract
         decoded = decode (fromString contract)
