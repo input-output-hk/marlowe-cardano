@@ -205,12 +205,12 @@ MINIMUM_ADA=3000000
 
 FIXED_POINT=1000000
 PRINCIPAL=10000
-INTEREST_RATE=1/50
-INTEREST=$((PRINCIPAL*$INTEREST_RATE))
+INTEREST_RATE=0.02
+INTEREST=$(jq -n $PRINCIPAL*$INTEREST_RATE)
 
-STATUS_DATE=$(date -d "$(date -u -R -d @$(($NOW/1000)))" +"%Y-%m-%dT00:00:00")
-INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$(($NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
-MATURITY_DATE=$(date -d "$(date -u -R -d @$(($NOW/1000))) + 2 year" +"%Y-01-01T00:00:00")
+STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
+INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
+MATURITY_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 2 year" +"%Y-01-01T00:00:00")
 
 LENDING_DEADLINE=$((NOW+12*HOUR))
 REPAYMENT_DEADLINE=$((NOW+24*HOUR))
@@ -239,7 +239,7 @@ cat > "$ACTUS_TERMS_FILE" << EOF
   "statusDate": "$STATUS_DATE",
   "cycleOfInterestPayment": "P1YL1",
   "prepaymentEffect": "N",
-  "nominalInterestRate": `jq -n $INTEREST_RATE`,
+  "nominalInterestRate": $INTEREST_RATE,
   "interestCalculationBase": "NT"
 }
 EOF
@@ -478,15 +478,15 @@ marlowe-cli run withdraw --testnet-magic "$MAGIC"                               
 
 echo "There is no UTxO at the role address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
 
 echo "Here are the UTxOs at the lender $LENDER_NAME's address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
 
 echo "Here are the UTxOs at the borrower $BORROWER_NAME's address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
 
 echo "## Clean Up"
 
@@ -494,8 +494,8 @@ FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
 
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
-                               --tx-in "$TX_5"#0                                    \
-                               --tx-in "$TX_5"#2                                    \
+                               --tx-in "$TX_6"#0                                    \
+                               --tx-in "$TX_6"#2                                    \
                                --tx-out "$LENDER_ADDRESS+1400000+1 $BORROWER_TOKEN" \
                                --required-signer "$BORROWER_PAYMENT_SKEY"           \
                                --change-address "$FAUCET_ADDRESS"                   \
