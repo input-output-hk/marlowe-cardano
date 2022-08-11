@@ -41,11 +41,10 @@ module Language.Marlowe.CLI.Types (
 
 
 import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), AssetId, BabbageEra, HasTypeProxy (proxyToAsType), Hash,
-                    IsCardanoEra, IsShelleyBasedEra, Lovelace, PaymentExtendedKey, PaymentKey, PlutusScript,
-                    PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo, TxIn,
-                    VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
-                    serialiseToTextEnvelope, shelleyBasedEra)
-import Cardano.Api.Shelley (PlutusScript (..), cardanoEra)
+                    IsShelleyBasedEra, Lovelace, PaymentExtendedKey, PaymentKey, PlutusScript, PlutusScriptV1,
+                    PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo, TxIn, VerificationKey,
+                    deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress, serialiseToTextEnvelope)
+import Cardano.Api.Shelley (PlutusScript (..))
 import Codec.Serialise (deserialise)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.ByteString.Short (ShortByteString)
