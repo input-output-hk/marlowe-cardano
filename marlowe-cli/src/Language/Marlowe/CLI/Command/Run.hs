@@ -24,28 +24,29 @@ module Language.Marlowe.CLI.Command.Run (
 ) where
 
 
-import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
-                    NetworkId (..), StakeAddressReference (..), TxIn)
+import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
+                    LocalNodeConnectInfo (..), NetworkId (..), StakeAddressReference (..), TxIn)
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseInput, parseNetworkId,
+import Language.Marlowe.CLI.Command.Parse (parseAddress, parseCurrencySymbol, parseInput, parseNetworkId,
                                            parsePOSIXTime, parseStakeAddressReference, parseTokenName, parseTxIn,
                                            parseTxOut)
 import Language.Marlowe.CLI.Run (initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Input)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
 import PlutusCore (defaultCostModelParams)
 
 import qualified Cardano.Api as Api (Value)
+import Control.Monad.Reader (MonadReader)
 import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options for running contracts.
-data RunCommand =
+data RunCommand era =
     -- | Initialize a Marlowe transaction.
     Initialize
     {
@@ -77,8 +78,8 @@ data RunCommand =
     , marloweIn       :: Maybe (FilePath, TxIn, TxIn)  -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spend and the collateral, unless the transaction opens the contract.
     , marloweOut      :: FilePath                      -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
     , inputs          :: [TxIn]                        -- ^ The ordinary transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]     -- ^ The ordinary transaction outputs.
-    , change          :: AddressAny                    -- ^ The change address.
+    , outputs         :: [(AddressInEra era, Api.Value)]     -- ^ The ordinary transaction outputs.
+    , change          :: AddressInEra era                    -- ^ The change address.
     , signingKeyFiles :: [FilePath]                    -- ^ The files containing the required signing keys.
     , metadataFile    :: Maybe FilePath                -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                      -- ^ The output file for the transaction body.
@@ -95,8 +96,8 @@ data RunCommand =
     , roleName        :: TokenName                 -- ^ The role name for the redemption.
     , collateral      :: TxIn                      -- ^ The collateral.
     , inputs          :: [TxIn]                    -- ^ The ordinary transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)] -- ^ The ordinary transaction outputs.
-    , change          :: AddressAny                -- ^ The change address.
+    , outputs         :: [(AddressInEra era, Api.Value)] -- ^ The ordinary transaction outputs.
+    , change          :: AddressInEra era                -- ^ The change address.
     , signingKeyFiles :: [FilePath]                -- ^ The files containing the required signing keys.
     , metadataFile    :: Maybe FilePath            -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                  -- ^ The output file for the transaction body.
@@ -107,9 +108,9 @@ data RunCommand =
 
 
 -- | Run a contract-related command.
-runRunCommand :: MonadError CliError m
+runRunCommand :: (MonadError CliError m, MonadReader (CliEnv era) m)
               => MonadIO m
-              => RunCommand  -- ^ The command.
+              => (RunCommand era)  -- ^ The command.
               -> m ()        -- ^ Action for running the command.
 runRunCommand command =
   do
@@ -137,21 +138,31 @@ runRunCommand command =
       Initialize{..} -> do
                           slotConfig <- querySlotConfig connection
                           initializeTransaction
-                            marloweParams' slotConfig costModel network' stake'
-                            contractFile stateFile
+                            marloweParams'
+                            slotConfig
+                            costModel
+                            network'
+                            stake'
+                            contractFile
+                            stateFile
                             outputFile
                             merkleize
                             printStats
       Prepare{..}    -> prepareTransaction
                           marloweInFile
-                          inputs' minimumTime maximumTime
+                          inputs'
+                          minimumTime
+                          maximumTime
                           outputFile
                           printStats
       Run{..}        -> guardMainnet
                           >> runTransaction
                             connection
-                            marloweIn marloweOut
-                            inputs outputs' change
+                            marloweIn
+                            marloweOut
+                            inputs
+                            outputs'
+                            change
                             signingKeyFiles
                             metadataFile
                             bodyFile
@@ -162,8 +173,12 @@ runRunCommand command =
       Withdraw{..}   -> guardMainnet
                           >> withdrawFunds
                             connection
-                            marloweOut roleName collateral
-                            inputs outputs' change
+                            marloweOut
+                            roleName
+                            collateral
+                            inputs
+                            outputs'
+                            change
                             signingKeyFiles
                             metadataFile
                             bodyFile
@@ -174,9 +189,9 @@ runRunCommand command =
 
 
 -- | Parser for contract commands.
-parseRunCommand :: O.Mod O.OptionFields NetworkId
+parseRunCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                 -> O.Mod O.OptionFields FilePath
-                -> O.Parser RunCommand
+                -> O.Parser (RunCommand era)
 parseRunCommand network socket =
   O.hsubparser
     $ O.commandGroup "Commands for running contracts:"
@@ -189,7 +204,7 @@ parseRunCommand network socket =
 -- | Parser for the "initialize" command.
 initializeCommand :: O.Mod O.OptionFields NetworkId
                   -> O.Mod O.OptionFields FilePath
-                  -> O.Mod O.CommandFields RunCommand
+                  -> O.Mod O.CommandFields (RunCommand era)
 initializeCommand network socket =
   O.command "initialize"
     . O.info (initializeOptions network socket)
@@ -199,7 +214,7 @@ initializeCommand network socket =
 -- | Parser for the "initialize" options.
 initializeOptions :: O.Mod O.OptionFields NetworkId
                   -> O.Mod O.OptionFields FilePath
-                  -> O.Parser RunCommand
+                  -> O.Parser (RunCommand era)
 initializeOptions network socket =
   Initialize
     <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -214,7 +229,7 @@ initializeOptions network socket =
 
 
 -- | Parser for the "prepare" command.
-prepareCommand :: O.Mod O.CommandFields RunCommand
+prepareCommand :: O.Mod O.CommandFields (RunCommand era)
 prepareCommand =
   O.command "prepare"
     $ O.info prepareOptions
@@ -222,7 +237,7 @@ prepareCommand =
 
 
 -- | Parser for the "prepare" options.
-prepareOptions :: O.Parser RunCommand
+prepareOptions :: O.Parser (RunCommand era)
 prepareOptions =
   Prepare
     <$> O.strOption                (O.long "marlowe-file"      <> O.metavar "MARLOWE_FILE"  <> O.help "JSON input file for the Marlowe state and contract.")
@@ -234,9 +249,9 @@ prepareOptions =
 
 
 -- | Parser for the "execute" command.
-runCommand :: O.Mod O.OptionFields NetworkId
+runCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
            -> O.Mod O.OptionFields FilePath
-           -> O.Mod O.CommandFields RunCommand
+           -> O.Mod O.CommandFields (RunCommand era)
 runCommand network socket =
   O.command "execute"
     $ O.info (runOptions network socket)
@@ -244,9 +259,10 @@ runCommand network socket =
 
 
 -- | Parser for the "execute" options.
-runOptions :: O.Mod O.OptionFields NetworkId
+runOptions :: IsShelleyBasedEra era
+           => O.Mod O.OptionFields NetworkId
            -> O.Mod O.OptionFields FilePath
-           -> O.Parser RunCommand
+           -> O.Parser (RunCommand era)
 runOptions network socket =
   Run
     <$> O.option parseNetworkId                (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -255,7 +271,7 @@ runOptions network socket =
     <*> O.strOption                            (O.long "marlowe-out-file"<> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the Marlowe inputs, final state, and final contract."                                             )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"           <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
-    <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress                  (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
     <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE"           <> O.help "JSON file containing metadata."                                                                                  )
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
@@ -272,9 +288,9 @@ runOptions network socket =
 
 
 -- | Parser for the "withdraw" command.
-withdrawCommand :: O.Mod O.OptionFields NetworkId
+withdrawCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                 -> O.Mod O.OptionFields FilePath
-                -> O.Mod O.CommandFields RunCommand
+                -> O.Mod O.CommandFields (RunCommand era)
 withdrawCommand network socket =
   O.command "withdraw"
     $ O.info (withdrawOptions network socket)
@@ -282,9 +298,9 @@ withdrawCommand network socket =
 
 
 -- | Parser for the "withdraw" options.
-withdrawOptions :: O.Mod O.OptionFields NetworkId
+withdrawOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                 -> O.Mod O.OptionFields FilePath
-                -> O.Parser RunCommand
+                -> O.Parser (RunCommand era)
 withdrawOptions network socket =
   Withdraw
     <$> O.option parseNetworkId                (O.long "testnet-magic"    <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -294,7 +310,7 @@ withdrawOptions network socket =
     <*> O.option parseTxIn                     (O.long "tx-in-collateral" <> O.metavar "TXID#TXIX"                <> O.help "Collateral for transaction."                                                                                     )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"            <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"           <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
-    <*> O.option parseAddressAny               (O.long "change-address"   <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress               (O.long "change-address"   <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.many . O.strOption)                 (O.long "required-signer"  <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
     <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
     <*> O.strOption                            (O.long "out-file"         <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )

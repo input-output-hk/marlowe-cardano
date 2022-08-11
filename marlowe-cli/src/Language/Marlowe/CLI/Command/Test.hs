@@ -23,32 +23,36 @@ module Language.Marlowe.CLI.Command.Test (
 ) where
 
 
-import Cardano.Api (NetworkId)
+import Cardano.Api (IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId)
+import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
 import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests))
-import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
+import Control.Monad.Reader.Class (MonadReader)
 import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options for testing contracts.
-type TestCommand = MarloweTests FilePath
+type TestCommand era = MarloweTests era FilePath
 
 
 -- | Run a contract-testing command.
 runTestCommand :: MonadError CliError m
                => MonadIO m
-               => TestCommand  -- ^ The command.
+               => MonadReader (CliEnv era) m
+               => TestCommand era  -- ^ The command.
                -> m ()         -- ^ Action for running the command.
-runTestCommand = runTests
+runTestCommand cmd = do
+  era <- askEra
+  runTests era cmd
 
 
 -- | Parser for test commands.
-parseTestCommand :: O.Mod O.OptionFields NetworkId
+parseTestCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                  -> O.Mod O.OptionFields FilePath
-                 -> O.Parser TestCommand
+                 -> O.Parser (TestCommand era)
 parseTestCommand network socket =
   O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
@@ -56,9 +60,9 @@ parseTestCommand network socket =
 
 
 -- | Parser for the "scripts" command.
-scriptsCommand :: O.Mod O.OptionFields NetworkId
+scriptsCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                 -> O.Mod O.OptionFields FilePath
-                -> O.Mod O.CommandFields TestCommand
+                -> O.Mod O.CommandFields (TestCommand era)
 scriptsCommand network socket =
   O.command "scripts"
     $ O.info (scriptsOptions network socket)
@@ -66,16 +70,15 @@ scriptsCommand network socket =
 
 
 -- | Parser for the "scripts" options.
-scriptsOptions :: O.Mod O.OptionFields NetworkId
+scriptsOptions :: IsShelleyBasedEra era
+               => O.Mod O.OptionFields NetworkId
                -> O.Mod O.OptionFields FilePath
-               -> O.Parser TestCommand
+               -> O.Parser (TestCommand era)
 scriptsOptions network socket =
   ScriptTests
     <$> O.option parseNetworkId  (O.long "testnet-magic"  <> O.metavar "INTEGER"      <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption              (O.long "socket-path"    <> O.metavar "SOCKET_FILE"  <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption              (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"            <> O.help "The file containing the signing key for the faucet."                                                             )
-    <*> O.option parseAddressAny (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
-    <*> O.option parseAddressAny (O.long "burn-address"   <> O.metavar "ADDRESS"                 <> O.help "Burn address for discarding used tokens."                                                                        )
+    <*> O.option parseAddress    (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
+    <*> O.option parseAddress    (O.long "burn-address"   <> O.metavar "ADDRESS"                 <> O.help "Burn address for discarding used tokens."                                                                        )
     <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )
-
-

@@ -33,10 +33,9 @@ module Language.Marlowe.CLI.IO (
 ) where
 
 
-import Cardano.Api (AsType (..), BabbageEra, FromSomeType (..), HasTextEnvelope, NetworkId (..), NetworkMagic (..),
-                    ScriptDataJsonSchema (..), TxMetadataInEra (..), TxMetadataJsonSchema (..),
-                    TxMetadataSupportedInEra (..), metadataFromJson, readFileTextEnvelopeAnyOf, scriptDataFromJson,
-                    serialiseToTextEnvelope, writeFileTextEnvelope)
+import Cardano.Api (AsType (..), FromSomeType (..), HasTextEnvelope, NetworkId (..), NetworkMagic (..),
+                    ScriptDataJsonSchema (..), TxMetadataInEra (..), TxMetadataJsonSchema (..), metadataFromJson,
+                    readFileTextEnvelopeAnyOf, scriptDataFromJson, serialiseToTextEnvelope, writeFileTextEnvelope)
 import Cardano.Api.Shelley (toPlutusData)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
@@ -44,12 +43,14 @@ import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
 import Data.Yaml (decodeFileEither)
-import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey)
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey, asksEra,
+                                   toTxMetadataSupportedInEra)
 import Plutus.V1.Ledger.Api (BuiltinData)
 import PlutusTx (dataToBuiltinData)
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
+import Control.Monad.Reader (MonadReader)
 import qualified Data.ByteString.Lazy as LBS (writeFile)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (putStrLn)
 
@@ -156,14 +157,16 @@ maybeWriteJson (Just outputFile) = liftIO . LBS.writeFile outputFile . encodePre
 -- | Read optional metadata.
 readMaybeMetadata :: MonadError CliError m
                   => MonadIO m
+                  => MonadReader (CliEnv era) m
                   => Maybe FilePath                 -- ^ The metadata file, if any.
-                  -> m (TxMetadataInEra BabbageEra)  -- ^ Action for reading the metadata.
+                  -> m (TxMetadataInEra era)  -- ^ Action for reading the metadata.
 readMaybeMetadata file =
   do
     metadata <- sequence $ decodeFileStrict <$> file
+    era <- asksEra toTxMetadataSupportedInEra
     maybe
       (pure TxMetadataNone)
-      (fmap (TxMetadataInEra TxMetadataInBabbageEra) . liftCli . metadataFromJson TxMetadataJsonNoSchema)
+      (fmap (TxMetadataInEra era) . liftCli . metadataFromJson TxMetadataJsonNoSchema)
       metadata
 
 

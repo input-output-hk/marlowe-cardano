@@ -32,7 +32,7 @@ module Language.Marlowe.CLI.Test.Types (
 ) where
 
 
-import Cardano.Api (AddressAny, NetworkId)
+import Cardano.Api (AddressInEra, NetworkId)
 import GHC.Generics (Generic)
 -- import Language.Marlowe.CLI.PAB (WsRunner)
 import Data.Aeson (FromJSON (..), ToJSON (..))
@@ -43,15 +43,15 @@ import Plutus.V1.Ledger.Time (POSIXTime)
 
 
 -- | Configuration for a set of Marlowe tests.
-data MarloweTests a =
+data MarloweTests era a =
     -- | Test contracts on-chain.
     ScriptTests
     {
       network       :: NetworkId   -- ^ The network ID, if any.
     , socketPath    :: FilePath    -- ^ The path to the node socket.
     , faucetFile    :: FilePath    -- ^ The file containing the faucet's signing key.
-    , faucetAddress :: AddressAny  -- ^ The faucet address.
-    , burnAddress   :: AddressAny  -- ^ The address to which to send unneeded native tokens.
+    , faucetAddress :: AddressInEra era  -- ^ The faucet address.
+    , burnAddress   :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
     , tests         :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
@@ -99,5 +99,3 @@ data ScriptOperation =
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
-
-

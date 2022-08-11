@@ -29,11 +29,12 @@ import Control.Monad.Except (MonadError, MonadIO, throwError)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference)
 import Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer, exportValidator)
-import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Plutus.V1.Ledger.Api (CurrencySymbol)
 import PlutusCore (defaultCostModelParams)
 
+import Control.Monad.Reader.Class (MonadReader)
 import qualified Options.Applicative as O
 
 
@@ -88,6 +89,7 @@ data ContractCommand =
 -- | Run an export-related command.
 runContractCommand :: MonadError CliError m
                    => MonadIO m
+                   => MonadReader (CliEnv era) m
                    => ContractCommand  -- ^ The command.
                    -> m ()             -- ^ Action for running the command.
 runContractCommand command =
@@ -103,17 +105,17 @@ runContractCommand command =
       stake'         = fromMaybe NoStakeAddress $ stake command
     case command of
       Export{..}          -> exportMarlowe
-                               marloweParams' costModel network' stake'
-                               contractFile stateFile
+                               marloweParams'
+                               costModel
+                               network'
+                               stake'
+                               contractFile
+                               stateFile
                                inputFiles
                                outputFile
                                printStats
-      ExportAddress{}     -> exportAddress
-                               marloweParams' network' stake'
-      ExportValidator{..} -> exportValidator
-                               marloweParams' costModel network' stake'
-                               outputFile
-                               printHash printStats
+      ExportAddress{}     -> exportAddress marloweParams' network' stake'
+      ExportValidator{..} -> exportValidator marloweParams' costModel network' stake' outputFile printHash printStats
       ExportDatum{..}     -> exportDatum
                                contractFile stateFile
                                outputFile

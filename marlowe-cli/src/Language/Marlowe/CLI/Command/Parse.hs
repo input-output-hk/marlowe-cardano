@@ -1,3 +1,5 @@
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -10,10 +12,9 @@
 --
 -----------------------------------------------------------------------------
 
-
 module Language.Marlowe.CLI.Command.Parse (
 -- * Parsers
-  parseAddressAny
+  parseAddress
 , parseAssetId
 , parseOutputQuery
 , parseByteString
@@ -41,10 +42,10 @@ module Language.Marlowe.CLI.Command.Parse (
 ) where
 
 
-import Cardano.Api (AddressAny, AsType (AsAddressAny, AsPolicyId, AsStakeAddress, AsTxId), AssetId (..), AssetName (..),
-                    Lovelace (..), NetworkId (..), NetworkMagic (..), Quantity (..), SlotNo (..),
+import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsShelleyBasedEra, Lovelace (..),
+                    NetworkId (..), NetworkMagic (..), Quantity (..), ShelleyBasedEra (..), SlotNo (..),
                     StakeAddressReference (..), TxId (..), TxIn (..), TxIx (..), Value, deserialiseAddress,
-                    deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace, valueFromList)
+                    deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace, shelleyBasedEra, valueFromList)
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
@@ -138,13 +139,13 @@ parseTxIx = TxIx <$> O.auto
 
 
 -- | Parser for `TxOut` information.
-parseTxOut :: O.ReadM (AddressAny, Value)
+parseTxOut :: IsShelleyBasedEra era => O.ReadM (AddressInEra era, Value)
 parseTxOut =
   O.eitherReader
     $ \s ->
       case splitOn "+" s of
         address : lovelace' : tokens -> do
-                                          address' <- readAddressAnyEither address
+                                          address' <- readAddressEither address
                                           lovelace'' <- readLovelaceEither lovelace'
                                           tokens' <- mapM readAssetValueEither tokens
                                           pure (address', lovelace'' <> mconcat tokens')
@@ -208,18 +209,27 @@ readAssetIdEither s =
 
 
 
--- | Parser for `AddressAny`.
-parseAddressAny :: O.ReadM AddressAny
-parseAddressAny = O.eitherReader readAddressAnyEither
+-- | Parser for `AddressInEra era`.
+parseAddress :: IsShelleyBasedEra era => O.ReadM (AddressInEra era)
+parseAddress = O.eitherReader readAddressEither
 
 
--- | Parser for `AddressAny`.
-readAddressAnyEither :: String                    -- ^ The string to be read.
-                     -> Either String AddressAny  -- ^ Either the address or an error message.
-readAddressAnyEither s =
-  case deserialiseAddress AsAddressAny $ T.pack s of
+-- | Parser for `AddressInEra era`.
+readAddressEither :: forall era
+                   . IsShelleyBasedEra era
+                  => String                    -- ^ The string to be read.
+                  -> Either String (AddressInEra era)  -- ^ Either the address or an error message.
+readAddressEither s = do
+  era <- eraAsType
+  case deserialiseAddress (AsAddressInEra era) $ T.pack s of
     Nothing      -> Left "Invalid address."
     Just address -> Right address
+  where
+    eraAsType :: Either String (AsType era)
+    eraAsType = case shelleyBasedEra :: ShelleyBasedEra era of
+      ShelleyBasedEraAlonzo  -> Right AsAlonzo
+      ShelleyBasedEraBabbage -> Right AsBabbage
+      era                    -> Left $ "unsupported era: " <> show era
 
 
 -- | Parser for `Party`.
@@ -337,13 +347,13 @@ readPubKeyHashEither s =
 
 
 -- | Parse a role.
-parseRole :: O.ReadM (TokenName, AddressAny)
+parseRole :: IsShelleyBasedEra era => O.ReadM (TokenName, AddressInEra era)
 parseRole =
   O.eitherReader
     $ \s ->
       case splitOn "=" s of
         [name, address] -> do
-                             address' <- readAddressAnyEither address
+                             address' <- readAddressEither address
                              pure (readTokenName name, address')
         _               -> Left "Invalid role assigment."
 

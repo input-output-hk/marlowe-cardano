@@ -24,22 +24,22 @@ module Language.Marlowe.CLI.Command.Transaction (
 ) where
 
 
-import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
-                    NetworkId (..), SlotNo, TxIn)
+import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
+                    LocalNodeConnectInfo (..), NetworkId (..), SlotNo, TxIn)
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseSlotNo, parseTxIn, parseTxOut,
-                                           parseValue)
+import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseSlotNo, parseTxIn, parseTxOut, parseValue)
 import Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
-import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.CLI.Types (CliEnv, CliError)
 
 import qualified Cardano.Api as Api (Value)
+import Control.Monad.Reader.Class (MonadReader)
 import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options.
-data TransactionCommand =
+data TransactionCommand era =
     -- | Build a non-Marlowe transaction.
     BuildTransact
     {
@@ -47,8 +47,8 @@ data TransactionCommand =
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
     , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , change          :: AddressAny                 -- ^ The change address.
+    , outputs         :: [(AddressInEra era, Api.Value)]  -- ^ The transaction outputs.
+    , change          :: AddressInEra era                 -- ^ The change address.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
@@ -60,13 +60,13 @@ data TransactionCommand =
     {
       network         :: NetworkId                  -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
-    , scriptAddress   :: AddressAny                 -- ^ The script address.
+    , scriptAddress   :: AddressInEra era                 -- ^ The script address.
     , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
     , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
     , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , change          :: AddressAny                 -- ^ The change address.
+    , outputs         :: [(AddressInEra era, Api.Value)]  -- ^ The transaction outputs.
+    , change          :: AddressInEra era                 -- ^ The change address.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
@@ -78,7 +78,7 @@ data TransactionCommand =
     {
       network         :: NetworkId                  -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
-    , scriptAddress   :: AddressAny                 -- ^ The script address.
+    , scriptAddress   :: AddressInEra era                 -- ^ The script address.
     , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
     , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
     , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
@@ -87,9 +87,9 @@ data TransactionCommand =
     , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
     , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , outputs         :: [(AddressInEra era, Api.Value)]  -- ^ The transaction outputs.
     , collateral      :: TxIn                       -- ^ The collateral.
-    , change          :: AddressAny                 -- ^ The change address.
+    , change          :: AddressInEra era                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
@@ -109,9 +109,9 @@ data TransactionCommand =
     , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
     , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , outputs         :: [(AddressInEra era, Api.Value)]  -- ^ The transaction outputs.
     , collateral      :: TxIn                       -- ^ The collateral.
-    , change          :: AddressAny                 -- ^ The change address.
+    , change          :: AddressInEra era                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
@@ -134,7 +134,8 @@ data TransactionCommand =
 -- | Run a transaction-related command.
 runTransactionCommand :: MonadError CliError m
                       => MonadIO m
-                      => TransactionCommand  -- ^ The command.
+                      => MonadReader (CliEnv era) m
+                      => TransactionCommand era  -- ^ The command.
                       -> m ()                -- ^ Action for running the command.
 runTransactionCommand command =
   do
@@ -220,9 +221,10 @@ runTransactionCommand command =
 
 
 -- | Parser for transaction-related commands.
-parseTransactionCommand :: O.Mod O.OptionFields NetworkId
+parseTransactionCommand :: IsShelleyBasedEra era
+                        => O.Mod O.OptionFields NetworkId
                         -> O.Mod O.OptionFields FilePath
-                        -> O.Parser TransactionCommand
+                        -> O.Parser (TransactionCommand era)
 parseTransactionCommand network socket =
   O.hsubparser
     $ O.commandGroup "Low-level commands for creating and submitting transactions:"
@@ -234,9 +236,10 @@ parseTransactionCommand network socket =
 
 
 -- | Parser for the "simple" command.
-buildSimpleCommand :: O.Mod O.OptionFields NetworkId
+buildSimpleCommand :: IsShelleyBasedEra era
+                   => O.Mod O.OptionFields NetworkId
                    -> O.Mod O.OptionFields FilePath
-                   -> O.Mod O.CommandFields TransactionCommand
+                   -> O.Mod O.CommandFields (TransactionCommand era)
 buildSimpleCommand network socket =
   O.command "simple"
     $ O.info (buildSimpleOptions network socket)
@@ -244,9 +247,10 @@ buildSimpleCommand network socket =
 
 
 -- | Parser for the "simple" options.
-buildSimpleOptions :: O.Mod O.OptionFields NetworkId
+buildSimpleOptions :: IsShelleyBasedEra era
+                   => O.Mod O.OptionFields NetworkId
                    -> O.Mod O.OptionFields FilePath
-                   -> O.Parser TransactionCommand
+                   -> O.Parser (TransactionCommand era)
 buildSimpleOptions network socket =
   BuildTransact
     <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -254,7 +258,7 @@ buildSimpleOptions network socket =
     <*> (O.some . O.strOption)         (O.long "required-signer" <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"           <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
-    <*> O.option parseAddressAny       (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress       (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"   <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
     <*> O.strOption                    (O.long "out-file"        <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
     <*> (O.optional . O.option O.auto) (O.long "submit"          <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
@@ -263,9 +267,9 @@ buildSimpleOptions network socket =
 
 
 -- | Parser for the "create" command.
-buildIncomingCommand :: O.Mod O.OptionFields NetworkId
+buildIncomingCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                      -> O.Mod O.OptionFields FilePath
-                     -> O.Mod O.CommandFields TransactionCommand
+                     -> O.Mod O.CommandFields (TransactionCommand era)
 buildIncomingCommand network socket =
   O.command "create"
     $ O.info (buildIncomingOptions network socket)
@@ -273,20 +277,20 @@ buildIncomingCommand network socket =
 
 
 -- | Parser for the "create" options.
-buildIncomingOptions :: O.Mod O.OptionFields NetworkId
+buildIncomingOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                      -> O.Mod O.OptionFields FilePath
-                     -> O.Parser TransactionCommand
+                     -> O.Parser (TransactionCommand era)
 buildIncomingOptions network socket =
   BuildCreate
     <$> O.option parseNetworkId        (O.long "testnet-magic"     <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                    (O.long "socket-path"       <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> O.option parseAddressAny       (O.long "script-address"    <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
+    <*> O.option parseAddress       (O.long "script-address"    <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
     <*> (O.some . O.strOption)         (O.long "required-signer"   <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
     <*> O.strOption                    (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"               <> O.help "Datum JSON file datum paid to Marlowe contract."                                                                 )
     <*> O.option parseValue            (O.long "tx-out-marlowe"    <> O.metavar "VALUE"                    <> O.help "Value paid to Marlowe contract."                                                                                 )
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"             <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
-    <*> O.option parseAddressAny       (O.long "change-address"    <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress       (O.long "change-address"    <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"     <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
     <*> O.strOption                    (O.long "out-file"          <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
     <*> (O.optional . O.option O.auto) (O.long "submit"            <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
@@ -295,9 +299,9 @@ buildIncomingOptions network socket =
 
 
 -- | Parser for the "advance" command.
-buildContinuingCommand :: O.Mod O.OptionFields NetworkId
+buildContinuingCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                        -> O.Mod O.OptionFields FilePath
-                       -> O.Mod O.CommandFields TransactionCommand
+                       -> O.Mod O.CommandFields (TransactionCommand era)
 buildContinuingCommand network socket =
   O.command "advance"
     $ O.info (buildContinuingOptions network socket)
@@ -305,14 +309,14 @@ buildContinuingCommand network socket =
 
 
 -- | Parser for the "advance" options.
-buildContinuingOptions :: O.Mod O.OptionFields NetworkId
+buildContinuingOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                        -> O.Mod O.OptionFields FilePath
-                       -> O.Parser TransactionCommand
+                       -> O.Parser (TransactionCommand era)
 buildContinuingOptions network socket =
   BuildAdvance
     <$> O.option parseNetworkId        (O.long "testnet-magic"       <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                    (O.long "socket-path"         <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> O.option parseAddressAny       (O.long "script-address"      <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
+    <*> O.option parseAddress       (O.long "script-address"      <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
     <*> O.strOption                    (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"              <> O.help "Plutus file for Marlowe contract."                                                                               )
     <*> O.strOption                    (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"            <> O.help "Redeemer JSON file spent from Marlowe contract."                                                                 )
     <*> O.strOption                    (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"               <> O.help "Datum JSON file spent from Marlowe contract."                                                                    )
@@ -323,7 +327,7 @@ buildContinuingOptions network socket =
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"               <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
     <*> O.option parseTxIn             (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"                <> O.help "Collateral for transaction."                                                                                     )
-    <*> O.option parseAddressAny       (O.long "change-address"      <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress       (O.long "change-address"      <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> O.option parseSlotNo           (O.long "invalid-before"      <> O.metavar "SLOT"                     <> O.help "Minimum slot for the redemption."                                                                                )
     <*> O.option parseSlotNo           (O.long "invalid-hereafter"   <> O.metavar "SLOT"                     <> O.help "Maximum slot for the redemption."                                                                                )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"       <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
@@ -334,9 +338,9 @@ buildContinuingOptions network socket =
 
 
 -- | Parser for the "close" command.
-buildOutgoingCommand :: O.Mod O.OptionFields NetworkId
+buildOutgoingCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                      -> O.Mod O.OptionFields FilePath
-                     -> O.Mod O.CommandFields TransactionCommand
+                     -> O.Mod O.CommandFields (TransactionCommand era)
 buildOutgoingCommand network socket =
   O.command "close"
     $ O.info (buildOutgoingOptions network socket)
@@ -344,9 +348,9 @@ buildOutgoingCommand network socket =
 
 
 -- | Parser for the "close" options.
-buildOutgoingOptions :: O.Mod O.OptionFields NetworkId
+buildOutgoingOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                      -> O.Mod O.OptionFields FilePath
-                     -> O.Parser TransactionCommand
+                     -> O.Parser (TransactionCommand era)
 buildOutgoingOptions network socket =
   BuildClose
     <$> O.option parseNetworkId        (O.long "testnet-magic"       <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
@@ -359,7 +363,7 @@ buildOutgoingOptions network socket =
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"               <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
     <*> O.option parseTxIn             (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"                <> O.help "Collateral for transaction."                                                                                     )
-    <*> O.option parseAddressAny       (O.long "change-address"      <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> O.option parseAddress       (O.long "change-address"      <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> O.option parseSlotNo           (O.long "invalid-before"      <> O.metavar "SLOT"                     <> O.help "Minimum slot for the redemption."                                                                                )
     <*> O.option parseSlotNo           (O.long "invalid-hereafter"   <> O.metavar "SLOT"                     <> O.help "Maximum slot for the redemption."                                                                                )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"       <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
@@ -372,7 +376,7 @@ buildOutgoingOptions network socket =
 -- | Parser for the "submit" command.
 submitCommand :: O.Mod O.OptionFields NetworkId
               -> O.Mod O.OptionFields FilePath
-              -> O.Mod O.CommandFields TransactionCommand
+              -> O.Mod O.CommandFields (TransactionCommand era)
 submitCommand network socket =
   O.command "submit"
     $ O.info (submitOptions network socket)
@@ -382,7 +386,7 @@ submitCommand network socket =
 -- | Parser for the "submit" options.
 submitOptions :: O.Mod O.OptionFields NetworkId
               -> O.Mod O.OptionFields FilePath
-              -> O.Parser TransactionCommand
+              -> O.Parser (TransactionCommand era)
 submitOptions network socket =
   Submit
     <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
