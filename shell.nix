@@ -134,7 +134,6 @@ let
       marloweCliBuildInputs = devToolsInputs ++ [
         cardano-node
         cardano-cli
-        marlowe-cli
         start-cardano-node
       ];
       develShell = { buildInputs, name, shellHook ? "" }:
