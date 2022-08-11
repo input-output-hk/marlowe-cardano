@@ -4,7 +4,7 @@
 {-# LANGUAGE PolyKinds      #-}
 {-# LANGUAGE RankNTypes     #-}
 
-module Network.Protocol.Command.Codec where
+module Network.Protocol.Job.Codec where
 
 import Control.Monad (mfilter)
 import Data.Binary
@@ -12,16 +12,16 @@ import Data.Binary.Get
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Network.Protocol.ChainSeek.Codec (DeserializeError (..))
-import Network.Protocol.Command.Types
+import Network.Protocol.Job.Types
 import Network.TypedProtocol.Codec
 import Unsafe.Coerce (unsafeCoerce)
 
 data SomeCommand cmd = forall status err result. SomeCommand (cmd status err result)
 data SomeJobId cmd = forall status err result. SomeJobId (JobId cmd status err result)
 
-codecCommand
+codecJob
   :: forall cmd m
-   . (Applicative m, IsCommand cmd)
+   . (Applicative m, Command cmd)
   => (SomeCommand cmd -> Put)
   -> Get (SomeCommand cmd)
   -> (SomeJobId cmd -> Put)
@@ -33,14 +33,14 @@ codecCommand
   -> (forall status err result. TokCommand cmd status err result -> Get err)
   -> (forall status err result. TokCommand cmd status err result -> result -> Put)
   -> (forall status err result. TokCommand cmd status err result -> Get result)
-  -> Codec (Command cmd) DeserializeError m LBS.ByteString
-codecCommand putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus putErr getErr putResult getResult =
+  -> Codec (Job cmd) DeserializeError m LBS.ByteString
+codecJob putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus putErr getErr putResult getResult =
   Codec (encodePut . putMsg) $ decodeGet . getMsg
   where
     putMsg
-      :: forall (pr :: PeerRole) (st :: Command cmd) (st' :: Command cmd)
+      :: forall (pr :: PeerRole) (st :: Job cmd) (st' :: Job cmd)
        . PeerHasAgency pr st
-      -> Message (Command cmd) st st'
+      -> Message (Job cmd) st st'
       -> Put
     putMsg = \case
       ClientAgency TokInit -> \case
@@ -66,7 +66,7 @@ codecCommand putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus pu
         MsgDetach -> putWord8 0x07
 
     getMsg
-      :: forall (pr :: PeerRole) (st :: Command cmd)
+      :: forall (pr :: PeerRole) (st :: Job cmd)
        . PeerHasAgency pr st
       -> Get (SomeMessage st)
     getMsg tok = do
