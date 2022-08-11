@@ -343,8 +343,8 @@ if cardano-cli transaction build --testnet-magic "$MAGIC" --alonzo-era        \
                                  --invalid-hereafter "$TIMEOUT_SLOT"          \
                                  --out-file tx-2.raw
 then
-  echo "Double satisfaction was prevented."
+  echo "Failure! Double satisfaction occurred"
   exit 1
 else
-  echo "Double satisfaction was not prevented."
+  echo "Success. Double satisfaction was prevented"
 fi
