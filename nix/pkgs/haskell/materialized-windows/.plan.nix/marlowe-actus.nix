@@ -35,15 +35,12 @@
         depends = [
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
-          (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-          (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-          (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
-          (hsPkgs."text" or (errorHandler.buildDepError "text"))
-          (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
-          (hsPkgs."time" or (errorHandler.buildDepError "time"))
+          (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."sort" or (errorHandler.buildDepError "sort"))
+          (hsPkgs."text" or (errorHandler.buildDepError "text"))
+          (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
           ];
         buildable = true;

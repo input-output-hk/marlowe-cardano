@@ -37,13 +37,8 @@
           (hsPkgs."base16-aeson" or (errorHandler.buildDepError "base16-aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-          (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
-          (hsPkgs."cardano-binary" or (errorHandler.buildDepError "cardano-binary"))
-          (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
-          (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."deriving-aeson" or (errorHandler.buildDepError "deriving-aeson"))
-          (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
@@ -58,7 +53,7 @@
           (hsPkgs."sbv" or (errorHandler.buildDepError "sbv"))
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
           (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
-          ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"));
+          ];
         buildable = true;
         modules = [
           "Language/Marlowe"
