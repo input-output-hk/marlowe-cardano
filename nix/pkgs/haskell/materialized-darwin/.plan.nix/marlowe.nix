@@ -84,6 +84,8 @@
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
+            (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
             (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
@@ -118,6 +120,7 @@
             "Spec/Marlowe/Marlowe"
             "Spec/Marlowe/Orphans"
             "Spec/Marlowe/Semantics"
+            "Spec/Marlowe/Transaction"
             "Spec/Marlowe/Util"
             "Spec/Marlowe/Util/AssocMap"
             ];
