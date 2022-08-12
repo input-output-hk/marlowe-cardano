@@ -56,7 +56,9 @@ library
     Network.Protocol.Job.Client,
     Network.Protocol.Job.Codec,
     Network.Protocol.Job.Server,
-    Network.Protocol.Job.Types
+    Network.Protocol.Job.Types,
+    Network.Protocol.Query.Client
+    Network.Protocol.Query.Types
   build-depends:
       base >= 4.9 && < 5
     , binary
