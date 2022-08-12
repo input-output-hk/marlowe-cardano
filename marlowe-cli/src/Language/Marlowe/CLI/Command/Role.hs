@@ -73,7 +73,7 @@ data RoleCommand =
 
 
 -- | Run a related command.
-runRoleCommand :: (MonadError CliError m, MonadReader (CliEnv era000) m)
+runRoleCommand :: (MonadError CliError m, MonadReader (CliEnv era) m)
                => MonadIO m
                => RoleCommand  -- ^ The command.
                -> m ()         -- ^ Action for running the command.

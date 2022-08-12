@@ -230,7 +230,7 @@ buildAddress :: MarloweParams          -- ^ The Marlowe contract parameters.
 buildAddress = buildAddressImpl . validatorScript . smallUntypedValidator
 
 -- | Print the address of a validator.
-exportAddressImpl :: (MonadIO m, MonadReader (CliEnv era0) m)
+exportAddressImpl :: (MonadIO m, MonadReader (CliEnv era) m)
                   => Validator             -- ^ The validator.
                   -> NetworkId              -- ^ The network ID.
                   -> StakeAddressReference  -- ^ The stake address.
@@ -242,7 +242,7 @@ exportAddressImpl validator network stake = do
 
 
 -- | Print the address of a Marlowe contract.
-exportAddress :: (MonadIO m, MonadReader (CliEnv era00) m)
+exportAddress :: (MonadIO m, MonadReader (CliEnv era) m)
               => MarloweParams          -- ^ The Marlowe contract parameters.
               -> NetworkId              -- ^ The network ID.
               -> StakeAddressReference  -- ^ The stake address.
@@ -283,7 +283,7 @@ buildValidator = buildValidatorImpl . validatorScript . smallUntypedValidator
 
 
 -- | Export to a file the validator information.
-exportValidatorImpl :: (MonadError CliError m, MonadReader (CliEnv era0) m)
+exportValidatorImpl :: (MonadError CliError m, MonadReader (CliEnv era) m)
                 => MonadIO m
                 => Validator              -- ^ The validator.
                 -> CostModelParams        -- ^ The cost model parameters.
@@ -312,7 +312,7 @@ exportValidatorImpl validator costModel network stake outputFile printHash print
 
 
 -- | Export to a file the validator information about a Marlowe contract.
-exportValidator :: (MonadError CliError m, MonadReader (CliEnv era00) m)
+exportValidator :: (MonadError CliError m, MonadReader (CliEnv era) m)
                 => MonadIO m
                 => MarloweParams          -- ^ The Marlowe contract parameters.
                 -> CostModelParams        -- ^ The cost model parameters.
@@ -459,7 +459,7 @@ buildRoleAddress currencySymbol = buildAddressImpl (rolePayoutScript' currencySy
 
 
 -- | Print the role address of a Marlowe contract.
-exportRoleAddress :: (MonadIO m, MonadReader (CliEnv era00) m)
+exportRoleAddress :: (MonadIO m, MonadReader (CliEnv era) m)
                   => CurrencySymbol         -- ^ The currency symbol for Marlowe contract roles.
                   -> NetworkId              -- ^ The network ID.
                   -> StakeAddressReference  -- ^ The stake address.
@@ -478,7 +478,7 @@ buildRoleValidator currencySymbol = buildValidatorImpl (rolePayoutScript' curren
 
 
 -- | Export to a file the role validator information about a Marlowe contract.
-exportRoleValidator :: (MonadError CliError m, MonadReader (CliEnv era00) m)
+exportRoleValidator :: (MonadError CliError m, MonadReader (CliEnv era) m)
                 => MonadIO m
                 => CurrencySymbol         -- ^ The currency symbol for Marlowe contract roles.
                 -> CostModelParams        -- ^ The cost model parameters.
