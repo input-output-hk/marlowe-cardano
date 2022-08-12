@@ -6,12 +6,9 @@
 
 module Network.Protocol.Job.Codec where
 
-import Control.Monad (mfilter)
 import Data.Binary
-import Data.Binary.Get
-import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
-import Network.Protocol.ChainSeek.Codec (DeserializeError (..))
+import Network.Protocol.Codec (DeserializeError, decodeGet, encodePut)
 import Network.Protocol.Job.Types
 import Network.TypedProtocol.Codec
 import Unsafe.Coerce (unsafeCoerce)
@@ -105,14 +102,3 @@ codecJob putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus putErr
           ClientAgency (TokAwait _) -> pure $ SomeMessage MsgDetach
           _                         -> fail "Invalid protocol state for MsgDetach"
         _ -> fail $ "Invalid msg tag " <> show tag
-
-encodePut :: (a -> Put) -> a -> LBS.ByteString
-encodePut = fmap runPut
-
-decodeGet :: Applicative m => Get a -> m (DecodeStep LBS.ByteString DeserializeError m a)
-decodeGet = go . runGetIncremental
-  where
-    go = pure . \case
-      Fail unconsumedInput offset message -> DecodeFail DeserializeError{..}
-      Partial f                           -> DecodePartial $ go . f . fmap LBS.toStrict
-      Done unconsumedInput _ a            -> DecodeDone a $ mfilter (not . LBS.null) $ Just $ LBS.fromStrict unconsumedInput

@@ -5,29 +5,17 @@
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
 
-module Network.Protocol.ChainSeek.Codec (DeserializeError(..), SomeQuery(..), codecChainSeek) where
+module Network.Protocol.ChainSeek.Codec (DeserializeError, SomeQuery(..), codecChainSeek) where
 
-import Control.Exception (Exception)
-import Control.Monad (mfilter)
-import Data.Binary (Binary (get), Get, Put, getWord8, put)
-import Data.Binary.Get (ByteOffset, Decoder (..), runGetIncremental)
-import Data.Binary.Put (putWord8, runPut)
-import qualified Data.ByteString as BS
+import Data.Binary (Binary (get), Get, Put, getWord8, put, putWord8)
+import Data.Binary.Put ()
 import qualified Data.ByteString.Lazy as LBS
 import Network.Protocol.ChainSeek.Types (ChainSeek, ClientHasAgency (..), Message (..), ServerHasAgency (..),
                                          TokNextKind (..))
+import Network.Protocol.Codec (DeserializeError, decodeGet, encodePut)
 import Network.TypedProtocol (PeerHasAgency (..), PeerRole, SomeMessage (..))
-import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
+import Network.TypedProtocol.Codec (Codec (..))
 import Unsafe.Coerce (unsafeCoerce)
-
--- An error type for deserialization
-data DeserializeError = DeserializeError
-  { message         :: !String
-  , offset          :: !ByteOffset
-  , unconsumedInput :: !BS.ByteString
-  } deriving (Show)
-
-instance Exception DeserializeError where
 
 data SomeQuery query = forall err result. SomeQuery (query err result)
 
@@ -150,14 +138,3 @@ codecChainSeek
         (0x0b, ClientAgency TokPing) -> pure $ SomeMessage MsgPong
 
         _ -> fail $ "Unexpected tag " <> show tag
-
-encodePut :: (a -> Put) -> a -> LBS.ByteString
-encodePut = fmap runPut
-
-decodeGet :: Applicative m => Get a -> m (DecodeStep LBS.ByteString DeserializeError m a)
-decodeGet = go . runGetIncremental
-  where
-    go = pure . \case
-      Fail unconsumedInput offset message -> DecodeFail DeserializeError{..}
-      Partial f                           -> DecodePartial $ go . f . fmap LBS.toStrict
-      Done unconsumedInput _ a            -> DecodeDone a $ mfilter (not . LBS.null) $ Just $ LBS.fromStrict unconsumedInput

@@ -6,12 +6,9 @@
 
 module Network.Protocol.Query.Codec where
 
-import Control.Monad (mfilter)
 import Data.Binary
-import Data.Binary.Get
-import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
-import Network.Protocol.ChainSeek.Codec (DeserializeError (..))
+import Network.Protocol.Codec (DeserializeError, decodeGet, encodePut)
 import Network.Protocol.Query.Types
 import Network.TypedProtocol.Codec
 import Unsafe.Coerce (unsafeCoerce)
@@ -140,14 +137,3 @@ codecQuery putCmd getCmd putDelimiter getDelimiter putErr getErr putResult getRe
 
     coerceQuery :: query1 delimiter1 err1 results1 -> query delimiter0 err0 results0
     coerceQuery = unsafeCoerce
-
-encodePut :: (a -> Put) -> a -> LBS.ByteString
-encodePut = fmap runPut
-
-decodeGet :: Applicative m => Get a -> m (DecodeStep LBS.ByteString DeserializeError m a)
-decodeGet = go . runGetIncremental
-  where
-    go = pure . \case
-      Fail unconsumedInput offset message -> DecodeFail DeserializeError{..}
-      Partial f                           -> DecodePartial $ go . f . fmap LBS.toStrict
-      Done unconsumedInput _ a            -> DecodeDone a $ mfilter (not . LBS.null) $ Just $ LBS.fromStrict unconsumedInput
