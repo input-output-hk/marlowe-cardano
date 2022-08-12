@@ -32,11 +32,6 @@ OPTIONS:
   -p, --faucet-skey-file <PATH>
           Payment signing key for the address above for funding test accounts.
   -h, --help
-
-If running this script against a cabal-compiled binary (not made with
-nix-build), prefix this command setting the MARLOWE_CLI_BIN variable:
-
-    $ MARLOWE_CLI_BIN="cabal run marlowe-cli" $basename ...
 USAGE
 )
 
