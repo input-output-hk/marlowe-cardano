@@ -18,18 +18,18 @@
 #      *  xargs
 
 
-: ${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}
-: ${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}
+: "${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}"
+: "${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}"
 
 # NOTE: if running this against a development marlowe-cli set this:
 #   MARLOWE_CLI_BIN="cabal run marlowe-cli"
-: ${MARLOWE_CLI_BIN:=marlowe-cli}
+: "${MARLOWE_CLI_BIN:=marlowe-cli}"
 
 
 set -ev
 
 
-: ${MAGIC:="1097911063"}
+: "${MAGIC:="1097911063"}"
 echo "MAGIC=$MAGIC"
 
 
