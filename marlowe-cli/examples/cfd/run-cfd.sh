@@ -22,16 +22,16 @@ echo "Signing and verification keys must be provided below for the oracle and pa
 
 echo "## Preliminaries"
 
-: ${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}
-: ${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}
+: "${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}"
+: "${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}"
 
 # NOTE: if running this against a development marlowe-cli set this:
 #   MARLOWE_CLI_BIN="cabal run marlowe-cli"
-: ${MARLOWE_CLI_BIN:=marlowe-cli}
+: "${MARLOWE_CLI_BIN:=marlowe-cli}"
 
 echo "### Select Network"
 
-: ${MAGIC:="1097911063"}
+: "${MAGIC:="1097911063"}"
 echo "MAGIC=$MAGIC"
 
 SLOT_LENGTH=$($MARLOWE_CLI_BIN -- util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | tail -n +2 | jq .scSlotLength)

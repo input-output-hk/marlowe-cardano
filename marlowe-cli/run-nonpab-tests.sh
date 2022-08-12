@@ -70,11 +70,11 @@ while true ; do
 done
 
 $OPTHELP && die 0 "$USAGE"
-: ${MAGIC:=$DEFAULT_CARDANO_TESTNET_MAGIC}
-: ${CARDANO_NODE_SOCKET_PATH:=$DEFAULT_CARDANO_NODE_SOCKET_PATH}
-: ${TREASURY:=$DEFAULT_TREASURY}
-[ -z $FAUCET_ADDRESS ] && die 1 "Missing required --faucet-address"
-[ -z $FAUCET_SKEY_FILE ] && die 1 "Missing required --faucet-skey-file"
+: "${MAGIC:=$DEFAULT_CARDANO_TESTNET_MAGIC}"
+: "${CARDANO_NODE_SOCKET_PATH:=$DEFAULT_CARDANO_NODE_SOCKET_PATH}"
+: "${TREASURY:=$DEFAULT_TREASURY}"
+[ -z "$FAUCET_ADDRESS" ] && die 1 "Missing required --faucet-address"
+[ -z "$FAUCET_SKEY_FILE" ] && die 1 "Missing required --faucet-skey-file"
 
 # These will be needed by the test scripts we're about to run
 
@@ -85,6 +85,7 @@ export FAUCET_ADDRESS
 export FAUCET_SKEY_FILE
 
 # for t in {test/double-satisfaction.sh,examples/*/run-*.sh}
+# shellcheck disable=SC2043
 for t in test/double-satisfaction.sh
 # for t in examples/cfd/run-*.sh
 do
