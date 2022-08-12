@@ -8,7 +8,7 @@ module Network.Protocol.Query.Codec where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
-import Network.Protocol.Codec (DeserializeError, decodeGet, encodePut)
+import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Query.Types
 import Network.TypedProtocol.Codec
 import Unsafe.Coerce (unsafeCoerce)
@@ -28,13 +28,9 @@ codecQuery
   -> (forall delimiter err result. query delimiter err result -> Get result)
   -> Codec (Query query) DeserializeError m LBS.ByteString
 codecQuery putCmd getCmd putDelimiter getDelimiter putErr getErr putResult getResult =
-  Codec (encodePut . putMsg) $ decodeGet . getMsg
+  binaryCodec putMsg getMsg
   where
-    putMsg
-      :: forall (pr :: PeerRole) (st :: Query query) (st' :: Query query)
-       . PeerHasAgency pr st
-      -> Message (Query query) st st'
-      -> Put
+    putMsg :: PutMessage (Query query)
     putMsg = \case
       ClientAgency TokInit -> \case
         MsgRequest query -> do
@@ -56,10 +52,7 @@ codecQuery putCmd getCmd putDelimiter getDelimiter putErr getErr putResult getRe
           putDelimiter query delimiter
         MsgDone -> putWord8 0x05
 
-    getMsg
-      :: forall (pr :: PeerRole) (st :: Query query)
-       . PeerHasAgency pr st
-      -> Get (SomeMessage st)
+    getMsg :: GetMessage (Query query)
     getMsg tok = do
       tag <- getWord8
       case tag of

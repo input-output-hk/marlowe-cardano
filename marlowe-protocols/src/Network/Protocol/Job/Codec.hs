@@ -8,7 +8,7 @@ module Network.Protocol.Job.Codec where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
-import Network.Protocol.Codec (DeserializeError, decodeGet, encodePut)
+import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Job.Types
 import Network.TypedProtocol.Codec
 import Unsafe.Coerce (unsafeCoerce)
@@ -31,14 +31,9 @@ codecJob
   -> (forall status err result. TokCommand cmd status err result -> result -> Put)
   -> (forall status err result. TokCommand cmd status err result -> Get result)
   -> Codec (Job cmd) DeserializeError m LBS.ByteString
-codecJob putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus putErr getErr putResult getResult =
-  Codec (encodePut . putMsg) $ decodeGet . getMsg
+codecJob putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus putErr getErr putResult getResult = binaryCodec putMsg getMsg
   where
-    putMsg
-      :: forall (pr :: PeerRole) (st :: Job cmd) (st' :: Job cmd)
-       . PeerHasAgency pr st
-      -> Message (Job cmd) st st'
-      -> Put
+    putMsg :: PutMessage (Job cmd)
     putMsg = \case
       ClientAgency TokInit -> \case
         MsgExec cmd -> do
@@ -62,10 +57,7 @@ codecJob putCmd getCmd putCmdId getSomeCmdId getCmdId putStatus getStatus putErr
         MsgPoll   -> putWord8 0x06
         MsgDetach -> putWord8 0x07
 
-    getMsg
-      :: forall (pr :: PeerRole) (st :: Job cmd)
-       . PeerHasAgency pr st
-      -> Get (SomeMessage st)
+    getMsg :: GetMessage (Job cmd)
     getMsg tok = do
       tag <- getWord8
       case tag of
