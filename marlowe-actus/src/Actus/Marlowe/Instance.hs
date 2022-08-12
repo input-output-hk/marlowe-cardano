@@ -26,6 +26,9 @@ import qualified Language.Marlowe.Core.V1.Semantics as Core
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Extended.V1
 import qualified Ledger
+import qualified PlutusTx.Builtins as Builtins
+
+{-# INLINABLE division #-}
 
 type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value
@@ -42,12 +45,23 @@ fromMarloweFixedPoint :: Integer -> Integer
 fromMarloweFixedPoint i = i `quot` marloweFixedPoint
 
 -- In order to have manageble contract sizes, we need to reduce Value as
--- good as possible. Note: this interfers with the semantics - ideally
--- we would have formally verified reduction semantics instead
+-- good as possible.
+--
+-- Note:
+--
+-- * This interfers with the semantics - ideally we would have formally
+--   verified reduction semantics instead
+--
+-- * There are partial implementations, as the evaluation of a Value
+--   is not always possible
+--
+-- * The semantics of division, i.e. rounding changed. In order to
+--   preserve financial rounding, in ACTUS we always have to use `division`
+--   rather than `DivValue`
 instance Num Value where
   x + y = reduceValue $ AddValue x y
   x - y = reduceValue $ SubValue x y
-  x * y = reduceValue $ DivValue (MulValue x y) (Constant marloweFixedPoint)
+  x * y = reduceValue $ division (MulValue x y) (Constant marloweFixedPoint)
   abs a = _max a (NegValue a)
     where
       _max x y = Cond (ValueGT x y) x y
@@ -65,8 +79,33 @@ instance ActusFrac Value where
   _ceiling x = fromMaybe (error "ActusFrac partially implemented") (evalVal x)
 
 instance Fractional Value where
-  x / y = reduceValue $ DivValue (MulValue (Constant marloweFixedPoint) x) y
-  fromRational (x :% y) = DivValue (fromInteger (marloweFixedPoint * x)) (fromInteger y)
+  lhs / rhs = MulValue (division lhs rhs) (Constant marloweFixedPoint)
+  fromRational (x :% y) = MulValue (division (fromInteger x) (fromInteger y)) (Constant marloweFixedPoint)
+
+-- |Division with financial rounding
+division :: Value -> Value -> Value
+division lhs rhs = fromMaybe (error "Value cannot be evaluted") $
+  do
+    n <- evalVal lhs
+    d <- evalVal rhs
+    pure $ Constant (division' n d)
+  where
+    division' :: Integer -> Integer -> Integer
+    division' 0 _ = 0
+    division' _ 0 = 0
+    division' n d =
+      let (q, r) = n `quotRem` d
+          ar = abs r * 2
+          ad = abs d
+       in if ar < ad
+            then q -- reminder < 1/2
+            else
+              if ar > ad
+                then q + signum n * signum d -- reminder > 1/2
+                else
+                  let -- reminder == 1/2
+                      qIsEven = q `Builtins.remainderInteger` 2 == 0
+                   in if qIsEven then q else q + signum n * signum d
 
 evalVal :: Value -> Maybe Integer
 evalVal d = toCore d <&> Core.evalValue env state
