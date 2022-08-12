@@ -125,3 +125,22 @@ queryServerPeer QueryServer{..} =
     Await (ClientAgency (TokPage query)) \case
       MsgRequestNext _ delimiter -> peerNext TokMustReply query $ recvMsgRequestNext delimiter
       MsgDone                    -> Effect $ Done TokDone <$> recvMsgDone
+
+-- | Create a server that does not return results in multiple pages. Requesting
+-- next will always return the same results as the first page.
+liftHandler
+  :: forall query m a
+   . Monad m
+  => (forall delimiter err results. query delimiter err results -> m (a, Either err results))
+  -> QueryServer query m a
+liftHandler handle = QueryServer $ pure $ ServerStInit \query -> do
+  (a, result) <- handle query
+  pure case result of
+    Left err      -> SendMsgReject err a
+    Right results -> sendResults a results
+  where
+    sendResults :: a -> results -> ServerStNext query k delimiter err results m a
+    sendResults a results = SendMsgNextPage results Nothing ServerStPage
+      { recvMsgDone = pure a
+      , recvMsgRequestNext = \_ -> pure $ sendResults a results
+      }
