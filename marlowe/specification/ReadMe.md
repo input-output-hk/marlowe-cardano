@@ -120,7 +120,7 @@ In the above, the `BuiltinByteString` is the hash of the serialized continuation
 
 ### Relationship between Marlowe Validator and Semantics
 
-The arguments are `computeTransaction` must be constructed as follows:
+The arguments of `computeTransaction` must be constructed as follows:
 1. The `txInterval` of `TransactionInput` is derived from the `txInfoValidTimeRange . scriptContextInfo` of the `ScriptContext`, as detailed below.
 2. The `txInputs` of `TransactionInput` is derived from the `MarloweInput` provided as the `Redeemer` and the `txInfoData . scriptContextTxInfo` of the `ScriptContext`, as detailed below.
 3. The `State` is the `marloweState` of the `MarloweData` provided as the `Datum`.
