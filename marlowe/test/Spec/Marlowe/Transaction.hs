@@ -286,6 +286,11 @@ unIf (If o c1 c2) = pure (o, c1, c2)
 unIf _            = throwError "Contract does not start with `If`."
 
 
+unAssert :: Contract -> Testify (Observation, Contract)
+unAssert (Assert o c) = pure (o, c)
+unAssert _            = throwError "Contract does not start with `Assert`."
+
+
 unWhen :: Contract -> Testify ([Case Contract], POSIXTime, Contract)
 unWhen (When cs t c) = pure (cs, t, c)
 unWhen _             = throwError "Contract does not start with `When`."
@@ -312,6 +317,16 @@ requireIfWhen =
     (_, elseTimeout, _) <- unWhen elseContract
     view minimumTime `requireLE` pure elseTimeout
     view latestTime  `requireLT` pure elseTimeout
+
+
+requireAssertWhen :: Testify ()
+requireAssertWhen =
+  do
+    contract <- view preContract
+    (_, contract') <- unAssert contract
+    (_, timeout, _) <- unWhen contract'
+    view minimumTime `requireLE` pure timeout
+    view latestTime  `requireLT` pure timeout
 
 
 requireLT :: Ord a => Testify a -> Testify a -> Testify ()
@@ -539,6 +554,20 @@ extractIf =
           else elseContinuation
 
 
+extractAssert :: Testify ([TransactionWarning], Contract)
+extractAssert =
+  do
+    (observation, continuation) <- unAssert =<< view preContract
+    observation' <- observe observation
+    pure
+      (
+        if observation'
+          then []
+          else [TransactionAssertionFailed]
+      , continuation
+      )
+
+
 checkValues :: AM.Map ValueId Integer -> Testify ()
 checkValues expected =
   (expected `assocMapEq`) <$> view postValues
@@ -581,6 +610,22 @@ ifBranches =
   }
 
 
+assertWarns :: TransactionTest
+assertWarns =
+  TransactionTest
+  {
+    name          = "Asset warns"
+  , generator     = arbitrary
+  , precondition  = requireAssertWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
+  , invariant     = sameState
+  , postcondition = do
+                      (failing, continuation) <- extractAssert
+                      (failing ==) <$> view warnings
+                        >>= (`unless` throwError "Erroneous assertion warning.")
+                      checkContinuation continuation
+  }
+
+
 tests :: TestTree
 tests =
   testGroup "Transactions"
@@ -594,4 +639,5 @@ tests =
     , implicitClose
     , letSets
     , ifBranches
+    , assertWarns
     ]
