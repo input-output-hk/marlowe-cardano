@@ -190,6 +190,23 @@ transactionError = to $ getError . mcOutput
 type Testify a = ReaderT MarloweContext (Either String) a
 
 
+data Invariant =
+    SameState
+  | SameAccounts
+  | SameChoices
+  | SameValues
+  | SameTime
+  | SameContract
+
+
+sameState    = pure SameState    :: [Invariant]
+sameAccounts = pure SameAccounts :: [Invariant]
+sameChoices  = pure SameChoices  :: [Invariant]
+sameValues   = pure SameValues   :: [Invariant]
+sameTime     = pure SameTime     :: [Invariant]
+sameContract = pure SameContract :: [Invariant]
+
+
 same :: Eq a
      => String
      -> Getter MarloweContext a
@@ -200,32 +217,13 @@ same message pre post =
     >>= (`unless` throwError message)
 
 
-sameState :: Testify ()
-sameState = same "State changed." preState postState
-
-
-sameStateDetailed :: Testify ()
-sameStateDetailed = sameAccounts >> sameChoices >> sameValues >> sameTime
-
-
-sameAccounts :: Testify ()
-sameAccounts = same "Accounts changed." preAccounts postAccounts
-
-
-sameChoices :: Testify ()
-sameChoices = same "Choices changed." preChoices postChoices
-
-
-sameValues :: Testify ()
-sameValues = same "Bound values changed." preValues postValues
-
-
-sameTime :: Testify ()
-sameTime = same "Minimum time changed." preTime postTime
-
-
-sameContract :: Testify ()
-sameContract = same "Contract changed." preContract postContract
+checkInvariant :: Invariant -> Testify ()
+checkInvariant SameState    = same "State changed."        preState    postState
+checkInvariant SameAccounts = same "Accounts changed."     preAccounts postAccounts
+checkInvariant SameChoices  = same "Choices changed."      preChoices  postChoices
+checkInvariant SameValues   = same "Bound values changed." preValues   postValues
+checkInvariant SameTime     = same "Minimum time changed." preTime     postTime
+checkInvariant SameContract = same "Contract changed."     preContract postContract
 
 
 require :: MonadError e m
@@ -356,7 +354,7 @@ data TransactionTest =
     name          :: String
   , generator     :: Gen MarloweContext
   , precondition  :: Testify ()
-  , invariant     :: Testify ()
+  , invariant     :: [Invariant]
   , postcondition :: Testify ()
   }
 
@@ -377,7 +375,7 @@ test doShrink TransactionTest{..} =
       in
         (if doShrink then forAllShrink gen shrink else forAll gen)
           . postResolve
-          $ invariant >> postcondition
+          $ mapM_ checkInvariant invariant >> postcondition
 
 
 invalidInterval :: TransactionTest
@@ -387,7 +385,7 @@ invalidInterval =
     name          = "Detect invalid time interval"
   , generator     = makeInvalidInterval <$> arbitrary
   , precondition  = requireInvalidInterval
-  , invariant     = pure ()
+  , invariant     = mempty
   , postcondition = view validTimes >>= hasError . TEIntervalError . InvalidInterval
   }
 
@@ -399,7 +397,7 @@ tooEarly =
     name          = "Detect time interval in past"
   , generator     = arbitrary
   , precondition  = requireInPast
-  , invariant     = pure ()
+  , invariant     = mempty
   , postcondition = IntervalInPastError <$> view preTime <*> view validTimes >>= hasError . TEIntervalError
   }
 
@@ -411,7 +409,7 @@ ambiguousTimeout =
     name          = "Ambiguous interval for timeout"
   , generator     = arbitrary
   , precondition  = requireAmbiguousTimeout >> requireInputs (== 0)
-  , invariant     = pure ()
+  , invariant     = mempty
   , postcondition = hasError TEAmbiguousTimeIntervalError
   }
 
@@ -423,7 +421,7 @@ uselessNoInput =
     name          = "Applying no inputs is useless until timeout"
   , generator     = arbitrary
   , precondition  = requireValidTime >> requireNotTimeout >> requireInputs (== 0)
-  , invariant     = pure ()
+  , invariant     = mempty
   , postcondition = hasError TEUselessTransaction
   }
 
@@ -435,7 +433,7 @@ explicitClose =
     name          = "Closing no accounts is useless"
   , generator     = arbitrary
   , precondition  = requireContract Close >> requireNoAccounts >> requireValidTime >> requireInputs (== 0)
-  , invariant     = pure ()
+  , invariant     = mempty
   , postcondition = hasError TEUselessTransaction
   }
 
@@ -447,7 +445,7 @@ implicitClose =
     name          = "Pay all accounts on close"
   , generator     = arbitrary
   , precondition  = requireContract Close >> requireAccounts >> requireValidTime >> requireInputs (== 0)
-  , invariant     = sameChoices >> sameValues
+  , invariant     = sameChoices <> sameValues
   , postcondition = hasNoAccounts >> noWarnings >> paysAllAccounts
   }
 
