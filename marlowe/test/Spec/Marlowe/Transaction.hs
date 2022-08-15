@@ -281,6 +281,11 @@ unLet (Let i x c) = pure (i, x, c)
 unLet _           = throwError "Contract does not start with `Let`."
 
 
+unIf :: Contract -> Testify (Observation, Contract, Contract)
+unIf (If o c1 c2) = pure (o, c1, c2)
+unIf _            = throwError "Contract does not start with `If`."
+
+
 unWhen :: Contract -> Testify ([Case Contract], POSIXTime, Contract)
 unWhen (When cs t c) = pure (cs, t, c)
 unWhen _             = throwError "Contract does not start with `When`."
@@ -294,6 +299,19 @@ requireLetWhen =
     (_, timeout, _) <- unWhen contract'
     view minimumTime `requireLE` pure timeout
     view latestTime  `requireLT` pure timeout
+
+
+requireIfWhen :: Testify ()
+requireIfWhen =
+  do
+    contract <- view preContract
+    (_, thenContract, elseContract) <- unIf contract
+    (_, thenTimeout, _) <- unWhen thenContract
+    view minimumTime `requireLE` pure thenTimeout
+    view latestTime  `requireLT` pure thenTimeout
+    (_, elseTimeout, _) <- unWhen elseContract
+    view minimumTime `requireLE` pure elseTimeout
+    view latestTime  `requireLT` pure elseTimeout
 
 
 requireLT :: Ord a => Testify a -> Testify a -> Testify ()
@@ -496,6 +514,43 @@ implicitClose =
   }
 
 
+extractLet :: Testify ((ValueId, Integer), [TransactionWarning], Contract)
+extractLet =
+  do
+    (variable, value, continuation) <- unLet =<< view preContract
+    values <- view preValues
+    value' <- evaluate value
+    pure
+      (
+        (variable, value')
+      , maybe [] (\x -> [TransactionShadowing variable x value']) $ assocMapLookup variable values
+      , continuation
+      )
+
+
+extractIf :: Testify Contract
+extractIf =
+  do
+    (observation, thenContinuation, elseContinuation) <- unIf =<< view preContract
+    observation' <- observe observation
+    pure
+      $ if observation'
+          then thenContinuation
+          else elseContinuation
+
+
+checkValues :: AM.Map ValueId Integer -> Testify ()
+checkValues expected =
+  (expected `assocMapEq`) <$> view postValues
+    >>= (`unless` throwError "Mismatch in expected bound values.")
+
+
+checkContinuation :: Contract -> Testify ()
+checkContinuation expected =
+  (expected ==) <$> view postContract
+    >>= (`unless` throwError "Mismatch in expected contract.")
+
+
 letSets :: TransactionTest
 letSets =
   TransactionTest
@@ -505,18 +560,24 @@ letSets =
   , precondition  = requireLetWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameAccounts <> sameChoices
   , postcondition = do
-                      (variable, value, _) <- unLet =<< view preContract
-                      original <- view preValues
-                      newValue <- evaluate value
-                      let
-                        oldValue = fromMaybe 0 $ assocMapLookup variable original
-                        expected = assocMapInsert variable newValue original
-                      actual <- view postValues
-                      expected `assocMapEq` actual
-                        `unless` throwError "Mismatch in bound values."
-                      shadowed <- ([TransactionShadowing variable oldValue newValue] ==) <$> view warnings
-                      (assocMapMember variable original == shadowed)
-                        `unless` throwError "Erroneous shadowing warning."
+                      ((variable, value), shadowing, continuation) <- extractLet
+                      expected <- assocMapInsert variable value <$> view preValues
+                      checkValues expected
+                      (shadowing ==) <$> view warnings
+                        >>= (`unless` throwError "Erroneous shadowing warning.")
+                      checkContinuation continuation
+  }
+
+
+ifBranches :: TransactionTest
+ifBranches =
+  TransactionTest
+  {
+    name          = "If branches"
+  , generator     = arbitrary
+  , precondition  = requireIfWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
+  , invariant     = sameState
+  , postcondition = checkContinuation =<< extractIf
   }
 
 
@@ -532,4 +593,5 @@ tests =
     , explicitClose
     , implicitClose
     , letSets
+    , ifBranches
     ]
