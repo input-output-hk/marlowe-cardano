@@ -5,6 +5,8 @@ module Spec.Marlowe.Util.AssocMap (
 , assocMapInsert
 , assocMapSort
 , assocMapValid
+, assocMapMember
+, assocMapLookup
 ) where
 
 
@@ -49,3 +51,11 @@ assocMapAdd k v =
     . sortBy (compare `on` fst)
     . ((k, v) :)
     . AM.toList
+
+
+assocMapMember :: Eq k => k -> AM.Map k v -> Bool
+assocMapMember k = any ((== k) . fst) . AM.toList
+
+
+assocMapLookup :: Eq k => k -> AM.Map k v -> Maybe v
+assocMapLookup k = lookup k . AM.toList

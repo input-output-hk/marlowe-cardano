@@ -22,6 +22,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Function (on)
 import Data.List (sort)
+import Data.Maybe (fromMaybe)
 import Data.Tuple (swap)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -29,6 +30,7 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
 import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Arbitrary
 import Spec.Marlowe.Orphans ()
+import Spec.Marlowe.Util.AssocMap
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
@@ -102,6 +104,17 @@ makeInvalidInterval :: MarloweContext -> MarloweContext
 makeInvalidInterval mc@MarloweContext{mcInput=mcInput@TransactionInput{txInterval=i}} =
   updateOutput
     $ mc {mcInput = mcInput {txInterval = swap i}}
+
+
+environment :: Getter MarloweContext Environment
+environment =
+  to
+    $ \MarloweContext{..} ->
+      Environment
+        (
+          maximum [minTime mcState, fst $ txInterval mcInput]
+        , snd $ txInterval mcInput
+        )
 
 
 validTimes :: Getter MarloweContext TimeInterval
@@ -190,6 +203,14 @@ transactionError = to $ getError . mcOutput
 type Testify a = ReaderT MarloweContext (Either String) a
 
 
+evaluate :: Value Observation -> Testify Integer
+evaluate value = evalValue <$> view environment <*> view preState <*> pure value
+
+
+observe :: Observation -> Testify Bool
+observe observation = evalObservation <$> view environment <*> view preState <*> pure observation
+
+
 data Invariant =
     SameState
   | SameAccounts
@@ -248,6 +269,31 @@ requireAccounts = view preAccounts >>= require "Accounts absent." (not . AM.null
 
 requireContract :: Contract -> Testify ()
 requireContract contract = view preContract >>= require "Contract does not match." (== contract)
+
+
+unPay :: Contract -> Testify (AccountId, Payee, Token, Value Observation, Contract)
+unPay (Pay a p t n c) = pure (a, p, t, n, c)
+unPay _               = throwError "Contract does not start with `Pay`."
+
+
+unLet :: Contract -> Testify (ValueId, Value Observation, Contract)
+unLet (Let i x c) = pure (i, x, c)
+unLet _           = throwError "Contract does not start with `Let`."
+
+
+unWhen :: Contract -> Testify ([Case Contract], POSIXTime, Contract)
+unWhen (When cs t c) = pure (cs, t, c)
+unWhen _             = throwError "Contract does not start with `When`."
+
+
+requireLetWhen :: Testify ()
+requireLetWhen =
+  do
+    contract <- view preContract
+    (_, _, contract') <- unLet contract
+    (_, timeout, _) <- unWhen contract'
+    view minimumTime `requireLE` pure timeout
+    view latestTime  `requireLT` pure timeout
 
 
 requireLT :: Ord a => Testify a -> Testify a -> Testify ()
@@ -450,6 +496,30 @@ implicitClose =
   }
 
 
+letSets :: TransactionTest
+letSets =
+  TransactionTest
+  {
+    name          = "Let sets variable"
+  , generator     = arbitrary
+  , precondition  = requireLetWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
+  , invariant     = sameAccounts <> sameChoices
+  , postcondition = do
+                      (variable, value, _) <- unLet =<< view preContract
+                      original <- view preValues
+                      newValue <- evaluate value
+                      let
+                        oldValue = fromMaybe 0 $ assocMapLookup variable original
+                        expected = assocMapInsert variable newValue original
+                      actual <- view postValues
+                      expected `assocMapEq` actual
+                        `unless` throwError "Mismatch in bound values."
+                      shadowed <- ([TransactionShadowing variable oldValue newValue] ==) <$> view warnings
+                      (assocMapMember variable original == shadowed)
+                        `unless` throwError "Erroneous shadowing warning."
+  }
+
+
 tests :: TestTree
 tests =
   testGroup "Transactions"
@@ -461,4 +531,5 @@ tests =
     , uselessNoInput
     , explicitClose
     , implicitClose
+    , letSets
     ]
