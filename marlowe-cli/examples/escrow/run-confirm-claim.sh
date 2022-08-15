@@ -24,12 +24,12 @@ echo "Signing and verification keys must be provided below for the bystander and
 
 echo "## Preliminaries"
 
+: ${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}
+: ${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}
+
 echo "### Select Network"
 
-if [[ -z "$MAGIC" ]]
-then
-  MAGIC=1567
-fi
+: ${MAGIC:="1097911063"}
 echo "MAGIC=$MAGIC"
 
 SLOT_LENGTH=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
@@ -71,6 +71,8 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 50000000                       \
+                        --faucet-address "$FAUCET_ADDRESS"        \
+                        --required-signer "$FAUCET_SKEY_FILE"     \
                         "$SELLER_ADDRESS"
 
 echo "#### The Buyer"
@@ -97,6 +99,8 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 350000000                      \
+                        --faucet-address "$FAUCET_ADDRESS"        \
+                        --required-signer "$FAUCET_SKEY_FILE"     \
                         "$BUYER_ADDRESS"
 
 echo "#### The Mediator"
@@ -123,6 +127,8 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 120000000                      \
+                        --faucet-address "$FAUCET_ADDRESS"        \
+                        --required-signer "$FAUCET_SKEY_FILE"     \
                         "$MEDIATOR_ADDRESS"
 
 echo "### Role Tokens"
@@ -132,7 +138,7 @@ echo "The mediator mints the role tokens."
 MINT_EXPIRES=$((TIP + 1000000))
 
 ROLE_CURRENCY=$(
-marlowe-cli util mint --testnet-magic "$MAGIC" \
+marlowe-cli util mint --testnet-magic "$MAGIC"                      \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"     \
                       --required-signer "$MEDIATOR_PAYMENT_SKEY"    \
                       --change-address  "$MEDIATOR_ADDRESS"         \
@@ -193,12 +199,12 @@ echo "### Available UTxOs"
 
 echo "The mediator $MEDIATOR_NAME is the minimum-ADA provider and has the address "'`'"$MEDIATOR_ADDRESS"'`'" and role token named "'`'"$MEDIATOR_ROLE"'`'". They have the following UTxOs in their wallet:"
 
-marlowe-cli util clean --testnet-magic "$MAGIC"                  \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --required-signer "$MEDIATOR_PAYMENT_SKEY"\
-                       --change-address "$MEDIATOR_ADDRESS"      \
-                       --out-file /dev/null                      \
-                       --submit=600                              \
+marlowe-cli util clean --testnet-magic "$MAGIC"                   \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                       --required-signer "$MEDIATOR_PAYMENT_SKEY" \
+                       --change-address "$MEDIATOR_ADDRESS"       \
+                       --out-file /dev/null                       \
+                       --submit=600                               \
 > /dev/null
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$MEDIATOR_ADDRESS"
 
@@ -223,12 +229,12 @@ echo "$MEDIATOR_NAME will spend the UTxOs "'`'"$TX_0_MEDIATOR_ADA"'`'" and "'`'"
 
 echo "The seller $SELLER_NAME has the address "'`'"$SELLER_ADDRESS"'`'" and role token named "'`'"$SELLER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
-marlowe-cli util clean --testnet-magic "$MAGIC"                  \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --required-signer "$SELLER_PAYMENT_SKEY"  \
-                       --change-address "$SELLER_ADDRESS"        \
-                       --out-file /dev/null                      \
-                       --submit=600                              \
+marlowe-cli util clean --testnet-magic "$MAGIC"                   \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                       --required-signer "$SELLER_PAYMENT_SKEY"   \
+                       --change-address "$SELLER_ADDRESS"         \
+                       --out-file /dev/null                       \
+                       --submit=600                               \
 > /dev/null
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$SELLER_ADDRESS"
 
@@ -253,12 +259,12 @@ echo "$SELLER_NAME will spend the UTxOs "'`'"$TX_0_SELLER_ADA"'`'" and "'`'"$TX_
 
 echo "The buyer $BUYER_NAME has the address "'`'"$BUYER_ADDRESS"'`'" and role token named "'`'"$BUYER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
-marlowe-cli util clean --testnet-magic "$MAGIC"                  \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --required-signer "$BUYER_PAYMENT_SKEY"   \
-                       --change-address "$BUYER_ADDRESS"         \
-                       --out-file /dev/null                      \
-                       --submit=600                              \
+marlowe-cli util clean --testnet-magic "$MAGIC"                   \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                       --required-signer "$BUYER_PAYMENT_SKEY"    \
+                       --change-address "$BUYER_ADDRESS"          \
+                       --out-file /dev/null                       \
+                       --submit=600                               \
 > /dev/null
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BUYER_ADDRESS"
 
@@ -331,13 +337,13 @@ marlowe-cli run initialize --testnet-magic "$MAGIC"                  \
 
 echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."
 
-CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
+CONTRACT_ADDRESS=$(jq -r '.tx.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
 echo "Because this is a role-based contract, we compute the address of the script for roles."
 
-ROLE_ADDRESS=$(jq -r '.rolesValidator.address' tx-1.marlowe)
+ROLE_ADDRESS=$(jq -r '.tx.rolesValidator.address' tx-1.marlowe)
 
 echo "The role address is "'`'"$ROLE_ADDRESS"'`.'
 
@@ -452,7 +458,7 @@ echo "First we compute the input for the contract to transition forward."
 
 marlowe-cli run prepare --marlowe-file tx-3.marlowe            \
                         --choice-name "Dispute problem"        \
-                        --choice-party "Role=$SELLER_ROLE" \
+                        --choice-party "Role=$SELLER_ROLE"     \
                         --choice-number 0                      \
                         --invalid-before "$NOW"                \
                         --invalid-hereafter "$((NOW+4*HOUR))"  \
@@ -614,7 +620,7 @@ marlowe-cli transaction simple --testnet-magic "$MAGIC"                         
                                --out-file /dev/null                                \
                                --submit 600
 
-marlowe-cli util mint --testnet-magic "$MAGIC" \
+marlowe-cli util mint --testnet-magic "$MAGIC"                      \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"     \
                       --required-signer "$MEDIATOR_PAYMENT_SKEY"    \
                       --change-address  "$MEDIATOR_ADDRESS"         \
