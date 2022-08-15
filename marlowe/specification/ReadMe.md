@@ -18,7 +18,7 @@ Marlowe contracts identify each participant by either a *public-key hash (PKH)* 
 The execution of a Marlowe contract proceeds as a linear sequence of applications of inputs at the contract's script address.
 1. Role tokens are typically minted prior to or within the creation transaction of the contract, though this is not enforced on-chain.
 2. The creation transaction for the contract stores the state of the contract in the datum at the contract's script address.
-3. Each application of input to the contract updates the state/datum at that same address.
+3. Each transaction that interacts with the contract updates the state/datum at that same address.
 4. When a contract closes, there is no output to the contract's script address.
 5. If the contract pays funds to a role during application of inputs, those funds are sent to the address of the Marlowe payout-validator script.
 
