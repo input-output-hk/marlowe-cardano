@@ -52,6 +52,7 @@ library
     aeson <2,
     base16-aeson,
     base -any,
+    binary -any,
     bytestring,
     containers -any,
     deriving-aeson -any,
