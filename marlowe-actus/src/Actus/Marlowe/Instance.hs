@@ -128,7 +128,7 @@ reduceContract (When cs t c) = When (map f cs) t (reduceContract c)
   where
     f (Case a x) = Case a (reduceContract x)
 reduceContract i@(If obs a b) = case evalObs obs of
-  Just c  -> if c then reduceContract a else reduceContract b
+  Just c  -> reduceContract (if c then a else b)
   Nothing -> i
 reduceContract (Let v o c) = Let v (reduceValue o) (reduceContract c)
 reduceContract (Assert o c) = Assert (reduceObs o) (reduceContract c)
