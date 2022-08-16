@@ -11,6 +11,14 @@ module Spec.Marlowe.Semantics.Arbitrary (
 , IsValid(..)
 , arbitraryChoiceName
 , arbitraryFibonacci
+, defaultContractWeights
+, closeContractWeights
+, payContractWeights
+, ifContractWeights
+, whenContractWeights
+, letContractWeights
+, assertContractWeights
+, arbitraryContractWeighted
 ) where
 
 
@@ -548,7 +556,7 @@ instance Arbitrary Action where
     frequency
       [
         (3, Deposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary)
-      , (6, Choice <$> arbitrary <*> arbitrary)
+      , (6, Choice <$> arbitrary <*> arbitrary `suchThat` ((< 5) . length))
       , (1, Notify <$> arbitrary)
       ]
   shrink (Deposit a p t x) = [Deposit a' p t x | a' <- shrink a] ++ [Deposit a p' t x | p' <- shrink p] ++ [Deposit a p t' x | t' <- shrink t] ++ [Deposit a p t x' | x' <- shrink x]
@@ -603,6 +611,10 @@ instance Arbitrary (Case Contract) where
 instance ContextuallyArbitrary (Case Contract) where
   arbitrary' context = Case <$> arbitrary' context <*> arbitrary' context
 
+arbitraryCaseWeighted :: [(Int, Int, Int, Int, Int, Int)] -> Context -> Gen (Case Contract)
+arbitraryCaseWeighted w context =
+  Case <$> arbitrary' context <*> arbitraryContractWeighted w context
+
 
 instance Arbitrary Contract where
   arbitrary = arbitrary' =<< arbitrary
@@ -614,20 +626,42 @@ instance Arbitrary Contract where
   shrink x = [x]
 
 
+arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)] -> Context -> Gen Contract
+arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) context =
+  frequency
+    [
+      (wClose , pure Close)
+    , (wPay   , Pay <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitraryContractWeighted w context)
+    , (wIf    , If <$> arbitrary' context <*> arbitraryContractWeighted w context <*> arbitraryContractWeighted w context)
+    , (wWhen  , When <$> listOf (arbitraryCaseWeighted w context) `suchThat` ((<= length w) . length) <*> arbitrary' context <*> arbitraryContractWeighted w context)
+    , (wLet   , Let <$> arbitrary' context <*> arbitrary' context <*> arbitraryContractWeighted w context)
+    , (wAssert, Assert <$> arbitrary' context <*> arbitraryContractWeighted w context)
+    ]
+arbitraryContractWeighted [] _ = pure Close
+
+defaultContractWeights :: (Int, Int, Int, Int, Int, Int)
+defaultContractWeights = (35, 20, 10, 15, 20, 5)
+
+closeContractWeights :: (Int, Int, Int, Int, Int, Int)
+closeContractWeights = (1, 0, 0, 0, 0, 0)
+
+payContractWeights :: (Int, Int, Int, Int, Int, Int)
+payContractWeights = (0, 1, 0, 0, 0, 0)
+
+ifContractWeights :: (Int, Int, Int, Int, Int, Int)
+ifContractWeights = (0, 0, 1, 0, 0, 0)
+
+whenContractWeights :: (Int, Int, Int, Int, Int, Int)
+whenContractWeights = (0, 0, 0, 1, 0, 0)
+
+letContractWeights :: (Int, Int, Int, Int, Int, Int)
+letContractWeights = (0, 0, 0, 0, 1, 0)
+
+assertContractWeights :: (Int, Int, Int, Int, Int, Int)
+assertContractWeights = (0, 0, 0, 0, 0, 1)
+
 arbitraryContractSized :: Int -> Context -> Gen Contract
-arbitraryContractSized n context =
-  let
-    n' = maximum [1, n - 1]
-  in
-    frequency
-      [
-        (35, pure Close)
-      , (20, Pay <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitraryContractSized n' context)
-      , (10, If <$> arbitrary' context <*> arbitrary' context <*> arbitraryContractSized n' context)
-      , (15, When <$> listOf (arbitrary' context) `suchThat` ((< n) . length) <*> arbitrary' context <*> arbitraryContractSized n' context)
-      , (20, Let <$> arbitrary' context <*> arbitrary' context <*> arbitraryContractSized n' context)
-      , ( 5, Assert <$> arbitrary' context <*> arbitraryContractSized n' context)
-      ]
+arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContractWeights)
 
 instance ContextuallyArbitrary Contract where
   arbitrary' = arbitraryContractSized 5

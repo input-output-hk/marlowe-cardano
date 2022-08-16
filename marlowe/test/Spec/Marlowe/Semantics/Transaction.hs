@@ -20,6 +20,7 @@ import Control.Arrow ((&&&))
 import Control.Lens.Getter
 import Control.Monad.Except
 import Control.Monad.Reader
+import Data.Default (Default (..))
 import Data.Function (on)
 import Data.List (sort)
 import Data.Maybe (fromMaybe)
@@ -90,6 +91,18 @@ instance ContextuallyArbitrary MarloweContext where
       mcInput    <- arbitrary' context
       mcState    <- arbitrary' context
       mcContract <- arbitrary' context
+      let
+        mcOutput = computeTransaction mcInput mcState mcContract
+      pure MarloweContext{..}
+
+
+arbitraryMarloweContext :: [(Int, Int, Int, Int, Int, Int)] -> Gen MarloweContext
+arbitraryMarloweContext w =
+    do
+      context    <- arbitrary
+      mcInput    <- arbitrary' context
+      mcState    <- arbitrary' context
+      mcContract <- arbitraryContractWeighted w context
       let
         mcOutput = computeTransaction mcInput mcState mcContract
       pure MarloweContext{..}
@@ -437,6 +450,17 @@ data TransactionTest =
   , postcondition :: Testify ()
   }
 
+instance Default TransactionTest where
+  def =
+    TransactionTest
+    {
+      name          = mempty
+    , generator     = arbitrary
+    , precondition  = pure ()
+    , invariant     = mempty
+    , postcondition = pure ()
+    }
+
 
 test :: Bool -> TransactionTest -> TestTree
 test doShrink TransactionTest{..} =
@@ -459,58 +483,51 @@ test doShrink TransactionTest{..} =
 
 invalidInterval :: TransactionTest
 invalidInterval =
-  TransactionTest
+  def
   {
     name          = "Detect invalid time interval"
   , generator     = makeInvalidInterval <$> arbitrary
   , precondition  = requireInvalidInterval
-  , invariant     = mempty
   , postcondition = view validTimes >>= hasError . TEIntervalError . InvalidInterval
   }
 
 
 tooEarly :: TransactionTest
 tooEarly =
-  TransactionTest
+  def
   {
     name          = "Detect time interval in past"
-  , generator     = arbitrary
   , precondition  = requireInPast
-  , invariant     = mempty
   , postcondition = IntervalInPastError <$> view preTime <*> view validTimes >>= hasError . TEIntervalError
   }
 
 
 ambiguousTimeout :: TransactionTest
 ambiguousTimeout =
-  TransactionTest
+  def
   {
     name          = "Ambiguous interval for timeout"
-  , generator     = arbitrary
   , precondition  = requireAmbiguousTimeout >> requireInputs (== 0)
-  , invariant     = mempty
   , postcondition = hasError TEAmbiguousTimeIntervalError
   }
 
 
 uselessNoInput :: TransactionTest
 uselessNoInput =
-  TransactionTest
+  def
   {
     name          = "Applying no inputs is useless until timeout"
-  , generator     = arbitrary
   , precondition  = requireValidTime >> requireNotTimeout >> requireInputs (== 0)
-  , invariant     = mempty
   , postcondition = hasError TEUselessTransaction
   }
 
 
 explicitClose :: TransactionTest
 explicitClose =
-  TransactionTest
+  def
   {
     name          = "Closing no accounts is useless"
-  , generator     = arbitrary
+  , generator     = arbitraryMarloweContext [closeContractWeights]
   , precondition  = requireContract Close >> requireNoAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = mempty
   , postcondition = hasError TEUselessTransaction
@@ -519,13 +536,28 @@ explicitClose =
 
 implicitClose :: TransactionTest
 implicitClose =
-  TransactionTest
+  def
   {
     name          = "Pay all accounts on close"
-  , generator     = arbitrary
+  , generator     = arbitraryMarloweContext [closeContractWeights]
   , precondition  = requireContract Close >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameChoices <> sameValues
   , postcondition = hasNoAccounts >> noWarnings >> paysAllAccounts
+  }
+
+
+noMatch :: TransactionTest
+noMatch =
+  def
+  {
+    name          = "No matching input"
+  , precondition  = do
+                      requireAccounts
+                      requireValidTime
+                      requireInputs (> 0)
+                      input <- head <$> view inputs
+                      pure ()
+  , postcondition = hasError TEApplyNoMatchError
   }
 
 
@@ -582,10 +614,10 @@ checkContinuation expected =
 
 letSets :: TransactionTest
 letSets =
-  TransactionTest
+  def
   {
     name          = "Let sets variable"
-  , generator     = arbitrary
+  , generator     = arbitraryMarloweContext [letContractWeights, whenContractWeights, defaultContractWeights]
   , precondition  = requireLetWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameAccounts <> sameChoices
   , postcondition = do
@@ -600,10 +632,10 @@ letSets =
 
 ifBranches :: TransactionTest
 ifBranches =
-  TransactionTest
+  def
   {
     name          = "If branches"
-  , generator     = arbitrary
+  , generator     = arbitraryMarloweContext [ifContractWeights, whenContractWeights, defaultContractWeights]
   , precondition  = requireIfWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameState
   , postcondition = checkContinuation =<< extractIf
@@ -612,10 +644,10 @@ ifBranches =
 
 assertWarns :: TransactionTest
 assertWarns =
-  TransactionTest
+  def
   {
     name          = "Asset warns"
-  , generator     = arbitrary
+  , generator     = arbitraryMarloweContext [assertContractWeights, whenContractWeights, defaultContractWeights]
   , precondition  = requireAssertWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameState
   , postcondition = do
@@ -637,6 +669,7 @@ tests =
     , uselessNoInput
     , explicitClose
     , implicitClose
+--  , noMatch
     , letSets
     , ifBranches
     , assertWarns
