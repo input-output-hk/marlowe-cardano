@@ -141,6 +141,15 @@ tests =
     ]
 
 
+forAll' :: Arbitrary a
+        => Show a
+        => Testable prop
+        => Gen a
+        -> (a -> prop)
+        -> Property
+forAll' x y = forAllShrink x shrink y
+
+
 checkFixInterval :: Bool -> Bool -> Property
 checkFixInterval invalid inPast =
   property $ do
@@ -149,7 +158,7 @@ checkFixInterval invalid inPast =
         end   <- arbitrary `suchThat` (\t -> (t < minTime state) == inPast)
         start <- arbitrary `suchThat` (\t -> (t > end) == invalid && (t < minTime state) == inPast)
         pure ((start, end), state)
-  forAll gen $ \(interval, state) ->
+  forAll' gen $ \(interval, state) ->
     case fixInterval interval state of
       IntervalTrimmed environment' state'     -> not invalid && not inPast
                                                    && timeInterval environment' == interval
@@ -158,7 +167,8 @@ checkFixInterval invalid inPast =
       IntervalError (IntervalInPastError _ _) -> not invalid && inPast
 
 
-checkValue :: Show a
+checkValue :: Arbitrary a
+           => Show a
            => (Environment -> State -> Gen a)
            -> ((Value Observation -> Integer) -> (Observation -> Bool) -> Environment -> State -> a -> Bool)
            -> Property
@@ -169,7 +179,7 @@ checkValue gen f =
         state <- arbitrary
         x <- gen environment state
         pure (environment, state, x)
-  forAll gen' $ \(environment, state, x) ->
+  forAll' gen' $ \(environment, state, x) ->
     f (evalValue environment state) (evalObservation environment state) environment state x
 
 
@@ -424,7 +434,7 @@ checkApplyActionMismatch = property $ do
         x <- chooseInt (0, length inputs - 1)
         y <- suchThat (chooseInt (0, length actions - 1)) (/= x)
         pure (inputs !! x, actions !! y)
-  forAll gen $ \(x, y) ->
+  forAll' gen $ \(x, y) ->
     case applyAction undefined undefined x y of
       NotAppliedAction -> True
       _                -> False
@@ -466,7 +476,7 @@ checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property 
         let amountEvaluated = evalValue environment state amount
         amount' <- if amountMatches' then pure amountEvaluated else suchThat arbitrary (/= amountEvaluated)
         pure (environment, state, account', party', token', amount', Deposit account party token amount, accountMatches' && partyMatches' && tokenMatches' && amountMatches')
-  forAll gen $ \(environment, state, account, party, token, amount, action, match) ->
+  forAll' gen $ \(environment, state, account, party, token, amount, action, match) ->
     let
       amount' = maybe amount (+ amount) . AM.lookup (account, token) $ accounts state
       newState = state {accounts = AM.insert (account, token) amount' $ accounts state}
@@ -489,7 +499,7 @@ checkIChoice choiceMatches choiceInBounds = property $ do
         choiceId' <- if choiceMatches' then pure choiceId else suchThat arbitrary (/= choiceId)
         choiceNum <- if choiceInBounds' then choiceInBoundsIfNonempty bounds else choiceNotInBounds bounds
         pure (environment, state, choiceId', choiceNum, Choice choiceId bounds, choiceMatches' && choiceInBounds')
-  forAll gen $ \(environment, state, choiceId, choiceNum, action, match) ->
+  forAll' gen $ \(environment, state, choiceId, choiceNum, action, match) ->
     let
       newState = state {choices = AM.insert choiceId choiceNum $ choices state}
     in
@@ -506,7 +516,7 @@ checkINotify = property $ do
         state <- arbitrary
         x <- arbitrary
         pure (environment, state, x)
-  forAll gen $ \(environment, state, x) ->
+  forAll' gen $ \(environment, state, x) ->
     let
       result = evalObservation environment state x
     in
@@ -519,7 +529,7 @@ checkINotify = property $ do
 checkRefundOne :: (Int -> Bool) -> Property
 checkRefundOne f =
   property
-    $ forAll (arbitrary `suchThat` (f . length . AM.toList)) $ \accounts' ->
+    $ forAll' (arbitrary `suchThat` (f . length . AM.toList)) $ \accounts' ->
       case (AM.null accounts', refundOne accounts') of
          (True, Nothing                          ) -> True
          (True, _                                ) -> False
@@ -536,7 +546,7 @@ checkMoneyInAccount =
         do
           context <- arbitrary
           (,) <$> semiArbitrary context <*> semiArbitrary context
-  forAll gen $ \((account, token), accounts') ->
+  forAll' gen $ \((account, token), accounts') ->
     fromMaybe 0 ((account, token) `AM.lookup` accounts') == moneyInAccount account token accounts'
 
 
@@ -547,7 +557,7 @@ checkUpdateMoneyInAccount =
         do
           context <- arbitrary
           (,,) <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
-  forAll gen $ \((account, token), amount, accounts') ->
+  forAll' gen $ \((account, token), amount, accounts') ->
     let
       newAccounts = AM.filter (> 0) $ assocMapInsert (account, token) amount accounts'
     in
@@ -561,7 +571,7 @@ checkAddMoneyToAccount =
         do
           context <- arbitrary
           (,,) <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
-  forAll gen $ \((account, token), amount, accounts') ->
+  forAll' gen $ \((account, token), amount, accounts') ->
     let
       newAccounts = assocMapAdd (account, token) amount accounts'
       accounts'' = addMoneyToAccount account token amount accounts'
@@ -578,7 +588,7 @@ checkGiveMoney =
         do
           context <- arbitrary
           (,,,) <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
-  forAll gen $ \((account, token), amount, payee, accounts') ->
+  forAll' gen $ \((account, token), amount, payee, accounts') ->
     let
       newAccounts =
         case payee of
@@ -601,7 +611,7 @@ checkGiveMoney =
 checkReduceContractStepClose :: Property
 checkReduceContractStepClose =
   property $ do
-  forAll ((,) <$> arbitrary <*> arbitrary) $ \(environment, state) ->
+  forAll' ((,) <$> arbitrary <*> arbitrary) $ \(environment, state) ->
     let
       checkPayment (Payment payee (Party payee') money) state' Close =
         payee == payee'
@@ -631,7 +641,7 @@ checkReduceContractStepPay =
           <*> semiArbitrary context
           <*> semiArbitrary context
           <*> semiArbitrary context
-  forAll gen $ \(environment, state, account, payee, token, value, contract) ->
+  forAll' gen $ \(environment, state, account, payee, token, value, contract) ->
     let
       prior = fromMaybe 0 $ AM.lookup (account, token) (accounts state)
       request = evalValue environment state value
@@ -686,7 +696,7 @@ checkReduceContractStepPay =
 checkReduceContractStepIf :: Property
 checkReduceContractStepIf =
   property $ do
-  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, thenContract, elseContract) ->
+  forAll' ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, thenContract, elseContract) ->
     let
       passed = evalObservation environment state observation
     in
@@ -698,7 +708,7 @@ checkReduceContractStepIf =
 checkReduceContractStepWhen :: Property
 checkReduceContractStepWhen =
   property $ do
-  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> listOf arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, cases, timeout, contract) ->
+  forAll' ((,,,,) <$> arbitrary <*> arbitrary <*> listOf arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, cases, timeout, contract) ->
     let
       before = snd (timeInterval environment) < timeout
       afterwards = fst (timeInterval environment) >= timeout
@@ -712,7 +722,7 @@ checkReduceContractStepWhen =
 checkReduceContractStepLet :: Property
 checkReduceContractStepLet =
   property $ do
-  forAll ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, valueId, value, contract) ->
+  forAll' ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, valueId, value, contract) ->
     let
       x = evalValue environment state value
       shadow = valueId `AM.member` boundValues state
@@ -731,7 +741,7 @@ checkReduceContractStepLet =
 checkReduceContractStepAssert :: Property
 checkReduceContractStepAssert =
   property $ do
-  forAll ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, contract) ->
+  forAll' ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, contract) ->
     let
       passed = evalObservation environment state observation
     in
@@ -744,7 +754,7 @@ checkReduceContractStepAssert =
 checkReduceContractUntilQuiescent :: Property
 checkReduceContractUntilQuiescent =
   property $ do
-    forAll ((,,) <$> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, contract) ->
+    forAll' ((,,) <$> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, contract) ->
       case reduceContractUntilQuiescent environment state contract of
         ContractQuiescent _ _ _ _ Close              -> True
         ContractQuiescent _ _ _ _ (When _ timeout _) -> snd (timeInterval environment) < timeout
@@ -769,7 +779,7 @@ checkGetContinuation =
            input <- elements [NormalInput content, MerkleizedInput content contractHash' contract']
            case' <- elements [Case action contract, MerkleizedCase action contractHash]
            pure (input, case', contract, contractHash == contractHash')
-    forAll gen $ \(input, case', contract, hashesMatch) ->
+    forAll' gen $ \(input, case', contract, hashesMatch) ->
       _ALLOW_FAILED_CONTINUATION_ || case (input, case', getContinuation input case') of
         (NormalInput{}    , Case{}          , contract') -> Just contract == contract'
         (MerkleizedInput{}, MerkleizedCase{}, contract') -> (Just contract == contract') == hashesMatch
@@ -780,7 +790,7 @@ checkGetContinuation =
 checkApplyInput :: Property
 checkApplyInput =
   property $ do
-    forAll ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, input, contract) ->
+    forAll' ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, input, contract) ->
       case (contract, applyInput environment state input contract) of
         (When cases _ _, result           ) -> result == applyCases environment state input cases
         (_             , ApplyNoMatchError) -> True

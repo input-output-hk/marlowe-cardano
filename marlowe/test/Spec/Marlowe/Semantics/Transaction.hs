@@ -674,7 +674,7 @@ assertWarns =
 tests :: TestTree
 tests =
   testGroup "Compute Transaction"
-    $ fmap (test False)
+    $ fmap (test True)
     [
       invalidInterval
     , tooEarly

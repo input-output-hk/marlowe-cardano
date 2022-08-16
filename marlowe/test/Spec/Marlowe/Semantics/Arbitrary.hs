@@ -24,14 +24,14 @@ module Spec.Marlowe.Semantics.Arbitrary (
 
 import Control.Monad (replicateM)
 import Data.Function (on)
-import Data.List (nubBy)
+import Data.List (nub, nubBy)
 import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (..), Case (..), ChoiceId (..),
                                                  ChoiceName, ChosenNum, Contract (..), Environment (..), Input (..),
                                                  InputContent (..), Observation (..), Party (..), Payee (..),
                                                  State (..), TimeInterval, Token (..), Value (..), ValueId (..))
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, listOf, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, listOf, shrinkList, suchThat)
 
 import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
@@ -98,7 +98,7 @@ instance Arbitrary Context where
     [context {parties = parties'} | parties' <- shrink parties]
       ++ [context {tokens = tokens'} | tokens' <- shrink tokens]
       ++ [context {amounts = amounts'} | amounts' <- shrink amounts]
---    ++ [context {choiceNames = choiceNames'} | choiceNames' <- shrink choiceNames]  -- TODO: Implement `shrink`.
+      ++ [context {choiceNames = choiceNames'} | choiceNames' <- shrinkList shrinkChoiceName choiceNames]
       ++ [context {chosenNums = chosenNums'} | chosenNums' <- shrink chosenNums]
       ++ [context {valueIds = valueIds'} | valueIds' <- shrink valueIds]
       ++ [context {values = values'} | values' <- shrink values]
@@ -116,8 +116,8 @@ class Arbitrary a => SemiArbitrary a where
      case fromContext context of
        [] -> arbitrary
        xs -> perturb arbitrary xs
-  shrink' :: [a] -> [[a]]
-  shrink' = shrink
+  semiShrink :: [a] -> [[a]]
+  semiShrink = shrink
   fromContext :: Context -> [a]
   fromContext _ = []
 
@@ -351,13 +351,15 @@ shrinkTimeInterval (start, end) =
   let
     mid = (start + end) `div` 2
   in
-    [
-      (start, start)
-    , (start, mid  )
-    , (mid  , mid  )
-    , (mid  , end  )
-    , (end  , end  )
-    ]
+    filter (/= (start, end))
+      $ nub
+      [
+        (start, start)
+      , (start, mid  )
+      , (mid  , mid  )
+      , (mid  , end  )
+      , (end  , end  )
+      ]
 
 instance SemiArbitrary TimeInterval where
   semiArbitrary context =
@@ -365,7 +367,7 @@ instance SemiArbitrary TimeInterval where
       POSIXTime start <- semiArbitrary context
       duration <- arbitraryPositiveInteger
       pure (POSIXTime start, POSIXTime $ start + duration)
-  shrink' = fmap shrinkTimeInterval
+  semiShrink = fmap shrinkTimeInterval
 
 
 instance Arbitrary ChoiceId where
@@ -531,13 +533,15 @@ instance Arbitrary Bound where
     let
       mid = (lower + upper) `div` 2
     in
-      [
-        Bound lower lower
-      , Bound lower mid
-      , Bound mid   mid
-      , Bound mid   upper
-      , Bound upper upper
-      ]
+      filter (/= Bound lower upper)
+        $ nub
+        [
+          Bound lower lower
+        , Bound lower mid
+        , Bound mid   mid
+        , Bound mid   upper
+        , Bound upper upper
+        ]
 
 instance SemiArbitrary Bound where
   semiArbitrary context =
@@ -623,7 +627,7 @@ instance Arbitrary Contract where
   shrink (When a t c) = [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
   shrink (Let v x c) = [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
   shrink (Assert o c) = [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
-  shrink x = [x]
+  shrink c = []
 
 
 arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)] -> Context -> Gen Contract
