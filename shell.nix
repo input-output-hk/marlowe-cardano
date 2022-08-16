@@ -119,6 +119,9 @@ let
       run-chainseekd
       start-cardano-node
       sphinxTools
+      pkgs.docker-compose
+      pkgs.postgresql
+      pkgs.sqitchPg
       # FIXME: I'm not sure why I'm not able to grap rPackages here
     ]); # ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
