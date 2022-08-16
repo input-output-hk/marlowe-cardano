@@ -13,7 +13,28 @@
 -- query is active.
 module Network.Protocol.Query.Types where
 
+import Data.Binary (Get, Put)
 import Network.TypedProtocol
+
+data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)
+
+data TagEq delimiter delimiter' err err' result result' where
+  Refl :: TagEq delimiter delimiter err err result result
+
+class IsQuery (q :: * -> * -> * -> *) where
+  data Tag q :: * -> * -> * -> *
+  tagFromQuery :: q delimiter err result -> Tag q delimiter err result
+  tagEq :: Tag q delimiter err result -> Tag q delimiter' err' result' -> Maybe (TagEq delimiter delimiter' err err' result result')
+  putTag :: Tag q delimiter err result -> Put
+  getTag :: Get (SomeTag q)
+  putQuery :: q delimiter err result -> Put
+  getQuery :: Tag q delimiter err result -> Get (q delimiter err result)
+  putDelimiter :: Tag q delimiter err result -> delimiter -> Put
+  getDelimiter :: Tag q delimiter err result -> Get delimiter
+  putErr :: Tag q delimiter err result -> err -> Put
+  getErr :: Tag q delimiter err result -> Get err
+  putResult :: Tag q delimiter err result -> result -> Put
+  getResult :: Tag q delimiter err result -> Get result
 
 -- | A state kind for the query protocol.
 data Query (query :: * -> * -> * -> *) where
@@ -49,17 +70,17 @@ instance Protocol (Query query) where
       ('StNext 'CanReject delimiter err results)
 
     -- | Reject the query with an error message.
-    MsgReject :: query delimiter err results -> err -> Message (Query query)
+    MsgReject :: err -> Message (Query query)
       ('StNext 'CanReject delimiter err results)
       'StDone
 
     -- | Send the next page of results to the client
-    MsgNextPage :: query delimiter err results -> results -> Maybe delimiter -> Message (Query query)
+    MsgNextPage :: results -> Maybe delimiter -> Message (Query query)
       ('StNext nextKind delimiter err results)
       ('StPage delimiter err results)
 
     -- | Request the next page of results starting from the delimiter
-    MsgRequestNext :: query delimiter err result -> delimiter -> Message (Query query)
+    MsgRequestNext :: delimiter -> Message (Query query)
       ('StPage delimiter err results)
       ('StNext 'MustReply delimiter err results)
 
@@ -70,10 +91,10 @@ instance Protocol (Query query) where
 
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
-    TokPage :: query delimiter err results -> ClientHasAgency ('StPage delimiter err results)
+    TokPage :: Tag query delimiter err results -> ClientHasAgency ('StPage delimiter err results)
 
   data ServerHasAgency st where
-    TokNext :: TokNextKind k -> query delimiter err results -> ServerHasAgency ('StNext k delimiter err resutls)
+    TokNext :: TokNextKind k -> Tag query delimiter err results -> ServerHasAgency ('StNext k delimiter err results)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone

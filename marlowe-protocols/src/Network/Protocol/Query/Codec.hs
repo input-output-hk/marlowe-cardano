@@ -13,43 +13,36 @@ import Network.Protocol.Query.Types
 import Network.TypedProtocol.Codec
 import Unsafe.Coerce (unsafeCoerce)
 
-data SomeQuery query = forall delimiter err result. SomeQuery (query delimiter err result)
-
 codecQuery
   :: forall query m
-   . Applicative m
-  => (SomeQuery query -> Put)
-  -> Get (SomeQuery query)
-  -> (forall delimiter err result. query delimiter err result -> delimiter -> Put)
-  -> (forall delimiter err result. query delimiter err result -> Get delimiter)
-  -> (forall delimiter err result. query delimiter err result -> err -> Put)
-  -> (forall delimiter err result. query delimiter err result -> Get err)
-  -> (forall delimiter err result. query delimiter err result -> result -> Put)
-  -> (forall delimiter err result. query delimiter err result -> Get result)
-  -> Codec (Query query) DeserializeError m LBS.ByteString
-codecQuery putCmd getCmd putDelimiter getDelimiter putErr getErr putResult getResult =
-  binaryCodec putMsg getMsg
+   . (Applicative m, IsQuery query)
+  => Codec (Query query) DeserializeError m LBS.ByteString
+codecQuery = binaryCodec putMsg getMsg
   where
     putMsg :: PutMessage (Query query)
     putMsg = \case
       ClientAgency TokInit -> \case
         MsgRequest query -> do
           putWord8 0x01
-          putCmd $ SomeQuery query
-      ServerAgency (TokNext _ _) -> \case
-        MsgReject query err -> do
+          putTag (tagFromQuery query)
+          putQuery query
+      ServerAgency (TokNext _ tag) -> \case
+        MsgReject err -> do
           putWord8 0x02
-          putErr query err
-        MsgNextPage query result delimiter -> do
+          putTag (coerceTag tag)
+          putErr (coerceTag tag) err
+        MsgNextPage results delimiter -> do
           putWord8 0x03
-          putResult query result
+          putTag (coerceTag tag)
+          putResult (coerceTag tag) results
           case delimiter of
             Nothing -> putWord8 0x01
-            Just d  -> putDelimiter query d
-      ClientAgency (TokPage _) -> \case
-        MsgRequestNext query delimiter -> do
+            Just d  -> putDelimiter (coerceTag tag) d
+      ClientAgency (TokPage tag) -> \case
+        MsgRequestNext delimiter -> do
           putWord8 0x04
-          putDelimiter query delimiter
+          putTag (coerceTag tag)
+          putDelimiter (coerceTag tag) delimiter
         MsgDone -> putWord8 0x05
 
     getMsg :: GetMessage (Query query)
@@ -58,75 +51,45 @@ codecQuery putCmd getCmd putDelimiter getDelimiter putErr getErr putResult getRe
       case tag of
         0x01 -> case tok of
           ClientAgency TokInit -> do
-            SomeQuery query <- getCmd
-            pure $ SomeMessage $ MsgRequest query
+            SomeTag qtag <- getTag
+            SomeMessage . MsgRequest <$> getQuery qtag
           _ -> fail "Invalid protocol state for MsgRequest"
         0x02 -> case tok of
-          ServerAgency (TokNext TokCanReject query) -> coerceNext <$> getReject (coerceQuery query)
-          _                                         -> fail "Invalid protocol state for MsgReject"
+          ServerAgency (TokNext TokCanReject qtag) -> do
+            SomeTag qtag' :: SomeTag query <- getTag
+            case tagEq (coerceTag qtag) qtag' of
+              Nothing   -> fail "decoded query tag does not match expected query tag"
+              Just Refl -> SomeMessage . MsgReject <$> getErr qtag'
+          _ -> fail "Invalid protocol state for MsgReject"
         0x03 -> case tok of
-          ServerAgency (TokNext _ query) -> coerceNext <$> getNextPage (coerceQuery query)
-          _                              -> fail "Invalid protocol state for MsgNextPage"
+          ServerAgency (TokNext _ qtag) -> do
+            SomeTag qtag' :: SomeTag query <- getTag
+            case tagEq (coerceTag qtag) qtag' of
+              Nothing   -> fail "decoded query tag does not match expected query tag"
+              Just Refl -> do
+                result <- getResult qtag'
+                maybeTag <- getWord8
+                delimiter <- case maybeTag of
+                  0x01 -> pure Nothing
+                  0x02 -> Just <$> getDelimiter qtag'
+                  _    -> fail $ "Invalid maybe tag: " <> show maybeTag
+                pure $ SomeMessage $ MsgNextPage result delimiter
+          _ -> fail "Invalid protocol state for MsgNextPage"
         0x04 -> case tok of
-          ClientAgency (TokPage query) -> coercePage <$> getRequestNext (coerceQuery query)
-          _                            -> fail "Invalid protocol state for MsgAwait"
+          ClientAgency (TokPage qtag) -> do
+            SomeTag qtag' :: SomeTag query <- getTag
+            case tagEq (coerceTag qtag) qtag' of
+              Nothing   -> fail "decoded query tag does not match expected query tag"
+              Just Refl -> SomeMessage . MsgRequestNext <$> getDelimiter qtag'
+          _                            -> fail "Invalid protocol state for MsgRequestNext"
         0x05 -> case tok of
           ClientAgency (TokPage _) -> pure $ SomeMessage MsgDone
-          _                        -> fail "Invalid protocol state for MsgRequetNext"
+          _                        -> fail "Invalid protocol state for MsgDone"
         _ -> fail $ "Invalid msg tag " <> show tag
 
-    getReject
-      :: forall (st :: Query query) delimiter err results
-       . st ~ 'StNext 'CanReject delimiter err results
-      => query delimiter err results
-      -> Get (SomeMessage st)
-    getReject query = do
-      err <- getErr query
-      pure $ SomeMessage $ MsgReject query err
-
-    getNextPage
-      :: forall (st :: Query query) k delimiter err results
-       . st ~ 'StNext k delimiter err results
-      => query delimiter err results
-      -> Get (SomeMessage st)
-    getNextPage query = do
-      result <- getResult query
-      maybeTag <- getWord8
-      delimiter <- case maybeTag of
-        0x01 -> pure Nothing
-        0x02 -> Just <$> getDelimiter query
-        _    -> fail $ "Invalid maybe tag: " <> show maybeTag
-      pure $ SomeMessage $ MsgNextPage query result delimiter
-
-    getRequestNext
-      :: forall (st :: Query query) delimiter err results
-       . st ~ 'StPage delimiter err results
-      => query delimiter err results
-      -> Get (SomeMessage st)
-    getRequestNext query = do
-      delimiter <- getDelimiter query
-      pure $ SomeMessage $ MsgRequestNext query delimiter
-
-    -- Unfortunately, PeerAgency does not appear to work well with protocols
-    -- that are parameterized by higher-kinded variables like `query` when they
-    -- are existentially quantified in the GADT constructors. The kind
-    -- parameters get instantiated twice, hence the compiler is unable to unify
-    -- `delimiter0 ~ delimiter1` etc... Some unsafe coercing is required. If
-    -- someone knows how to solve this problem, a fix would be greatly
-    -- appreciated!
-    --
-    -- If we were working with concrete types for `query`, this wouldn't be an
-    -- issue, because we could introduce the neccessary type equallity
-    -- constraints into scope via GADT pattern matching.
-    coerceNext
-      :: SomeMessage ('StNext k delimiter0 err0 results)
-      -> SomeMessage ('StNext k delimiter1 err1 resutls)
-    coerceNext = unsafeCoerce
-
-    coercePage
-      :: SomeMessage ('StPage delimiter0 err0 results)
-      -> SomeMessage ('StPage delimiter1 err1 resutls)
-    coercePage = unsafeCoerce
-
-    coerceQuery :: query1 delimiter1 err1 results1 -> query delimiter0 err0 results0
-    coerceQuery = unsafeCoerce
+    -- Unfortunately, the poly-kinded query parameter doesn't play nicely with
+    -- the `PeerHasAgency` type and it gets confused, thinking that 'query1'
+    -- and 'query' are unrelated types. So we have to coerce them (they will
+    -- absolutely be the same type constructor though).
+    coerceTag :: forall query1 delimiter err results. Tag query1 delimiter err results -> Tag query delimiter err results
+    coerceTag = unsafeCoerce

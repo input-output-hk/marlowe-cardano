@@ -10,8 +10,7 @@
 
 module Network.Protocol.ChainSeek.Server where
 
-import Network.Protocol.ChainSeek.Types (ChainSeek (..), ClientHasAgency (..), Message (..), NobodyHasAgency (..),
-                                         SchemaVersion, ServerHasAgency (..), StNextKind (..), TokNextKind (..))
+import Network.Protocol.ChainSeek.Types
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
 import Network.TypedProtocol.Core (PeerRole (..))
 
@@ -174,7 +173,7 @@ hoistChainSeekServer f =
 -- | Interpret the server as a 'typed-protocols' 'Peer'.
 chainSeekServerPeer
   :: forall query point tip m a
-   . Monad m
+   . (Monad m, Query query)
   => point
   -> ChainSeekServer query point tip m a
   -> Peer (ChainSeek query point tip) 'AsServer 'StInit m a
@@ -227,11 +226,11 @@ chainSeekServerPeer initialPoint (ChainSeekServer mclient) =
     SendMsgRollForward result pos' tip midle -> yield pos' (MsgRollForward result pos' tip) midle
     SendMsgRollBackward pos' tip midle       -> yield pos' (MsgRollBackward pos' tip) midle
     SendMsgWait mnext                    ->
-      Yield (ServerAgency (TokNext query TokCanAwait)) MsgWait $
+      Yield (ServerAgency (TokNext (tagFromQuery query) TokCanAwait)) MsgWait $
       Effect $ peerNext TokMustReply pos query <$> mnext
     SendMsgPing mnext                        ->
-      Yield (ServerAgency (TokNext query TokMustReply)) MsgPing $
+      Yield (ServerAgency (TokNext (tagFromQuery query) TokMustReply)) MsgPing $
       Await (ClientAgency TokPing) \MsgPong ->
       Effect $ peerNext TokMustReply pos query <$> mnext
     where
-      yield pos' msg = Yield (ServerAgency (TokNext query tok)) msg . peerIdle pos'
+      yield pos' msg = Yield (ServerAgency (TokNext (tagFromQuery query) tok)) msg . peerIdle pos'

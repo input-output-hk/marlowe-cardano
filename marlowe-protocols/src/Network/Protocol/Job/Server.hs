@@ -100,31 +100,31 @@ hoistJobServer phi = JobServer . phi . fmap hoistInit . runJobServer
     }
 
 -- | Interpret a server as a typed-protocols peer.
-commandServerPeer
+jobServerPeer
   :: forall cmd m a
    . (Monad m, Command cmd)
   => JobServer cmd m a
   -> Peer (Job cmd) 'AsServer 'StInit m a
-commandServerPeer JobServer{..} =
+jobServerPeer JobServer{..} =
   Effect $ peerInit <$> runJobServer
   where
   peerInit :: ServerStInit cmd m a -> Peer (Job cmd) 'AsServer 'StInit m a
   peerInit ServerStInit{..} =
     Await (ClientAgency TokInit) $ Effect . \case
-      MsgExec cmd     -> peerCmd (tokFromCmd cmd) <$> recvMsgExec cmd
-      MsgAttach cmdId -> peerCmd (tokFromId cmdId) <$> recvMsgAttach cmdId
+      MsgExec cmd     -> peerCmd (tagFromCommand cmd) <$> recvMsgExec cmd
+      MsgAttach cmdId -> peerCmd (tagFromJobId cmdId) <$> recvMsgAttach cmdId
 
   peerCmd
-    :: TokCommand cmd status err result
+    :: Tag cmd status err result
     -> ServerStCmd cmd status err result m a
     -> Peer (Job cmd) 'AsServer ('StCmd status err result) m a
-  peerCmd tokCmd = \case
-    SendMsgFail err a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgFail tokCmd err) $ Done TokDone a
-    SendMsgSucceed result a -> Yield (ServerAgency (TokCmd tokCmd)) (MsgSucceed tokCmd result) $ Done TokDone a
-    SendMsgAwait status cmdId await -> Yield (ServerAgency (TokCmd tokCmd)) (MsgAwait status cmdId) $ peerAwait tokCmd await
+  peerCmd tag = \case
+    SendMsgFail err a               -> Yield (ServerAgency (TokCmd tag)) (MsgFail err) $ Done TokDone a
+    SendMsgSucceed result a         -> Yield (ServerAgency (TokCmd tag)) (MsgSucceed result) $ Done TokDone a
+    SendMsgAwait status cmdId await -> Yield (ServerAgency (TokCmd tag)) (MsgAwait status cmdId) $ peerAwait tag await
 
   peerAwait
-    :: TokCommand cmd status err result
+    :: Tag cmd status err result
     -> ServerStAwait cmd status err result m a
     -> Peer (Job cmd) 'AsServer ('StAwait status err result) m a
   peerAwait tokCmd ServerStAwait{..} =

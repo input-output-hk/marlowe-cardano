@@ -9,8 +9,7 @@
 
 module Network.Protocol.ChainSeek.Client where
 
-import Network.Protocol.ChainSeek.Types (ChainSeek (..), ClientHasAgency (..), Message (..), NobodyHasAgency (..),
-                                         SchemaVersion, ServerHasAgency (..), StNextKind (..), TokNextKind (..))
+import Network.Protocol.ChainSeek.Types
 import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
 import Network.TypedProtocol.Core (PeerRole (..))
 
@@ -135,7 +134,7 @@ hoistChainSeekClient f ChainSeekClient{..} =
 -- | Interpret the client as a 'typed-protocols' 'Peer'.
 chainSeekClientPeer
   :: forall query point tip m a
-   . Monad m
+   . (Monad m, Query query)
   => point
   -> ChainSeekClient query point tip m a
   -> Peer (ChainSeek query point tip) 'AsClient 'StInit m a
@@ -169,7 +168,7 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
   peerIdle_ pos = \case
     SendMsgQueryNext query ClientStNext{..} waitNext ->
       Yield (ClientAgency TokIdle) (MsgQueryNext query) $
-      Await (ServerAgency (TokNext query TokCanAwait)) \case
+      Await (ServerAgency (TokNext (tagFromQuery query) TokCanAwait)) \case
         MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
         MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
         MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
@@ -185,7 +184,7 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
     -> Peer (ChainSeek query point tip) 'AsClient ('StNext err result 'StMustReply) m a
   peerWait pos query mnext = Effect do
     next@ClientStNext{..} <- mnext
-    pure $ Await (ServerAgency (TokNext query TokMustReply)) \case
+    pure $ Await (ServerAgency (TokNext (tagFromQuery query) TokMustReply)) \case
       MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
       MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
       MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
