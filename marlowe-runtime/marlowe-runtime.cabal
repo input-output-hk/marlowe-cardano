@@ -33,35 +33,54 @@ common lang
   default-language: Haskell2010
   default-extensions:
     BlockArguments
+    DeriveAnyClass
     DeriveFoldable
     DeriveFunctor
     DeriveGeneric
     DeriveLift
     DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    EmptyCase
     ExplicitForAll
     GeneralizedNewtypeDeriving
-    DeriveAnyClass
-    DerivingVia
-    DerivingStrategies
+    LambdaCase
+    NamedFieldPuns
+    NumericUnderscores
+    OverloadedStrings
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
     TypeApplications
+    TupleSections
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities
+    -Wredundant-constraints -Widentities -threaded
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
 library
   import: lang
   hs-source-dirs:   src
-  exposed-modules:  MyLib
+  exposed-modules:
+    Language.Marlowe.Runtime.Core.Api
   build-depends:
       base >= 4.9 && < 5
+    , aeson
+    , async
+    , binary
+    , bytestring
+    , containers
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , stm
+    , text
+    , typed-protocols
+    , witherable
 
-executable marlowe-runtime
+executable marlowed
   import: lang
   hs-source-dirs:   app
   main-is: Main.hs
@@ -72,5 +91,3 @@ executable marlowe-runtime
   build-depends:
       base >= 4.9 && < 5
     , marlowe-runtime
-  ghc-options:
-    -threaded
