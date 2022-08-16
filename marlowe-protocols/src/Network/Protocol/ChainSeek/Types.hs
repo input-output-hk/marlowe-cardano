@@ -8,12 +8,30 @@
 
 module Network.Protocol.ChainSeek.Types where
 
-import Data.Binary (Binary (..))
+import Data.Binary (Binary (..), Get, Put)
 import Data.Kind (Type)
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import Network.TypedProtocol (Protocol (..))
+
+data SomeTag q = forall err result. SomeTag (Tag q err result)
+
+data TagEq err err' result result' where
+  Refl :: TagEq err err result result
+
+class Query (q :: * -> * -> *) where
+  data Tag q :: * -> * -> *
+  tagFromQuery :: q err result -> Tag q err result
+  tagEq :: Tag q err result -> Tag q err' result' -> Maybe (TagEq err err' result result')
+  putTag :: Tag q err result -> Put
+  getTag :: Get (SomeTag q)
+  putQuery :: q err result -> Put
+  getQuery :: Tag q err result -> Get (q err result)
+  putErr :: Tag q err result -> err -> Put
+  getErr :: Tag q err result -> Get err
+  putResult :: Tag q err result -> result -> Put
+  getResult :: Tag q err result -> Get result
 
 -- | The type of states in the protocol.
 data ChainSeek (query :: Type -> Type -> Type) point tip where
@@ -129,7 +147,7 @@ instance Protocol (ChainSeek query point tip) where
 
   data ServerHasAgency st where
     TokHandshake :: ServerHasAgency 'StHandshake
-    TokNext :: query err result -> TokNextKind k -> ServerHasAgency ('StNext err result k)
+    TokNext :: Tag query err result -> TokNextKind k -> ServerHasAgency ('StNext err result k)
 
   data NobodyHasAgency st where
     TokFault :: NobodyHasAgency 'StFault

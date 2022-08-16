@@ -14,7 +14,14 @@
 
 module Network.Protocol.Job.Types where
 
+import Data.Binary (Put)
+import Data.Binary.Get (Get)
 import Network.TypedProtocol
+
+data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
+
+data TagEq status status' err err' result result' where
+  Refl :: TagEq status status err err result result
 
 -- | A typeclass for commands. Defines associated types and conversion
 -- functions needed to run the protocol.
@@ -23,15 +30,31 @@ class Command (cmd :: * -> * -> * -> *) where
   -- | The type of job IDs for this command type.
   data JobId cmd :: * -> * -> * -> *
 
-  -- | The type of tokens for this command type. Used exclusively for GADT
+  -- | The type of tags for this command type. Used exclusively for GADT
   -- pattern matching.
-  data TokCommand cmd :: * -> * -> * -> *
+  data Tag cmd :: * -> * -> * -> *
 
   -- | Obtain a token from a command.
-  tokFromCmd :: cmd status err result -> TokCommand cmd status err result
+  tagFromCommand :: cmd status err result -> Tag cmd status err result
 
   -- | Obtain a token from a command ID.
-  tokFromId :: JobId cmd status err result -> TokCommand cmd status err result
+  tagFromJobId :: JobId cmd status err result -> Tag cmd status err result
+
+  -- | Prove that two tags are the same.
+  tagEq :: Tag cmd status err result -> Tag cmd status' err' result' -> Maybe (TagEq status status' err err' result result')
+
+  putTag :: Tag cmd status err result -> Put
+  getTag :: Get (SomeTag cmd)
+  putJobId :: JobId cmd status err result -> Put
+  getJobId :: Tag cmd status err result -> Get (JobId cmd status err result)
+  putCommand :: cmd status err result -> Put
+  getCommand :: Tag cmd status err result -> Get (cmd status err result)
+  putStatus :: Tag cmd status err result -> status -> Put
+  getStatus :: Tag cmd status err result -> Get status
+  putErr :: Tag cmd status err result -> err -> Put
+  getErr :: Tag cmd status err result -> Get err
+  putResult :: Tag cmd status err result -> result -> Put
+  getResult :: Tag cmd status err result -> Get result
 
 -- | A state kind for the job protocol.
 data Job (cmd :: * -> * -> * -> *) where
@@ -67,12 +90,12 @@ instance Protocol (Job cmd) where
       ('StCmd status err result)
 
     -- | Tell the client the job failed.
-    MsgFail :: TokCommand cmd status err result -> err -> Message (Job cmd)
+    MsgFail :: err -> Message (Job cmd)
       ('StCmd status err result)
       'StDone
 
     -- | Tell the client the job succeeded.
-    MsgSucceed :: TokCommand cmd status err result -> result -> Message (Job cmd)
+    MsgSucceed :: result -> Message (Job cmd)
       ('StCmd status err result)
       'StDone
 
@@ -93,10 +116,10 @@ instance Protocol (Job cmd) where
 
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
-    TokAwait :: TokCommand cmd status err result -> ClientHasAgency ('StAwait status err result)
+    TokAwait :: Tag cmd status err result -> ClientHasAgency ('StAwait status err result)
 
   data ServerHasAgency st where
-    TokCmd :: TokCommand cmd status err result -> ServerHasAgency ('StCmd status err result)
+    TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
