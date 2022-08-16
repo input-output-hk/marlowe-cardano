@@ -7,7 +7,7 @@
 
 
 module Spec.Marlowe.Semantics.Arbitrary (
-  ContextuallyArbitrary(..)
+  SemiArbitrary(..)
 , IsValid(..)
 , arbitraryChoiceName
 , arbitraryFibonacci
@@ -110,9 +110,9 @@ instance Arbitrary Context where
 
 
 
-class Arbitrary a => ContextuallyArbitrary a where
-  arbitrary' :: Context -> Gen a
-  arbitrary' context =
+class Arbitrary a => SemiArbitrary a where
+  semiArbitrary :: Context -> Gen a
+  semiArbitrary context =
      case fromContext context of
        [] -> arbitrary
        xs -> perturb arbitrary xs
@@ -264,7 +264,7 @@ instance Arbitrary Token where
     | otherwise                       = Token adaSymbol adaToken : [Token c' n' | c' <- shrink c, n' <- shrink n]
 
 
-instance ContextuallyArbitrary Token where
+instance SemiArbitrary Token where
   fromContext = tokens
 
 
@@ -299,7 +299,7 @@ instance Arbitrary Party where
   shrink (PK x)   = (Role <$> randomRoleNames) <> (PK <$> filter (< x) randomPubKeyHashes)
   shrink (Role x) = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
 
-instance ContextuallyArbitrary Party where
+instance SemiArbitrary Party where
   fromContext = parties
 
 
@@ -307,7 +307,7 @@ instance Arbitrary POSIXTime where
   arbitrary = POSIXTime <$> arbitraryInteger
   shrink x = filter (< x) fibonaccis
 
-instance ContextuallyArbitrary POSIXTime where
+instance SemiArbitrary POSIXTime where
   fromContext = times
 
 
@@ -359,10 +359,10 @@ shrinkTimeInterval (start, end) =
     , (end  , end  )
     ]
 
-instance ContextuallyArbitrary TimeInterval where
-  arbitrary' context =
+instance SemiArbitrary TimeInterval where
+  semiArbitrary context =
     do
-      POSIXTime start <- arbitrary' context
+      POSIXTime start <- semiArbitrary context
       duration <- arbitraryPositiveInteger
       pure (POSIXTime start, POSIXTime $ start + duration)
   shrink' = fmap shrinkTimeInterval
@@ -372,7 +372,7 @@ instance Arbitrary ChoiceId where
   arbitrary = ChoiceId <$> arbitraryChoiceName <*> arbitrary
   shrink (ChoiceId n p) = [ChoiceId n' p' | n' <- shrinkChoiceName n, p' <- shrink p]
 
-instance ContextuallyArbitrary ChoiceId where
+instance SemiArbitrary ChoiceId where
   fromContext = choiceIds
 
 
@@ -401,7 +401,7 @@ instance Arbitrary ValueId where
   arbitrary = arbitraryFibonacci randomValueIds
   shrink = shrinkByteString (\(ValueId x) -> x) randomValueIds
 
-instance ContextuallyArbitrary ValueId where
+instance SemiArbitrary ValueId where
   fromContext = valueIds
 
 
@@ -418,8 +418,8 @@ arbitraryValueNum :: Context -> Gen Integer
 arbitraryValueNum = arbitraryNumber values
 
 
-instance ContextuallyArbitrary Integer where
-  arbitrary' context =
+instance SemiArbitrary Integer where
+  semiArbitrary context =
     frequency
       [
         (1, arbitraryAmount    context)
@@ -457,22 +457,22 @@ instance Arbitrary (Value Observation) where
   shrink (Cond o x y) = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
   shrink x = [x]
 
-instance ContextuallyArbitrary (Value Observation) where
-  arbitrary' context =
+instance SemiArbitrary (Value Observation) where
+  semiArbitrary context =
     frequency
       [
         ( 8, uncurry AvailableMoney <$> perturb ((,) <$> arbitrary <*> arbitrary) (AM.keys $ caccounts context))
-      , (14, Constant <$> arbitrary' context)
-      , ( 8, NegValue <$> arbitrary' context)
-      , ( 8, AddValue <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, SubValue <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, MulValue <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, DivValue <$> arbitrary' context <*> arbitrary' context)
-      , (10, ChoiceValue <$> arbitrary' context)
+      , (14, Constant <$> semiArbitrary context)
+      , ( 8, NegValue <$> semiArbitrary context)
+      , ( 8, AddValue <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, SubValue <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, MulValue <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, DivValue <$> semiArbitrary context <*> semiArbitrary context)
+      , (10, ChoiceValue <$> semiArbitrary context)
       , ( 6, pure TimeIntervalStart)
       , ( 6, pure TimeIntervalEnd)
-      , ( 8, UseValue <$> arbitrary' context)
-      , ( 8, Cond <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context)
+      , ( 8, UseValue <$> semiArbitrary context)
+      , ( 8, Cond <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context)
       ]
 
 
@@ -503,19 +503,19 @@ instance Arbitrary Observation where
   shrink (ValueEQ x y)      = [ValueEQ x' y | x' <- shrink x] ++ [ValueEQ x y' | y' <- shrink y]
   shrink x                  = [x]
 
-instance ContextuallyArbitrary Observation where
-  arbitrary' context =
+instance SemiArbitrary Observation where
+  semiArbitrary context =
     frequency
       [
-        ( 8, AndObs <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, OrObs <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, NotObs <$> arbitrary' context)
-      , (16, ChoseSomething <$> arbitrary' context)
-      , ( 8, ValueGE <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, ValueGT <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, ValueLT <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, ValueLE <$> arbitrary' context <*> arbitrary' context)
-      , ( 8, ValueEQ <$> arbitrary' context <*> arbitrary' context)
+        ( 8, AndObs <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, OrObs <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, NotObs <$> semiArbitrary context)
+      , (16, ChoseSomething <$> semiArbitrary context)
+      , ( 8, ValueGE <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, ValueGT <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, ValueLT <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, ValueLE <$> semiArbitrary context <*> semiArbitrary context)
+      , ( 8, ValueEQ <$> semiArbitrary context <*> semiArbitrary context)
       , (10, pure TrueObs)
       , (10, pure FalseObs)
       ]
@@ -539,16 +539,16 @@ instance Arbitrary Bound where
       , Bound upper upper
       ]
 
-instance ContextuallyArbitrary Bound where
-  arbitrary' context =
+instance SemiArbitrary Bound where
+  semiArbitrary context =
       do
-        lower <- arbitrary' context
+        lower <- semiArbitrary context
         extent <- arbitraryPositiveInteger `suchThat` (>= 0)
         pure $ Bound lower (lower + extent)
 
 
-instance ContextuallyArbitrary [Bound] where
-  arbitrary' context = listOf $ arbitrary' context
+instance SemiArbitrary [Bound] where
+  semiArbitrary context = listOf $ semiArbitrary context
 
 
 instance Arbitrary Action where
@@ -563,21 +563,21 @@ instance Arbitrary Action where
   shrink (Choice c b) = [Choice c' b | c' <- shrink c] ++ [Choice c b' | b' <- shrink b]
   shrink (Notify o) = Notify <$> shrink o
 
-instance ContextuallyArbitrary Action where
-  arbitrary' context@Context{..} =
+instance SemiArbitrary Action where
+  semiArbitrary context@Context{..} =
     let
       arbitraryDeposit =
         do
           (account, token) <- perturb ((,) <$> arbitrary <*> arbitrary) $ AM.keys caccounts
-          party <- arbitrary' context
-          Deposit account party token <$> arbitrary' context
-      arbitraryChoice = Choice <$> arbitrary' context <*> arbitrary' context
+          party <- semiArbitrary context
+          Deposit account party token <$> semiArbitrary context
+      arbitraryChoice = Choice <$> semiArbitrary context <*> semiArbitrary context
     in
       frequency
         [
           (3, arbitraryDeposit)
         , (6, arbitraryChoice)
-        , (1, Notify <$> arbitrary' context)
+        , (1, Notify <$> semiArbitrary context)
         ]
 
 
@@ -592,10 +592,10 @@ instance Arbitrary Payee where
   shrink (Account x) = Account <$> shrink x
 
 
-instance ContextuallyArbitrary Payee where
-  arbitrary' context =
+instance SemiArbitrary Payee where
+  semiArbitrary context =
       do
-        party <- arbitrary' context
+        party <- semiArbitrary context
         isParty <- arbitrary
         pure
           $ if isParty
@@ -604,20 +604,20 @@ instance ContextuallyArbitrary Payee where
 
 
 instance Arbitrary (Case Contract) where
-  arbitrary = arbitrary' =<< arbitrary
+  arbitrary = semiArbitrary =<< arbitrary
   shrink (Case a c)           = [Case a' c | a' <- shrink a] ++ [Case a c' | c' <- shrink c]
   shrink (MerkleizedCase a c) = (`MerkleizedCase` c) <$> shrink a
 
-instance ContextuallyArbitrary (Case Contract) where
-  arbitrary' context = Case <$> arbitrary' context <*> arbitrary' context
+instance SemiArbitrary (Case Contract) where
+  semiArbitrary context = Case <$> semiArbitrary context <*> semiArbitrary context
 
 arbitraryCaseWeighted :: [(Int, Int, Int, Int, Int, Int)] -> Context -> Gen (Case Contract)
 arbitraryCaseWeighted w context =
-  Case <$> arbitrary' context <*> arbitraryContractWeighted w context
+  Case <$> semiArbitrary context <*> arbitraryContractWeighted w context
 
 
 instance Arbitrary Contract where
-  arbitrary = arbitrary' =<< arbitrary
+  arbitrary = semiArbitrary =<< arbitrary
   shrink (Pay a p t x c) = [Pay a' p t x c | a' <- shrink a] ++ [Pay a p' t x c | p' <- shrink p] ++ [Pay a p t' x c | t' <- shrink t] ++ [Pay a p t x' c | x' <- shrink x] ++ [Pay a p t x c' | c' <- shrink c]
   shrink (If o x y) = [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
   shrink (When a t c) = [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
@@ -631,11 +631,11 @@ arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) contex
   frequency
     [
       (wClose , pure Close)
-    , (wPay   , Pay <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitraryContractWeighted w context)
-    , (wIf    , If <$> arbitrary' context <*> arbitraryContractWeighted w context <*> arbitraryContractWeighted w context)
-    , (wWhen  , When <$> listOf (arbitraryCaseWeighted w context) `suchThat` ((<= length w) . length) <*> arbitrary' context <*> arbitraryContractWeighted w context)
-    , (wLet   , Let <$> arbitrary' context <*> arbitrary' context <*> arbitraryContractWeighted w context)
-    , (wAssert, Assert <$> arbitrary' context <*> arbitraryContractWeighted w context)
+    , (wPay   , Pay <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context <*> arbitraryContractWeighted w context)
+    , (wIf    , If <$> semiArbitrary context <*> arbitraryContractWeighted w context <*> arbitraryContractWeighted w context)
+    , (wWhen  , When <$> listOf (arbitraryCaseWeighted w context) `suchThat` ((<= length w) . length) <*> semiArbitrary context <*> arbitraryContractWeighted w context)
+    , (wLet   , Let <$> semiArbitrary context <*> semiArbitrary context <*> arbitraryContractWeighted w context)
+    , (wAssert, Assert <$> semiArbitrary context <*> arbitraryContractWeighted w context)
     ]
 arbitraryContractWeighted [] _ = pure Close
 
@@ -663,8 +663,8 @@ assertContractWeights = (0, 0, 0, 0, 0, 1)
 arbitraryContractSized :: Int -> Context -> Gen Contract
 arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContractWeights)
 
-instance ContextuallyArbitrary Contract where
-  arbitrary' = arbitraryContractSized 5
+instance SemiArbitrary Contract where
+  semiArbitrary = arbitraryContractSized 5
 
 
 arbitraryAssocMap :: Eq k => Gen k -> Gen v -> Gen (AM.Map k v)
@@ -690,24 +690,24 @@ instance Arbitrary Accounts where
   shrink = shrinkAssocMap
 
 
-instance ContextuallyArbitrary Accounts where
-  arbitrary' context =
+instance SemiArbitrary Accounts where
+  semiArbitrary context =
     do
       entries <- arbitraryFibonacci [0..]
       fmap (AM.fromList . nubBy ((==) `on` fst))
         . replicateM entries
-        $ (,) <$> arbitrary' context <*> (arbitrary' context `suchThat` (> 0))
+        $ (,) <$> semiArbitrary context <*> (semiArbitrary context `suchThat` (> 0))
 
-instance ContextuallyArbitrary (Party, Token) where
-  arbitrary' context = (,) <$> arbitrary' context <*> arbitrary' context
+instance SemiArbitrary (Party, Token) where
+  semiArbitrary context = (,) <$> semiArbitrary context <*> semiArbitrary context
 
 instance Arbitrary (AM.Map ChoiceId ChosenNum) where
   arbitrary = arbitraryAssocMap arbitrary arbitraryInteger
   shrink = shrinkAssocMap
 
 
-instance ContextuallyArbitrary (AM.Map ChoiceId ChosenNum) where
-  arbitrary' context = arbitraryAssocMap (arbitrary' context) (arbitrary' context)
+instance SemiArbitrary (AM.Map ChoiceId ChosenNum) where
+  semiArbitrary context = arbitraryAssocMap (semiArbitrary context) (semiArbitrary context)
 
 
 instance Arbitrary (AM.Map ValueId Integer) where
@@ -715,25 +715,25 @@ instance Arbitrary (AM.Map ValueId Integer) where
   shrink = shrinkAssocMap
 
 
-instance ContextuallyArbitrary (AM.Map ValueId Integer) where
-  arbitrary' context = arbitraryAssocMap (arbitrary' context) (arbitrary' context)
+instance SemiArbitrary (AM.Map ValueId Integer) where
+  semiArbitrary context = arbitraryAssocMap (semiArbitrary context) (semiArbitrary context)
 
 
 instance Arbitrary State where
-  arbitrary = arbitrary' =<< arbitrary
+  arbitrary = semiArbitrary =<< arbitrary
   shrink s@State{..} =
     [s {accounts = accounts'} | accounts' <- shrinkAssocMap accounts]
       <> [s {choices = choices'} | choices' <- shrinkAssocMap choices]
       <> [s {boundValues = boundValues'} | boundValues' <- shrinkAssocMap boundValues]
       <> [s {minTime = minTime'} | minTime' <- shrink minTime]
 
-instance ContextuallyArbitrary State where
-  arbitrary' context =
+instance SemiArbitrary State where
+  semiArbitrary context =
     do
-      accounts <- arbitrary' context
-      choices <- arbitrary' context
-      boundValues <- arbitrary' context
-      minTime <- arbitrary' context
+      accounts <- semiArbitrary context
+      choices <- semiArbitrary context
+      boundValues <- semiArbitrary context
+      minTime <- semiArbitrary context
       pure State{..}
 
 
@@ -741,21 +741,21 @@ instance Arbitrary Environment where
   arbitrary = Environment <$> arbitraryTimeInterval
   shrink (Environment x) = Environment <$> shrink x
 
-instance ContextuallyArbitrary Environment where
-  arbitrary' context = Environment <$> arbitrary' context
+instance SemiArbitrary Environment where
+  semiArbitrary context = Environment <$> semiArbitrary context
 
 
 instance Arbitrary InputContent where
-  arbitrary = arbitrary' =<< arbitrary
+  arbitrary = semiArbitrary =<< arbitrary
   shrink (IDeposit a p t x) = [IDeposit a' p t x | a' <- shrink a] ++ [IDeposit a p' t x | p' <- shrink p] ++ [IDeposit a p t' x | t' <- shrink t] ++ [IDeposit a p t x' | x' <- shrink x]
   shrink (IChoice c x) = [IChoice c' x | c' <- shrink c] ++ [IChoice c x' | x' <- shrink x]
   shrink x = [x]
 
-instance ContextuallyArbitrary InputContent where
-  arbitrary' context =
+instance SemiArbitrary InputContent where
+  semiArbitrary context =
     do
-      deposit <- IDeposit <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary
-      choice <- IChoice <$> arbitrary' context <*> arbitrary' context
+      deposit <- IDeposit <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context <*> arbitrary
+      choice <- IChoice <$> semiArbitrary context <*> semiArbitrary context
       elements [deposit, choice, INotify]
 
 
@@ -764,5 +764,5 @@ instance Arbitrary Input where
   shrink (NormalInput i)         = NormalInput <$> shrink i
   shrink (MerkleizedInput i b c) = [MerkleizedInput i' b c | i' <- shrink i]
 
-instance ContextuallyArbitrary Input where
-  arbitrary' context = NormalInput <$> arbitrary' context
+instance SemiArbitrary Input where
+  semiArbitrary context = NormalInput <$> semiArbitrary context

@@ -451,9 +451,9 @@ checkIDeposit :: Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe Bool -> Propert
 checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property $ do
   let gen = do
         context <- arbitrary
-        environment <- arbitrary' context
-        state <- arbitrary' context
-        (account, token) <- arbitrary' context
+        environment <- semiArbitrary context
+        state <- semiArbitrary context
+        (account, token) <- semiArbitrary context
         accountMatches' <- maybe arbitrary pure accountMatches
         account' <- if accountMatches' then pure account else suchThat arbitrary (/= account)
         partyMatches' <- maybe arbitrary pure partyMatches
@@ -535,7 +535,7 @@ checkMoneyInAccount =
   let gen =
         do
           context <- arbitrary
-          (,) <$> arbitrary' context <*> arbitrary' context
+          (,) <$> semiArbitrary context <*> semiArbitrary context
   forAll gen $ \((account, token), accounts') ->
     fromMaybe 0 ((account, token) `AM.lookup` accounts') == moneyInAccount account token accounts'
 
@@ -546,7 +546,7 @@ checkUpdateMoneyInAccount =
   let gen =
         do
           context <- arbitrary
-          (,,) <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context
+          (,,) <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
   forAll gen $ \((account, token), amount, accounts') ->
     let
       newAccounts = AM.filter (> 0) $ assocMapInsert (account, token) amount accounts'
@@ -560,7 +560,7 @@ checkAddMoneyToAccount =
   let gen =
         do
           context <- arbitrary
-          (,,) <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context
+          (,,) <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
   forAll gen $ \((account, token), amount, accounts') ->
     let
       newAccounts = assocMapAdd (account, token) amount accounts'
@@ -577,7 +577,7 @@ checkGiveMoney =
   let gen =
         do
           context <- arbitrary
-          (,,,) <$> arbitrary' context <*> arbitrary' context <*> arbitrary' context <*> arbitrary' context
+          (,,,) <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
   forAll gen $ \((account, token), amount, payee, accounts') ->
     let
       newAccounts =
@@ -624,13 +624,13 @@ checkReduceContractStepPay =
   let gen = do
         context <- arbitrary
         (,,,,,,)
-          <$> arbitrary' context
-          <*> arbitrary' context
-          <*> arbitrary' context
-          <*> arbitrary' context
-          <*> arbitrary' context
-          <*> arbitrary' context
-          <*> arbitrary' context
+          <$> semiArbitrary context
+          <*> semiArbitrary context
+          <*> semiArbitrary context
+          <*> semiArbitrary context
+          <*> semiArbitrary context
+          <*> semiArbitrary context
+          <*> semiArbitrary context
   forAll gen $ \(environment, state, account, payee, token, value, contract) ->
     let
       prior = fromMaybe 0 $ AM.lookup (account, token) (accounts state)

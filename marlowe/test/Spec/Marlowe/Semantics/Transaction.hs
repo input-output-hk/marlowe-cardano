@@ -55,17 +55,17 @@ unPayment (Payment a p m) = Payment' (a, p, flattenValue m)
 
 
 instance Arbitrary TransactionInput where
-  arbitrary = arbitrary' =<< arbitrary
+  arbitrary = semiArbitrary =<< arbitrary
   shrink TransactionInput{..} =
        [TransactionInput   interval' txInputs  | interval' <- shrink txInterval]
     <> [TransactionInput txInterval    inputs' | inputs'   <- shrink txInputs  ]
 
-instance ContextuallyArbitrary TransactionInput where
-  arbitrary' context =
+instance SemiArbitrary TransactionInput where
+  semiArbitrary context =
     do
-      Environment txInterval <- arbitrary' context
+      Environment txInterval <- semiArbitrary context
       n <- arbitraryFibonacci [1, 1, 1, 1, 0, 2]  -- TODO: Review.
-      TransactionInput txInterval <$> vectorOf n (arbitrary' context)
+      TransactionInput txInterval <$> vectorOf n (semiArbitrary context)
 
 
 data MarloweContext =
@@ -79,18 +79,18 @@ data MarloweContext =
     deriving (Show)
 
 instance Arbitrary MarloweContext where
-  arbitrary = arbitrary' =<< arbitrary
+  arbitrary = semiArbitrary =<< arbitrary
   shrink mc@MarloweContext{..} =
        [mc {mcInput    = input'   , mcOutput = computeTransaction   input' mcState  mcContract } | input'    <- shrink mcInput   ]
     <> [mc {mcState    = state'   , mcOutput = computeTransaction mcInput    state' mcContract } | state'    <- shrink mcState   ]
     <> [mc {mcContract = contract', mcOutput = computeTransaction mcInput  mcState    contract'} | contract' <- shrink mcContract]
 
-instance ContextuallyArbitrary MarloweContext where
-  arbitrary' context =
+instance SemiArbitrary MarloweContext where
+  semiArbitrary context =
     do
-      mcInput    <- arbitrary' context
-      mcState    <- arbitrary' context
-      mcContract <- arbitrary' context
+      mcInput    <- semiArbitrary context
+      mcState    <- semiArbitrary context
+      mcContract <- semiArbitrary context
       let
         mcOutput = computeTransaction mcInput mcState mcContract
       pure MarloweContext{..}
@@ -100,8 +100,8 @@ arbitraryMarloweContext :: [(Int, Int, Int, Int, Int, Int)] -> Gen MarloweContex
 arbitraryMarloweContext w =
     do
       context    <- arbitrary
-      mcInput    <- arbitrary' context
-      mcState    <- arbitrary' context
+      mcInput    <- semiArbitrary context
+      mcState    <- semiArbitrary context
       mcContract <- arbitraryContractWeighted w context
       let
         mcOutput = computeTransaction mcInput mcState mcContract
@@ -669,7 +669,7 @@ tests =
     , uselessNoInput
     , explicitClose
     , implicitClose
---  , noMatch
+    , noMatch
     , letSets
     , ifBranches
     , assertWarns
