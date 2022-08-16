@@ -94,15 +94,17 @@ test-suite marlowe-test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
-        Spec.Marlowe.Arbitrary
         Spec.Marlowe.AutoExecute
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
-        Spec.Marlowe.Orphans
         Spec.Marlowe.Semantics
-        Spec.Marlowe.Transaction
-        Spec.Marlowe.Util
-        Spec.Marlowe.Util.AssocMap
+        Spec.Marlowe.Semantics.Arbitrary
+        Spec.Marlowe.Semantics.AssocMap
+        Spec.Marlowe.Semantics.Entropy
+        Spec.Marlowe.Semantics.Functions
+        Spec.Marlowe.Semantics.Orphans
+        Spec.Marlowe.Semantics.Transaction
+        Spec.Marlowe.Semantics.Util
 
     if !(impl(ghcjs) || os(ghcjs))
       build-depends: plutus-tx-plugin -any

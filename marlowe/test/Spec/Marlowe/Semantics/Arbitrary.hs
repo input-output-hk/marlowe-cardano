@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Arbitrary (
+module Spec.Marlowe.Semantics.Arbitrary (
   ContextuallyArbitrary(..)
 , IsValid(..)
 , arbitraryChoiceName

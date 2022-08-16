@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Spec.Marlowe.Util (
+module Spec.Marlowe.Semantics.Util (
   truncatedDivide
 , flattenMoney
 , stateEq
@@ -15,7 +15,7 @@ import Data.Function (on)
 import Data.List (group, sort)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V1.Ledger.Value (flattenValue)
-import Spec.Marlowe.Util.AssocMap
+import Spec.Marlowe.Semantics.AssocMap
 import Test.Tasty.HUnit (Assertion, assertBool)
 import Test.Tasty.QuickCheck (Gen, generate)
 

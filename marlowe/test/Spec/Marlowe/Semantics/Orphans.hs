@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Orphans (
+module Spec.Marlowe.Semantics.Orphans (
 ) where
 
 

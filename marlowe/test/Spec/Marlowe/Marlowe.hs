@@ -69,7 +69,7 @@ import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
 import Test.Tasty.QuickCheck (Property, testProperty)
 
 tests :: TestTree
-tests = testGroup "Semantics"
+tests = testGroup "Contracts"
   [ testCase "Contracts with different creators have different hashes" uniqueContractHash
   , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
   , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
@@ -91,6 +91,7 @@ tests = testGroup "Semantics"
   , testProperty "Multiply by zero" mulTest
   , testProperty "Divide zero and by zero" divZeroTest
   , testProperty "DivValue rounding" divisionRoundingTest
+--, testProperty "Correct Show instance for Contract" Spec.Marlowe.Marlowe.prop_showWorksForContracts
 -- PAB tests
 --  , zeroCouponBondTest
 --  , merkleizedZeroCouponBondTest

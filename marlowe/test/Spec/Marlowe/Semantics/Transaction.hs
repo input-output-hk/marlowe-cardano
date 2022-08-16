@@ -10,7 +10,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans               #-}
 
 
-module Spec.Marlowe.Transaction (
+module Spec.Marlowe.Semantics.Transaction (
   tests
 ) where
 
@@ -28,9 +28,9 @@ import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
 import Plutus.V1.Ledger.Value (flattenValue)
-import Spec.Marlowe.Arbitrary
-import Spec.Marlowe.Orphans ()
-import Spec.Marlowe.Util.AssocMap
+import Spec.Marlowe.Semantics.Arbitrary
+import Spec.Marlowe.Semantics.AssocMap
+import Spec.Marlowe.Semantics.Orphans ()
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
@@ -628,7 +628,7 @@ assertWarns =
 
 tests :: TestTree
 tests =
-  testGroup "Transactions"
+  testGroup "Compute Transaction"
     $ fmap (test False)
     [
       invalidInterval

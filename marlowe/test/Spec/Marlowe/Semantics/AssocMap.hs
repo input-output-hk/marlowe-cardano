@@ -1,5 +1,5 @@
 
-module Spec.Marlowe.Util.AssocMap (
+module Spec.Marlowe.Semantics.AssocMap (
   assocMapAdd
 , assocMapEq
 , assocMapInsert
