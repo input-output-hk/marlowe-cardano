@@ -66,7 +66,7 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
-                        --lovelace 15000000000                    \
+                        --lovelace 150000000                      \
                         "$LENDER_ADDRESS"
 
 echo "#### The Borrower"
@@ -204,7 +204,7 @@ echo "## The Contract"
 MINIMUM_ADA=3000000
 
 FIXED_POINT=1000000
-PRINCIPAL=10000
+PRINCIPAL=100
 INTEREST_RATE=0.02
 INTEREST=$(jq -n $PRINCIPAL*$INTEREST_RATE)
 
@@ -294,7 +294,7 @@ marlowe-cli run execute --testnet-magic "$MAGIC"                  \
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
 )
 
-echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace from the lender $LENDER_NAME in the transaction "'`'"$TX_1"'`'".  Here is the UTxO at the contract address:"
+echo "The contract received the minimum ADA amount of $MINIMUM_ADA lovelace from the lender $LENDER_NAME in the transaction "'`'"$TX_1"'`'".  Here is the UTxO at the contract address:"
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
 
@@ -445,15 +445,15 @@ marlowe-cli run execute --testnet-magic "$MAGIC"                                
 
 echo "The closing of the contract paid in the transaction "'`'"$TX_5"'`'" the $PRINCIPAL ada principal and $INTEREST ada interest to the role address for the benefit of the lender $LENDER_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract. There is no UTxO at the contract address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
 
 echo "Here are the UTxOs at the borrower $BORROWER_NAME's address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 
 echo "Here is the UTxO at the role address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 
 echo "## Transaction 6. Lender Withdraws Repayment."
 
@@ -492,10 +492,17 @@ echo "## Clean Up"
 
 FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
 
+TX_7=$(
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 1                         \
+                        "$BORROWER_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1/;p}'            \
+)
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
-                               --tx-in "$TX_6"#0                                    \
-                               --tx-in "$TX_6"#2                                    \
+                               --tx-in "$TX_7"#0                                    \
+                               --tx-in "$TX_7"#2                                    \
                                --tx-out "$LENDER_ADDRESS+1400000+1 $BORROWER_TOKEN" \
                                --required-signer "$BORROWER_PAYMENT_SKEY"           \
                                --change-address "$FAUCET_ADDRESS"                   \
