@@ -81,9 +81,10 @@ data MarloweContext =
 instance Arbitrary MarloweContext where
   arbitrary = semiArbitrary =<< arbitrary
   shrink mc@MarloweContext{..} =
-       [mc {mcInput    = input'   , mcOutput = computeTransaction   input' mcState  mcContract } | input'    <- shrink mcInput   ]
-    <> [mc {mcState    = state'   , mcOutput = computeTransaction mcInput    state' mcContract } | state'    <- shrink mcState   ]
-    <> [mc {mcContract = contract', mcOutput = computeTransaction mcInput  mcState    contract'} | contract' <- shrink mcContract]
+    fmap updateOutput
+      $  [mc {mcInput    = input'   } | input'    <- shrink mcInput   ]
+      <> [mc {mcState    = state'   } | state'    <- shrink mcState   ]
+      <> [mc {mcContract = contract'} | contract' <- shrink mcContract]
 
 instance SemiArbitrary MarloweContext where
   semiArbitrary context =
@@ -121,13 +122,12 @@ makeInvalidInterval mc@MarloweContext{mcInput=mcInput@TransactionInput{txInterva
 
 environment :: Getter MarloweContext Environment
 environment =
-  to
-    $ \MarloweContext{..} ->
-      Environment
-        (
-          maximum [minTime mcState, fst $ txInterval mcInput]
-        , snd $ txInterval mcInput
-        )
+  to $ \MarloweContext{..} ->
+    Environment
+      (
+        maximum [minTime mcState, fst $ txInterval mcInput]
+      , snd $ txInterval mcInput
+      )
 
 
 validTimes :: Getter MarloweContext TimeInterval
@@ -546,17 +546,30 @@ implicitClose =
   }
 
 
+requireIncompatibleInput :: Testify ()
+requireIncompatibleInput =
+  do
+    requireInputs (> 0)
+    input <- getInputContent . head <$> view inputs
+    (cs, _, _) <- unWhen =<< view preContract
+    let matches (IDeposit _ _ _ _) (Deposit _ _ _ _) = True
+        matches (IChoice _ _     ) (Choice _ _     ) = True
+        matches  INotify           (Notify _       ) = True
+        matches  _                  _                = False
+    any (matches input . getAction) cs
+      `when` throwError "Input may be compatible with action."
+
+
 noMatch :: TransactionTest
 noMatch =
   def
   {
     name          = "No matching input"
-  , precondition  = do
-                      requireAccounts
-                      requireValidTime
-                      requireInputs (> 0)
-                      input <- head <$> view inputs
-                      pure ()
+  , generator     = arbitraryMarloweContext
+                      . (whenContractWeights :)
+                      . (`replicate` defaultContractWeights)
+                      =<< arbitrary `suchThat` (< 4)
+  , precondition  = requireValidTime >> requireNotTimeout >> requireIncompatibleInput
   , postcondition = hasError TEApplyNoMatchError
   }
 
