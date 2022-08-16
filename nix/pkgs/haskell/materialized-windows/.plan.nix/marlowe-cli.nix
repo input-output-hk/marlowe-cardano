@@ -54,6 +54,7 @@
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."marlowe-actus" or (errorHandler.buildDepError "marlowe-actus"))
           (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))

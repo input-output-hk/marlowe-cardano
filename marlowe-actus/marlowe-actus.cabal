@@ -34,21 +34,20 @@ source-repository head
   location: https://github.com/input-output-hk/plutus
 
 flag defer-plugin-errors
-    description:
-        Defer errors from the plugin, useful for things like Haddock that can't handle it.
-    default: False
-    manual: True
+  description:
+      Defer errors from the plugin, useful for things like Haddock that can't handle it.
+  default: False
+  manual: True
 
-library
-  hs-source-dirs: src
+library actus-core
+  hs-source-dirs: actus-core/src
   build-depends:
     aeson -any,
     base -any,
-    marlowe,
     mtl -any,
-    plutus-ledger-api,
     sort -any,
-    text,
+    lens -any,
+    text -any,
     time -any,
     validation -any
   default-language: Haskell2010
@@ -57,68 +56,110 @@ library
                       DeriveFunctor DeriveFoldable
                       DeriveTraversable
   exposed-modules:
-    Language.Marlowe.ACTUS.Domain.BusinessEvents
-    Language.Marlowe.ACTUS.Domain.ContractTerms
-    Language.Marlowe.ACTUS.Domain.ContractState
-    Language.Marlowe.ACTUS.Domain.Ops
-    Language.Marlowe.ACTUS.Domain.Schedule
-    Language.Marlowe.ACTUS.Generator.Analysis
-    Language.Marlowe.ACTUS.Generator.Generator
-    Language.Marlowe.ACTUS.Generator.GeneratorFs
-    Language.Marlowe.ACTUS.Generator.GeneratorStatic
-    Language.Marlowe.ACTUS.Generator.MarloweCompat
-    Language.Marlowe.ACTUS.Model.Applicability
-    Language.Marlowe.ACTUS.Model.ContractSchedule
-    Language.Marlowe.ACTUS.Model.StateInitialization
-    Language.Marlowe.ACTUS.Model.StateTransition
-    Language.Marlowe.ACTUS.Model.Payoff
-    Language.Marlowe.ACTUS.Utility.ANN.Annuity
-    Language.Marlowe.ACTUS.Utility.DateShift
-    Language.Marlowe.ACTUS.Utility.ScheduleGenerator
-    Language.Marlowe.ACTUS.Utility.YearFraction
+    Actus.Core
+    Actus.Domain
+    Actus.Model
+    Actus.Utility
+  other-modules:
+    Actus.Domain.BusinessEvents
+    Actus.Domain.ContractTerms
+    Actus.Domain.ContractState
+    Actus.Domain.Schedule
+    Actus.Model.Applicability
+    Actus.Model.ContractSchedule
+    Actus.Model.Payoff
+    Actus.Model.StateInitialization
+    Actus.Model.StateTransition
+    Actus.Utility.ANN.Annuity
+    Actus.Utility.DateShift
+    Actus.Utility.ScheduleGenerator
+    Actus.Utility.YearFraction
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+
+test-suite actus-core-test
+  default-language: Haskell2010
+  hs-source-dirs: actus-core/test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Spec.TestFramework
+  build-depends:
+    actus-core,
+    aeson -any,
+    base >=4.9 && <5,
+    bytestring -any,
+    containers -any,
+    lens -any,
+    mtl -any,
+    pretty-simple -any,
+    sort -any,
+    tasty -any,
+    tasty-hunit -any,
+    tasty-quickcheck -any,
+    text -any,
+    time -any,
+    validation -any,
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+
+library
+  hs-source-dirs: src
+  build-depends:
+    actus-core,
+    base -any,
+    bytestring,
+    plutus-tx -any,
+    plutus-ledger,
+    text,
+    marlowe -any,
+    time -any,
+    validation -any
+  default-language: Haskell2010
+  default-extensions: ExplicitForAll ScopedTypeVariables
+                      DeriveGeneric StandaloneDeriving DeriveLift
+                      DeriveFunctor DeriveFoldable
+                      DeriveTraversable
+  exposed-modules:
+    Actus.Marlowe
+  other-modules:
+    Actus.Marlowe.Instance
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
 
 test-suite marlowe-actus-test
-    default-language: Haskell2010
-    hs-source-dirs: test
-    type: exitcode-stdio-1.0
-    main-is: Spec.hs
-    other-modules:
-        Spec.Marlowe.ACTUS.Examples
-        Spec.Marlowe.ACTUS.TestFramework
-        Spec.Marlowe.ACTUS.QCGenerator
-        Spec.Marlowe.ACTUS.QCTests
-    build-depends:
-        QuickCheck,
-        aeson -any,
-        base >=4.9 && <5,
-        bytestring -any,
-        cborg,
-        containers -any,
-        extra -any,
-        hedgehog -any,
-        lens -any,
-        marlowe,
-        marlowe-actus,
-        mtl -any,
-        plutus-tx,
-        plutus-ledger-api,
-        pretty-simple -any,
-        scientific -any,
-        sort -any,
-        tasty -any,
-        tasty-hunit -any,
-        tasty-quickcheck -any,
-        template-haskell -any,
-        text -any,
-        time -any,
-        unordered-containers -any,
-        utf8-string -any,
-        validation -any,
-        vector -any,
+  default-language: Haskell2010
+  hs-source-dirs: test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Spec.Actus.Examples
+  build-depends:
+    actus-core,
+    aeson -any,
+    base >=4.9 && <5,
+    bytestring -any,
+    containers -any,
+    scientific -any,
+    marlowe,
+    marlowe-actus,
+    mtl -any,
+    plutus-ledger -any,
+    plutus-tx -any,
+    pretty-simple -any,
+    sort -any,
+    tasty -any,
+    tasty-hunit -any,
+    tasty-quickcheck -any,
+    text -any,
+    time -any,
+    validation -any,
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates

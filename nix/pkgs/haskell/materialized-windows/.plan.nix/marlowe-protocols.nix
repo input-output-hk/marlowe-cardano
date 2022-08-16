@@ -48,6 +48,13 @@
           "Network/Protocol/ChainSeek/Codec"
           "Network/Protocol/ChainSeek/Server"
           "Network/Protocol/ChainSeek/Types"
+          "Network/Protocol/Job/Client"
+          "Network/Protocol/Job/Codec"
+          "Network/Protocol/Job/Server"
+          "Network/Protocol/Job/Types"
+          "Network/Protocol/Query/Client"
+          "Network/Protocol/Query/Types"
+          "Network/Protocol/Codec"
           ];
         hsSourceDirs = [ "src" ];
         };

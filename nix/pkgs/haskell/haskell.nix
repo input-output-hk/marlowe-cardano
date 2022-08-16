@@ -173,7 +173,7 @@ let
 
             # The marlowe-actus tests depend on external data which is
             # provided from Nix (as niv dependency)
-            marlowe-actus.components.tests.marlowe-actus-test.preCheck = ''
+            marlowe-actus.components.tests.actus-core-test.preCheck = ''
               export ACTUS_TEST_DATA_DIR=${actus-tests}/tests/
             '';
 
