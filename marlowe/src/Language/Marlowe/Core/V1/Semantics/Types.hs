@@ -235,7 +235,6 @@ data State = State { accounts    :: Accounts
 newtype Environment = Environment { timeInterval :: TimeInterval }
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord)
 
-
 {-| Input for a Marlowe contract. Correspond to expected 'Action's.
 -}
 data InputContent = IDeposit AccountId Party Token Integer

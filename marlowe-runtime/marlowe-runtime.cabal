@@ -78,6 +78,7 @@ library
     , marlowe-chain-sync
     , marlowe-protocols
     , plutus-ledger-api
+    , split
     , stm
     , text
     , typed-protocols
@@ -94,3 +95,23 @@ executable marlowed
   build-depends:
       base >= 4.9 && < 5
     , marlowe-runtime
+
+executable marlowe-follower
+  import: lang
+  hs-source-dirs:   marlowe-follower
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async
+    , base16
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
+    , network
+    , typed-protocols
+    , optparse-applicative
+    , stm
