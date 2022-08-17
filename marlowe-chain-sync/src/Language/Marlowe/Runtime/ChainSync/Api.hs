@@ -76,6 +76,7 @@ data Metadata
 data TransactionInput = TransactionInput
   { txId     :: !TxId             -- ^ The txId of the TransactionOutput this input consumes.
   , txIx     :: !TxIx             -- ^ The txIx of the TransactionOutput this input consumes.
+  , address  :: !Address          -- ^ The address of the TransactionOutput this input consumes.
   , redeemer :: !(Maybe Redeemer) -- ^ The script redeemer dataum for this input (if one was provided).
   }
   deriving stock (Show, Read, Eq, Ord, Generic)
