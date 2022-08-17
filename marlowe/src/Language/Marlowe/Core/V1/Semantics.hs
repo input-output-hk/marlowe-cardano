@@ -225,6 +225,7 @@ currencySymbolToJSON (CurrencySymbol h) = toJSON . EncodeBase16 . fromBuiltin $ 
     This data type is a content of a contract's /Datum/
 -}
 data MarloweData = MarloweData {
+        marloweParams   :: MarloweParams,
         marloweState    :: State,
         marloweContract :: Contract
     } deriving stock (Haskell.Show, Haskell.Eq, Generic)
@@ -745,5 +746,6 @@ makeLift ''TransactionWarning
 makeLift ''TransactionError
 makeLift ''TransactionOutput
 makeLift ''MarloweData
+makeIsDataIndexed ''MarloweParams [('MarloweParams,0)]
 makeIsDataIndexed ''MarloweData [('MarloweData,0)]
 makeLift ''MarloweParams

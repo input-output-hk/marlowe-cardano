@@ -29,6 +29,7 @@ tests = testGroup "Marlowe" $
     , testGroup "Marlowe JSON"
         [ testProperty "Serialise deserialise Contract loops" Spec.Marlowe.Marlowe.prop_contractJsonLoops
         , testProperty "Serialise deserialise MarloweParams loops" Spec.Marlowe.Marlowe.prop_marloweParamsJsonLoops
+        , testProperty "Serialise deserialise IntervalError loops" Spec.Marlowe.Marlowe.prop_intervalErrorJsonLoops
         ]
     ]
     <> Spec.Marlowe.Semantics.tests
