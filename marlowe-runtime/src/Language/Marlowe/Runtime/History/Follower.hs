@@ -6,8 +6,8 @@ module Language.Marlowe.Runtime.History.Follower where
 
 import Control.Applicative ((<|>))
 import Control.Concurrent.STM (STM, TVar, atomically, newTVar, readTVar, writeTVar)
-import Control.Monad (guard)
-import Data.Foldable (asum)
+import Control.Monad (guard, when)
+import Data.Foldable (asum, for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -90,6 +90,7 @@ data ExtractCreationError
   | InvalidScriptHash
   | NoDatum
   | InvalidDatum
+  | NotCreationTransaction
   deriving stock (Show, Eq, Ord)
 
 data ContractChangesTVar v = ContractChangesTVar (MarloweVersion v) (TVar (ContractChanges v))
@@ -130,7 +131,7 @@ mkFollower FollowerDependencies{..} = do
               let scriptUTxO = Just $ unContractId contractId
               let payoutUTxOs = mempty
               followContract FollowerState{..}
-      , recvMsgRollBackward = \_ _ -> findContract
+      , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
       }
 
   pure Follower
@@ -153,9 +154,11 @@ data FollowerState v = FollowerState
   }
 
 exctractCreation :: ContractId -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-exctractCreation contractId tx = do
+exctractCreation contractId tx@Chain.Transaction{inputs} = do
   Chain.TransactionOutput{address, datum=mdatum} <- getOutput (txIx $ unContractId contractId) tx
   scriptHash <- getScriptHash address
+  for_ inputs \Chain.TransactionInput{address=txInAddress} ->
+    when (isScriptAddress scriptHash txInAddress) $ Left NotCreationTransaction
   SomeMarloweVersion version <- maybe (Left InvalidScriptHash) Right $ getMarloweVersion scriptHash
   txDatum <- maybe (Left NoDatum) Right mdatum
   datum <- maybe (Left InvalidDatum) Right $ datumFromData version txDatum
@@ -167,6 +170,9 @@ getScriptHash address = do
   case credential of
     Chain.ScriptCredential scriptHash -> pure scriptHash
     _                                 -> Left NonScriptAddress
+
+isScriptAddress :: ScriptHash -> Chain.Address -> Bool
+isScriptAddress scriptHash address = getScriptHash address == Right scriptHash
 
 getOutput :: Chain.TxIx -> Chain.Transaction -> Either ExtractCreationError Chain.TransactionOutput
 getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
