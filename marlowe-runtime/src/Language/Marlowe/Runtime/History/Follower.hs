@@ -134,9 +134,7 @@ mkFollower FollowerDependencies{..} = do
       }
 
   pure Follower
-    { runFollower = connectToChainSeek $ ChainSeekClient do
-        putStrLn $ "Following contract " <> show contractId
-        pure stInit
+    { runFollower = connectToChainSeek $ ChainSeekClient $ pure stInit
     , changes = do
         mChangesVar <- readTVar someChangesVar
         for mChangesVar \(SomeContractChangesTVar (ContractChangesTVar version changesVar)) -> do

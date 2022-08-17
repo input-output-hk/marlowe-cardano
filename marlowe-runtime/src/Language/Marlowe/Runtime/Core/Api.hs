@@ -13,6 +13,7 @@ import Data.Binary (Binary (..))
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.List.Split (splitOn)
 import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -20,14 +21,42 @@ import Data.Text.Encoding (encodeUtf8)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ScriptHash, TokenName (..), TxOutRef, ValidityRange)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ScriptHash, TokenName (..), TxId (..), TxIx (..),
+                                               TxOutRef (..), ValidityRange)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import Text.Read (readMaybe)
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
 -- the contract.
 newtype ContractId = ContractId { unContractId :: TxOutRef }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+parseTxOutRef :: String -> Maybe TxOutRef
+parseTxOutRef val = case splitOn "#" val of
+  [txId, txIx] -> TxOutRef
+    <$> (TxId <$> either (const Nothing) Just (decodeBase16 $ encodeUtf8 $ T.pack txId))
+    <*> (TxIx <$> readMaybe txIx)
+  _ -> Nothing
+
+renderTxOutRef :: TxOutRef -> Text
+renderTxOutRef TxOutRef{..} = mconcat
+  [ encodeBase16 $ unTxId txId
+  , "#"
+  , T.pack $ show $ unTxIx txIx
+  ]
+
+parseContractId :: String -> Maybe ContractId
+parseContractId = fmap ContractId . parseTxOutRef
+
+parseTransactionId :: String -> Maybe TransactionId
+parseTransactionId = fmap TransactionId . parseTxOutRef
+
+renderContractId :: ContractId -> Text
+renderContractId = renderTxOutRef . unContractId
+
+renderTransactionId :: TransactionId -> Text
+renderTransactionId = renderTxOutRef . unTransactionId
 
 -- | The ID of a transaction is the TxId and TxIx of the script UTxO that it
 -- consumes.
