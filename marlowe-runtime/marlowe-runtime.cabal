@@ -65,16 +65,19 @@ library
   hs-source-dirs:   src
   exposed-modules:
     Language.Marlowe.Runtime.Core.Api
+    Language.Marlowe.Runtime.History.Follower
   build-depends:
       base >= 4.9 && < 5
     , aeson
     , async
+    , base16
     , binary
     , bytestring
     , containers
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
+    , plutus-ledger-api
     , stm
     , text
     , typed-protocols
