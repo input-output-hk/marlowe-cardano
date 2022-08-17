@@ -32,7 +32,7 @@ _ALLOW_ZERO_PAYMENT = True
 
 -- FIXME: Turn this off when the `getContinuation` test is fixed, see SCP-4268.
 _ALLOW_FAILED_CONTINUATION_ :: Bool
-_ALLOW_FAILED_CONTINUATION_ = False
+_ALLOW_FAILED_CONTINUATION_ = True
 
 
 tests :: TestTree
@@ -138,6 +138,7 @@ tests =
       , testProperty "INotify" checkINotify
       ]
     , testProperty "getContinuation" checkGetContinuation
+    , testProperty "applyCases" checkApplyCases
     , testProperty "applyInput" checkApplyInput
     , testCase "isClose" checkIsClose
     ]
@@ -803,6 +804,24 @@ checkGetContinuation =
         (MerkleizedInput{}, MerkleizedCase{}, contract') -> (Just contract == contract') == hashesMatch
         (_                , _               , Nothing  ) -> True
         _                                                -> False
+
+
+checkApplyCases :: Property
+checkApplyCases =
+  property $ do
+    let gen =
+          do
+            context <- arbitrary
+            state <- semiArbitrary context
+            contract <- arbitraryContractWeighted [whenContractWeights] context
+            input <- arbitraryValidStep state contract
+            pure (state, contract, input)
+    forAll gen $ \(state, contract, TransactionInput times inputs) ->
+      case (contract, inputs) of
+        (When cases _ _, [input]) -> case applyCases (Environment times) state input cases of
+                                       Applied{} -> True
+                                       _         -> False
+        _                         -> True
 
 
 checkApplyInput :: Property

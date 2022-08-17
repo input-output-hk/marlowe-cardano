@@ -1,5 +1,6 @@
 
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -20,20 +21,24 @@ module Spec.Marlowe.Semantics.Arbitrary (
 , letContractWeights
 , assertContractWeights
 , arbitraryContractWeighted
+, arbitraryValidStep
 ) where
 
 
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
+import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (..), Case (..), ChoiceId (..),
                                                  ChoiceName, ChosenNum, Contract (..), Environment (..), Input (..),
                                                  InputContent (..), Observation (..), Party (..), Payee (..),
-                                                 State (..), TimeInterval, Token (..), Value (..), ValueId (..))
+                                                 State (..), TimeInterval, Token (..), Value (..), ValueId (..),
+                                                 getAction)
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, listOf, shrinkList, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat)
 
+import qualified Data.Map.Strict as M
 import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
@@ -159,6 +164,15 @@ arbitraryPositiveInteger =
   frequency
     [
       (60, arbitrary `suchThat` (> 0))
+    , (30, arbitraryFibonacci fibonaccis)
+    ]
+
+
+arbitraryNonnegativeInteger :: Gen Integer
+arbitraryNonnegativeInteger =
+  frequency
+    [
+      (60, arbitrary `suchThat` (>= 0))
     , (30, arbitraryFibonacci fibonaccis)
     ]
 
@@ -344,7 +358,28 @@ arbitraryTimeInterval :: Gen TimeInterval
 arbitraryTimeInterval =
   do
     start <- arbitraryInteger
-    duration <- arbitraryPositiveInteger
+    duration <- arbitraryNonnegativeInteger
+    pure (POSIXTime start, POSIXTime $ start + duration)
+
+arbitraryTimeIntervalAround :: POSIXTime -> Gen TimeInterval
+arbitraryTimeIntervalAround (POSIXTime limit) =
+  do
+    start <- arbitraryInteger `suchThat` (<= limit)
+    duration <- ((limit - start) +) <$> arbitraryNonnegativeInteger
+    pure (POSIXTime start, POSIXTime $ start + duration)
+
+arbitraryTimeIntervalBefore :: POSIXTime -> POSIXTime -> Gen TimeInterval
+arbitraryTimeIntervalBefore (POSIXTime lower) (POSIXTime upper) =
+  do
+    start <- arbitraryInteger `suchThat` (<= lower)
+    duration <- chooseInteger (0, upper - start - 1)
+    pure (POSIXTime start, POSIXTime $ start + duration)
+
+arbitraryTimeIntervalAfter :: POSIXTime -> Gen TimeInterval
+arbitraryTimeIntervalAfter (POSIXTime lower) =
+  do
+    start <- arbitraryInteger `suchThat` (>= lower)
+    duration <- arbitraryNonnegativeInteger
     pure (POSIXTime start, POSIXTime $ start + duration)
 
 shrinkTimeInterval :: TimeInterval -> [TimeInterval]
@@ -366,7 +401,7 @@ instance SemiArbitrary TimeInterval where
   semiArbitrary context =
     do
       POSIXTime start <- semiArbitrary context
-      duration <- arbitraryPositiveInteger
+      duration <- arbitraryNonnegativeInteger
       pure (POSIXTime start, POSIXTime $ start + duration)
   semiShrink = fmap shrinkTimeInterval
 
@@ -528,7 +563,7 @@ instance Arbitrary Bound where
   arbitrary =
     do
       lower <- arbitraryInteger
-      extent <- arbitraryPositiveInteger `suchThat` (>= 0)
+      extent <- arbitraryNonnegativeInteger
       pure $ Bound lower (lower + extent)
   shrink (Bound lower upper) =
     let
@@ -548,7 +583,7 @@ instance SemiArbitrary Bound where
   semiArbitrary context =
       do
         lower <- semiArbitrary context
-        extent <- arbitraryPositiveInteger `suchThat` (>= 0)
+        extent <- arbitraryNonnegativeInteger
         pure $ Bound lower (lower + extent)
 
 
@@ -771,3 +806,25 @@ instance Arbitrary Input where
 
 instance SemiArbitrary Input where
   semiArbitrary context = NormalInput <$> semiArbitrary context
+
+
+arbitraryValidStep :: State -> Contract -> Gen TransactionInput
+arbitraryValidStep state@State{..} (When [] timeout _) =
+  TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
+arbitraryValidStep state@State{..} (When cases timeout _) =
+  do
+    isTimeout <- frequency [(9, pure False), (1, pure True)]
+    if isTimeout || minTime >= timeout
+      then TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
+      else do
+             times <- arbitraryTimeIntervalBefore minTime timeout
+             cas <- elements cases
+             i <- case getAction cas of
+                    Deposit a p t v -> pure . IDeposit a p t $ evalValue (Environment times) state v
+                    Choice n bs     -> do
+                                         Bound lower upper <- elements bs
+                                         IChoice n <$> chooseInteger (lower, upper)
+                    Notify _        -> pure INotify
+             pure $ TransactionInput times [NormalInput i]
+arbitraryValidStep State{minTime} _ =
+  TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
