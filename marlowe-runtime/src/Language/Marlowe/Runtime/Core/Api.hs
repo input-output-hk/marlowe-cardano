@@ -11,6 +11,7 @@ import Data.Aeson.Types (Parser, parse)
 import Data.Binary (Binary (..))
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
+import Data.Set (Set)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
@@ -46,6 +47,113 @@ data Datum v = Datum
   , datumParams   :: Params v
   , datumState    :: State v
   }
+
+data SomeMarloweVersion = forall v. SomeMarloweVersion (MarloweVersion v)
+
+data ContractInVersion v = ContractInVersion (MarloweVersion v) (Contract v)
+data SomeContractInVersion = forall v. SomeContractInVersion (ContractInVersion v)
+
+data RedeemerInVersion v = RedeemerInVersion (MarloweVersion v) (Redeemer v)
+data SomeRedeemerInVersion = forall v. SomeRedeemerInVersion (RedeemerInVersion v)
+
+data DatumInVersion v = DatumInVersion (MarloweVersion v) (Datum v)
+data SomeDataInVersion = forall v. SomeDataInVersion (DatumInVersion v)
+
+instance ToJSON (MarloweVersion v) where
+  toJSON = String . \case
+    MarloweV1 -> "v1"
+
+instance FromJSON SomeMarloweVersion where
+  parseJSON json = do
+    s :: Text <- parseJSON json
+    case s of
+      "v1" -> pure $ SomeMarloweVersion MarloweV1
+      _    -> fail "Invalid marlowe version"
+
+instance Binary SomeMarloweVersion where
+  put (SomeMarloweVersion v) = case v of
+    MarloweV1 -> putWord32be 0x01
+  get = getWord32be >>= \case
+    0x01 -> pure $ SomeMarloweVersion MarloweV1
+    _    -> fail "Invalid marlowe version bytes"
+
+instance ToJSON (ContractInVersion v) where
+  toJSON (ContractInVersion v c) = object
+    [ "version" .= v
+    , "contract" .= contractToJSON v c
+    ]
+
+instance FromJSON SomeContractInVersion where
+  parseJSON json = do
+    obj <- parseJSON json
+    SomeMarloweVersion v <- obj .: "version"
+    c <- contractFromJSON v =<< obj .: "contract"
+    pure $ SomeContractInVersion $ ContractInVersion v c
+
+instance Binary SomeContractInVersion where
+  put (SomeContractInVersion (ContractInVersion v c)) = do
+    put $ SomeMarloweVersion v
+    put $ encode $ contractToJSON v c
+  get = do
+    SomeMarloweVersion v <- get
+    bytes <- get
+    case eitherDecode bytes of
+      Left err -> fail err
+      Right json -> case parse (contractFromJSON v) json of
+        Error err -> fail err
+        Success c -> pure $ SomeContractInVersion $ ContractInVersion v c
+
+instance ToJSON (RedeemerInVersion v) where
+  toJSON (RedeemerInVersion v r) = object
+    [ "version" .= v
+    , "redeemer" .= redeemerToJSON v r
+    ]
+
+instance FromJSON SomeRedeemerInVersion where
+  parseJSON json = do
+    obj <- parseJSON json
+    SomeMarloweVersion v <- obj .: "version"
+    r <- redeemerFromJSON v =<< obj .: "redeemer"
+    pure $ SomeRedeemerInVersion $ RedeemerInVersion v r
+
+instance Binary SomeRedeemerInVersion where
+  put (SomeRedeemerInVersion (RedeemerInVersion v c)) = do
+    put $ SomeMarloweVersion v
+    put $ encode $ redeemerToJSON v c
+  get = do
+    SomeMarloweVersion v <- get
+    bytes <- get
+    case eitherDecode bytes of
+      Left err -> fail err
+      Right json -> case parse (redeemerFromJSON v) json of
+        Error err -> fail err
+        Success c -> pure $ SomeRedeemerInVersion $ RedeemerInVersion v c
+
+instance ToJSON (DatumInVersion v) where
+  toJSON (DatumInVersion v d) = object
+    [ "version" .= v
+    , "datum" .= datumToJSON v d
+    ]
+
+instance FromJSON SomeDataInVersion where
+  parseJSON json = do
+    obj <- parseJSON json
+    SomeMarloweVersion v <- obj .: "version"
+    d <- datumFromJSON v =<< obj .: "datum"
+    pure $ SomeDataInVersion $ DatumInVersion v d
+
+instance Binary SomeDataInVersion where
+  put (SomeDataInVersion (DatumInVersion v c)) = do
+    put $ SomeMarloweVersion v
+    put $ encode $ datumToJSON v c
+  get = do
+    SomeMarloweVersion v <- get
+    bytes <- get
+    case eitherDecode bytes of
+      Left err -> fail err
+      Right json -> case parse (datumFromJSON v) json of
+        Error err -> fail err
+        Success c -> pure $ SomeDataInVersion $ DatumInVersion v c
 
 contractToJSON :: MarloweVersion v -> Contract v -> Value
 contractToJSON = \case
@@ -94,116 +202,8 @@ datumFromJSON v json = do
   datumState <- stateFromJSON v =<< obj .: "marloweState"
   pure Datum{..}
 
-data SomeMarloweVersion = forall v. SomeMarloweVersion (MarloweVersion v)
-
-instance ToJSON (MarloweVersion v) where
-  toJSON = String . \case
-    MarloweV1 -> "v1"
-
-instance FromJSON SomeMarloweVersion where
-  parseJSON json = do
-    s :: Text <- parseJSON json
-    case s of
-      "v1" -> pure $ SomeMarloweVersion MarloweV1
-      _    -> fail "Invalid marlowe version"
-
-instance Binary SomeMarloweVersion where
-  put (SomeMarloweVersion v) = case v of
-    MarloweV1 -> putWord32be 0x01
-  get = getWord32be >>= \case
-    0x01 -> pure $ SomeMarloweVersion MarloweV1
-    _    -> fail "Invalid marlowe version bytes"
-
-
-data VersionedContract v = VersionedContract (MarloweVersion v) (Contract v)
-data SomeVersionedContract = forall v. SomeVersionedContract (VersionedContract v)
-
-instance ToJSON (VersionedContract v) where
-  toJSON (VersionedContract v c) = object
-    [ "version" .= v
-    , "contract" .= contractToJSON v c
-    ]
-
-instance FromJSON SomeVersionedContract where
-  parseJSON json = do
-    obj <- parseJSON json
-    SomeMarloweVersion v <- obj .: "version"
-    c <- contractFromJSON v =<< obj .: "contract"
-    pure $ SomeVersionedContract $ VersionedContract v c
-
-instance Binary SomeVersionedContract where
-  put (SomeVersionedContract (VersionedContract v c)) = do
-    put $ SomeMarloweVersion v
-    put $ encode $ contractToJSON v c
-  get = do
-    SomeMarloweVersion v <- get
-    bytes <- get
-    case eitherDecode bytes of
-      Left err -> fail err
-      Right json -> case parse (contractFromJSON v) json of
-        Error err -> fail err
-        Success c -> pure $ SomeVersionedContract $ VersionedContract v c
-
-data VersionedRedeemer v = VersionedRedeemer (MarloweVersion v) (Redeemer v)
-data SomeVersionedRedeemer = forall v. SomeVersionedRedeemer (VersionedRedeemer v)
-
-instance ToJSON (VersionedRedeemer v) where
-  toJSON (VersionedRedeemer v r) = object
-    [ "version" .= v
-    , "redeemer" .= redeemerToJSON v r
-    ]
-
-instance FromJSON SomeVersionedRedeemer where
-  parseJSON json = do
-    obj <- parseJSON json
-    SomeMarloweVersion v <- obj .: "version"
-    r <- redeemerFromJSON v =<< obj .: "redeemer"
-    pure $ SomeVersionedRedeemer $ VersionedRedeemer v r
-
-instance Binary SomeVersionedRedeemer where
-  put (SomeVersionedRedeemer (VersionedRedeemer v c)) = do
-    put $ SomeMarloweVersion v
-    put $ encode $ redeemerToJSON v c
-  get = do
-    SomeMarloweVersion v <- get
-    bytes <- get
-    case eitherDecode bytes of
-      Left err -> fail err
-      Right json -> case parse (redeemerFromJSON v) json of
-        Error err -> fail err
-        Success c -> pure $ SomeVersionedRedeemer $ VersionedRedeemer v c
-
-data VersionedDatum v = VersionedDatum (MarloweVersion v) (Datum v)
-data SomeVersionedDatum = forall v. SomeVersionedDatum (VersionedDatum v)
-
-instance ToJSON (VersionedDatum v) where
-  toJSON (VersionedDatum v d) = object
-    [ "version" .= v
-    , "datum" .= datumToJSON v d
-    ]
-
-instance FromJSON SomeVersionedDatum where
-  parseJSON json = do
-    obj <- parseJSON json
-    SomeMarloweVersion v <- obj .: "version"
-    d <- datumFromJSON v =<< obj .: "datum"
-    pure $ SomeVersionedDatum $ VersionedDatum v d
-
-instance Binary SomeVersionedDatum where
-  put (SomeVersionedDatum (VersionedDatum v c)) = do
-    put $ SomeMarloweVersion v
-    put $ encode $ datumToJSON v c
-  get = do
-    SomeMarloweVersion v <- get
-    bytes <- get
-    case eitherDecode bytes of
-      Left err -> fail err
-      Right json -> case parse (datumFromJSON v) json of
-        Error err -> fail err
-        Success c -> pure $ SomeVersionedDatum $ VersionedDatum v c
-
 getMarloweVersion :: ValidatorHash -> Maybe SomeMarloweVersion
-getMarloweVersion = error "not implemented"
+getMarloweVersion _ = Nothing
 
-getScriptHash :: MarloweVersion v -> ValidatorHash
-getScriptHash = error "not implemented"
+getScriptHash :: MarloweVersion v -> Set ValidatorHash
+getScriptHash = mempty
