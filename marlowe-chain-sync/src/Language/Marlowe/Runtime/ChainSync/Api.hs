@@ -5,6 +5,11 @@
 
 module Language.Marlowe.Runtime.ChainSync.Api where
 
+import qualified Cardano.Api as Cardano
+import qualified Cardano.Api.Shelley as Cardano
+import qualified Cardano.Ledger.BaseTypes as Base
+import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
+import Control.Monad ((>=>))
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary (..), get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
@@ -17,20 +22,19 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.These (These (..))
 import Data.Void (Void)
-import Data.Word (Word16, Word64)
+import Data.Word (Word16, Word32, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
-import Network.Protocol.ChainSeek.Client (ChainSeekClient)
+import Network.Protocol.ChainSeek.Client (ChainSeekClient, ClientStIdle)
 import Network.Protocol.ChainSeek.Codec (DeserializeError, codecChainSeek)
 import Network.Protocol.ChainSeek.Server (ChainSeekServer)
 import Network.Protocol.ChainSeek.Types (ChainSeek, Query (..), SchemaVersion (..), SomeTag (..), TagEq (..))
 import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
-import Text.Read (Read (..), pfail)
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
-  deriving stock (Show, Read, Eq, Ord, Functor, Generic)
+  deriving stock (Show, Eq, Ord, Functor, Generic)
   deriving anyclass (Binary)
 
 -- | A point in the chain, identified by a slot number, block header hash, and
@@ -43,8 +47,11 @@ data BlockHeader = BlockHeader
   , headerHash :: !BlockHeaderHash -- ^ The hash of this block's header.
   , blockNo    :: !BlockNo         -- ^ The ordinal number of this block.
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+isAfter :: SlotNo -> BlockHeader -> Bool
+isAfter s BlockHeader{..} = slotNo > s
 
 -- | A transaction body
 data Transaction = Transaction
@@ -55,7 +62,7 @@ data Transaction = Transaction
   , outputs       :: ![TransactionOutput]    -- ^ The outputs produced by the transaction.
   , mintedTokens  :: !Tokens                 -- ^ Tokens minted by the transaction.
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- | A validity range for a transaction
@@ -64,12 +71,12 @@ data ValidityRange
   | MinBound SlotNo           -- ^ The transaction is only valid after a specific slot.
   | MaxBound SlotNo           -- ^ The transaction is only valid before a specific slot.
   | MinMaxBound SlotNo SlotNo -- ^ The transaction is only valid between two slots.
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- TODO invlude validator versions
 data Metadata
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- | An input of a transaction.
@@ -79,7 +86,7 @@ data TransactionInput = TransactionInput
   , address  :: !Address          -- ^ The address of the TransactionOutput this input consumes.
   , redeemer :: !(Maybe Redeemer) -- ^ The script redeemer dataum for this input (if one was provided).
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- | An output of a transaction.
@@ -89,12 +96,12 @@ data TransactionOutput = TransactionOutput
   , datumHash :: !(Maybe DatumHash) -- ^ The hash of the script datum associated with this output.
   , datum     :: !(Maybe Datum)     -- ^ The script datum associated with this output.
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- | A script datum that is used to spend the output of a script tx.
 newtype Redeemer = Redeemer { unRedeemer :: Datum }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary)
 
 -- | A datum as a sum-of-products.
@@ -104,8 +111,14 @@ data Datum
   | List [Datum]
   | I Integer
   | B ByteString
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+fromDatum :: Plutus.FromData a => Datum -> Maybe a
+fromDatum = Plutus.fromData . toPlutusData
+
+toDatum :: Plutus.ToData a => a -> Datum
+toDatum = fromPlutusData . Plutus.toData
 
 -- | Convert from Plutus.V1.Ledger.Api.Data to Datum
 fromPlutusData :: Plutus.Data -> Datum
@@ -128,12 +141,12 @@ data Assets = Assets
   { ada    :: !Lovelace -- ^ The ADA sent by the tx output.
   , tokens :: !Tokens   -- ^ Additional tokens sent by the tx output.
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- | A collection of token quantities by their asset ID.
 newtype Tokens = Tokens { unTokens :: Map AssetId Quantity }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid)
 
 -- | A newtype wrapper for parsing base 16 strings as byte strings.
@@ -142,104 +155,151 @@ newtype Base16 = Base16 { unBase16 :: ByteString }
 instance Show Base16 where
   show = show . encodeBase16 . unBase16
 
-instance Read Base16 where
-  readPrec = either (const pfail) (pure . Base16) . decodeBase16 . encodeUtf8 =<< readPrec
-
 instance IsString Base16 where
   fromString = either (error . T.unpack) Base16 . decodeBase16 . encodeUtf8 . T.pack
 
 newtype DatumHash = DatumHash { unDatumHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
 newtype TxId = TxId { unTxId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
 newtype TxIx = TxIx { unTxIx :: Word16 }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+
+newtype CertIx = CertIx { unCertIx :: Word64 }
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
 
 data TxOutRef = TxOutRef
   { txId :: !TxId
   , txIx :: !TxIx
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
 
 newtype BlockNo = BlockNo { unBlockNo :: Word64 }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
 
 newtype BlockHeaderHash = BlockHeaderHash { unBlockHeaderHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
 data AssetId = AssetId
   { policyId  :: !PolicyId
   , tokenName :: !TokenName
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
 newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
 newtype Quantity = Quantity { unQuantity :: Word64 }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
 
 newtype Lovelace = Lovelace { unLovelace :: Word64 }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+
+newtype Magic = Magic { unMagic :: Word32 }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+
+data NetworkId
+  = Mainnet
+  | Testnet Magic
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
 
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
--- data Address = Address
---   { paymentCredential :: !Credential
---   , stakingCredential :: !(Maybe StakingCredential)
---   }
---   deriving stock (Show, Read, Eq, Ord, Generic)
---   deriving anyclass (Binary)
+toCardanoAddress :: Address -> Maybe Cardano.AddressAny
+toCardanoAddress = Cardano.deserialiseFromRawBytes Cardano.AsAddressAny . unAddress
+
+paymentCredential :: Address -> Maybe Credential
+paymentCredential = toCardanoAddress >=> \case
+  Cardano.AddressShelley (Cardano.ShelleyAddress _ credential _) ->
+    Just $ fromCardanoPaymentCredential $ Cardano.fromShelleyPaymentCredential credential
+  _ -> Nothing
+
+stakeReference :: Address -> Maybe StakeReference
+stakeReference = toCardanoAddress >=> \case
+  Cardano.AddressShelley (Cardano.ShelleyAddress _ _ ref) ->
+    fromCardanoStakeAddressReference $ Cardano.fromShelleyStakeReference ref
+  _ -> Nothing
 
 data Credential
-  = PubKeyCredential PubKeyHash
-  | ScriptCredential ValidatorHash
-  deriving stock (Show, Read, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  = PaymentKeyCredential PaymentKeyHash
+  | ScriptCredential ScriptHash
+  deriving stock (Show, Eq, Ord, Generic)
 
-newtype PubKeyHash = PubKeyHash { unPubKeyHash :: ByteString }
+fromCardanoPaymentCredential :: Cardano.PaymentCredential -> Credential
+fromCardanoPaymentCredential = \case
+  Cardano.PaymentCredentialByKey pkh           -> PaymentKeyCredential $ fromCardanoPaymentKeyHash pkh
+  Cardano.PaymentCredentialByScript scriptHash -> ScriptCredential $ fromCardanoScriptHash scriptHash
+
+newtype PaymentKeyHash = PaymentKeyHash { unPaymentKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
-newtype ValidatorHash = ValidatorHash { unValidatorHash :: ByteString }
+fromCardanoPaymentKeyHash :: Cardano.Hash Cardano.PaymentKey -> PaymentKeyHash
+fromCardanoPaymentKeyHash = PaymentKeyHash . Cardano.serialiseToRawBytes
+
+fromCardanoStakeKeyHash :: Cardano.Hash Cardano.StakeKey -> PaymentKeyHash
+fromCardanoStakeKeyHash = PaymentKeyHash . Cardano.serialiseToRawBytes
+
+newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
-  deriving (IsString, Show, Read) via Base16
+  deriving (IsString, Show) via Base16
 
-data StakingCredential
-  = StakingHash Credential
-  | StakingPtr Word64 Natural Natural
-  deriving stock (Show, Read, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+fromCardanoScriptHash :: Cardano.ScriptHash -> ScriptHash
+fromCardanoScriptHash = ScriptHash . Cardano.serialiseToRawBytes
+
+data StakeReference
+  = StakeCredential Credential
+  | StakePointer SlotNo TxIx CertIx
+  deriving stock (Show, Eq, Ord, Generic)
+
+fromCardanoStakeAddressReference :: Cardano.StakeAddressReference -> Maybe StakeReference
+fromCardanoStakeAddressReference = \case
+  Cardano.NoStakeAddress -> Nothing
+  Cardano.StakeAddressByValue credential -> Just $ StakeCredential $ fromCardanoStakeCredential credential
+  Cardano.StakeAddressByPointer (Cardano.StakeAddressPointer ptr) -> Just $ StakePointer
+    (SlotNo $ Cardano.unSlotNo $ ptrSlotNo ptr)
+    (let Base.TxIx txIx = ptrTxIx ptr in TxIx $ fromIntegral txIx)
+    (let Base.CertIx certIx = ptrCertIx ptr in CertIx certIx)
+
+fromCardanoStakeAddressPointer :: Cardano.StakeAddressPointer -> Word64
+fromCardanoStakeAddressPointer = error "not implemented"
+
+fromCardanoStakeCredential :: Cardano.StakeCredential -> Credential
+fromCardanoStakeCredential = \case
+  Cardano.StakeCredentialByKey pkh           -> PaymentKeyCredential $ fromCardanoStakeKeyHash pkh
+  Cardano.StakeCredentialByScript scriptHash -> ScriptCredential $ fromCardanoScriptHash scriptHash
 
 -- | The 'query' type for the Marlowe Chain Sync.
 data Move err result where
@@ -272,24 +332,26 @@ data Move err result where
 data UTxOError
   = UTxONotFound
   | UTxOSpent TxId
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- | Reasons a 'FindTx' request can be rejected.
 data TxError
   = TxNotFound
   | TxInPast BlockHeader
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 -- | Reasons an 'Intersect' request can be rejected.
 data IntersectError = IntersectionNotFound
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
 type RuntimeChainSeekClient = ChainSeekClient Move ChainPoint ChainPoint
+
+type RuntimeClientStIdle = ClientStIdle Move ChainPoint ChainPoint
 
 type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
 
