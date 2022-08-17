@@ -432,7 +432,7 @@ instance Query Move where
       0x03 -> pure $ SomeTag TagAdvanceBlocks
       0x04 -> pure $ SomeTag TagFindConsumingTx
       0x05 -> pure $ SomeTag TagIntersect
-      0x06 -> pure $ SomeTag TagIntersect
+      0x06 -> pure $ SomeTag TagFindTx
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case

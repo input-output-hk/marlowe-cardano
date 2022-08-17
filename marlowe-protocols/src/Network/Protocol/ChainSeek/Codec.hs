@@ -46,11 +46,13 @@ codecChainSeek = binaryCodec putMsg getMsg
 
     putMsg (ServerAgency (TokNext tag _)) (MsgRejectQuery err tip) = do
         putWord8 0x05
+        putTag $ coerceTag tag
         putErr (coerceTag tag) err
         put tip
 
     putMsg (ServerAgency (TokNext tag _)) (MsgRollForward result pos tip) = do
         putWord8 0x06
+        putTag $ coerceTag tag
         putResult (coerceTag tag) result
         put pos
         put tip
