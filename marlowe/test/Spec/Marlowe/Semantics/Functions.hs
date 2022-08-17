@@ -9,6 +9,7 @@ module Spec.Marlowe.Semantics.Functions (
 
 
 import Data.Maybe (fromMaybe, isNothing)
+import Debug.Trace
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
@@ -31,7 +32,7 @@ _ALLOW_ZERO_PAYMENT = True
 
 -- FIXME: Turn this off when the `getContinuation` test is fixed, see SCP-4268.
 _ALLOW_FAILED_CONTINUATION_ :: Bool
-_ALLOW_FAILED_CONTINUATION_ = True
+_ALLOW_FAILED_CONTINUATION_ = False
 
 
 tests :: TestTree
@@ -98,9 +99,10 @@ tests =
       ]
     , testGroup "refundOne"
       [
-        testProperty "No accounts"       $ checkRefundOne (== 0)
-      , testProperty "One account"       $ checkRefundOne (== 1)
-      , testProperty "Multiple accounts" $ checkRefundOne (>= 2)
+        testProperty "No accounts"         $ checkRefundOne (== 0)
+      , testProperty "One account"         $ checkRefundOne (== 1)
+      , testProperty "Multiple accounts"   $ checkRefundOne (>= 2)
+      , testProperty "Nonpositive account" $ checkRefundOneNotPositive
       ]
     , testProperty "moneyInAccount" checkMoneyInAccount
     , testProperty "updateMoneyInAccount" checkUpdateMoneyInAccount
@@ -482,9 +484,11 @@ checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property 
       newState = state {accounts = AM.insert (account, token) amount' $ accounts state}
     in
       case applyAction environment state (IDeposit account party token amount) action of
-        NotAppliedAction                    -> not match
-        AppliedAction ApplyNoWarning state' -> match && amount >  0 && newState == state'
-        AppliedAction _              state' -> match && amount <= 0 && state    == state'
+        NotAppliedAction                                                              -> not match
+        AppliedAction ApplyNoWarning state'                                           -> match && amount >  0 && newState == state'
+        AppliedAction (ApplyNonPositiveDeposit party' account' token' amount') state' -> match && amount <= 0 && state    == state'
+                                                                                           && party == party' && account == account'
+                                                                                           && token == token' && amount  == amount'
 
 
 checkIChoice :: Maybe Bool -> Maybe Bool -> Property
@@ -537,6 +541,20 @@ checkRefundOne f =
          (_   , Just ((party, money), accounts'')) -> case flattenMoney money of
                                                         [(token, amount)] -> accounts' `assocMapEq` assocMapInsert (party, token) amount accounts''
                                                         _                 -> False
+
+
+checkRefundOneNotPositive :: Property
+checkRefundOneNotPositive =
+  property
+    $ forAll' (arbitraryAssocMap ((,) <$> arbitrary <*> arbitrary) arbitrary) $ \accountsMixed ->
+      let
+        positive = AM.fromList . filter ((> 0) . snd) . AM.toList
+        accountsPositive = positive accountsMixed
+      in
+        case (refundOne accountsMixed, refundOne accountsPositive) of
+          (Just (payment, accountsMixed'), Just (payment', accountsPositive')) -> payment == payment' && positive accountsMixed' == accountsPositive'
+          (Nothing                       , Nothing                           ) -> True
+          _                                                                    -> False
 
 
 checkMoneyInAccount :: Property

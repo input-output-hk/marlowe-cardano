@@ -11,6 +11,7 @@ module Spec.Marlowe.Semantics.Arbitrary (
 , IsValid(..)
 , arbitraryChoiceName
 , arbitraryFibonacci
+, arbitraryAssocMap
 , defaultContractWeights
 , closeContractWeights
 , payContractWeights
@@ -448,16 +449,16 @@ instance Arbitrary (Value Observation) where
       , ( 8, Cond <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
   shrink (AvailableMoney a t) = [AvailableMoney a' t | a' <- shrink a] ++ [AvailableMoney a t' | t' <- shrink t]
-  shrink (Constant x) = Constant <$> shrink x
-  shrink (NegValue x) = NegValue <$> shrink x
-  shrink (AddValue x y) = [AddValue x' y | x' <- shrink x] ++ [AddValue x y' | y' <- shrink y]
-  shrink (SubValue x y) = [SubValue x' y | x' <- shrink x] ++ [SubValue x y' | y' <- shrink y]
-  shrink (MulValue x y) = [MulValue x' y | x' <- shrink x] ++ [MulValue x y' | y' <- shrink y]
-  shrink (DivValue x y) = [DivValue x' y | x' <- shrink x] ++ [DivValue x y' | y' <- shrink y]
-  shrink (ChoiceValue c) = ChoiceValue <$> shrink c
-  shrink (UseValue v) = UseValue <$> shrink v
-  shrink (Cond o x y) = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
-  shrink x = [x]
+  shrink (Constant x)         = Constant <$> shrink x
+  shrink (NegValue x)         = NegValue <$> shrink x
+  shrink (AddValue x y)       = [AddValue x' y | x' <- shrink x] ++ [AddValue x y' | y' <- shrink y]
+  shrink (SubValue x y)       = [SubValue x' y | x' <- shrink x] ++ [SubValue x y' | y' <- shrink y]
+  shrink (MulValue x y)       = [MulValue x' y | x' <- shrink x] ++ [MulValue x y' | y' <- shrink y]
+  shrink (DivValue x y)       = [DivValue x' y | x' <- shrink x] ++ [DivValue x y' | y' <- shrink y]
+  shrink (ChoiceValue c)      = ChoiceValue <$> shrink c
+  shrink (UseValue v)         = UseValue <$> shrink v
+  shrink (Cond o x y)         = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
+  shrink x                    = []
 
 instance SemiArbitrary (Value Observation) where
   semiArbitrary context =
@@ -503,7 +504,7 @@ instance Arbitrary Observation where
   shrink (ValueLT x y)      = [ValueLT x' y | x' <- shrink x] ++ [ValueLT x y' | y' <- shrink y]
   shrink (ValueLE x y)      = [ValueLE x' y | x' <- shrink x] ++ [ValueLE x y' | y' <- shrink y]
   shrink (ValueEQ x y)      = [ValueEQ x' y | x' <- shrink x] ++ [ValueEQ x y' | y' <- shrink y]
-  shrink x                  = [x]
+  shrink x                  = []
 
 instance SemiArbitrary Observation where
   semiArbitrary context =
@@ -753,7 +754,7 @@ instance Arbitrary InputContent where
   arbitrary = semiArbitrary =<< arbitrary
   shrink (IDeposit a p t x) = [IDeposit a' p t x | a' <- shrink a] ++ [IDeposit a p' t x | p' <- shrink p] ++ [IDeposit a p t' x | t' <- shrink t] ++ [IDeposit a p t x' | x' <- shrink x]
   shrink (IChoice c x) = [IChoice c' x | c' <- shrink c] ++ [IChoice c x' | x' <- shrink x]
-  shrink x = [x]
+  shrink x = []
 
 instance SemiArbitrary InputContent where
   semiArbitrary context =
@@ -764,7 +765,7 @@ instance SemiArbitrary InputContent where
 
 
 instance Arbitrary Input where
-  arbitrary = NormalInput <$> arbitrary
+  arbitrary = semiArbitrary =<< arbitrary
   shrink (NormalInput i)         = NormalInput <$> shrink i
   shrink (MerkleizedInput i b c) = [MerkleizedInput i' b c | i' <- shrink i]
 
