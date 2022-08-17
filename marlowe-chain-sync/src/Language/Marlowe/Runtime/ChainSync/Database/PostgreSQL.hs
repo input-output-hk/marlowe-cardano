@@ -395,15 +395,20 @@ mergeTxRow tx@Api.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, toke
 queryTxIns :: Api.SlotNo -> Api.TxId -> Transaction (Set.Set Api.TransactionInput)
 queryTxIns slotNo txInId = HT.statement (Api.unTxId txInId, fromIntegral slotNo) $
   [foldStatement|
-    SELECT txOutId :: bytea, txOutIx :: smallint, redeemerDatumBytes :: bytea?
-      FROM chain.txIn as txIn
-     WHERE txInId = $1 :: bytea AND slotNo = $2 :: bigint
+    SELECT txIn.txOutId :: bytea
+         , txIn.txOutIx :: smallint
+         , txOut.address :: bytea
+         , txIn.redeemerDatumBytes :: bytea?
+      FROM chain.txIn  as txIn
+      JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
+     WHERE txIn.txInId = $1 :: bytea AND txIn.slotNo = $2 :: bigint
   |] (Fold.foldMap (Set.singleton . decodeTxIn) id)
   where
     decodeTxIn :: ReadTxInRow -> Api.TransactionInput
-    decodeTxIn (txId, txIx, redeemerDatumBytes) = Api.TransactionInput
+    decodeTxIn (txId, txIx, address, redeemerDatumBytes) = Api.TransactionInput
       { txId = Api.TxId txId
       , txIx = fromIntegral txIx
+      , address = Api.Address address
       , redeemer = Api.Redeemer . Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
       }
 
@@ -470,6 +475,7 @@ type ReadTxRow =
 type ReadTxInRow =
   ( ByteString       -- TxIn's TxId
   , Int16            -- TxIn's TxIx
+  , ByteString       -- TxIn's Address
   , Maybe ByteString -- TxIn's redeemerDatumBytes
   )
 
