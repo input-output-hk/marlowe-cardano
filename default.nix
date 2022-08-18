@@ -24,7 +24,7 @@
   # Whether to build our Haskell packages (and their dependencies) with profiling enabled.
 , enableHaskellProfiling ? false
 , source-repo-override ? { }
-, networkNixName ? "testnet"
+, networkNixName ? "preview"
 }:
 let
   inherit (packages) pkgs marlowe sources;

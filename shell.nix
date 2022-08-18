@@ -90,6 +90,10 @@ let
     yq
     zlib
     z3
+
+    docker-compose
+    sqitchPg
+    postgresql
   ]);
 
   defaultShellHook = ''

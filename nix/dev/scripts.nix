@@ -55,13 +55,11 @@ let
 
   start-cardano-node = writeShellScriptBinInRepoRoot "start-cardano-node" ''
     echo "socket path = ${devNetworkConfig.node.socket-path}"
+    export DATA_DIR=${devNetworkConfig.node.database-path}
+    export ENVIRONMENT=${network.name}
+    export SOCKET_POATH=${devNetworkConfig.node.socket-path}
     mkdir -p ${devNetworkConfig.node.database-path}
-    cardano-node run \
-            --config ${devNetworkConfig.node.config-file} \
-            --topology ${devNetworkConfig.topology} \
-            --port ${toString devNetworkConfig.node.port} \
-            --socket-path ${devNetworkConfig.node.socket-path} \
-            --database-path ${devNetworkConfig.node.database-path}
+    ${pkgs.cardano.entrypoints.cardano-node}/bin/entrypoint
   '';
 
   #

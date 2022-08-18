@@ -6,7 +6,7 @@ let
   mkNetwork = env: env // {
     topology = mkEdgeTopology {
       edgeNodes = [ env.relaysNew ];
-      edgePort = env.edgePort;
+      edgePort = env?edgePort;
       valency = 1;
     };
   };
@@ -21,6 +21,10 @@ in
     };
     testnet = mkNetwork environments.testnet // {
       magic = 1097911063;
+    };
+    preview = mkNetwork self.cardano.environments.preview // {
+      name = "preview";
+      magic = 2;
     };
     # TODO add testnet-public, mainnet in the future
   };

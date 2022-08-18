@@ -31,6 +31,7 @@ let
         # needed for cardano-api wich uses a patched libsodium
         ++ iohkNixMain.overlays.crypto
         ++ iohkNixMain.overlays.iohkNix
+        ++ [ (final: prev: { cardano = (import sources.cardano-world { nixpkgs = final; }).${system}.cardano; }) ]
         ++ ownOverlays
         ++ overlays;
     config = haskellNix.nixpkgsArgs.config // config;
