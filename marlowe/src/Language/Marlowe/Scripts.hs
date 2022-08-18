@@ -30,8 +30,8 @@ import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Pretty (Pretty (..))
 -- Added to silence cabal about unused plutus-tx-plugin
+import qualified Plutus.Script.Utils.Typed as Scripts
 import Plutus.Script.Utils.V1.Typed.Scripts as Scripts
-import qualified Plutus.Script.Utils.V1.Typed.TypeUtils as Scripts
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Api (Address (Address), CurrencySymbol, Datum (Datum), DatumHash (DatumHash), POSIXTime,
                              ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
