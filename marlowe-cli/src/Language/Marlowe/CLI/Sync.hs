@@ -75,7 +75,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
 import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), smallUntypedValidator)
 import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
-import Plutus.Script.Utils.V1.Scripts (dataHash)
+import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.Script.Utils.V1.Typed.Scripts (validatorHash)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), Extended (..), FromData, Interval (..),
                              LowerBound (..), MintingPolicyHash (..), TokenName (..), UpperBound (..),

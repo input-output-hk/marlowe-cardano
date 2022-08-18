@@ -20,7 +20,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
-import Plutus.Script.Utils.V1.Scripts (dataHash)
+import Plutus.Script.Utils.Scripts (dataHash)
 import qualified PlutusTx.AssocMap as AM
 
 
