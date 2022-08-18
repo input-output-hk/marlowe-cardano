@@ -43,6 +43,7 @@
           (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
+          (hsPkgs."hw-aeson" or (errorHandler.buildDepError "hw-aeson"))
           (hsPkgs."mmorph" or (errorHandler.buildDepError "mmorph"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))

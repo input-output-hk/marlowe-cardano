@@ -49,6 +49,8 @@
           ];
         buildable = true;
         modules = [
+          "Plutus/Script/Utils/Scripts"
+          "Plutus/Script/Utils/Typed"
           "Plutus/Script/Utils/V1/Address"
           "Plutus/Script/Utils/V1/Generators"
           "Plutus/Script/Utils/V1/Scripts"
@@ -57,11 +59,12 @@
           "Plutus/Script/Utils/V1/Typed/Scripts/MonetaryPolicies"
           "Plutus/Script/Utils/V1/Typed/Scripts/StakeValidators"
           "Plutus/Script/Utils/V1/Typed/Scripts/Validators"
-          "Plutus/Script/Utils/V1/Typed/TypeUtils"
           "Plutus/Script/Utils/V2/Address"
+          "Plutus/Script/Utils/V2/Contexts"
           "Plutus/Script/Utils/V2/Generators"
           "Plutus/Script/Utils/V2/Scripts"
           "Plutus/Script/Utils/V2/Tx"
+          "Plutus/Script/Utils/V2/Typed/Scripts"
           "Plutus/Script/Utils/V2/Typed/Scripts/MonetaryPolicies"
           "Plutus/Script/Utils/V2/Typed/Scripts/StakeValidators"
           "Plutus/Script/Utils/V2/Typed/Scripts/Validators"

@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "cardano-testnet"; version = "1.35.2"; };
+      identifier = { name = "cardano-testnet"; version = "1.35.3"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "operations@iohk.io";
@@ -56,12 +56,16 @@
           (hsPkgs."safe-exceptions" or (errorHandler.buildDepError "safe-exceptions"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
+          (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
           ];
         buildable = true;
         modules = [
+          "Test/Assert"
           "Test/Base"
           "Test/Process"
+          "Test/Runtime"
+          "Testnet/Babbage"
           "Testnet/Byron"
           "Testnet/Cardano"
           "Testnet/Conf"
@@ -92,6 +96,7 @@
           modules = [
             "Paths_cardano_testnet"
             "Testnet/Commands"
+            "Testnet/Commands/Babbage"
             "Testnet/Commands/Byron"
             "Testnet/Commands/Cardano"
             "Testnet/Commands/Shelley"
@@ -120,6 +125,7 @@
             (hsPkgs."tasty-expected-failure" or (errorHandler.buildDepError "tasty-expected-failure"))
             (hsPkgs."tasty-hedgehog" or (errorHandler.buildDepError "tasty-hedgehog"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
             ];
           build-tools = [
             (hsPkgs.buildPackages.cardano-node.components.exes.cardano-node or (pkgs.buildPackages.cardano-node or (errorHandler.buildToolDepError "cardano-node:cardano-node")))
@@ -128,6 +134,8 @@
             ];
           buildable = true;
           modules = [
+            "Spec/Cli/Alonzo/LeadershipSchedule"
+            "Spec/Cli/Babbage/LeadershipSchedule"
             "Spec/Cli/KesPeriodInfo"
             "Spec/Node/Shutdown"
             "Spec/ShutdownOnSlotSynced"
