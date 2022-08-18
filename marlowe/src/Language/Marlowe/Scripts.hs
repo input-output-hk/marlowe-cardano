@@ -257,7 +257,7 @@ mkMarloweValidator
 
 -- This is pretty standard way to minimize size of the typed validator:
 --  * Wrap validator function so it accepts raw `BuiltinData`.
---  * Create a vaidator which is simply typed.
+--  * Create a validator which is simply typed.
 --  * Create "typed by `Any` validator".
 --  * Coerce it if you like. This step is not required - we only need `TypedValidator`.
 smallMarloweValidator :: Scripts.TypedValidator TypedMarloweValidator
@@ -277,15 +277,18 @@ smallMarloweValidator =
     unsafeCoerce typedValidator
 
 marloweValidator :: Scripts.TypedValidator TypedMarloweValidator
-marloweValidator = Scripts.mkTypedValidator @TypedMarloweValidator
+marloweValidator = Scripts.mkTypedValidator
+    @TypedMarloweValidator
     compiledMarloweValidator
-    $$(PlutusTx.compile [|| wrap ||])
+    compiledArgsValidator
     where
         compiledMarloweValidator =
           $$(PlutusTx.compile [|| mkMarloweValidator ||])
             `PlutusTx.applyCode`
-            PlutusTx.liftCode rolePayoutValidatorHash
-        wrap = mkUntypedValidator @MarloweData @MarloweInput
+              PlutusTx.liftCode rolePayoutValidatorHash
+        mkArgsValidator = mkUntypedValidator @MarloweData @MarloweInput
+        compiledArgsValidator =
+          $$(PlutusTx.compile [|| mkArgsValidator ||])
 
 
 marloweValidatorHash :: ValidatorHash
