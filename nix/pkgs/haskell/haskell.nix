@@ -44,7 +44,6 @@ let
       else builtins.error "Don't have materialized files for this platform";
     # If true, we check that the generated files are correct. Set in the CI so we don't make mistakes.
     inherit checkMaterialization source-repo-override;
-    sha256map = import ./sha256map.nix;
     # Configuration settings needed for cabal configure to work when cross compiling
     # for windows. We can't use `modules` for these as `modules` are only applied
     # after cabal has been configured.
