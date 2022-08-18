@@ -1,5 +1,8 @@
+{-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE RankNTypes                #-}
 
 module Language.Marlowe.Runtime.History.Follower where
@@ -12,20 +15,21 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Traversable (for)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, Move (..), RuntimeChainSeekClient, RuntimeClientStIdle,
-                                               ScriptHash (..), SlotNo (..), TxError, TxId, TxOutRef (..),
-                                               WithGenesis (..), isAfter, schemaVersion1_0)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
+                                               ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
+                                               RuntimeChainSeekClient, ScriptHash (..), SlotNo (..), TxError, TxId,
+                                               TxOutRef (..), WithGenesis (..), isAfter, schemaVersion1_0)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, MarloweVersion, PayoutDatum,
-                                          SomeMarloweVersion (SomeMarloweVersion), Transaction, datumFromData,
-                                          getMarloweVersion)
-import Network.Protocol.ChainSeek.Client (ChainSeekClient (..), ClientStHandshake (..), ClientStIdle (..),
-                                          ClientStInit (..), ClientStNext (..))
+import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, MarloweVersion (..), MarloweVersionTag (..),
+                                          PayoutDatum, SomeMarloweVersion (..), Transaction, datumFromData)
 
 data CreateStep v = CreateStep
   { datum      :: Datum v
   , scriptHash :: ScriptHash
   }
+
+deriving instance Show (CreateStep 'V1)
+deriving instance Eq (CreateStep 'V1)
 
 data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
 
@@ -35,18 +39,40 @@ data RedeemStep v = RedeemStep
   , datum       :: PayoutDatum v
   }
 
+deriving instance Show (RedeemStep 'V1)
+deriving instance Eq (RedeemStep 'V1)
+
 data ContractStep v
   = Create (CreateStep v)
   | Transaction (Transaction v)
   | RedeemPayout (RedeemStep v)
   -- TODO add TimeoutElapsed
 
+deriving instance Show (ContractStep 'V1)
+deriving instance Eq (ContractStep 'V1)
+
 data ContractChanges v = ContractChanges
   { steps      :: Map BlockHeader [ContractStep v]
   , rollbackTo :: Maybe SlotNo
   }
 
+deriving instance Show (ContractChanges 'V1)
+deriving instance Eq (ContractChanges 'V1)
+
 data SomeContractChanges = forall v. SomeContractChanges (MarloweVersion v) (ContractChanges v)
+
+instance Show SomeContractChanges where
+  showsPrec p (SomeContractChanges version changes) =
+    showParen (p >= 11)
+      ( showString "SomeContractChanges"
+      . showsPrec 11 version
+      . case version of
+          MarloweV1 -> showsPrec 11 changes
+      )
+
+instance Eq SomeContractChanges where
+  SomeContractChanges v1 c1 == SomeContractChanges v2 c2 = case (v1, v2) of
+    (MarloweV1, MarloweV1) -> c1 == c2
 
 instance Semigroup (ContractChanges v) where
   ContractChanges{..} <> c2 = c2' { steps = Map.unionWith (<>) steps2 steps }
@@ -69,6 +95,7 @@ applyRollback slotNo ContractChanges{..} = ContractChanges
 
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
+  , getMarloweVersion  :: ScriptHash -> Maybe SomeMarloweVersion
   , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
   }
 
@@ -97,7 +124,7 @@ data ContractChangesTVar v = ContractChangesTVar (MarloweVersion v) (TVar (Contr
 data SomeContractChangesTVar = forall v. SomeContractChangesTVar (ContractChangesTVar v)
 
 mkFollower :: FollowerDependencies -> STM Follower
-mkFollower FollowerDependencies{..} = do
+mkFollower deps@FollowerDependencies{..} = do
   someChangesVar <- newTVar Nothing
   let
     stInit = SendMsgRequestHandshake schemaVersion1_0 handshake
@@ -114,7 +141,7 @@ mkFollower FollowerDependencies{..} = do
       { recvMsgQueryRejected = \err _ -> pure $ SendMsgDone $ Left $ FindTxFailed err
       , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> error "transaction detected at Genesis"
-          At blockHeader -> case exctractCreation contractId tx of
+          At blockHeader -> case exctractCreation deps tx of
             Left err ->
               pure $ SendMsgDone $ Left $ ExtractContractFailed err
             Right (SomeCreateStep version create) -> do
@@ -153,8 +180,8 @@ data FollowerState v = FollowerState
   , payoutUTxOs :: Set TxOutRef
   }
 
-exctractCreation :: ContractId -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-exctractCreation contractId tx@Chain.Transaction{inputs} = do
+exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
+exctractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs} = do
   Chain.TransactionOutput{address, datum=mdatum} <- getOutput (txIx $ unContractId contractId) tx
   scriptHash <- getScriptHash address
   for_ inputs \Chain.TransactionInput{address=txInAddress} ->
@@ -181,5 +208,7 @@ getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
     go 0 (x : _)   = Right x
     go i' (_ : xs) = go (i' - 1) xs
 
-followContract :: FollowerState v -> IO (RuntimeClientStIdle IO (Either ContractHistoryError ()))
+followContract
+  :: FollowerState v
+  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
 followContract _ = pure $ SendMsgDone $ Right ()

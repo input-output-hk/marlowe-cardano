@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -70,6 +71,10 @@ data MarloweVersionTag
 data MarloweVersion (v :: MarloweVersionTag) where
   MarloweV1 :: MarloweVersion 'V1
 
+deriving instance Show (MarloweVersion v)
+deriving instance Eq (MarloweVersion v)
+deriving instance Ord (MarloweVersion v)
+
 class IsMarloweVersion (v :: MarloweVersionTag) where
   type Contract v :: *
   type Datum v :: *
@@ -95,15 +100,24 @@ data Transaction v = Transaction
   , output        :: TransactionOutput v
   }
 
+deriving instance Show (Transaction 'V1)
+deriving instance Eq (Transaction 'V1)
+
 data TransactionOutput v = TransactionOutput
   { payouts      :: [Payment v]
   , scriptOutput :: Maybe (TransactionScriptOutput v)
   }
 
+deriving instance Show (TransactionOutput 'V1)
+deriving instance Eq (TransactionOutput 'V1)
+
 data TransactionScriptOutput v = TransactionScriptOutput
   { utxo  :: TxOutRef
   , datum :: Datum v
   }
+
+deriving instance Show (TransactionScriptOutput 'V1)
+deriving instance Eq (TransactionScriptOutput 'V1)
 
 data SomeMarloweVersion = forall v. SomeMarloweVersion (MarloweVersion v)
 
