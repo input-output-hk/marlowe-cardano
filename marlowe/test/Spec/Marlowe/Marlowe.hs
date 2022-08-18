@@ -51,7 +51,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound
                                                  State (State, accounts, boundValues, choices, minTime), Token (Token),
                                                  Value (AddValue, Constant, DivValue, MulValue, NegValue, SubValue, UseValue),
                                                  ValueId (ValueId), emptyState)
-import Language.Marlowe.Scripts (smallTypedValidator, smallUntypedValidator)
+import Language.Marlowe.Scripts (marloweValidator, smallMarloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as TS
@@ -70,14 +70,13 @@ import Test.Tasty.QuickCheck (Property, testProperty)
 
 tests :: TestTree
 tests = testGroup "Semantics"
-  [ testCase "Contracts with different creators have different hashes" uniqueContractHash
-  , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
+  [ testCase "Token Show instance respects HEX and Unicode" tokenShowTest
   , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
   , testCase "State serializes into valid JSON" stateSerialization
   , testCase "Input serializes into valid JSON" inputSerialization
   , testGroup "Validator size is reasonable"
-      [ testCase "Typed validator size" typedValidatorSize
-      , testCase "Untyped validator size" untypedValidatorSize
+      [ testCase "Typed validator size" marloweValidatorSize
+      , testCase "Untyped validator size" smallMarloweValidatorSize
       ]
   , testCase "Mul analysis" mulAnalysisTest
   , testCase "Div analysis" divAnalysisTest
@@ -339,25 +338,18 @@ tests = testGroup "Semantics"
 --
 
 
-uniqueContractHash :: IO ()
-uniqueContractHash = do
-    let hash1 = TS.validatorHash $ smallTypedValidator (marloweParams "11")
-    let hash2 = TS.validatorHash $ smallTypedValidator (marloweParams "22")
-    let hash3 = TS.validatorHash $ smallTypedValidator (marloweParams "22")
-    assertBool "Hashes must be different" (hash1 /= hash2)
-    assertBool "Hashes must be same" (hash2 == hash3)
 
-typedValidatorSize :: IO ()
-typedValidatorSize = do
-    let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
+marloweValidatorSize :: IO ()
+marloweValidatorSize = do
+    let validator = Scripts.validatorScript marloweValidator
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 17200)
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15200)
 
-untypedValidatorSize :: IO ()
-untypedValidatorSize = do
-    let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
+smallMarloweValidatorSize :: IO ()
+smallMarloweValidatorSize = do
+    let validator = Scripts.validatorScript smallMarloweValidator
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 12500)
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do
@@ -609,9 +601,8 @@ prop_marloweParamsJsonLoops :: Property
 prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJsonLoops
   where
     gen = do
-      b <- toBuiltin <$> (arbitrary :: Gen ByteString)
       c <- toBuiltin <$> (arbitrary :: Gen ByteString)
-      return $ MarloweParams (ValidatorHash b) (CurrencySymbol c)
+      return $ MarloweParams (CurrencySymbol c)
 
 
 intervalErrorJsonLoops :: IntervalError -> Property
