@@ -32,6 +32,22 @@
         "type": "github"
       }
     },
+    "cardano-world": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1660852763,
+        "narHash": "sha256-nwTL8wOi5ohFSelNLIE3IF17hrIfdYYA1JSxca16OWA=",
+        "owner": "input-output-hk",
+        "repo": "cardano-world",
+        "rev": "c98f0992657f2924feecb0847c974203f05b3a41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "cardano-world",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "locked": {
         "lastModified": 1620759905,
@@ -197,6 +213,7 @@
       "inputs": {
         "actus-tests": "actus-tests",
         "cardano-repo-tool": "cardano-repo-tool",
+        "cardano-world": "cardano-world",
         "flake-utils": "flake-utils",
         "gitignore-nix": "gitignore-nix",
         "hackage-nix": "hackage-nix",
