@@ -22,13 +22,14 @@ module Spec.Marlowe.Semantics.Arbitrary (
 , assertContractWeights
 , arbitraryContractWeighted
 , arbitraryValidStep
+, arbitraryValidInputs
 ) where
 
 
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
-import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), evalValue)
+import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), TransactionOutput (..), computeTransaction, evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (..), Case (..), ChoiceId (..),
                                                  ChoiceName, ChosenNum, Contract (..), Environment (..), Input (..),
                                                  InputContent (..), Observation (..), Party (..), Payee (..),
@@ -36,7 +37,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (.
                                                  getAction)
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
+                              vectorOf)
 
 import qualified Data.Map.Strict as M
 import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
@@ -808,18 +810,35 @@ instance SemiArbitrary Input where
   semiArbitrary context = NormalInput <$> semiArbitrary context
 
 
+instance Arbitrary TransactionInput where
+  arbitrary = semiArbitrary =<< arbitrary
+  shrink TransactionInput{..} =
+       [TransactionInput txInterval' txInputs  | txInterval' <- shrink txInterval]
+    <> [TransactionInput txInterval  txInputs' | txInputs'   <- shrink txInputs  ]
+
+instance SemiArbitrary TransactionInput where
+  semiArbitrary context =
+    do
+      Environment txInterval <- semiArbitrary context
+      n <- arbitraryFibonacci [1, 1, 1, 1, 0, 2]  -- TODO: Review.
+      TransactionInput txInterval <$> vectorOf n (semiArbitrary context)
+
+
 arbitraryValidStep :: State -> Contract -> Gen TransactionInput
 arbitraryValidStep state@State{..} (When [] timeout _) =
   TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
 arbitraryValidStep state@State{..} (When cases timeout _) =
   do
+    let
+      isEmptyChoice (Choice _ []) = True
+      isEmptyChoice _             = False
     isTimeout <- frequency [(9, pure False), (1, pure True)]
-    if isTimeout || minTime >= timeout
+    if isTimeout || minTime >= timeout || all (isEmptyChoice . getAction) cases
       then TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
       else do
              times <- arbitraryTimeIntervalBefore minTime timeout
-             cas <- elements cases
-             i <- case getAction cas of
+             case' <- elements $ filter (not . isEmptyChoice . getAction) cases
+             i <- case getAction case' of
                     Deposit a p t v -> pure . IDeposit a p t $ evalValue (Environment times) state v
                     Choice n bs     -> do
                                          Bound lower upper <- elements bs
@@ -828,3 +847,22 @@ arbitraryValidStep state@State{..} (When cases timeout _) =
              pure $ TransactionInput times [NormalInput i]
 arbitraryValidStep State{minTime} _ =
   TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
+
+
+arbitraryValidInputs :: State -> Contract -> Gen [TransactionInput]
+arbitraryValidInputs = arbitraryValidInputs' Nothing
+
+arbitraryValidInputs' :: Maybe TransactionInput -> State -> Contract -> Gen [TransactionInput]
+arbitraryValidInputs' _ _ Close = pure []
+arbitraryValidInputs' Nothing state contract =
+  do
+    input <- arbitraryValidStep state contract
+    case computeTransaction input state contract of
+      Error{}               -> pure []
+      TransactionOutput{..} -> (input :) <$> arbitraryValidInputs' (Just input) txOutState txOutContract
+arbitraryValidInputs' (Just previous) state contract =
+  do
+    input <- arbitraryValidStep state contract
+    case computeTransaction input state contract of
+      Error{}               -> pure []
+      TransactionOutput{..} -> (input :) <$> arbitraryValidInputs' (Just input) txOutState txOutContract

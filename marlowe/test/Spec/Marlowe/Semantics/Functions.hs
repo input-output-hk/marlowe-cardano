@@ -141,6 +141,7 @@ tests =
     , testProperty "applyCases" checkApplyCases
     , testProperty "applyInput" checkApplyInput
     , testCase "isClose" checkIsClose
+    , testProperty "playTrace" checkPlayTrace
     ]
 
 
@@ -816,7 +817,7 @@ checkApplyCases =
             contract <- arbitraryContractWeighted [whenContractWeights] context
             input <- arbitraryValidStep state contract
             pure (state, contract, input)
-    forAll gen $ \(state, contract, TransactionInput times inputs) ->
+    forAll' gen $ \(state, contract, TransactionInput times inputs) ->
       case (contract, inputs) of
         (When cases _ _, [input]) -> case applyCases (Environment times) state input cases of
                                        Applied{} -> True
@@ -827,7 +828,7 @@ checkApplyCases =
 checkApplyInput :: Property
 checkApplyInput =
   property $ do
-    forAll' ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, input, contract) ->
+    forAll ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, input, contract) ->
       case (contract, applyInput environment state input contract) of
         (When cases _ _, result           ) -> result == applyCases environment state input cases
         (_             , ApplyNoMatchError) -> True
@@ -842,3 +843,18 @@ checkIsClose =
     assertBool "isClose When = False"  . not . isClose $ When undefined undefined undefined
     assertBool "isClose Let = False"   . not . isClose $ Let undefined undefined undefined
     assertBool "isClose Asset = False" . not . isClose $ Assert undefined undefined
+
+
+checkPlayTrace :: Property
+checkPlayTrace =
+  property $ do
+    let gen =
+          do
+            start <- arbitrary
+            contract <- arbitrary
+            inputs <- arbitraryValidInputs (State AM.empty AM.empty AM.empty start) contract
+            pure (start, contract, inputs)
+    forAll gen $ \(start, contract, inputs) ->
+      case playTrace start contract inputs of
+        Error e             -> error $ show e
+        TransactionOutput{} -> True

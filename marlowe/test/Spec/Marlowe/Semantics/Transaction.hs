@@ -54,20 +54,6 @@ unPayment :: Payment -> Payment'
 unPayment (Payment a p m) = Payment' (a, p, flattenValue m)
 
 
-instance Arbitrary TransactionInput where
-  arbitrary = semiArbitrary =<< arbitrary
-  shrink TransactionInput{..} =
-       [TransactionInput   interval' txInputs  | interval' <- shrink txInterval]
-    <> [TransactionInput txInterval    inputs' | inputs'   <- shrink txInputs  ]
-
-instance SemiArbitrary TransactionInput where
-  semiArbitrary context =
-    do
-      Environment txInterval <- semiArbitrary context
-      n <- arbitraryFibonacci [1, 1, 1, 1, 0, 2]  -- TODO: Review.
-      TransactionInput txInterval <$> vectorOf n (semiArbitrary context)
-
-
 data MarloweContext =
   MarloweContext
   {
