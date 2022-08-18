@@ -32,6 +32,7 @@ import Language.Marlowe.Pretty (Pretty (..))
 -- Added to silence cabal about unused plutus-tx-plugin
 import qualified Plutus.Script.Utils.Typed as Scripts
 import Plutus.Script.Utils.V1.Typed.Scripts as Scripts
+import qualified Plutus.Script.Utils.V1.Typed.TypeUtils as TypedUtils
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Api (Address (Address), CurrencySymbol, Datum (Datum), DatumHash (DatumHash), POSIXTime,
                              ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
@@ -53,10 +54,6 @@ import Unsafe.Coerce (unsafeCoerce)
 type MarloweTimeRange = (POSIXTime, POSIXTime)
 type MarloweInput = [MarloweTxInput]
 
--- Yeah, I know
-type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
-type SmallTypedValidator = Scripts.TypedValidator TypedMarloweValidator
-
 data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
@@ -77,34 +74,34 @@ data MarloweTxInput = Input InputContent
   deriving anyclass (Pretty)
 
 
-rolePayoutScript :: Scripts.TypedValidator TypedRolePayoutValidator
--- rolePayoutScript = mkTypedValidator $$(PlutusTx.compile [|| rolePayoutValidator ||])
-rolePayoutScript = mkTypedValidator @TypedRolePayoutValidator
-  $$(PlutusTx.compile [|| rolePayoutValidator ||])
+rolePayoutValidator :: Scripts.TypedValidator TypedRolePayoutValidator
+rolePayoutValidator = mkTypedValidator @TypedRolePayoutValidator
+  $$(PlutusTx.compile [|| mkRolePayoutValidator ||])
   $$(PlutusTx.compile [|| wrap ||])
   where
-    wrap = Scripts.mkUntypedValidator
+    wrap = Scripts.mkUntypedValidator @(CurrencySymbol, TokenName) @()
 
 
 {-# INLINABLE rolePayoutValidator #-}
-rolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Bool
-rolePayoutValidator (currency, role) _ ctx =
+mkRolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Bool
+mkRolePayoutValidator (currency, role) _ ctx =
     Val.valueOf (valueSpent (scriptContextTxInfo ctx)) currency role > 0
 
 
-mkRolePayoutValidatorHash :: ValidatorHash
-mkRolePayoutValidatorHash = Scripts.validatorHash rolePayoutScript
+rolePayoutValidatorHash :: ValidatorHash
+rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
 
 
-{-# INLINABLE smallMarloweValidator #-}
+{-# INLINABLE mkMarloweValidator #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
-smallMarloweValidator
-    :: ()
+mkMarloweValidator
+    :: ValidatorHash
     -> MarloweData
     -> MarloweInput
     -> ScriptContext
     -> Bool
-smallMarloweValidator _
+mkMarloweValidator
+    rolePayoutValidatorHash
     MarloweData{..}
     marloweTxInputs
     ctx@ScriptContext{scriptContextTxInfo} = do
@@ -169,7 +166,7 @@ smallMarloweValidator _
         Error TEHashMismatch -> traceError "E6"
 
   where
-    MarloweParams{ rolesCurrency,rolePayoutValidatorHash} = marloweParams
+    MarloweParams{ rolesCurrency } = marloweParams
 
     findOwnInput :: ScriptContext -> Maybe TxInInfo
     findOwnInput ScriptContext{scriptContextTxInfo=TxInfo{txInfoInputs}, scriptContextPurpose=Spending txOutRef} =
@@ -258,23 +255,41 @@ smallMarloweValidator _
                 addr = scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "R" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
 
+-- This is pretty standard way to minimize size of the typed validator:
+--  * Wrap validator function so it accepts raw `BuiltinData`.
+--  * Create a vaidator which is simply typed.
+--  * Create "typed by `Any` validator".
+--  * Coerce it if you like. This step is not required - we only need `TypedValidator`.
+smallMarloweValidator :: Scripts.TypedValidator TypedMarloweValidator
+smallMarloweValidator =
+  let
+    mkUntypedMarloweValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+    mkUntypedMarloweValidator rp = mkUntypedValidator (mkMarloweValidator rp)
 
-smallTypedValidator :: () -> Scripts.TypedValidator TypedMarloweValidator
-smallTypedValidator = Scripts.mkTypedValidatorParam @TypedMarloweValidator
-    $$(PlutusTx.compile [|| smallMarloweValidator ||])
+    untypedValidator :: Validator
+    untypedValidator = mkValidatorScript $
+      $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
+        `PlutusTx.applyCode` PlutusTx.liftCode rolePayoutValidatorHash
+
+    typedValidator :: TypedValidator TypedUtils.Any
+    typedValidator = Scripts.unsafeMkTypedValidator untypedValidator
+  in
+    unsafeCoerce typedValidator
+
+marloweValidator :: Scripts.TypedValidator TypedMarloweValidator
+marloweValidator = Scripts.mkTypedValidator @TypedMarloweValidator
+    compiledMarloweValidator
     $$(PlutusTx.compile [|| wrap ||])
     where
-        wrap = mkUntypedValidator
+        compiledMarloweValidator =
+          $$(PlutusTx.compile [|| mkMarloweValidator ||])
+            `PlutusTx.applyCode`
+            PlutusTx.liftCode rolePayoutValidatorHash
+        wrap = mkUntypedValidator @MarloweData @MarloweInput
 
 
-smallUntypedValidator :: () -> Scripts.TypedValidator TypedMarloweValidator
-smallUntypedValidator params = let
-    wrapped s = mkUntypedValidator (smallMarloweValidator s)
-    typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
-    -- Yeah, I know. It works, though.
-    -- Remove this when Typed Validator has the same size as untyped.
-    in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
-
+marloweValidatorHash :: ValidatorHash
+marloweValidatorHash = Scripts.validatorHash marloweValidator
 
 defaultTxValidationRange :: POSIXTime
 defaultTxValidationRange = 10000
