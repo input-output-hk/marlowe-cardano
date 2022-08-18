@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "cardano-api"; version = "1.35.2"; };
+      identifier = { name = "cardano-api"; version = "1.35.3"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "operations@iohk.io";
@@ -146,6 +146,7 @@
           "Cardano/Api/ChainSync/Client"
           "Cardano/Api/ChainSync/ClientPipelined"
           "Cardano/Api/Crypto/Ed25519Bip32"
+          "Cardano/Api/EraCast"
           "Cardano/Api/Protocol/Types"
           "Cardano/Api/Shelley"
           "Cardano/Api/Orphans"
