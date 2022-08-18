@@ -115,3 +115,24 @@ executable marlowe-follower
     , typed-protocols
     , optparse-applicative
     , stm
+
+test-suite marlowe-runtime-test
+  import: lang
+  hs-source-dirs: test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Language.Marlowe.Runtime.History.FollowerSpec
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async
+    , containers
+    , hspec
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-protocols-test
+    , marlowe-runtime
+    , stm
+  build-tool-depends: hspec-discover:hspec-discover

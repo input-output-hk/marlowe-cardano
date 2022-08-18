@@ -762,6 +762,7 @@
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
         small-steps = ./.plan.nix/small-steps.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
+        marlowe-protocols-test = ./.plan.nix/marlowe-protocols-test.nix;
         ouroboros-network-framework = ./.plan.nix/ouroboros-network-framework.nix;
         orphans-deriving-via = ./.plan.nix/orphans-deriving-via.nix;
         marlowe-chain-sync = ./.plan.nix/marlowe-chain-sync.nix;
@@ -925,6 +926,7 @@
           "plutus-script-utils" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
+          "marlowe-protocols-test" = { flags = {}; };
           "ouroboros-network-framework" = { flags = {}; };
           "orphans-deriving-via" = {
             flags = { "development" = lib.mkOverride 900 false; };
@@ -1204,6 +1206,7 @@
           "lobemo-backend-trace-forwarder".components.library.planned = lib.mkOverride 900 true;
           "dependent-sum-template".components.library.planned = lib.mkOverride 900 true;
           "plutus-ghc-stub".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowed".planned = lib.mkOverride 900 true;
           "validation-selective".components.library.planned = lib.mkOverride 900 true;
           "generic-data".components.library.planned = lib.mkOverride 900 true;
           "small-steps".components.library.planned = lib.mkOverride 900 true;
@@ -1269,6 +1272,7 @@
           "adjunctions".components.library.planned = lib.mkOverride 900 true;
           "tree-diff".components.library.planned = lib.mkOverride 900 true;
           "marlowe-actus".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.tests."marlowe-runtime-test".planned = lib.mkOverride 900 true;
           "vector-binary-instances".components.library.planned = lib.mkOverride 900 true;
           "parallel".components.library.planned = lib.mkOverride 900 true;
           "cryptonite".components.library.planned = lib.mkOverride 900 true;
@@ -1375,6 +1379,7 @@
           "Stream".components.library.planned = lib.mkOverride 900 true;
           "criterion".components.library.planned = lib.mkOverride 900 true;
           "katip".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-protocols-test".components.library.planned = lib.mkOverride 900 true;
           "hasql".components.library.planned = lib.mkOverride 900 true;
           "cardano-submit-api".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.setup.planned = lib.mkOverride 900 true;
@@ -1483,6 +1488,7 @@
           "servant-client".components.library.planned = lib.mkOverride 900 true;
           "natural-transformation".components.library.planned = lib.mkOverride 900 true;
           "wl-pprint-annotated".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe-follower".planned = lib.mkOverride 900 true;
           "marlowe-cli".components.library.planned = lib.mkOverride 900 true;
           "hasql-pool".components.library.planned = lib.mkOverride 900 true;
           "writer-cps-mtl".components.library.planned = lib.mkOverride 900 true;
@@ -1491,7 +1497,6 @@
           "cardano-crypto".components.library.planned = lib.mkOverride 900 true;
           "tls".components.library.planned = lib.mkOverride 900 true;
           "bytestring-strict-builder".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."marlowe-runtime".planned = lib.mkOverride 900 true;
           "hpc".components.library.planned = lib.mkOverride 900 true;
           "http-types".components.library.planned = lib.mkOverride 900 true;
           "websockets-snap".components.library.planned = lib.mkOverride 900 true;

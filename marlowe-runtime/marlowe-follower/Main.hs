@@ -9,6 +9,7 @@ import Data.Foldable (for_, traverse_)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis (Genesis), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), parseContractId)
+import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), ContractStep (..), CreateStep (..),
                                                   Follower (..), FollowerDependencies (..), SomeContractChanges (..),
                                                   mkFollower)
@@ -35,6 +36,7 @@ run Options{..} = withSocketsDo do
       connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
       connectToChainSeek client = fst <$> runPeerWithDriver driver peer (startDState driver)
         where peer = chainSeekClientPeer Genesis client
+    let getMarloweVersion = Core.getMarloweVersion
     Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
     Left result <- race runFollower (logChanges changes)
     case result of

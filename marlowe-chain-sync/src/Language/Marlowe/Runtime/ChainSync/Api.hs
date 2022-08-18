@@ -3,7 +3,61 @@
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Language.Marlowe.Runtime.ChainSync.Api where
+module Language.Marlowe.Runtime.ChainSync.Api
+  ( Address(..)
+  , AssetId(..)
+  , Assets(..)
+  , BlockHeader(..)
+  , BlockHeaderHash(..)
+  , BlockNo(..)
+  , CertIx(..)
+  , ChainPoint
+  , Credential(..)
+  , Datum(..)
+  , DatumHash(..)
+  , IntersectError(..)
+  , Lovelace(..)
+  , Metadata
+  , Move(..)
+  , PaymentKeyHash(..)
+  , PolicyId(..)
+  , Quantity(..)
+  , Redeemer(..)
+  , RuntimeChainSeek
+  , RuntimeChainSeekClient
+  , RuntimeChainSeekCodec
+  , RuntimeChainSeekServer
+  , ScriptHash(..)
+  , SlotNo(..)
+  , StakeReference(..)
+  , TokenName(..)
+  , Tokens(..)
+  , Transaction(..)
+  , TransactionInput(..)
+  , TransactionOutput(..)
+  , TxError(..)
+  , TxId(..)
+  , TxIx(..)
+  , TxOutRef(..)
+  , UTxOError(..)
+  , ValidityRange(..)
+  , WithGenesis(..)
+  , fromCardanoStakeAddressPointer
+  , fromDatum
+  , fromPlutusData
+  , isAfter
+  , paymentCredential
+  , runtimeChainSeekCodec
+  , schemaVersion1_0
+  , stakeReference
+  , toCardanoAddress
+  , toDatum
+  , toPlutusData
+  , module Network.Protocol.ChainSeek.Types
+  , module Network.Protocol.ChainSeek.Client
+  , module Network.Protocol.ChainSeek.Server
+  , module Network.Protocol.ChainSeek.Codec
+  ) where
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
@@ -22,13 +76,13 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.These (These (..))
 import Data.Void (Void)
-import Data.Word (Word16, Word32, Word64)
+import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
-import Network.Protocol.ChainSeek.Client (ChainSeekClient, ClientStIdle)
-import Network.Protocol.ChainSeek.Codec (DeserializeError, codecChainSeek)
-import Network.Protocol.ChainSeek.Server (ChainSeekServer)
-import Network.Protocol.ChainSeek.Types (ChainSeek, Query (..), SchemaVersion (..), SomeTag (..), TagEq (..))
+import Network.Protocol.ChainSeek.Client
+import Network.Protocol.ChainSeek.Codec
+import Network.Protocol.ChainSeek.Server
+import Network.Protocol.ChainSeek.Types
 import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
 
@@ -221,16 +275,6 @@ newtype Lovelace = Lovelace { unLovelace :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
 
-newtype Magic = Magic { unMagic :: Word32 }
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
-
-data NetworkId
-  = Mainnet
-  | Testnet Magic
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
-
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
@@ -328,6 +372,10 @@ data Move err result where
   -- | Advance to the block containing a transaction.
   FindTx :: TxId -> Move TxError Transaction
 
+deriving instance Show (Move err result)
+deriving instance Eq (Move err result)
+deriving instance Ord (Move err result)
+
 -- | Reasons a 'FindConsumingTx' request can be rejected.
 data UTxOError
   = UTxONotFound
@@ -350,8 +398,6 @@ data IntersectError = IntersectionNotFound
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
 type RuntimeChainSeekClient = ChainSeekClient Move ChainPoint ChainPoint
-
-type RuntimeClientStIdle = ClientStIdle Move ChainPoint ChainPoint
 
 type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
 
