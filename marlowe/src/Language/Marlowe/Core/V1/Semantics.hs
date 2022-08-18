@@ -232,28 +232,21 @@ data MarloweData = MarloweData {
       deriving anyclass (ToJSON, FromJSON)
 
 
-data MarloweParams = MarloweParams {
-        rolePayoutValidatorHash :: ValidatorHash,
-        rolesCurrency           :: CurrencySymbol
-    }
+newtype MarloweParams = MarloweParams { rolesCurrency :: CurrencySymbol }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
 
 instance FromJSON MarloweParams where
   parseJSON (JSON.Object v) = do
-      pv <- v .: "rolePayoutValidatorHash"
       c <- v .: "rolesCurrency"
       MarloweParams
-        <$> validatorHashFromJSON pv
-        <*> currencySymbolFromJSON c
+        <$> currencySymbolFromJSON c
 
   parseJSON invalid =
       JSON.prependFailure "parsing MarloweParams failed, " (JSON.typeMismatch "Object" invalid)
 
 instance ToJSON MarloweParams where
-  toJSON (MarloweParams v c) = JSON.object
-    [ ("rolePayoutValidatorHash", validatorHashToJSON v)
-    , ("rolesCurrency", currencySymbolToJSON c)
-    ]
+  toJSON (MarloweParams c) = JSON.object
+    [ ("rolesCurrency", currencySymbolToJSON c) ]
 
 {- Checks 'interval' and trim it if necessary. -}
 fixInterval :: TimeInterval -> State -> IntervalResult

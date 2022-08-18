@@ -59,7 +59,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound
                                                  State (State, accounts, boundValues, choices, minTime), Token (Token),
                                                  Value (AddValue, Constant, DivValue, MulValue, NegValue, SubValue, UseValue),
                                                  ValueId (ValueId), emptyState)
-import Language.Marlowe.Scripts (smallTypedValidator, smallUntypedValidator)
+import Language.Marlowe.Scripts (marloweValidator, smallMarloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), ValidatorHash (ValidatorHash),
                              toBuiltin)
@@ -94,14 +94,13 @@ _PRINT_PANGRAM_JSON_ = False
 -- | Run the tests.
 tests :: TestTree
 tests = testGroup "Contracts"
-  [ testCase "Contracts with different creators have different hashes" uniqueContractHash
-  , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
+  [ testCase "Token Show instance respects HEX and Unicode" tokenShowTest
   , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
   , testCase "State serializes into valid JSON" stateSerialization
   , testCase "Input serializes into valid JSON" inputSerialization
   , testGroup "Validator size is reasonable"
-      [ testCase "Typed validator size" typedValidatorSize
-      , testCase "Untyped validator size" untypedValidatorSize
+      [ testCase "Typed validator size" marloweValidatorSize
+      , testCase "Untyped validator size" smallMarloweValidatorSize
       ]
   , testCase "Mul analysis" mulAnalysisTest
   , testCase "Div analysis" divAnalysisTest
@@ -118,30 +117,19 @@ tests = testGroup "Contracts"
   ]
 
 
--- | Test that different contract hash to different values.
-uniqueContractHash :: IO ()
-uniqueContractHash = do
-    let hash1 = TS.validatorHash $ smallTypedValidator (marloweParams "11")
-    let hash2 = TS.validatorHash $ smallTypedValidator (marloweParams "22")
-    let hash3 = TS.validatorHash $ smallTypedValidator (marloweParams "22")
-    assertBool "Hashes must be different" (hash1 /= hash2)
-    assertBool "Hashes must be same" (hash2 == hash3)
-
-
 -- | Test that the typed validator is not too large.
-typedValidatorSize :: IO ()
-typedValidatorSize = do
-    let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
+marloweValidatorSize :: IO ()
+marloweValidatorSize = do
+    let validator = Scripts.validatorScript marloweValidator
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 17200)
-
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15200)
 
 -- | Test that the untyped validator is not too large.
-untypedValidatorSize :: IO ()
-untypedValidatorSize = do
-    let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
+smallMarloweValidatorSize :: IO ()
+smallMarloweValidatorSize = do
+    let validator = Scripts.validatorScript smallMarloweValidator
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 12500)
 
 
 -- | Test `extractNonMerkleizedContractRoles`.
@@ -428,9 +416,8 @@ prop_marloweParamsJsonLoops :: Property
 prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJsonLoops
   where
     gen = do
-      b <- toBuiltin <$> (arbitrary :: Gen ByteString)
       c <- toBuiltin <$> (arbitrary :: Gen ByteString)
-      return $ MarloweParams (ValidatorHash b) (CurrencySymbol c)
+      return $ MarloweParams (CurrencySymbol c)
 
 
 -- | Test that JSON decoding inverts encoding for an interval error.
@@ -452,3 +439,227 @@ prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJson
         s <- POSIXTime <$> arbitrary
         t <- (POSIXTime *** POSIXTime) <$> arbitrary
         return $ IntervalInPastError s t
+
+
+
+--- FIXME: Try to migrate if feasible some of these tests to the Marlowe Runtime setup
+--- zeroCouponBondTest :: TestTree
+--- zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond Contract"
+---     (assertNoFailedTransactions
+---     -- T..&&. emulatorLog (const False) ""
+---     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag alice) (const True) "contract should close"
+---     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
+---     T..&&. walletFundsChange alice (lovelaceValueOf 15_000_000)
+---     T..&&. walletFundsChange bob (lovelaceValueOf (-15_000_000))
+---     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+---     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+---     ) $ do
+---     -- Init a contract
+---     let alicePk = PK (walletPubKeyHash alice)
+---         bobPk = PK (walletPubKeyHash bob)
+---
+---     let params = defaultMarloweParams
+---
+---     slotCfg <- Trace.getSlotConfig
+---     let seconds = secondsSinceShelley slotCfg
+---
+---     let zeroCouponBond = When [ Case
+---             (Deposit alicePk alicePk ada (Constant 75_000_000))
+---             (Pay alicePk (Party bobPk) ada (Constant 75_000_000)
+---                 (When
+---                     [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (seconds 200) Close
+---                 ))] (seconds 100) Close
+---
+---     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
+---     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
+---
+---     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
+---     Trace.waitNSlots 4
+---
+---     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk alicePk ada 75_000_000])
+---     Trace.waitNSlots 4
+---
+---     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk bobPk ada 90_000_000])
+---     void $ Trace.waitNSlots 4
+---
+---     Trace.callEndpoint @"close" aliceHdl reqId
+---     Trace.callEndpoint @"close" bobHdl reqId
+---     void $ Trace.waitNSlots 2
+-
+--- merkleizedZeroCouponBondTest :: TestTree
+--- merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkleized Zero Coupon Bond Contract"
+---     (assertNoFailedTransactions
+---     -- T..&&. emulatorLog (const False) ""
+---     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag alice) (const True) "contract should close"
+---     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
+---     T..&&. walletFundsChange alice (lovelaceValueOf 15_000_000)
+---     T..&&. walletFundsChange bob (lovelaceValueOf (-15_000_000))
+---     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+---     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+---     ) $ do
+---     -- Init a contract
+---     let alicePk = PK (walletPubKeyHash alice)
+---         bobPk = PK (walletPubKeyHash bob)
+---
+---     let params = defaultMarloweParams
+---
+---     slotCfg <- Trace.getSlotConfig
+---     let seconds = secondsSinceShelley slotCfg
+---
+---     let zeroCouponBondStage1 = When [ merkleizedCase (Deposit alicePk alicePk ada (Constant 75_000_000))
+---                                                      zeroCouponBondStage2
+---                                     ] (seconds 100) Close
+---         zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 75_000_000)
+---                                   (When [ merkleizedCase (Deposit alicePk bobPk ada (Constant 90_000_000))
+---                                                          zeroCouponBondStage3
+---                                         ] (seconds 200) Close)
+---         zeroCouponBondStage3 = Close
+---
+---     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
+---     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
+---
+---     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBondStage1)
+---     Trace.waitNSlots 2
+---
+---     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
+---                                                  [ClientMerkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
+---     Trace.waitNSlots 4
+---
+---     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
+---                                                [ClientMerkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
+---     void $ Trace.waitNSlots 4
+---
+---     Trace.callEndpoint @"close" aliceHdl reqId
+---     Trace.callEndpoint @"close" bobHdl reqId
+---     void $ Trace.waitNSlots 2
+---
+---
+--- errorHandlingTest :: TestTree
+--- errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
+---     (assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice)
+---     (\case (Just (EndpointException _ "apply-inputs" _)) -> True
+---            _                                             -> False
+---     ) "should be fail with EndpointException"
+---     ) $ do
+---     -- Init a contract
+---     let alicePk = PK (walletPubKeyHash alice)
+---         bobPk = PK (walletPubKeyHash bob)
+---
+---     let params = defaultMarloweParams
+---
+---     slotCfg <- Trace.getSlotConfig
+---     let seconds = secondsSinceShelley slotCfg
+---
+---     let zeroCouponBond = When [ Case
+---             (Deposit alicePk alicePk ada (Constant 75_000_000))
+---             (Pay alicePk (Party bobPk) ada (Constant 75_000_000)
+---                 (When
+---                     [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (seconds 200) Close
+---                 ))] (seconds 100) Close
+---
+---     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
+---     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
+---
+---     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
+---     Trace.waitNSlots 2
+---
+---     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk alicePk ada 90_000_000])
+---     Trace.waitNSlots 2
+---     pure ()
+---
+---
+--- minAda :: Integer
+--- minAda = 2_000_000
+---
+---
+--- trustFundTest :: TestTree
+--- trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
+---     (assertNoFailedTransactions
+---     -- T..&&. emulatorLog (const False) ""
+---     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag alice) "contract should not have any errors"
+---     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag bob) "contract should not have any errors"
+---     T..&&. walletFundsChange alice (lovelaceValueOf (-minAda-25_600_000) <> Val.singleton (rolesCurrency params) "alice" 1)
+---     T..&&. walletFundsChange bob (lovelaceValueOf (minAda+25_600_000) <> Val.singleton (rolesCurrency params) "bob" 1)
+---     -- TODO Commented out because the new chain index does not allow to fetch
+---     -- all transactions that modified an address. Need to find an alternative
+---     -- way.
+---     --T..&&. assertAccumState marloweFollowContract "bob follow"
+---     --    (\state@ContractHistory{chParams, chHistory} ->
+---     --        case chParams of
+---     --            First (Just (mp, MarloweData{marloweContract})) -> mp == params && marloweContract == contract
+---     --            _                                               -> False) "follower contract state"
+---     --        --mp MarloweData{marloweContract} history
+---     --        -- chParams == (_ params) && chParams == (_ contract))
+---     ) $ do
+---
+---     -- Init a contract
+---     let alicePkh = walletAddress alice
+---         bobPkh = walletAddress bob
+---     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
+---     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
+---     bobCompanionHdl <- Trace.activateContract bob marloweCompanionContract "bob companion"
+---     bobFollowHdl <- Trace.activateContract bob marloweFollowContract "bob follow"
+---
+---     slotCfg <- Trace.getSlotConfig
+---     let seconds = secondsSinceShelley slotCfg
+---
+---     let contract = When [
+---             Case (Choice chId [Bound 10 90_000_000])
+---                 (When [Case
+---                     (Deposit "alice" "alice" ada (ChoiceValue chId))
+---                         (When [Case (Notify (TimeIntervalStart `ValueGE` Constant 15))
+---                             (Pay "alice" (Party "bob") ada
+---                                 (ChoiceValue chId) Close)]
+---                         (seconds 40) Close)
+---                     ] (seconds 30) Close)
+---             ] (seconds 20) Close
+---
+---     Trace.callEndpoint @"create" aliceHdl
+---         (reqId, AssocMap.fromList [("alice", alicePkh), ("bob", bobPkh)],
+---         contract)
+---     Trace.waitNSlots 5
+---     CompanionState r <- _observableState . instContractState <$> Trace.getContractState bobCompanionHdl
+---     case Map.toList r of
+---         [] -> pure ()
+---         (pms, _) : _ -> do
+---
+---             Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, pms, Nothing,
+---                 [ ClientInput $ IChoice chId 25_600_000
+---                 , ClientInput $ IDeposit "alice" "alice" ada 25_600_000
+---                 ])
+---             Trace.waitNSlots 17
+---
+---             -- get contract's history and start following our contract
+---             Trace.callEndpoint @"follow" bobFollowHdl pms
+---             Trace.waitNSlots 4
+---
+---             Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [ClientInput INotify])
+---
+---             Trace.waitNSlots 4
+---             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)
+---             Trace.waitNSlots 4
+---             Trace.callEndpoint @"redeem" aliceHdl (reqId, pms, "alice", alicePkh)
+---             void $ Trace.waitNSlots 5
+---     where
+---         alicePk = PK $ walletPubKeyHash alice
+---         bobPk = PK $ walletPubKeyHash bob
+---         chId = ChoiceId "1" alicePk
+---
+---         roles = Set.fromList ["alice", "bob"]
+---
+---         (params, _ :: TxConstraints MarloweInput MarloweData, _) =
+---             let con = setupMarloweParams @MarloweSchema @MarloweError
+---                         (AssocMap.fromList [("alice", walletAddress alice), ("bob", walletAddress bob)])
+---                         roles
+---                 fld = Folds.instanceOutcome con (Trace.walletInstanceTag alice)
+---                 getOutcome (Done a) = a
+---                 getOutcome e        = error $ "not finished: " <> show e
+---             in either (error . show) (getOutcome . S.fst')
+---                     $ run
+---                     $ runError @Folds.EmulatorFoldErr
+---                     $ foldEmulatorStreamM fld
+---                     $ Trace.runEmulatorStream def
+---                     $ do
+---                         void $ Trace.activateContractWallet alice (void con)
+---                         Trace.waitNSlots 10
+---
