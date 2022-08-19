@@ -36,7 +36,7 @@ import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), makeContract
 import Language.Marlowe.CLI.Test.Types (ScriptContract (InlineContract, TemplateContract), ScriptOperation (..),
                                         ScriptTest (..), TransactionNickname)
 import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction))
-import Language.Marlowe.Core.V1.Semantics.Types (Contract)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract)
 import Language.Marlowe.Extended.V1 (Value (..))
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 import Plutus.V1.Ledger.Api (CostModelParams)
@@ -56,8 +56,9 @@ import Language.Marlowe.CLI.Test.Types
 import qualified Language.Marlowe.Client as Client
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
-newtype ScriptState era = ScriptState
-  { transactions :: Map String (MarloweTransaction era)
+data ScriptState = ScriptState
+  { transactions :: Map String (MarloweTransaction BabbageEra)
+  , wallets      :: Map AccountId Wallet
   }
 
 data ScriptEnv era = ScriptEnv
@@ -164,11 +165,14 @@ interpret Prepare {..} = do
   modify $ insertMarloweTransaction soTransaction preparedMarloweTransaction
 
 interpret CreateWallet {..} = do
-  -- skey <- liftIO $ generateSigningKey asType
-  -- let vkey = getVerificationKey skey
-  throwError $ CliError "Not implemented"
+  skey <- liftIO $ generateSigningKey AsPaymentKey
+  let vkey = getVerificationKey skey
+  let wallet = Wallet vkey skey
+  modify $ insertWallet soOwner wallet
 
 interpret (Fail message) = throwError $ CliError message
+
+interpret _ = throwError $ CliError "Not implemented"
 
 withError :: MonadError e m => (e -> e) -> m a -> m a
 withError modifyError action = catchError action \e -> do
@@ -177,6 +181,11 @@ withError modifyError action = catchError action \e -> do
 insertMarloweTransaction :: TransactionNickname -> MarloweTransaction era -> ScriptState era -> ScriptState era
 insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
   scriptState{ transactions = Map.insert nickname transaction transactions }
+
+insertWallet :: AccountId -> Wallet -> ScriptState -> ScriptState
+insertWallet ownerName wallet scriptState@ScriptState { wallets } =
+  scriptState{ wallets = Map.insert ownerName wallet wallets }
+
 
 -- | Find Marlowe Transaction corresponding to a transaction nickname.
 findMarloweTransaction :: MonadError CliError m
@@ -209,7 +218,7 @@ scriptTest era costModel networkId _ slotConfig ScriptTest{..} =
       interpretLoop = for_ stScriptOperations \operation ->
         interpret operation
     void $ catchError
-      ( runReaderT (execStateT interpretLoop (ScriptState mempty)) (ScriptEnv networkId slotConfig costModel era))
+      (runReaderT (execStateT interpretLoop (ScriptState mempty mempty)) (ScriptEnv networkId slotConfig costModel era))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
