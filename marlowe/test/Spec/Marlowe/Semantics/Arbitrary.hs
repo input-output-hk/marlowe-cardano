@@ -22,6 +22,7 @@ module Spec.Marlowe.Semantics.Arbitrary (
 , assertContractWeights
 , arbitraryContractWeighted
 , arbitraryValidStep
+, arbitraryValidInput
 , arbitraryValidInputs
 ) where
 
@@ -43,6 +44,11 @@ import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, freq
 import qualified Data.Map.Strict as M
 import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
+
+
+-- FIXME: Turn this off if semantics should allow applying `[]` to a non-quiescent contract without ever throwing a timeout-related error.
+_FORBID_NONQUIESCENT_TIMEOUT_ :: Bool
+_FORBID_NONQUIESCENT_TIMEOUT_ = True
 
 
 fibonaccis :: Num a => [a]
@@ -845,24 +851,43 @@ arbitraryValidStep state@State{..} (When cases timeout _) =
                                          IChoice n <$> chooseInteger (lower, upper)
                     Notify _        -> pure INotify
              pure $ TransactionInput times [NormalInput i]
-arbitraryValidStep State{minTime} _ =
-  TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
+arbitraryValidStep State{minTime} contract =
+  if _FORBID_NONQUIESCENT_TIMEOUT_
+    then let
+           nextTimeout Close                                    = minTime
+           nextTimeout (Pay _ _ _ _ continuation)               = nextTimeout continuation
+           nextTimeout (If o thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
+           nextTimeout (When _ timeout _)                       = timeout
+           nextTimeout (Let _ _ continuation)                   = nextTimeout continuation
+           nextTimeout (Assert _ continuation)                  = nextTimeout continuation
+         in
+           TransactionInput <$> arbitraryTimeIntervalAfter (maximum [minTime, nextTimeout contract]) <*> pure []
+    else TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
+
+
+arbitraryValidInput :: State -> Contract -> Gen TransactionInput
+arbitraryValidInput = arbitraryValidInput' Nothing
+
+arbitraryValidInput' :: Maybe TransactionInput -> State -> Contract -> Gen TransactionInput
+arbitraryValidInput' Nothing state contract =
+  arbitraryValidStep state contract
+arbitraryValidInput' (Just input) state contract =
+  case computeTransaction input state contract of
+    Error{}               -> pure input
+    TransactionOutput{..} -> do
+                               nextInput <- arbitraryValidStep state contract
+                               let
+                                 combinedInput = input {txInputs = txInputs input ++ txInputs nextInput}
+                               case computeTransaction combinedInput txOutState txOutContract of
+                                 Error{}             -> pure input
+                                 TransactionOutput{} -> pure combinedInput
 
 
 arbitraryValidInputs :: State -> Contract -> Gen [TransactionInput]
-arbitraryValidInputs = arbitraryValidInputs' Nothing
-
-arbitraryValidInputs' :: Maybe TransactionInput -> State -> Contract -> Gen [TransactionInput]
-arbitraryValidInputs' _ _ Close = pure []
-arbitraryValidInputs' Nothing state contract =
+arbitraryValidInputs _ Close = pure []
+arbitraryValidInputs state contract =
   do
-    input <- arbitraryValidStep state contract
-    case computeTransaction input state contract of
+    input <- arbitraryValidInput state contract
+    case computeTransaction input state contract of  -- FIXME: It is tautological to use `computeTransaction` to filter test cases.
       Error{}               -> pure []
-      TransactionOutput{..} -> (input :) <$> arbitraryValidInputs' (Just input) txOutState txOutContract
-arbitraryValidInputs' (Just previous) state contract =
-  do
-    input <- arbitraryValidStep state contract
-    case computeTransaction input state contract of
-      Error{}               -> pure []
-      TransactionOutput{..} -> (input :) <$> arbitraryValidInputs' (Just input) txOutState txOutContract
+      TransactionOutput{..} -> (input :) <$> arbitraryValidInputs txOutState txOutContract

@@ -1,6 +1,8 @@
 
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TupleSections  #-}
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 
 module Spec.Marlowe.Semantics.Functions (
@@ -12,11 +14,13 @@ import Data.Maybe (fromMaybe, isNothing)
 import Debug.Trace
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.FindInputs
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
 import Spec.Marlowe.Semantics.Arbitrary
 import Spec.Marlowe.Semantics.AssocMap
 import Spec.Marlowe.Semantics.Orphans ()
 import Spec.Marlowe.Semantics.Util
+import Test.QuickCheck.Monadic
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -140,7 +144,9 @@ tests =
     , testProperty "getContinuation" checkGetContinuation
     , testProperty "applyCases" checkApplyCases
     , testProperty "applyInput" checkApplyInput
+--  , testProperty "applyAllInputs" checkApplyAllInputs
     , testCase "isClose" checkIsClose
+    , testProperty "computeTransaction (via playTrace)" checkComputeTransaction
     , testProperty "playTrace" checkPlayTrace
     ]
 
@@ -832,7 +838,8 @@ checkApplyInput =
       case (contract, applyInput environment state input contract) of
         (When cases _ _, result           ) -> result == applyCases environment state input cases
         (_             , ApplyNoMatchError) -> True
-        _                                   -> False
+        e                                   -> error $ show e
+
 
 checkIsClose :: Assertion
 checkIsClose =
@@ -845,6 +852,19 @@ checkIsClose =
     assertBool "isClose Asset = False" . not . isClose $ Assert undefined undefined
 
 
+checkComputeTransaction :: Property
+checkComputeTransaction =
+  monadicIO $ do
+    contract <- pick $ arbitrary `suchThat` (/= Close)
+    let
+      play (time, inputs) =
+        case playTrace time contract inputs of
+          TransactionOutput{} -> True
+          e                   -> error $ show (time, contract, inputs, e)
+    either (const True) (all play)
+      <$> run (getAllInputs contract)
+
+
 checkPlayTrace :: Property
 checkPlayTrace =
   property $ do
@@ -852,9 +872,10 @@ checkPlayTrace =
           do
             start <- arbitrary
             contract <- arbitrary
+            -- FIXME: This is tautological in that `arbitraryValidInputs` uses `computeTransaction` as a filter.
             inputs <- arbitraryValidInputs (State AM.empty AM.empty AM.empty start) contract
             pure (start, contract, inputs)
     forAll gen $ \(start, contract, inputs) ->
       case playTrace start contract inputs of
-        Error e             -> error $ show e
         TransactionOutput{} -> True
+        e                   -> error $ show e
