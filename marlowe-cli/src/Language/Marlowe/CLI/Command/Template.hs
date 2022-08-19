@@ -22,6 +22,8 @@ module Language.Marlowe.CLI.Command.Template (
 -- * Marlowe CLI Commands
   TemplateCommand(..)
 , OutputFiles(..)
+, Seconds(..)
+, Timeout(..)
 , parseTemplateCommand
 , parseTemplateCommandOutputFiles
 , runTemplateCommand
@@ -40,12 +42,28 @@ import Language.Marlowe.CLI.IO (decodeFileStrict, liftCliMaybe)
 import Language.Marlowe.CLI.Types (CliError (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
 import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
-import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
+import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Token, Value (..), toCore)
+import qualified Language.Marlowe.Extended.V1 as E
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
 import qualified Options.Applicative as O
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
+
+
+newtype Seconds = Seconds Integer
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+
+-- FIXME: we want to handle JSON encoding / decoding
+--       using a bit nicer syntax like:
+--
+--          "relative": 8000
+--          "absolute": 123123900
+data Timeout = AbsoluteTimeout E.Timeout | RelativeTimeout Seconds
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+
 
 
 -- | Marlowe CLI commands and options for contract templates.
@@ -58,7 +76,7 @@ data TemplateCommand =
     , party              :: Party    -- ^ The party.
     , depositLovelace    :: Integer  -- ^ Lovelace in the deposit.
     , withdrawalLovelace :: Integer  -- ^ Lovelace in the withdrawal.
-    , timeout            :: Timeout  -- ^ The timeout.
+    , timeout            :: E.Timeout  -- ^ The timeout.
     }
     -- | Template for escrow contract.
   | TemplateEscrow
@@ -68,10 +86,10 @@ data TemplateCommand =
     , seller            :: Party    -- ^ The seller.
     , buyer             :: Party    -- ^ The buyer.
     , mediator          :: Party    -- ^ The mediator.
-    , paymentDeadline   :: Timeout  -- ^ The deadline for the buyer to pay.
-    , complaintDeadline :: Timeout  -- ^ The deadline for the buyer to complain.
-    , disputeDeadline   :: Timeout  -- ^ The deadline for the seller to dispute a complaint.
-    , mediationDeadline :: Timeout  -- ^ The deadline for the mediator to decide.
+    , paymentDeadline   :: E.Timeout  -- ^ The deadline for the buyer to pay.
+    , complaintDeadline :: E.Timeout  -- ^ The deadline for the buyer to complain.
+    , disputeDeadline   :: E.Timeout  -- ^ The deadline for the seller to dispute a complaint.
+    , mediationDeadline :: E.Timeout  -- ^ The deadline for the mediator to decide.
     }
     -- | Template for swap contract.
   | TemplateSwap
@@ -80,11 +98,11 @@ data TemplateCommand =
     , aParty   :: Party     -- ^ First party.
     , aToken   :: Token     -- ^ First party's token.
     , aAmount  :: Integer   -- ^ Amount of first party's token.
-    , aTimeout :: Timeout   -- ^ Timeout for first party's deposit.
+    , aTimeout :: E.Timeout   -- ^ Timeout for first party's deposit.
     , bParty   :: Party     -- ^ Second party.
     , bToken   :: Token     -- ^ Second party's token.
     , bAmount  :: Integer   -- ^ Amount of second party's token.
-    , bTimeout :: Timeout   -- ^ Timeout for second party's deposit.
+    , bTimeout :: E.Timeout   -- ^ Timeout for second party's deposit.
     }
     -- | Template for zero-coupon bond.
   | TemplateZeroCouponBond
@@ -94,8 +112,8 @@ data TemplateCommand =
     , borrower        :: Party     -- ^ The borrower.
     , principal       :: Integer   -- ^ The principal.
     , interest        :: Integer   -- ^ The interest.
-    , lendingDeadline :: Timeout   -- ^ The lending deadline.
-    , paybackDeadline :: Timeout   -- ^ The payback deadline.
+    , lendingDeadline :: E.Timeout   -- ^ The lending deadline.
+    , paybackDeadline :: E.Timeout   -- ^ The payback deadline.
     }
     -- | Template for covered call.
   | TemplateCoveredCall
@@ -107,9 +125,9 @@ data TemplateCommand =
     , underlying     :: Token     -- ^ The underlying token.
     , strike         :: Integer   -- ^ The strike in currency.
     , amount         :: Integer   -- ^ The amount of underlying.
-    , issueDate      :: Timeout   -- ^ The issue date.
-    , maturityDate   :: Timeout   -- ^ The maturity date.
-    , settlementDate :: Timeout   -- ^ The settlement date.
+    , issueDate      :: E.Timeout   -- ^ The issue date.
+    , maturityDate   :: E.Timeout   -- ^ The maturity date.
+    , settlementDate :: E.Timeout   -- ^ The settlement date.
     }
     -- | Template for actus contracts.
   | TemplateActus
