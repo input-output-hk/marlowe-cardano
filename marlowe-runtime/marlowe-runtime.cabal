@@ -134,5 +134,7 @@ test-suite marlowe-runtime-test
     , marlowe-protocols
     , marlowe-protocols-test
     , marlowe-runtime
+    , plutus-tx
     , stm
+    , transformers
   build-tool-depends: hspec-discover:hspec-discover

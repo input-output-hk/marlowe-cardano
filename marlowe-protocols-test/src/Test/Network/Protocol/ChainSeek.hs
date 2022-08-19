@@ -15,6 +15,8 @@ data ChainSeekServerScript q point tip (m :: * -> *) a
   | ConfirmHandshake (ServerStIdleScript q point tip m a)
 
 data ServerStIdleScript q point tip (m :: * -> *) a where
+  Assert :: m () -> ServerStIdleScript q point tip m a -> ServerStIdleScript q point tip m a
+  Halt :: a -> ServerStIdleScript q point tip m a
   ExpectDone :: a -> ServerStIdleScript q point tip m a
   ExpectQuery :: q err result -> ServerStNextScript q point tip 'StCanAwait err result m a -> ServerStIdleScript q point tip m a
 
@@ -31,20 +33,22 @@ runClientWithScript
   -> (forall err result. q err result -> q err result -> Expectation)
   -> ChainSeekServerScript q point tip m a
   -> ChainSeekClient q point tip m b
-  -> m (a, b)
+  -> m (a, Maybe b)
 runClientWithScript showQuery assertQueryEq script ChainSeekClient{..} = do
   SendMsgRequestHandshake _ ClientStHandshake{..} <- runChainSeekClient
   case script of
-    RejectHandshake versions a -> (a,) <$> recvMsgHandshakeRejected versions
+    RejectHandshake versions a -> (a,) . Just <$> recvMsgHandshakeRejected versions
     ConfirmHandshake script'   -> runIdle script' =<< recvMsgHandshakeConfirmed
   where
     runIdle
       :: ServerStIdleScript q point tip m a
       -> ClientStIdle q point tip m b
-      -> m (a, b)
+      -> m (a, Maybe b)
     runIdle = \case
+      Assert action script' -> \client -> action *> runIdle script' client
+      Halt a -> \_ -> pure (a, Nothing)
       ExpectDone a -> \case
-        SendMsgDone b -> pure (a, b)
+        SendMsgDone b -> pure (a, Just b)
         SendMsgQueryNext move _ _ -> liftIO do
           expectationFailure $ "Expected MsgDone, got MsgQueryNext (" <> showQuery move <> ")"
           undefined
@@ -67,7 +71,7 @@ runClientWithScript showQuery assertQueryEq script ChainSeekClient{..} = do
       :: ClientStNext q err result point tip m b
       -> m (ClientStNext q err result point tip m b)
       -> ServerStNextScript q point tip k err result m a
-      -> m (a, b)
+      -> m (a, Maybe b)
     runNext ClientStNext{..} waitNext = \case
       RejectQuery err tip script' -> runIdle script' =<< recvMsgQueryRejected err tip
       RollForward result point tip script' -> runIdle script' =<< recvMsgRollForward result point tip
