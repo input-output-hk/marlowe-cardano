@@ -40,13 +40,13 @@ module Language.Marlowe.CLI.Run (
 
 
 import Cardano.Api (AddressAny, AddressInEra (..), BabbageEra, CardanoMode, Key (deterministicSigningKeySeedSize),
-                    LocalNodeConnectInfo (..), MultiAssetSupportedInEra (MultiAssetInBabbageEra), NetworkId,
-                    PaymentCredential (..), QueryInShelleyBasedEra (..), QueryUTxOFilter (..), Script (..),
-                    ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..),
-                    StakeAddressReference (..), TxId, TxIn, TxMintValue (..), TxOut (..), TxOutDatum (..),
-                    TxOutValue (..), UTxO (..), anyAddressInShelleyBasedEra, calculateMinimumUTxO, getTxId,
-                    lovelaceToValue, makeShelleyAddressInEra, selectLovelace, shelleyBasedEra, toAddressAny,
-                    txOutValueToValue, writeFileTextEnvelope)
+                    LocalNodeConnectInfo (localNodeNetworkId), MultiAssetSupportedInEra (MultiAssetInBabbageEra),
+                    NetworkId, QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO),
+                    QueryUTxOFilter (QueryUTxOByAddress), Script (..), ScriptDataSupportedInEra (..),
+                    ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..), StakeAddressReference (..), TxId, TxIn,
+                    TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
+                    anyAddressInShelleyBasedEra, calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace,
+                    toAddressAny, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as Cardano.Api.TxBody
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
@@ -436,7 +436,6 @@ ensureAtLeastHalfAnAda origValue =
   where
     origLovelace = selectLovelace origValue
     minLovelace = Lovelace 500_000
-
 
 -- | Adjust the lovelace in an output to confirm to the minimum ADA requirement.
 adjustMinimumUTxO :: forall m era
