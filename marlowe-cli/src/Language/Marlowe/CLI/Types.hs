@@ -12,6 +12,8 @@
 
 
 {-# LANGUAGE BlockArguments             #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -23,6 +25,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 
 module Language.Marlowe.CLI.Types (
@@ -68,6 +71,8 @@ module Language.Marlowe.CLI.Types (
 , doWithCardanoEra
 , doWithShelleyBasedEra
 , toAddressAny'
+, AnyTimeout(..)
+, toTimeout
 ) where
 
 
@@ -96,17 +101,27 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeeme
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 import qualified Cardano.Api as Api (Value)
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader.Class (MonadReader (..), asks)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort)
 import qualified Data.Map.Strict as M (Map)
 import Data.Proxy (Proxy (Proxy))
+import Data.Time (NominalDiffTime, addUTCTime, getCurrentTime)
+import GHC.Exts (IsString (fromString))
+import Language.Marlowe.Extended.V1 (Timeout (POSIXTime))
+import qualified Language.Marlowe.Extended.V1 as E
+import qualified Marlowe.Contracts.UTC.Common as UTC.Common
 
 
 -- | Exception for Marlowe CLI.
 newtype CliError = CliError {unCliError :: String}
-  deriving (Eq, IsString, Ord, Read, Show)
+  deriving (Eq, Ord, Read, Show)
 
+instance IsString CliError where
+  fromString = CliError
 
 -- | A payment key.
 type SomePaymentVerificationKey = Either (VerificationKey PaymentKey) (VerificationKey PaymentExtendedKey)
@@ -473,3 +488,29 @@ data OutputQuery =
     {
       asset :: AssetId
     }
+
+
+data AnyTimeout = AbsoluteTimeout Integer | RelativeTimeout NominalDiffTime
+    deriving stock (Eq, Generic, Show)
+
+
+instance ToJSON AnyTimeout where
+  toJSON (AbsoluteTimeout timeout)  = Aeson.object [("absolute", toJSON timeout)]
+  toJSON (RelativeTimeout duration) = Aeson.object [("relative", toJSON duration)]
+
+
+instance FromJSON AnyTimeout where
+  parseJSON json = case json of
+    Aeson.Object (KeyMap.toList -> [("absolute", absoluteTimeout)]) -> do
+      parsedTimeout <- parseJSON absoluteTimeout
+      pure $ AbsoluteTimeout parsedTimeout
+    Aeson.Object (KeyMap.toList -> [("relative", duration)]) -> do
+      parsedDuration <- parseJSON duration
+      pure $ RelativeTimeout parsedDuration
+    _ -> fail "Expected object with a single field of either `absolute` or `relative`"
+
+
+toTimeout :: MonadIO m => AnyTimeout -> m E.Timeout
+toTimeout (AbsoluteTimeout t)       = pure $ POSIXTime t
+toTimeout (RelativeTimeout seconds) = liftIO $ UTC.Common.toTimeout . addUTCTime seconds <$> getCurrentTime
+

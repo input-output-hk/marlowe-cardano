@@ -35,7 +35,7 @@ import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), initialMarloweState, makeContract)
-import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction)
+import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction, toTimeout)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId)
 import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams)
@@ -90,11 +90,12 @@ interpret Initialize {..} = do
     InlineContract contract -> pure contract
     TemplateContract templateCommand ->
       case templateCommand of
-        TemplateTrivial{..} -> makeContract $ trivial
-                                  party
-                                  depositLovelace
-                                  withdrawalLovelace
-                                  timeout
+        TemplateTrivial{..} -> do timeout' <- toTimeout timeout
+                                  makeContract $ trivial
+                                    party
+                                    depositLovelace
+                                    withdrawalLovelace
+                                    timeout'
         template -> throwError $ CliError $ "Template not implemented: " <> show template
         -- TemplateEscrow{..} -> makeContract $
         --                         escrow
