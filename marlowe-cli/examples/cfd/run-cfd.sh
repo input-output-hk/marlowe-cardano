@@ -27,7 +27,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-: "${MAGIC:="1097911063"}"
+: "${MAGIC:=1097911063}"
 echo "MAGIC=$MAGIC"
 
 SLOT_LENGTH=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
