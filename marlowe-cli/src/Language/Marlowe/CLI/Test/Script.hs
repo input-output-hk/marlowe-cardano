@@ -27,9 +27,10 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (AsType (AsPaymentKey), BabbageEra, CardanoMode, Key (getVerificationKey), LocalNodeConnectInfo (..),
-                    NetworkId (..), ScriptDataSupportedInEra, StakeAddressReference (NoStakeAddress),
-                    generateSigningKey)
+import Cardano.Api (AsType (AsPaymentKey), BabbageEra, CardanoMode, Key (getVerificationKey, verificationKeyHash),
+                    LocalNodeConnectInfo (..), NetworkId (..), PaymentCredential (PaymentCredentialByKey),
+                    ScriptDataSupportedInEra, StakeAddressReference (NoStakeAddress), generateSigningKey,
+                    makeShelleyAddress)
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
@@ -163,8 +164,11 @@ interpret Prepare {..} = do
 
 interpret CreateWallet {..} = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
+  ScriptEnv {..} <- ask
   let vkey = getVerificationKey skey
-  let wallet = Wallet vkey skey
+  let
+    address = makeShelleyAddress seNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
+  let wallet = Wallet vkey skey address (verificationKeyHash vkey)
   modify $ insertWallet soOwner wallet
 
 interpret (Fail message) = throwError $ CliError message
