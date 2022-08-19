@@ -31,6 +31,7 @@ module Language.Marlowe.CLI.Test.Types (
 , ScriptOperation(..)
 , TransactionNickname
 , ScriptContract(..)
+, Wallet(..)
 ) where
 
 
@@ -131,7 +132,7 @@ data ScriptOperation =
 data Wallet =
   Wallet
   {
-    verificationKey :: VerificationKey PaymentKey
-  , signingKey      :: SigningKey PaymentKey
+    waVerificationKey :: VerificationKey PaymentKey
+  , waSigningKey      :: SigningKey PaymentKey
   -- , address         :: AddressKeyShelley
   }
