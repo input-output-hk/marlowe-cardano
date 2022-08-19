@@ -27,18 +27,16 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (CardanoMode, LocalNodeConnectInfo (..), NetworkId (..), ScriptDataSupportedInEra,
-                    StakeAddressReference (NoStakeAddress))
+import Cardano.Api (AsType (AsPaymentKey), BabbageEra, CardanoMode, Key (getVerificationKey), LocalNodeConnectInfo (..),
+                    NetworkId (..), ScriptDataSupportedInEra, StakeAddressReference (NoStakeAddress),
+                    generateSigningKey)
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
-import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), makeContract)
-import Language.Marlowe.CLI.Test.Types (ScriptContract (InlineContract, TemplateContract), ScriptOperation (..),
-                                        ScriptTest (..), TransactionNickname)
-import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction (MarloweTransaction))
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract)
-import Language.Marlowe.Extended.V1 (Value (..))
-import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
+import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), initialMarloweState, makeContract)
+import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId)
+import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -50,7 +48,6 @@ import Data.Foldable.Extra (for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as M (lookup)
-import Language.Marlowe.CLI.Command.Template (initialMarloweState)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl)
 import Language.Marlowe.CLI.Test.Types
 import qualified Language.Marlowe.Client as Client
@@ -92,7 +89,7 @@ interpret Initialize {..} = do
     InlineContract contract -> pure contract
     TemplateContract templateCommand ->
       case templateCommand of
-        TemplateTrivial{..} -> pure $ makeContract $ trivial
+        TemplateTrivial{..} -> makeContract $ trivial
                                   party
                                   depositLovelace
                                   withdrawalLovelace

@@ -35,10 +35,13 @@ module Language.Marlowe.CLI.Test.Types (
 ) where
 
 
-import Cardano.Api (AddressInEra, NetworkId)
+import Cardano.Api (AddressAny, AddressInEra, Key (VerificationKey), NetworkId, PaymentKey, SigningKey)
 import Data.Aeson (FromJSON (..), ToJSON (..))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Text (Text)
 import GHC.Generics (Generic)
+import Language.Marlowe.CLI.Command.Template (TemplateCommand)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Time (POSIXTime)
