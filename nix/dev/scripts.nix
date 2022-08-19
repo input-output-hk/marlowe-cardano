@@ -57,7 +57,7 @@ let
     echo "socket path = ${devNetworkConfig.node.socket-path}"
     export DATA_DIR=${devNetworkConfig.node.database-path}
     export ENVIRONMENT=${network.name}
-    export SOCKET_POATH=${devNetworkConfig.node.socket-path}
+    export SOCKET_PATH=${devNetworkConfig.node.socket-path}
     mkdir -p ${devNetworkConfig.node.database-path}
     ${pkgs.cardano.entrypoints.cardano-node}/bin/entrypoint
   '';
