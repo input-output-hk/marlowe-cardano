@@ -15,7 +15,7 @@ data ChainSeekServerScript q point tip (m :: * -> *) a
   | ConfirmHandshake (ServerStIdleScript q point tip m a)
 
 data ServerStIdleScript q point tip (m :: * -> *) a where
-  Assert :: m () -> ServerStIdleScript q point tip m a -> ServerStIdleScript q point tip m a
+  Do :: m () -> ServerStIdleScript q point tip m a -> ServerStIdleScript q point tip m a
   Halt :: a -> ServerStIdleScript q point tip m a
   ExpectDone :: a -> ServerStIdleScript q point tip m a
   ExpectQuery :: q err result -> ServerStNextScript q point tip 'StCanAwait err result m a -> ServerStIdleScript q point tip m a
@@ -45,7 +45,7 @@ runClientWithScript showQuery assertQueryEq script ChainSeekClient{..} = do
       -> ClientStIdle q point tip m b
       -> m (a, Maybe b)
     runIdle = \case
-      Assert action script' -> \client -> action *> runIdle script' client
+      Do action script' -> \client -> action *> runIdle script' client
       Halt a -> \_ -> pure (a, Nothing)
       ExpectDone a -> \case
         SendMsgDone b -> pure (a, Just b)

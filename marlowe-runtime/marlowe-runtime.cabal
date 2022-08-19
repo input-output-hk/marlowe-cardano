@@ -81,6 +81,7 @@ library
     , split
     , stm
     , text
+    , transformers
     , typed-protocols
     , witherable
 
@@ -106,8 +107,11 @@ executable marlowe-follower
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , ansi-terminal
     , async
     , base16
+    , containers
+    , marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-chain-sync
@@ -115,6 +119,8 @@ executable marlowe-follower
     , typed-protocols
     , optparse-applicative
     , stm
+    , text
+    , wl-pprint
 
 test-suite marlowe-runtime-test
   import: lang

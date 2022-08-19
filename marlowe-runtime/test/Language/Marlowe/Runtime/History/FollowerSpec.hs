@@ -4,7 +4,7 @@
 {-# LANGUAGE RankNTypes     #-}
 {-# LANGUAGE RecursiveDo    #-}
 
-module Language.Marlowe.Runtime.History.FollowerSpec where
+module Language.Marlowe.Runtime.History.FollowerSpec (spec) where
 
 import Control.Concurrent.Async (concurrently)
 import Control.Concurrent.STM (atomically, newEmptyTMVar, putTMVar, takeTMVar)
@@ -12,19 +12,22 @@ import Control.Exception (Exception, catch, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Data.Functor (void)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSeekClient, Move (..), ScriptHash,
-                                               TransactionOutput (..), TxError (TxNotFound), TxId, TxOutRef (..),
-                                               WithGenesis (..), toDatum)
+                                               TransactionOutput (address), TxError (..), TxId, TxOutRef (..),
+                                               UTxOError (..), WithGenesis (..), toDatum)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), SomeMarloweVersion (SomeMarloweVersion),
+import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), SomeMarloweVersion (..),
+                                          Transaction (..), TransactionOutput (..), TransactionScriptOutput (..),
                                           parseContractId)
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), ContractHistoryError (..), ContractStep (..),
-                                                  CreateStep (..), ExtractCreationError (..), Follower (..),
+                                                  CreateStep (..), ExtractCreationError (..),
+                                                  ExtractMarloweTransactionError (..), Follower (..),
                                                   FollowerDependencies (..), SomeContractChanges (..), mkFollower)
 import Network.Protocol.ChainSeek.Client (hoistChainSeekClient)
 import qualified PlutusTx.AssocMap as AMap
@@ -40,10 +43,18 @@ spec = do
   it "terminates with ByronAddress" checkByronAddress
   it "terminates with NonScriptAddress" checkNonScriptAddress
   it "terminates with InvalidScriptHash" checkInvalidScriptHash
-  it "terminates with NoDatum" checkNoDatum
-  it "terminates with InvalidDatum" checkInvalidDatum
+  it "terminates with NoCreateDatum" checkNoCreateDatum
+  it "terminates with InvalidCreateDatum" checkInvalidCreateDatum
   it "terminates with NotCreationTransaction" checkNotCreationTransaction
   it "discovers a contract creation" checkCreation
+  it "terminates with FollowScriptUTxOFailed" checkFollowScriptUTxOFailed
+  it "terminates with TxInNotFound" checkTxInNotFound
+  it "terminates with NoRedeemer" checkNoRedeemer
+  it "terminates with InvalidRedeemer" checkInvalidRedeemer
+  it "terminates with NoTransactionDatum" checkNoTransactionDatum
+  it "terminates with InvalidTransactionDatum" checkInvalidTransactionDatum
+  it "discovers a contract transaction (close)" checkCloseTransaction
+  it "discovers a contract transaction (non-close)" checkNonCloseTransaction
 
 testContractId :: ContractId
 testContractId = fromJust $ parseContractId "036e9b4cfdd668f9682d9153950980d7b065455f29b3b47923b2572bdd791e69#0"
@@ -57,8 +68,11 @@ testScriptHash = "45da42055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
 marloweVersions :: [(ScriptHash, SomeMarloweVersion)]
 marloweVersions = [(testScriptHash, SomeMarloweVersion MarloweV1)]
 
+createUTxO :: TxOutRef
+createUTxO = unContractId testContractId
+
 createTxId :: TxId
-createTxId = txId $ unContractId testContractId
+createTxId = txId createUTxO
 
 createDatum :: V1.MarloweData
 createDatum = V1.MarloweData
@@ -102,11 +116,78 @@ createOutput =
   in
     Chain.TransactionOutput{..}
 
+closeTxIn :: Chain.TransactionInput
+closeTxIn =
+  let
+    redeemer = Just $ Chain.Redeemer $ toDatum ([] :: [V1.Input])
+  in
+    Chain.TransactionInput createTxId 0 testScriptAddress redeemer
+
+closeTxId :: TxId
+closeTxId = "0000000000000000000000000000000000000000000000000000000000000000"
+
+closeTx :: Chain.Transaction
+closeTx =
+  let
+    txId = closeTxId
+    validityRange = Chain.Unbounded
+    metadata = Nothing
+    inputs = Set.singleton closeTxIn
+    outputs = []
+    mintedTokens = Chain.Tokens mempty
+  in
+    Chain.Transaction{..}
+
+applyInputsRedeemer :: [V1.Input]
+applyInputsRedeemer = [ V1.NormalInput V1.INotify ]
+
+applyInputsTxIn :: Chain.TransactionInput
+applyInputsTxIn =
+  let
+    redeemer = Just $ Chain.Redeemer $ toDatum applyInputsRedeemer
+  in
+    Chain.TransactionInput createTxId 0 testScriptAddress redeemer
+
+applyInputsTxId :: TxId
+applyInputsTxId = "0000000000000000000000000000000000000000000000000000000000000001"
+
+applyInputsTx :: Chain.Transaction
+applyInputsTx =
+  let
+    txId = applyInputsTxId
+    validityRange = Chain.Unbounded
+    metadata = Nothing
+    inputs = Set.singleton applyInputsTxIn
+    outputs = [applyInputsOutput]
+    mintedTokens = Chain.Tokens mempty
+  in
+    Chain.Transaction{..}
+
+applyInputsOutput :: Chain.TransactionOutput
+applyInputsOutput =
+  let
+    address = testScriptAddress
+    assets = Chain.Assets
+      { ada = 0
+      , tokens = Chain.Tokens mempty
+      }
+    datumHash = Nothing
+    datum = Just $ toDatum createDatum
+  in
+    Chain.TransactionOutput{..}
+
 block1 :: Chain.BlockHeader
 block1 = Chain.BlockHeader 0 "" 0
 
 point1 :: ChainPoint
 point1 = Chain.At block1
+
+block2 :: Chain.BlockHeader
+block2 = Chain.BlockHeader 1 "" 1
+
+point2 :: ChainPoint
+point2 = Chain.At block2
+
 
 checkHandshakeRejected :: Expectation
 checkHandshakeRejected = do
@@ -165,24 +246,24 @@ checkInvalidScriptHash = do
   followerError `shouldBe` Just (ExtractContractFailed InvalidScriptHash)
   followerChanges `shouldBe` Nothing
 
-checkNoDatum :: Expectation
-checkNoDatum = do
+checkNoCreateDatum :: Expectation
+checkNoCreateDatum = do
   FollowerTestResult{..} <- runFollowerTest marloweVersions
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
     $ RollForward createTx { Chain.outputs = [createOutput { Chain.datum = Nothing }] } point1 point1
     $ ExpectDone ()
-  followerError `shouldBe` Just (ExtractContractFailed NoDatum)
+  followerError `shouldBe` Just (ExtractContractFailed NoCreateDatum)
   followerChanges `shouldBe` Nothing
 
-checkInvalidDatum :: Expectation
-checkInvalidDatum = do
+checkInvalidCreateDatum :: Expectation
+checkInvalidCreateDatum = do
   FollowerTestResult{..} <- runFollowerTest marloweVersions
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
     $ RollForward createTx { Chain.outputs = [createOutput { Chain.datum = Just $ Chain.I 0 }] } point1 point1
     $ ExpectDone ()
-  followerError `shouldBe` Just (ExtractContractFailed InvalidDatum)
+  followerError `shouldBe` Just (ExtractContractFailed InvalidCreateDatum)
   followerChanges `shouldBe` Nothing
 
 checkNotCreationTransaction :: Expectation
@@ -205,12 +286,12 @@ checkNotCreationTransaction = do
 checkCreation :: Expectation
 checkCreation = do
   let datum = createDatum
-  let scriptHash = testScriptHash
+  let scriptAddress = testScriptAddress
   FollowerTestResult{..} <- runFollowerTest marloweVersions
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
     $ RollForward createTx point1 point1
-    $ Assert
+    $ Do
         ( expectChanges MarloweV1 ContractChanges
             { steps = Map.singleton block1 [Create CreateStep {..}]
             , rollbackTo = Nothing
@@ -218,8 +299,117 @@ checkCreation = do
         )
     $ Halt ()
   followerError `shouldBe` Nothing
-  -- Should be empty because we already read them in the Assert above and it
+  -- Should be empty because we already read them in the Do above and it
   -- resets to empty each time it is read.
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkFollowScriptUTxOFailed :: Expectation
+checkFollowScriptUTxOFailed = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RejectQuery UTxONotFound point1
+    $ ExpectDone ()
+  followerError `shouldBe` Just (FollowScriptUTxOFailed UTxONotFound)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkTxInNotFound :: Expectation
+checkTxInNotFound = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx { Chain.inputs = mempty } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed TxInNotFound)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkNoRedeemer :: Expectation
+checkNoRedeemer = do
+  let badInput = closeTxIn { Chain.redeemer = Nothing }
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx { Chain.inputs = Set.singleton badInput } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed NoRedeemer)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkInvalidRedeemer :: Expectation
+checkInvalidRedeemer = do
+  let badInput = closeTxIn { Chain.redeemer = Just $ Chain.toRedeemer () }
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx { Chain.inputs = Set.singleton badInput } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed InvalidRedeemer)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkNoTransactionDatum :: Expectation
+checkNoTransactionDatum = do
+  let badOutput = applyInputsOutput { Chain.datum = Nothing }
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward applyInputsTx { Chain.outputs = [badOutput] } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed NoTransactionDatum)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkInvalidTransactionDatum :: Expectation
+checkInvalidTransactionDatum = do
+  let badOutput = applyInputsOutput { Chain.datum = Just $ Chain.toDatum () }
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward applyInputsTx { Chain.outputs = [badOutput] } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed InvalidTransactionDatum)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCloseTransaction :: Expectation
+checkCloseTransaction = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = closeTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityRange = Chain.Unbounded
+                    , redeemer = []
+                    , output = TransactionOutput [] Nothing
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkNonCloseTransaction :: Expectation
+checkNonCloseTransaction = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward applyInputsTx point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityRange = Chain.Unbounded
+                    , redeemer = applyInputsRedeemer
+                    , output = TransactionOutput [] $ Just TransactionScriptOutput
+                        { utxo = Chain.TxOutRef applyInputsTxId 0
+                        , datum = createDatum
+                        }
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
   followerChanges `shouldBe` Just (emptyChanges MarloweV1)
 
 emptyChanges :: MarloweVersion v -> SomeContractChanges
@@ -232,12 +422,27 @@ expectChanges version expectedChanges = do
     currentChanges <- atomically changes
     currentChanges `shouldBe` Just (SomeContractChanges version expectedChanges)
 
+readChanges :: ReaderT Follower IO ()
+readChanges = do
+  Follower{..} <- ask
+  void $ liftIO $ atomically changes
+
 -- TODO move to a test module in marlowe-protocols and generalize Move -> query
 data FollowerTestResult a = FollowerTestResult
   { followerError   :: Maybe ContractHistoryError
   , followerChanges :: Maybe SomeContractChanges
   , testResult      :: a
   }
+
+runFollowerTestPostCreation
+  :: [(ScriptHash, SomeMarloweVersion)]
+  -> ServerStIdleScript Move ChainPoint ChainPoint (ReaderT Follower IO) a
+  -> IO (FollowerTestResult a)
+runFollowerTestPostCreation marloweVersions' = runFollowerTest marloweVersions'
+  . ConfirmHandshake
+  . ExpectQuery (FindTx createTxId)
+  . RollForward createTx point1 point2
+  . Do readChanges -- to empty them
 
 runFollowerTest
   :: [(ScriptHash, SomeMarloweVersion)]
