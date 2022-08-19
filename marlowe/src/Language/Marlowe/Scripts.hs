@@ -251,7 +251,7 @@ mkMarloweValidator
         payoutToTxOut (party, value) = case party of
             PK pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
             Role role -> let
-                hsh = findDatumHash' role
+                hsh = findDatumHash' (rolesCurrency, role)
                 addr = scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "R" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
 
