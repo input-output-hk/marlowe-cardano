@@ -15,6 +15,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Traversable (for)
+import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
                                                RuntimeChainSeekClient, ScriptHash (..), SlotNo (..), TxError, TxId,
@@ -65,7 +66,9 @@ instance Show SomeContractChanges where
   showsPrec p (SomeContractChanges version changes) =
     showParen (p >= 11)
       ( showString "SomeContractChanges"
+      . showSpace
       . showsPrec 11 version
+      . showSpace
       . case version of
           MarloweV1 -> showsPrec 11 changes
       )

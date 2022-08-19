@@ -294,7 +294,9 @@ datumFromData = \case
   MarloweV1 -> Chain.fromDatum
 
 getMarloweVersion :: ScriptHash -> Maybe SomeMarloweVersion
-getMarloweVersion _ = Nothing
+getMarloweVersion hash
+  | hash == "62c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307" = Just $ SomeMarloweVersion MarloweV1
+  | otherwise = Nothing
 
 getScriptHashes :: MarloweVersion v -> Set ScriptHash
 getScriptHashes = mempty

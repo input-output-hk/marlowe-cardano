@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+
 module Main where
 
 import Control.Concurrent.Async (race)
