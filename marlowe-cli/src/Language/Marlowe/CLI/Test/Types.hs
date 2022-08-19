@@ -48,9 +48,9 @@ module Language.Marlowe.CLI.Test.Types (
 
 
 import Cardano.Api (AddressInEra, NetworkId)
-import GHC.Generics (Generic)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import Data.Text (Text)
+import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Time (POSIXTime)
@@ -100,21 +100,21 @@ data PabTest =
 
 type TransactionNickname = String
 
-data ScriptContract = InlineContract Contract | TemplateContract String
+data ScriptContract = InlineContract Contract | TemplateContract TemplateCommand
     deriving stock (Eq, Generic, Show)
 
 instance ToJSON ScriptContract where
-    toJSON (InlineContract c)              = Aeson.object [("inline", toJSON c)]
-    toJSON (TemplateContract templateName) = Aeson.object [("template", toJSON templateName)]
+    toJSON (InlineContract c)                 = Aeson.object [("inline", toJSON c)]
+    toJSON (TemplateContract templateCommand) = Aeson.object [("template", toJSON templateCommand)]
 
 instance FromJSON ScriptContract where
     parseJSON json = case json of
       Aeson.Object (Data.HashMap.Strict.toList -> [("inline", contractJson)]) -> do
         parsedContract <- parseJSON contractJson
         pure $ InlineContract parsedContract
-      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateNameJson)]) -> do
-        parsedTemplateName <- parseJSON templateNameJson
-        pure $ TemplateContract parsedTemplateName
+      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateCommandJson)]) -> do
+        parsedTemplateCommand <- parseJSON templateCommandJson
+        pure $ TemplateContract parsedTemplateCommand
       _ -> fail "Expected object with a single field of either `inline` or `template`"
 
 
