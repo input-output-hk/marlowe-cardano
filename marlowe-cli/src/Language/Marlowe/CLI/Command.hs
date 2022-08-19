@@ -101,7 +101,6 @@ runCommand era cmd = flip runReaderT CliEnv{..} case cmd of
   TestCommand command                 -> runTestCommand command
   InputCommand command                -> runInputCommand command
   RoleCommand command                 -> runRoleCommand command
-  TemplateCommand command             -> runTemplateCommand command
   TemplateCommand command outputFiles -> runTemplateCommand command outputFiles
   TransactionCommand command          -> runTransactionCommand command
   UtilCommand command                 -> runUtilCommand command

@@ -163,12 +163,12 @@ interpret Prepare {..} = do
                                   True
   modify $ insertMarloweTransaction soTransaction preparedMarloweTransaction
 
-interpret Fail message = throwError $ CliError message
+interpret CreateWallet {..} = do
+  -- skey <- liftIO $ generateSigningKey asType
+  -- let vkey = getVerificationKey skey
+  throwError $ CliError "Not implemented"
 
-anotateCliError :: String -> CliError -> CliError
-anotateCliError anotation (CliError msg) = CliError $ annotation <> msg
-
-asPrepareError = annotateError "Prepare: "
+interpret (Fail message) = throwError $ CliError message
 
 withError :: MonadError e m => (e -> e) -> m a -> m a
 withError modifyError action = catchError action \e -> do
