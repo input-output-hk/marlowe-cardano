@@ -75,21 +75,7 @@ BYSTANDER_PREFIX="$TREASURY/christopher-marlowe"
 BYSTANDER_NAME="Christopher Marlowe"
 BYSTANDER_PAYMENT_SKEY="$BYSTANDER_PREFIX".skey
 BYSTANDER_PAYMENT_VKEY="$BYSTANDER_PREFIX".vkey
-
-if [[ ! -e "$BYSTANDER_PAYMENT_SKEY" ]]
-then
-  cardano-cli address key-gen --signing-key-file "$BYSTANDER_PAYMENT_SKEY"      \
-                              --verification-key-file "$BYSTANDER_PAYMENT_VKEY"
-fi
-
-BYSTANDER_ADDRESS=$(
-  cardano-cli address build --testnet-magic "$MAGIC"                                  \
-                            --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY" \
-)
-BYSTANDER_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY"
-)
-
+if [[ ! -e "$BYSTANDER_PAYMENT_SKEY" ]] then cardano-cli address key-gen --signing-key-file "$BYSTANDER_PAYMENT_SKEY"      \ --verification-key-file "$BYSTANDER_PAYMENT_VKEY" fi BYSTANDER_ADDRESS=$( cardano-cli address build --testnet-magic "$MAGIC"                                  \ --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY" \) BYSTANDER_PUBKEYHASH=$( cardano-cli address key-hash --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY")
 marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
