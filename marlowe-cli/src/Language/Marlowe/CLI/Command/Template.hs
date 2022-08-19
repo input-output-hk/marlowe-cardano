@@ -16,6 +16,8 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 
 module Language.Marlowe.CLI.Command.Template (
@@ -34,7 +36,7 @@ module Language.Marlowe.CLI.Command.Template (
 
 import Actus.Marlowe (defaultRiskFactors, genContract', toMarlowe)
 import Control.Monad.Except (MonadError, MonadIO)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON (..), ToJSON (..))
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken)
 import Language.Marlowe.CLI.Examples (makeExample)
@@ -47,6 +49,8 @@ import qualified Language.Marlowe.Extended.V1 as E
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Options.Applicative as O
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
@@ -62,7 +66,20 @@ newtype Seconds = Seconds Integer
 --          "absolute": 123123900
 data Timeout = AbsoluteTimeout E.Timeout | RelativeTimeout Seconds
     deriving stock (Eq, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON Timeout where
+  toJSON (AbsoluteTimeout timeout)            = Aeson.object [("absolute", toJSON timeout)]
+  toJSON (RelativeTimeout (Seconds duration)) = Aeson.object [("relative", toJSON duration)]
+
+instance FromJSON Timeout where
+  parseJSON json = case json of
+    Aeson.Object (KeyMap.toList -> [("absolute", absoluteTimeout)]) -> do
+      parsedTimeout <- parseJSON absoluteTimeout
+      pure $ AbsoluteTimeout parsedTimeout
+    Aeson.Object (KeyMap.toList -> [("relative", duration)]) -> do
+      parsedDuration <- parseJSON duration
+      pure $ RelativeTimeout $ Seconds parsedDuration
+    _ -> fail "Expected object with a single field of either `absolute` or `relative`"
 
 
 
