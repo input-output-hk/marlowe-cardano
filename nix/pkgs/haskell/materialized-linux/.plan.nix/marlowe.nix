@@ -114,15 +114,17 @@
             ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"));
           buildable = true;
           modules = [
-            "Spec/Marlowe/Arbitrary"
             "Spec/Marlowe/AutoExecute"
             "Spec/Marlowe/Common"
             "Spec/Marlowe/Marlowe"
-            "Spec/Marlowe/Orphans"
             "Spec/Marlowe/Semantics"
-            "Spec/Marlowe/Transaction"
-            "Spec/Marlowe/Util"
-            "Spec/Marlowe/Util/AssocMap"
+            "Spec/Marlowe/Semantics/Arbitrary"
+            "Spec/Marlowe/Semantics/AssocMap"
+            "Spec/Marlowe/Semantics/Compute"
+            "Spec/Marlowe/Semantics/Entropy"
+            "Spec/Marlowe/Semantics/Functions"
+            "Spec/Marlowe/Semantics/Orphans"
+            "Spec/Marlowe/Semantics/Util"
             ];
           hsSourceDirs = [ "test" ];
           mainPath = [ "Spec.hs" ];

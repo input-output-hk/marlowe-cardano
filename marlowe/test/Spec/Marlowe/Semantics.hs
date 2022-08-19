@@ -12,9 +12,9 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
+import qualified Spec.Marlowe.Semantics.Compute (tests)
 import qualified Spec.Marlowe.Semantics.Entropy (tests)
 import qualified Spec.Marlowe.Semantics.Functions (tests)
-import qualified Spec.Marlowe.Semantics.Transaction (tests)
 
 
 tests :: TestTree
@@ -23,5 +23,5 @@ tests =
     [
       Spec.Marlowe.Semantics.Entropy.tests
     , Spec.Marlowe.Semantics.Functions.tests
-    , Spec.Marlowe.Semantics.Transaction.tests
+    , Spec.Marlowe.Semantics.Compute.tests
     ]

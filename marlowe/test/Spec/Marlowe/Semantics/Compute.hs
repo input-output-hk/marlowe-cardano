@@ -10,7 +10,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans               #-}
 
 
-module Spec.Marlowe.Semantics.Transaction (
+module Spec.Marlowe.Semantics.Compute (
   tests
 ) where
 
@@ -27,11 +27,13 @@ import Data.Maybe (fromMaybe)
 import Data.Tuple (swap)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
 import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Semantics.Arbitrary
 import Spec.Marlowe.Semantics.AssocMap
 import Spec.Marlowe.Semantics.Orphans ()
+import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
@@ -91,6 +93,22 @@ arbitraryMarloweContext w =
       mcState    <- semiArbitrary context
       mcContract <- arbitraryContractWeighted w context
       let
+        mcOutput = computeTransaction mcInput mcState mcContract
+      pure MarloweContext{..}
+
+
+arbitraryValid :: Gen MarloweContext
+arbitraryValid =
+    do
+      mcContract <- arbitrary `suchThat` (/= Close)
+      (time, inputs) <-
+        case unsafePerformIO $ getAllInputs mcContract of
+          Right candidates -> elements candidates
+          Left _           -> discard
+      let
+        -- FIXME: Generalize to arbitrary starting state.
+        mcState = State AM.empty AM.empty AM.empty time
+        mcInput = head inputs
         mcOutput = computeTransaction mcInput mcState mcContract
       pure MarloweContext{..}
 
@@ -197,6 +215,13 @@ transactionError = to $ getError . mcOutput
   where
     getError (Error e) = e
     getError _         = error "TransactionOutput has no error."
+
+
+noError :: Getter MarloweContext ()
+noError = to $ getNoError . mcOutput
+  where
+    getNoError (Error e) = error $ "TransactionOutput has error: " <> show e <> "."
+    getNoError _         = ()
 
 
 type Testify a = ReaderT MarloweContext (Either String) a
@@ -657,6 +682,16 @@ assertWarns =
   }
 
 
+anyInput :: TransactionTest
+anyInput =
+  def
+  {
+    name          = "Static-analysis input"
+  , generator     = arbitraryValid
+  , postcondition = view noError
+  }
+
+
 tests :: TestTree
 tests =
   testGroup "Compute Transaction"
@@ -672,4 +707,5 @@ tests =
     , letSets
     , ifBranches
     , assertWarns
+    , anyInput
     ]
