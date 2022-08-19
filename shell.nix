@@ -64,7 +64,6 @@ let
   #
   # IMPORTANT: Do not add git to the dev shell, It breaks Lorri. See https://github.com/input-output-hk/plutus/pull/2422
   devToolsInputs = (with pkgs; with marlowe; [
-    coreutils
     cabal-install
     curl
     docs.build-and-serve-docs
