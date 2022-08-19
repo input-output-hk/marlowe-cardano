@@ -35,7 +35,8 @@ module Language.Marlowe.CLI.Test.Types (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra, Key (VerificationKey), NetworkId, PaymentKey, SigningKey)
+import Cardano.Api (Address, AddressAny, AddressInEra, Hash, Key (VerificationKey), NetworkId, PaymentKey, ShelleyAddr,
+                    SigningKey)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -137,5 +138,6 @@ data Wallet =
   {
     waVerificationKey :: VerificationKey PaymentKey
   , waSigningKey      :: SigningKey PaymentKey
-  -- , address         :: AddressKeyShelley
+  , waAddress         :: Address ShelleyAddr
+  , waPubKeyHash      :: Hash PaymentKey
   }
