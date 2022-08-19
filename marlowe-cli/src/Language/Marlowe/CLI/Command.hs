@@ -40,13 +40,13 @@ import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTest
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
-import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), withShelleyBasedEra)
+import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..))
 import System.Exit (exitFailure)
 import System.IO (BufferMode (LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 
+import Control.Applicative ((<|>))
 import Control.Monad.Reader (runReaderT)
 import qualified Options.Applicative as O
-import System.Environment (lookupEnv)
 
 
 -- | Marlowe CLI commands and options.
@@ -68,7 +68,7 @@ data Command era =
     -- | Test-related commands.
   | TestCommand (TestCommand era)
 
-data ScriptDataSupportedInSomeEra = forall era. ScriptDataSupportedInSomeEra (ScriptDataSupportedInEra era)
+data SomeCommand = forall era. SomeCommand (ScriptDataSupportedInEra era) (Command era)
 
 -- | Main entry point for Marlowe CLI tool.
 runCLI :: String  -- ^ The version of the tool.
@@ -79,8 +79,7 @@ runCLI version =
     hSetBuffering stderr LineBuffering
     networkId <- maybe mempty O.value <$> liftIO getNetworkMagic
     socketPath <- maybe mempty O.value <$> liftIO getNodeSocketPath
-    ScriptDataSupportedInSomeEra era <- maybe (ScriptDataSupportedInSomeEra ScriptDataInBabbageEra) readEra <$> lookupEnv "CARDANO_ERA"
-    command <- O.execParser $ withShelleyBasedEra era $ parseCommand networkId socketPath version
+    SomeCommand era command <- O.execParser $ parseCommand networkId socketPath version
     result <- runExceptT $ runCommand era command
     case result of
       Right ()      -> return ()
@@ -105,24 +104,17 @@ runCommand era cmd = flip runReaderT CliEnv{..} case cmd of
   TransactionCommand command -> runTransactionCommand command
   UtilCommand command        -> runUtilCommand command
 
-readEra :: String -> ScriptDataSupportedInSomeEra
-readEra = \case
-  "alonzo"  -> ScriptDataSupportedInSomeEra ScriptDataInAlonzoEra
-  "babbage" -> ScriptDataSupportedInSomeEra ScriptDataInBabbageEra
-  era       -> error $ "unsupported era: " <> era
-
 -- | Command parseCommand for the tool version.
-parseCommand :: IsShelleyBasedEra era
-             => O.Mod O.OptionFields NetworkId  -- ^ The default network ID.
+parseCommand :: O.Mod O.OptionFields NetworkId  -- ^ The default network ID.
              -> O.Mod O.OptionFields FilePath   -- ^ The default node socket path.
              -> String                          -- ^ The tool version.
-             -> O.ParserInfo (Command era)      -- ^ The command parseCommand.
+             -> O.ParserInfo SomeCommand        -- ^ The command parseCommand.
 parseCommand networkId socketPath version =
   O.info
     (
           O.helper
       <*> versionOption version
-      <*> commandParser
+      <*> (alonzoParser <|> babbageParser)
     )
     (
          O.fullDesc
@@ -130,6 +122,17 @@ parseCommand networkId socketPath version =
       <> O.header "marlowe-cli : a command-line tool for Marlowe contracts"
     )
   where
+    alonzoParser = SomeCommand <$> alonzoFlagParser <*> commandParser
+    babbageParser = SomeCommand <$> babbageFlagParser <*> commandParser
+    alonzoFlagParser = O.flag' ScriptDataInAlonzoEra $ mconcat
+      [ O.long "alonzo-era"
+      , O.help "Read and write Alonzo transactions"
+      ]
+    babbageFlagParser = O.flag ScriptDataInBabbageEra ScriptDataInBabbageEra $ mconcat
+      [ O.long "babbage-era"
+      , O.help "Read and write Babbage transactions"
+      ]
+    commandParser :: IsShelleyBasedEra era => O.Parser (Command era)
     commandParser = asum
       [
         O.hsubparser $ fold
