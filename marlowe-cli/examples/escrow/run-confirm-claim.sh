@@ -24,12 +24,12 @@ echo "Signing and verification keys must be provided below for the bystander and
 
 echo "## Preliminaries"
 
-: ${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}
-: ${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}
+: "${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}"
+: "${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}"
 
 echo "### Select Network"
 
-: ${MAGIC:="1097911063"}
+: "${MAGIC:=1097911063}"
 echo "MAGIC=$MAGIC"
 
 SLOT_LENGTH=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
