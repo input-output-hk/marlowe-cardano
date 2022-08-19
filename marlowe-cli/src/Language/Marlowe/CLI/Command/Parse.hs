@@ -39,6 +39,7 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseUrl
 , parseValue
 , readTokenName
+, timeoutHelpMsg
 ) where
 
 
@@ -49,7 +50,7 @@ import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsS
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
-import Language.Marlowe.CLI.Types (OutputQuery (..))
+import Language.Marlowe.CLI.Types (AnyTimeout (AbsoluteTimeout, RelativeTimeout), OutputQuery (..))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -62,7 +63,6 @@ import Text.Regex.Posix ((=~))
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 import qualified Data.Text as T (pack)
-import qualified Language.Marlowe.Extended.V1 as E (Timeout (..))
 import qualified Options.Applicative as O
 
 
@@ -97,9 +97,25 @@ parsePOSIXTime = POSIXTime <$> O.auto
 
 
 -- | Parser for Timeout.
-parseTimeout :: O.ReadM E.Timeout
-parseTimeout = E.POSIXTime <$> O.auto
+parseTimeout :: O.ReadM AnyTimeout
+parseTimeout = O.eitherReader $ \s -> case s =~ "^([1-9][[:digit:]]*|0)([s|m|h|d|w]?)$" of
+    [[_, instant, ""]] -> do
+      timeout <- readEither instant
+      pure $ AbsoluteTimeout (fromInteger timeout)
+    [[_, instant, unit]] -> do
+      duration <- readEither instant
+      pure $ RelativeTimeout $ unitMultiplier unit * fromInteger duration
+    result -> Left $ "Invalid timeout value. " <> show result <> timeoutHelpMsg
+  where
+    unitMultiplier "m" = 60
+    unitMultiplier "h" = 60 * 60
+    unitMultiplier "d" = 60 * 60 * 24
+    unitMultiplier "w" = 60 * 60 * 24 * 7
+    unitMultiplier _   = 1
 
+
+timeoutHelpMsg :: String
+timeoutHelpMsg = "POSIX milliseconds or duration: `INTEGER[s|m|d|w|h]`."
 
 -- | Parser for currency symbol.
 parseCurrencySymbol :: O.ReadM CurrencySymbol
