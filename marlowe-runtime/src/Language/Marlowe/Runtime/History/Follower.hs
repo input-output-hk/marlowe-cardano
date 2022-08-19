@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
+{-# LANGUAGE EmptyDataDeriving         #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
@@ -8,9 +9,11 @@
 module Language.Marlowe.Runtime.History.Follower where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent.STM (STM, TVar, atomically, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard, when)
-import Data.Foldable (asum, for_)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Maybe (MaybeT (..))
+import Data.Foldable (asum, find, for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -19,14 +22,16 @@ import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
                                                RuntimeChainSeekClient, ScriptHash (..), SlotNo (..), TxError, TxId,
-                                               TxOutRef (..), WithGenesis (..), isAfter, schemaVersion1_0)
+                                               TxOutRef (..), UTxOError, WithGenesis (..), isAfter, schemaVersion1_0)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, MarloweVersion (..), MarloweVersionTag (..),
-                                          PayoutDatum, SomeMarloweVersion (..), Transaction, datumFromData)
+                                          PayoutDatum, SomeMarloweVersion (..), Transaction (..),
+                                          TransactionOutput (..), TransactionScriptOutput (..), fromChainDatum,
+                                          fromChainRedeemer)
 
 data CreateStep v = CreateStep
-  { datum      :: Datum v
-  , scriptHash :: ScriptHash
+  { datum         :: Datum v
+  , scriptAddress :: Chain.Address
   }
 
 deriving instance Show (CreateStep 'V1)
@@ -45,7 +50,7 @@ deriving instance Eq (RedeemStep 'V1)
 
 data ContractStep v
   = Create (CreateStep v)
-  | Transaction (Transaction v)
+  | ApplyTransaction (Transaction v)
   | RedeemPayout (RedeemStep v)
   -- TODO add TimeoutElapsed
 
@@ -111,6 +116,8 @@ data ContractHistoryError
   = HansdshakeFailed
   | FindTxFailed TxError
   | ExtractContractFailed ExtractCreationError
+  | FollowScriptUTxOFailed UTxOError
+  | ExtractMarloweTransactionFailed ExtractMarloweTransactionError
   deriving stock (Show, Eq, Ord)
 
 data ExtractCreationError
@@ -118,9 +125,17 @@ data ExtractCreationError
   | ByronAddress
   | NonScriptAddress
   | InvalidScriptHash
-  | NoDatum
-  | InvalidDatum
+  | NoCreateDatum
+  | InvalidCreateDatum
   | NotCreationTransaction
+  deriving stock (Show, Eq, Ord)
+
+data ExtractMarloweTransactionError
+  = TxInNotFound
+  | NoRedeemer
+  | InvalidRedeemer
+  | NoTransactionDatum
+  | InvalidTransactionDatum
   deriving stock (Show, Eq, Ord)
 
 data ContractChangesTVar v = ContractChangesTVar (MarloweVersion v) (TVar (ContractChanges v))
@@ -141,24 +156,21 @@ mkFollower deps@FollowerDependencies{..} = do
       pure $ SendMsgQueryNext move handleContract (pure handleContract)
 
     handleContract = ClientStNext
-      { recvMsgQueryRejected = \err _ -> pure $ SendMsgDone $ Left $ FindTxFailed err
+      { recvMsgQueryRejected = \err _ -> failWith $ FindTxFailed err
       , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> error "transaction detected at Genesis"
           At blockHeader -> case exctractCreation deps tx of
             Left err ->
-              pure $ SendMsgDone $ Left $ ExtractContractFailed err
-            Right (SomeCreateStep version create) -> do
+              failWith $ ExtractContractFailed err
+            Right (SomeCreateStep version create@CreateStep{..}) -> do
               changesVar <- atomically do
-                changesVar <- newTVar ContractChanges
-                  { steps = Map.singleton blockHeader [Create create]
-                  , rollbackTo = Nothing
-                  }
+                changesVar <- newTVar mempty { steps = Map.singleton blockHeader [Create create] }
                 writeTVar someChangesVar
                   $ Just
                   $ SomeContractChangesTVar
                   $ ContractChangesTVar version changesVar
                 pure changesVar
-              let scriptUTxO = Just $ unContractId contractId
+              let scriptUTxO = unContractId contractId
               let payoutUTxOs = mempty
               followContract FollowerState{..}
       , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
@@ -175,28 +187,30 @@ mkFollower deps@FollowerDependencies{..} = do
     }
 
 data FollowerState v = FollowerState
-  { version     :: MarloweVersion v
-  , create      :: CreateStep v
-  , contractId  :: ContractId
-  , changesVar  :: TVar (ContractChanges v)
-  , scriptUTxO  :: Maybe TxOutRef
-  , payoutUTxOs :: Set TxOutRef
+  { version       :: MarloweVersion v
+  , create        :: CreateStep v
+  , contractId    :: ContractId
+  , changesVar    :: TVar (ContractChanges v)
+  , scriptUTxO    :: TxOutRef
+  , payoutUTxOs   :: Set TxOutRef
+  , scriptAddress :: Chain.Address
   }
 
 exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
 exctractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs} = do
-  Chain.TransactionOutput{address, datum=mdatum} <- getOutput (txIx $ unContractId contractId) tx
-  scriptHash <- getScriptHash address
-  for_ inputs \Chain.TransactionInput{address=txInAddress} ->
-    when (isScriptAddress scriptHash txInAddress) $ Left NotCreationTransaction
-  SomeMarloweVersion version <- maybe (Left InvalidScriptHash) Right $ getMarloweVersion scriptHash
-  txDatum <- maybe (Left NoDatum) Right mdatum
-  datum <- maybe (Left InvalidDatum) Right $ datumFromData version txDatum
+  Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
+    getOutput (txIx $ unContractId contractId) tx
+  scriptHash <- getScriptHash scriptAddress
+  for_ inputs \Chain.TransactionInput{..} ->
+    when (isScriptAddress scriptHash address) $ Left NotCreationTransaction
+  SomeMarloweVersion version <- note InvalidScriptHash $ getMarloweVersion scriptHash
+  txDatum <- note NoCreateDatum mdatum
+  datum <- note InvalidCreateDatum $ fromChainDatum version txDatum
   pure $ SomeCreateStep version CreateStep{..}
 
 getScriptHash :: Chain.Address -> Either ExtractCreationError ScriptHash
 getScriptHash address = do
-  credential <- maybe (Left ByronAddress) Right $ Chain.paymentCredential address
+  credential <- note ByronAddress $ Chain.paymentCredential address
   case credential of
     Chain.ScriptCredential scriptHash -> pure scriptHash
     _                                 -> Left NonScriptAddress
@@ -214,4 +228,70 @@ getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
 followContract
   :: FollowerState v
   -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
-followContract _ = pure $ SendMsgDone $ Right ()
+followContract state@FollowerState{..} = do
+  let move = FindConsumingTx scriptUTxO
+  pure $ SendMsgQueryNext move (followNext state) (pure (followNext state))
+
+followNext
+  :: FollowerState v
+  -> ClientStNext Move Chain.UTxOError Chain.Transaction ChainPoint ChainPoint IO (Either ContractHistoryError ())
+followNext state@FollowerState{..} = ClientStNext
+  { recvMsgQueryRejected = \err _ -> failWith $ FollowScriptUTxOFailed err
+  , recvMsgRollForward = \tx point _ -> case point of
+      Genesis -> error "transaction detected at Genesis"
+      At blockHeader -> case extractMarloweTransaction version contractId scriptAddress scriptUTxO blockHeader tx of
+        Left err -> failWith $ ExtractMarloweTransactionFailed err
+        Right marloweTx@Transaction{output} -> do
+          let changes = mempty { steps = Map.singleton blockHeader [ApplyTransaction marloweTx] }
+          atomically $ modifyTVar changesVar (<> changes)
+          let TransactionOutput{..} = output
+          case scriptOutput of
+            Nothing -> pure $ SendMsgDone $ Right ()
+            Just TransactionScriptOutput{..} -> do
+              -- TODO read payouts to payout validator
+              followContract state { scriptUTxO = utxo }
+  , recvMsgRollBackward = \_ _ -> error "not implemented"
+  }
+
+extractMarloweTransaction
+  :: MarloweVersion v
+  -> ContractId
+  -> Chain.Address
+  -> TxOutRef
+  -> BlockHeader
+  -> Chain.Transaction
+  -> Either ExtractMarloweTransactionError (Transaction v)
+extractMarloweTransaction version contractId scriptAddress consumedUTxO blockHeader Chain.Transaction{..} = do
+  let transactionId = txId
+  Chain.TransactionInput { redeemer = mRedeemer } <-
+    note TxInNotFound $ find (consumesUTxO consumedUTxO) inputs
+  rawRedeemer <- note NoRedeemer mRedeemer
+  redeemer <- note InvalidRedeemer $ fromChainRedeemer version rawRedeemer
+  scriptOutput <- runMaybeT do
+    (ix, Chain.TransactionOutput{ datum = mDatum }) <-
+      hoistMaybe $ find (isToAddress scriptAddress . snd) $ zip [0..] outputs
+    lift do
+      rawDatum <- note NoTransactionDatum mDatum
+      datum <- note InvalidTransactionDatum $ fromChainDatum version rawDatum
+      let txIx = Chain.TxIx ix
+      let utxo = Chain.TxOutRef{..}
+      pure TransactionScriptOutput{..}
+  let payouts = [] -- TODO
+  let output = TransactionOutput{..}
+  pure Transaction{..}
+
+isToAddress :: Chain.Address -> Chain.TransactionOutput -> Bool
+isToAddress toAddress Chain.TransactionOutput{..} = address == toAddress
+
+hoistMaybe :: Applicative m => Maybe a -> MaybeT m a
+hoistMaybe = MaybeT . pure
+
+consumesUTxO :: TxOutRef -> Chain.TransactionInput -> Bool
+consumesUTxO TxOutRef{..} Chain.TransactionInput { txId = txInId, txIx = txInIx } =
+  txId == txInId && txIx == txInIx
+
+failWith :: ContractHistoryError -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
+failWith = pure . SendMsgDone . Left
+
+note :: a -> Maybe b -> Either a b
+note e = maybe (Left e) Right

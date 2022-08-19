@@ -6,14 +6,24 @@ import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad (forever)
-import Data.Foldable (for_, traverse_)
+import Data.ByteString.Base16 (encodeBase16)
+import Data.Foldable (for_)
+import Data.Functor (void)
+import qualified Data.Map as Map
+import qualified Data.Text as T
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis (Genesis), runtimeChainSeekCodec)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), parseContractId)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
+import Language.Marlowe.Pretty (pretty)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..),
+                                               RuntimeChainSeekClient, SlotNo (..), TxId (..), TxOutRef (..),
+                                               WithGenesis (..), runtimeChainSeekCodec, toBech32)
+import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
+                                          TransactionOutput (..), TransactionScriptOutput (..), parseContractId,
+                                          renderContractId)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), ContractStep (..), CreateStep (..),
-                                                  Follower (..), FollowerDependencies (..), SomeContractChanges (..),
-                                                  mkFollower)
+                                                  Follower (..), FollowerDependencies (..), RedeemStep (..),
+                                                  SomeContractChanges (..), mkFollower)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
@@ -22,7 +32,9 @@ import Network.Socket (AddrInfo (..), HostName, PortNumber, SocketType (..), clo
 import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options.Applicative (argument, auto, execParser, fullDesc, header, help, info, long, maybeReader, metavar,
                             option, progDesc, short, strOption, value)
+import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), setSGR)
 import System.IO (hPrint, stderr)
+import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
 
 main :: IO ()
 main = run =<< getOptions
@@ -39,7 +51,7 @@ run Options{..} = withSocketsDo do
         where peer = chainSeekClientPeer Genesis client
     let getMarloweVersion = Core.getMarloweVersion
     Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
-    Left result <- race runFollower (logChanges changes)
+    Left result <- race runFollower (logChanges contractId changes)
     case result of
       Left err -> hPrint stderr err
       Right () -> pure ()
@@ -48,26 +60,79 @@ run Options{..} = withSocketsDo do
       connect sock $ addrAddress addr
       pure sock
 
-logChanges :: STM (Maybe SomeContractChanges) -> IO Void
-logChanges readChanges = forever do
+logChanges :: ContractId -> STM (Maybe SomeContractChanges) -> IO Void
+logChanges contractId readChanges = forever do
   SomeContractChanges version ContractChanges{..} <- atomically do
     mchanges <- readChanges
     maybe retry pure mchanges
   for_ rollbackTo \slotNo -> do
-    putStrLn $ "Rollback to slot " <> show slotNo
-  (traverse_ . traverse_) (logStep version) steps
+    putStrLn $ "Rollback to slot: " <> show slotNo
+  void $ Map.traverseWithKey (traverse . logStep version contractId) steps
 
-logStep :: MarloweVersion v -> ContractStep v -> IO ()
-logStep version = \case
-  Create CreateStep{..} -> do
-    putStr "Create{scriptHash="
-    putStr $ show scriptHash
-    putStr ",datum="
-    putStr case version of
-      MarloweV1 -> show datum
-    putStr "}"
-  Transaction _ -> error "not implemented"
-  RedeemPayout _ -> error "not implemented"
+logStep :: MarloweVersion v -> ContractId -> BlockHeader -> ContractStep v -> IO ()
+logStep version contractId BlockHeader{..} step = do
+  setSGR [SetColor Foreground Vivid Yellow]
+  putStr "transaction "
+  case step of
+    Create _ -> do
+      putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
+      putStrLn " (creation)"
+    ApplyTransaction Transaction{transactionId} -> do
+      putStrLn $ T.unpack $ encodeBase16 $ unTxId transactionId
+    RedeemPayout RedeemStep{..}-> do
+      putStr $ T.unpack $ encodeBase16 $ unTxId redeemingTx
+      putStrLn " (redeem)"
+  setSGR [Reset]
+  case step of
+    Create CreateStep{..} -> do
+      putStr "ContractId:      "
+      putStrLn $ T.unpack $ renderContractId contractId
+      putStr "SlotNo:          "
+      print $ unSlotNo slotNo
+      putStr "BlockNo:         "
+      print $ unBlockNo blockNo
+      putStr "BlockId:         "
+      putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+      for_ (toBech32 scriptAddress) \addr -> do
+        putStr "ScriptAddress:   "
+        putStrLn $ T.unpack addr
+      putStr "Marlowe Version: "
+      putStrLn case version of
+        MarloweV1 -> "1"
+      let
+        contractDoc :: Doc
+        contractDoc = indent 4 case version of
+          MarloweV1 -> pretty $ V1.marloweContract datum
+      putStrLn ""
+      putDoc contractDoc
+      putStrLn ""
+      putStrLn ""
+    ApplyTransaction Transaction{redeemer, output} -> do
+      putStr "ContractId: "
+      putStrLn $ T.unpack $ renderContractId contractId
+      putStr "SlotNo:     "
+      print $ unSlotNo slotNo
+      putStr "BlockNo:    "
+      print $ unBlockNo blockNo
+      putStr "BlockId:    "
+      putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+      putStr "Inputs:     "
+      putStrLn case version of
+        MarloweV1 -> show redeemer
+      putStrLn ""
+      let TransactionOutput{..} = output
+      case scriptOutput of
+        Nothing -> putStrLn "    <contract closed>"
+        Just TransactionScriptOutput{..} -> do
+          let
+            contractDoc :: Doc
+            contractDoc = indent 4 case version of
+              MarloweV1 -> pretty $ V1.marloweContract datum
+          putDoc contractDoc
+      putStrLn ""
+      putStrLn ""
+
+    RedeemPayout _ -> error "not implemented"
 
 data Options = Options
   { port       :: PortNumber

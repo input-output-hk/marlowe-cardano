@@ -50,20 +50,8 @@ renderTxOutRef TxOutRef{..} = mconcat
 parseContractId :: String -> Maybe ContractId
 parseContractId = fmap ContractId . parseTxOutRef
 
-parseTransactionId :: String -> Maybe TransactionId
-parseTransactionId = fmap TransactionId . parseTxOutRef
-
 renderContractId :: ContractId -> Text
 renderContractId = renderTxOutRef . unContractId
-
-renderTransactionId :: TransactionId -> Text
-renderTransactionId = renderTxOutRef . unTransactionId
-
--- | The ID of a transaction is the TxId and TxIx of the script UTxO that it
--- consumes.
-newtype TransactionId = TransactionId { unTransactionId :: TxOutRef }
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
 
 data MarloweVersionTag
   = V1
@@ -92,7 +80,7 @@ instance IsMarloweVersion 'V1 where
   marloweVersion = MarloweV1
 
 data Transaction v = Transaction
-  { transactionId :: TransactionId
+  { transactionId :: TxId
   , contractId    :: ContractId
   , blockHeader   :: BlockHeader
   , validityRange :: ValidityRange
@@ -285,13 +273,21 @@ datumFromJSON :: MarloweVersion v -> Value -> Parser (Datum v)
 datumFromJSON = \case
   MarloweV1 -> parseJSON
 
-datumToData :: MarloweVersion v -> Datum v -> Chain.Datum
-datumToData = \case
+toChainDatum :: MarloweVersion v -> Datum v -> Chain.Datum
+toChainDatum = \case
   MarloweV1 -> Chain.toDatum
 
-datumFromData :: MarloweVersion v -> Chain.Datum -> Maybe (Datum v)
-datumFromData = \case
+fromChainDatum :: MarloweVersion v -> Chain.Datum -> Maybe (Datum v)
+fromChainDatum = \case
   MarloweV1 -> Chain.fromDatum
+
+toChainRedeemer :: MarloweVersion v -> Redeemer v -> Chain.Redeemer
+toChainRedeemer = \case
+  MarloweV1 -> Chain.toRedeemer
+
+fromChainRedeemer :: MarloweVersion v -> Chain.Redeemer -> Maybe (Redeemer v)
+fromChainRedeemer = \case
+  MarloweV1 -> Chain.fromRedeemer
 
 getMarloweVersion :: ScriptHash -> Maybe SomeMarloweVersion
 getMarloweVersion hash

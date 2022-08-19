@@ -42,23 +42,28 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , UTxOError(..)
   , ValidityRange(..)
   , WithGenesis(..)
+  , fromBech32
   , fromCardanoStakeAddressPointer
   , fromDatum
   , fromPlutusData
+  , fromRedeemer
   , isAfter
   , paymentCredential
   , runtimeChainSeekCodec
   , schemaVersion1_0
   , stakeReference
+  , toBech32
   , toCardanoAddress
   , toDatum
   , toPlutusData
+  , toRedeemer
   , module Network.Protocol.ChainSeek.Types
   , module Network.Protocol.ChainSeek.Client
   , module Network.Protocol.ChainSeek.Server
   , module Network.Protocol.ChainSeek.Codec
   ) where
 
+import Cardano.Api (AsType (..), SerialiseAsRawBytes (serialiseToRawBytes), deserialiseFromBech32, serialiseToBech32)
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
@@ -72,6 +77,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.String (IsString (..))
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.These (These (..))
@@ -173,6 +179,12 @@ fromDatum = Plutus.fromData . toPlutusData
 
 toDatum :: Plutus.ToData a => a -> Datum
 toDatum = fromPlutusData . Plutus.toData
+
+fromRedeemer :: Plutus.FromData a => Redeemer -> Maybe a
+fromRedeemer = fromDatum . unRedeemer
+
+toRedeemer :: Plutus.ToData a => a -> Redeemer
+toRedeemer = Redeemer . toDatum
 
 -- | Convert from Plutus.V1.Ledger.Api.Data to Datum
 fromPlutusData :: Plutus.Data -> Datum
@@ -279,6 +291,17 @@ newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
   deriving (IsString, Show) via Base16
+
+toBech32 :: Address -> Maybe Text
+toBech32 = toCardanoAddress >=> \case
+  Cardano.AddressShelley address ->
+    Just $ serialiseToBech32 address
+  _ -> Nothing
+
+fromBech32 :: Text -> Maybe Address
+fromBech32 = fmap (Address . serialiseToRawBytes)
+  . either (const Nothing) Just
+  . deserialiseFromBech32 (AsAddress AsShelleyAddr)
 
 toCardanoAddress :: Address -> Maybe Cardano.AddressAny
 toCardanoAddress = Cardano.deserialiseFromRawBytes Cardano.AsAddressAny . unAddress
