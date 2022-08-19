@@ -31,19 +31,6 @@ module Language.Marlowe.CLI.Test.Types (
 , ScriptOperation(..)
 , TransactionNickname
 , ScriptContract(..)
-
--- * Lenses
-, psFaucetKey
-, psFaucetAddress
-, psBurnAddress
-, psPassphrase
-, psWallets
-, psAppInstances
-, psFollowerInstances
-, psCompanionInstances
-, prComparison
-, prRetry
-, comparisonJSON
 ) where
 
 
@@ -87,19 +74,6 @@ data ScriptTest =
     deriving anyclass (FromJSON, ToJSON)
 
 
--- | An on- and off-chain test of the Marlowe contracts, via the Marlowe PAB.
-data PabTest =
-  PabTest
-  {
-    ptTestName      :: String          -- ^ The name of the test.
-  , ptPabOperations :: [PabOperation]  -- ^ The sequence of test operations.
-  }
-    deriving stock (Eq, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
-
-
-type TransactionNickname = String
-
 data ScriptContract = InlineContract Contract | TemplateContract TemplateCommand
     deriving stock (Eq, Generic, Show)
 
@@ -109,10 +83,10 @@ instance ToJSON ScriptContract where
 
 instance FromJSON ScriptContract where
     parseJSON json = case json of
-      Aeson.Object (Data.HashMap.Strict.toList -> [("inline", contractJson)]) -> do
+      Aeson.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
         parsedContract <- parseJSON contractJson
         pure $ InlineContract parsedContract
-      Aeson.Object (Data.HashMap.Strict.toList -> [("template", templateCommandJson)]) -> do
+      Aeson.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
         parsedTemplateCommand <- parseJSON templateCommandJson
         pure $ TemplateContract parsedTemplateCommand
       _ -> fail "Expected object with a single field of either `inline` or `template`"
@@ -142,9 +116,22 @@ data ScriptOperation =
     {
       soTransaction :: TransactionNickname
     }
+  | CreateWallet
+    {
+      soOwner       :: AccountId
+    }
   | Fail
     {
       soFailureMessage :: String
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
+
+
+data Wallet =
+  Wallet
+  {
+    verificationKey :: VerificationKey PaymentKey
+  , signingKey      :: SigningKey PaymentKey
+  -- , address         :: AddressKeyShelley
+  }
