@@ -39,18 +39,16 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra (..), BabbageEra, CardanoMode, Key (deterministicSigningKeySeedSize),
-                    LocalNodeConnectInfo (localNodeNetworkId), MultiAssetSupportedInEra (MultiAssetInBabbageEra),
-                    NetworkId, QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO),
-                    QueryUTxOFilter (QueryUTxOByAddress), Script (..), ScriptDataSupportedInEra (..),
-                    ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..), StakeAddressReference (..), TxId, TxIn,
-                    TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
-                    anyAddressInShelleyBasedEra, calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace,
-                    toAddressAny, txOutValueToValue, writeFileTextEnvelope)
+import Cardano.Api (AddressAny, AddressInEra (..), BabbageEra, CardanoMode, LocalNodeConnectInfo (localNodeNetworkId),
+                    MultiAssetSupportedInEra (MultiAssetInBabbageEra), NetworkId,
+                    QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
+                    Script (..), ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..),
+                    StakeAddressReference (..), TxBody, TxId, TxIn, TxMintValue (TxMintNone), TxOut (..),
+                    TxOutDatum (..), TxOutValue (..), UTxO (..), anyAddressInShelleyBasedEra, calculateMinimumUTxO,
+                    getTxId, lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as Cardano.Api.TxBody
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
-import Cardano.Ledger.Core (TxBody)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.Reader (MonadReader)
@@ -60,7 +58,6 @@ import Data.List (groupBy, sortBy)
 import qualified Data.Map.Strict as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as S (singleton)
-import GHC.IO.Handle.Types (Handle__)
 import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer, buildRoleValidator,
                                     buildValidator)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readMaybeMetadata, readSigningKey)
