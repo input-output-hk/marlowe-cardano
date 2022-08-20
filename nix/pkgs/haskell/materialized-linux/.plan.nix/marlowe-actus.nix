@@ -35,10 +35,8 @@
         depends = [
           (hsPkgs."marlowe-actus".components.sublibs.actus-core or (errorHandler.buildDepError "marlowe-actus:actus-core"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
-          (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
-          (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."validation" or (errorHandler.buildDepError "validation"))

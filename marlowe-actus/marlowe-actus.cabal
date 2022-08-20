@@ -112,10 +112,8 @@ library
   build-depends:
     actus-core,
     base -any,
-    bytestring,
     plutus-tx -any,
     plutus-ledger,
-    text,
     marlowe -any,
     time -any,
     validation -any
