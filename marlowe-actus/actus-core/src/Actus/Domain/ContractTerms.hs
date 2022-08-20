@@ -31,6 +31,7 @@ data CT = PAM   -- ^ Principal at maturity
         | CSH   -- ^ Cash
         | CLM   -- ^ Call Money
         | SWPPV -- ^ Plain Vanilla Swap
+        | SWAPS -- ^ Swap
         | CEG   -- ^ Guarantee
         | CEC   -- ^ Collateral
         deriving stock (Show, Read, Eq, Generic)
@@ -512,7 +513,7 @@ instance FromJSON (ContractTerms Double) where
       <$> (v .:  "contractID" <|> v .: "contractId")
       <*> v .:  "contractType"
       <*> (v .: "contractStructure" <|> return [])
-      <*> v .:  "contractRole"
+      <*> (v .:  "contractRole" <|> return CR_RPA) -- SWAPS tests miss contractRole in contract terms
       <*> v .:? "settlementCurrency"
       <*> v .:? "initialExchangeDate"
       <*> v .:? "dayCountConvention"

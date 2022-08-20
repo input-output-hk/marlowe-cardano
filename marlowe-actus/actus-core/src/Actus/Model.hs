@@ -9,7 +9,7 @@ module Actus.Model
 
 import Actus.Model.Applicability
 import Actus.Model.ContractSchedule
-import Actus.Model.Payoff hiding (contractTerms, riskFactors)
+import Actus.Model.Payoff hiding (contractTerms, referenceStates, riskFactors)
 import Actus.Model.StateInitialization
 import Actus.Model.StateTransition hiding (maturity)
 

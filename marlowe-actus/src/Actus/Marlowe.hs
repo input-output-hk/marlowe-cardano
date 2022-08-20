@@ -45,7 +45,7 @@ genContract ::
   -- | Party and Counter-party for the contract
   (Party, Party) ->
   -- | Risk factors per event and time
-  (EventType -> LocalTime -> RiskFactorsMarlowe) ->
+  (String -> EventType -> LocalTime -> RiskFactorsMarlowe) ->
   -- | ACTUS contract terms
   ContractTermsMarlowe ->
   -- | Marlowe contract or applicabilty errors
@@ -58,7 +58,7 @@ genContract' ::
   -- | Party and Counter-party for the contract
   (Party, Party) ->
   -- | Risk factors per event and time
-  (EventType -> LocalTime -> RiskFactorsMarlowe) ->
+  (String -> EventType -> LocalTime -> RiskFactorsMarlowe) ->
   -- | ACTUS contract terms
   ContractTermsMarlowe ->
   -- | Marlowe contract

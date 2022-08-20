@@ -8,7 +8,7 @@ module Actus.Model.ContractSchedule
   )
 where
 
-import Actus.Domain (ActusFrac (..), CT (..), ContractStructure (..), ContractTerms (..), Cycle (..), DS (..),
+import Actus.Domain (ActusFrac (..), CR (..), CT (..), ContractStructure (..), ContractTerms (..), Cycle (..), DS (..),
                      EventType (..), IPCB (..), PPEF (..), PYTP (..), Reference (..), ReferenceRole (..), SCEF (..),
                      ScheduleConfig (..), ShiftedDay (..), mkShiftedDay)
 import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, yearFraction, (<+>), (<->))
@@ -16,7 +16,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (liftM2, liftM4)
 import Data.Functor ((<&>))
 import Data.List as L (delete, find, nub)
-import Data.Maybe (fromMaybe, isJust, isNothing, maybeToList)
+import Data.Maybe (fromMaybe, isJust, isNothing, mapMaybe, maybeToList)
 import Data.Ord (Down (..))
 import Data.Sort (sortOn)
 import Data.Time (LocalTime)
@@ -24,109 +24,137 @@ import Data.Time.Calendar (addDays)
 import Data.Time.LocalTime (LocalTime (..), addLocalTime)
 
 -- |Generate the schedule for a given event type
-schedule :: (ActusFrac a) =>
-  EventType          -- ^ Event type
-  -> ContractTerms a -- ^ Contract terms
-  -> [ShiftedDay]    -- ^ Schedule
-schedule IED  ct@ContractTerms{ contractType = PAM }   = _SCHED_IED_PAM ct
-schedule MD   ct@ContractTerms{ contractType = PAM }   = _SCHED_MD_PAM ct
-schedule PP   ct@ContractTerms{ contractType = PAM }   = _SCHED_PP_PAM ct
-schedule PY   ct@ContractTerms{ contractType = PAM }   = _SCHED_PY_PAM ct
-schedule FP   ct@ContractTerms{ contractType = PAM }   = _SCHED_FP_PAM ct
-schedule PRD  ct@ContractTerms{ contractType = PAM }   = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = PAM }   = _SCHED_TD_PAM ct
-schedule IP   ct@ContractTerms{ contractType = PAM }   = _SCHED_IP_PAM ct
-schedule IPCI ct@ContractTerms{ contractType = PAM }   = _SCHED_IPCI_PAM ct
-schedule RR   ct@ContractTerms{ contractType = PAM }   = _SCHED_RR_PAM ct
-schedule RRF  ct@ContractTerms{ contractType = PAM }   = _SCHED_RRF_PAM ct
-schedule SC   ct@ContractTerms{ contractType = PAM }   = _SCHED_SC_PAM ct
-schedule IED  ct@ContractTerms{ contractType = LAM }   = _SCHED_IED_PAM ct
-schedule PR   ct@ContractTerms{ contractType = LAM }   = _SCHED_PR_LAM ct
-schedule MD   ct@ContractTerms{ contractType = LAM }   = _SCHED_MD_LAM ct
-schedule PP   ct@ContractTerms{ contractType = LAM }   = _SCHED_PP_PAM ct
-schedule PY   ct@ContractTerms{ contractType = LAM }   = _SCHED_PY_PAM ct
-schedule FP   ct@ContractTerms{ contractType = LAM }   = _SCHED_FP_PAM ct
-schedule PRD  ct@ContractTerms{ contractType = LAM }   = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = LAM }   = _SCHED_TD_PAM ct
-schedule IP   ct@ContractTerms{ contractType = LAM }   = _SCHED_IP_PAM ct
-schedule IPCI ct@ContractTerms{ contractType = LAM }   = _SCHED_IPCI_PAM ct
-schedule IPCB ct@ContractTerms{ contractType = LAM }   = _SCHED_IPCB_LAM ct
-schedule RR   ct@ContractTerms{ contractType = LAM }   = _SCHED_RR_PAM ct
-schedule RRF  ct@ContractTerms{ contractType = LAM }   = _SCHED_RRF_PAM ct
-schedule SC   ct@ContractTerms{ contractType = LAM }   = _SCHED_SC_PAM ct
-schedule IED  ct@ContractTerms{ contractType = NAM }   = _SCHED_IED_PAM ct
-schedule PR   ct@ContractTerms{ contractType = NAM }   = _SCHED_PR_LAM ct
-schedule MD   ct@ContractTerms{ contractType = NAM }   = _SCHED_MD_PAM ct
-schedule PP   ct@ContractTerms{ contractType = NAM }   = _SCHED_PP_PAM ct
-schedule PY   ct@ContractTerms{ contractType = NAM }   = _SCHED_PY_PAM ct
-schedule FP   ct@ContractTerms{ contractType = NAM }   = _SCHED_FP_PAM ct
-schedule PRD  ct@ContractTerms{ contractType = NAM }   = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = NAM }   = _SCHED_TD_PAM ct
-schedule IP   ct@ContractTerms{ contractType = NAM }   = _SCHED_IP_NAM ct
-schedule IPCI ct@ContractTerms{ contractType = NAM }   = _SCHED_IPCI_NAM ct
-schedule IPCB ct@ContractTerms{ contractType = NAM }   = _SCHED_IPCB_LAM ct
-schedule RR   ct@ContractTerms{ contractType = NAM }   = _SCHED_RR_PAM ct
-schedule RRF  ct@ContractTerms{ contractType = NAM }   = _SCHED_RRF_PAM ct
-schedule SC   ct@ContractTerms{ contractType = NAM }   = _SCHED_SC_PAM ct
-schedule IED  ct@ContractTerms{ contractType = ANN }   = _SCHED_IED_PAM ct
-schedule PR   ct@ContractTerms{ contractType = ANN }   = _SCHED_PR_LAM ct
-schedule MD   ct@ContractTerms{ contractType = ANN }   = _SCHED_MD_PAM ct
-schedule PP   ct@ContractTerms{ contractType = ANN }   = _SCHED_PP_PAM ct
-schedule PY   ct@ContractTerms{ contractType = ANN }   = _SCHED_PY_PAM ct
-schedule FP   ct@ContractTerms{ contractType = ANN }   = _SCHED_FP_PAM ct
-schedule PRD  ct@ContractTerms{ contractType = ANN }   = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = ANN }   = _SCHED_TD_PAM ct
-schedule IP   ct@ContractTerms{ contractType = ANN }   = _SCHED_IP_NAM ct
-schedule IPCI ct@ContractTerms{ contractType = ANN }   = _SCHED_IPCI_PAM ct
-schedule IPCB ct@ContractTerms{ contractType = ANN }   = _SCHED_IPCB_LAM ct
-schedule RR   ct@ContractTerms{ contractType = ANN }   = _SCHED_RR_PAM ct
-schedule RRF  ct@ContractTerms{ contractType = ANN }   = _SCHED_RRF_PAM ct
-schedule SC   ct@ContractTerms{ contractType = ANN }   = _SCHED_SC_PAM ct
-schedule PRF  ct@ContractTerms{ contractType = ANN }   = _SCHED_PRF_ANN ct
-schedule PRD  ct@ContractTerms{ contractType = STK }   = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = STK }   = _SCHED_TD_PAM ct
-schedule DV   ct@ContractTerms{ contractType = STK }   = _SCHED_DV_STK ct
-schedule PRD  ct@ContractTerms{ contractType = OPTNS } = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = OPTNS } = _SCHED_TD_PAM ct
-schedule MD   ct@ContractTerms{ contractType = OPTNS } = _SCHED_MD_PAM ct
-schedule XD   ct@ContractTerms{ contractType = OPTNS } = _SCHED_XD_OPTNS ct
-schedule STD  ct@ContractTerms{ contractType = OPTNS } = _SCHED_STD_OPTNS ct
-schedule PRD  ct@ContractTerms{ contractType = FUTUR } = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = FUTUR } = _SCHED_TD_PAM ct
-schedule MD   ct@ContractTerms{ contractType = FUTUR } = _SCHED_MD_PAM ct
-schedule XD   ct@ContractTerms{ contractType = FUTUR } = _SCHED_XD_OPTNS ct
-schedule STD  ct@ContractTerms{ contractType = FUTUR } = _SCHED_STD_OPTNS ct
-schedule PRD  ct@ContractTerms{ contractType = SWPPV } = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = SWPPV } = _SCHED_TD_PAM ct
-schedule IED  ct@ContractTerms{ contractType = SWPPV } = _SCHED_IED_PAM ct
-schedule RR   ct@ContractTerms{ contractType = SWPPV } = _SCHED_RR_SWPPV ct
-schedule IP   ct@ContractTerms{ contractType = SWPPV } = _SCHED_IP_SWPPV ct
-schedule IPFX ct@ContractTerms{ contractType = SWPPV } = _SCHED_IPFX_SWPPV ct
-schedule IPFL ct@ContractTerms{ contractType = SWPPV } = _SCHED_IPFL_SWPPV ct
-schedule MD   ct@ContractTerms{ contractType = SWPPV } = _SCHED_MD_PAM ct
-schedule PRD  ct@ContractTerms{ contractType = CEG }   = _SCHED_PRD_PAM ct
-schedule MD   ct@ContractTerms{ contractType = CEG }   = _SCHED_MD_CEG ct
-schedule XD   ct@ContractTerms{ contractType = CEG }   = _SCHED_XD_CEG ct -- added as unscheduled events
-schedule FP   ct@ContractTerms{ contractType = CEG }   = _SCHED_FP_CEG ct
-schedule PRD  ct@ContractTerms{ contractType = CEC }   = _SCHED_PRD_PAM ct
-schedule MD   ct@ContractTerms{ contractType = CEC }   = _SCHED_MD_CEC ct
-schedule XD   ct@ContractTerms{ contractType = CEC }   = _SCHED_XD_CEG ct -- added as unscheduled events
-schedule PRD  ct@ContractTerms{ contractType = COM }   = _SCHED_PRD_PAM ct
-schedule TD   ct@ContractTerms{ contractType = COM }   = _SCHED_TD_PAM ct
-schedule IED  ct@ContractTerms{ contractType = CLM }   = _SCHED_IED_PAM ct
-schedule MD   ct@ContractTerms{ contractType = CLM }   = _SCHED_MD_PAM ct
-schedule FP   ct@ContractTerms{ contractType = CLM }   = _SCHED_FP_PAM ct
-schedule PR   ct@ContractTerms{ contractType = CLM }   = _SCHED_PR_LAM ct
-schedule IP   ct@ContractTerms{ contractType = CLM }   = _SCHED_IP_CLM ct
-schedule IPCI ct@ContractTerms{ contractType = CLM }   = _SCHED_IPCI_CLM ct
-schedule RR   ct@ContractTerms{ contractType = CLM }   = _SCHED_RR_PAM ct
-schedule RRF  ct@ContractTerms{ contractType = CLM }   = _SCHED_RRF_PAM ct
+schedule ::
+  (ActusFrac a) =>
+  -- | Event type
+  EventType ->
+  -- | Contract terms
+  ContractTerms a ->
+  -- | Schedule
+  [(String, ShiftedDay)]
+schedule IED ct@ContractTerms {contractId, contractType = PAM} = zip (repeat contractId) $ _SCHED_IED_PAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_MD_PAM ct
+schedule PP   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_PP_PAM ct
+schedule PY   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_PY_PAM ct
+schedule FP   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_FP_PAM ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule IP   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_IP_PAM ct
+schedule IPCI ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_IPCI_PAM ct
+schedule RR   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_RR_PAM ct
+schedule RRF  ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_RRF_PAM ct
+schedule SC   ct@ContractTerms{ contractId, contractType = PAM }   = zip (repeat contractId) $ _SCHED_SC_PAM ct
+schedule IED  ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_IED_PAM ct
+schedule PR   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_PR_LAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_MD_LAM ct
+schedule PP   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_PP_PAM ct
+schedule PY   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_PY_PAM ct
+schedule FP   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_FP_PAM ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule IP   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_IP_PAM ct
+schedule IPCI ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_IPCI_PAM ct
+schedule IPCB ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_IPCB_LAM ct
+schedule RR   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_RR_PAM ct
+schedule RRF  ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_RRF_PAM ct
+schedule SC   ct@ContractTerms{ contractId, contractType = LAM }   = zip (repeat contractId) $ _SCHED_SC_PAM ct
+schedule IED  ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_IED_PAM ct
+schedule PR   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_PR_LAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_MD_PAM ct
+schedule PP   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_PP_PAM ct
+schedule PY   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_PY_PAM ct
+schedule FP   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_FP_PAM ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule IP   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_IP_NAM ct
+schedule IPCI ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_IPCI_NAM ct
+schedule IPCB ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_IPCB_LAM ct
+schedule RR   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_RR_PAM ct
+schedule RRF  ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_RRF_PAM ct
+schedule SC   ct@ContractTerms{ contractId, contractType = NAM }   = zip (repeat contractId) $ _SCHED_SC_PAM ct
+schedule IED  ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_IED_PAM ct
+schedule PR   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_PR_LAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_MD_PAM ct
+schedule PP   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_PP_PAM ct
+schedule PY   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_PY_PAM ct
+schedule FP   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_FP_PAM ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule IP   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_IP_NAM ct
+schedule IPCI ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_IPCI_PAM ct
+schedule IPCB ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_IPCB_LAM ct
+schedule RR   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_RR_PAM ct
+schedule RRF  ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_RRF_PAM ct
+schedule SC   ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_SC_PAM ct
+schedule PRF  ct@ContractTerms{ contractId, contractType = ANN }   = zip (repeat contractId) $ _SCHED_PRF_ANN ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = STK }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = STK }   = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule DV   ct@ContractTerms{ contractId, contractType = STK }   = zip (repeat contractId) $ _SCHED_DV_STK ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = OPTNS } = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = OPTNS } = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = OPTNS } = zip (repeat contractId) $ _SCHED_MD_PAM ct
+schedule XD   ct@ContractTerms{ contractId, contractType = OPTNS } = zip (repeat contractId) $ _SCHED_XD_OPTNS ct
+schedule STD  ct@ContractTerms{ contractId, contractType = OPTNS } = zip (repeat contractId) $ _SCHED_STD_OPTNS ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = FUTUR } = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = FUTUR } = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = FUTUR } = zip (repeat contractId) $ _SCHED_MD_PAM ct
+schedule XD   ct@ContractTerms{ contractId, contractType = FUTUR } = zip (repeat contractId) $ _SCHED_XD_OPTNS ct
+schedule STD  ct@ContractTerms{ contractId, contractType = FUTUR } = zip (repeat contractId) $ _SCHED_STD_OPTNS ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule IED  ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_IED_PAM ct
+schedule RR   ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_RR_SWPPV ct
+schedule IP   ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_IP_SWPPV ct
+schedule IPFX ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_IPFX_SWPPV ct
+schedule IPFL ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_IPFL_SWPPV ct
+schedule MD   ct@ContractTerms{ contractId, contractType = SWPPV } = zip (repeat contractId) $ _SCHED_MD_PAM ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = CEG }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = CEG }   = zip (repeat contractId) $ _SCHED_MD_CEG ct
+schedule XD   ct@ContractTerms{ contractId, contractType = CEG }   = zip (repeat contractId) $ _SCHED_XD_CEG ct -- added as unscheduled events
+schedule FP   ct@ContractTerms{ contractId, contractType = CEG }   = zip (repeat contractId) $ _SCHED_FP_CEG ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = CEC }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = CEC }   = zip (repeat contractId) $ _SCHED_MD_CEC ct
+schedule XD   ct@ContractTerms{ contractId, contractType = CEC }   = zip (repeat contractId) $ _SCHED_XD_CEG ct -- added as unscheduled events
+schedule PRD  ct@ContractTerms{ contractId, contractType = COM }   = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = COM }   = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule IED  ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_IED_PAM ct
+schedule MD   ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_MD_PAM ct
+schedule FP   ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_FP_PAM ct
+schedule PR   ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_PR_LAM ct
+schedule IP   ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_IP_CLM ct
+schedule IPCI ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_IPCI_CLM ct
+schedule RR   ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_RR_PAM ct
+schedule RRF  ct@ContractTerms{ contractId, contractType = CLM }   = zip (repeat contractId) $ _SCHED_RRF_PAM ct
+schedule PRD  ct@ContractTerms{ contractId, contractType = SWAPS}  = zip (repeat contractId) $ _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTerms{ contractId, contractType = SWAPS}  = zip (repeat contractId) $ _SCHED_TD_PAM ct
+schedule ev   ct@ContractTerms{ contractRole, contractType = SWAPS}  =
+  let fil = head $ filter (\cs -> referenceRole cs == FIL) $ contractStructure ct
+      sel = head $ filter (\cs -> referenceRole cs == SEL) $ contractStructure ct
+      s = maybe [] (schedule ev) (setRoleFil contractRole <$> termsFromStructure fil)
+        ++ maybe [] (schedule ev) (setRoleSel contractRole <$> termsFromStructure sel)
+   in s
 schedule _ _                                           = []
 
+setRoleFil :: CR -> ContractTerms a -> ContractTerms a
+setRoleFil CR_RFL ct = ct {contractRole = CR_RPA}
+setRoleFil _ ct      = ct {contractRole = CR_RPL}
+
+setRoleSel :: CR -> ContractTerms a -> ContractTerms a
+setRoleSel CR_RFL ct = ct {contractRole = CR_RPL}
+setRoleSel _ ct      = ct {contractRole = CR_RPA}
+
+termsFromStructure :: ContractStructure a -> Maybe (ContractTerms a)
+termsFromStructure cs = case reference cs of
+  ReferenceTerms rt -> Just rt
+  ReferenceId _     -> Nothing
+
 -- |Determine the maturity of a contract
-maturity :: ActusFrac a =>
-  ContractTerms a -- ^ Contract terms
-  -> Maybe LocalTime  -- ^ Maturity, if available
+maturity ::
+  ActusFrac a =>
+  -- | Contract terms
+  ContractTerms a ->
+  -- | Maturity, if available
+  Maybe LocalTime
 maturity ContractTerms {contractType = PAM, ..} = maturityDate
 maturity ContractTerms {contractType = LAM, maturityDate = md@(Just _)} = md
 maturity
@@ -808,14 +836,10 @@ _SCHED_MD_CEG
   ct@ContractTerms
     { maturityDate = md
     } =
-    let refs = maximum <$> mapM f (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct)
+    let refs = maximum <$> (mapM maturityDate $ mapMaybe termsFromStructure (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct))
      in case md <|> maturity ct <|> refs of
           Just m  -> [mkShiftedDay m]
           Nothing -> []
-    where
-      f cs = case reference cs of
-        ReferenceTerms rt -> maturityDate rt
-        ReferenceId _     -> undefined
 
 _SCHED_FP_CEG ::
   ActusFrac a =>
@@ -828,27 +852,19 @@ _SCHED_FP_CEG
       maturityDate = md,
       scheduleConfig
     } =
-    let refs = maximum <$> mapM f (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct)
+    let refs = maximum <$> (mapM maturityDate $ mapMaybe termsFromStructure (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct))
      in case md <|> maturity ct <|> refs of
           Just m  -> generateRecurrentSchedule feanx fecl {includeEndDay = True} m scheduleConfig
           Nothing -> []
-    where
-      f cs = case reference cs of
-        ReferenceTerms rt -> maturityDate rt
-        ReferenceId _     -> undefined
 _SCHED_FP_CEG _ = []
 
 _SCHED_MD_CEC :: ContractTerms a -> [ShiftedDay]
 _SCHED_MD_CEC
   ct@ContractTerms
     {
-    } = case mapM f (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct) of
+    } = case mapM maturityDate $ mapMaybe termsFromStructure (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct) of
     Just m  -> [mkShiftedDay $ maximum m]
     Nothing -> []
-    where
-      f cs = case reference cs of
-        ReferenceTerms rt -> maturityDate rt
-        ReferenceId _     -> undefined
 
 _SCHED_IP_CLM :: ContractTerms a -> [ShiftedDay]
 _SCHED_IP_CLM
@@ -879,4 +895,3 @@ _SCHED_IPCI_CLM
       scheduleConfig
     } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = False} md scheduleConfig
 _SCHED_IPCI_CLM _ = []
-

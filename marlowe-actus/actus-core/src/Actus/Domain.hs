@@ -89,6 +89,11 @@ sign CR_PF  = negate 1
 
 -- == Default instance (Double)
 
+applyDefaults :: ContractStructure Double -> ContractStructure Double
+applyDefaults cs = case reference cs of
+  ReferenceTerms rt -> cs { reference = ReferenceTerms $ setDefaultContractTermValues rt }
+  ReferenceId _     -> cs
+
 setDefaultContractTermValues :: ContractTerms Double -> ContractTerms Double
 setDefaultContractTermValues ct@ContractTerms {..} =
   ct
@@ -98,6 +103,7 @@ setDefaultContractTermValues ct@ContractTerms {..} =
             businessDayConvention = applyDefault BDC_NULL (businessDayConvention scheduleConfig),
             calendar = applyDefault CLDR_NC (calendar scheduleConfig)
           },
+      contractStructure              = map applyDefaults contractStructure,
       contractPerformance            = applyDefault PRF_PF contractPerformance,
       interestCalculationBase        = applyDefault IPCB_NT interestCalculationBase,
       premiumDiscountAtIED           = applyDefault 0.0 premiumDiscountAtIED,

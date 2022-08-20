@@ -49,7 +49,7 @@ runTest tc@TestCase {..} =
       cashFlows = genProjectedCashflows riskFactors terms unscheduleEvents
       latestCashFlow = cashPaymentDay
                         <$> (find (\cf -> cashEvent cf == STD) cashFlows
-                        <|> find (\cf -> cashEvent cf == MD) cashFlows)
+                        <|> find (\cf -> contractType terms /= SWAPS && cashEvent cf == MD) cashFlows)
       cashFlowsTo =
         maybe
           cashFlows
@@ -57,8 +57,8 @@ runTest tc@TestCase {..} =
           (min <$> latestCashFlow <*> to <|> latestCashFlow <|> to)
    in assertTestResults cashFlowsTo results
   where
-    riskFactors ev date =
-      case getValue tc ev date of
+    riskFactors i ev date =
+      case getValue i tc ev date of
         Just v -> case ev of
           RR -> defaultRiskFactors {o_rf_RRMO = v}
           SC -> defaultRiskFactors {o_rf_SCMO = v}
@@ -67,8 +67,8 @@ runTest tc@TestCase {..} =
           _  -> defaultRiskFactors {o_rf_CURS = v}
         Nothing -> defaultRiskFactors
 
-getValue :: TestCase -> EventType -> LocalTime -> Maybe Double
-getValue TestCase {..} ev date =
+getValue :: String -> TestCase -> EventType -> LocalTime -> Maybe Double
+getValue i TestCase {..} ev date =
   do
     key <- observedKey ev
     DataObserved {values} <- Map.lookup key dataObserved
@@ -81,11 +81,19 @@ getValue TestCase {..} ev date =
         values
     return value
   where
-    observedKey RR = marketObjectCodeOfRateReset terms
+    observedKey RR | Actus.Domain.contractId terms == i = marketObjectCodeOfRateReset terms
+    observedKey RR =
+      do a <- mapM termsFromStructure $ contractStructure terms
+         head <$> (mapM marketObjectCodeOfRateReset $ filter (\b -> Actus.Domain.contractId b == i) a)
     observedKey SC = marketObjectCodeOfScalingIndex terms
     observedKey DV = Just (fmap toUpper identifier ++ "_DV")
     observedKey XD = let l = map (getMarketObjectCode . reference) (contractStructure terms) in head $ filter isJust l
     observedKey _  = settlementCurrency terms
+
+termsFromStructure :: ContractStructure a -> Maybe (ContractTerms a)
+termsFromStructure cs = case reference cs of
+  ReferenceTerms rt -> Just rt
+  ReferenceId _     -> Nothing
 
 -- |Unscheduled events from test cases
 unSchedEv :: TestContractTerms -> EventObserved -> [(String, EventType, ShiftedDay)]

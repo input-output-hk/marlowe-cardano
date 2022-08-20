@@ -31,6 +31,7 @@ main = do
       ]
       $ p ++ "actus-tests-clm.json"
   swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
+  swapsTests <- testCasesFromFile [] $ p ++ "actus-tests-swaps.json"
   cegTests <-
     testCasesFromFile
       [ "guarantee14" -- result in reference test is not precise: 3508695 but should be 3508695.652174
@@ -53,6 +54,7 @@ main = do
             tests "CSH" cshTests,
             tests "CLM" clmTests,
             tests "SWPPV" swppvTests,
+            tests "SWAPS" swapsTests,
             tests "CEG" cegTests,
             tests "CEC" cecTests
           ]
