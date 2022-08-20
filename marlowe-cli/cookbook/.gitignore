@@ -6,8 +6,5 @@ node.socket
 english-auction*
 revenue-based-loan*
 guessing-game*
-collective-loan-*.contract
-collective-loan-*.state
-collective-loan-*.partial
-collective-loan-*.marlowe
-collective-loan.merkleization
+collective-loan*
+simple-babbage*
