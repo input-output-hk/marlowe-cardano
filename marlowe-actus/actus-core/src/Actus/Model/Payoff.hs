@@ -9,30 +9,38 @@ module Actus.Model.Payoff
 where
 
 import Actus.Domain (ActusFrac, ActusOps (..), CT (..), ContractState (..), ContractTerms (..), EventType (..),
-                     FEB (..), PYTP (..), RiskFactors (..), sign)
+                     FEB (..), PYTP (..), RiskFactors (..), ShiftedDay (..), sign)
 import Actus.Utility.YearFraction (yearFraction)
+import Control.Monad (join)
 import Control.Monad.Reader (Reader, reader)
+import Data.Functor ((<&>))
+import Data.List (find)
+import Data.Maybe (fromMaybe)
 import Data.Time.LocalTime (LocalTime)
 
 -- |The context for payoff functions
 data CtxPOF a = CtxPOF
-  { contractTerms :: ContractTerms a                         -- ^ Contract terms
-  , riskFactors   :: EventType -> LocalTime -> RiskFactors a -- ^ Risk factors as a function of event type and time
+  { -- | Contract terms
+    contractTerms   :: ContractTerms a,
+    -- | Risk factors as a function of event type and time
+    riskFactors     :: String -> EventType -> LocalTime -> RiskFactors a,
+    -- | Cash flows from underlying contracts
+    referenceStates :: [[((String, EventType, ShiftedDay), ContractState a, a)]]
   }
 
--- |The payoff function
-payoff :: ActusFrac a =>
-     EventType           -- ^ Event type
-  -> LocalTime           -- ^ Time
-  -> ContractState a     -- ^ Contract state
-  -> Reader (CtxPOF a) a -- ^ Updated contract state
-payoff ev t st = reader payoff'
+-- | The payoff function
+payoff ::
+  ActusFrac a =>
+  -- | Event
+  (String, EventType, LocalTime) ->
+  -- | Contract state
+  ContractState a ->
+  -- | Updated contract state
+  Reader (CtxPOF a) a
+payoff (cid, ev, t) st = reader payoff'
   where
-    payoff' CtxPOF {..} = pof ev (riskFactors ev t) contractTerms st
+    payoff' CtxPOF {..} = pof ev (riskFactors (contractId contractTerms) ev t) contractTerms st
       where
-        pof ::
-          ActusFrac a =>
-            EventType -> RiskFactors a -> ContractTerms a -> ContractState a -> a
         ----------------------------
         -- Initial Exchange (IED) --
         ----------------------------
@@ -153,14 +161,16 @@ payoff ev t st = reader payoff'
           RiskFactors
             { o_rf_CURS
             }
-          _
+          ContractTerms
+            { contractType
+            }
           ContractState
             { nt,
               nsc,
               isc,
               ipac,
               feac
-            } = o_rf_CURS * (nsc * nt + isc * ipac + feac)
+            } | contractType /= SWAPS = o_rf_CURS * (nsc * nt + isc * ipac + feac)
         -------------------------------
         -- Principal Prepayment (PP) --
         -------------------------------
@@ -286,6 +296,15 @@ payoff ev t st = reader payoff'
               priceAtPurchaseDate = Just pprd,
               contractRole
             }
+          _ | contractType == SWAPS = sign contractRole * pprd
+        pof
+          PRD
+          _
+          ContractTerms
+            { contractType,
+              priceAtPurchaseDate = Just pprd,
+              contractRole
+            }
           _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV, CEG] = negate $ sign contractRole * pprd
         -- POF_PRD_COM
         pof
@@ -340,6 +359,17 @@ payoff ev t st = reader payoff'
             }
           ContractTerms
             { contractType = SWPPV,
+              priceAtTerminationDate = Just ptd
+            }
+          _ = o_rf_CURS * ptd
+        -- POF_TD_SWAPS
+        pof
+          TD
+          RiskFactors
+            { o_rf_CURS
+            }
+          ContractTerms
+            { contractType = SWAPS,
               priceAtTerminationDate = Just ptd
             }
           _ = o_rf_CURS * ptd
@@ -566,6 +596,25 @@ payoff ev t st = reader payoff'
           { contractType
           }
           _ | contractType `elem` [SWPPV, CLM] = 0
+        -------------------------------
+        -- SWAPS --
+        -------------------------------
+        pof
+          _
+          _
+          ContractTerms
+            { contractType = SWAPS
+            }
+          _ = fromMaybe 0 $ do
+                find
+                  ( \((a, x, ShiftedDay {..}), _, _) ->
+                      a == cid
+                        && x == ev
+                        && calculationDay == t
+                  )
+                  $ join referenceStates
+                <&> thrd
+             where thrd (_,_,c) = c
         -------------
         -- Default --
         -------------

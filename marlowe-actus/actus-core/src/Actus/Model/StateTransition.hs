@@ -26,25 +26,37 @@ import Data.Time.LocalTime (LocalTime)
 -- schedules and the maturity of the contract. Furthermore a function to retrieve
 -- risk factors is available.
 data CtxSTF a = CtxSTF
-  { contractTerms   :: ContractTerms a                              -- ^ Contract terms
-  , fpSchedule      :: [LocalTime]                                  -- ^ Fee payment schedule
-  , prSchedule      :: [LocalTime]                                  -- ^ Principal redemption schedule
-  , ipSchedule      :: [LocalTime]                                  -- ^ Interest payment schedule
-  , maturity        :: Maybe LocalTime                              -- ^ Maturity
-  , riskFactors     :: EventType -> LocalTime -> RiskFactors a      -- ^ Riskfactors per event and time
-  , referenceStates :: [[(EventType, ShiftedDay, ContractState a)]] -- ^ Cash flows from underlying contracts
+  { -- | Contract terms
+    contractTerms   :: ContractTerms a,
+    -- | Fee payment schedule
+    fpSchedule      :: [LocalTime],
+    -- | Principal redemption schedule
+    prSchedule      :: [LocalTime],
+    -- | Interest payment schedule
+    ipSchedule      :: [LocalTime],
+    -- | Maturity
+    maturity        :: Maybe LocalTime,
+    -- | Riskfactors per event and time
+    riskFactors     :: String -> EventType -> LocalTime -> RiskFactors a,
+    -- | Cash flows from underlying contracts
+    referenceStates :: [[((String, EventType, ShiftedDay), ContractState a, a)]]
   }
 
 -- |A state transition updates the contract state based on the type of event and the time.
 -- `CtxSTF` provides in particular the contract terms and risk factors.
-stateTransition :: ActusFrac a =>
-     EventType                           -- ^ Event type
-  -> LocalTime                           -- ^ Time
-  -> ContractState a                     -- ^ Contract state
-  -> Reader (CtxSTF a) (ContractState a) -- ^ Updated contract state
+stateTransition ::
+  ActusFrac a =>
+  -- | Event type
+  EventType ->
+  -- | Time
+  LocalTime ->
+  -- | Contract state
+  ContractState a ->
+  -- | Updated contract state
+  Reader (CtxSTF a) (ContractState a)
 stateTransition ev t sn = reader stateTransition'
   where
-    stateTransition' CtxSTF {..} = stf ev (riskFactors ev t) contractTerms sn
+    stateTransition' CtxSTF {..} = stf ev (riskFactors (contractId contractTerms) ev t) contractTerms sn
       where
         stf AD _ ContractTerms { contractType = CSH } st        = _STF_AD_CSH st t
         stf AD _ ct st                                          = _STF_AD_ALL ct st t
@@ -109,6 +121,7 @@ stateTransition ev t sn = reader stateTransition'
         stf XD rf ct@ContractTerms { contractType = FUTUR } st  = _STF_XD_FUTUR rf ct st t
         stf XD _ ct@ContractTerms { contractType = CEG } st     = _STF_XD_CEG referenceStates ct st t
         stf XD rf ct@ContractTerms { contractType = CEC } st    = _STF_XD_CEC referenceStates rf ct st t
+        stf _ _   ct@ContractTerms { contractType = SWAPS} st   = _STF_XX_SWAPS referenceStates ev ct st t
 
         -----------------------
         -- Credit Event (CE) --
@@ -230,6 +243,22 @@ _STF_IED_SWPPV
       & L.accruedInterestSecondLeg ?~ 0
       & L.statusDate .~ t
 _STF_IED_SWPPV _ s _ = s
+
+_STF_XX_SWAPS :: [[((String, EventType, ShiftedDay), ContractState a, a)]] -> EventType -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+  {-
+_STF_XX_SWAPS
+  referenceStates
+  ev
+  ContractTerms
+    { contractStructure = [_, _]
+    }
+  s
+  t =
+    let y = join referenceStates
+        x = lookup (ev,t) (map (\(a,b,c) -> ((a,calculationDay b),c)) y)
+     in traceShow ("STF", ev, refId <$> x) $ fromMaybe s x
+     -}
+_STF_XX_SWAPS _ _ _ s _ = s
 
 _STF_IED_LAM :: ActusFrac a => ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_IED_LAM
@@ -970,7 +999,7 @@ _STF_XD_FUTUR
       & L.statusDate .~ t
 _STF_XD_FUTUR _ _ s _ = s
 
-_STF_XD_CEG :: ActusFrac a => [[(EventType, ShiftedDay, ContractState a)]] -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_XD_CEG :: ActusFrac a => [[((String, EventType, ShiftedDay), ContractState a, a)]] -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_XD_CEG
   referenceStates
   ContractTerms
@@ -987,7 +1016,7 @@ _STF_XD_CEG
   t =
     let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
-          let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
+          let (_, c, _) = last $ takeWhile (\((_, _, d), _, _) -> calculationDay d <= t) cs
            in nt c
         timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
         timeFullFeeCycle = yearFraction dcc (s ^. L.statusDate) ((s ^. L.statusDate) <+> cef) maturityDate
@@ -1006,7 +1035,7 @@ _STF_XD_CEG
   t =
     let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
-          let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
+          let (_, c, _) = last $ takeWhile (\((_, _, d), _, _) -> calculationDay d <= t) cs
            in nt c
      in s & L.exerciseAmount ?~ nt'
           & L.notionalPrincipal .~ nt'
@@ -1022,7 +1051,7 @@ _STF_XD_CEG
   t =
     let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
-          let (_, _, c) = last $ takeWhile (\(_, _, x) -> sd x <= t) cs
+          let (_, c, _) = last $ takeWhile (\(_, x, _) -> sd x <= t) cs
            in nt c + ipac c
      in s & L.exerciseAmount ?~ nt'
           & L.notionalPrincipal .~ nt'
@@ -1035,7 +1064,7 @@ _STF_XD_CEG
     s & L.exerciseAmount ?~ (s ^. L.notionalPrincipal)
       & L.statusDate .~ t
 
-_STF_XD_CEC :: ActusFrac a => [[(EventType, ShiftedDay, ContractState a)]] -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
+_STF_XD_CEC :: ActusFrac a => [[((String, EventType, ShiftedDay), ContractState a, a)]] -> RiskFactors a -> ContractTerms a -> ContractState a -> LocalTime -> ContractState a
 _STF_XD_CEC
   referenceStates
   RiskFactors
@@ -1050,7 +1079,7 @@ _STF_XD_CEC
   t =
     let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
-          let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
+          let (_, c, _) = last $ takeWhile (\((_, _, d), _, _) -> calculationDay d <= t) cs
            in nt c
      in s & L.exerciseAmount ?~ _min xd_payoff nt'
           & L.notionalPrincipal .~ nt'
@@ -1069,7 +1098,7 @@ _STF_XD_CEC
   t =
     let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
-          let (_, _, c) = last $ takeWhile (\(_, _, x) -> sd x <= t) cs
+          let (_, c, _) = last $ takeWhile (\(_, x, _) -> sd x <= t) cs
            in nt c + ipac c
      in s & L.exerciseAmount ?~ _min xd_payoff nt'
           & L.notionalPrincipal .~ nt'
@@ -1088,7 +1117,7 @@ _STF_XD_CEC
     let cecv = fromMaybe 1 coverageOfCreditEnhancement
         nt' = cecv * sign contractRole * (sum $ map f referenceStates)
         f cs =
-          let (_, _, c) = last $ takeWhile (\(_, d, _) -> calculationDay d <= t) cs
+          let (_, c, _) = last $ takeWhile (\((_, _, d) , _, _) -> calculationDay d <= t) cs
            in nt c
      in s & L.exerciseAmount ?~ _min xd_payoff nt'
           & L.statusDate .~ t

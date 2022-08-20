@@ -217,8 +217,8 @@ ex_optns1 =
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
           let Just contract = toCore $ genContract' ("party", "counterparty") rf (toMarlowe ct)
-              rf :: Num a => EventType -> LocalTime -> RiskFactors a
-              rf XD d
+              rf :: Num a => String -> EventType -> LocalTime -> RiskFactors a
+              rf _ XD d
                 | d == (fromJust $ maturityDate ct) =
                   RiskFactors
                     { o_rf_CURS = 1,
@@ -228,7 +228,7 @@ ex_optns1 =
                       xd_payoff = 120,
                       dv_payoff = 0
                     }
-              rf _ _ =
+              rf _ _ _ =
                 RiskFactors
                   { o_rf_CURS = 1,
                     o_rf_RRMO = 1,
@@ -281,8 +281,8 @@ ex_com1 =
                   assertBool ("total payments to party: " ++ show tc) (tc == 1_400)
       )
 
-emptyRiskFactors :: Num a => EventType -> LocalTime -> RiskFactors a
-emptyRiskFactors _ _ =
+emptyRiskFactors :: Num a => String -> EventType -> LocalTime -> RiskFactors a
+emptyRiskFactors _ _ _ =
   RiskFactors
     { o_rf_CURS = 1,
       o_rf_RRMO = 1,
