@@ -123,6 +123,7 @@
             "Spec/Marlowe/Semantics/Compute"
             "Spec/Marlowe/Semantics/Entropy"
             "Spec/Marlowe/Semantics/Functions"
+            "Spec/Marlowe/Semantics/Golden"
             "Spec/Marlowe/Semantics/Orphans"
             "Spec/Marlowe/Semantics/Util"
             ];
