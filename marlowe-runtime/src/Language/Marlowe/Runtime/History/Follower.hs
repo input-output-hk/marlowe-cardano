@@ -17,17 +17,23 @@ import Data.Foldable (asum, find, for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
+import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import GHC.Show (showSpace)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
-                                               RuntimeChainSeekClient, ScriptHash (..), SlotNo (..), TxError, TxId,
-                                               TxOutRef (..), UTxOError, WithGenesis (..), isAfter, schemaVersion1_0)
+                                               RuntimeChainSeekClient, ScriptHash (..), SlotConfig, SlotNo (..),
+                                               TxError, TxId, TxOutRef (..), UTxOError, WithGenesis (..), isAfter,
+                                               schemaVersion1_0, slotToUTCTime)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, MarloweVersion (..), MarloweVersionTag (..),
-                                          PayoutDatum, SomeMarloweVersion (..), Transaction (..),
-                                          TransactionOutput (..), TransactionScriptOutput (..), fromChainDatum,
-                                          fromChainRedeemer)
+import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, IsMarloweVersion (Redeemer), MarloweVersion (..),
+                                          MarloweVersionTag (..), PayoutDatum, SomeMarloweVersion (..),
+                                          Transaction (..), TransactionOutput (..), TransactionScriptOutput (..),
+                                          fromChainDatum, fromChainRedeemer)
+import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime))
 
 data CreateStep v = CreateStep
   { datum         :: Datum v
@@ -105,6 +111,7 @@ data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
   , getMarloweVersion  :: ScriptHash -> Maybe SomeMarloweVersion
   , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+  , slotConfig         :: SlotConfig
   }
 
 data Follower = Follower
@@ -136,6 +143,7 @@ data ExtractMarloweTransactionError
   | InvalidRedeemer
   | NoTransactionDatum
   | InvalidTransactionDatum
+  | InvalidValidityRange
   deriving stock (Show, Eq, Ord)
 
 data ContractChangesTVar v = ContractChangesTVar (MarloweVersion v) (TVar (ContractChanges v))
@@ -172,6 +180,7 @@ mkFollower deps@FollowerDependencies{..} = do
                 pure changesVar
               let scriptUTxO = unContractId contractId
               let payoutUTxOs = mempty
+              let prevDatum = datum
               followContract FollowerState{..}
       , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
       }
@@ -191,9 +200,11 @@ data FollowerState v = FollowerState
   , create        :: CreateStep v
   , contractId    :: ContractId
   , changesVar    :: TVar (ContractChanges v)
+  , prevDatum     :: Datum v
   , scriptUTxO    :: TxOutRef
   , payoutUTxOs   :: Set TxOutRef
   , scriptAddress :: Chain.Address
+  , slotConfig    :: SlotConfig
   }
 
 exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
@@ -239,7 +250,7 @@ followNext state@FollowerState{..} = ClientStNext
   { recvMsgQueryRejected = \err _ -> failWith $ FollowScriptUTxOFailed err
   , recvMsgRollForward = \tx point _ -> case point of
       Genesis -> error "transaction detected at Genesis"
-      At blockHeader -> case extractMarloweTransaction version contractId scriptAddress scriptUTxO blockHeader tx of
+      At blockHeader -> case extractMarloweTransaction version prevDatum slotConfig contractId scriptAddress scriptUTxO blockHeader tx of
         Left err -> failWith $ ExtractMarloweTransactionFailed err
         Right marloweTx@Transaction{output} -> do
           let changes = mempty { steps = Map.singleton blockHeader [ApplyTransaction marloweTx] }
@@ -249,25 +260,34 @@ followNext state@FollowerState{..} = ClientStNext
             Nothing -> pure $ SendMsgDone $ Right ()
             Just TransactionScriptOutput{..} -> do
               -- TODO read payouts to payout validator
-              followContract state { scriptUTxO = utxo }
+              followContract state { scriptUTxO = utxo, prevDatum = datum }
   , recvMsgRollBackward = \_ _ -> error "not implemented"
   }
 
 extractMarloweTransaction
   :: MarloweVersion v
+  -> Datum v
+  -> SlotConfig
   -> ContractId
   -> Chain.Address
   -> TxOutRef
   -> BlockHeader
   -> Chain.Transaction
   -> Either ExtractMarloweTransactionError (Transaction v)
-extractMarloweTransaction version contractId scriptAddress consumedUTxO blockHeader Chain.Transaction{..} = do
+extractMarloweTransaction version prevDatum slotConfig contractId scriptAddress consumedUTxO blockHeader Chain.Transaction{..} = do
   let transactionId = txId
   Chain.TransactionInput { redeemer = mRedeemer } <-
     note TxInNotFound $ find (consumesUTxO consumedUTxO) inputs
   rawRedeemer <- note NoRedeemer mRedeemer
   redeemer <- note InvalidRedeemer $ fromChainRedeemer version rawRedeemer
+  (minSlot, maxSlot) <- case validityRange of
+    Chain.MinMaxBound minSlot maxSlot -> pure (minSlot, maxSlot)
+    _                                 -> Left InvalidValidityRange
+  let validityLowerBound = slotToUTCTime slotConfig minSlot
+  let validityUpperBound = slotToUTCTime slotConfig maxSlot
+  let wouldClose = wouldCloseContract version validityLowerBound validityUpperBound redeemer prevDatum
   scriptOutput <- runMaybeT do
+    guard $ not wouldClose
     (ix, Chain.TransactionOutput{ datum = mDatum }) <-
       hoistMaybe $ find (isToAddress scriptAddress . snd) $ zip [0..] outputs
     lift do
@@ -279,6 +299,20 @@ extractMarloweTransaction version contractId scriptAddress consumedUTxO blockHea
   let payouts = [] -- TODO
   let output = TransactionOutput{..}
   pure Transaction{..}
+
+wouldCloseContract :: MarloweVersion v -> UTCTime -> UTCTime -> Redeemer v -> Datum v -> Bool
+wouldCloseContract version validityLowerBound validityUpperBound redeemer datum = case version of
+  MarloweV1 ->
+    let
+      utcTimeToPOSIXTime = POSIXTime . round . (* 1000) . utcTimeToPOSIXSeconds
+      timeInterval = (utcTimeToPOSIXTime validityLowerBound, utcTimeToPOSIXTime validityUpperBound)
+      input = V1.TransactionInput timeInterval redeemer
+      V1.MarloweData{..} = datum
+    in
+      marloweContract == V1.Close || case V1.computeTransaction input marloweState marloweContract of
+        V1.TransactionOutput{..} -> txOutContract == V1.Close
+        _                        -> False
+
 
 isToAddress :: Chain.Address -> Chain.TransactionOutput -> Bool
 isToAddress toAddress Chain.TransactionOutput{..} = address == toAddress

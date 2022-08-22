@@ -16,9 +16,12 @@ import Data.Functor (void)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
+import Data.Time (secondsToNominalDiffTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Language.Marlowe (POSIXTime (..))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSeekClient, Move (..), ScriptHash,
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSeekClient, Move (..), ScriptHash, SlotConfig (..),
                                                TransactionOutput (address), TxError (..), TxId, TxOutRef (..),
                                                UTxOError (..), WithGenesis (..), toDatum)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -51,10 +54,14 @@ spec = do
   it "terminates with TxInNotFound" checkTxInNotFound
   it "terminates with NoRedeemer" checkNoRedeemer
   it "terminates with InvalidRedeemer" checkInvalidRedeemer
+  it "terminates with InvalidValidityRange for Unbounded" checkInvalidValidityRangeUnbounded
+  it "terminates with InvalidValidityRange for MinBound" checkInvalidValidityRangeMinBound
+  it "terminates with InvalidValidityRange for MaxBound" checkInvalidValidityRangeMaxBound
   it "terminates with NoTransactionDatum" checkNoTransactionDatum
   it "terminates with InvalidTransactionDatum" checkInvalidTransactionDatum
   it "discovers a contract transaction (close)" checkCloseTransaction
   it "discovers a contract transaction (non-close)" checkNonCloseTransaction
+  it "discovers a contract transaction (close, create new)" checkCloseAndCreateInSameTransaction
 
 testContractId :: ContractId
 testContractId = fromJust $ parseContractId "036e9b4cfdd668f9682d9153950980d7b065455f29b3b47923b2572bdd791e69#0"
@@ -81,7 +88,11 @@ createDatum = V1.MarloweData
   }
 
 createContract :: V1.Contract
-createContract = V1.Close
+createContract = V1.When
+  [ V1.Case (V1.Notify V1.TrueObs) V1.Close
+  ]
+  (POSIXTime 100_001)
+  V1.Close
 
 createDatumState :: V1.State
 createDatumState = V1.State
@@ -119,9 +130,12 @@ createOutput =
 closeTxIn :: Chain.TransactionInput
 closeTxIn =
   let
-    redeemer = Just $ Chain.Redeemer $ toDatum ([] :: [V1.Input])
+    redeemer = Just $ Chain.Redeemer $ toDatum closeRedeemer
   in
     Chain.TransactionInput createTxId 0 testScriptAddress redeemer
+
+closeRedeemer :: [V1.Input]
+closeRedeemer = [ V1.NormalInput V1.INotify ]
 
 closeTxId :: TxId
 closeTxId = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -130,7 +144,7 @@ closeTx :: Chain.Transaction
 closeTx =
   let
     txId = closeTxId
-    validityRange = Chain.Unbounded
+    validityRange = Chain.MinMaxBound 0 100
     metadata = Nothing
     inputs = Set.singleton closeTxIn
     outputs = []
@@ -139,7 +153,7 @@ closeTx =
     Chain.Transaction{..}
 
 applyInputsRedeemer :: [V1.Input]
-applyInputsRedeemer = [ V1.NormalInput V1.INotify ]
+applyInputsRedeemer = []
 
 applyInputsTxIn :: Chain.TransactionInput
 applyInputsTxIn =
@@ -155,7 +169,7 @@ applyInputsTx :: Chain.Transaction
 applyInputsTx =
   let
     txId = applyInputsTxId
-    validityRange = Chain.Unbounded
+    validityRange = Chain.MinMaxBound 0 100
     metadata = Nothing
     inputs = Set.singleton applyInputsTxIn
     outputs = [applyInputsOutput]
@@ -341,6 +355,33 @@ checkInvalidRedeemer = do
   followerError `shouldBe` Just (ExtractMarloweTransactionFailed InvalidRedeemer)
   followerChanges `shouldBe` Just (emptyChanges MarloweV1)
 
+checkInvalidValidityRangeUnbounded :: Expectation
+checkInvalidValidityRangeUnbounded = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx { Chain.validityRange = Chain.Unbounded } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed InvalidValidityRange)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkInvalidValidityRangeMinBound :: Expectation
+checkInvalidValidityRangeMinBound = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx { Chain.validityRange = Chain.MinBound 0 } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed InvalidValidityRange)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkInvalidValidityRangeMaxBound :: Expectation
+checkInvalidValidityRangeMaxBound = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx { Chain.validityRange = Chain.MaxBound 0 } point2 point2
+    $ ExpectDone ()
+  followerError `shouldBe` Just (ExtractMarloweTransactionFailed InvalidValidityRange)
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
 checkNoTransactionDatum :: Expectation
 checkNoTransactionDatum = do
   let badOutput = applyInputsOutput { Chain.datum = Nothing }
@@ -373,8 +414,9 @@ checkCloseTransaction = do
                     { transactionId = let Chain.Transaction{..} = closeTx in txId
                     , contractId = testContractId
                     , blockHeader = block2
-                    , validityRange = Chain.Unbounded
-                    , redeemer = []
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = closeRedeemer
                     , output = TransactionOutput [] Nothing
                     }
                 ]
@@ -397,12 +439,38 @@ checkNonCloseTransaction = do
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
                     , blockHeader = block2
-                    , validityRange = Chain.Unbounded
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
                     , output = TransactionOutput [] $ Just TransactionScriptOutput
                         { utxo = Chain.TxOutRef applyInputsTxId 0
                         , datum = createDatum
                         }
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCloseAndCreateInSameTransaction :: Expectation
+checkCloseAndCreateInSameTransaction = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTx createUTxO)
+    $ RollForward closeTx { Chain.outputs = [createOutput] } point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = closeTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = closeRedeemer
+                    , output = TransactionOutput [] Nothing
                     }
                 ]
             , rollbackTo = Nothing
@@ -461,6 +529,9 @@ runFollowerTest marloweVersions' script = do
           Nothing -> throwIO HaltException
     let contractId = testContractId
     let getMarloweVersion scriptHash = lookup scriptHash marloweVersions'
+    let slotZeroTime = posixSecondsToUTCTime 0
+    let slotLength = secondsToNominalDiffTime 1
+    let slotConfig = SlotConfig{..}
     follower <- mkFollower FollowerDependencies{..}
     pure (resultVar, follower)
   let

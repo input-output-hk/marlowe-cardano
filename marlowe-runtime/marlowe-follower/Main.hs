@@ -7,6 +7,7 @@ import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad (forever)
 import Data.ByteString.Base16 (encodeBase16)
+import Data.Either (fromRight)
 import Data.Foldable (for_)
 import Data.Functor (void)
 import qualified Data.Map as Map
@@ -15,8 +16,9 @@ import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Pretty (pretty)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..),
-                                               RuntimeChainSeekClient, SlotNo (..), TxId (..), TxOutRef (..),
-                                               WithGenesis (..), runtimeChainSeekCodec, toBech32)
+                                               ChainSyncQuery (GetSlotConfig), RuntimeChainSeekClient, SlotNo (..),
+                                               TxId (..), TxOutRef (..), WithGenesis (..), runtimeChainSeekCodec,
+                                               toBech32)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
                                           TransactionOutput (..), TransactionScriptOutput (..), parseContractId,
                                           renderContractId)
@@ -27,6 +29,8 @@ import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), Contract
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
+import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
+import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket (AddrInfo (..), HostName, PortNumber, SocketType (..), close, connect, defaultHints, getAddrInfo,
                        openSocket, withSocketsDo)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
@@ -42,23 +46,33 @@ main = run =<< getOptions
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
   let hints = defaultHints { addrSocketType = Stream }
-  addr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
-  bracket (open addr) close \socket -> do
-    let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel socket
-    let
-      connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-      connectToChainSeek client = fst <$> runPeerWithDriver driver peer (startDState driver)
-        where peer = chainSeekClientPeer Genesis client
-    let getMarloweVersion = Core.getMarloweVersion
-    Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
-    Left result <- race runFollower (logChanges contractId changes)
-    case result of
-      Left err -> hPrint stderr err
-      Right () -> pure ()
+  chainSeekAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
+  queryAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show queryPort)
+  bracket (open chainSeekAddr) close \chainSeekSocket -> do
+    bracket (open queryAddr) close \querySocket -> do
+      slotConfig <- querySlotConfig querySocket
+      let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
+      let
+        connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+        connectToChainSeek client = fst <$> runPeerWithDriver driver peer (startDState driver)
+          where peer = chainSeekClientPeer Genesis client
+      let getMarloweVersion = Core.getMarloweVersion
+      Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
+      Left result <- race runFollower (logChanges contractId changes)
+      case result of
+        Left err -> hPrint stderr err
+        Right () -> pure ()
   where
     open addr = bracketOnError (openSocket addr) close \sock -> do
       connect sock $ addrAddress addr
       pure sock
+
+    querySlotConfig socket = do
+      let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
+      let client = liftQuery GetSlotConfig
+      let peer = queryClientPeer client
+      result <- fst <$> runPeerWithDriver driver peer (startDState driver)
+      pure $ fromRight (error "failed to query slot config from chain seek server") result
 
 logChanges :: ContractId -> STM (Maybe SomeContractChanges) -> IO Void
 logChanges contractId readChanges = forever do
@@ -136,6 +150,7 @@ logStep version contractId BlockHeader{..} step = do
 
 data Options = Options
   { port       :: PortNumber
+  , queryPort  :: PortNumber
   , host       :: HostName
   , contractId :: ContractId
   }
@@ -143,7 +158,7 @@ data Options = Options
 getOptions :: IO Options
 getOptions = execParser $ info parser infoMod
   where
-    parser = Options <$> portParser <*> hostParser <*> contractIdParser
+    parser = Options <$> portParser <*> queryPortParser <*> hostParser <*> contractIdParser
 
     portParser = option auto $ mconcat
       [ long "port-number"
@@ -151,6 +166,14 @@ getOptions = execParser $ info parser infoMod
       , value 3715
       , metavar "PORT_NUMBER"
       , help "The port number of the chain seek server"
+      ]
+
+    queryPortParser = option auto $ mconcat
+      [ long "query-port-number"
+      , short 'p'
+      , value 3716
+      , metavar "PORT_NUMBER"
+      , help "The query port number of the chain seek server"
       ]
 
     hostParser = strOption $ mconcat
