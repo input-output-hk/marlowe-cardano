@@ -403,6 +403,10 @@ data Move err result where
   -- consumes the tx out.
   FindConsumingTx :: TxOutRef -> Move UTxOError Transaction
 
+  -- | Advance to the block when a tx out is consumed and collect the tx that
+  -- consumes the tx out.
+  FindConsumingTxs :: Set TxOutRef -> Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
+
   -- | Advance to the block containing a transaction.
   FindTx :: TxId -> Move TxError Transaction
 
@@ -451,14 +455,16 @@ instance Query Move where
     TagIntersect :: Tag Move IntersectError ()
     TagFindConsumingTx :: Tag Move UTxOError Transaction
     TagFindTx :: Tag Move TxError Transaction
+    TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
 
   tagFromQuery = \case
-    Fork m1 m2        -> TagFork (tagFromQuery m1) (tagFromQuery m2)
-    AdvanceSlots _    -> TagAdvanceSlots
-    AdvanceBlocks _   -> TagAdvanceBlocks
-    Intersect _       -> TagIntersect
-    FindConsumingTx _ -> TagFindConsumingTx
-    FindTx _          -> TagFindTx
+    Fork m1 m2         -> TagFork (tagFromQuery m1) (tagFromQuery m2)
+    AdvanceSlots _     -> TagAdvanceSlots
+    AdvanceBlocks _    -> TagAdvanceBlocks
+    Intersect _        -> TagIntersect
+    FindConsumingTx _  -> TagFindConsumingTx
+    FindTx _           -> TagFindTx
+    FindConsumingTxs _ -> TagFindConsumingTxs
 
   tagEq = curry \case
     (TagFork m1 m2, TagFork m3 m4)           ->
@@ -479,6 +485,8 @@ instance Query Move where
     (TagFindConsumingTx, _)                  -> Nothing
     (TagFindTx, TagFindTx)                   -> Just Refl
     (TagFindTx, _)                           -> Nothing
+    (TagFindConsumingTxs, TagFindConsumingTxs) -> Just Refl
+    (TagFindConsumingTxs, _)                  -> Nothing
 
   putTag = \case
     TagFork t1 t2 -> do
@@ -490,6 +498,7 @@ instance Query Move where
     TagFindConsumingTx -> putWord8 0x04
     TagIntersect -> putWord8 0x05
     TagFindTx -> putWord8 0x06
+    TagFindConsumingTxs -> putWord8 0x07
 
   putQuery = \case
     Fork m1 m2 -> do
@@ -500,6 +509,7 @@ instance Query Move where
     FindConsumingTx utxo -> put utxo
     Intersect points -> put points
     FindTx txId -> put txId
+    FindConsumingTxs utxos -> put utxos
 
   getTag = do
     tag <- getWord8
@@ -513,15 +523,17 @@ instance Query Move where
       0x04 -> pure $ SomeTag TagFindConsumingTx
       0x05 -> pure $ SomeTag TagIntersect
       0x06 -> pure $ SomeTag TagFindTx
+      0x07 -> pure $ SomeTag TagFindConsumingTxs
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case
-    TagFork t1 t2      -> Fork <$> getQuery t1 <*> getQuery t2
-    TagAdvanceSlots    -> AdvanceSlots <$> get
-    TagAdvanceBlocks   -> AdvanceBlocks <$> get
-    TagFindConsumingTx -> FindConsumingTx <$> get
-    TagIntersect       -> Intersect <$> get
-    TagFindTx          -> FindTx <$> get
+    TagFork t1 t2       -> Fork <$> getQuery t1 <*> getQuery t2
+    TagAdvanceSlots     -> AdvanceSlots <$> get
+    TagAdvanceBlocks    -> AdvanceBlocks <$> get
+    TagFindConsumingTx  -> FindConsumingTx <$> get
+    TagIntersect        -> Intersect <$> get
+    TagFindTx           -> FindTx <$> get
+    TagFindConsumingTxs -> FindConsumingTxs <$> get
 
   putResult = \case
     TagFork t1 t2 -> \case
@@ -540,6 +552,7 @@ instance Query Move where
     TagFindConsumingTx -> put
     TagFindTx -> put
     TagIntersect -> mempty
+    TagFindConsumingTxs -> put
 
   getResult = \case
     TagFork t1 t2    -> do
@@ -554,6 +567,7 @@ instance Query Move where
     TagFindConsumingTx -> get
     TagFindTx -> get
     TagIntersect -> get
+    TagFindConsumingTxs -> get
 
   putErr = \case
     TagFork t1 t2 -> \case
@@ -572,6 +586,7 @@ instance Query Move where
     TagFindConsumingTx -> put
     TagFindTx -> put
     TagIntersect -> put
+    TagFindConsumingTxs -> put
 
   getErr = \case
     TagFork t1 t2    -> do
@@ -586,6 +601,7 @@ instance Query Move where
     TagFindConsumingTx -> get
     TagFindTx -> get
     TagIntersect -> get
+    TagFindConsumingTxs -> get
 
 schemaVersion1_0 :: SchemaVersion
 schemaVersion1_0 = SchemaVersion "marlowe-chain-sync-1.0"
