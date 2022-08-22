@@ -16,6 +16,7 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Foldable (asum, find, for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
@@ -208,13 +209,23 @@ data FollowerState v = FollowerState
   }
 
 exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-exctractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs} = do
+exctractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs, validityRange} = do
   Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   scriptHash <- getScriptHash scriptAddress
-  for_ inputs \Chain.TransactionInput{..} ->
-    when (isScriptAddress scriptHash address) $ Left NotCreationTransaction
   SomeMarloweVersion version <- note InvalidScriptHash $ getMarloweVersion scriptHash
+  let
+    wouldCloseContract' mdatum' mredeemer = fromMaybe False do
+      datum <- fromChainDatum version =<< mdatum'
+      redeemer <- fromChainRedeemer version =<< mredeemer
+      (minSlot, maxSlot) <- case validityRange of
+        Chain.MinMaxBound minSlot maxSlot -> Just (minSlot, maxSlot)
+        _                                 -> Nothing
+      let validityLowerBound = slotToUTCTime slotConfig minSlot
+      let validityUpperBound = slotToUTCTime slotConfig maxSlot
+      pure $ wouldCloseContract version validityLowerBound validityUpperBound redeemer datum
+  for_ inputs \Chain.TransactionInput{..} ->
+    when (isScriptAddress scriptHash address && not (wouldCloseContract' datumBytes redeemer)) $ Left NotCreationTransaction
   txDatum <- note NoCreateDatum mdatum
   datum <- note InvalidCreateDatum $ fromChainDatum version txDatum
   pure $ SomeCreateStep version CreateStep{..}

@@ -398,6 +398,7 @@ queryTxIns slotNo txInId = HT.statement (Api.unTxId txInId, fromIntegral slotNo)
     SELECT txIn.txOutId :: bytea
          , txIn.txOutIx :: smallint
          , txOut.address :: bytea
+         , txOut.datumBytes :: bytea?
          , txIn.redeemerDatumBytes :: bytea?
       FROM chain.txIn  as txIn
       JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
@@ -405,10 +406,11 @@ queryTxIns slotNo txInId = HT.statement (Api.unTxId txInId, fromIntegral slotNo)
   |] (Fold.foldMap (Set.singleton . decodeTxIn) id)
   where
     decodeTxIn :: ReadTxInRow -> Api.TransactionInput
-    decodeTxIn (txId, txIx, address, redeemerDatumBytes) = Api.TransactionInput
+    decodeTxIn (txId, txIx, address, datumBytes, redeemerDatumBytes) = Api.TransactionInput
       { txId = Api.TxId txId
       , txIx = fromIntegral txIx
       , address = Api.Address address
+      , datumBytes = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
       , redeemer = Api.Redeemer . Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
       }
 
@@ -476,6 +478,7 @@ type ReadTxInRow =
   ( ByteString       -- TxIn's TxId
   , Int16            -- TxIn's TxIx
   , ByteString       -- TxIn's Address
+  , Maybe ByteString -- TxIn's datumBytes
   , Maybe ByteString -- TxIn's redeemerDatumBytes
   )
 

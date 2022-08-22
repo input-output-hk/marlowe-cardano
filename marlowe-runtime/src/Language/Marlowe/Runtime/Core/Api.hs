@@ -24,7 +24,7 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ScriptHash, TokenName (..), TxId (..), TxIx (..),
-                                               TxOutRef (..), ValidityRange)
+                                               TxOutRef (..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Text.Read (readMaybe)
 
