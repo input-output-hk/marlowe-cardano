@@ -1,8 +1,5 @@
 
-{-# LANGUAGE LambdaCase      #-}
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 
 module Spec.Marlowe.Semantics.Functions (
@@ -11,12 +8,11 @@ module Spec.Marlowe.Semantics.Functions (
 
 
 import Data.Maybe (fromMaybe, isNothing)
-import Debug.Trace
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.FindInputs
 import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
+import Plutus.V1.Ledger.Api (POSIXTime (..), toBuiltinData)
 import Spec.Marlowe.Semantics.Arbitrary
 import Spec.Marlowe.Semantics.AssocMap
 import Spec.Marlowe.Semantics.Orphans ()
@@ -106,7 +102,7 @@ tests =
         testProperty "No accounts"         $ checkRefundOne (== 0)
       , testProperty "One account"         $ checkRefundOne (== 1)
       , testProperty "Multiple accounts"   $ checkRefundOne (>= 2)
-      , testProperty "Nonpositive account" $ checkRefundOneNotPositive
+      , testProperty "Nonpositive account"   checkRefundOneNotPositive
       ]
     , testProperty "moneyInAccount" checkMoneyInAccount
     , testProperty "updateMoneyInAccount" checkUpdateMoneyInAccount
@@ -157,7 +153,7 @@ forAll' :: Arbitrary a
         => Gen a
         -> (a -> prop)
         -> Property
-forAll' x y = forAllShrink x shrink y
+forAll' = flip forAllShrink shrink
 
 
 checkFixInterval :: Bool -> Bool -> Property
@@ -492,11 +488,11 @@ checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property 
       newState = state {accounts = AM.insert (account, token) amount' $ accounts state}
     in
       case applyAction environment state (IDeposit account party token amount) action of
-        NotAppliedAction                                                              -> not match
-        AppliedAction ApplyNoWarning state'                                           -> match && amount >  0 && newState == state'
-        AppliedAction (ApplyNonPositiveDeposit party' account' token' amount') state' -> match && amount <= 0 && state    == state'
-                                                                                           && party == party' && account == account'
-                                                                                           && token == token' && amount  == amount'
+        NotAppliedAction                                                               -> not match
+        AppliedAction ApplyNoWarning state'                                            -> match && amount >  0 && newState == state'
+        AppliedAction (ApplyNonPositiveDeposit party' account' token' amount'') state' -> match && amount <= 0 && state    == state'
+                                                                                            && party == party' && account == account'
+                                                                                            && token == token' && amount  == amount''
 
 
 checkIChoice :: Maybe Bool -> Maybe Bool -> Property

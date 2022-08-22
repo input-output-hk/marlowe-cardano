@@ -1,13 +1,12 @@
 
 {-# LANGUAGE ConstraintKinds  #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns   #-}
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE RecordWildCards  #-}
-{-# LANGUAGE TupleSections    #-}
 
-{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# OPTIONS_GHC -fno-warn-orphans               #-}
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
+{-# OPTIONS_GHC -fno-warn-unused-top-binds      #-}
 
 
 module Spec.Marlowe.Semantics.Compute (
@@ -16,14 +15,12 @@ module Spec.Marlowe.Semantics.Compute (
 
 
 import Control.Applicative
-import Control.Arrow ((&&&))
 import Control.Lens.Getter
 import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Default (Default (..))
 import Data.Function (on)
 import Data.List (sort)
-import Data.Maybe (fromMaybe)
 import Data.Tuple (swap)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -101,14 +98,14 @@ arbitraryValid :: Gen MarloweContext
 arbitraryValid =
     do
       mcContract <- arbitrary `suchThat` (/= Close)
-      (time, inputs) <-
+      (time, inputs') <-
         case unsafePerformIO $ getAllInputs mcContract of
           Right candidates -> elements candidates
           Left _           -> discard
       let
         -- FIXME: Generalize to arbitrary starting state.
         mcState = State AM.empty AM.empty AM.empty time
-        mcInput = head inputs
+        mcInput = head inputs'
         mcOutput = computeTransaction mcInput mcState mcContract
       pure MarloweContext{..}
 
@@ -244,12 +241,23 @@ data Invariant =
   | SameContract
 
 
-sameState    = pure SameState    :: [Invariant]
-sameAccounts = pure SameAccounts :: [Invariant]
-sameChoices  = pure SameChoices  :: [Invariant]
-sameValues   = pure SameValues   :: [Invariant]
-sameTime     = pure SameTime     :: [Invariant]
-sameContract = pure SameContract :: [Invariant]
+sameState    :: [Invariant]
+sameState    = pure SameState
+
+sameAccounts :: [Invariant]
+sameAccounts = pure SameAccounts
+
+sameChoices  :: [Invariant]
+sameChoices  = pure SameChoices
+
+sameValues   :: [Invariant]
+sameValues   = pure SameValues
+
+sameTime     :: [Invariant]
+sameTime     = pure SameTime
+
+sameContract :: [Invariant]
+sameContract = pure SameContract
 
 
 same :: Eq a
@@ -563,10 +571,10 @@ requireIncompatibleInput =
     requireInputs (> 0)
     input <- getInputContent . head <$> view inputs
     (cs, _, _) <- unWhen =<< view preContract
-    let matches (IDeposit _ _ _ _) (Deposit _ _ _ _) = True
-        matches (IChoice _ _     ) (Choice _ _     ) = True
-        matches  INotify           (Notify _       ) = True
-        matches  _                  _                = False
+    let matches IDeposit{} Deposit{}  = True
+        matches IChoice{}  Choice{}   = True
+        matches INotify{}  Notify{}   = True
+        matches  _                  _ = False
     any (matches input . getAction) cs
       `when` throwError "Input may be compatible with action."
 
@@ -617,23 +625,23 @@ extractAssert =
     observation' <- observe observation
     pure
       (
-        if observation'
-          then []
-          else [TransactionAssertionFailed]
+        [TransactionAssertionFailed | not observation']
       , continuation
       )
 
 
 checkValues :: AM.Map ValueId Integer -> Testify ()
 checkValues expected =
-  (expected `assocMapEq`) <$> view postValues
+   view postValues
     >>= (`unless` throwError "Mismatch in expected bound values.")
+    . (expected `assocMapEq`)
 
 
 checkContinuation :: Contract -> Testify ()
 checkContinuation expected =
-  (expected ==) <$> view postContract
+  view postContract
     >>= (`unless` throwError "Mismatch in expected contract.")
+    . (== expected)
 
 
 letSets :: TransactionTest
@@ -648,8 +656,8 @@ letSets =
                       ((variable, value), shadowing, continuation) <- extractLet
                       expected <- assocMapInsert variable value <$> view preValues
                       checkValues expected
-                      (shadowing ==) <$> view warnings
-                        >>= (`unless` throwError "Erroneous shadowing warning.")
+                      view warnings
+                        >>= (`unless` throwError "Erroneous shadowing warning.") . (== shadowing)
                       checkContinuation continuation
   }
 
@@ -676,8 +684,8 @@ assertWarns =
   , invariant     = sameState
   , postcondition = do
                       (failing, continuation) <- extractAssert
-                      (failing ==) <$> view warnings
-                        >>= (`unless` throwError "Erroneous assertion warning.")
+                      view warnings
+                        >>= (`unless` throwError "Erroneous assertion warning.") . (failing ==)
                       checkContinuation continuation
   }
 

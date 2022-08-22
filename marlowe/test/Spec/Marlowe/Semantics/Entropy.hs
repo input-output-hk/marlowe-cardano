@@ -1,20 +1,12 @@
 
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TupleSections  #-}
-
-
 module Spec.Marlowe.Semantics.Entropy (
   tests
 ) where
 
 
-import Data.Maybe (fromMaybe, isNothing)
-import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), PubKeyHash, TokenName, toBuiltinData)
+import Plutus.V1.Ledger.Api (CurrencySymbol, PubKeyHash, TokenName)
 import Spec.Marlowe.Semantics.Arbitrary
-import Spec.Marlowe.Semantics.AssocMap
 import Spec.Marlowe.Semantics.Orphans ()
 import Spec.Marlowe.Semantics.Util
 import Test.Tasty

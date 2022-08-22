@@ -1,7 +1,8 @@
 
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
 module Spec.Marlowe.Semantics.Golden (
@@ -16,10 +17,13 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.V1.Ledger.Api (POSIXTime (..))
 import Spec.Marlowe.Semantics.Golden.Pangram
-import Test.QuickCheck.Monadic
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
+
+
+-- | Set to `True` to print the paths through the pangram contract.
+_PRINT_PANGRAM_ :: Bool
+_PRINT_PANGRAM_ = False
 
 
 tests :: TestTree
@@ -27,11 +31,12 @@ tests =
   testGroup "Golden"
     [
       testGroup "Pangram"
-        [
-          testCase "Valid inputs"   testPangramValid
-        , testCase "Invalid inputs" testPangramInvalid
---      , testCase "Generate valid inputs" printPangram  -- Uncomment this to generate golden test cases.
-        ]
+        $ if _PRINT_PANGRAM_
+            then [testCase "Generate valid inputs" printPangram]
+            else [
+                   testCase "Valid inputs"   testPangramValid
+                 , testCase "Invalid inputs" testPangramInvalid
+                 ]
     ]
 
 

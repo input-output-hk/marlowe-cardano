@@ -2,6 +2,8 @@
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 
 module Spec.Marlowe.Semantics.Golden.Pangram (
   pangramValids

@@ -41,7 +41,6 @@ import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
                               vectorOf)
 
-import qualified Data.Map.Strict as M
 import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
@@ -501,7 +500,7 @@ instance Arbitrary (Value Observation) where
   shrink (ChoiceValue c)      = ChoiceValue <$> shrink c
   shrink (UseValue v)         = UseValue <$> shrink v
   shrink (Cond o x y)         = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
-  shrink x                    = []
+  shrink _                    = []
 
 instance SemiArbitrary (Value Observation) where
   semiArbitrary context =
@@ -547,7 +546,7 @@ instance Arbitrary Observation where
   shrink (ValueLT x y)      = [ValueLT x' y | x' <- shrink x] ++ [ValueLT x y' | y' <- shrink y]
   shrink (ValueLE x y)      = [ValueLE x' y | x' <- shrink x] ++ [ValueLE x y' | y' <- shrink y]
   shrink (ValueEQ x y)      = [ValueEQ x' y | x' <- shrink x] ++ [ValueEQ x y' | y' <- shrink y]
-  shrink x                  = []
+  shrink _                  = []
 
 instance SemiArbitrary Observation where
   semiArbitrary context =
@@ -671,7 +670,7 @@ instance Arbitrary Contract where
   shrink (When a t c) = [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
   shrink (Let v x c) = [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
   shrink (Assert o c) = [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
-  shrink c = []
+  shrink _ = []
 
 
 arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)] -> Context -> Gen Contract
@@ -797,7 +796,7 @@ instance Arbitrary InputContent where
   arbitrary = semiArbitrary =<< arbitrary
   shrink (IDeposit a p t x) = [IDeposit a' p t x | a' <- shrink a] ++ [IDeposit a p' t x | p' <- shrink p] ++ [IDeposit a p t' x | t' <- shrink t] ++ [IDeposit a p t x' | x' <- shrink x]
   shrink (IChoice c x) = [IChoice c' x | c' <- shrink c] ++ [IChoice c x' | x' <- shrink x]
-  shrink x = []
+  shrink _ = []
 
 instance SemiArbitrary InputContent where
   semiArbitrary context =
@@ -831,7 +830,7 @@ instance SemiArbitrary TransactionInput where
 
 
 arbitraryValidStep :: State -> Contract -> Gen TransactionInput
-arbitraryValidStep state@State{..} (When [] timeout _) =
+arbitraryValidStep _ (When [] timeout _) =
   TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
 arbitraryValidStep state@State{..} (When cases timeout _) =
   do
@@ -856,7 +855,7 @@ arbitraryValidStep State{minTime} contract =
     then let
            nextTimeout Close                                    = minTime
            nextTimeout (Pay _ _ _ _ continuation)               = nextTimeout continuation
-           nextTimeout (If o thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
+           nextTimeout (If _ thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
            nextTimeout (When _ timeout _)                       = timeout
            nextTimeout (Let _ _ continuation)                   = nextTimeout continuation
            nextTimeout (Assert _ continuation)                  = nextTimeout continuation
