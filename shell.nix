@@ -6,7 +6,7 @@ let
   inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
   inherit (dev-scripts) nix-flakes-alias start-cardano-node run-chainseekd;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
-  inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
+  inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
 
   set-xdg = ''
@@ -111,6 +111,7 @@ let
   defaultShell = haskell.project.shellFor {
     buildInputs = devToolsInputs ++ (with marlowe; [
       cabal-install
+      cardano-address
       cardano-cli
       cardano-node
       cardano-repo-tool
@@ -133,9 +134,9 @@ let
 
   develShells =
     let
-
       marloweCoreBuildInputs = devToolsInputs;
       marloweCliBuildInputs = devToolsInputs ++ [
+        cardano-address
         cardano-node
         cardano-cli
         start-cardano-node

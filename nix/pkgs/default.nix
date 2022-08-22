@@ -40,6 +40,7 @@ let
   # These are needed to pull the cardano-cli and cardano-node in the nix-shell.
   inherit (haskell.project.hsPkgs.cardano-cli.components.exes) cardano-cli;
   inherit (haskell.project.hsPkgs.cardano-node.components.exes) cardano-node;
+  inherit (haskell.project.hsPkgs.cardano-addresses-cli.components.exes) cardano-address;
 
   #
   # dev convenience scripts
@@ -111,7 +112,7 @@ in
 {
   inherit sphinx-markdown-tables sphinxemoji sphinxcontrib-haddock;
   inherit nix-pre-commit-hooks;
-  inherit haskell cabal-install cardano-repo-tool stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-cli cardano-node;
+  inherit haskell cabal-install cardano-repo-tool stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-address cardano-cli cardano-node;
   inherit fixStylishHaskell updateMaterialized writeShellScriptBinInRepoRoot;
   inherit plutus-haddock-combined;
   inherit lib;
