@@ -12,6 +12,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , BlockNo(..)
   , CertIx(..)
   , ChainPoint
+  , ChainSyncQuery(..)
   , Credential(..)
   , Datum(..)
   , DatumHash(..)
@@ -28,6 +29,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , RuntimeChainSeekCodec
   , RuntimeChainSeekServer
   , ScriptHash(..)
+  , SlotConfig(..)
   , SlotNo(..)
   , StakeReference(..)
   , TokenName(..)
@@ -51,6 +53,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , paymentCredential
   , runtimeChainSeekCodec
   , schemaVersion1_0
+  , slotToUTCTime
   , stakeReference
   , toBech32
   , toCardanoAddress
@@ -81,7 +84,10 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.These (These (..))
-import Data.Void (Void)
+import Data.Time (NominalDiffTime, UTCTime (..), addUTCTime, diffTimeToPicoseconds, nominalDiffTimeToSeconds,
+                  picosecondsToDiffTime, secondsToNominalDiffTime)
+import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
+import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
@@ -89,6 +95,7 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
+import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
 
@@ -252,6 +259,9 @@ data TxOutRef = TxOutRef
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+
+slotToUTCTime :: SlotConfig -> SlotNo -> UTCTime
+slotToUTCTime SlotConfig{..} slot = addUTCTime (slotLength * fromIntegral slot) slotZeroTime
 
 newtype BlockNo = BlockNo { unBlockNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
@@ -578,3 +588,61 @@ instance Query Move where
 
 schemaVersion1_0 :: SchemaVersion
 schemaVersion1_0 = SchemaVersion "marlowe-chain-sync-1.0"
+
+data SlotConfig = SlotConfig
+  { slotZeroTime :: UTCTime
+  , slotLength   :: NominalDiffTime
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+
+instance Binary SlotConfig where
+  put SlotConfig{..} = do
+    let UTCTime{..} = slotZeroTime
+    let (year, dayOfYear) = toOrdinalDate utctDay
+    put year
+    put dayOfYear
+    put $ diffTimeToPicoseconds utctDayTime
+    put $ nominalDiffTimeToSeconds slotLength
+  get = do
+    year <- get
+    dayOfYear <- get
+    utctDayTime <- picosecondsToDiffTime <$> get
+    slotLength <- secondsToNominalDiffTime <$> get
+    utctDay <- case fromOrdinalDateValid year dayOfYear of
+      Nothing -> fail "Invalid ISO 8601 ordinal date"
+      Just a  -> pure a
+    let slotZeroTime = UTCTime{..}
+    pure SlotConfig{..}
+
+data ChainSyncQuery delimiter err result where
+  GetSlotConfig :: ChainSyncQuery Void () SlotConfig
+
+instance Query.IsQuery ChainSyncQuery where
+  data Tag ChainSyncQuery delimiter err result where
+    TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
+  tagEq TagGetSlotConfig TagGetSlotConfig = Just Query.Refl
+  putTag = \case
+    TagGetSlotConfig -> putWord8 0x01
+  getTag = do
+    word <- getWord8
+    case word of
+      0x01 -> pure $ Query.SomeTag TagGetSlotConfig
+      _    -> fail "Invalid ChainSyncQuery tag"
+  putQuery = \case
+    GetSlotConfig -> mempty
+  getQuery = \case
+    TagGetSlotConfig -> pure GetSlotConfig
+  putDelimiter = \case
+    TagGetSlotConfig -> absurd
+  getDelimiter = \case
+    TagGetSlotConfig -> fail "no delimiter defined"
+  putErr = \case
+    TagGetSlotConfig -> put
+  getErr = \case
+    TagGetSlotConfig -> get
+  putResult = \case
+    TagGetSlotConfig -> put
+  getResult = \case
+    TagGetSlotConfig -> get
+  tagFromQuery = \case
+    GetSlotConfig -> TagGetSlotConfig

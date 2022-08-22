@@ -61,6 +61,7 @@ library
     Language.Marlowe.Runtime.ChainSync.Genesis
     Language.Marlowe.Runtime.ChainSync.NodeClient
     Language.Marlowe.Runtime.ChainSync.Server
+    Language.Marlowe.Runtime.ChainSync.QueryServer
     Language.Marlowe.Runtime.ChainSync.Store
     Language.Marlowe.Runtime.ChainSync.Api
   other-modules:
@@ -129,6 +130,7 @@ executable chainseekd
     , text
     , time
     , transformers
+    , typed-protocols
 
 executable example-client
   import: lang

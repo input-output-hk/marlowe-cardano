@@ -7,6 +7,7 @@ module Language.Marlowe.Runtime.ChainSync
   ) where
 
 import Cardano.Api (CardanoMode, LocalNodeClientProtocolsInMode)
+import qualified Cardano.Api as Cardano
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.STM (STM)
 import Control.Monad (unless)
@@ -15,17 +16,26 @@ import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient (..), NodeClientDependencies (..), mkNodeClient)
+import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServer (..), ChainSyncQueryServerDependencies (..),
+                                                       RunQueryServer, mkChainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServer (..), ChainSyncServerDependencies (..),
                                                   mkChainSyncServer)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), mkChainStore)
 import Network.Channel (Channel)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
 data ChainSyncDependencies = ChainSyncDependencies
-  { connectToLocalNode :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
-  , databaseQueries    :: !(DatabaseQueries IO)
-  , persistRateLimit   :: !NominalDiffTime
-  , genesisBlock       :: !GenesisBlock
-  , acceptChannel      :: IO (Channel IO LBS.ByteString, IO ())
+  { connectToLocalNode   :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
+  , databaseQueries      :: !(DatabaseQueries IO)
+  , persistRateLimit     :: !NominalDiffTime
+  , genesisBlock         :: !GenesisBlock
+  , acceptChannel        :: IO (Channel IO LBS.ByteString, IO ())
+  , acceptRunQueryServer :: IO (RunQueryServer IO)
+  , queryLocalNodeState
+      :: forall result
+       . Maybe Cardano.ChainPoint
+      -> Cardano.QueryInMode CardanoMode result
+      -> IO (Either AcquireFailure result)
   }
 
 newtype ChainSync = ChainSync { runChainSync :: IO () }
@@ -37,6 +47,7 @@ mkChainSync ChainSyncDependencies{..} = do
   let rateLimit = persistRateLimit
   ChainStore{..} <- mkChainStore ChainStoreDependencies{..}
   ChainSyncServer{..} <- mkChainSyncServer ChainSyncServerDependencies{..}
+  ChainSyncQueryServer{..} <- mkChainSyncQueryServer ChainSyncQueryServerDependencies{..}
   pure $ ChainSync do
     mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
     case mDbGenesisBlock of
@@ -47,3 +58,4 @@ mkChainSync ChainSyncDependencies{..} = do
     runNodeClient
       `concurrently_` runChainStore
       `concurrently_` runChainSyncServer
+      `concurrently_` runChainSyncQueryServer
