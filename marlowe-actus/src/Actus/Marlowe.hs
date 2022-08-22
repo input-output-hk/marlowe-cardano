@@ -144,8 +144,8 @@ hasRiskFactor cf = hasRiskFactor' (amount cf)
     hasRiskFactor' (ConstantParam _) = False
     hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
 
-defaultRiskFactors :: EventType -> LocalTime -> RiskFactors Value
-defaultRiskFactors ev t =
+defaultRiskFactors :: String -> EventType -> LocalTime -> RiskFactors Value
+defaultRiskFactors _ ev t =
   let choiceId = ChoiceId (stringToBuiltinByteString $ show ev <> show t) (Role "RiskFactor")
       value = ChoiceValue choiceId
   in mkRiskFactor ev value
