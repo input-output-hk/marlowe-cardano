@@ -21,6 +21,7 @@ import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString, unsafeDeserialize')
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
+import Control.Arrow ((&&&))
 import Control.Foldl (Fold (Fold))
 import qualified Control.Foldl as Fold
 import Data.ByteString (ByteString)
@@ -30,8 +31,11 @@ import Data.ByteString.Short (fromShort, toShort)
 import Data.Int (Int16, Int64)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Monoid (Sum (..))
 import Data.Profunctor (rmap)
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -197,12 +201,13 @@ data PerformMoveResult err result
 
 performMove :: Api.Move err result -> Api.ChainPoint -> Transaction (PerformMoveResult err result)
 performMove = \case
-  Api.Fork left right          -> performFork left right
-  Api.AdvanceSlots slots       -> performAdvanceSlots slots
-  Api.AdvanceBlocks blocks     -> performAdvanceBlocks blocks
-  Api.FindConsumingTx txOutRef -> performFindConsumingTx txOutRef
-  Api.FindTx txId              -> performFindTx txId
-  Api.Intersect points         -> performIntersect points
+  Api.Fork left right           -> performFork left right
+  Api.AdvanceSlots slots        -> performAdvanceSlots slots
+  Api.AdvanceBlocks blocks      -> performAdvanceBlocks blocks
+  Api.FindConsumingTx txOutRef  -> performFindConsumingTx txOutRef
+  Api.FindTx txId               -> performFindTx txId
+  Api.Intersect points          -> performIntersect points
+  Api.FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
 
 performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
 performFork left right point = do
@@ -318,6 +323,29 @@ performFindConsumingTx Api.TxOutRef{..} point = do
           , mintedTokens = decodeTokens policyId tokenName quantity
           }
     readFirstTxRow _ = MoveWait
+
+performFindConsumingTxs :: Set Api.TxOutRef -> Api.ChainPoint -> Transaction (PerformMoveResult (Map Api.TxOutRef Api.UTxOError) (Map Api.TxOutRef Api.Transaction))
+performFindConsumingTxs utxos point = do
+  results <- traverse (flip performFindConsumingTx point) $ Map.fromList $ (id &&& id) <$> Set.toList utxos
+  let (aborts, Sum waits, arrives) = partitionResults results
+  pure if Map.null aborts
+    then case Map.foldrWithKey foldMinBlockTxs Nothing arrives of
+      Nothing
+        | waits > 0 -> MoveWait
+        | otherwise -> MoveAbort Map.empty
+      Just (blockHeader, txs) -> MoveArrive blockHeader txs
+    else MoveAbort aborts
+  where
+    foldMinBlockTxs utxo (header, tx) Nothing = Just (header, Map.singleton utxo tx)
+    foldMinBlockTxs utxo (header', tx) (Just (header, txs)) = Just case compare header' header of
+      LT -> (header', Map.singleton utxo tx)
+      EQ -> (header, Map.insert utxo tx txs)
+      GT -> (header, txs)
+
+    partitionResults = Map.foldMapWithKey \utxo -> \case
+      MoveArrive header tx -> (mempty, mempty, Map.singleton utxo (header, tx))
+      MoveWait             -> (mempty, 1 :: Sum Int, mempty)
+      MoveAbort err        -> (Map.singleton utxo err, mempty, mempty)
 
 performFindTx :: Api.TxId -> Api.ChainPoint -> Transaction (PerformMoveResult Api.TxError Api.Transaction)
 performFindTx txId point = do
