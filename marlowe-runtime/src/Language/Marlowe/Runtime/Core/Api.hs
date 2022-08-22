@@ -19,6 +19,7 @@ import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import Data.Time (UTCTime)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -80,12 +81,13 @@ instance IsMarloweVersion 'V1 where
   marloweVersion = MarloweV1
 
 data Transaction v = Transaction
-  { transactionId :: TxId
-  , contractId    :: ContractId
-  , blockHeader   :: BlockHeader
-  , validityRange :: ValidityRange
-  , redeemer      :: Redeemer v
-  , output        :: TransactionOutput v
+  { transactionId      :: TxId
+  , contractId         :: ContractId
+  , blockHeader        :: BlockHeader
+  , validityLowerBound :: UTCTime
+  , validityUpperBound :: UTCTime
+  , redeemer           :: Redeemer v
+  , output             :: TransactionOutput v
   }
 
 deriving instance Show (Transaction 'V1)
@@ -296,6 +298,3 @@ getMarloweVersion hash
 
 getScriptHashes :: MarloweVersion v -> Set ScriptHash
 getScriptHashes = mempty
-
-getRoleValidatorHashes :: MarloweVersion v -> Set ScriptHash
-getRoleValidatorHashes = mempty

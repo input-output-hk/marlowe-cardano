@@ -81,6 +81,7 @@ library
     , split
     , stm
     , text
+    , time
     , transformers
     , typed-protocols
     , witherable
@@ -142,5 +143,6 @@ test-suite marlowe-runtime-test
     , marlowe-runtime
     , plutus-tx
     , stm
+    , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover
