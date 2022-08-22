@@ -12,13 +12,18 @@ module Spec.Marlowe.Semantics.Golden (
 
 
 import Data.List (intercalate)
-import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics (Payment (..), TransactionOutput (Error, TransactionOutput), playTrace)
+import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit, Notify), Bound (Bound), Case (Case),
+                                                 ChoiceId (ChoiceId), Contract (..),
+                                                 Observation (AndObs, ChoseSomething, FalseObs, NotObs, OrObs, ValueEQ, ValueGE, ValueGT, ValueLE, ValueLT),
+                                                 Party (PK, Role), Payee (Account, Party), Token (Token),
+                                                 Value (AddValue, AvailableMoney, ChoiceValue, Cond, Constant, DivValue, MulValue, NegValue, SubValue, TimeIntervalEnd, TimeIntervalStart, UseValue),
+                                                 ValueId (ValueId))
 import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.V1.Ledger.Api (POSIXTime (..))
-import Spec.Marlowe.Semantics.Golden.Pangram
-import Test.Tasty
-import Test.Tasty.HUnit
+import Spec.Marlowe.Semantics.Golden.Pangram (pangramInvalids, pangramValids)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (assertBool, testCase)
 
 
 -- | Set to `True` to print the paths through the pangram contract.

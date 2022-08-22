@@ -4,7 +4,7 @@ module Spec.Marlowe.Semantics (
 ) where
 
 
-import Test.Tasty
+import Test.Tasty (TestTree, testGroup)
 
 import qualified Spec.Marlowe.Semantics.Compute (tests)
 import qualified Spec.Marlowe.Semantics.Entropy (tests)

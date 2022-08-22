@@ -8,19 +8,39 @@ module Spec.Marlowe.Semantics.Functions (
 
 
 import Data.Maybe (fromMaybe, isNothing)
-import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.FindInputs
+import Language.Marlowe.Core.V1.Semantics (ApplyAction (AppliedAction, NotAppliedAction),
+                                           ApplyResult (Applied, ApplyNoMatchError),
+                                           ApplyWarning (ApplyNoWarning, ApplyNonPositiveDeposit), Payment (Payment),
+                                           ReduceEffect (ReduceNoPayment, ReduceWithPayment),
+                                           ReduceResult (ContractQuiescent, RRAmbiguousTimeIntervalError),
+                                           ReduceStepResult (NotReduced, Reduced),
+                                           ReduceWarning (ReduceAssertionFailed, ReduceNoWarning, ReduceNonPositivePay, ReducePartialPay, ReduceShadowing),
+                                           TransactionInput (TransactionInput), TransactionOutput (TransactionOutput),
+                                           addMoneyToAccount, applyAction, applyCases, applyInput, evalObservation,
+                                           evalValue, fixInterval, getContinuation, giveMoney, isClose, moneyInAccount,
+                                           playTrace, reduceContractStep, reduceContractUntilQuiescent, refundOne,
+                                           updateMoneyInAccount)
+import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit, Notify), Bound (..),
+                                                 Case (Case, MerkleizedCase), ChosenNum,
+                                                 Contract (Assert, Close, If, Let, Pay, When), Environment (..),
+                                                 Input (MerkleizedInput, NormalInput),
+                                                 InputContent (IChoice, IDeposit, INotify),
+                                                 IntervalError (IntervalInPastError, InvalidInterval),
+                                                 IntervalResult (IntervalError, IntervalTrimmed), Observation (..),
+                                                 Payee (Account, Party), State (..), Value (..))
+import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (POSIXTime (..), toBuiltinData)
-import Spec.Marlowe.Semantics.Arbitrary
-import Spec.Marlowe.Semantics.AssocMap
+import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary (semiArbitrary), arbitraryAssocMap, arbitraryContractWeighted,
+                                         arbitraryValidInputs, arbitraryValidStep, whenContractWeights)
+import Spec.Marlowe.Semantics.AssocMap (assocMapAdd, assocMapEq, assocMapInsert)
 import Spec.Marlowe.Semantics.Orphans ()
-import Spec.Marlowe.Semantics.Util
-import Test.QuickCheck.Monadic
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
+import Spec.Marlowe.Semantics.Util (flattenMoney, stateEq, truncatedDivide)
+import Test.QuickCheck.Monadic (monadicIO, pick, run)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (Assertion, assertBool, testCase)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, Testable (property), chooseInt, chooseInteger, elements,
+                              forAll, forAllShrink, listOf, suchThat, testProperty)
 
 import qualified PlutusTx.AssocMap as AM
 

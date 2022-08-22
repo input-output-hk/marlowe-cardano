@@ -14,7 +14,7 @@ import Data.Bifunctor (bimap)
 import Data.Function (on)
 import Data.List (groupBy, nub, sortBy)
 
-import qualified PlutusTx.AssocMap as AM
+import qualified PlutusTx.AssocMap as AM (Map, fromList, toList)
 
 
 assocMapValid :: Eq k => AM.Map k v -> AM.Map k v

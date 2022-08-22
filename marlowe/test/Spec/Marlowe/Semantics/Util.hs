@@ -13,9 +13,9 @@ module Spec.Marlowe.Semantics.Util (
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (group, sort)
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types (Money, State (..), Token (..))
 import Plutus.V1.Ledger.Value (flattenValue)
-import Spec.Marlowe.Semantics.AssocMap
+import Spec.Marlowe.Semantics.AssocMap (assocMapSort)
 import Test.Tasty.HUnit (Assertion, assertBool)
 import Test.Tasty.QuickCheck (Gen, generate)
 

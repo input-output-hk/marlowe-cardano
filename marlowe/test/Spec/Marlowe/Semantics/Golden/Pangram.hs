@@ -12,8 +12,13 @@ module Spec.Marlowe.Semantics.Golden.Pangram (
 
 
 import Data.String (IsString (..))
-import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics (Payment (Payment), TransactionInput (..),
+                                           TransactionOutput (TransactionOutput, txOutContract, txOutPayments, txOutState, txOutWarnings),
+                                           TransactionWarning (TransactionNonPositiveDeposit, TransactionNonPositivePay, TransactionPartialPay, TransactionShadowing))
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (ChoiceId), Contract (Close), Input (NormalInput),
+                                                 InputContent (IChoice, IDeposit, INotify), Party (PK, Role),
+                                                 Payee (Party), State (State, accounts, boundValues, choices, minTime),
+                                                 Token (Token))
 import Plutus.V1.Ledger.Api (POSIXTime (..), Value (..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)

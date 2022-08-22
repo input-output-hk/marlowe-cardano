@@ -4,14 +4,14 @@ module Spec.Marlowe.Semantics.Entropy (
 ) where
 
 
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types (Accounts, ChoiceId, ChosenNum, Party, Token, ValueId)
 import Plutus.V1.Ledger.Api (CurrencySymbol, PubKeyHash, TokenName)
-import Spec.Marlowe.Semantics.Arbitrary
+import Spec.Marlowe.Semantics.Arbitrary (arbitraryChoiceName)
 import Spec.Marlowe.Semantics.Orphans ()
-import Spec.Marlowe.Semantics.Util
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
+import Spec.Marlowe.Semantics.Util (checkEntropy)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
+import Test.Tasty.QuickCheck (Arbitrary (arbitrary), Gen)
 
 import qualified PlutusTx.AssocMap as AM
 
