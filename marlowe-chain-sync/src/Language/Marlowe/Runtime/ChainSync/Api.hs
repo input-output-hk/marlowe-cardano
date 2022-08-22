@@ -148,10 +148,11 @@ data Metadata
 
 -- | An input of a transaction.
 data TransactionInput = TransactionInput
-  { txId     :: !TxId             -- ^ The txId of the TransactionOutput this input consumes.
-  , txIx     :: !TxIx             -- ^ The txIx of the TransactionOutput this input consumes.
-  , address  :: !Address          -- ^ The address of the TransactionOutput this input consumes.
-  , redeemer :: !(Maybe Redeemer) -- ^ The script redeemer dataum for this input (if one was provided).
+  { txId       :: !TxId             -- ^ The txId of the TransactionOutput this input consumes.
+  , txIx       :: !TxIx             -- ^ The txIx of the TransactionOutput this input consumes.
+  , address    :: !Address          -- ^ The address of the TransactionOutput this input consumes.
+  , datumBytes :: !(Maybe Datum)    -- ^ The script datum for this input
+  , redeemer   :: !(Maybe Redeemer) -- ^ The script redeemer dataum for this input (if one was provided).
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)

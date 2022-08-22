@@ -50,6 +50,7 @@ spec = do
   it "terminates with InvalidCreateDatum" checkInvalidCreateDatum
   it "terminates with NotCreationTransaction" checkNotCreationTransaction
   it "discovers a contract creation" checkCreation
+  it "discovers a contract creation in the same tx as a previous close" checkCreationWithClose
   it "terminates with FollowScriptUTxOFailed" checkFollowScriptUTxOFailed
   it "terminates with TxInNotFound" checkTxInNotFound
   it "terminates with NoRedeemer" checkNoRedeemer
@@ -132,7 +133,7 @@ closeTxIn =
   let
     redeemer = Just $ Chain.Redeemer $ toDatum closeRedeemer
   in
-    Chain.TransactionInput createTxId 0 testScriptAddress redeemer
+    Chain.TransactionInput createTxId 0 testScriptAddress (Just $ toDatum createDatum) redeemer
 
 closeRedeemer :: [V1.Input]
 closeRedeemer = [ V1.NormalInput V1.INotify ]
@@ -160,7 +161,7 @@ applyInputsTxIn =
   let
     redeemer = Just $ Chain.Redeemer $ toDatum applyInputsRedeemer
   in
-    Chain.TransactionInput createTxId 0 testScriptAddress redeemer
+    Chain.TransactionInput createTxId 0 testScriptAddress (Just $ toDatum createDatum) redeemer
 
 applyInputsTxId :: TxId
 applyInputsTxId = "0000000000000000000000000000000000000000000000000000000000000001"
@@ -286,6 +287,7 @@ checkNotCreationTransaction = do
   let txIx = 0
   let address = testScriptAddress
   let redeemer = Nothing
+  let datumBytes = Nothing
   let txIn = Chain.TransactionInput {..}
   FollowerTestResult{..} <- runFollowerTest marloweVersions
     $ ConfirmHandshake
@@ -315,6 +317,24 @@ checkCreation = do
   followerError `shouldBe` Nothing
   -- Should be empty because we already read them in the Do above and it
   -- resets to empty each time it is read.
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCreationWithClose :: Expectation
+checkCreationWithClose = do
+  let datum = createDatum
+  let scriptAddress = testScriptAddress
+  FollowerTestResult{..} <- runFollowerTest marloweVersions
+    $ ConfirmHandshake
+    $ ExpectQuery (FindTx createTxId)
+    $ RollForward (createTx { Chain.validityRange = Chain.MinMaxBound 0 100, Chain.inputs = Set.singleton closeTxIn }) point1 point1
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block1 [Create CreateStep {..}]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
   followerChanges `shouldBe` Just (emptyChanges MarloweV1)
 
 checkFollowScriptUTxOFailed :: Expectation
