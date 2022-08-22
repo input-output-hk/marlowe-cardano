@@ -107,6 +107,8 @@
         };
       in
       {
-        packages = topLevel.bitte-packages;
+        packages = topLevel.bitte-packages // {
+          entrypoints = topLevel.bitte-packages;
+        };
       }));
 }
