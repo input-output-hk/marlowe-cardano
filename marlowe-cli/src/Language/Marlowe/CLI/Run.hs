@@ -304,21 +304,41 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
     SomeMarloweTransaction era' marloweOut' <- decodeFileStrict marloweOutFile
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
-    let marloweInBundle' =
-          case marloweInBundle of
-            Nothing                                 -> pure Nothing
-            Just (marloweInFile, spend, collateral) -> do
-                                                        SomeMarloweTransaction _ marloweIn  <- decodeFileStrict marloweInFile
-                                                        pure $ Just (marloweIn, spend, collateral)
+    marloweInBundle' <-
+      case marloweInBundle of
+          Nothing                                 -> pure Nothing
+          Just (marloweInFile, spend, collateral) -> do
+                                                      (someMarloweIn :: SomeMarloweTransaction) <- decodeFileStrict marloweInFile
+                                                      pure $ Just (someMarloweIn, spend, collateral)
+    -- let
+    --   writeBodyToFile :: forall era' m'. MonadIO m' => MonadError CliError m' => MonadReader (CliEnv era') m' => (MarloweTransaction era', _, _) -> m' TxId
+    --   writeBodyToFile marloweInBundle'' = do
+    --     body <- runTransactionImpl connection marloweInBundle'' marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+    --     -- body <- runTransactionImpl connection (Just (marloweIn, spend, collateral)) marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+    --     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+    --     pure $ getTxId body
 
-    body <- case (era, era') of
-      (ScriptDataInAlonzoEra, ScriptDataInBabbageEra)  -> throwError "Running in Alonzo era, read file in Babbage era"
-      (ScriptDataInBabbageEra, ScriptDataInAlonzoEra)  -> throwError "Running in Babbage era, read file in Alonzo era"
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra)   -> runTransactionImpl connection marloweInBundle' marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> runTransactionImpl connection marloweInBundle' marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+    case (era, era', marloweInBundle') of
+      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Nothing)   -> do
+          body <- runTransactionImpl connection Nothing marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+          pure $ getTxId body
+      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Nothing) -> do
+          body <- runTransactionImpl connection Nothing marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+          pure $ getTxId body
+      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Just (SomeMarloweTransaction ScriptDataInAlonzoEra marloweIn, spend, collateral))  -> do
+          body <- runTransactionImpl connection (Just (marloweIn, spend, collateral)) marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+          pure $ getTxId body
+      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Just (SomeMarloweTransaction ScriptDataInBabbageEra marloweIn, spend, collateral)) -> do
+          body <- runTransactionImpl connection (Just (marloweIn, spend, collateral)) marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+          pure $ getTxId body
+      -- (ScriptDataInAlonzoEra, ScriptDataInBabbageEra, _)  -> throwError "Running in Alonzo era, read file in Babbage era"
+      -- (ScriptDataInBabbageEra, ScriptDataInAlonzoEra, _)  -> throwError "Running in Babbage era, read file in Alonzo era"
+      (_, _, _)  -> throwError "Running in Babbage era, read file in Alonzo era"
 
-    doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    pure $ getTxId body
 
 -- | Run a Marlowe transaction.
 runTransactionImpl :: forall era m
