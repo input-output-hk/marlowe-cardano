@@ -27,7 +27,7 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (AsType (AsPaymentKey), BabbageEra, CardanoMode, Key (getVerificationKey, verificationKeyHash),
+import Cardano.Api (AsType (AsPaymentKey), CardanoMode, Key (getVerificationKey, verificationKeyHash),
                     LocalNodeConnectInfo (..), NetworkId (..), PaymentCredential (PaymentCredentialByKey),
                     ScriptDataSupportedInEra, StakeAddressReference (NoStakeAddress), generateSigningKey,
                     makeShelleyAddress)
@@ -51,11 +51,12 @@ import qualified Data.Map as Map
 import qualified Data.Map.Strict as M (lookup)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl)
 import Language.Marlowe.CLI.Test.Types
+import Language.Marlowe.CLI.Types (CliEnv (..))
 import qualified Language.Marlowe.Client as Client
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
-data ScriptState = ScriptState
-  { transactions :: Map String (MarloweTransaction BabbageEra)
+data ScriptState era = ScriptState
+  { transactions :: Map String (MarloweTransaction era)
   , wallets      :: Map AccountId Wallet
   }
 
@@ -184,7 +185,7 @@ insertMarloweTransaction :: TransactionNickname -> MarloweTransaction era -> Scr
 insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
   scriptState{ transactions = Map.insert nickname transaction transactions }
 
-insertWallet :: AccountId -> Wallet -> ScriptState -> ScriptState
+insertWallet :: AccountId -> Wallet -> ScriptState era -> ScriptState era
 insertWallet ownerName wallet scriptState@ScriptState { wallets } =
   scriptState{ wallets = Map.insert ownerName wallet wallets }
 

@@ -39,15 +39,14 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra (..), BabbageEra, CardanoMode, LocalNodeConnectInfo (localNodeNetworkId),
-                    MultiAssetSupportedInEra (MultiAssetInBabbageEra), NetworkId,
+import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (localNodeNetworkId), NetworkId,
+                    PaymentCredential (PaymentCredentialByKey),
                     QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
-                    Script (..), ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraBabbage), SlotNo (..),
-                    StakeAddressReference (..), TxBody, TxId, TxIn, TxMintValue (TxMintNone), TxOut (..),
-                    TxOutDatum (..), TxOutValue (..), UTxO (..), anyAddressInShelleyBasedEra, calculateMinimumUTxO,
-                    getTxId, lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue, writeFileTextEnvelope)
+                    Script (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..), TxId, TxIn,
+                    TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
+                    calculateMinimumUTxO, getTxId, lovelaceToValue, makeShelleyAddressInEra, selectLovelace,
+                    shelleyBasedEra, txOutValueToValue, writeFileTextEnvelope, Lovelace(..))
 import qualified Cardano.Api as Api (Value)
-import qualified Cardano.Api as Cardano.Api.TxBody
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
@@ -63,21 +62,18 @@ import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, b
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
-<<<<<<< HEAD
 import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey,
                                          queryInEra, selectCoins, submitBody)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
-                                   SomeMarloweTransaction (..), SomePaymentSigningKey, ValidatorInfo (..), askEra,
-                                   doWithCardanoEra, toAddressAny', toMultiAssetSupportedInEra, withShelleyBasedEra)
+                                   SomeMarloweTransaction (..), ValidatorInfo (..), askEra, doWithCardanoEra,
+                                   toAddressAny', toMultiAssetSupportedInEra, withShelleyBasedEra, txIn)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
                                            TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                                  InputContent (..), Party (..), Payee (..), State (accounts),
                                                  Token (..), getInputContent)
-import Language.Marlowe.Scripts (marloweTxInputFromInput)
 import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash))
-import Ledger.Tx.CardanoAPI (toCardanoAddressInEra, toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoValue)
-import Network.WebSockets.Connection (ConnectionOptions (connectionCompressionOptions))
+import Ledger.Tx.CardanoAPI (toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
 import Plutus.V1.Ledger.Api (CostModelParams, Datum (..), POSIXTime, TokenName, toBuiltinData, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot)
