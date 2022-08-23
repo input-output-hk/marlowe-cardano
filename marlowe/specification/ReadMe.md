@@ -32,7 +32,7 @@ Any Cardano monetary policy may be used to mint the role tokens used in a Marlow
 
 ## Representation of Marlowe Semantics in Plutus
 
-Marlowe semantics are embodied in the Haskell function `computeTransaction` that is generated from [the Isabelle implementation of the Marlowe DSL](https://github.com/input-output-hk/marlowe/tree/master/isabelle/Core). Note that `computeTransaction`  uses the `PlutusTx` types and functions instead of the standard-prelude or GHC-base Haskell ones.
+Marlowe semantics are embodied in the Haskell function `computeTransaction` that follows [the Isabelle implementation of the Marlowe DSL](https://github.com/input-output-hk/marlowe/tree/master/isabelle/Core). Note that `computeTransaction` uses the `PlutusTx` types and functions instead of the standard-prelude or GHC-base Haskell ones.
 ```haskell
 computeTransaction :: TransactionInput -> State -> Contract -> TransactionOutput
 ```
