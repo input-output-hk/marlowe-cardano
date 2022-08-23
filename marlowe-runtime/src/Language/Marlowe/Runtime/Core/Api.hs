@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE KindSignatures        #-}
@@ -15,6 +16,7 @@ import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.List.Split (splitOn)
+import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -26,6 +28,7 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ScriptHash, TokenName (..), TxId (..), TxIx (..),
                                                TxOutRef (..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
@@ -69,7 +72,6 @@ class IsMarloweVersion (v :: MarloweVersionTag) where
   type Datum v :: *
   type Redeemer v :: *
   type PayoutDatum v :: *
-  type Payment v :: *
   marloweVersion :: MarloweVersion v
 
 instance IsMarloweVersion 'V1 where
@@ -77,7 +79,6 @@ instance IsMarloweVersion 'V1 where
   type Datum 'V1 = V1.MarloweData
   type Redeemer 'V1 = [V1.Input]
   type PayoutDatum 'V1 = TokenName
-  type Payment 'V1 = V1.Payment
   marloweVersion = MarloweV1
 
 data Transaction v = Transaction
@@ -94,12 +95,20 @@ deriving instance Show (Transaction 'V1)
 deriving instance Eq (Transaction 'V1)
 
 data TransactionOutput v = TransactionOutput
-  { payouts      :: [Payment v]
+  { payouts      :: Map Chain.TxOutRef (Payout v)
   , scriptOutput :: Maybe (TransactionScriptOutput v)
   }
 
 deriving instance Show (TransactionOutput 'V1)
 deriving instance Eq (TransactionOutput 'V1)
+
+data Payout v = Payout
+  { assets :: Chain.Assets
+  , datum  :: PayoutDatum v
+  }
+
+deriving instance Show (Payout 'V1)
+deriving instance Eq (Payout 'V1)
 
 data TransactionScriptOutput v = TransactionScriptOutput
   { utxo  :: TxOutRef
@@ -275,6 +284,14 @@ datumFromJSON :: MarloweVersion v -> Value -> Parser (Datum v)
 datumFromJSON = \case
   MarloweV1 -> parseJSON
 
+toChainPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Chain.Datum
+toChainPayoutDatum = \case
+  MarloweV1 -> Chain.toDatum . Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName
+
+fromChainPayoutDatum :: MarloweVersion v -> Chain.Datum -> Maybe (PayoutDatum v)
+fromChainPayoutDatum = \case
+  MarloweV1 -> fmap (Chain.TokenName . Plutus.fromBuiltin . Plutus.unTokenName) . Chain.fromDatum
+
 toChainDatum :: MarloweVersion v -> Datum v -> Chain.Datum
 toChainDatum = \case
   MarloweV1 -> Chain.toDatum
@@ -291,9 +308,10 @@ fromChainRedeemer :: MarloweVersion v -> Chain.Redeemer -> Maybe (Redeemer v)
 fromChainRedeemer = \case
   MarloweV1 -> Chain.fromRedeemer
 
-getMarloweVersion :: ScriptHash -> Maybe SomeMarloweVersion
+getMarloweVersion :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
 getMarloweVersion hash
-  | hash == "62c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307" = Just $ SomeMarloweVersion MarloweV1
+  | hash == "62c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307" =
+      Just (SomeMarloweVersion MarloweV1, "") --TODO
   | otherwise = Nothing
 
 getScriptHashes :: MarloweVersion v -> Set ScriptHash
