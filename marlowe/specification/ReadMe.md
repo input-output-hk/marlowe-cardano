@@ -215,7 +215,7 @@ inValue + foldMap valueOfDeposit (fmap getInputContent transactionInput) ≡ out
 
 The input state of the transaction is used in the semantics computation.
 ```haskell
-marloweState marloweData ≡ inState
+inState ≡ marloweState marloweData
 ```
 
 
