@@ -1,7 +1,7 @@
 digraph G {
 
   rankdir=LR
-  node [shape=rectangle]
+  node [shape=oval]
   
   subgraph cluster_v {
     rank=same
@@ -20,7 +20,7 @@ digraph G {
     label="smallMarloweValidator"
   }
 
-  Fail [label=<<i>fail</i>> shape=oval]
+  Fail [label=<<i>fail</i>> shape=circle]
 
   Unit -> Fail [label="False" style=dashed constraint=false]
   
@@ -49,7 +49,7 @@ digraph G {
   
   subgraph cluster_n {
     #rank=same
-    MarloweParams -> State1 -> Contract1
+    MarloweParams
     State1 [label="State"]
     Contract1 [label="Contract"]
     label=<MarloweData <i>Output to Script</i>>

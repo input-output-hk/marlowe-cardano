@@ -158,6 +158,8 @@ The arguments of `computeTransaction` must be constructed as follows:
 4. The `Contract` is the `marloweContract` of the `MarloweData` provided as the `Datum`.
 5. The new `Datum` at the script address is the `MarloweData` with the same `marloweParams` as originally, but with the new `txOutState` and `txOutContract` of the `TransactionOutput`.
 
+In the diagram below, the upper three rectangles represent functions: the untyped `Validator`, the typed validator `smallMarloweValidator`, or the semantics's `computeTransaction`. The data values (ovals) are marshalled or passed from the untyped representation over to the semantics. The `computeTransaction` function validates the semantics and returns the required new state and contract instance. Conceptually, success or failure is passed to the untyped validator. The bottom rectangle packages the `Datum` that is provided as output for the continued progression of the Marlowe contract instance.
+
 ![Relationship between Marlowe validator and semantics.](semantics2plutus.svg)
 
 
