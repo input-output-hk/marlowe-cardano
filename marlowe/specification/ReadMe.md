@@ -223,7 +223,7 @@ inState ≡ marloweState marloweData
 
 The input contract of the transaction is used in the semantics computation.
 ```haskell
-marloweContract marloweData ≡ inContract
+inContract ≡ marloweContract marloweData
 ```
 
 
