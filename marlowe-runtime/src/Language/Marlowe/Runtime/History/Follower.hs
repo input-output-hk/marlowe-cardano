@@ -4,26 +4,29 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE MultiWayIf                #-}
 {-# LANGUAGE RankNTypes                #-}
 
 module Language.Marlowe.Runtime.History.Follower where
 
 import Control.Applicative ((<|>))
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
-import Control.Monad (guard, when)
+import Control.Monad (guard, mfilter, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
-import Control.Monad.Trans.Writer.CPS (WriterT, runWriterT, tell)
+import Control.Monad.Trans.Writer.CPS (WriterT, execWriterT, runWriterT, tell)
 import Data.Bifunctor (first)
-import Data.Foldable (asum, find, for_)
+import Data.Foldable (asum, find, fold, for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
+import Data.These (These (..), these)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
+import Data.Void (Void, absurd)
 import GHC.Show (showSpace)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -31,7 +34,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSee
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
                                                RuntimeChainSeekClient, ScriptHash (..), SlotConfig, SlotNo (..),
                                                TxError, TxId, TxOutRef (..), UTxOError, WithGenesis (..), isAfter,
-                                               schemaVersion1_0, slotToUTCTime)
+                                               mapClientStNext, schemaVersion1_0, slotToUTCTime)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, IsMarloweVersion (Redeemer), MarloweVersion (..),
                                           MarloweVersionTag (..), Payout (..), PayoutDatum, SomeMarloweVersion (..),
@@ -224,6 +227,14 @@ data FollowerState v = FollowerState
   , previousStates :: Map BlockHeader (FollowerState v)
   }
 
+data FollowerStateClosed v = FollowerStateClosed
+  { lastStepBlock        :: BlockHeader
+  , currentBlock         :: BlockHeader
+  , payouts              :: Map Chain.TxOutRef (Payout v)
+  , previousStates       :: Map BlockHeader (FollowerState v)
+  , previousClosedStates :: Map BlockHeader (FollowerStateClosed v)
+  }
+
 exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
 exctractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs, validityRange} = do
   Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
@@ -299,7 +310,13 @@ followNext context@FollowerContext{..} state@FollowerState{..} = ClientStNext
             case mOutput of
               Nothing -> followContract' state
               Just (TransactionOutput newPayouts mScriptOutput) -> case mScriptOutput of
-                Nothing            -> pure $ SendMsgDone $ Right ()
+                Nothing            -> followContractClosed context $ FollowerStateClosed
+                  { lastStepBlock = blockHeader
+                  , currentBlock = blockHeader
+                  , payouts = Map.withoutKeys payouts $ Map.keysSet txs
+                  , previousStates = updatePreviousStates securityParameter blockHeader state previousStates
+                  , previousClosedStates = mempty
+                  }
                 Just scriptOutput' -> followContract' state { scriptOutput = scriptOutput', payouts = Map.union payouts newPayouts }
   , recvMsgRollBackward = \point _ -> do
       atomically $ modifyTVar changesVar $ applyRollback $ Chain.slotNo <$> point
@@ -310,12 +327,77 @@ followNext context@FollowerContext{..} state@FollowerState{..} = ClientStNext
   where
     scriptUTxO = let TransactionScriptOutput{..} = scriptOutput in utxo
 
+followContractClosed
+  :: FollowerContext v
+  -> FollowerStateClosed v
+  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
+followContractClosed context@FollowerContext{..} state@FollowerStateClosed{..} = case (advanceMove, payoutsMove) of
+  (Nothing, Nothing) -> pure $ SendMsgDone $ Right ()
+  (Just m1, Nothing) -> do
+    let move = m1
+    let next = mapClientStNext This This $ followNextClosed context state
+    pure $ SendMsgQueryNext move next (pure next)
+  (Nothing, Just m2) -> do
+    let move = m2
+    let next = mapClientStNext That That $ followNextClosed context state
+    pure $ SendMsgQueryNext move next (pure next)
+  (Just m1, Just m2) -> do
+    let move = m1 `Fork` m2
+    pure $ SendMsgQueryNext move (followNextClosed context state) (pure (followNextClosed context state))
+  where
+    blocksToWait =
+      let
+        Chain.BlockHeader _ _ lastStepBlockNo = lastStepBlock
+        Chain.BlockHeader _ _ currentBlockNo = currentBlock
+      in
+        securityParameter - fromIntegral (currentBlockNo - lastStepBlockNo)
+    advanceMove = AdvanceBlocks . fromIntegral <$> mfilter (> 0) (Just blocksToWait)
+    payoutsMove = FindConsumingTxs <$> mfilter (not . Set.null) (Just $ Map.keysSet payouts)
+
+followNextClosed
+  :: FollowerContext v
+  -> FollowerStateClosed v
+  -> ClientStNext
+      Move
+      (These Void (Map TxOutRef UTxOError))
+      (These () (Map TxOutRef Chain.Transaction))
+      ChainPoint
+      ChainPoint
+      IO
+      (Either ContractHistoryError ())
+followNextClosed context@FollowerContext{..} state@FollowerStateClosed{..} = ClientStNext
+  { recvMsgQueryRejected = \err _ -> failWith $ these absurd FollowPayoutUTxOsFailed absurd err
+  , recvMsgRollForward = \queryResult point _ -> case point of
+      Genesis        -> error "transaction detected at Genesis"
+      At blockHeader -> do
+        let txs = fold queryResult
+        case execWriterT $ Map.traverseWithKey (processPayout blockHeader payouts) txs of
+          Left err -> failWith err
+          Right changes -> do
+            atomically $ modifyTVar changesVar (<> changes)
+            followContractClosed context $ state
+              { previousClosedStates = updatePreviousStates securityParameter blockHeader state previousClosedStates
+              , currentBlock = blockHeader
+              , lastStepBlock = if Map.null txs then lastStepBlock else blockHeader
+              , payouts = Map.withoutKeys payouts $ Map.keysSet txs
+              }
+  , recvMsgRollBackward = \point _ -> do
+      atomically $ modifyTVar changesVar $ applyRollback $ Chain.slotNo <$> point
+      case point of
+        Genesis        -> failWith CreateTxRolledBack
+        At blockHeader -> case find ((<= blockHeader) . fst) (Map.toDescList previousClosedStates) of
+          Just (_, state') -> followContractClosed context state'
+          Nothing          -> case find ((<= blockHeader) . fst) (Map.toDescList previousStates) of
+            Just (_, state') -> followContract context state'
+            Nothing          -> failWith CreateTxRolledBack
+  }
+
 updatePreviousStates
   :: Int
   -> BlockHeader
-  -> FollowerState v
-  -> Map BlockHeader (FollowerState v)
-  -> Map BlockHeader (FollowerState v)
+  -> s
+  -> Map BlockHeader s
+  -> Map BlockHeader s
 updatePreviousStates securityParameter blockHeader@Chain.BlockHeader{..} state =
   Map.insert blockHeader state
     . Map.fromDistinctAscList
@@ -331,18 +413,18 @@ processTxs
   -> Map TxOutRef Chain.Transaction
   -> WriterT (ContractChanges v) (Either ContractHistoryError) (Maybe (TransactionOutput v))
 processTxs blockHeader context state@FollowerState{..} txs = do
-  void $ Map.traverseWithKey (processPayout blockHeader state) $ Map.delete scriptUTxO txs
+  void $ Map.traverseWithKey (processPayout blockHeader payouts) $ Map.delete scriptUTxO txs
   traverse (processScriptTx blockHeader context state) $ Map.lookup scriptUTxO txs
   where
     scriptUTxO = let TransactionScriptOutput{..} = scriptOutput in utxo
 
 processPayout
   :: BlockHeader
-  -> FollowerState v
+  -> Map Chain.TxOutRef (Payout v)
   -> TxOutRef
   -> Chain.Transaction
   -> WriterT (ContractChanges v) (Either ContractHistoryError) ()
-processPayout blockHeader  FollowerState{..} utxo Chain.Transaction{..} = case Map.lookup utxo payouts of
+processPayout blockHeader payouts utxo Chain.Transaction{..} = case Map.lookup utxo payouts of
   Nothing -> lift $ Left $ PayoutUTxONotFound utxo
   Just Payout{..} -> do
     let redeemingTx = txId

@@ -64,6 +64,17 @@ data ClientStNext query err result point tip m a = ClientStNext
   , recvMsgRollBackward  :: point -> tip -> m (ClientStIdle query point tip m a)
   }
 
+mapClientStNext
+  :: (err' -> err)
+  -> (result' -> result)
+  -> ClientStNext q err result point tip m a
+  -> ClientStNext q err' result' point tip m a
+mapClientStNext cmapErr cmapResult ClientStNext{..} = ClientStNext
+  { recvMsgQueryRejected = recvMsgQueryRejected . cmapErr
+  , recvMsgRollForward = recvMsgRollForward . cmapResult
+  , recvMsgRollBackward
+  }
+
 -- | Transform the query, point, and tip types in the client.
 mapChainSeekClient
   :: forall query query' point point' tip tip' m a
