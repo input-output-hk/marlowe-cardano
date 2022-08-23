@@ -46,7 +46,7 @@ import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (localN
                     Script (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..), TxBody, TxId,
                     TxIn, TxMetadataInEra, TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..),
                     UTxO (..), calculateMinimumUTxO, getTxId, lovelaceToValue, makeShelleyAddressInEra, selectLovelace,
-                    shelleyBasedEra, txOutValueToValue, writeFileTextEnvelope)
+                    shelleyBasedEra, txOutValueToValue, writeFileTextEnvelope, Lovelace (Lovelace))
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
@@ -326,7 +326,8 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
           go (Just (marloweIn, spend, collateral)) marloweOut'
       (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Just (SomeMarloweTransaction ScriptDataInBabbageEra marloweIn, spend, collateral)) -> do
           go (Just (marloweIn, spend, collateral)) marloweOut'
-      (_, _, _)  -> throwError "Running in Babbage era, read file in Alonzo era"
+      -- FIXME: error message is missleaading - fix it
+      (_, _, _)  -> throwError "Eras mistmatch"
 
 
 -- | Run a Marlowe transaction.
@@ -458,7 +459,6 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
         pure body
     go marloweOut'
 
-
 -- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
 ensureAtLeastHalfAnAda :: Api.Value -> Api.Value
 ensureAtLeastHalfAnAda origValue =
@@ -468,6 +468,7 @@ ensureAtLeastHalfAnAda origValue =
   where
     origLovelace = selectLovelace origValue
     minLovelace = Lovelace 500_000
+
 
 -- | Adjust the lovelace in an output to confirm to the minimum ADA requirement.
 adjustMinimumUTxO :: forall m era
