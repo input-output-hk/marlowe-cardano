@@ -70,7 +70,7 @@ deriving instance Eq (ContractStep 'V1)
 
 data ContractChanges v = ContractChanges
   { steps      :: Map BlockHeader [ContractStep v]
-  , rollbackTo :: Maybe SlotNo
+  , rollbackTo :: Maybe (WithGenesis SlotNo)
   }
 
 deriving instance Show (ContractChanges 'V1)
@@ -101,11 +101,12 @@ instance Semigroup (ContractChanges v) where
 instance Monoid (ContractChanges v) where
   mempty = ContractChanges Map.empty Nothing
 
-applyRollback :: SlotNo -> ContractChanges v -> ContractChanges v
-applyRollback slotNo ContractChanges{..} = ContractChanges
+applyRollback :: WithGenesis SlotNo -> ContractChanges v -> ContractChanges v
+applyRollback Genesis _ = ContractChanges mempty $ Just Genesis
+applyRollback (At slotNo) ContractChanges{..} = ContractChanges
   { steps = steps'
   , rollbackTo = asum
-      [ guard (Map.null steps') *> (min (Just slotNo) rollbackTo <|> Just slotNo)
+      [ guard (Map.null steps') *> (min (Just (At slotNo)) rollbackTo <|> Just (At slotNo))
       , rollbackTo
       ]
   }
@@ -117,6 +118,7 @@ data FollowerDependencies = FollowerDependencies
   , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
   , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
   , slotConfig         :: SlotConfig
+  , securityParameter  :: Int
   }
 
 data Follower = Follower
@@ -132,6 +134,7 @@ data ContractHistoryError
   | FollowPayoutUTxOsFailed (Map Chain.TxOutRef UTxOError)
   | ExtractMarloweTransactionFailed ExtractMarloweTransactionError
   | PayoutUTxONotFound Chain.TxOutRef
+  | CreateTxRolledBack
   deriving stock (Show, Eq, Ord)
 
 data ExtractCreationError
@@ -189,6 +192,7 @@ mkFollower deps@FollowerDependencies{..} = do
                 pure changesVar
               let payouts = mempty
               let scriptOutput = TransactionScriptOutput (unContractId contractId) datum
+              let previousStates = mempty
               followContract FollowerContext{..} FollowerState{..}
       , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
       }
@@ -211,11 +215,13 @@ data FollowerContext v = FollowerContext
   , scriptAddress       :: Chain.Address
   , payoutValidatorHash :: ScriptHash
   , slotConfig          :: SlotConfig
+  , securityParameter   :: Int
   }
 
 data FollowerState v = FollowerState
-  { payouts      :: Map Chain.TxOutRef (Payout v)
-  , scriptOutput :: TransactionScriptOutput v
+  { payouts        :: Map Chain.TxOutRef (Payout v)
+  , scriptOutput   :: TransactionScriptOutput v
+  , previousStates :: Map BlockHeader (FollowerState v)
   }
 
 exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
@@ -284,18 +290,39 @@ followNext context@FollowerContext{..} state@FollowerState{..} = ClientStNext
           Left err -> failWith err
           Right (mOutput, changes) -> do
             let
-              nextState :: FollowerState v -> FollowerState v
-              nextState state' = state' { payouts = Map.withoutKeys payouts $ Map.keysSet txs }
+              followContract' :: FollowerState v -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
+              followContract' state' = followContract context state'
+                { payouts = Map.withoutKeys payouts $ Map.keysSet txs
+                , previousStates = updatePreviousStates securityParameter blockHeader state previousStates
+                }
             atomically $ modifyTVar changesVar (<> changes)
             case mOutput of
-              Nothing -> followContract context $ nextState state
+              Nothing -> followContract' state
               Just (TransactionOutput newPayouts mScriptOutput) -> case mScriptOutput of
                 Nothing            -> pure $ SendMsgDone $ Right ()
-                Just scriptOutput' -> followContract context $ nextState $ state { scriptOutput = scriptOutput', payouts = Map.union payouts newPayouts }
-  , recvMsgRollBackward = \_ _ -> error "not implemented"
+                Just scriptOutput' -> followContract' state { scriptOutput = scriptOutput', payouts = Map.union payouts newPayouts }
+  , recvMsgRollBackward = \point _ -> do
+      atomically $ modifyTVar changesVar $ applyRollback $ Chain.slotNo <$> point
+      maybe (failWith CreateTxRolledBack) (followContract context . snd) case point of
+        Genesis        -> Nothing
+        At blockHeader -> find ((<= blockHeader) . fst) (Map.toDescList previousStates)
   }
   where
     scriptUTxO = let TransactionScriptOutput{..} = scriptOutput in utxo
+
+updatePreviousStates
+  :: Int
+  -> BlockHeader
+  -> FollowerState v
+  -> Map BlockHeader (FollowerState v)
+  -> Map BlockHeader (FollowerState v)
+updatePreviousStates securityParameter blockHeader@Chain.BlockHeader{..} state =
+  Map.insert blockHeader state
+    . Map.fromDistinctAscList
+    . dropWhile isPastSecurityParameter
+    . Map.toAscList
+  where
+    isPastSecurityParameter (Chain.BlockHeader { blockNo = blockNo' }, _) = blockNo - blockNo' > fromIntegral securityParameter
 
 processTxs
   :: BlockHeader

@@ -16,9 +16,8 @@ import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Pretty (pretty)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..),
-                                               ChainSyncQuery (GetSlotConfig), RuntimeChainSeekClient, SlotNo (..),
-                                               TxId (..), TxOutRef (..), WithGenesis (..), runtimeChainSeekCodec,
-                                               toBech32)
+                                               ChainSyncQuery (..), RuntimeChainSeekClient, SlotNo (..), TxId (..),
+                                               TxOutRef (..), WithGenesis (..), runtimeChainSeekCodec, toBech32)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
                                           TransactionOutput (..), TransactionScriptOutput (..), parseContractId,
                                           renderContractId)
@@ -43,14 +42,15 @@ import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
 main :: IO ()
 main = run =<< getOptions
 
+hints :: AddrInfo
+hints = defaultHints { addrSocketType = Stream }
+
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
-  let hints = defaultHints { addrSocketType = Stream }
   chainSeekAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
-  queryAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show queryPort)
   bracket (open chainSeekAddr) close \chainSeekSocket -> do
-    bracket (open queryAddr) close \querySocket -> do
-      slotConfig <- querySlotConfig querySocket
+      slotConfig <- queryChainSync GetSlotConfig
+      securityParameter <- queryChainSync GetSecurityParameter
       let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
       let
         connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
@@ -67,12 +67,15 @@ run Options{..} = withSocketsDo do
       connect sock $ addrAddress addr
       pure sock
 
-    querySlotConfig socket = do
-      let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
-      let client = liftQuery GetSlotConfig
-      let peer = queryClientPeer client
-      result <- fst <$> runPeerWithDriver driver peer (startDState driver)
-      pure $ fromRight (error "failed to query slot config from chain seek server") result
+    queryChainSync :: ChainSyncQuery Void e a -> IO a
+    queryChainSync query = do
+      addr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show queryPort)
+      bracket (open addr) close \socket -> do
+        let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
+        let client = liftQuery query
+        let peer = queryClientPeer client
+        result <- fst <$> runPeerWithDriver driver peer (startDState driver)
+        pure $ fromRight (error "failed to query chain seek server") result
 
 logChanges :: ContractId -> STM (Maybe SomeContractChanges) -> IO Void
 logChanges contractId readChanges = forever do
