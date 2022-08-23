@@ -1,21 +1,54 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Check the entropy of arbitrary instances.
+--
+-----------------------------------------------------------------------------
+
 
 module Spec.Marlowe.Semantics.Entropy (
+-- * Testing
   tests
+, checkEntropy
 ) where
 
 
+import Control.Monad (replicateM)
+import Data.List (group, sort)
 import Language.Marlowe.Core.V1.Semantics.Types (Accounts, ChoiceId, ChosenNum, Party, Token, ValueId)
 import Plutus.V1.Ledger.Api (CurrencySymbol, PubKeyHash, TokenName)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryChoiceName)
 import Spec.Marlowe.Semantics.Orphans ()
-import Spec.Marlowe.Semantics.Util (checkEntropy)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (testCase)
-import Test.Tasty.QuickCheck (Arbitrary (arbitrary), Gen)
+import Test.Tasty.HUnit (Assertion, assertBool, testCase)
+import Test.Tasty.QuickCheck (Arbitrary (arbitrary), Gen, generate)
 
-import qualified PlutusTx.AssocMap as AM
+import qualified PlutusTx.AssocMap as AM (Map, keys)
 
 
+-- | Check the entropy of an arbitrary instance.
+checkEntropy :: Ord a
+             => Int               -- ^ The number of values to generate.
+             -> (Double, Double)  -- ^ The valid rand for the entropy.
+             -> Gen a             -- ^ The generator being tested.
+             -> Assertion         -- ^ The test.
+checkEntropy n (min', max') gen =
+  do
+    sample'' <- generate $ replicateM n gen
+    let
+      n' = fromIntegral n
+      histogram = fmap (fromIntegral . length) . group . sort $ sample''
+      entropy = sum $ (\f -> - f * logBase 2 f) . (/ n') <$> histogram
+    assertBool ("!(" <> show min' <> " <= " <> show entropy <> " <= " <> show max' <> ")")
+      $ min' <= entropy && entropy <= max'
+
+
+-- | Run the tests.
 tests :: TestTree
 tests =
   testGroup "Arbitrary"

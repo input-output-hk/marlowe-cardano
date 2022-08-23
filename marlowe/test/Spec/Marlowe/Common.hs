@@ -1,38 +1,105 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Shared functions for Marlowe testing.
+--
+-----------------------------------------------------------------------------
+
+
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
-module Spec.Marlowe.Common where
+
+
+module Spec.Marlowe.Common (
+-- * Types
+  PubKey(..)
+, MarloweScenario(..)
+-- * Generating
+, actionGen
+, actionGenSized
+, amount
+, boundListGen
+, caseRelGenSized
+, choiceIdGen
+, contractGen
+, contractGenSized
+, contractRelGenSized
+, listLengthGen
+, observationGen
+, observationGenSized
+, partyGen
+, payeeGen
+, positiveAmount
+, rationalGen
+, simpleIntegerGen
+, tokenGen
+, valueGen
+, valueGenSized
+, valueIdGen
+-- * Shrinking
+, shrinkAction
+, shrinkCase
+, shrinkChoiceId
+, shrinkContract
+, shrinkObservation
+, shrinkPOSIXTime
+, shrinkParty
+, shrinkPayee
+, shrinkSimpleInteger
+, shrinkToken
+, shrinkValue
+, shrinkValueId
+-- * Instances
+, alicePk
+, pangramContract
+-- * Functions
+, secondsSinceShelley
+) where
+
 
 import Data.Map.Strict (Map)
-
 import Data.Ratio (Ratio)
 import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
                                                  Observation (..), Party (..), Payee (..), Token (..), Value (..),
                                                  ValueId (..))
 import Language.Marlowe.Extended.V1 (ada)
-import qualified Language.Marlowe.Extended.V1 as Extended
 import Language.Marlowe.Util (merkleizedCase)
 import Plutus.V1.Ledger.Api (PubKeyHash (PubKeyHash))
-import qualified Plutus.V1.Ledger.Api as Ledger
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-import Test.QuickCheck
--- import Wallet (PubKey (..))
--- import Wallet.Emulator
+import Test.QuickCheck (Gen, choose, frequency, oneof, shrinkList, sized, vectorOf)
 
+import qualified Language.Marlowe.Extended.V1 as Extended
+import qualified Plutus.V1.Ledger.Api as Ledger
+
+
+-- | A public key represented as a string.
 newtype PubKey = PubKey String
 
+
+-- | A scenario for Marlowe testing.
 newtype MarloweScenario = MarloweScenario { mlInitialBalances :: Map PubKey Ledger.Value }
 
+
+-- | Generate a small integer at random.
 amount :: Gen Integer
 amount = choose (-100, 100)
 
 
+-- | Generate a small positive integer at random.
 positiveAmount :: Gen Integer
 positiveAmount = choose (1, 100)
 
 
+-- | Generate one of three parties at random.
 partyGen :: Gen Party
 partyGen = oneof [ return $ Role "alice"
                  , return $ Role "bob"
@@ -40,6 +107,7 @@ partyGen = oneof [ return $ Role "alice"
                  ]
 
 
+-- | Shrink a generated party.
 shrinkParty :: Party -> [Party]
 shrinkParty party = case party of
     PK _         -> [Role "alice", Role "bob"]
@@ -48,28 +116,33 @@ shrinkParty party = case party of
     _            -> []
 
 
+-- | Generate a payee at random.
 payeeGen :: Gen Payee
 payeeGen = oneof [ Account <$> partyGen
                  , Party <$> partyGen
                  ]
 
 
+-- | Shrink a generated payee.
 shrinkPayee :: Payee -> [Payee]
 shrinkPayee (Account accId) = [Account x | x <- shrinkParty accId]
 shrinkPayee (Party party)   = [Party x | x <- shrinkParty party]
 
 
+-- | Generate one of two tokens at random.
 tokenGen :: Gen Token
 tokenGen = oneof [ return $ Token "" ""
                  , return $ Token "424954" "434f494e"
                  ]
 
 
+-- | Shrink a generated token.
 shrinkToken :: Token -> [Token]
 shrinkToken (Token "" "") = []
 shrinkToken (Token _ _)   = [Token "" ""]
 
 
+-- | Generate at random an integer with one of a few values.
 simpleIntegerGen :: Gen Integer
 simpleIntegerGen = frequency [ (1, return (-100))
                              , (1, return (-1))
@@ -83,14 +156,18 @@ simpleIntegerGen = frequency [ (1, return (-100))
                              ]
 
 
+-- | Shrink a simply generated integer.
 shrinkSimpleInteger :: Integer -> [Integer]
 shrinkSimpleInteger 0 = []
 shrinkSimpleInteger v = [0, v `quot` 2]
 
+
+-- | Shrink a POSIX time.
 shrinkPOSIXTime :: Ledger.POSIXTime -> [Ledger.POSIXTime]
 shrinkPOSIXTime (Ledger.POSIXTime t) = map Ledger.POSIXTime (shrinkSimpleInteger t)
 
 
+-- | Generate a choice identifier at random.
 choiceIdGen :: Gen ChoiceId
 choiceIdGen = do choName <- oneof [ return "first"
                                   , return "second"
@@ -99,6 +176,7 @@ choiceIdGen = do choName <- oneof [ return "first"
                  return $ ChoiceId choName chooser
 
 
+-- | Shrink a generated choice identifieer.
 shrinkChoiceId :: ChoiceId -> [ChoiceId]
 shrinkChoiceId (ChoiceId "second" chooser) = ChoiceId "first" chooser
                                             :[ChoiceId "second" x | x <- shrinkParty chooser]
@@ -106,18 +184,21 @@ shrinkChoiceId (ChoiceId "first" chooser) = [ChoiceId "first" x | x <- shrinkPar
 shrinkChoiceId _ = []
 
 
+-- | Generate at random one of two values.
 valueIdGen :: Gen ValueId
 valueIdGen = oneof [ return "alpha"
                    , return "beta"
                    ]
 
 
+-- | Shrink a generated value.
 shrinkValueId :: ValueId -> [ValueId]
 shrinkValueId "beta"  = ["alpha"]
 shrinkValueId "alpha" = []
 shrinkValueId _       = []
 
 
+-- | Generate a ratio at random.
 rationalGen :: Gen (Ratio Integer)
 rationalGen = do
     a <- simpleIntegerGen
@@ -125,7 +206,9 @@ rationalGen = do
     return $ a Extended.% b
 
 
-valueGenSized :: Int -> Gen (Value Observation)
+-- | Generate a value at random.
+valueGenSized :: Int                      -- ^ The size of the value.
+              -> Gen (Value Observation)  -- ^ Action to generated the value.
 valueGenSized s
   | s > 0 = oneof [ AvailableMoney <$> partyGen <*> tokenGen
                   , Constant <$> simpleIntegerGen
@@ -150,10 +233,12 @@ valueGenSized s
                       ]
 
 
+-- | Generate a value at random.
 valueGen ::  Gen (Value Observation)
 valueGen = sized valueGenSized
 
 
+-- | Shrink a generated value.
 shrinkValue :: Value Observation -> [Value Observation]
 shrinkValue value = case value of
     Constant x -> [Constant y | y <- shrinkSimpleInteger x]
@@ -177,7 +262,9 @@ shrinkValue value = case value of
                          ++ [Cond b val1 y | y <- shrinkValue val2])
 
 
-observationGenSized :: Int -> Gen Observation
+-- | Generate an observation at random.
+observationGenSized :: Int              -- ^ The size of the observation.
+                    -> Gen Observation  -- ^ Action for generating the observation.
 observationGenSized s
   | s > 0 = oneof [ AndObs <$> observationGenSized (s `quot` 2)
                            <*> observationGenSized (s `quot` 2)
@@ -203,10 +290,13 @@ observationGenSized s
                       , return FalseObs
                       ]
 
+
+-- | Generate an observation at random.
 observationGen :: Gen Observation
 observationGen = sized observationGenSized
 
 
+-- | Shrink a generated observation.
 shrinkObservation :: Observation -> [Observation]
 shrinkObservation obs = case obs of
     FalseObs -> []
@@ -229,7 +319,19 @@ shrinkObservation obs = case obs of
     NotObs subObs ->   FalseObs:TrueObs:subObs:[NotObs x | x <- shrinkObservation subObs]
 
 
-boundListGenAux :: Int -> Integer -> Gen [Bound]
+-- | Generate a short list of integers at random.
+listLengthGen :: Gen Int
+listLengthGen = frequency [ (1, return 0)
+                          , (8, return 1)
+                          , (4, return 2)
+                          , (1, return 3)
+                          ]
+
+
+-- | Generate a list of bounds at random.
+boundListGenAux :: Int          -- ^ The size of the list.
+                -> Integer      -- ^ The minimum lower bound.
+                -> Gen [Bound]  -- ^ Action for generating the bounds.
 boundListGenAux s lb
   | s > 0 = do inc1 <- simpleIntegerGen
                inc2 <- simpleIntegerGen
@@ -240,31 +342,29 @@ boundListGenAux s lb
   | otherwise = return []
 
 
-listLengthGen :: Gen Int
-listLengthGen = frequency [ (1, return 0)
-                          , (8, return 1)
-                          , (4, return 2)
-                          , (1, return 3)
-                          ]
-
-
+-- | Generate a list of bounds at random.
 boundListGen :: Gen [Bound]
 boundListGen = do len <- listLengthGen
                   firstBound <- simpleIntegerGen
                   boundListGenAux len firstBound
 
 
-actionGenSized :: Int -> Gen Action
+-- | Generate an action at random.
+actionGenSized :: Int         -- ^ The size of the action.
+               -> Gen Action  -- ^ Action to generate the action.
 actionGenSized s =
   oneof [ Deposit <$> partyGen <*> partyGen <*> tokenGen <*> valueGenSized (s - 1)
         , Choice <$> choiceIdGen <*> boundListGen
         , Notify <$> observationGenSized (s - 1)
         ]
 
+
+-- | Generate an action at random.
 actionGen :: Gen Action
 actionGen = sized actionGenSized
 
 
+-- | Shrink a generated action.
 shrinkAction :: Action -> [Action]
 shrinkAction action = case action of
     Deposit accId party tok val -> Notify FalseObs : [Deposit accId party tok v | v <- shrinkValue val]
@@ -277,18 +377,26 @@ shrinkAction action = case action of
     Notify obs -> [Notify x | x <- shrinkObservation obs]
 
 
-caseRelGenSized :: Int -> Integer -> Gen (Case Contract)
+-- | Generate a case at random.
+caseRelGenSized :: Int                  -- ^ The size of the case.
+                -> Integer              -- ^ The minimum timeout for continuations.
+                -> Gen (Case Contract)  -- ^ Action to generate the contract.
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
                                  , (1, merkleizedCase <$> actionGenSized s <*> contractRelGenSized s bn)
                                  ]
 
+
+-- | Shrink a generated case.
 shrinkCase :: Case Contract -> [Case Contract]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
 shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]
 
 
-contractRelGenSized :: Int -> Integer -> Gen Contract
+-- | Generate a contract at random.
+contractRelGenSized :: Int           -- ^ The size of the contract.
+                    -> Integer       -- ^ The minimum timeout for continuations.
+                    -> Gen Contract  -- ^ Action to generate the contract.
 contractRelGenSized s bn
   | s > 0 = oneof [ return Close
                   , Pay <$> partyGen <*> payeeGen <*> tokenGen
@@ -311,14 +419,19 @@ contractRelGenSized s bn
   | otherwise = return Close
 
 
-contractGenSized :: Int -> Gen Contract
+-- | Generate a contract at random.
+contractGenSized :: Int           -- ^ The size of the contract.
+                 -> Gen Contract  -- ^ Action to generate the contract.
 contractGenSized s = do iniBn <- simpleIntegerGen
                         contractRelGenSized s iniBn
 
+
+-- | Generate a contract at random.
 contractGen :: Gen Contract
 contractGen = sized contractGenSized
 
 
+-- | Shrink a generated contract.
 shrinkContract :: Contract -> [Contract]
 shrinkContract cont = case cont of
     Close -> []
@@ -346,9 +459,12 @@ shrinkContract cont = case cont of
               ++ [Assert obs y | y <- shrinkContract cont])
 
 
+-- | The primary key hash for Alice.
 alicePk :: Party
 alicePk = PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
 
+
+-- | A contract using all Marlowe DSL terms.
 pangramContract :: Contract
 pangramContract = let
     aliceAcc = alicePk
@@ -369,6 +485,7 @@ pangramContract = let
         ] (Ledger.POSIXTime 100) Close
 
 
+-- | The number of seconds since the Shelley era.
 secondsSinceShelley :: SlotConfig -> Integer -> Ledger.POSIXTime
 secondsSinceShelley SlotConfig {scSlotZeroTime} seconds =
     scSlotZeroTime + Ledger.POSIXTime (seconds * 1000)

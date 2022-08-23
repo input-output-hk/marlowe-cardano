@@ -1,3 +1,15 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Arbitrary and semi-arbitrary instances for the Marlowe DSL.
+--
+-----------------------------------------------------------------------------
+
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns    #-}
@@ -8,11 +20,20 @@
 
 
 module Spec.Marlowe.Semantics.Arbitrary (
+-- * Types
   SemiArbitrary(..)
 , IsValid(..)
+-- * Generators
 , arbitraryChoiceName
 , arbitraryFibonacci
 , arbitraryAssocMap
+, arbitraryContractWeighted
+, arbitraryValidStep
+, arbitraryValidInput
+, arbitraryValidInputs
+, choiceInBoundsIfNonempty
+, choiceNotInBounds
+-- * Weighting factors for arbitrary contracts
 , defaultContractWeights
 , closeContractWeights
 , payContractWeights
@@ -20,10 +41,6 @@ module Spec.Marlowe.Semantics.Arbitrary (
 , whenContractWeights
 , letContractWeights
 , assertContractWeights
-, arbitraryContractWeighted
-, arbitraryValidStep
-, arbitraryValidInput
-, arbitraryValidInputs
 ) where
 
 
@@ -45,23 +62,27 @@ import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
 
--- FIXME: Turn this off if semantics should allow applying `[]` to a non-quiescent contract without ever throwing a timeout-related error.
+-- | FIXME: Turn this off if semantics should allow applying `[]` to a non-quiescent contract without ever throwing a timeout-related error.
 _FORBID_NONQUIESCENT_TIMEOUT_ :: Bool
 _FORBID_NONQUIESCENT_TIMEOUT_ = True
 
 
+-- | Part of the Fibonacci sequence.
 fibonaccis :: Num a => [a]
 fibonaccis = [2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584]
 
 
+-- | Inverse-Fibanoncci frequencies.
 fibonacciFrequencies :: Integral a => [a]
 fibonacciFrequencies = (1000000 `div`) <$> fibonaccis
 
 
+-- | Select an element of a list with propability proportional to inverse-Fibonacci weights.
 arbitraryFibonacci :: [a] -> Gen a
 arbitraryFibonacci = frequency . zip fibonacciFrequencies . fmap pure
 
 
+-- | Shrink a byte string.
 shrinkByteString :: (a -> BuiltinByteString) -> [a] -> a -> [a]
 shrinkByteString f universe selected =
   filter
@@ -69,26 +90,46 @@ shrinkByteString f universe selected =
     universe
 
 
-perturb :: Gen a -> [a] -> Gen a
+-- | Select an element of a list with high probability, or create a non-element at random with low probability.
+perturb :: Gen a   -- ^ The generator for a random item.
+        -> [a]     -- ^ The list of pre-defined items.
+        -> Gen a   -- ^ Action for generating an item
 perturb gen [] = gen
 perturb gen xs = frequency [(20, gen), (80, elements xs)]
 
 
+-- | Class for arbitrary values with respect to a context.
+class Arbitrary a => SemiArbitrary a where
+  -- | Generate an arbitrary value within a context.
+  semiArbitrary :: Context -> Gen a
+  semiArbitrary context =
+     case fromContext context of
+       [] -> arbitrary
+       xs -> perturb arbitrary xs
+  -- | Shrink a contextually arbitrary value.
+  semiShrink :: [a] -> [[a]]
+  semiShrink = shrink
+  -- | Report values present in a context.
+  fromContext :: Context -> [a]
+  fromContext _ = []
+
+
+-- | Context for generating correlated Marlowe terms and state.
 data Context =
   Context
   {
-    parties      :: [Party]
-  , tokens       :: [Token]
-  , amounts      :: [Integer]
-  , choiceNames  :: [ChoiceName]
-  , chosenNums   :: [ChosenNum]
-  , choiceIds    :: [ChoiceId]
-  , valueIds     :: [ValueId]
-  , values       :: [Integer]
-  , times        :: [POSIXTime]
-  , caccounts    :: Accounts
-  , cchoices     :: AM.Map ChoiceId ChosenNum
-  , cboundValues :: AM.Map ValueId Integer
+    parties      :: [Party]                     -- ^ Universe of parties.
+  , tokens       :: [Token]                     -- ^ Universe of tokens.
+  , amounts      :: [Integer]                   -- ^ Universe of token amounts.
+  , choiceNames  :: [ChoiceName]                -- ^ Universe of choice names.
+  , chosenNums   :: [ChosenNum]                 -- ^ Universe of chosen numbers.
+  , choiceIds    :: [ChoiceId]                  -- ^ Universe of token identifiers.
+  , valueIds     :: [ValueId]                   -- ^ Universe of value identifiers.
+  , values       :: [Integer]                   -- ^ Universe of values.
+  , times        :: [POSIXTime]                 -- ^ Universe of times.
+  , caccounts    :: Accounts                    -- ^ Accounts for state.
+  , cchoices     :: AM.Map ChoiceId ChosenNum   -- ^ Choices for state.
+  , cboundValues :: AM.Map ValueId Integer      -- ^ Bound values for state.
   }
 
 instance Arbitrary Context where
@@ -122,20 +163,9 @@ instance Arbitrary Context where
       ++ [context {cboundValues = cboundValues'} | cboundValues' <- shrink cboundValues]
 
 
-
-class Arbitrary a => SemiArbitrary a where
-  semiArbitrary :: Context -> Gen a
-  semiArbitrary context =
-     case fromContext context of
-       [] -> arbitrary
-       xs -> perturb arbitrary xs
-  semiShrink :: [a] -> [[a]]
-  semiShrink = shrink
-  fromContext :: Context -> [a]
-  fromContext _ = []
-
-
+-- | Class of reporting the validity of something.
 class IsValid a where
+  -- | Report whether a value is valid.
   isValid :: a -> Bool
 
 instance IsValid Accounts where
@@ -166,6 +196,7 @@ instance IsValid Context where
   isValid Context{..} = isValid caccounts && isValid cchoices && isValid cboundValues
 
 
+-- | An arbitrary positive integer, mostly small.
 arbitraryPositiveInteger :: Gen Integer
 arbitraryPositiveInteger =
   frequency
@@ -175,6 +206,7 @@ arbitraryPositiveInteger =
     ]
 
 
+-- | An arbitrary non-negative integer, mostly small.
 arbitraryNonnegativeInteger :: Gen Integer
 arbitraryNonnegativeInteger =
   frequency
@@ -184,17 +216,19 @@ arbitraryNonnegativeInteger =
     ]
 
 
+-- | An arbitrary integer, mostly small.
 arbitraryInteger :: Gen Integer
 arbitraryInteger =
   frequency
     [
       ( 5, arbitrary `suchThat` (< 0))
-    , (60, arbitrary `suchThat` (> 0))
+    , (30, arbitrary `suchThat` (> 0))
     , ( 5, pure 0)
-    , (30, arbitraryFibonacci fibonaccis)
+    , (60, arbitraryFibonacci fibonaccis)
     ]
 
 
+-- | Some public key hashes.
 randomPubKeyHashes :: [PubKeyHash]
 randomPubKeyHashes =
   [
@@ -216,12 +250,12 @@ randomPubKeyHashes =
   , "e3351d289f3eaa66e500f17b91a74e492193f4485c32e5ad606da83542"  -- NB: Too long for ledger.
   ]
 
-
 instance Arbitrary PubKeyHash where
   arbitrary = arbitraryFibonacci randomPubKeyHashes
   shrink x = filter (< x) randomPubKeyHashes
 
 
+-- | Some currency symbols.
 randomCurrencySymbols :: [CurrencySymbol]
 randomCurrencySymbols =
   [
@@ -248,6 +282,7 @@ instance Arbitrary CurrencySymbol where
   shrink x = filter (< x) randomCurrencySymbols
 
 
+-- | Some token names.
 randomTokenNames :: [TokenName]
 randomTokenNames =
   [
@@ -273,7 +308,6 @@ instance Arbitrary TokenName where
   arbitrary = arbitraryFibonacci randomTokenNames
   shrink = shrinkByteString (\(TokenName x) -> x) randomTokenNames
 
-
 instance Arbitrary Token where
   arbitrary =
      do
@@ -285,11 +319,11 @@ instance Arbitrary Token where
     | c == adaSymbol && n == adaToken = []
     | otherwise                       = Token adaSymbol adaToken : [Token c' n' | c' <- shrink c, n' <- shrink n]
 
-
 instance SemiArbitrary Token where
   fromContext = tokens
 
 
+-- | Some role names.
 randomRoleNames :: [TokenName]
 randomRoleNames =
   [
@@ -333,6 +367,7 @@ instance SemiArbitrary POSIXTime where
   fromContext = times
 
 
+-- | Some choice names.
 randomChoiceNames :: [ChoiceName]
 randomChoiceNames =
   [
@@ -354,13 +389,35 @@ randomChoiceNames =
   , "understand weigh originate envisage"  -- NB: Too long for ledger.
   ]
 
+-- | Generate a choice name from a few possibilities.
 arbitraryChoiceName :: Gen ChoiceName
 arbitraryChoiceName = arbitraryFibonacci randomChoiceNames
 
+-- | Shrink a generated choice name.
 shrinkChoiceName :: ChoiceName -> [ChoiceName]
 shrinkChoiceName = shrinkByteString id randomChoiceNames
 
 
+-- | Generate a random choice inside given bounds.
+choiceInBoundsIfNonempty :: [Bound] -> Gen ChosenNum
+choiceInBoundsIfNonempty [] = arbitrary
+choiceInBoundsIfNonempty bounds =
+  do
+    Bound lower upper <- elements bounds
+    chooseInteger (lower, upper)
+
+
+-- | Generate a random choice not in given bounds.
+choiceNotInBounds :: [Bound] -> Gen ChosenNum
+choiceNotInBounds [] = arbitrary
+choiceNotInBounds bounds =
+  let
+    inBound chosenNum (Bound lower upper) = chosenNum >= lower && chosenNum <= upper
+  in
+    suchThat arbitrary $ \chosenNum -> not $ any (inBound chosenNum) bounds
+
+
+-- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
 arbitraryTimeInterval =
   do
@@ -368,6 +425,7 @@ arbitraryTimeInterval =
     duration <- arbitraryNonnegativeInteger
     pure (POSIXTime start, POSIXTime $ start + duration)
 
+-- | Generate a semi-random time interrval straddling a given time.
 arbitraryTimeIntervalAround :: POSIXTime -> Gen TimeInterval
 arbitraryTimeIntervalAround (POSIXTime limit) =
   do
@@ -375,6 +433,7 @@ arbitraryTimeIntervalAround (POSIXTime limit) =
     duration <- ((limit - start) +) <$> arbitraryNonnegativeInteger
     pure (POSIXTime start, POSIXTime $ start + duration)
 
+-- | Generate a semi-random time interval before a given time.
 arbitraryTimeIntervalBefore :: POSIXTime -> POSIXTime -> Gen TimeInterval
 arbitraryTimeIntervalBefore (POSIXTime lower) (POSIXTime upper) =
   do
@@ -382,6 +441,7 @@ arbitraryTimeIntervalBefore (POSIXTime lower) (POSIXTime upper) =
     duration <- chooseInteger (0, upper - start - 1)
     pure (POSIXTime start, POSIXTime $ start + duration)
 
+-- | Generate a semi-random time interval after a given time.
 arbitraryTimeIntervalAfter :: POSIXTime -> Gen TimeInterval
 arbitraryTimeIntervalAfter (POSIXTime lower) =
   do
@@ -389,6 +449,7 @@ arbitraryTimeIntervalAfter (POSIXTime lower) =
     duration <- arbitraryNonnegativeInteger
     pure (POSIXTime start, POSIXTime $ start + duration)
 
+-- | Shrink a generated time interval.
 shrinkTimeInterval :: TimeInterval -> [TimeInterval]
 shrinkTimeInterval (start, end) =
   let
@@ -421,6 +482,7 @@ instance SemiArbitrary ChoiceId where
   fromContext = choiceIds
 
 
+-- | Some value identifiers.
 randomValueIds :: [ValueId]
 randomValueIds =
   [
@@ -450,15 +512,21 @@ instance SemiArbitrary ValueId where
   fromContext = valueIds
 
 
-arbitraryNumber :: (Context -> [Integer]) -> Context -> Gen Integer
+-- | Generate a semi-random integer.
+arbitraryNumber :: (Context -> [Integer])  -- ^ How to select the universe of some possibilities.
+                -> Context                 -- ^ The Marlowe context.
+                -> Gen Integer             -- ^ Action for generating the integer.
 arbitraryNumber = (perturb arbitraryInteger .)
 
+-- | Generate a semi-random token amount.
 arbitraryAmount :: Context -> Gen Integer
 arbitraryAmount = arbitraryNumber amounts
 
+-- | Generate a semi-random chosen number.
 arbitraryChosenNum :: Context -> Gen Integer
 arbitraryChosenNum = arbitraryNumber chosenNums
 
+-- | Generate a semi-random value.
 arbitraryValueNum :: Context -> Gen Integer
 arbitraryValueNum = arbitraryNumber values
 
@@ -658,7 +726,10 @@ instance Arbitrary (Case Contract) where
 instance SemiArbitrary (Case Contract) where
   semiArbitrary context = Case <$> semiArbitrary context <*> semiArbitrary context
 
-arbitraryCaseWeighted :: [(Int, Int, Int, Int, Int, Int)] -> Context -> Gen (Case Contract)
+-- | Generate a random case, weighted towards different contract types.
+arbitraryCaseWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights for contract terms.
+                      -> Context                           -- ^ The Marlowe context.
+                      -> Gen (Case Contract)               -- ^ Action for generating the case.
 arbitraryCaseWeighted w context =
   Case <$> semiArbitrary context <*> arbitraryContractWeighted w context
 
@@ -673,7 +744,10 @@ instance Arbitrary Contract where
   shrink _ = []
 
 
-arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)] -> Context -> Gen Contract
+-- | Generate an arbitrary contract, weighted towards different contract types.
+arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights of contract terms.
+                          -> Context                           -- ^ The Marlowe context.
+                          -> Gen Contract                      -- ^ Action for generating the contract.
 arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) context =
   frequency
     [
@@ -686,34 +760,45 @@ arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) contex
     ]
 arbitraryContractWeighted [] _ = pure Close
 
+-- | Default weights for contract terms.
 defaultContractWeights :: (Int, Int, Int, Int, Int, Int)
 defaultContractWeights = (35, 20, 10, 15, 20, 5)
 
+-- | Contract weights selecting only `Close`.
 closeContractWeights :: (Int, Int, Int, Int, Int, Int)
 closeContractWeights = (1, 0, 0, 0, 0, 0)
 
+-- | Contract weights selecting only `Pay`.
 payContractWeights :: (Int, Int, Int, Int, Int, Int)
 payContractWeights = (0, 1, 0, 0, 0, 0)
 
+-- | Contract weights selecting only `If`.
 ifContractWeights :: (Int, Int, Int, Int, Int, Int)
 ifContractWeights = (0, 0, 1, 0, 0, 0)
 
+-- | Contract weights selecting only `When`.
 whenContractWeights :: (Int, Int, Int, Int, Int, Int)
 whenContractWeights = (0, 0, 0, 1, 0, 0)
 
+-- | Contractt weights selecing only `Let`.
 letContractWeights :: (Int, Int, Int, Int, Int, Int)
 letContractWeights = (0, 0, 0, 0, 1, 0)
 
+-- | Contract weights selecting only `Assert`.
 assertContractWeights :: (Int, Int, Int, Int, Int, Int)
 assertContractWeights = (0, 0, 0, 0, 0, 1)
 
-arbitraryContractSized :: Int -> Context -> Gen Contract
+-- | Generate a semi-random contract of a given depth.
+arbitraryContractSized :: Int           -- ^ The maximum depth.
+                       -> Context       -- ^ The Marlowe context.
+                       -> Gen Contract  -- ^ Action for generating the contract.
 arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContractWeights)
 
 instance SemiArbitrary Contract where
   semiArbitrary = arbitraryContractSized 5
 
 
+-- | Generate a random association map.
 arbitraryAssocMap :: Eq k => Gen k -> Gen v -> Gen (AM.Map k v)
 arbitraryAssocMap arbitraryKey arbitraryValue =
   do
@@ -723,6 +808,7 @@ arbitraryAssocMap arbitraryKey arbitraryValue =
       $ (,) <$> arbitraryKey <*> arbitraryValue
 
 
+-- | Shrink a generated association map.
 shrinkAssocMap :: P.Eq k => AM.Map k v -> [AM.Map k v]
 shrinkAssocMap am =
   [
@@ -736,7 +822,6 @@ instance Arbitrary Accounts where
   arbitrary = arbitraryAssocMap ((,) <$> arbitrary <*> arbitrary) arbitraryPositiveInteger
   shrink = shrinkAssocMap
 
-
 instance SemiArbitrary Accounts where
   semiArbitrary context =
     do
@@ -745,13 +830,14 @@ instance SemiArbitrary Accounts where
         . replicateM entries
         $ (,) <$> semiArbitrary context <*> (semiArbitrary context `suchThat` (> 0))
 
+
 instance SemiArbitrary (Party, Token) where
   semiArbitrary context = (,) <$> semiArbitrary context <*> semiArbitrary context
+
 
 instance Arbitrary (AM.Map ChoiceId ChosenNum) where
   arbitrary = arbitraryAssocMap arbitrary arbitraryInteger
   shrink = shrinkAssocMap
-
 
 instance SemiArbitrary (AM.Map ChoiceId ChosenNum) where
   semiArbitrary context = arbitraryAssocMap (semiArbitrary context) (semiArbitrary context)
@@ -760,7 +846,6 @@ instance SemiArbitrary (AM.Map ChoiceId ChosenNum) where
 instance Arbitrary (AM.Map ValueId Integer) where
   arbitrary = arbitraryAssocMap arbitrary arbitraryInteger
   shrink = shrinkAssocMap
-
 
 instance SemiArbitrary (AM.Map ValueId Integer) where
   semiArbitrary context = arbitraryAssocMap (semiArbitrary context) (semiArbitrary context)
@@ -829,7 +914,10 @@ instance SemiArbitrary TransactionInput where
       TransactionInput txInterval <$> vectorOf n (semiArbitrary context)
 
 
-arbitraryValidStep :: State -> Contract -> Gen TransactionInput
+-- | Generate a random step for a contract.
+arbitraryValidStep :: State                 -- ^ The state of the contract.
+                   -> Contract              -- ^ The contract.
+                   -> Gen TransactionInput  -- ^ Action for generating the transaction input for a single step.
 arbitraryValidStep _ (When [] timeout _) =
   TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
 arbitraryValidStep state@State{..} (When cases timeout _) =
@@ -864,7 +952,10 @@ arbitraryValidStep State{minTime} contract =
     else TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
 
 
-arbitraryValidInput :: State -> Contract -> Gen TransactionInput
+-- | Generate random transaction input.
+arbitraryValidInput :: State                 -- ^ The state of the contract.
+                    -> Contract              -- ^ The contract.
+                    -> Gen TransactionInput  -- ^ Action for generating the transaction input.
 arbitraryValidInput = arbitraryValidInput' Nothing
 
 arbitraryValidInput' :: Maybe TransactionInput -> State -> Contract -> Gen TransactionInput
@@ -882,7 +973,10 @@ arbitraryValidInput' (Just input) state contract =
                                  TransactionOutput{} -> pure combinedInput
 
 
-arbitraryValidInputs :: State -> Contract -> Gen [TransactionInput]
+-- | Generate a random path through a contract.
+arbitraryValidInputs :: State                   -- ^ The state of the contract.
+                     -> Contract                -- ^ The contract.
+                     -> Gen [TransactionInput]  -- ^ Action for generating the transaction inputs.
 arbitraryValidInputs _ Close = pure []
 arbitraryValidInputs state contract =
   do

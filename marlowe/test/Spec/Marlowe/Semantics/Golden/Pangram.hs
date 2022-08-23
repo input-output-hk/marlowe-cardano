@@ -1,3 +1,15 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Reference golden output for the Pangram contract.
+--
+-----------------------------------------------------------------------------
+
 
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -6,6 +18,7 @@
 
 
 module Spec.Marlowe.Semantics.Golden.Pangram (
+-- * Test cases
   pangramValids
 , pangramInvalids
 ) where
@@ -24,18 +37,22 @@ import Plutus.V1.Ledger.Api (POSIXTime (..), Value (..))
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 
 
+-- | A wrapper to assist parsing of test cases.
 newtype Map k v = Map {unMap :: [(k, v)]}
 
 
+-- | A function to assist parsing of test cases.
 toAM :: Map k v -> AM.Map k v
 toAM = AM.fromList . unMap
 
 
+-- An orphan instance to support parsing of test cases.
 instance IsString AccountId where
   fromString ('P' : 'K' : x) = PK $ fromString x
   fromString x               = Role $ fromString x
 
 
+-- | A list of Pangram test cases and results that should succeed.
 pangramValids :: [(POSIXTime, [TransactionInput], TransactionOutput)]
 pangramValids =
   [
@@ -326,6 +343,7 @@ pangramValids =
   ]
 
 
+-- | A list of Pangram test cases and results that should fail.
 pangramInvalids :: [(POSIXTime, [TransactionInput], TransactionOutput)]
 pangramInvalids =
   [

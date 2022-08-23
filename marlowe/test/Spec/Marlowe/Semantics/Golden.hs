@@ -1,3 +1,15 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Golden tests of contract execution.
+--
+-----------------------------------------------------------------------------
+
 
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -6,7 +18,9 @@
 
 
 module Spec.Marlowe.Semantics.Golden (
+-- * Testing
   tests
+-- * Reference contracts
 , pangram
 ) where
 
@@ -31,6 +45,7 @@ _PRINT_PANGRAM_ :: Bool
 _PRINT_PANGRAM_ = False
 
 
+-- | Run tests.
 tests :: TestTree
 tests =
   testGroup "Golden"
@@ -50,6 +65,7 @@ deriving instance Eq Payment
 deriving instance Eq TransactionOutput
 
 
+-- | Test successful execution for the Pangram contract.
 testPangramValid :: IO ()
 testPangramValid =
   sequence_
@@ -60,6 +76,7 @@ testPangramValid =
     ]
 
 
+-- | Test erroneous transactions for the Pangram contract.
 testPangramInvalid :: IO ()
 testPangramInvalid =
   sequence_
@@ -70,6 +87,7 @@ testPangramInvalid =
     ]
 
 
+-- | Use static analysis to generate and print successful golden test cases for the Pangram contract. This takes nearly one hour to execute.
 printPangram :: IO ()
 printPangram =
   do
@@ -84,6 +102,7 @@ printPangram =
       ]
 
 
+-- | The Pangram contract.
 pangram :: Contract
 pangram =
   let

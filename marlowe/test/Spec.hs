@@ -1,8 +1,21 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Marlowe tests.
+--
+-----------------------------------------------------------------------------
+
 
 {-# LANGUAGE OverloadedStrings #-}
 
 
 module Main(
+-- * Testing
   main
 ) where
 
@@ -15,10 +28,12 @@ import qualified Spec.Marlowe.Marlowe (prop_contractJsonLoops, prop_marloweParam
 import qualified Spec.Marlowe.Semantics (tests)
 
 
+-- | Entry point for the tests.
 main :: IO ()
 main = defaultMain tests
 
 
+-- | Run the tests.
 tests :: TestTree
 tests =
   testGroup "Marlowe"

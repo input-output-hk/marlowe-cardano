@@ -1,3 +1,16 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Marlowe tests.
+--
+-----------------------------------------------------------------------------
+
+
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -5,17 +18,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Spec.Marlowe.Marlowe
-    ( prop_noFalsePositives
-    , tests
-    , prop_showWorksForContracts
-    , prop_contractJsonLoops
-    , prop_marloweParamsJsonLoops
-    , prop_intervalErrorJsonLoops
-    )
-    where
+module Spec.Marlowe.Marlowe (
+-- * Testing
+  tests
+, prop_noFalsePositives
+, prop_showWorksForContracts
+, prop_contractJsonLoops
+, prop_marloweParamsJsonLoops
+, prop_intervalErrorJsonLoops
+)
+where
 
-import qualified Codec.Serialise as Serialise
+
 import Control.Arrow (Arrow ((***)))
 import Control.Exception (SomeException, catch)
 import Control.Monad (when)
@@ -23,19 +37,13 @@ import Data.Aeson (decode, eitherDecode, encode)
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as LB
-import qualified Data.ByteString.Short as SBS
 import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
-import qualified Data.Set as Set
 import Data.String (IsString (fromString))
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Text.Lazy (toStrict)
 import GHC.IO (unsafePerformIO)
 import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
                                      languageExtensions, runInterpreter, set, setImports)
-import qualified Language.Marlowe as M
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (MarloweParams),
@@ -52,13 +60,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound
                                                  ValueId (ValueId), emptyState)
 import Language.Marlowe.Scripts (smallTypedValidator, smallUntypedValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
-import qualified Ledger.Typed.Scripts as Scripts
-import qualified Plutus.Script.Utils.V1.Typed.Scripts as TS
 import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), ValidatorHash (ValidatorHash),
                              toBuiltin)
-import qualified PlutusTx.AssocMap as AssocMap
-import qualified PlutusTx.Prelude as P
-import qualified PlutusTx.Ratio as P
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
 import Test.QuickCheck (Gen, arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate,
                         withMaxSuccess, (.&&.), (=/=), (===))
@@ -67,12 +70,26 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
 import Test.Tasty.QuickCheck (Property, testProperty)
 
+import qualified Codec.Serialise as Serialise
+import qualified Data.ByteString.Lazy as LB
+import qualified Data.ByteString.Short as SBS
+import qualified Data.Set as Set
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import qualified Language.Marlowe as M
+import qualified Ledger.Typed.Scripts as Scripts
+import qualified Plutus.Script.Utils.V1.Typed.Scripts as TS
+import qualified PlutusTx.AssocMap as AssocMap
+import qualified PlutusTx.Prelude as P
+import qualified PlutusTx.Ratio as P
+
 
 -- | Set to `True` to print the JSON for the pangram contract.
 _PRINT_PANGRAM_JSON_ :: Bool
 _PRINT_PANGRAM_JSON_ = False
 
 
+-- | Run the tests.
 tests :: TestTree
 tests = testGroup "Contracts"
   [ testCase "Contracts with different creators have different hashes" uniqueContractHash
@@ -99,6 +116,7 @@ tests = testGroup "Contracts"
   ]
 
 
+-- | Test that different contract hash to different values.
 uniqueContractHash :: IO ()
 uniqueContractHash = do
     let hash1 = TS.validatorHash $ smallTypedValidator (marloweParams "11")
@@ -107,18 +125,24 @@ uniqueContractHash = do
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
 
+
+-- | Test that the typed validator is not too large.
 typedValidatorSize :: IO ()
 typedValidatorSize = do
     let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
     assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 17200)
 
+
+-- | Test that the untyped validator is not too large.
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do
     let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
     assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
 
+
+-- | Test `extractNonMerkleizedContractRoles`.
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do
     extractNonMerkleizedContractRoles Close @=? mempty
@@ -133,6 +157,7 @@ extractContractRolesTest = do
             @=? Set.fromList ["Alice"]
 
 
+-- | Test that equality on `Value` is symmetric and transitive.
 checkEqValue :: Property
 checkEqValue = property $ do
     let gen = do
@@ -147,12 +172,14 @@ checkEqValue = property $ do
             .&&. (not (a P.== b && b P.== c) || a P.== c) -- transitive
 
 
+-- | Test that `NegValue` is its own inverse.
 doubleNegation :: Property
 doubleNegation = property $ do
     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     forAll valueGen $ \a -> eval (NegValue (NegValue a)) === eval a
 
 
+-- | Test that `Value` forms an Abelian group.
 valuesFormAbelianGroup :: Property
 valuesFormAbelianGroup = property $ do
     let gen = do
@@ -174,6 +201,7 @@ valuesFormAbelianGroup = property $ do
         eval (SubValue (AddValue a b) b) === eval a
 
 
+-- | Test rounding of `DivValue`.
 divisionRoundingTest :: Property
 divisionRoundingTest = property $ do
     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
@@ -187,13 +215,7 @@ divisionRoundingTest = property $ do
       roundToZero = P.truncate
 
 
-mulTest :: Property
-mulTest = property $ do
-    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
-    forAll valueGen $ \a ->
-        eval (MulValue (Constant 0) a) === 0
-
-
+-- | Test `DivValue` with zero in numerator or denominator.
 divZeroTest :: Property
 divZeroTest = property $ do
     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
@@ -202,6 +224,15 @@ divZeroTest = property $ do
         eval (DivValue a (Constant 0)) === 0
 
 
+-- | Test `MulValue` with a zero numerator.
+mulTest :: Property
+mulTest = property $ do
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+    forAll valueGen $ \a ->
+        eval (MulValue (Constant 0) a) === 0
+
+
+-- | Test the serialization of `Value`.
 valueSerialization :: Property
 valueSerialization = property $
     forAll valueGen $ \a ->
@@ -210,6 +241,7 @@ valueSerialization = property $
         in Just a === decoded
 
 
+-- | Test a complicated sequence of multiplications.
 mulAnalysisTest :: IO ()
 mulAnalysisTest = do
     let muliply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1..100] :: [Int])
@@ -219,23 +251,7 @@ mulAnalysisTest = do
     assertBool "Analysis ok" $ isRight result
 
 
-transferBetweenAccountsTest :: IO ()
-transferBetweenAccountsTest = do
-    let state = State
-            { accounts = AssocMap.fromList [((Role "alice", Token "" ""), 100)]
-            , choices  = AssocMap.empty
-            , boundValues = AssocMap.empty
-            , minTime = 10 }
-    let contract = Pay "alice" (Account "bob") (Token "" "") (Constant 100) (When [] 100 Close)
-    let txInput = TransactionInput {
-                    txInterval = (20, 30),
-                    txInputs = [] }
-    case computeTransaction txInput state contract of
-        TransactionOutput {txOutState = State{accounts}} -> do
-            assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
-        e -> fail $ show e
-
-
+-- | Test a complicated division.
 divAnalysisTest :: IO ()
 divAnalysisTest = do
     let
@@ -256,6 +272,7 @@ divAnalysisTest = do
     eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
 
 
+-- | Golden tests for `DivValue`.
 divTest :: IO ()
 divTest = do
     let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
@@ -267,7 +284,25 @@ divTest = do
     eval (DivValue (Constant (-7)) (Constant 2)) @=? -3
 
 
+-- | Test transfer of funds between internal accounts.
+transferBetweenAccountsTest :: IO ()
+transferBetweenAccountsTest = do
+    let state = State
+            { accounts = AssocMap.fromList [((Role "alice", Token "" ""), 100)]
+            , choices  = AssocMap.empty
+            , boundValues = AssocMap.empty
+            , minTime = 10 }
+    let contract = Pay "alice" (Account "bob") (Token "" "") (Constant 100) (When [] 100 Close)
+    let txInput = TransactionInput {
+                    txInterval = (20, 30),
+                    txInputs = [] }
+    case computeTransaction txInput state contract of
+        TransactionOutput {txOutState = State{accounts}} -> do
+            assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
+        e -> fail $ show e
 
+
+-- | Serialize the Pangram contract.
 pangramContractSerialization :: IO ()
 pangramContractSerialization = do
     when _PRINT_PANGRAM_JSON_ $ do
@@ -283,6 +318,7 @@ pangramContractSerialization = do
         _         -> assertFailure "Nope"
 
 
+-- | Test printing of tokens.
 tokenShowTest :: IO ()
 tokenShowTest = do
     -- SCP-834, CurrencySymbol is HEX encoded ByteString,
@@ -293,6 +329,7 @@ tokenShowTest = do
     show actual @=? "AvailableMoney \"alice\" (Token \"00010aff\" \"ÚSD©\")"
 
 
+-- | Test JSON serialization of input.
 inputSerialization :: IO ()
 inputSerialization = do
     state <- readFile "test/input.json"
@@ -305,6 +342,8 @@ inputSerialization = do
                 Left e       -> assertFailure $ "Could not decode encoded input: " <> e
         Left e -> assertFailure $ "Could not decode test/input.json: " <> e
 
+
+-- | Test JSON serialization of state.
 stateSerialization :: IO ()
 stateSerialization = do
     state <- readFile "test/state.json"
@@ -317,10 +356,13 @@ stateSerialization = do
                 Nothing  -> assertFailure "Nope"
         Nothing -> assertFailure "Nope"
 
+
+-- | Test that showing contracts works, with shrinkage of test cases.
 prop_showWorksForContracts :: Property
 prop_showWorksForContracts = forAllShrink contractGen shrinkContract showWorksForContract
 
 
+-- | Test that showing a contract works.
 showWorksForContract :: Contract -> Property
 showWorksForContract contract = unsafePerformIO $ do
   res <- runInterpreter $ setImports ["Language.Marlowe"]
@@ -331,10 +373,12 @@ showWorksForContract contract = unsafePerformIO $ do
             Left err -> counterexample (show err) False)
 
 
+-- | Test reading of contracts.
 interpretContractString :: MonadInterpreter m => String -> m Contract
 interpretContractString contractStr = interpret contractStr (as :: Contract)
 
 
+-- | Test that a contract execution does not exhibit false positives for warnings.
 noFalsePositivesForContract :: Contract -> Property
 noFalsePositivesForContract cont =
   unsafePerformIO (do res <- catch (first Right <$> warningsTrace cont)
@@ -353,18 +397,27 @@ noFalsePositivesForContract cont =
                                                   (warns =/= []))))
 
 
+-- | Test that contract execution does not exhibit false positives for warnings.
 prop_noFalsePositives :: Property
 prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
 
+
+-- | Test that JSON decoding inverts encoding for a contract.
 contractJsonLoops :: Contract -> Property
 contractJsonLoops cont = decode (encode cont) === Just cont
 
+
+-- | Test that JSON decoding inverts encoding for contracts.
 prop_contractJsonLoops :: Property
 prop_contractJsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract contractJsonLoops
 
+
+-- | Test that JSON decoding inverts encoding for Marlowe parameters.
 marloweParamsJsonLoops :: MarloweParams -> Property
 marloweParamsJsonLoops mp = decode (encode mp) === Just mp
 
+
+-- | Test that JSON decoding inverts encoding for Marlowe parameters.
 prop_marloweParamsJsonLoops :: Property
 prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJsonLoops
   where
@@ -374,9 +427,12 @@ prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJson
       return $ MarloweParams (ValidatorHash b) (CurrencySymbol c)
 
 
+-- | Test that JSON decoding inverts encoding for an interval error.
 intervalErrorJsonLoops :: IntervalError -> Property
 intervalErrorJsonLoops ie = decode (encode ie) === Just ie
 
+
+-- | Test that JSON decoding inverts encoding for interval errors.
 prop_intervalErrorJsonLoops :: Property
 prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJsonLoops
   where
@@ -390,4 +446,3 @@ prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJson
         s <- POSIXTime <$> arbitrary
         t <- (POSIXTime *** POSIXTime) <$> arbitrary
         return $ IntervalInPastError s t
-
