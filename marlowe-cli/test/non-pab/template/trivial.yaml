@@ -19,8 +19,7 @@ stScriptOperations:
         depositLovelace: 15000000
         withdrawalLovelace: 15000000
         timeout:
-          tag: "POSIXTime"
-          contents: 1961123625000
+          relative: 20000
 
   - tag: Prepare
     soTransaction: "TestTransaction-1"

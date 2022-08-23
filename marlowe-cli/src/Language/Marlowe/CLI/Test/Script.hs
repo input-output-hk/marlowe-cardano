@@ -27,17 +27,17 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (AsType (AsPaymentKey), CardanoMode, Key (getVerificationKey, verificationKeyHash),
-                    LocalNodeConnectInfo (..), NetworkId (..), PaymentCredential (PaymentCredentialByKey),
-                    ScriptDataSupportedInEra, StakeAddressReference (NoStakeAddress), generateSigningKey,
-                    makeShelleyAddress)
+import Cardano.Api (AsType (AsPaymentKey), CardanoMode, ConsensusModeParams (CardanoModeParams),
+                    EpochSlots (EpochSlots), Key (getVerificationKey, verificationKeyHash), LocalNodeConnectInfo (..),
+                    NetworkId (..), PaymentCredential (PaymentCredentialByKey), ScriptDataSupportedInEra,
+                    StakeAddressReference (NoStakeAddress), generateSigningKey, makeShelleyAddress)
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), initialMarloweState, makeContract)
 import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction, toTimeout)
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId)
-import Marlowe.Contracts (trivial)
+import Language.Marlowe.Extended.V1 as E
+import Marlowe.Contracts (escrow, trivial)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -56,12 +56,12 @@ import qualified Language.Marlowe.Client as Client
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
 data ScriptState era = ScriptState
-  { transactions :: Map String (MarloweTransaction era)
+  { transactions :: Map String (Maybe (MarloweTransaction era), MarloweTransaction era)
   , wallets      :: Map AccountId Wallet
   }
 
 data ScriptEnv era = ScriptEnv
-  { seNetworkId        :: NetworkId
+  { seConnection       :: LocalNodeConnectInfo CardanoMode
   , seSlotConfig       :: SlotConfig
   , seConstModelParams :: CostModelParams
   , seEra              :: ScriptDataSupportedInEra era
@@ -76,6 +76,7 @@ interpret :: MonadError CliError m
 interpret Initialize {..} = do
   ScriptEnv {..} <- ask
   let
+    LocalNodeConnectInfo { localNodeNetworkId } = seConnection
     roleCurrencyJson = JSON.object
       [ ( "unCurrencySymbol"
         , JSON.String soRoleCurrency
@@ -97,16 +98,20 @@ interpret Initialize {..} = do
                                     depositLovelace
                                     withdrawalLovelace
                                     timeout'
+        TemplateEscrow{..} -> do paymentDeadline' <- toTimeout paymentDeadline
+                                 complaintDeadline' <- toTimeout complaintDeadline
+                                 disputeDeadline' <- toTimeout disputeDeadline
+                                 mediationDeadline' <- toTimeout mediationDeadline
+                                 makeContract $ escrow
+                                    (E.Constant price)
+                                    seller
+                                    buyer
+                                    mediator
+                                    paymentDeadline'
+                                    complaintDeadline'
+                                    disputeDeadline'
+                                    mediationDeadline'
         template -> throwError $ CliError $ "Template not implemented: " <> show template
-        -- TemplateEscrow{..} -> makeContract $
-        --                         escrow
-        --                           (Constant price)
-        --                           seller
-        --                           buyer
-        --                           mediator
-        --                           paymentDeadline
-        --                           complaintDeadline
-        --                           disputeDeadline
         -- TemplateSwap{..} -> makeContract $
         --                       swap
         --                         aParty
@@ -145,7 +150,7 @@ interpret Initialize {..} = do
     marloweParams
     seSlotConfig
     seConstModelParams
-    seNetworkId
+    localNodeNetworkId
     NoStakeAddress
     testContract
     marloweState
@@ -155,7 +160,7 @@ interpret Initialize {..} = do
   modify $ insertMarloweTransaction soTransaction transaction
 
 interpret Prepare {..} = do
-  marloweTransaction <- findMarloweTransaction soTransaction
+  (_, marloweTransaction) <- findMarloweTransaction soTransaction
   preparedMarloweTransaction <- withError (\(CliError originalMessage) -> CliError $ originalMessage <> " - from Prepare Impl") $ prepareTransactionImpl
                                   marloweTransaction
                                   soInputs
@@ -168,10 +173,15 @@ interpret CreateWallet {..} = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
   ScriptEnv {..} <- ask
   let vkey = getVerificationKey skey
+  let LocalNodeConnectInfo {localNodeNetworkId} = seConnection
   let
-    address = makeShelleyAddress seNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
+    address = makeShelleyAddress localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
   let wallet = Wallet vkey skey address (verificationKeyHash vkey)
   modify $ insertWallet soOwner wallet
+
+-- interpret Execute {..} = do
+--   (prev, marloweTransaction) <- findMarloweTransaction soTransaction
+--   runTransactionImpl
 
 interpret (Fail message) = throwError $ CliError message
 
@@ -182,8 +192,11 @@ withError modifyError action = catchError action \e -> do
                                 throwError $ modifyError e
 
 insertMarloweTransaction :: TransactionNickname -> MarloweTransaction era -> ScriptState era -> ScriptState era
-insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } =
-  scriptState{ transactions = Map.insert nickname transaction transactions }
+insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } = do
+  let
+    f (Just (_, prevTransaction)) = Just (Just prevTransaction, transaction)
+    f Nothing                     = Just (Nothing, transaction)
+  scriptState{ transactions = Map.alter f nickname transactions }
 
 insertWallet :: AccountId -> Wallet -> ScriptState era -> ScriptState era
 insertWallet ownerName wallet scriptState@ScriptState { wallets } =
@@ -194,12 +207,12 @@ insertWallet ownerName wallet scriptState@ScriptState { wallets } =
 findMarloweTransaction :: MonadError CliError m
                 => MonadState (ScriptState era) m
                 => TransactionNickname   -- ^ The nickname.
-                -> m (MarloweTransaction era) -- ^ Action returning the instance.
+                -> m (Maybe (MarloweTransaction era), MarloweTransaction era) -- ^ Action returning the instance.
 findMarloweTransaction nickname = do
   ScriptState { transactions } <- get
   case M.lookup nickname transactions of
     Nothing -> throwError $ CliError ("[findMarloweTransaction] Marlowe Transaction was not found for nickname " <> show nickname <> ".")
-    Just marloweTransaction -> pure marloweTransaction
+    Just t -> pure t
 
 -- | Test a Marlowe contract.
 scriptTest  :: forall era m
@@ -220,8 +233,16 @@ scriptTest era costModel networkId _ slotConfig ScriptTest{..} =
     let
       interpretLoop = for_ stScriptOperations \operation ->
         interpret operation
+    let
+      connection =
+        LocalNodeConnectInfo
+        {
+          localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+        , localNodeNetworkId       = networkId
+        , localNodeSocketPath      = "FIXME:NODESOCEKTPATH"
+        }
     void $ catchError
-      (runReaderT (execStateT interpretLoop (ScriptState mempty mempty)) (ScriptEnv networkId slotConfig costModel era))
+      (runReaderT (execStateT interpretLoop (ScriptState mempty mempty)) (ScriptEnv connection slotConfig costModel era))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
