@@ -110,15 +110,31 @@ data ScriptOperation =
     }
   | Prepare
     {
-      soOwner       :: AccountId -- ^ The name of the wallet's owner.
+      soOwner       :: AccountId             -- ^ The name of the wallet's owner.
     , soTransaction :: TransactionNickname   -- ^ The name of the wallet's owner.
     , soInputs      :: [Input]
     , soMinimumTime :: POSIXTime
     , soMaximumTime :: POSIXTime
     }
+-- runTransactionImpl :: forall era era' m
+--                 . MonadError CliError m
+--                => MonadIO m
+--                => MonadReader (CliEnv era) m
+--                => LocalNodeConnectInfo CardanoMode              -- ^ The connection info for the local node.
+--                -> Maybe (MarloweTransaction era', TxIn, TxIn)   -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
+--                -> MarloweTransaction era                        -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+--                -> [TxIn]                                        -- ^ The transaction inputs.
+--                -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
+--                -> AddressInEra era                              -- ^ The change address.
+--                -> [SomePaymentSigningKey]                              -- ^ The files for required signing keys.
+--                -> TxMetadataInEra era                           -- ^ The file containing JSON metadata, if any.
+--                -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+--                -> Bool                                          -- ^ Whether to print statistics about the transaction.
+--                -> Bool                                          -- ^ Assertion that the transaction is invalid.
+--                -> m (TxBody era)                                -- ^ Action to build the transaction body.
   | Execute
-    {
-      soTransaction :: TransactionNickname
+    { soTransaction :: TransactionNickname
+    -- , soTimeout     :: Maybe Integer
     }
   | CreateWallet
     {
