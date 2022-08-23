@@ -73,10 +73,11 @@ mkWorker WorkerDependencies{..} =
   where
     server :: QueryServer ChainSyncQuery IO ()
     server = QueryServer $ pure $ ServerStInit \case
-      GetSlotConfig -> queryGetSlotConfig
+      GetSlotConfig        -> queryGenesisParameters extractSlotConfig
+      GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
 
-    queryGetSlotConfig :: IO (ServerStNext ChainSyncQuery 'CanReject Void () SlotConfig IO ())
-    queryGetSlotConfig = do
+    queryGenesisParameters :: (GenesisParameters -> a) -> IO (ServerStNext ChainSyncQuery 'CanReject Void () a IO ())
+    queryGenesisParameters f = do
       result <- runExceptT do
         AnyCardanoEra era <- withExceptT (const ())
           $ ExceptT
@@ -97,12 +98,13 @@ mkWorker WorkerDependencies{..} =
           $ queryLocalNodeState Nothing
           $ QueryInEra eraInMode
           $ QueryInShelleyBasedEra shelleyBasedEra QueryGenesisParameters
-        GenesisParameters{..} <- withExceptT (const ()) $ except result
-        pure $ SlotConfig protocolParamSystemStart protocolParamSlotLength
+        withExceptT (const ()) $ except result
 
       case result of
         Left _ -> pure $ SendMsgReject () ()
-        Right slotConfig -> pure $ SendMsgNextPage slotConfig Nothing $ ServerStPage
+        Right genesisParameters -> pure $ SendMsgNextPage (f genesisParameters) Nothing $ ServerStPage
           { recvMsgDone = pure ()
           , recvMsgRequestNext = absurd
           }
+
+    extractSlotConfig GenesisParameters{..} = SlotConfig protocolParamSystemStart protocolParamSlotLength
