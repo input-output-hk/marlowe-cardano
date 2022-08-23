@@ -23,7 +23,7 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSeekClient, Move (..), ScriptHash, SlotConfig (..),
                                                TransactionOutput (address), TxError (..), TxId, TxOutRef (..),
-                                               UTxOError (..), WithGenesis (..), toDatum)
+                                               UTxOError (..), WithGenesis (..), hoistChainSeekClient, toDatum)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), SomeMarloweVersion (..),
                                           Transaction (..), TransactionOutput (..), TransactionScriptOutput (..),
@@ -32,7 +32,6 @@ import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), Contract
                                                   CreateStep (..), ExtractCreationError (..),
                                                   ExtractMarloweTransactionError (..), Follower (..),
                                                   FollowerDependencies (..), SomeContractChanges (..), mkFollower)
-import Network.Protocol.ChainSeek.Client (hoistChainSeekClient)
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)
 import Test.Network.Protocol.ChainSeek (ChainSeekServerScript (..), ServerStIdleScript (..), ServerStNextScript (..),
@@ -557,6 +556,7 @@ runFollowerTest marloweVersions' script = do
     let slotZeroTime = posixSecondsToUTCTime 0
     let slotLength = secondsToNominalDiffTime 1
     let slotConfig = SlotConfig{..}
+    let securityParameter = 2160
     follower <- mkFollower FollowerDependencies{..}
     pure (resultVar, follower)
   let
