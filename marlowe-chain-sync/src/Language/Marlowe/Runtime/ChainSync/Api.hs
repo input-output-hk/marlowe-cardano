@@ -633,33 +633,49 @@ instance Binary SlotConfig where
 
 data ChainSyncQuery delimiter err result where
   GetSlotConfig :: ChainSyncQuery Void () SlotConfig
+  GetSecurityParameter :: ChainSyncQuery Void () Int
 
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
-  tagEq TagGetSlotConfig TagGetSlotConfig = Just Query.Refl
+    TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
+  tagEq TagGetSlotConfig TagGetSlotConfig               = Just Query.Refl
+  tagEq TagGetSlotConfig _                              = Nothing
+  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Query.Refl
+  tagEq TagGetSecurityParameter _                       = Nothing
   putTag = \case
-    TagGetSlotConfig -> putWord8 0x01
+    TagGetSlotConfig        -> putWord8 0x01
+    TagGetSecurityParameter -> putWord8 0x02
   getTag = do
     word <- getWord8
     case word of
       0x01 -> pure $ Query.SomeTag TagGetSlotConfig
+      0x02 -> pure $ Query.SomeTag TagGetSecurityParameter
       _    -> fail "Invalid ChainSyncQuery tag"
   putQuery = \case
-    GetSlotConfig -> mempty
+    GetSlotConfig        -> mempty
+    GetSecurityParameter -> mempty
   getQuery = \case
-    TagGetSlotConfig -> pure GetSlotConfig
+    TagGetSlotConfig        -> pure GetSlotConfig
+    TagGetSecurityParameter -> pure GetSecurityParameter
   putDelimiter = \case
-    TagGetSlotConfig -> absurd
+    TagGetSlotConfig        -> absurd
+    TagGetSecurityParameter -> absurd
   getDelimiter = \case
-    TagGetSlotConfig -> fail "no delimiter defined"
+    TagGetSlotConfig        -> fail "no delimiter defined"
+    TagGetSecurityParameter -> fail "no delimiter defined"
   putErr = \case
-    TagGetSlotConfig -> put
+    TagGetSlotConfig        -> put
+    TagGetSecurityParameter -> put
   getErr = \case
-    TagGetSlotConfig -> get
+    TagGetSlotConfig        -> get
+    TagGetSecurityParameter -> get
   putResult = \case
-    TagGetSlotConfig -> put
+    TagGetSlotConfig        -> put
+    TagGetSecurityParameter -> put
   getResult = \case
-    TagGetSlotConfig -> get
+    TagGetSlotConfig        -> get
+    TagGetSecurityParameter -> get
   tagFromQuery = \case
-    GetSlotConfig -> TagGetSlotConfig
+    GetSlotConfig        -> TagGetSlotConfig
+    GetSecurityParameter -> TagGetSecurityParameter
