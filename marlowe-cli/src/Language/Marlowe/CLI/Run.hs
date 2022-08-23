@@ -291,19 +291,19 @@ runTransaction :: forall era m
                 . MonadError CliError m
                => MonadIO m
                => MonadReader (CliEnv era) m
-               => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
-               -> Maybe (FilePath, TxIn, TxIn)            -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
-               -> FilePath                                -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
-               -> [TxIn]                                  -- ^ The transaction inputs.
+               => LocalNodeConnectInfo CardanoMode              -- ^ The connection info for the local node.
+               -> Maybe (FilePath, TxIn, TxIn)                  -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
+               -> FilePath                                      -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+               -> [TxIn]                                        -- ^ The transaction inputs.
                -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
                -> AddressInEra era                              -- ^ The change address.
-               -> [FilePath]                              -- ^ The files for required signing keys.
-               -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
-               -> FilePath                                -- ^ The output file for the transaction body.
-               -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-               -> Bool                                    -- ^ Whether to print statistics about the transaction.
-               -> Bool                                    -- ^ Assertion that the transaction is invalid.
-               -> m TxId                                  -- ^ Action to build the transaction body.
+               -> [FilePath]                                    -- ^ The files for required signing keys.
+               -> Maybe FilePath                                -- ^ The file containing JSON metadata, if any.
+               -> FilePath                                      -- ^ The output file for the transaction body.
+               -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Bool                                          -- ^ Whether to print statistics about the transaction.
+               -> Bool                                          -- ^ Assertion that the transaction is invalid.
+               -> m TxId                                        -- ^ Action to build the transaction body.
 runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
   do
     metadata <- readMaybeMetadata metadataFile
@@ -317,42 +317,39 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                                       (someMarloweIn :: SomeMarloweTransaction) <- decodeFileStrict marloweInFile
                                                       pure $ Just (someMarloweIn, spend, collateral)
     let
-      go :: Maybe (MarloweTransaction era, TxIn, TxIn) -> MarloweTransaction era -> m TxId
+      go :: Maybe (MarloweTransaction era', TxIn, TxIn) -> MarloweTransaction era -> m TxId
       go marloweInBundle'' marloweOut'' = do
         (body :: TxBody era) <- runTransactionImpl connection marloweInBundle'' marloweOut'' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
         doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
         pure $ getTxId body
 
     case (era, era', marloweInBundle') of
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Nothing)   -> do
-          go Nothing marloweOut'
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Nothing) -> do
-          go Nothing marloweOut'
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Just (SomeMarloweTransaction ScriptDataInAlonzoEra marloweIn, spend, collateral))  -> do
+      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Nothing)   -> go Nothing marloweOut'
+      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Nothing) -> go Nothing marloweOut'
+      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Just (SomeMarloweTransaction _ marloweIn, spend, collateral)) ->
           go (Just (marloweIn, spend, collateral)) marloweOut'
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Just (SomeMarloweTransaction ScriptDataInBabbageEra marloweIn, spend, collateral)) -> do
+      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Just (SomeMarloweTransaction _ marloweIn, spend, collateral)) ->
           go (Just (marloweIn, spend, collateral)) marloweOut'
-      -- FIXME: error message is missleaading - fix it
       (_, _, _)  -> throwError "Eras mistmatch"
 
 
 -- | Run a Marlowe transaction.
-runTransactionImpl :: forall era m
+runTransactionImpl :: forall era era' m
                 . MonadError CliError m
                => MonadIO m
                => MonadReader (CliEnv era) m
-               => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
-               -> Maybe (MarloweTransaction era, TxIn, TxIn)            -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
-               -> MarloweTransaction era                                -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
-               -> [TxIn]                                  -- ^ The transaction inputs.
+               => LocalNodeConnectInfo CardanoMode              -- ^ The connection info for the local node.
+               -> Maybe (MarloweTransaction era', TxIn, TxIn)   -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
+               -> MarloweTransaction era                        -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+               -> [TxIn]                                        -- ^ The transaction inputs.
                -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
                -> AddressInEra era                              -- ^ The change address.
                -> [SomePaymentSigningKey]                              -- ^ The files for required signing keys.
-               -> TxMetadataInEra era                          -- ^ The file containing JSON metadata, if any.
-               -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-               -> Bool                                    -- ^ Whether to print statistics about the transaction.
-               -> Bool                                    -- ^ Assertion that the transaction is invalid.
-               -> m (TxBody era)                          -- ^ Action to build the transaction body.
+               -> TxMetadataInEra era                           -- ^ The file containing JSON metadata, if any.
+               -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Bool                                          -- ^ Whether to print statistics about the transaction.
+               -> Bool                                          -- ^ Assertion that the transaction is invalid.
+               -> m (TxBody era)                                -- ^ Action to build the transaction body.
 runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid =
   do
     protocol <- queryInEra connection QueryProtocolParameters
@@ -506,20 +503,20 @@ adjustMinimumUTxO era protocol address datum origValue =
 -- | Withdraw funds for a specific role from the role address.
 withdrawFunds :: (MonadError CliError m, MonadReader (CliEnv era) m)
               => MonadIO m
-              => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
-              -> FilePath                                -- ^ The JSON file with the Marlowe state and contract.
-              -> TokenName                               -- ^ The role name for the redemption.
-              -> TxIn                                    -- ^ The collateral.
-              -> [TxIn]                                  -- ^ The transaction inputs.
-              -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
-              -> AddressInEra era                              -- ^ The change address.
-              -> [FilePath]                              -- ^ The files for required signing keys.
-              -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
-              -> FilePath                                -- ^ The output file for the transaction body.
-              -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-              -> Bool                                    -- ^ Whether to print statistics about the transaction.
-              -> Bool                                    -- ^ Assertion that the transaction is invalid.
-              -> m TxId                                  -- ^ Action to build the transaction body.
+              => LocalNodeConnectInfo CardanoMode               -- ^ The connection info for the local node.
+              -> FilePath                                       -- ^ The JSON file with the Marlowe state and contract.
+              -> TokenName                                      -- ^ The role name for the redemption.
+              -> TxIn                                           -- ^ The collateral.
+              -> [TxIn]                                         -- ^ The transaction inputs.
+              -> [(AddressInEra era, Maybe Datum, Api.Value)]   -- ^ The transaction outputs.
+              -> AddressInEra era                               -- ^ The change address.
+              -> [FilePath]                                     -- ^ The files for required signing keys.
+              -> Maybe FilePath                                 -- ^ The file containing JSON metadata, if any.
+              -> FilePath                                       -- ^ The output file for the transaction body.
+              -> Maybe Int                                      -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Bool                                           -- ^ Whether to print statistics about the transaction.
+              -> Bool                                           -- ^ Assertion that the transaction is invalid.
+              -> m TxId                                         -- ^ Action to build the transaction body.
 withdrawFunds connection marloweOutFile roleName collateral inputs outputs changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
   do
     metadata <- readMaybeMetadata metadataFile
