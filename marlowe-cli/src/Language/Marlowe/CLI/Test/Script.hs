@@ -37,7 +37,7 @@ import Control.Monad.State.Strict (MonadState, execStateT, get)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), initialMarloweState, makeContract)
 import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction, toTimeout)
 import Language.Marlowe.Extended.V1 as E
-import Marlowe.Contracts (escrow, trivial)
+import Marlowe.Contracts (escrow, swap, trivial)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -111,18 +111,19 @@ interpret Initialize {..} = do
                                     complaintDeadline'
                                     disputeDeadline'
                                     mediationDeadline'
+        TemplateSwap{..} -> do  aTimeout' <- toTimeout aTimeout
+                                bTimeout' <- toTimeout bTimeout
+                                makeContract $ swap
+                                    aParty
+                                    aToken
+                                    (Constant aAmount)
+                                    aTimeout'
+                                    bParty
+                                    bToken
+                                    (Constant bAmount)
+                                    bTimeout'
+                                    Close
         template -> throwError $ CliError $ "Template not implemented: " <> show template
-        -- TemplateSwap{..} -> makeContract $
-        --                       swap
-        --                         aParty
-        --                         aToken
-        --                         (Constant aAmount)
-        --                         aTimeout
-        --                         bParty
-        --                         bToken
-        --                         (Constant bAmount)
-        --                         bTimeout
-        --                         Close
         -- TemplateZeroCouponBond{..} -> makeContract $
         --                                 zeroCouponBond
         --                                   lender
