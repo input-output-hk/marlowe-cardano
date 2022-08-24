@@ -146,7 +146,7 @@ interpret Initialize {..} = do
         --                               issueDate
         --                               maturityDate
         --                               settlementDate
-
+  -- liftIO $ print testContract
   transaction <- flip runReaderT (CliEnv seEra) $ initializeTransactionImpl
     marloweParams
     seSlotConfig
@@ -155,13 +155,14 @@ interpret Initialize {..} = do
     NoStakeAddress
     testContract
     marloweState
-    True
+    False
     True
 
   modify $ insertMarloweTransaction soTransaction transaction
 
 interpret Prepare {..} = do
   (_, marloweTransaction) <- findMarloweTransaction soTransaction
+  -- liftIO $ print marloweTransaction
   preparedMarloweTransaction <- withError (\(CliError originalMessage) -> CliError $ originalMessage <> " - from Prepare Impl") $ prepareTransactionImpl
                                   marloweTransaction
                                   soInputs
