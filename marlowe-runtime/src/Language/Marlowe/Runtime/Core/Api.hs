@@ -123,6 +123,9 @@ data SomeMarloweVersion = forall v. SomeMarloweVersion (MarloweVersion v)
 instance Eq SomeMarloweVersion where
   SomeMarloweVersion MarloweV1 == SomeMarloweVersion MarloweV1 = True
 
+instance Ord SomeMarloweVersion where
+  compare (SomeMarloweVersion MarloweV1) (SomeMarloweVersion MarloweV1) = EQ
+
 instance Show SomeMarloweVersion where
   showsPrec p (SomeMarloweVersion version) = showParen (p >= 11)
     $ showString "SomeMarloweVersion " . showsPrec 11 version

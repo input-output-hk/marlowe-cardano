@@ -4,15 +4,18 @@
 
 module Language.Marlowe.Runtime.History where
 
-import Control.Concurrent.Async (race_)
+import Control.Concurrent.Async (Concurrently (..))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (when)
+import Data.Foldable (asum)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash, SlotConfig)
 import Language.Marlowe.Runtime.Core.Api (SomeMarloweVersion, parseContractId)
 import Language.Marlowe.Runtime.History.FollowerSupervisor
+import Language.Marlowe.Runtime.History.JobServer
 
 data HistoryDependencies = HistoryDependencies
-  { getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
+  { acceptRunJobServer :: IO (RunJobServer IO)
+  , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
   , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
   , slotConfig         :: SlotConfig
   , securityParameter  :: Int
@@ -22,12 +25,12 @@ newtype History = History
   { runHistory :: IO ()
   }
 
-
 mkHistory :: HistoryDependencies -> STM History
 mkHistory HistoryDependencies{..} = do
   FollowerSupervisor{..} <- mkFollowerSupervisor FollowerSupervisorDependencies{..}
+  HistoryJobServer{..} <- mkHistoryJobServer HistoryJobServerDependencies{..}
   let
-    go = do
+    repl = do
       line <- getLine
       loop <- case words line of
 
@@ -50,7 +53,11 @@ mkHistory HistoryDependencies{..} = do
         ["quit"] -> pure False
 
         _ -> True <$ putStrLn "invalid command"
-      when loop go
+      when loop repl
   pure History
-    { runHistory = race_ runFollowerSupervisor $ putStrLn "enter a command" *> go
+    { runHistory = runConcurrently $ asum $ Concurrently <$>
+        [ runFollowerSupervisor
+        , runHistoryJobServer
+        , putStrLn "enter a command" *> repl
+        ]
     }
