@@ -66,6 +66,7 @@ library
   exposed-modules:
     Language.Marlowe.Runtime.Core.Api
     Language.Marlowe.Runtime.History.Follower
+    Language.Marlowe.Runtime.History.FollowerSupervisor
   build-depends:
       base >= 4.9 && < 5
     , aeson
