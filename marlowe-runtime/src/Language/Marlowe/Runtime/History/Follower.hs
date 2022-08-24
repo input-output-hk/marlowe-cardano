@@ -13,7 +13,9 @@
 module Language.Marlowe.Runtime.History.Follower where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
+import Control.Concurrent.Async (Concurrently (..))
+import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newEmptyTMVar, newTVar, readTVar, takeTMVar,
+                               tryPutTMVar, tryTakeTMVar, writeTVar)
 import Control.Monad (guard, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -73,6 +75,8 @@ data ContractStep v
 deriving instance Show (ContractStep 'V1)
 deriving instance Eq (ContractStep 'V1)
 
+data SomeContractSteps = forall v. SomeContractSteps (MarloweVersion v) [ContractStep v]
+
 data ContractChanges v = ContractChanges
   { steps      :: Map BlockHeader [ContractStep v]
   , rollbackTo :: Maybe (WithGenesis SlotNo)
@@ -118,6 +122,11 @@ applyRollback (At slotNo) ContractChanges{..} = ContractChanges
   where
     steps' = Map.filterWithKey (const . not . isAfter slotNo) steps
 
+data FollowerStatus
+  = Pending
+  | Following SomeMarloweVersion
+  | Failed ContractHistoryError
+
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
   , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
@@ -127,8 +136,10 @@ data FollowerDependencies = FollowerDependencies
   }
 
 data Follower = Follower
-  { runFollower :: IO (Either ContractHistoryError ())
-  , changes     :: STM (Maybe SomeContractChanges)
+  { runFollower    :: IO (Either ContractHistoryError ())
+  , status         :: STM FollowerStatus
+  , changes        :: STM (Maybe SomeContractChanges)
+  , cancelFollower :: STM ()
   }
 
 data ContractHistoryError
@@ -169,6 +180,8 @@ data SomeContractChangesTVar = forall v. SomeContractChangesTVar (ContractChange
 mkFollower :: FollowerDependencies -> STM Follower
 mkFollower deps@FollowerDependencies{..} = do
   someChangesVar <- newTVar Nothing
+  statusVar <- newTVar Pending
+  cancelled <- newEmptyTMVar
   let
     stInit = SendMsgRequestHandshake schemaVersion1_0 handshake
     handshake = ClientStHandshake
@@ -194,6 +207,7 @@ mkFollower deps@FollowerDependencies{..} = do
                   $ Just
                   $ SomeContractChangesTVar
                   $ ContractChangesTVar version changesVar
+                writeTVar statusVar $ Following $ SomeMarloweVersion version
                 pure changesVar
               let payouts = mempty
               let scriptOutput = TransactionScriptOutput (unContractId contractId) datum
@@ -203,13 +217,25 @@ mkFollower deps@FollowerDependencies{..} = do
       }
 
   pure Follower
-    { runFollower = connectToChainSeek $ ChainSeekClient $ pure stInit
+    { runFollower = do
+        _ <- atomically $ tryTakeTMVar cancelled
+        runConcurrently $ asum $ Concurrently <$>
+          [ atomically $ Right <$> takeTMVar cancelled
+          , do
+              result <- connectToChainSeek $ ChainSeekClient $ pure stInit
+              case result of
+                Left err -> atomically $ writeTVar statusVar $ Failed err
+                _        -> pure ()
+              pure result
+          ]
     , changes = do
         mChangesVar <- readTVar someChangesVar
         for mChangesVar \(SomeContractChangesTVar (ContractChangesTVar version changesVar)) -> do
           changes <- readTVar changesVar
           writeTVar changesVar mempty
           pure $ SomeContractChanges version changes
+    , status = readTVar statusVar
+    , cancelFollower = void $ tryPutTMVar cancelled ()
     }
 
 data FollowerContext v = FollowerContext
