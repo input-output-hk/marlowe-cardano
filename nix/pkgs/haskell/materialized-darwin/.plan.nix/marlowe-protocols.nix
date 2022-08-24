@@ -54,6 +54,8 @@
           "Network/Protocol/Job/Server"
           "Network/Protocol/Job/Types"
           "Network/Protocol/Query/Client"
+          "Network/Protocol/Query/Codec"
+          "Network/Protocol/Query/Server"
           "Network/Protocol/Query/Types"
           "Network/Protocol/Codec"
           ];
