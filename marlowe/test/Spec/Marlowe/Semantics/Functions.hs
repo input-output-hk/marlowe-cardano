@@ -940,7 +940,7 @@ checkComputeTransaction =
         case playTrace time contract inputs of
           TransactionOutput{} -> True
           e                   -> error $ show (time, contract, inputs, e)
-    either (const True) (all play)
+    either (error . ("`getAllInputs` failed with " <>) . show) (all play)
       <$> run (getAllInputs contract)
 
 
