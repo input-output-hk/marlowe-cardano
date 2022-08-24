@@ -49,6 +49,7 @@ objects of, the protocol.
 - schema version: The version of the query schema supported by the participants in the protocol. Used in the handshake to verify that the server supports the query schema supported by the client.
 - handshake: A proceedure used to establish a connection which ensures the client and server understand the same queeries.
 - agency: Used to describe which role is permited to send a message in a given state.
+- tag: Metadata for serializing queries, errors, and results that explicitly indicates which query the message is related to.
 
 ### Operation
 
@@ -152,9 +153,9 @@ reason.
   - `RollBackward` to client
   - `Wait` to client
 
-##### Next MustAwait state
+##### Next MustReply state
 
-The `Next MustAwait` state is a sub-state of `Next wait`. The server SHOULD
+The `Next MustReply` state is a sub-state of `Next wait`. The server SHOULD
 respond with a `RollForward` message as soon as the query can be responded to.
 The server MUST respond with a `RollBackward` if a rollback is encountered that
 reverts the tip to a point before the client's current position. The payloads
@@ -257,6 +258,8 @@ The `QueryNext` is sent by the client to request more data from the blockchain.
 The `QueryNext` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x04`
+- The octets representing the query's tag. The encoding of this is determined
+  by the query schema.
 - The octets representing the query. The encoding of this is determined by the
   query schema.
 
@@ -276,6 +279,8 @@ rejected.
 The `RejectQuery` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x05`
+- The octets representing the query's tag. The encoding of this is determined
+  by the query schema.
 - The octets representing the rejection reason. The encoding of this is
   determined by the query schema.
 
@@ -283,7 +288,7 @@ The `RejectQuery` message is encoded as follows, in the following order:
 
 The `RollForward` is sent by the server with a query result.
 
-- Origin State: `Next (CanAwait | MustAwait)`
+- Origin State: `Next (CanAwait | MustReply)`
 - Target State: `Idle`
 - Payload: result, new position, current tip
 - Sender: server
@@ -294,6 +299,8 @@ The `RollForward` is sent by the server with a query result.
 The `RollForward` message is encoded as follows, in the following order:
 
 - A `tag` octet consisting of the value `0x06`
+- The octets representing the query's tag. The encoding of this is determined
+  by the query schema.
 - The octets representing the result of the query. The encoding of this is
   determined by the query schema.
 - The octets representing the client's new position. The encoding of this is
@@ -306,7 +313,7 @@ The `RollForward` message is encoded as follows, in the following order:
 The `RollBackward` is sent by the server to indicate that the client's position
 has been rolled back.
 
-- Origin State: `Next (CanAwait | MustAwait)`
+- Origin State: `Next (CanAwait | MustReply)`
 - Target State: `Idle`
 - Payload: new position, current tip
 - Sender: server
@@ -327,7 +334,7 @@ The `Wait` is sent by the server to indicate that the client must wait for a
 query result.
 
 - Origin State: `Next CanAwait`
-- Target State: `Next MustAwait`
+- Target State: `Next MustReply`
 - Payload: current tip
 - Sender: server
 - Receiver: client
@@ -373,13 +380,13 @@ stateDiagram-v2
   Done --> [*]
   state Next {
     [*] --> CanAwait
-    CanAwait --> MustAwait : Wait
+    CanAwait --> MustReply : Wait
     CanAwait --> [*] : RejectQuery
     CanAwait --> [*] : RollForward
     CanAwait --> [*] : RollBackward
-    MustAwait --> [*] : RejectQuery
-    MustAwait --> [*] : RollForward
-    MustAwait --> [*] : RollBackward
+    MustReply --> [*] : RejectQuery
+    MustReply --> [*] : RollForward
+    MustReply --> [*] : RollBackward
   }
   Next --> Idle : RejectQuery
   Next --> Idle : RollForward
