@@ -114,7 +114,7 @@ parseCommand networkId socketPath version =
     (
           O.helper
       <*> versionOption version
-      <*> (alonzoParser <|> babbageParser)
+      <*> (noEraParser <|> alonzoParser <|> babbageParser)
     )
     (
          O.fullDesc
@@ -124,11 +124,12 @@ parseCommand networkId socketPath version =
   where
     alonzoParser = SomeCommand <$> alonzoFlagParser <*> commandParser
     babbageParser = SomeCommand <$> babbageFlagParser <*> commandParser
-    alonzoFlagParser = O.flag' ScriptDataInAlonzoEra $ mconcat
+    noEraParser = SomeCommand ScriptDataInBabbageEra <$> commandParser
+    alonzoFlagParser = O.flag ScriptDataInAlonzoEra ScriptDataInAlonzoEra $ mconcat
       [ O.long "alonzo-era"
       , O.help "Read and write Alonzo transactions"
       ]
-    babbageFlagParser = O.flag ScriptDataInBabbageEra ScriptDataInBabbageEra $ mconcat
+    babbageFlagParser = O.flag' ScriptDataInBabbageEra $ mconcat
       [ O.long "babbage-era"
       , O.help "Read and write Babbage transactions"
       ]
