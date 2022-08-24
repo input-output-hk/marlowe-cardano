@@ -50,10 +50,10 @@ goldenContracts :: [Contract]
 goldenContracts =
   [
     Escrow.contract
-  , Pangram.contract
   , Swap.contract
   , Trivial.contract
   , ZCB.contract
+  -- Note that Pangram is omitted because `getAllInputs` takes 30 minutes for it.
   ]
 
 

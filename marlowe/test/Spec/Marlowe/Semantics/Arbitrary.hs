@@ -33,6 +33,7 @@ module Spec.Marlowe.Semantics.Arbitrary (
 , arbitraryValidInputs
 , choiceInBoundsIfNonempty
 , choiceNotInBounds
+, goldenContract
 -- * Weighting factors for arbitrary contracts
 , defaultContractWeights
 , closeContractWeights
@@ -55,10 +56,11 @@ import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (.
                                                  getAction)
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
+import Spec.Marlowe.Semantics.Golden (goldenContracts)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
                               vectorOf)
 
-import qualified PlutusTx.AssocMap as AM (Map, delete, fromList, keys, toList)
+import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
 
@@ -734,8 +736,13 @@ arbitraryCaseWeighted w context =
   Case <$> semiArbitrary context <*> arbitraryContractWeighted w context
 
 
+-- | Generate one of the golden contracts and its initial state.
+goldenContract :: Gen (Contract, State)
+goldenContract = (,) <$> elements goldenContracts <*> pure (State AM.empty AM.empty AM.empty $ POSIXTime 0)
+
+
 instance Arbitrary Contract where
-  arbitrary = semiArbitrary =<< arbitrary
+  arbitrary = frequency [(95, semiArbitrary =<< arbitrary), (5, fst <$> goldenContract)]
   shrink (Pay a p t x c) = [Pay a' p t x c | a' <- shrink a] ++ [Pay a p' t x c | p' <- shrink p] ++ [Pay a p t' x c | t' <- shrink t] ++ [Pay a p t x' c | x' <- shrink x] ++ [Pay a p t x c' | c' <- shrink c]
   shrink (If o x y) = [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
   shrink (When a t c) = [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
