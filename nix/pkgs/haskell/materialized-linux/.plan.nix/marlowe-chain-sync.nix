@@ -77,6 +77,7 @@
           "Language/Marlowe/Runtime/ChainSync/Genesis"
           "Language/Marlowe/Runtime/ChainSync/NodeClient"
           "Language/Marlowe/Runtime/ChainSync/Server"
+          "Language/Marlowe/Runtime/ChainSync/QueryServer"
           "Language/Marlowe/Runtime/ChainSync/Store"
           "Language/Marlowe/Runtime/ChainSync/Api"
           ];
@@ -103,6 +104,7 @@
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             ];
           buildable = true;
           modules = [ "Options" "Paths_marlowe_chain_sync" ];
