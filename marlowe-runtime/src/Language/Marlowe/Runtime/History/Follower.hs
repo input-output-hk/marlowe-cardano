@@ -36,14 +36,15 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
-                                               RuntimeChainSeekClient, ScriptHash (..), SlotConfig, SlotNo (..),
-                                               TxError, TxId, TxOutRef (..), UTxOError, WithGenesis (..), isAfter,
-                                               schemaVersion1_0, slotToUTCTime)
+                                               RuntimeChainSeekClient, ScriptHash (..), SlotConfig, SlotNo (..), TxId,
+                                               TxOutRef (..), UTxOError, WithGenesis (..), isAfter, schemaVersion1_0,
+                                               slotToUTCTime)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, IsMarloweVersion (Redeemer), MarloweVersion (..),
                                           MarloweVersionTag (..), Payout (..), PayoutDatum, SomeMarloweVersion (..),
                                           Transaction (..), TransactionOutput (..), TransactionScriptOutput (..),
                                           fromChainDatum, fromChainPayoutDatum, fromChainRedeemer)
+import Language.Marlowe.Runtime.History.Api
 import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime))
 
 data CreateStep v = CreateStep
@@ -126,12 +127,6 @@ applyRollback (At slotNo) ContractChanges{..} = ContractChanges
   where
     steps' = Map.filterWithKey (const . not . isAfter slotNo) steps
 
-data FollowerStatus
-  = Pending
-  | Following SomeMarloweVersion
-  | Failed ContractHistoryError
-  deriving (Eq, Show)
-
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
   , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
@@ -146,38 +141,6 @@ data Follower = Follower
   , changes        :: STM (Maybe SomeContractChanges)
   , cancelFollower :: STM ()
   }
-
-data ContractHistoryError
-  = HansdshakeFailed
-  | FindTxFailed TxError
-  | ExtractContractFailed ExtractCreationError
-  | FollowScriptUTxOFailed UTxOError
-  | FollowPayoutUTxOsFailed (Map Chain.TxOutRef UTxOError)
-  | ExtractMarloweTransactionFailed ExtractMarloweTransactionError
-  | PayoutUTxONotFound Chain.TxOutRef
-  | CreateTxRolledBack
-  deriving stock (Show, Eq, Ord)
-
-data ExtractCreationError
-  = TxIxNotFound
-  | ByronAddress
-  | NonScriptAddress
-  | InvalidScriptHash
-  | NoCreateDatum
-  | InvalidCreateDatum
-  | NotCreationTransaction
-  deriving stock (Show, Eq, Ord)
-
-data ExtractMarloweTransactionError
-  = TxInNotFound
-  | NoRedeemer
-  | InvalidRedeemer
-  | NoTransactionDatum
-  | InvalidTransactionDatum
-  | NoPayoutDatum TxOutRef
-  | InvalidPayoutDatum TxOutRef
-  | InvalidValidityRange
-  deriving stock (Show, Eq, Ord)
 
 data ContractChangesTVar v = ContractChangesTVar (MarloweVersion v) (TVar (ContractChanges v))
 data SomeContractChangesTVar = forall v. SomeContractChangesTVar (ContractChangesTVar v)
