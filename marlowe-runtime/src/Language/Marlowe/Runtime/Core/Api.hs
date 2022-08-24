@@ -120,6 +120,13 @@ deriving instance Eq (TransactionScriptOutput 'V1)
 
 data SomeMarloweVersion = forall v. SomeMarloweVersion (MarloweVersion v)
 
+instance Eq SomeMarloweVersion where
+  SomeMarloweVersion MarloweV1 == SomeMarloweVersion MarloweV1 = True
+
+instance Show SomeMarloweVersion where
+  showsPrec p (SomeMarloweVersion version) = showParen (p >= 11)
+    $ showString "SomeMarloweVersion " . showsPrec 11 version
+
 data ContractInVersion v = ContractInVersion (MarloweVersion v) (Contract v)
 data SomeContractInVersion = forall v. SomeContractInVersion (ContractInVersion v)
 

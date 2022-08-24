@@ -4,11 +4,12 @@ module Language.Marlowe.Runtime.History.FollowerSupervisor where
 
 import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
-import Control.Monad (guard, (<=<))
+import Control.Monad (guard, mfilter, when, (<=<))
 import Data.Foldable (sequenceA_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash, SlotConfig)
 import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
 import Language.Marlowe.Runtime.History.Follower (Follower (..), FollowerDependencies (..), FollowerStatus (..),
@@ -27,11 +28,16 @@ data FollowerSupervisorDependencies = FollowerSupervisorDependencies
   , securityParameter  :: Int
   }
 
+data UpdateContract
+  = RemoveContract
+  | UpdateContract SomeContractChanges
+  deriving (Show, Eq)
+
 data FollowerSupervisor = FollowerSupervisor
   { followContract        :: ContractId -> STM Bool
   , stopFollowingContract :: ContractId -> STM Bool
   , followerStatuses      :: STM (Map ContractId FollowerStatus)
-  , changes               :: STM (Map ContractId SomeContractChanges)
+  , changes               :: STM (Map ContractId UpdateContract)
   , runFollowerSupervisor :: IO ()
   }
 
@@ -39,6 +45,8 @@ mkFollowerSupervisor :: FollowerSupervisorDependencies -> STM FollowerSupervisor
 mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
   followersVar <- newTVar Map.empty
   followerActivationsVar <- newTVar Map.empty
+  seenVar <- newTVar Set.empty
+  removalsVar <- newTVar Set.empty
 
   let
     followContract contractId = do
@@ -95,7 +103,17 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
 
     followerStatuses = traverse (status <=< readTVar) =<< readTVar followersVar
 
-    changes = wither (Follower.changes <=< readTVar) =<< readTVar followersVar
+    changes = do
+      followers <- readTVar followersVar
+      updatesFromFollowers <- wither
+        (fmap (mfilter $ not . Follower.isEmptyChanges) . Follower.changes <=< readTVar)
+        followers
+      modifyTVar seenVar $ Set.union $ Map.keysSet updatesFromFollowers
+      removals <- readTVar removalsVar
+      writeTVar removalsVar Set.empty
+      pure
+        $ Map.union (UpdateContract <$> updatesFromFollowers)
+        $ Map.fromSet (const RemoveContract) removals
 
     awaitActivations = do
       activations <- readTVar followerActivationsVar
@@ -123,6 +141,9 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
               writeTVar followersVar $ Map.delete contractId followers
               Follower{cancelFollower} <- readTVar followerVar
               cancelFollower
+              seen <- readTVar seenVar
+              when (Set.member contractId seen) do
+                modifyTVar removalsVar $ Set.insert contractId
               pure Nothing
       runConcurrently
         $ sequenceA_

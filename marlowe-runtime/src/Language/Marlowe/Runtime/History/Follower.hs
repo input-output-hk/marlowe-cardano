@@ -110,6 +110,10 @@ instance Semigroup (ContractChanges v) where
 instance Monoid (ContractChanges v) where
   mempty = ContractChanges Map.empty Nothing
 
+isEmptyChanges :: SomeContractChanges -> Bool
+isEmptyChanges (SomeContractChanges _ (ContractChanges steps Nothing)) = Map.null steps
+isEmptyChanges _                                                       = False
+
 applyRollback :: WithGenesis SlotNo -> ContractChanges v -> ContractChanges v
 applyRollback Genesis _ = ContractChanges mempty $ Just Genesis
 applyRollback (At slotNo) ContractChanges{..} = ContractChanges
@@ -126,6 +130,7 @@ data FollowerStatus
   = Pending
   | Following SomeMarloweVersion
   | Failed ContractHistoryError
+  deriving (Eq, Show)
 
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
