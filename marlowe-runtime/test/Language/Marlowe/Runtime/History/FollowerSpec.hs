@@ -25,13 +25,15 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSeekClient, Move
                                                TransactionOutput (address), TxError (..), TxId, TxOutRef (..),
                                                UTxOError (..), WithGenesis (..), hoistChainSeekClient, toDatum)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), SomeMarloweVersion (..),
-                                          Transaction (..), TransactionOutput (..), TransactionScriptOutput (..),
-                                          parseContractId)
+import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), MarloweVersionTag (..), Payout (..),
+                                          SomeMarloweVersion (..), Transaction (..), TransactionOutput (..),
+                                          TransactionScriptOutput (..), parseContractId)
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), ContractHistoryError (..), ContractStep (..),
                                                   CreateStep (..), ExtractCreationError (..),
                                                   ExtractMarloweTransactionError (..), Follower (..),
-                                                  FollowerDependencies (..), SomeContractChanges (..), mkFollower)
+                                                  FollowerDependencies (..), RedeemStep (..), SomeContractChanges (..),
+                                                  mkFollower)
+import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)
 import Test.Network.Protocol.ChainSeek (ChainSeekServerScript (..), ServerStIdleScript (..), ServerStNextScript (..),
@@ -59,15 +61,30 @@ spec = do
   it "terminates with InvalidValidityRange for MaxBound" checkInvalidValidityRangeMaxBound
   it "terminates with NoTransactionDatum" checkNoTransactionDatum
   it "terminates with InvalidTransactionDatum" checkInvalidTransactionDatum
+  it "terminates with CreateTxRolledBack (to genesis, no inputs applied)" checkCreateTxRolledBackGenesisNoInputs
+  it "terminates with CreateTxRolledBack (to genesis, inputs applied)" checkCreateTxRolledBackGenesisWithInputs
+  it "terminates with CreateTxRolledBack (to genesis, closed)" checkCreateTxRolledBackGenesisClosed
+  it "terminates with CreateTxRolledBack (no inputs applied)" checkCreateTxRolledBackNoInputs
+  it "terminates with CreateTxRolledBack (inputs applied)" checkCreateTxRolledBackWithInputs
+  it "terminates with CreateTxRolledBack (closed)" checkCreateTxRolledBackClosed
+  it "handles rolling back to creation (inputs applied)" checkRollbackToCreationWithInputs
+  it "handles rolling back to creation (closed)" checkRollbackToCreationClosed
+  it "handles rolling back to transaction" checkRollbackToTransaction
   it "discovers a contract transaction (close)" checkCloseTransaction
   it "discovers a contract transaction (non-close)" checkNonCloseTransaction
   it "discovers a contract transaction (close, create new)" checkCloseAndCreateInSameTransaction
+  it "discovers a payout (open, redeemed before next input))" checkPayoutOpenRedeemedBefore
+  it "discovers a payout (open, redeemed after next input))" checkPayoutOpenRedeemedAfter
+  it "discovers a payout (open, redeemed with next input))" checkPayoutOpenRedeemedTogether
 
 testContractId :: ContractId
 testContractId = fromJust $ parseContractId "036e9b4cfdd668f9682d9153950980d7b065455f29b3b47923b2572bdd791e69#0"
 
 testScriptAddress :: Chain.Address
 testScriptAddress = "7045da42055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
+
+testPayoutValidatorAddress :: Chain.Address
+testPayoutValidatorAddress = "70da4542055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
 
 testPayoutValidatorHash :: Chain.ScriptHash
 testPayoutValidatorHash = "da4542055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
@@ -168,6 +185,9 @@ applyInputsTxIn =
 applyInputsTxId :: TxId
 applyInputsTxId = "0000000000000000000000000000000000000000000000000000000000000001"
 
+applyInputsUTxO :: TxOutRef
+applyInputsUTxO = TxOutRef applyInputsTxId 0
+
 applyInputsTx :: Chain.Transaction
 applyInputsTx =
   let
@@ -193,6 +213,90 @@ applyInputsOutput =
   in
     Chain.TransactionOutput{..}
 
+applyInputsPayoutTx :: Chain.Transaction
+applyInputsPayoutTx = applyInputsTx { Chain.outputs = [applyInputsOutput, payoutOutput] }
+
+payout :: Payout 'V1
+payout =
+  let
+    assets = Chain.Assets
+      { ada = 100
+      , tokens = Chain.Tokens mempty
+      }
+    datum = Chain.TokenName "test_role"
+  in
+    Payout{..}
+
+payoutUTxO :: TxOutRef
+payoutUTxO = TxOutRef applyInputsTxId 1
+
+payoutOutput :: Chain.TransactionOutput
+payoutOutput =
+  let
+    address = testPayoutValidatorAddress
+    Payout{assets} = payout
+    datumHash = Nothing
+    datum = Just $ toDatum $ Plutus.TokenName "test_role"
+  in
+    Chain.TransactionOutput{..}
+
+redeemPayoutTxId :: TxId
+redeemPayoutTxId = "0000000000000000000000000000000000000000000000000000000000000003"
+
+redeemPayoutTxIn :: Chain.TransactionInput
+redeemPayoutTxIn =
+  let
+    Chain.TransactionOutput{datum} = payoutOutput
+  in
+    Chain.TransactionInput applyInputsTxId 1 testScriptAddress datum Nothing
+
+redeemPayoutTx :: Chain.Transaction
+redeemPayoutTx =
+  let
+    txId = redeemPayoutTxId
+    validityRange = Chain.Unbounded
+    metadata = Nothing
+    inputs = Set.singleton redeemPayoutTxIn
+    outputs = [redeemPayoutOutput]
+    mintedTokens = Chain.Tokens mempty
+  in
+    Chain.Transaction{..}
+
+redeemPayoutOutput :: Chain.TransactionOutput
+redeemPayoutOutput =
+  let
+    address = "6022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6"
+    Payout{assets} = payout
+    datumHash = Nothing
+    datum = Nothing
+  in
+    Chain.TransactionOutput{..}
+
+close2TxIn :: Chain.TransactionInput
+close2TxIn =
+  let
+    redeemer = Just $ Chain.Redeemer $ toDatum close2Redeemer
+  in
+    Chain.TransactionInput applyInputsTxId 0 testScriptAddress (Just $ toDatum createDatum) redeemer
+
+close2Redeemer :: [V1.Input]
+close2Redeemer = [ V1.NormalInput V1.INotify ]
+
+close2TxId :: TxId
+close2TxId = "0000000000000000000000000000000000000000000000000000000000000002"
+
+close2Tx :: Chain.Transaction
+close2Tx =
+  let
+    txId = close2TxId
+    validityRange = Chain.MinMaxBound 0 100
+    metadata = Nothing
+    inputs = Set.singleton close2TxIn
+    outputs = []
+    mintedTokens = Chain.Tokens mempty
+  in
+    Chain.Transaction{..}
+
 block1 :: Chain.BlockHeader
 block1 = Chain.BlockHeader 0 "" 0
 
@@ -205,6 +309,17 @@ block2 = Chain.BlockHeader 1 "" 1
 point2 :: ChainPoint
 point2 = Chain.At block2
 
+block3 :: Chain.BlockHeader
+block3 = Chain.BlockHeader 3 "" 3
+
+point3 :: ChainPoint
+point3 = Chain.At block3
+
+block4 :: Chain.BlockHeader
+block4 = Chain.BlockHeader 4 "" 4
+
+point4 :: ChainPoint
+point4 = Chain.At block4
 
 checkHandshakeRejected :: Expectation
 checkHandshakeRejected = do
@@ -426,6 +541,227 @@ checkInvalidTransactionDatum = do
   followerError `shouldBe` Just (ExtractMarloweTransactionFailed InvalidTransactionDatum)
   followerChanges `shouldBe` Just (emptyChanges MarloweV1)
 
+checkCreateTxRolledBackGenesisNoInputs :: Expectation
+checkCreateTxRolledBackGenesisNoInputs = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollBackward Genesis Genesis
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just Genesis
+            }
+        )
+    $ ExpectDone ()
+  followerError `shouldBe` Just CreateTxRolledBack
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCreateTxRolledBackGenesisWithInputs :: Expectation
+checkCreateTxRolledBackGenesisWithInputs = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsTx) point2 point2
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton applyInputsUTxO)
+    $ RollBackward Genesis Genesis
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just Genesis
+            }
+        )
+    $ ExpectDone ()
+  followerError `shouldBe` Just CreateTxRolledBack
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCreateTxRolledBackGenesisClosed :: Expectation
+checkCreateTxRolledBackGenesisClosed = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO closeTx) point2 point2
+    $ ExpectQuery (AdvanceBlocks 2160)
+    $ RollBackward Genesis Genesis
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just Genesis
+            }
+        )
+    $ ExpectDone ()
+  followerError `shouldBe` Just CreateTxRolledBack
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCreateTxRolledBackNoInputs :: Expectation
+checkCreateTxRolledBackNoInputs = do
+  FollowerTestResult{..} <- runFollowerTestPostCreationFrom point2 point2 marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollBackward point1 point1
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just $ At 0
+            }
+        )
+    $ ExpectDone ()
+  followerError `shouldBe` Just CreateTxRolledBack
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCreateTxRolledBackWithInputs :: Expectation
+checkCreateTxRolledBackWithInputs = do
+  FollowerTestResult{..} <- runFollowerTestPostCreationFrom point2 point2 marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsTx) point3 point3
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton applyInputsUTxO)
+    $ RollBackward point1 point1
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just $ At 0
+            }
+        )
+    $ ExpectDone ()
+  followerError `shouldBe` Just CreateTxRolledBack
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkCreateTxRolledBackClosed :: Expectation
+checkCreateTxRolledBackClosed = do
+  FollowerTestResult{..} <- runFollowerTestPostCreationFrom point2 point2 marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO closeTx) point3 point3
+    $ ExpectQuery (AdvanceBlocks 2160)
+    $ RollBackward point1 point1
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just $ At 0
+            }
+        )
+    $ ExpectDone ()
+  followerError `shouldBe` Just CreateTxRolledBack
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkRollbackToCreationWithInputs :: Expectation
+checkRollbackToCreationWithInputs = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsTx) point2 point2
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton applyInputsUTxO)
+    $ RollBackward point1 point1
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just $ At 0
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsTx) point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = applyInputsRedeemer
+                    , output = TransactionOutput mempty $ Just TransactionScriptOutput
+                        { utxo = Chain.TxOutRef applyInputsTxId 0
+                        , datum = createDatum
+                        }
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkRollbackToCreationClosed :: Expectation
+checkRollbackToCreationClosed = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO closeTx) point2 point2
+    $ ExpectQuery (AdvanceBlocks 2160)
+    $ RollBackward point1 point1
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.empty
+            , rollbackTo = Just $ At 0
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO closeTx) point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = closeTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = closeRedeemer
+                    , output = TransactionOutput mempty Nothing
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkRollbackToTransaction :: Expectation
+checkRollbackToTransaction = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsTx) point2 point2
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton applyInputsUTxO)
+    $ RollForward (Map.singleton applyInputsUTxO close2Tx) point3 point3
+    $ ExpectQuery (AdvanceBlocks 2160)
+    $ RollBackward point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = applyInputsRedeemer
+                    , output = TransactionOutput mempty $ Just TransactionScriptOutput
+                        { utxo = Chain.TxOutRef applyInputsTxId 0
+                        , datum = createDatum
+                        }
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton applyInputsUTxO)
+    $ RollForward (Map.singleton applyInputsUTxO close2Tx) point3 point3
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block3
+                [ ApplyTransaction Transaction
+                    { transactionId = close2TxId
+                    , contractId = testContractId
+                    , blockHeader = block3
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = closeRedeemer
+                    , output = TransactionOutput mempty Nothing
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
 checkCloseTransaction :: Expectation
 checkCloseTransaction = do
   FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
@@ -504,6 +840,195 @@ checkCloseAndCreateInSameTransaction = do
   followerError `shouldBe` Nothing
   followerChanges `shouldBe` Just (emptyChanges MarloweV1)
 
+checkPayoutOpenRedeemedBefore :: Expectation
+checkPayoutOpenRedeemedBefore = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsPayoutTx) point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = applyInputsRedeemer
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just TransactionScriptOutput
+                        { utxo = Chain.TxOutRef applyInputsTxId 0
+                        , datum = createDatum
+                        }
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.fromList [applyInputsUTxO, payoutUTxO])
+    $ RollForward (Map.singleton payoutUTxO redeemPayoutTx) point3 point3
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block3
+                [ RedeemPayout RedeemStep
+                    { utxo = payoutUTxO
+                    , redeemingTx = redeemPayoutTxId
+                    , datum = Chain.TokenName "test_role"
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton applyInputsUTxO)
+    $ RollForward (Map.singleton applyInputsUTxO close2Tx) point4 point4
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block4
+                [ ApplyTransaction Transaction
+                    { transactionId = close2TxId
+                    , contractId = testContractId
+                    , blockHeader = block4
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = closeRedeemer
+                    , output = TransactionOutput mempty Nothing
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (AdvanceBlocks 2160)
+    $ RollBackward point2 point2
+    $ ExpectQuery (FindConsumingTxs $ Set.fromList [applyInputsUTxO, payoutUTxO])
+    $ RollForward (Map.singleton payoutUTxO redeemPayoutTx) point3 point3
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block3
+                [ RedeemPayout RedeemStep
+                    { utxo = payoutUTxO
+                    , redeemingTx = redeemPayoutTxId
+                    , datum = Chain.TokenName "test_role"
+                    }
+                ]
+            , rollbackTo = Just $ At 1
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkPayoutOpenRedeemedAfter :: Expectation
+checkPayoutOpenRedeemedAfter = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsPayoutTx) point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = applyInputsRedeemer
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just TransactionScriptOutput
+                        { utxo = Chain.TxOutRef applyInputsTxId 0
+                        , datum = createDatum
+                        }
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.fromList [applyInputsUTxO, payoutUTxO])
+    $ RollForward (Map.singleton applyInputsUTxO close2Tx) point3 point3
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block3
+                [ ApplyTransaction Transaction
+                    { transactionId = close2TxId
+                    , contractId = testContractId
+                    , blockHeader = block3
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = closeRedeemer
+                    , output = TransactionOutput mempty Nothing
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton payoutUTxO)
+    $ RollForward (Map.singleton payoutUTxO redeemPayoutTx) point4 point4
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block4
+                [ RedeemPayout RedeemStep
+                    { utxo = payoutUTxO
+                    , redeemingTx = redeemPayoutTxId
+                    , datum = Chain.TokenName "test_role"
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ Halt ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
+checkPayoutOpenRedeemedTogether :: Expectation
+checkPayoutOpenRedeemedTogether = do
+  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
+    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
+    $ RollForward (Map.singleton createUTxO applyInputsPayoutTx) point2 point2
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block2
+                [ ApplyTransaction Transaction
+                    { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
+                    , contractId = testContractId
+                    , blockHeader = block2
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = applyInputsRedeemer
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just TransactionScriptOutput
+                        { utxo = Chain.TxOutRef applyInputsTxId 0
+                        , datum = createDatum
+                        }
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (FindConsumingTxs $ Set.fromList [applyInputsUTxO, payoutUTxO])
+    $ RollForward (Map.fromList [(applyInputsUTxO, close2Tx), (payoutUTxO, redeemPayoutTx)]) point3 point3
+    $ Do
+        ( expectChanges MarloweV1 ContractChanges
+            { steps = Map.singleton block3
+                [ RedeemPayout RedeemStep
+                    { utxo = payoutUTxO
+                    , redeemingTx = redeemPayoutTxId
+                    , datum = Chain.TokenName "test_role"
+                    }
+                , ApplyTransaction Transaction
+                    { transactionId = close2TxId
+                    , contractId = testContractId
+                    , blockHeader = block3
+                    , validityLowerBound = posixSecondsToUTCTime 0
+                    , validityUpperBound = posixSecondsToUTCTime 100
+                    , redeemer = closeRedeemer
+                    , output = TransactionOutput mempty Nothing
+                    }
+                ]
+            , rollbackTo = Nothing
+            }
+        )
+    $ ExpectQuery (AdvanceBlocks 2160)
+    $ RollForward () point4 point4
+    $ ExpectDone ()
+  followerError `shouldBe` Nothing
+  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
+
 emptyChanges :: MarloweVersion v -> SomeContractChanges
 emptyChanges version = SomeContractChanges version mempty
 
@@ -526,15 +1051,23 @@ data FollowerTestResult a = FollowerTestResult
   , testResult      :: a
   }
 
+runFollowerTestPostCreationFrom
+  :: ChainPoint
+  -> ChainPoint
+  -> [(ScriptHash, (SomeMarloweVersion, ScriptHash))]
+  -> ServerStIdleScript Move ChainPoint ChainPoint (ReaderT Follower IO) a
+  -> IO (FollowerTestResult a)
+runFollowerTestPostCreationFrom point tip marloweVersions' = runFollowerTest marloweVersions'
+  . ConfirmHandshake
+  . ExpectQuery (FindTx createTxId)
+  . RollForward createTx point tip
+  . Do readChanges -- to empty them
+
 runFollowerTestPostCreation
   :: [(ScriptHash, (SomeMarloweVersion, ScriptHash))]
   -> ServerStIdleScript Move ChainPoint ChainPoint (ReaderT Follower IO) a
   -> IO (FollowerTestResult a)
-runFollowerTestPostCreation marloweVersions' = runFollowerTest marloweVersions'
-  . ConfirmHandshake
-  . ExpectQuery (FindTx createTxId)
-  . RollForward createTx point1 point2
-  . Do readChanges -- to empty them
+runFollowerTestPostCreation = runFollowerTestPostCreationFrom point1 point2
 
 runFollowerTest
   :: [(ScriptHash, (SomeMarloweVersion, ScriptHash))]
