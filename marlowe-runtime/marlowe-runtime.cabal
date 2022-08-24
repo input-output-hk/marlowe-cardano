@@ -65,6 +65,7 @@ library
   hs-source-dirs:   src
   exposed-modules:
     Language.Marlowe.Runtime.Core.Api
+    Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Follower
     Language.Marlowe.Runtime.History.FollowerSupervisor
   build-depends:
@@ -99,6 +100,31 @@ executable marlowed
   build-depends:
       base >= 4.9 && < 5
     , marlowe-runtime
+
+executable marlowe-history
+  import: lang
+  hs-source-dirs:   marlowe-history
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , containers
+    , marlowe
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
+    , network
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , text
+    , wl-pprint
 
 executable marlowe-follower
   import: lang
