@@ -1,28 +1,30 @@
+{-# LANGUAGE BlockArguments            #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE EmptyDataDeriving         #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE MultiWayIf                #-}
 {-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TypeApplications          #-}
 
 module Language.Marlowe.Runtime.History.Follower where
 
 import Control.Applicative ((<|>))
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
-import Control.Monad (guard, mfilter, when)
+import Control.Monad (guard, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Writer.CPS (WriterT, execWriterT, runWriterT, tell)
 import Data.Bifunctor (first)
-import Data.Foldable (asum, find, fold, for_)
+import Data.Foldable (asum, find, for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
-import Data.These (These (..), these)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
@@ -34,7 +36,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSee
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
                                                RuntimeChainSeekClient, ScriptHash (..), SlotConfig, SlotNo (..),
                                                TxError, TxId, TxOutRef (..), UTxOError, WithGenesis (..), isAfter,
-                                               mapClientStNext, schemaVersion1_0, slotToUTCTime)
+                                               schemaVersion1_0, slotToUTCTime)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, IsMarloweVersion (Redeemer), MarloweVersion (..),
                                           MarloweVersionTag (..), Payout (..), PayoutDatum, SomeMarloweVersion (..),
@@ -97,9 +99,9 @@ instance Eq SomeContractChanges where
     (MarloweV1, MarloweV1) -> c1 == c2
 
 instance Semigroup (ContractChanges v) where
-  ContractChanges{..} <> c2 = c2' { steps = Map.unionWith (<>) steps2 steps }
+  c1 <> ContractChanges{..} = c1' { steps = Map.unionWith (<>) steps1 steps }
     where
-      c2'@ContractChanges{steps=steps2} = maybe c2 (flip applyRollback c2) rollbackTo
+      c1'@ContractChanges{steps=steps1} = maybe c1 (flip applyRollback c1) rollbackTo
 
 instance Monoid (ContractChanges v) where
   mempty = ContractChanges Map.empty Nothing
@@ -195,8 +197,8 @@ mkFollower deps@FollowerDependencies{..} = do
                 pure changesVar
               let payouts = mempty
               let scriptOutput = TransactionScriptOutput (unContractId contractId) datum
-              let previousStates = mempty
-              followContract FollowerContext{..} FollowerState{..}
+              let previousState = Nothing
+              followContract blockHeader FollowerContext{..} FollowerState{..}
       , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
       }
 
@@ -221,18 +223,24 @@ data FollowerContext v = FollowerContext
   , securityParameter   :: Int
   }
 
+data PreviousState a
+  = Retained BlockHeader a
+  | Truncated
+  deriving (Functor)
+
 data FollowerState v = FollowerState
-  { payouts        :: Map Chain.TxOutRef (Payout v)
-  , scriptOutput   :: TransactionScriptOutput v
-  , previousStates :: Map BlockHeader (FollowerState v)
+  { payouts       :: Map Chain.TxOutRef (Payout v)
+  , scriptOutput  :: TransactionScriptOutput v
+  , previousState :: Maybe (PreviousState (FollowerState v))
   }
 
+data ClosedPreviousState v
+  = ClosedPreviousOpen (FollowerState v)
+  | ClosedPreviousClosed (FollowerStateClosed v)
+
 data FollowerStateClosed v = FollowerStateClosed
-  { lastStepBlock        :: BlockHeader
-  , currentBlock         :: BlockHeader
-  , payouts              :: Map Chain.TxOutRef (Payout v)
-  , previousStates       :: Map BlockHeader (FollowerState v)
-  , previousClosedStates :: Map BlockHeader (FollowerStateClosed v)
+  { payouts       :: Map Chain.TxOutRef (Payout v)
+  , previousState :: PreviousState (ClosedPreviousState v)
   }
 
 exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
@@ -275,21 +283,23 @@ getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
     go i' (_ : xs) = go (i' - 1) xs
 
 followContract
-  :: FollowerContext v
+  :: BlockHeader
+  -> FollowerContext v
   -> FollowerState v
   -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
-followContract context state@FollowerState{..} = do
+followContract blockHeader context state@FollowerState{..} = do
   let move = FindConsumingTxs $ Set.insert scriptUTxO $ Map.keysSet payouts
-  pure $ SendMsgQueryNext move (followNext context state) (pure (followNext context state))
+  pure $ SendMsgQueryNext move (followNext blockHeader context state) (pure (followNext blockHeader context state))
   where
     scriptUTxO = let TransactionScriptOutput{..} = scriptOutput in utxo
 
 followNext
   :: forall v
-   . FollowerContext v
+   . BlockHeader
+  -> FollowerContext v
   -> FollowerState v
   -> ClientStNext Move (Map Chain.TxOutRef Chain.UTxOError) (Map Chain.TxOutRef Chain.Transaction) ChainPoint ChainPoint IO (Either ContractHistoryError ())
-followNext context@FollowerContext{..} state@FollowerState{..} = ClientStNext
+followNext previousBlockHeader context@FollowerContext{..} state@FollowerState{..} = ClientStNext
   { recvMsgQueryRejected = \err _ -> failWith case Map.lookup scriptUTxO err of
       Nothing   -> FollowPayoutUTxOsFailed err
       Just err' -> FollowScriptUTxOFailed err'
@@ -302,109 +312,131 @@ followNext context@FollowerContext{..} state@FollowerState{..} = ClientStNext
           Right (mOutput, changes) -> do
             let
               followContract' :: FollowerState v -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
-              followContract' state' = followContract context state'
-                { payouts = Map.withoutKeys payouts $ Map.keysSet txs
-                , previousStates = updatePreviousStates securityParameter blockHeader state previousStates
+              followContract' state'@FollowerState{payouts = payouts'} = followContract blockHeader context state'
+                { payouts = Map.withoutKeys payouts' $ Map.keysSet txs
+                , previousState = Just $ truncateFollowerState securityParameter blockHeader $ Retained previousBlockHeader state
                 }
             atomically $ modifyTVar changesVar (<> changes)
             case mOutput of
               Nothing -> followContract' state
               Just (TransactionOutput newPayouts mScriptOutput) -> case mScriptOutput of
-                Nothing            -> followContractClosed context $ FollowerStateClosed
-                  { lastStepBlock = blockHeader
-                  , currentBlock = blockHeader
-                  , payouts = Map.withoutKeys payouts $ Map.keysSet txs
-                  , previousStates = updatePreviousStates securityParameter blockHeader state previousStates
-                  , previousClosedStates = mempty
+                Nothing            -> followContractClosed blockHeader context $ FollowerStateClosed
+                  { payouts = Map.withoutKeys payouts $ Map.keysSet txs
+                  , previousState = truncateFollowerStateClosed securityParameter blockHeader $ Retained previousBlockHeader $ ClosedPreviousOpen state
                   }
                 Just scriptOutput' -> followContract' state { scriptOutput = scriptOutput', payouts = Map.union payouts newPayouts }
   , recvMsgRollBackward = \point _ -> do
+      next <- case point of
+        Genesis        -> failWith CreateTxRolledBack
+        At blockHeader -> rollbackPreviousState blockHeader context previousState
       atomically $ modifyTVar changesVar $ applyRollback $ Chain.slotNo <$> point
-      maybe (failWith CreateTxRolledBack) (followContract context . snd) case point of
-        Genesis        -> Nothing
-        At blockHeader -> find ((<= blockHeader) . fst) (Map.toDescList previousStates)
+      pure next
   }
   where
     scriptUTxO = let TransactionScriptOutput{..} = scriptOutput in utxo
 
 followContractClosed
-  :: FollowerContext v
+  :: BlockHeader
+  -> FollowerContext v
   -> FollowerStateClosed v
   -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
-followContractClosed context@FollowerContext{..} state@FollowerStateClosed{..} = case (advanceMove, payoutsMove) of
-  (Nothing, Nothing) -> pure $ SendMsgDone $ Right ()
-  (Just m1, Nothing) -> do
-    let move = m1
-    let next = mapClientStNext This This $ followNextClosed context state
-    pure $ SendMsgQueryNext move next (pure next)
-  (Nothing, Just m2) -> do
-    let move = m2
-    let next = mapClientStNext That That $ followNextClosed context state
-    pure $ SendMsgQueryNext move next (pure next)
-  (Just m1, Just m2) -> do
-    let move = m1 `Fork` m2
-    pure $ SendMsgQueryNext move (followNextClosed context state) (pure (followNextClosed context state))
-  where
-    blocksToWait =
-      let
-        Chain.BlockHeader _ _ lastStepBlockNo = lastStepBlock
-        Chain.BlockHeader _ _ currentBlockNo = currentBlock
-      in
-        securityParameter - fromIntegral (currentBlockNo - lastStepBlockNo)
-    advanceMove = AdvanceBlocks . fromIntegral <$> mfilter (> 0) (Just blocksToWait)
-    payoutsMove = FindConsumingTxs <$> mfilter (not . Set.null) (Just $ Map.keysSet payouts)
+followContractClosed blockHeader context@FollowerContext{..} state@FollowerStateClosed{..}
+  | Map.null payouts = do
+    let next = followNextRetire context state
+    pure $ SendMsgQueryNext (AdvanceBlocks $ fromIntegral securityParameter) next $ pure next
+  | otherwise = do
+    let next = followNextPayout blockHeader context state
+    pure $ SendMsgQueryNext (FindConsumingTxs $ Map.keysSet payouts) next $ pure next
 
-followNextClosed
+followNextRetire
   :: FollowerContext v
   -> FollowerStateClosed v
-  -> ClientStNext
-      Move
-      (These Void (Map TxOutRef UTxOError))
-      (These () (Map TxOutRef Chain.Transaction))
-      ChainPoint
-      ChainPoint
-      IO
-      (Either ContractHistoryError ())
-followNextClosed context@FollowerContext{..} state@FollowerStateClosed{..} = ClientStNext
-  { recvMsgQueryRejected = \err _ -> failWith $ these absurd FollowPayoutUTxOsFailed absurd err
-  , recvMsgRollForward = \queryResult point _ -> case point of
+  -> ClientStNext Move Void () ChainPoint ChainPoint IO (Either ContractHistoryError ())
+followNextRetire context state = ClientStNext
+  { recvMsgQueryRejected = absurd
+  , recvMsgRollForward = \_ _ _ -> pure $ SendMsgDone $ Right ()
+  , recvMsgRollBackward = \point _ -> followNextHandleRollback point context state
+  }
+
+followNextPayout
+  :: BlockHeader
+  -> FollowerContext v
+  -> FollowerStateClosed v
+  -> ClientStNext Move (Map TxOutRef UTxOError) (Map TxOutRef Chain.Transaction) ChainPoint ChainPoint IO (Either ContractHistoryError ())
+followNextPayout previousBlockHeader context@FollowerContext{..} state@FollowerStateClosed{..} = ClientStNext
+  { recvMsgQueryRejected = \err _ -> failWith $ FollowPayoutUTxOsFailed err
+  , recvMsgRollForward = \txs point _ -> case point of
       Genesis        -> error "transaction detected at Genesis"
       At blockHeader -> do
-        let txs = fold queryResult
         case execWriterT $ Map.traverseWithKey (processPayout blockHeader payouts) txs of
           Left err -> failWith err
           Right changes -> do
             atomically $ modifyTVar changesVar (<> changes)
-            followContractClosed context $ state
-              { previousClosedStates = updatePreviousStates securityParameter blockHeader state previousClosedStates
-              , currentBlock = blockHeader
-              , lastStepBlock = if Map.null txs then lastStepBlock else blockHeader
+            followContractClosed blockHeader context $ state
+              { previousState = truncateFollowerStateClosed securityParameter blockHeader $ Retained previousBlockHeader $ ClosedPreviousClosed state
               , payouts = Map.withoutKeys payouts $ Map.keysSet txs
               }
-  , recvMsgRollBackward = \point _ -> do
-      atomically $ modifyTVar changesVar $ applyRollback $ Chain.slotNo <$> point
-      case point of
-        Genesis        -> failWith CreateTxRolledBack
-        At blockHeader -> case find ((<= blockHeader) . fst) (Map.toDescList previousClosedStates) of
-          Just (_, state') -> followContractClosed context state'
-          Nothing          -> case find ((<= blockHeader) . fst) (Map.toDescList previousStates) of
-            Just (_, state') -> followContract context state'
-            Nothing          -> failWith CreateTxRolledBack
+  , recvMsgRollBackward = \point _ -> followNextHandleRollback point context state
   }
 
-updatePreviousStates
-  :: Int
-  -> BlockHeader
-  -> s
-  -> Map BlockHeader s
-  -> Map BlockHeader s
-updatePreviousStates securityParameter blockHeader@Chain.BlockHeader{..} state =
-  Map.insert blockHeader state
-    . Map.fromDistinctAscList
-    . dropWhile isPastSecurityParameter
-    . Map.toAscList
+followNextHandleRollback
+  :: ChainPoint
+  -> FollowerContext v
+  -> FollowerStateClosed v
+  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
+followNextHandleRollback point context@FollowerContext{..} FollowerStateClosed{..}= do
+  next <- case point of
+    Genesis        -> failWith CreateTxRolledBack
+    At blockHeader -> rollbackPreviousStateClosed blockHeader context previousState
+  atomically $ modifyTVar changesVar $ applyRollback $ Chain.slotNo <$> point
+  pure next
+
+rollbackPreviousState
+  :: forall v
+   . BlockHeader
+  -> FollowerContext v
+  -> Maybe (PreviousState (FollowerState v))
+  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
+rollbackPreviousState blockHeader context = \case
+  Nothing -> failWith CreateTxRolledBack
+  Just Truncated -> error "encountered rollback beyond security parameter"
+  Just (Retained blockHeader' state@FollowerState{..}) -> if blockHeader' <= blockHeader
+    then do
+      followContract blockHeader' context state
+    else rollbackPreviousState blockHeader context previousState
+
+rollbackPreviousStateClosed
+  :: forall v
+   . BlockHeader
+  -> FollowerContext v
+  -> PreviousState (ClosedPreviousState v)
+  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError ()))
+rollbackPreviousStateClosed blockHeader context = \case
+  Truncated -> error "encountered rollback beyond security parameter"
+  Retained blockHeader' (ClosedPreviousOpen state) -> rollbackPreviousState blockHeader context $ Just $ Retained blockHeader' state
+  Retained blockHeader' (ClosedPreviousClosed state@FollowerStateClosed{..}) -> if blockHeader' <= blockHeader
+    then followContractClosed blockHeader' context state
+    else rollbackPreviousStateClosed blockHeader context previousState
+
+truncateFollowerState :: forall v. Int -> BlockHeader -> PreviousState (FollowerState v) -> PreviousState (FollowerState v)
+truncateFollowerState securityParameter blockHeader@Chain.BlockHeader{..} = \case
+  Truncated -> Truncated
+  Retained previousBlockHeader state@FollowerState{..}
+    | isPastSecurityParameter previousBlockHeader -> Truncated
+    | otherwise -> Retained @(FollowerState v) previousBlockHeader state { previousState = truncateFollowerState securityParameter blockHeader <$> previousState }
   where
-    isPastSecurityParameter (Chain.BlockHeader { blockNo = blockNo' }, _) = blockNo - blockNo' > fromIntegral securityParameter
+    isPastSecurityParameter Chain.BlockHeader { blockNo = blockNo' } = blockNo - blockNo' > fromIntegral securityParameter
+
+truncateFollowerStateClosed :: forall v. Int -> BlockHeader -> PreviousState (ClosedPreviousState v) -> PreviousState (ClosedPreviousState v)
+truncateFollowerStateClosed securityParameter blockHeader@Chain.BlockHeader{..} = \case
+  Truncated -> Truncated
+  Retained previousBlockHeader previous -> case previous of
+    ClosedPreviousOpen previousOpen -> ClosedPreviousOpen <$> truncateFollowerState securityParameter blockHeader (Retained previousBlockHeader previousOpen)
+    ClosedPreviousClosed previousClosed@FollowerStateClosed{..}
+      | isPastSecurityParameter previousBlockHeader -> Truncated
+      | otherwise -> Retained @(ClosedPreviousState v) previousBlockHeader $ ClosedPreviousClosed previousClosed { previousState = truncateFollowerStateClosed securityParameter blockHeader previousState }
+  where
+    isPastSecurityParameter Chain.BlockHeader { blockNo = blockNo' } = blockNo - blockNo' > fromIntegral securityParameter
 
 processTxs
   :: BlockHeader

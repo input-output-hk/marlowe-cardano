@@ -135,6 +135,7 @@ test-suite marlowe-runtime-test
   build-depends:
       base >= 4.9 && < 5
     , async
+    , bytestring
     , containers
     , hspec
     , marlowe
@@ -143,6 +144,7 @@ test-suite marlowe-runtime-test
     , marlowe-protocols-test
     , marlowe-runtime
     , plutus-tx
+    , plutus-ledger-api
     , stm
     , time
     , transformers
