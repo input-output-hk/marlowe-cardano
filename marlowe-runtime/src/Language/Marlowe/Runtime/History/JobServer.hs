@@ -41,7 +41,7 @@ mkHistoryJobServer HistoryJobServerDependencies{..} = do
   pure $ HistoryJobServer { runHistoryJobServer }
 
 catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show
+catchWorker = hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show
 
 data WorkerDependencies = WorkerDependencies
   { runJobServer          :: RunJobServer IO
