@@ -56,7 +56,12 @@
         buildable = true;
         modules = [
           "Language/Marlowe/Runtime/Core/Api"
+          "Language/Marlowe/Runtime/History"
+          "Language/Marlowe/Runtime/History/Api"
           "Language/Marlowe/Runtime/History/Follower"
+          "Language/Marlowe/Runtime/History/FollowerSupervisor"
+          "Language/Marlowe/Runtime/History/JobServer"
+          "Language/Marlowe/Runtime/History/QueryServer"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -69,6 +74,55 @@
           buildable = true;
           modules = [ "Paths_marlowe_runtime" ];
           hsSourceDirs = [ "app" ];
+          mainPath = [
+            "Main.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
+          };
+        "marlowe-history" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
+            (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."network" or (errorHandler.buildDepError "network"))
+            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
+            ];
+          buildable = true;
+          modules = [ "Paths_marlowe_runtime" ];
+          hsSourceDirs = [ "marlowe-history" ];
+          mainPath = [
+            "Main.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
+          };
+        "marlowe-history-cli" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
+            (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."network" or (errorHandler.buildDepError "network"))
+            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
+            ];
+          buildable = true;
+          modules = [ "Paths_marlowe_runtime" ];
+          hsSourceDirs = [ "marlowe-history-cli" ];
           mainPath = [
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
