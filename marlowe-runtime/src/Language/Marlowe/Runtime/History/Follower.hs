@@ -184,7 +184,7 @@ mkFollower deps@FollowerDependencies{..} = do
       { recvMsgQueryRejected = \err _ -> failWith $ FindTxFailed err
       , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> error "transaction detected at Genesis"
-          At blockHeader -> case exctractCreation deps tx of
+          At blockHeader -> case extractCreation deps tx of
             Left err ->
               failWith $ ExtractContractFailed err
             Right (SomeCreateStep version create@CreateStep{..}) -> do
@@ -243,8 +243,8 @@ data FollowerStateClosed v = FollowerStateClosed
   , previousState :: PreviousState (ClosedPreviousState v)
   }
 
-exctractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-exctractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs, validityRange} = do
+extractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
+extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs, validityRange} = do
   Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   scriptHash <- getScriptHash scriptAddress
@@ -534,6 +534,7 @@ wouldCloseContract version validityLowerBound validityUpperBound redeemer datum 
     in
       marloweContract == V1.Close || case V1.computeTransaction input marloweState marloweContract of
         V1.TransactionOutput{..} -> txOutContract == V1.Close
+        -- TODO log a warning here when adding structured logging.
         _                        -> False
 
 
