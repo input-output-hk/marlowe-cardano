@@ -42,6 +42,14 @@ stScriptOperations:
           token_name: ""
         into_account:
           role_token: "aParty"
+      - input_from_party:
+          role_token: "bParty"
+        that_deposits: 25000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: "bParty"
     soMinimumTime: 1645590825000
     soMaximumTime: 1898051625000
 
