@@ -1,0 +1,277 @@
+When
+    [Case
+        (Choice
+            (ChoiceId
+                "Stabilization"
+                (Role "Stabilizer")
+            )
+            [Bound 100000 10000000]
+        )
+        Close , Case
+        (Deposit
+            (Role "Stabilizer")
+            (Role "Stabilizer")
+            (Token "00" "DjedUSD")
+            (ChoiceValue
+                (ChoiceId
+                    "Stabilization"
+                    (Role "Stabilizer")
+                ))
+        )
+        Close , Case
+        (Choice
+            (ChoiceId
+                "Investment"
+                (Role "Investor")
+            )
+            [Bound 10000 10000000]
+        )
+        Close , Case
+        (Deposit
+            (Role "Investor")
+            (Role "Investor")
+            (Token "00" "DjedUSD")
+            (ChoiceValue
+                (ChoiceId
+                    "Investment"
+                    (Role "Investor")
+                ))
+        )
+        (Let
+            "Investments"
+            (AddValue
+                (UseValue "Investments")
+                (ChoiceValue
+                    (ChoiceId
+                        "Investment"
+                        (Role "Investor")
+                    ))
+            )
+            Close 
+        ), Case
+        (Choice
+            (ChoiceId
+                "Withdrawal"
+                (Role "Investor")
+            )
+            [Bound 10000 100000000]
+        )
+        (If
+            (ValueLE
+                (ChoiceValue
+                    (ChoiceId
+                        "Investment"
+                        (Role "Investor")
+                    ))
+                (AvailableMoney
+                    (Role "Investor")
+                    (Token "00" "DjedUSD")
+                )
+            )
+            (Pay
+                (Role "Investor")
+                (Party (Role "Investor"))
+                (Token "00" "DjedUSD")
+                (ChoiceValue
+                    (ChoiceId
+                        "Investment"
+                        (Role "Investor")
+                    ))
+                (Let
+                    "Investments"
+                    (SubValue
+                        (UseValue "Investments")
+                        (ChoiceValue
+                            (ChoiceId
+                                "Investment"
+                                (Role "Investor")
+                            ))
+                    )
+                    Close 
+                )
+            )
+            Close 
+        ), Case
+        (Choice
+            (ChoiceId
+                "Loan"
+                (Role "Administrative Oracle")
+            )
+            [Bound 10000 10000000]
+        )
+        (If
+            (AndObs
+                (ValueLE
+                    (ChoiceValue
+                        (ChoiceId
+                            "Loan"
+                            (Role "Administrative Oracle")
+                        ))
+                    (UseValue "Investments")
+                )
+                (ValueGE
+                    (AvailableMoney
+                        (Role "Stabilizer")
+                        (Token "00" "DjedUSD")
+                    )
+                    (DivValue
+                        (MulValue
+                            (AddValue
+                                (UseValue "Debt")
+                                (DivValue
+                                    (MulValue
+                                        (ChoiceValue
+                                            (ChoiceId
+                                                "Loan"
+                                                (Role "Administrative Oracle")
+                                            ))
+                                        (AddValue
+                                            (Constant 100)
+                                            (ConstantParam "Percent Interest")
+                                        )
+                                    )
+                                    (Constant 100)
+                                )
+                            )
+                            (ConstantParam "Percent Stabilization")
+                        )
+                        (Constant 100)
+                    )
+                )
+            )
+            (Let
+                "Debt"
+                (AddValue
+                    (UseValue "Debt")
+                    (DivValue
+                        (MulValue
+                            (ChoiceValue
+                                (ChoiceId
+                                    "Loan"
+                                    (Role "Administrative Oracle")
+                                ))
+                            (AddValue
+                                (Constant 100)
+                                (ConstantParam "Percent Interest")
+                            )
+                        )
+                        (Constant 100)
+                    )
+                )
+                (Let
+                    "Investments"
+                    (SubValue
+                        (UseValue "Investments")
+                        (ChoiceValue
+                            (ChoiceId
+                                "Loan"
+                                (Role "Administrative Oracle")
+                            ))
+                    )
+                    (Pay
+                        (Role "Investor")
+                        (Party (Role "Lender"))
+                        (Token "00" "DjedUSD")
+                        (ChoiceValue
+                            (ChoiceId
+                                "Loan"
+                                (Role "Administrative Oracle")
+                            ))
+                        Close 
+                    )
+                )
+            )
+            Close 
+        ), Case
+        (Choice
+            (ChoiceId
+                "Repayment"
+                (Role "Lender")
+            )
+            [Bound 1 15000000]
+        )
+        Close , Case
+        (Deposit
+            (Role "Investor")
+            (Role "Lender")
+            (Token "00" "DjedUSD")
+            (ChoiceValue
+                (ChoiceId
+                    "Repayment"
+                    (Role "Lender")
+                ))
+        )
+        (If
+            (ValueLE
+                (ChoiceValue
+                    (ChoiceId
+                        "name"
+                        (Role "Lender")
+                    ))
+                (UseValue "Debt")
+            )
+            (Let
+                "Debt"
+                (SubValue
+                    (UseValue "Debt")
+                    (ChoiceValue
+                        (ChoiceId
+                            "Repayment"
+                            (Role "Lender")
+                        ))
+                )
+                (Let
+                    "Investments"
+                    (AddValue
+                        (UseValue "Investments")
+                        (ChoiceValue
+                            (ChoiceId
+                                "Repayment"
+                                (Role "Lender")
+                            ))
+                    )
+                    Close 
+                )
+            )
+            (Pay
+                (Role "Investor")
+                (Account (Role "Stabilizer"))
+                (Token "00" "DjedUSD")
+                (SubValue
+                    (ChoiceValue
+                        (ChoiceId
+                            "Repayment"
+                            (Role "Lender")
+                        ))
+                    (UseValue "Debt")
+                )
+                (Let
+                    "Investments"
+                    (AddValue
+                        (UseValue "Investments")
+                        (UseValue "Debt")
+                    )
+                    (Let
+                        "Debt"
+                        (Constant 0)
+                        Close 
+                    )
+                )
+            )
+        ), Case
+        (Choice
+            (ChoiceId
+                "Terminate"
+                (Role "Administrative Oracle")
+            )
+            [Bound 1 1]
+        )
+        (Pay
+            (Role "Stabilizer")
+            (Account (Role "Investor"))
+            (Token "00" "DjedUSD")
+            (UseValue "Debt")
+            Close 
+        )]
+    (TimeParam "TIMEOUT")
+    Close 
