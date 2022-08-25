@@ -21,7 +21,6 @@ import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString, unsafeDeserialize')
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
-import Control.Arrow ((&&&))
 import Control.Foldl (Fold (Fold))
 import qualified Control.Foldl as Fold
 import Data.ByteString (ByteString)
@@ -343,7 +342,7 @@ performFindConsumingTxs utxos point = do
   -- did any of the queries indicate that a result should be awaited?
   let encounteredWaits = waits > 0
 
-  case (not $ Map.null aborts, txsFromEarliestBlock, waits > 0) of
+  pure case (not $ Map.null aborts, txsFromEarliestBlock, encounteredWaits) of
     -- There were no errors, no consuming Txs were found, and there were UTxOs to
     -- wait for. In this case, the client should wait for results.
     (False, Nothing, True)              -> MoveWait
