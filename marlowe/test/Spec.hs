@@ -26,6 +26,7 @@ import Test.Tasty.QuickCheck (testProperty)
 
 import qualified Spec.Marlowe.Marlowe (prop_contractJsonLoops, prop_marloweParamsJsonLoops, prop_noFalsePositives,
                                        tests)
+import qualified Spec.Marlowe.Plutus (tests)
 import qualified Spec.Marlowe.Semantics (tests)
 
 
@@ -60,4 +61,5 @@ tests =
       , testProperty "Serialise deserialise MarloweParams loops" Spec.Marlowe.Marlowe.prop_marloweParamsJsonLoops
       ]
     , Spec.Marlowe.Semantics.tests
+    , Spec.Marlowe.Plutus.tests
     ]

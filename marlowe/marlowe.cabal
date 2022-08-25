@@ -110,6 +110,10 @@ test-suite marlowe-test
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
         Spec.Marlowe.Semantics
+        Spec.Marlowe.Plutus
+        Spec.Marlowe.Plutus.Arbitrary
+        Spec.Marlowe.Plutus.Specification
+        Spec.Marlowe.Plutus.Types
         Spec.Marlowe.Semantics.Arbitrary
         Spec.Marlowe.Semantics.AssocMap
         Spec.Marlowe.Semantics.Compute
