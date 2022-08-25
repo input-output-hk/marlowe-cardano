@@ -144,6 +144,7 @@ executable marlowe-history-cli
     , base16
     , containers
     , marlowe
+    , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , network
