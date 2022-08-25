@@ -12,13 +12,17 @@ import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHas
 import Language.Marlowe.Runtime.Core.Api (SomeMarloweVersion, parseContractId)
 import Language.Marlowe.Runtime.History.FollowerSupervisor
 import Language.Marlowe.Runtime.History.JobServer
+import Language.Marlowe.Runtime.History.QueryServer
+import Numeric.Natural (Natural)
 
 data HistoryDependencies = HistoryDependencies
-  { acceptRunJobServer :: IO (RunJobServer IO)
-  , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
-  , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-  , slotConfig         :: SlotConfig
-  , securityParameter  :: Int
+  { acceptRunJobServer   :: IO (RunJobServer IO)
+  , acceptRunQueryServer :: IO (RunQueryServer IO)
+  , getMarloweVersion    :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
+  , connectToChainSeek   :: forall a. RuntimeChainSeekClient IO a -> IO a
+  , followerPageSize     :: Natural
+  , slotConfig           :: SlotConfig
+  , securityParameter    :: Int
   }
 
 newtype History = History
@@ -29,6 +33,7 @@ mkHistory :: HistoryDependencies -> STM History
 mkHistory HistoryDependencies{..} = do
   FollowerSupervisor{..} <- mkFollowerSupervisor FollowerSupervisorDependencies{..}
   HistoryJobServer{..} <- mkHistoryJobServer HistoryJobServerDependencies{..}
+  HistoryQueryServer{..} <- mkHistoryQueryServer HistoryQueryServerDependencies{..}
   let
     repl = do
       line <- getLine
@@ -58,6 +63,7 @@ mkHistory HistoryDependencies{..} = do
     { runHistory = runConcurrently $ asum $ Concurrently <$>
         [ runFollowerSupervisor
         , runHistoryJobServer
+        , runHistoryQueryServer
         , putStrLn "enter a command" *> repl
         ]
     }

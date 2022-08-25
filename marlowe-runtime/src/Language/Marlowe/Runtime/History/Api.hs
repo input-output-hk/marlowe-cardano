@@ -19,6 +19,10 @@ import Network.Protocol.Job.Client
 import Network.Protocol.Job.Codec
 import Network.Protocol.Job.Server
 import Network.Protocol.Job.Types
+import Network.Protocol.Query.Client (QueryClient)
+import Network.Protocol.Query.Codec (codecQuery)
+import Network.Protocol.Query.Server (QueryServer)
+import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec
 
 data ContractHistoryError
@@ -169,3 +173,59 @@ type RuntimeHistoryJobCodec m = Codec RuntimeHistoryJob DeserializeError m LBS.B
 
 historyJobCodec :: Applicative m => RuntimeHistoryJobCodec m
 historyJobCodec = codecJob
+
+data HistoryQuery delimiter err results where
+  GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
+
+instance Query.IsQuery HistoryQuery where
+  data Tag HistoryQuery delimiter err result where
+    TagGetFollowedContracts :: Query.Tag HistoryQuery ContractId Void (Map ContractId FollowerStatus)
+
+  tagFromQuery = \case
+    GetFollowedContracts -> TagGetFollowedContracts
+
+  tagEq TagGetFollowedContracts TagGetFollowedContracts = Just Query.Refl
+
+  putTag = \case
+    TagGetFollowedContracts -> putWord8 0x01
+
+  getTag = do
+    tagWord <- getWord8
+    case tagWord of
+      0x01 -> pure $ Query.SomeTag TagGetFollowedContracts
+      _    -> fail "invalid tag bytes"
+
+  putQuery = \case
+    GetFollowedContracts -> mempty
+
+  getQuery = \case
+    TagGetFollowedContracts -> pure GetFollowedContracts
+
+  putDelimiter = \case
+    TagGetFollowedContracts -> put
+
+  getDelimiter = \case
+    TagGetFollowedContracts -> get
+
+  putErr = \case
+    TagGetFollowedContracts -> put
+
+  getErr = \case
+    TagGetFollowedContracts -> get
+
+  putResult = \case
+    TagGetFollowedContracts -> put
+
+  getResult = \case
+    TagGetFollowedContracts -> get
+
+type RuntimeHistoryQuery = Query.Query HistoryQuery
+
+type RuntimeHistoryQueryClient = QueryClient HistoryQuery
+
+type RuntimeHistoryQueryServer = QueryServer HistoryQuery
+
+type RuntimeHistoryQueryCodec m = Codec RuntimeHistoryQuery DeserializeError m LBS.ByteString
+
+historyQueryCodec :: Applicative m => RuntimeHistoryQueryCodec m
+historyQueryCodec = codecQuery
