@@ -128,6 +128,30 @@ executable marlowe-history
     , text
     , wl-pprint
 
+executable marlowe-history-cli
+  import: lang
+  hs-source-dirs:   marlowe-history-cli
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , containers
+    , marlowe
+    , marlowe-protocols
+    , marlowe-runtime
+    , network
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , text
+    , wl-pprint
+
 executable marlowe-follower
   import: lang
   hs-source-dirs:   marlowe-follower
