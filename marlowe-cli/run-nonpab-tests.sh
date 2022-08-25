@@ -79,10 +79,7 @@ export TREASURY
 export FAUCET_ADDRESS
 export FAUCET_SKEY_FILE
 
-# for t in {test/double-satisfaction.sh,examples/*/run-*.sh}
-# shellcheck disable=SC2043
-for t in test/double-satisfaction.sh
-# for t in examples/cfd/run-*.sh
+for t in {test/double-satisfaction.sh,examples/*/run-*.sh}
 do
   if bash -ve "$t" >& "${t%%.sh}.log"
     then echo "PASS: $t"

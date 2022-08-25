@@ -25,7 +25,7 @@
 set -ev
 
 
-: "${MAGIC:="1097911063"}"
+: "${MAGIC:="2"}"
 echo "MAGIC=$MAGIC"
 
 

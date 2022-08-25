@@ -27,7 +27,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-: "${MAGIC:=1097911063}"
+: "${MAGIC:=2}"
 echo "MAGIC=$MAGIC"
 
 SLOT_LENGTH=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
@@ -814,8 +814,6 @@ echo "Here are the UTxOs at the oracle $ORACLE_NAME's address:"
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ORACLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
 
 echo "## Clean Up"
-
-FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
 
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                  \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
