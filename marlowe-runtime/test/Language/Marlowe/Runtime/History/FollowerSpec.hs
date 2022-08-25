@@ -28,11 +28,8 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), MarloweVersionTag (..), Payout (..),
                                           SomeMarloweVersion (..), Transaction (..), TransactionOutput (..),
                                           TransactionScriptOutput (..), parseContractId)
-import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), ContractHistoryError (..), ContractStep (..),
-                                                  CreateStep (..), ExtractCreationError (..),
-                                                  ExtractMarloweTransactionError (..), Follower (..),
-                                                  FollowerDependencies (..), RedeemStep (..), SomeContractChanges (..),
-                                                  mkFollower)
+import Language.Marlowe.Runtime.History.Api
+import Language.Marlowe.Runtime.History.Follower
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)

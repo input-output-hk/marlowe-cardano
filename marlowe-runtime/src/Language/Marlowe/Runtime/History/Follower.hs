@@ -10,7 +10,15 @@
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TypeApplications          #-}
 
-module Language.Marlowe.Runtime.History.Follower where
+module Language.Marlowe.Runtime.History.Follower
+  ( ContractChanges(..)
+  , Follower(..)
+  , FollowerDependencies(..)
+  , SomeContractChanges(..)
+  , mkFollower
+  , isEmptyChanges
+  , applyRollback
+  ) where
 
 import Control.Applicative ((<|>))
 import Control.Concurrent.Async (Concurrently (..))
@@ -36,47 +44,18 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
-                                               RuntimeChainSeekClient, ScriptHash (..), SlotConfig, SlotNo (..), TxId,
+                                               RuntimeChainSeekClient, ScriptHash (..), SlotConfig, SlotNo (..),
                                                TxOutRef (..), UTxOError, WithGenesis (..), isAfter, schemaVersion1_0,
                                                slotToUTCTime)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, IsMarloweVersion (Redeemer), MarloweVersion (..),
-                                          MarloweVersionTag (..), Payout (..), PayoutDatum, SomeMarloweVersion (..),
+                                          MarloweVersionTag (..), Payout (..), SomeMarloweVersion (..),
                                           Transaction (..), TransactionOutput (..), TransactionScriptOutput (..),
                                           fromChainDatum, fromChainPayoutDatum, fromChainRedeemer)
 import Language.Marlowe.Runtime.History.Api
 import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime))
 
-data CreateStep v = CreateStep
-  { datum               :: Datum v
-  , scriptAddress       :: Chain.Address
-  , payoutValidatorHash :: ScriptHash
-  }
-
-deriving instance Show (CreateStep 'V1)
-deriving instance Eq (CreateStep 'V1)
-
 data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
-
-data RedeemStep v = RedeemStep
-  { utxo        :: TxOutRef
-  , redeemingTx :: TxId
-  , datum       :: PayoutDatum v
-  }
-
-deriving instance Show (RedeemStep 'V1)
-deriving instance Eq (RedeemStep 'V1)
-
-data ContractStep v
-  = Create (CreateStep v)
-  | ApplyTransaction (Transaction v)
-  | RedeemPayout (RedeemStep v)
-  -- TODO add TimeoutElapsed
-
-deriving instance Show (ContractStep 'V1)
-deriving instance Eq (ContractStep 'V1)
-
-data SomeContractSteps = forall v. SomeContractSteps (MarloweVersion v) [ContractStep v]
 
 data ContractChanges v = ContractChanges
   { steps      :: Map BlockHeader [ContractStep v]

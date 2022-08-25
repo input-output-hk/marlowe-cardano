@@ -1,5 +1,8 @@
-{-# LANGUAGE GADTs        #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Language.Marlowe.Runtime.History.Api where
 
@@ -8,9 +11,9 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.ChainSync.Api (TxError, TxOutRef, UTxOError)
+import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash, TxError, TxId, TxOutRef, UTxOError)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
+import Language.Marlowe.Runtime.Core.Api
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
 import Network.Protocol.Job.Client
 import Network.Protocol.Job.Codec
@@ -59,6 +62,33 @@ data FollowerStatus
   | Failed ContractHistoryError
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass Binary
+
+data CreateStep v = CreateStep
+  { datum               :: Datum v
+  , scriptAddress       :: Chain.Address
+  , payoutValidatorHash :: ScriptHash
+  }
+
+deriving instance Show (CreateStep 'V1)
+deriving instance Eq (CreateStep 'V1)
+
+data RedeemStep v = RedeemStep
+  { utxo        :: TxOutRef
+  , redeemingTx :: TxId
+  , datum       :: PayoutDatum v
+  }
+
+deriving instance Show (RedeemStep 'V1)
+deriving instance Eq (RedeemStep 'V1)
+
+data ContractStep v
+  = Create (CreateStep v)
+  | ApplyTransaction (Transaction v)
+  | RedeemPayout (RedeemStep v)
+  -- TODO add TimeoutElapsed
+
+deriving instance Show (ContractStep 'V1)
+deriving instance Eq (ContractStep 'V1)
 
 data HistoryCommand status err result where
   FollowContract :: ContractId -> HistoryCommand Void ContractHistoryError Bool

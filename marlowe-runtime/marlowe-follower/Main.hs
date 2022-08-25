@@ -22,9 +22,8 @@ import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), 
                                           TransactionOutput (..), TransactionScriptOutput (..), parseContractId,
                                           renderContractId)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), ContractStep (..), CreateStep (..),
-                                                  Follower (..), FollowerDependencies (..), RedeemStep (..),
-                                                  SomeContractChanges (..), mkFollower)
+import Language.Marlowe.Runtime.History.Api
+import Language.Marlowe.Runtime.History.Follower
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
