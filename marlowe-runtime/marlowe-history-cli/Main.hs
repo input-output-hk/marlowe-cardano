@@ -1,14 +1,24 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs     #-}
 module Main where
 
 import Control.Category ((>>>))
 import Control.Exception (bracket, bracketOnError, throwIO)
-import Data.Foldable (asum, fold)
+import Data.ByteString.Base16 (encodeBase16)
+import Data.Foldable (asum, fold, for_, traverse_)
 import Data.Functor (void)
 import qualified Data.Map as Map
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Void (Void, absurd)
 import GHC.Base (when)
-import Language.Marlowe.Runtime.Core.Api (ContractId, parseContractId, renderContractId)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
+import Language.Marlowe.Pretty (pretty)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..), SlotNo (..),
+                                               TxId (..), TxOutRef (..), toBech32)
+import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
+                                          TransactionOutput (..), TransactionScriptOutput (..), parseContractId,
+                                          renderContractId)
 import Language.Marlowe.Runtime.History.Api
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
@@ -19,7 +29,9 @@ import Network.Socket (AddrInfo (..), HostName, PortNumber, Socket, SocketType (
                        getAddrInfo, openSocket)
 import Network.TypedProtocol (Driver (..), runPeerWithDriver)
 import qualified Options.Applicative as O
+import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), setSGR)
 import System.Exit (die)
+import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
 
 main :: IO ()
 main = run =<< getOptions
@@ -40,6 +52,10 @@ run Options{..} = do
     Ls lsCommand -> do
       queryAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show queryPort)
       bracket (open queryAddr) close $ runLsCommand lsCommand
+
+    Show contractId -> do
+      queryAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show queryPort)
+      bracket (open queryAddr) close $ runShowCommand contractId
   where
     hints = defaultHints { addrSocketType = Stream }
 
@@ -86,6 +102,25 @@ runLsCommand LsCommand{..} socket = void $ runPeerWithDriver driver peer (startD
       putStr " Status: "
       print status
 
+runShowCommand :: ContractId -> Socket -> IO ()
+runShowCommand contractId socket = void $ runPeerWithDriver driver peer (startDState driver)
+  where
+    driver = mkDriver throwIO historyQueryCodec $ socketAsChannel socket
+    peer = queryClientPeer client
+    client = QueryClient $ pure $ SendMsgRequest (GetHistory contractId) ClientStNextCanReject
+      { recvMsgReject = die . show
+      , recvMsgNextPage = nextPage
+      }
+    nextPage (SomeHistoryPage version page) mNext = do
+      void $ Map.traverseWithKey (printBlock version) page
+      pure case mNext of
+        Nothing -> SendMsgDone ()
+        Just next -> SendMsgRequestNext next ClientStNext
+          { recvMsgNextPage = nextPage
+          }
+    printBlock :: MarloweVersion v -> BlockHeader -> [ContractStep v] -> IO ()
+    printBlock version = traverse_ . logStep version contractId
+
 data Options = Options
   { commandPort :: !PortNumber
   , queryPort   :: !PortNumber
@@ -97,6 +132,7 @@ data Command
   = Add ContractId
   | Rm ContractId
   | Ls LsCommand
+  | Show ContractId
 
 data LsStatusFlag
   = LsShowStatus
@@ -144,11 +180,13 @@ getOptions = O.execParser $ O.info parser infoMod
       , O.hsubparser $ fold
           [ O.commandGroup "Queries:"
           , O.command "ls" $ Ls <$> lsParser
+          , O.command "show" $ Show <$> showParser
           ]
       ]
 
     addParser = O.info (contractIdParser "follow") $ O.progDesc "Start following a contract by its ID."
     rmParser = O.info (contractIdParser "stop following") $ O.progDesc "Stop following a contract by its ID."
+    showParser = O.info (contractIdParser "show history for") $ O.progDesc "Show the history of a contract"
     lsParser = O.info (LsCommand <$> showStatusParser <*> showFailedParser) $ O.progDesc "List followed contracts"
       where
         showStatusParser = O.flag LsHideStatus LsShowStatus $ fold
@@ -175,3 +213,68 @@ getOptions = O.execParser $ O.info parser infoMod
       [ O.fullDesc
       , O.progDesc "Example Chain Seek client for the Marlowe Chain Sync"
       ]
+
+logStep :: MarloweVersion v -> ContractId -> BlockHeader -> ContractStep v -> IO ()
+logStep version contractId BlockHeader{..} step = do
+  setSGR [SetColor Foreground Vivid Yellow]
+  putStr "transaction "
+  case step of
+    Create _ -> do
+      putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
+      putStrLn " (creation)"
+    ApplyTransaction Transaction{transactionId} -> do
+      putStrLn $ T.unpack $ encodeBase16 $ unTxId transactionId
+    RedeemPayout RedeemStep{..}-> do
+      putStr $ T.unpack $ encodeBase16 $ unTxId redeemingTx
+      putStrLn " (redeem)"
+  setSGR [Reset]
+  case step of
+    Create CreateStep{..} -> do
+      putStr "ContractId:      "
+      putStrLn $ T.unpack $ renderContractId contractId
+      putStr "SlotNo:          "
+      print $ unSlotNo slotNo
+      putStr "BlockNo:         "
+      print $ unBlockNo blockNo
+      putStr "BlockId:         "
+      putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+      for_ (toBech32 scriptAddress) \addr -> do
+        putStr "ScriptAddress:   "
+        putStrLn $ T.unpack addr
+      putStr "Marlowe Version: "
+      putStrLn case version of
+        MarloweV1 -> "1"
+      let
+        contractDoc :: Doc
+        contractDoc = indent 4 case version of
+          MarloweV1 -> pretty $ V1.marloweContract datum
+      putStrLn ""
+      putDoc contractDoc
+      putStrLn ""
+      putStrLn ""
+    ApplyTransaction Transaction{redeemer, output} -> do
+      putStr "ContractId: "
+      putStrLn $ T.unpack $ renderContractId contractId
+      putStr "SlotNo:     "
+      print $ unSlotNo slotNo
+      putStr "BlockNo:    "
+      print $ unBlockNo blockNo
+      putStr "BlockId:    "
+      putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+      putStr "Inputs:     "
+      putStrLn case version of
+        MarloweV1 -> show redeemer
+      putStrLn ""
+      let TransactionOutput{..} = output
+      case scriptOutput of
+        Nothing -> putStrLn "    <contract closed>"
+        Just TransactionScriptOutput{..} -> do
+          let
+            contractDoc :: Doc
+            contractDoc = indent 4 case version of
+              MarloweV1 -> pretty $ V1.marloweContract datum
+          putDoc contractDoc
+      putStrLn ""
+      putStrLn ""
+
+    RedeemPayout _ -> error "not implemented"

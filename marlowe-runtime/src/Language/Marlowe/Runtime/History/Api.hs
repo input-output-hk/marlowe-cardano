@@ -63,6 +63,8 @@ data ExtractMarloweTransactionError
 data FollowerStatus
   = Pending
   | Following SomeMarloweVersion
+  | Waiting SomeMarloweVersion
+  | Finished SomeMarloweVersion
   | Failed ContractHistoryError
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass Binary
@@ -76,6 +78,13 @@ data CreateStep v = CreateStep
 deriving instance Show (CreateStep 'V1)
 deriving instance Eq (CreateStep 'V1)
 
+instance Binary (CreateStep 'V1) where
+  put CreateStep{..} = do
+    putDatum MarloweV1 datum
+    put scriptAddress
+    put payoutValidatorHash
+  get = CreateStep <$> getDatum MarloweV1 <*> get <*> get
+
 data RedeemStep v = RedeemStep
   { utxo        :: TxOutRef
   , redeemingTx :: TxId
@@ -85,14 +94,23 @@ data RedeemStep v = RedeemStep
 deriving instance Show (RedeemStep 'V1)
 deriving instance Eq (RedeemStep 'V1)
 
+instance Binary (RedeemStep 'V1) where
+  put RedeemStep{..} = do
+    put utxo
+    put redeemingTx
+    putPayoutDatum MarloweV1 datum
+  get = RedeemStep <$> get <*> get <*> getPayoutDatum MarloweV1
+
 data ContractStep v
   = Create (CreateStep v)
   | ApplyTransaction (Transaction v)
   | RedeemPayout (RedeemStep v)
   -- TODO add TimeoutElapsed
+  deriving (Generic)
 
 deriving instance Show (ContractStep 'V1)
 deriving instance Eq (ContractStep 'V1)
+instance Binary (ContractStep 'V1)
 
 data HistoryCommand status err result where
   FollowContract :: ContractId -> HistoryCommand Void ContractHistoryError Bool
@@ -174,50 +192,80 @@ type RuntimeHistoryJobCodec m = Codec RuntimeHistoryJob DeserializeError m LBS.B
 historyJobCodec :: Applicative m => RuntimeHistoryJobCodec m
 historyJobCodec = codecJob
 
+type HistoryPage v = Map Chain.BlockHeader [ContractStep v]
+
+data SomeHistoryPage = forall v. SomeHistoryPage (MarloweVersion v) (HistoryPage v)
+
+instance Binary SomeHistoryPage where
+  put (SomeHistoryPage version page) = do
+    put $ SomeMarloweVersion version
+    case version of
+      MarloweV1 -> put page
+  get = do
+    SomeMarloweVersion version <- get
+    case version of
+      MarloweV1 -> SomeHistoryPage version <$> get
+
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
+  GetHistory :: ContractId -> HistoryQuery () ContractHistoryError SomeHistoryPage
 
 instance Query.IsQuery HistoryQuery where
   data Tag HistoryQuery delimiter err result where
     TagGetFollowedContracts :: Query.Tag HistoryQuery ContractId Void (Map ContractId FollowerStatus)
+    TagGetHistory :: Query.Tag HistoryQuery () ContractHistoryError SomeHistoryPage
 
   tagFromQuery = \case
     GetFollowedContracts -> TagGetFollowedContracts
+    GetHistory _         -> TagGetHistory
 
   tagEq TagGetFollowedContracts TagGetFollowedContracts = Just Query.Refl
+  tagEq TagGetFollowedContracts _                       = Nothing
+  tagEq TagGetHistory TagGetHistory                     = Just Query.Refl
+  tagEq TagGetHistory _                                 = Nothing
 
   putTag = \case
     TagGetFollowedContracts -> putWord8 0x01
+    TagGetHistory           -> putWord8 0x02
 
   getTag = do
     tagWord <- getWord8
     case tagWord of
       0x01 -> pure $ Query.SomeTag TagGetFollowedContracts
+      0x02 -> pure $ Query.SomeTag TagGetHistory
       _    -> fail "invalid tag bytes"
 
   putQuery = \case
-    GetFollowedContracts -> mempty
+    GetFollowedContracts  -> mempty
+    GetHistory contractId -> put contractId
 
   getQuery = \case
     TagGetFollowedContracts -> pure GetFollowedContracts
+    TagGetHistory           -> GetHistory <$> get
 
   putDelimiter = \case
     TagGetFollowedContracts -> put
+    TagGetHistory           -> put
 
   getDelimiter = \case
     TagGetFollowedContracts -> get
+    TagGetHistory           -> get
 
   putErr = \case
     TagGetFollowedContracts -> put
+    TagGetHistory           -> put
 
   getErr = \case
     TagGetFollowedContracts -> get
+    TagGetHistory           -> get
 
   putResult = \case
     TagGetFollowedContracts -> put
+    TagGetHistory           -> put
 
   getResult = \case
     TagGetFollowedContracts -> get
+    TagGetHistory           -> get
 
 type RuntimeHistoryQuery = Query.Query HistoryQuery
 

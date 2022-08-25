@@ -49,8 +49,10 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , fromDatum
   , fromPlutusData
   , fromRedeemer
+  , getUTCTime
   , isAfter
   , paymentCredential
+  , putUTCTime
   , runtimeChainSeekCodec
   , schemaVersion1_0
   , slotToUTCTime
@@ -73,7 +75,7 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Control.Monad ((>=>))
 import Data.Bifunctor (bimap)
-import Data.Binary (Binary (..), get, getWord8, put, putWord8)
+import Data.Binary (Binary (..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
@@ -353,6 +355,7 @@ fromCardanoStakeKeyHash = PaymentKeyHash . Cardano.serialiseToRawBytes
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving (IsString, Show) via Base16
+  deriving anyclass (Binary)
 
 fromCardanoScriptHash :: Cardano.ScriptHash -> ScriptHash
 fromCardanoScriptHash = ScriptHash . Cardano.serialiseToRawBytes
@@ -612,24 +615,28 @@ data SlotConfig = SlotConfig
   }
   deriving stock (Show, Eq, Ord, Generic)
 
+putUTCTime :: UTCTime -> Put
+putUTCTime UTCTime{..} = do
+  let (year, dayOfYear) = toOrdinalDate utctDay
+  put year
+  put dayOfYear
+  put $ diffTimeToPicoseconds utctDayTime
+
+getUTCTime :: Get UTCTime
+getUTCTime  = do
+  year <- get
+  dayOfYear <- get
+  utctDayTime <- picosecondsToDiffTime <$> get
+  utctDay <- case fromOrdinalDateValid year dayOfYear of
+    Nothing -> fail "Invalid ISO 8601 ordinal date"
+    Just a  -> pure a
+  pure UTCTime{..}
+
 instance Binary SlotConfig where
   put SlotConfig{..} = do
-    let UTCTime{..} = slotZeroTime
-    let (year, dayOfYear) = toOrdinalDate utctDay
-    put year
-    put dayOfYear
-    put $ diffTimeToPicoseconds utctDayTime
+    putUTCTime slotZeroTime
     put $ nominalDiffTimeToSeconds slotLength
-  get = do
-    year <- get
-    dayOfYear <- get
-    utctDayTime <- picosecondsToDiffTime <$> get
-    slotLength <- secondsToNominalDiffTime <$> get
-    utctDay <- case fromOrdinalDateValid year dayOfYear of
-      Nothing -> fail "Invalid ISO 8601 ordinal date"
-      Just a  -> pure a
-    let slotZeroTime = UTCTime{..}
-    pure SlotConfig{..}
+  get = SlotConfig <$> getUTCTime <*> (secondsToNominalDiffTime <$> get)
 
 data ChainSyncQuery delimiter err result where
   GetSlotConfig :: ChainSyncQuery Void () SlotConfig
