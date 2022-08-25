@@ -104,7 +104,7 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
     when positive balances are payed out on contract closure.
 -}
 data Payment = Payment AccountId Payee Money
-  deriving stock (Haskell.Show, Haskell.Eq)
+  deriving stock (Haskell.Show)
 
 
 -- | Effect of 'reduceContractStep' computation
