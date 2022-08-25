@@ -16,11 +16,12 @@
 , deferPluginErrors
 , actus-tests
 , source-repo-override
+, evalSystem
 }:
 let
   r-packages = with rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
   project = haskell-nix.cabalProject' ({ pkgs, ... }: {
-    inherit compiler-nix-name;
+    inherit compiler-nix-name evalSystem;
     # This is incredibly difficult to get right, almost everything goes wrong, see https://github.com/input-output-hk/haskell.nix/issues/496
     src = let root = ../../../.; in
       haskell-nix.haskellLib.cleanSourceWith {
@@ -235,6 +236,10 @@ let
             # See https://github.com/input-output-hk/iohk-nix/pull/488
             cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf ] ];
             cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf ] ];
+
+            # hpack fails due to modified cabal file, can remove when we bump to 3.12.0
+            cardano-addresses.cabal-generator = lib.mkForce null;
+            cardano-addresses-cli.cabal-generator = lib.mkForce null;
           };
       })
     ] ++ lib.optional enableHaskellProfiling {

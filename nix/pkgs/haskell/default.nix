@@ -1,5 +1,5 @@
 { lib
-, sources
+, inputs
 , stdenv
 , haskell-nix
 , buildPackages
@@ -13,6 +13,7 @@
 , enableHaskellProfiling
 , actus-tests
 , source-repo-override
+, evalSystem
 }:
 let
   # The Hackage index-state from cabal.project
@@ -36,7 +37,7 @@ let
   baseProject =
     { deferPluginErrors }:
     import ./haskell.nix {
-      inherit lib haskell-nix R libsodium-vrf rPackages z3;
+      inherit lib haskell-nix R libsodium-vrf rPackages z3 evalSystem;
       inherit checkMaterialization compiler-nix-name gitignore-nix;
       inherit enableHaskellProfiling;
       inherit deferPluginErrors;
@@ -58,7 +59,7 @@ let
   };
 
   extraPackages = import ./extra.nix {
-    inherit stdenv lib haskell-nix sources buildPackages writeShellScript;
+    inherit stdenv lib haskell-nix inputs buildPackages writeShellScript evalSystem;
     inherit index-state checkMaterialization compiler-nix-name;
   };
 

@@ -10,6 +10,6 @@ by Simon Thompson and Pablo Lamela Seijas
 
 To run tests, from this folder:
 ```bash
-$(nix-build ../default.nix -A marlowe.haskell.packages.marlowe.components.tests.marlowe-test)/bin/marlowe-test
+nix run ../.#marlowe.haskell.packages.marlowe.components.tests.marlowe-test
 ```
 

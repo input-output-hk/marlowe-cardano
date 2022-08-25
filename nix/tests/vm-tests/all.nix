@@ -6,7 +6,7 @@
 , marlowe-playground
 , marlowe-dashboard
 , web-ghc
-, sources
+, inputs
 , vmCompileTests # when enabled the test tries to compile plutus/marlowe code on webghc
 }:
 let
@@ -132,7 +132,7 @@ makeTest {
 
     webghc = { pkgs, ... }: {
 
-      virtualisation.memorySize = "1024";
+      virtualisation.memorySize = 1024;
 
       networking = {
         firewall.allowedTCPPorts = [ 80 ];
@@ -142,7 +142,7 @@ makeTest {
       };
 
       imports = [
-        (sources.plutus-apps + "/nix/modules/web-ghc.nix")
+        (inputs.plutus-apps + "/nix/modules/web-ghc.nix")
       ];
       services = {
         web-ghc = {

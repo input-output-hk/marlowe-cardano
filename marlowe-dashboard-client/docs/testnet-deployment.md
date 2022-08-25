@@ -11,7 +11,7 @@ Use the `marlowe-run-development` branch of marlowe.
 git clone git@github.com:input-output-hk/marlowe-cardano.git -b sprint-49
 
 # Build the PAB.
-nix-build marlowe-cardano/default.nix -A marlowe-pab -o build-pab
+nix build ./marlowe-cardano#marlowe-pab -o build-pab
 
 # Create the PAB configuration.
 cat > marlowe-pab.yaml << EOI
@@ -58,7 +58,7 @@ developmentOptions:
 EOI
 
 # Build the marlowe dashboard server.
-nix-build marlowe-cardano/default.nix -A marlowe-dashboard.marlowe-run-backend-invoker -o build-run
+nix build ./marlowe-cardano#marlowe-dashboard.marlowe-run-backend-invoker -o build-run
 
 # Create the configuration file for the dashboard server.
 cat > marlowe-run.json << EOI
@@ -367,7 +367,7 @@ The server is generally silent, except for a few messages like when wallets are 
 In a terminal for the dashboard client, run the following:
 
 ```bash
-nix-shell marlowe-cardano/shell.nix --run "cd marlowe-cardano/marlowe-dashboard-client; spago build; npm run start"
+nix develop ./marlowe-cardano --command -- bash -c "cd marlowe-cardano/marlowe-dashboard-client; spago build; npm run start"
 ```
 
 Compilation and other messages will appear. Visit http://localhost:8009.

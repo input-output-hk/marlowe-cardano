@@ -33,4 +33,7 @@ self: super: {
       });
     };
   };
+
+  # Needed until https://github.com/nix-community/npmlock2nix/issues/153
+  nodejs = self.nodejs-14_x;
 }

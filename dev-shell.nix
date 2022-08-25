@@ -1,6 +1,5 @@
-{ system ? builtins.currentSystem
-, enableHaskellProfiling ? false
-, packages ? import ./. { inherit system enableHaskellProfiling; }
+{ system
+, packages
 }:
 let
   inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli marlowe-pab plutus-chain-index cardano-wallet dev-scripts;
@@ -25,6 +24,9 @@ let
     marlowe-run-generate-purs; marlowe-playground-generate-purs
   '';
 
+  updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
+    nix run .#updateMaterialized
+  '';
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
     sphinxcontrib-haddock.sphinxcontrib-domaintools
@@ -154,7 +156,7 @@ haskell.project.shellFor {
     ${pre-commit-check.shellHook}
   ''
   # Work around https://github.com/NixOS/nix/issues/3345, which makes
-  # tests etc. run single-threaded in a nix-shell.
+  # tests etc. run single-threaded in a nix shell.
   # Sets the affinity to cores 0-1000 for $$ (current PID in bash)
   # Only necessary for linux - darwin doesn't even expose thread
   # affinity APIs!

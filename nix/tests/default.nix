@@ -13,7 +13,7 @@
 , plutus-pab
 , marlowe-pab
 , docs
-, sources
+, inputs
 , vmCompileTests ? false
 }:
 let
@@ -55,6 +55,6 @@ pkgs.recurseIntoAttrs {
 
   vmTests = pkgs.callPackage ./vm.nix {
     inherit vmCompileTests marlowe-playground
-      marlowe-dashboard web-ghc plutus-pab marlowe-pab docs sources;
+      marlowe-dashboard web-ghc plutus-pab marlowe-pab docs inputs;
   };
 }

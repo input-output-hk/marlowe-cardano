@@ -31,7 +31,7 @@ let
   generate-purescript = writeShellScriptBinInRepoRoot "marlowe-run-generate-purs" ''
     generated=./marlowe-dashboard-client/generated
     rm -rf $generated
-    cp -a $(nix-build -A marlowe-dashboard.generated-purescript --no-out-link "$@") $generated
+    cp -a $(nix build .#marlowe-dashboard.generated-purescript --no-link --json | jq -r .[0].outputs.out) $generated
     chmod -R +w $generated
   '';
 
@@ -48,8 +48,8 @@ let
     }
     EOF
     (trap 'kill 0' SIGINT;
-      $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml webserver &
-      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./marlowe-run.json -n 1564
+      nix run ../.#marlowe-dashboard.marlowe-invoker -- --config plutus-pab.yaml webserver &
+      nix run ../.#marlowe-dashboard.marlowe-run-backend-invoker -- webserver -c ./marlowe-run.json -n 1564
     )
   '';
 

@@ -4,24 +4,24 @@
 
 Make sure you have a local backend server running first:
 ```bash
-[nix-shell] $ marlowe-playground-server
+[nix develop shell] $ marlowe-playground-server
 ```
 
 Check the [backend documentation](../marlowe-playground-server/README.md) for more information on how to setup the Github OAuth application.
 
 Now we will build and run the front end:
 ```bash
-[nix-shell] $ cd marlowe-playground-client
+[nix develop shell] $ cd marlowe-playground-client
 # Generate the purescript bridge files
-[nix-shell] $ marlowe-playground-generate-purs
+[nix develop shell] $ marlowe-playground-generate-purs
 # Download javascript dependencies
-[nix-shell] $ npm install
+[nix develop shell] $ npm install
 # Install purescript depdendencies
-[nix-shell] $ npm run build:spago
+[nix develop shell] $ npm run build:spago
 # Precompile js dependencies bundle
-[nix-shell] $ npm run build:webpack:dev:vendor
+[nix develop shell] $ npm run build:webpack:dev:vendor
 # Run aun auto-reloading dev build on https://localhost:8009
-[nix-shell] $ npm run build:webpack:dev
+[nix develop shell] $ npm run build:webpack:dev
 ```
 
 ## Adding dependencies
@@ -32,8 +32,8 @@ Now we will build and run the front end:
 Whenever you change `packages.dhall` you need to make sure that all dependencies can still properly be resolved and built.
 You can do so using the `update-client-deps` script:
 
-- Inside the nix-shell environment: `update-client-deps`
-- Outside of the nix-shell environment (from the client directory): `$(nix-build -A plutus.updateClientDeps ../)/bin/update-client-deps`
+- Inside the nix develop environment: `update-client-deps`
+- Outside of the nix develop environment (from the client directory): `nix run ../.#update-client-deps`
 
 The `update-client-deps` script will generate/update `.nix` files which have to be committed and are required for a successful CI run.
 
@@ -62,7 +62,7 @@ message during the build with the actual hash value.
 The code is formatted using [purs-tidy](https://github.com/natefaubion/purescript-tidy), and there is a CI task that will fail if the code is not properly formatted. You can apply purs-tidy to the project by calling:
 
 ```bash
-nix-shell shell.nix --run fix-purs-tidy
+nix develop --command fix-purs-tidy
 ```
 
 The code is formatted using [purs-tidy](https://github.com/natefaubion/purescript-tidy), and there is a CI task that will fail if the code is not properly formatted. You can apply purs-tidy to the project by calling:

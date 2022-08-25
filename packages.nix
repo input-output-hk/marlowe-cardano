@@ -1,33 +1,10 @@
-########################################################################
-# default.nix -- The top-level nix build file for Marlowe.
-#
-# This file defines various attributes that are used for building and
-# developing Marlowe.
-#
-########################################################################
-{ system ? builtins.currentSystem
-, crossSystem ? null
-, config ? { }
-, sourcesOverride ? { }
-, sources ? import ./nix/sources.nix { inherit system; } // sourcesOverride
-, haskellNix ? import sources.haskell-nix {
-    pkgs = import sources.nixpkgs { inherit system; };
-    sourcesOverride = {
-      hackage = sources.hackage-nix;
-      stackage = sources.stackage-nix;
-    };
-  }
-, packages ? import ./nix { inherit system sources crossSystem config sourcesOverride haskellNix checkMaterialization enableHaskellProfiling source-repo-override; }
-  # An explicit git rev to use, passed when we are in Hydra
-  # Whether to check that the pinned shas for haskell.nix are correct. We want this to be
-  # false, generally, since it does more work, but we set it to true in the CI
-, checkMaterialization ? false
-  # Whether to build our Haskell packages (and their dependencies) with profiling enabled.
-, enableHaskellProfiling ? false
-, source-repo-override ? { }
+{ system
+, packagesBySystem
+, inputs
 }:
 let
-  inherit (packages) pkgs marlowe sources;
+  packages = packagesBySystem.${system};
+  inherit (packages) pkgs marlowe;
   inherit (marlowe) haskell;
   inherit (haskell.packages.cardano-wallet.components.exes) cardano-wallet;
   inherit (haskell.packages.plutus-chain-index.components.exes) plutus-chain-index;
@@ -68,7 +45,7 @@ rec {
 
 
   dev-scripts = import ./nix/dev/scripts.nix {
-    inherit pkgs;
+    inherit pkgs packagesBySystem marlowe;
     inherit cardano-cli marlowe-pab cardano-node plutus-chain-index;
     network = pkgs.networks.testnet-dev;
     marlowe-dashboard = marlowe-dashboard.marlowe-run-backend-invoker;
@@ -76,7 +53,7 @@ rec {
   };
 
   tests = import ./nix/tests/default.nix {
-    inherit pkgs docs sources;
+    inherit pkgs docs inputs;
     inherit (marlowe.lib) gitignore-nix;
     inherit (marlowe) fixStylishHaskell fix-purs-tidy fix-prettier fixPngOptimization;
     inherit (haskell) plutus-pab;
@@ -88,12 +65,12 @@ rec {
 
   docs = import ./nix/docs.nix { inherit pkgs marlowe; };
 
-  # Test data needed by marlowe-actus provided via niv
-  inherit (sources) actus-tests;
+  # Test data needed by marlowe-actus
+  inherit (inputs) actus-tests;
 
   # Packages needed for the bitte deployment
-  bitte-packages = import ./bitte {
-    inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs sources cardano-wallet plutus-chain-index marlowe-dashboard-server;
+  entrypoints = import ./bitte {
+    inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs inputs cardano-wallet plutus-chain-index marlowe-dashboard-server;
     inherit (marlowe) cardano-node;
   };
 }

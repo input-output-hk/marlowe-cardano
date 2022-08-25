@@ -5,8 +5,11 @@
 , marlowe-pab
 , cardano-node
 , plutus-chain-index
+, packagesBySystem
+, marlowe
 }:
 let
+  inherit (pkgs) lib;
   marlowe-pab-exe = marlowe-pab + "/bin/marlowe-pab";
   marlowe-dashboard-exe = marlowe-dashboard + "/bin/marlowe-dashboard-server";
 
@@ -172,4 +175,24 @@ let
 in
 {
   inherit start-cardano-node start-wallet start-chain-index start-marlowe-pab start-dashboard-server start-marlowe-run;
+
+  updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
+    # comment to appease nixpkgs-fmt
+    ${lib.concatStringsSep "\n" (lib.mapAttrsToList
+      (system: packages:
+      let
+        haskell = packages.marlowe.haskell;
+      in
+      ''
+        # comment to appease nixpkgs-fmt
+        ${haskell.project.plan-nix.passthru.generateMaterialized} \
+          ./nix/pkgs/haskell/materialized-${lib.removePrefix "x86_64-" system} &
+
+        ${haskell.extraPackages.updateAllShaFiles} &
+      '')
+      packagesBySystem)}
+      ${marlowe.haskell.project.projectCross.mingwW64.plan-nix.passthru.generateMaterialized} ./nix/pkgs/haskell/materialized-windows &
+
+      wait
+  '';
 }

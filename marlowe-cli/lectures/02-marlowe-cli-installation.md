@@ -163,7 +163,7 @@ to its top folder and open a Nix shell.
 
 ``` bash
 cd marlowe-cardano
-nix-shell
+nix develop
 ```
 
 </div>

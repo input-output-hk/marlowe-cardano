@@ -1,7 +1,7 @@
-{ marlowe-playground, marlowe-pab, web-ghc, marlowe-dashboard, marlowe-dashboard-server, cardano-node, cardano-wallet, plutus-chain-index, docs, pkgs, sources }:
+{ marlowe-playground, marlowe-pab, web-ghc, marlowe-dashboard, marlowe-dashboard-server, cardano-node, cardano-wallet, plutus-chain-index, docs, pkgs, inputs }:
 let
-  staticSite = pkgs.callPackage (sources.plutus-apps + "/bitte/static-site.nix") { };
-  playgroundStatic = pkgs.callPackage (sources.plutus-apps + "/bitte/playground-static.nix") { inherit staticSite; docs = docs.site; };
+  staticSite = pkgs.callPackage (inputs.plutus-apps + "/bitte/static-site.nix") { };
+  playgroundStatic = pkgs.callPackage (inputs.plutus-apps + "/bitte/playground-static.nix") { inherit staticSite; docs = docs.site; };
   wait-for-socket = pkgs.writeShellScriptBin "wait-for-socket" ''
     set -eEuo pipefail
 
@@ -65,11 +65,11 @@ let
     }) [ "testnet-dev" "testnet-pioneers" ]);
 in
 {
-  web-ghc-server-entrypoint = pkgs.callPackage (sources.plutus-apps + "/bitte/web-ghc-server.nix") {
+  web-ghc-server-entrypoint = pkgs.callPackage (inputs.plutus-apps + "/bitte/web-ghc-server.nix") {
     web-ghc-server = web-ghc;
   };
 
-  marlowe-playground-server-entrypoint = pkgs.callPackage (sources.plutus-apps + "/bitte/plutus-playground-server.nix") {
+  marlowe-playground-server-entrypoint = pkgs.callPackage (inputs.plutus-apps + "/bitte/plutus-playground-server.nix") {
     variant = "marlowe";
     pkg = marlowe-playground.server;
   };

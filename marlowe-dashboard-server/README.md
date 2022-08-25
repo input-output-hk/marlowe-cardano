@@ -10,7 +10,7 @@ This application is both a web-server for the frontend in production (in develop
 
 ## Developing
 
-In order to develop this application is recommended to be inside a `nix-shell` (read the project's [Readme](../README.adoc) for more information). Once inside, you can use
+In order to develop this application is recommended to be inside `nix develop` (read the project's [Readme](../README.adoc) for more information). Once inside, you can use
 
 ```bash
 # To do a build

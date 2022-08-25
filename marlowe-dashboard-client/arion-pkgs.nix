@@ -1,4 +1,4 @@
 let
-  packages = import ../default.nix { };
+  packages = (builtins.getFlake "git+file:${toString ../.}").packages.${builtins.currentSystem};
 in
 packages.pkgs // packages

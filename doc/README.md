@@ -1,6 +1,6 @@
 # Plutus and Marlowe documentation site
  
-This is a sphinx site. You can build it with sphinx directly (assuming you're in a `nix-shell`):
+This is a sphinx site. You can build it with sphinx directly (assuming you're in a `nix develop`):
 
 ```
 sphinx-build -j 4 -n . _build
@@ -9,7 +9,7 @@ sphinx-build -j 4 -n . _build
 Or you can build it with Nix at the top level, which will also build the Haddock for the project and link it in:
 
 ```
-nix build -f default.nix docs.site
+nix build .#docs.site
 ```
 
 The doc site from master is built automatically and hosted [here](https://plutus.readthedocs.io/en/latest).

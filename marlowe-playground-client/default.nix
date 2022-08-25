@@ -13,9 +13,7 @@
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
 
-  build-playground-exe = "$(nix-build ../default.nix -A marlowe.haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server \"$@\")";
-
-  build-ghc-with-marlowe = "$(nix-build --quiet --no-build-output -E '(import ./.. {}).marlowe.haskell.project.ghcWithPackages(ps: [ ps.marlowe ])' \"$@\")";
+  build-ghc-with-marlowe = "$(nix-build --quiet --no-build-output -E '(builtins.getFlake \"git+file:\${toString ../.}\").packages.\${builtins.currentSystem}.marlowe.haskell.project.ghcWithPackages (ps: [ ps.marlowe ])' \"$@\")";
 
   # Output containing the purescript bridge code
   generated-purescript = pkgs.runCommand "marlowe-playground-purescript" { } ''
@@ -33,7 +31,7 @@ let
   generate-purescript = writeShellScriptBinInRepoRoot "marlowe-playground-generate-purs" ''
     generated=./marlowe-playground-client/generated
     rm -rf $generated
-    cp -a $(nix-build -A marlowe-playground.generated-purescript --no-out-link "$@") $generated
+    cp -a $(nix build .#marlowe-playground.generated-purescript --no-link --json | jq -r .[0].outputs.out) $generate
     chmod -R +w $generated
   '';
 
@@ -48,7 +46,7 @@ let
     export PATH=$GHC_WITH_PKGS/bin:$PATH
     export FRONTEND_URL=https://localhost:8009
 
-    ${build-playground-exe}/bin/marlowe-playground-server webserver
+    nix run ../.#marlowe.haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server webserver
   '';
 
   cleanSrc = gitignore-nix.gitignoreSource ./.;

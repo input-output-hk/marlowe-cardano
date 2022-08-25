@@ -7,23 +7,24 @@
 { stdenv
 , lib
 , haskell-nix
-, sources
+, inputs
 , index-state
 , compiler-nix-name
 , checkMaterialization
 , buildPackages
 , writeShellScript
+, evalSystem
 }:
 let
   cabalInstallProject = haskell-nix.hackage-project {
     name = "cabal-install";
     version = "3.4.0.0";
-    inherit compiler-nix-name index-state checkMaterialization;
+    inherit compiler-nix-name index-state checkMaterialization evalSystem;
     plan-sha256 = lib.removeSuffix "\n" (builtins.readFile ./cabal-install.sha);
   };
   cardanoRepoToolProject = haskell-nix.cabalProject' {
-    src = sources.cardano-repo-tool;
-    inherit compiler-nix-name index-state checkMaterialization;
+    src = inputs.cardano-repo-tool;
+    inherit compiler-nix-name index-state checkMaterialization evalSystem;
     plan-sha256 = lib.removeSuffix "\n" (builtins.readFile ./cardano-repo-tool.sha);
     sha256map = {
       "https://github.com/input-output-hk/nix-archive"."7dcf21b2af54d0ab267f127b6bd8fa0b31cfa49d" = "0mhw896nfqbd2iwibzymydjlb3yivi9gm0v2g1nrjfdll4f7d8ly";
@@ -42,8 +43,8 @@ let
       constraints: stylish-haskell==0.12.2.0, hlint==3.2.7
       allow-newer: hls-stylish-haskell-plugin:stylish-haskell
     '';
-    src = sources.haskell-language-server;
-    inherit compiler-nix-name index-state checkMaterialization;
+    src = inputs.haskell-language-server;
+    inherit compiler-nix-name index-state checkMaterialization evalSystem;
     plan-sha256 = lib.removeSuffix "\n" (builtins.readFile hlsShaFile);
     sha256map = {
       "https://github.com/hsyl20/ghc-api-compat"."8fee87eac97a538dbe81ff1ab18cff10f2f9fa15" = "16bibb7f3s2sxdvdy2mq6w1nj1lc8zhms54lwmj17ijhvjys29vg";
@@ -57,10 +58,15 @@ let
     }];
   };
 
-  updateShaFile = project: shaFile: writeShellScript "updateShaFile" ''
-    ${project.plan-nix.passthru.calculateMaterializedSha} > ${toString shaFile}
-  '';
-  updateAllShaFiles = writeShellScript "updateShaFiles" ''
+  updateShaFile = project: shaFile:
+    let
+      evalPkgs = project.pkg-set.config.evalPackages;
+    in
+    evalPkgs.writeShellScript "updateShaFile" ''
+      cd `${evalPkgs.git}/bin/git rev-parse --show-toplevel`
+      ${project.plan-nix.passthru.calculateMaterializedSha} > ./nix/pkgs/haskell/${baseNameOf shaFile}
+    '';
+  updateAllShaFiles = cabalInstallProject.pkg-set.config.evalPackages.writeShellScript "updateShaFiles" ''
     ${updateShaFile cabalInstallProject ./cabal-install.sha}
     ${updateShaFile hlsProject hlsShaFile}
     ${updateShaFile cardanoRepoToolProject ./cardano-repo-tool.sha}
