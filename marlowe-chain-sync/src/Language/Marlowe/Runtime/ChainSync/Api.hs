@@ -105,7 +105,7 @@ data WithGenesis a = Genesis | At a
   deriving anyclass (Binary)
 
 -- | A point in the chain, identified by a slot number, block header hash, and
--- block numner.
+-- block number.
 type ChainPoint = WithGenesis BlockHeader
 
 -- | A block header, consisting of a slot number, a hash, and a block number.
@@ -141,7 +141,7 @@ data ValidityRange
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
--- TODO invlude validator versions
+-- TODO add content
 data Metadata
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
@@ -152,7 +152,7 @@ data TransactionInput = TransactionInput
   , txIx       :: !TxIx             -- ^ The txIx of the TransactionOutput this input consumes.
   , address    :: !Address          -- ^ The address of the TransactionOutput this input consumes.
   , datumBytes :: !(Maybe Datum)    -- ^ The script datum for this input
-  , redeemer   :: !(Maybe Redeemer) -- ^ The script redeemer dataum for this input (if one was provided).
+  , redeemer   :: !(Maybe Redeemer) -- ^ The script redeemer datum for this input (if one was provided).
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
@@ -160,7 +160,7 @@ data TransactionInput = TransactionInput
 -- | An output of a transaction.
 data TransactionOutput = TransactionOutput
   { address   :: !Address           -- ^ The address that receives the assets of this output.
-  , assets    :: !Assets            -- ^ The assets this ouptut produces.
+  , assets    :: !Assets            -- ^ The assets this output produces.
   , datumHash :: !(Maybe DatumHash) -- ^ The hash of the script datum associated with this output.
   , datum     :: !(Maybe Datum)     -- ^ The script datum associated with this output.
   }
@@ -196,21 +196,21 @@ toRedeemer = Redeemer . toDatum
 
 -- | Convert from Plutus.V1.Ledger.Api.Data to Datum
 fromPlutusData :: Plutus.Data -> Datum
-fromPlutusData (Plutus.Constr i dats) = Constr i $ fromPlutusData <$> dats
-fromPlutusData (Plutus.Map m)         = Map $ bimap fromPlutusData fromPlutusData <$> m
-fromPlutusData (Plutus.List dats)     = List $ fromPlutusData <$> dats
-fromPlutusData (Plutus.I i)           = I i
-fromPlutusData (Plutus.B b)           = B b
+fromPlutusData (Plutus.Constr i ds) = Constr i $ fromPlutusData <$> ds
+fromPlutusData (Plutus.Map m)       = Map $ bimap fromPlutusData fromPlutusData <$> m
+fromPlutusData (Plutus.List ds)     = List $ fromPlutusData <$> ds
+fromPlutusData (Plutus.I i)         = I i
+fromPlutusData (Plutus.B b)         = B b
 
 -- | Convert to Plutus.V1.Ledger.Api.Data to Datum
 toPlutusData :: Datum -> Plutus.Data
-toPlutusData (Constr i dats) = Plutus.Constr i $ toPlutusData <$> dats
-toPlutusData (Map m)         = Plutus.Map $ bimap toPlutusData toPlutusData <$> m
-toPlutusData (List dats)     = Plutus.List $ toPlutusData <$> dats
-toPlutusData (I i)           = Plutus.I i
-toPlutusData (B b)           = Plutus.B b
+toPlutusData (Constr i ds) = Plutus.Constr i $ toPlutusData <$> ds
+toPlutusData (Map m)       = Plutus.Map $ bimap toPlutusData toPlutusData <$> m
+toPlutusData (List ds)     = Plutus.List $ toPlutusData <$> ds
+toPlutusData (I i)         = Plutus.I i
+toPlutusData (B b)         = Plutus.B b
 
--- | A collection of assets transferred by a trasaction output.
+-- | A collection of assets transferred by a transaction output.
 data Assets = Assets
   { ada    :: !Lovelace -- ^ The ADA sent by the tx output.
   , tokens :: !Tokens   -- ^ Additional tokens sent by the tx output.
@@ -395,7 +395,7 @@ data Move err result where
   -- | Advance a fixed number of blocks without collecting any results..
   AdvanceBlocks :: Natural -> Move Void ()
 
-  -- | Jump to the lastest intersection from a list of known block headers
+  -- | Jump to the latest intersection from a list of known block headers
   -- without collecting any results.
   Intersect :: [BlockHeader] -> Move IntersectError ()
 
