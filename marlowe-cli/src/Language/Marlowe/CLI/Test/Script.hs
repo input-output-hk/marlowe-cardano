@@ -37,7 +37,7 @@ import Control.Monad.State.Strict (MonadState, execStateT, get)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), initialMarloweState, makeContract)
 import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction, toTimeout)
 import Language.Marlowe.Extended.V1 as E
-import Marlowe.Contracts (escrow, swap, trivial)
+import Marlowe.Contracts (escrow, swap, trivial, zeroCouponBond)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -123,17 +123,19 @@ interpret Initialize {..} = do
                                     (Constant bAmount)
                                     bTimeout'
                                     Close
+        TemplateZeroCouponBond{..} -> do  lendingDeadline' <- toTimeout lendingDeadline
+                                          paybackDeadline' <- toTimeout paybackDeadline
+                                          makeContract $
+                                            zeroCouponBond
+                                              lender
+                                              borrower
+                                              lendingDeadline'
+                                              paybackDeadline'
+                                              (Constant principal)
+                                              (Constant principal `AddValue` Constant interest)
+                                              ada
+                                              Close
         template -> throwError $ CliError $ "Template not implemented: " <> show template
-        -- TemplateZeroCouponBond{..} -> makeContract $
-        --                                 zeroCouponBond
-        --                                   lender
-        --                                   borrower
-        --                                   lendingDeadline
-        --                                   paybackDeadline
-        --                                   (Constant principal)
-        --                                   (Constant principal `AddValue` Constant interest)
-        --                                   ada
-        --                                   Close
         -- TemplateCoveredCall{..} -> makeContract $
         --                             coveredCall
         --                               issuer
