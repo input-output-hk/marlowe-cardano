@@ -606,7 +606,7 @@ extractIf =
           else elseContinuation
 
 
--- | Extract the variable, value, warnings, and post-transaction contract from a `Assert` at the start of the pre-transaction contract.
+-- | Extract the warnings, and post-transaction contract from an `Assert` at the start of the pre-transaction contract.
 extractAssert :: Testify ([TransactionWarning], Contract)
 extractAssert =
   do
