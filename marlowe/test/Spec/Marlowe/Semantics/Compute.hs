@@ -468,7 +468,7 @@ requireEarliestLeLatest :: Testify ()
 requireEarliestLeLatest = view earliestTime `requireLE` view latestTime
 
 
--- | Assert that the validity interval is valid for transacting.
+-- | Assert that the validity interval is valid for transacting, and that the start of the validity interval does not preceed the minimum time of the pre-transaction state.
 requireValidTime :: Testify ()
 requireValidTime =
      view earliestTime `requireLE` view preTime

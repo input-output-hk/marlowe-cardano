@@ -752,7 +752,7 @@ instance Arbitrary Contract where
 
 
 -- | Generate an arbitrary contract, weighted towards different contract constructs.
-arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights of contract terms.
+arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights of contract terms, which must eventually include `Close` as a posibility.
                           -> Context                           -- ^ The Marlowe context.
                           -> Gen Contract                      -- ^ Generator for a contract.
 arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) context =

@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections  #-}
 
 
 module Spec.Marlowe.Semantics.Functions (
@@ -525,22 +526,22 @@ checkIDeposit :: Maybe Bool  -- ^ Whether the accounts match.
               -> Maybe Bool  -- ^ Whether the amounts match.
               -> Property    -- ^ The test.
 checkIDeposit accountMatches partyMatches tokenMatches amountMatches = property $ do
+  let perhapsMatches item shouldMatch =
+        do
+          matches' <- maybe arbitrary pure shouldMatch
+          (matches', ) <$> if matches' then pure item else arbitrary `suchThat` (/= item)
   let gen = do
         context <- arbitrary
         environment <- semiArbitrary context
         state <- semiArbitrary context
         (account, token) <- semiArbitrary context
-        accountMatches' <- maybe arbitrary pure accountMatches
-        account' <- if accountMatches' then pure account else suchThat arbitrary (/= account)
-        partyMatches' <- maybe arbitrary pure partyMatches
         party <- arbitrary
-        party' <- if partyMatches' then pure party else suchThat arbitrary (/= party)
-        tokenMatches' <- maybe arbitrary pure tokenMatches
-        token' <- if tokenMatches' then pure token else suchThat arbitrary (/= token)
-        amountMatches' <- maybe arbitrary pure amountMatches
         amount <- arbitrary
         let amountEvaluated = evalValue environment state amount
-        amount' <- if amountMatches' then pure amountEvaluated else suchThat arbitrary (/= amountEvaluated)
+        (accountMatches', account') <- perhapsMatches account         accountMatches
+        (partyMatches'  , party'  ) <- perhapsMatches party           partyMatches
+        (tokenMatches'  , token'  ) <- perhapsMatches token           tokenMatches
+        (amountMatches' , amount' ) <- perhapsMatches amountEvaluated amountMatches
         pure (environment, state, account', party', token', amount', Deposit account party token amount, accountMatches' && partyMatches' && tokenMatches' && amountMatches')
   forAll' gen $ \(environment, state, account, party, token, amount, action, match) ->
     let

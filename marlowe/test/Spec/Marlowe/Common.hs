@@ -207,7 +207,7 @@ rationalGen = do
 
 
 -- | Generate a value at random.
-valueGenSized :: Int                      -- ^ The size (complexity) of the value.
+valueGenSized :: Int                      -- ^ The maximum size (complexity) of the value.
               -> Gen (Value Observation)  -- ^ Generator for a value.
 valueGenSized s
   | s > 0 = oneof [ AvailableMoney <$> partyGen <*> tokenGen
@@ -263,7 +263,7 @@ shrinkValue value = case value of
 
 
 -- | Generate an observation at random.
-observationGenSized :: Int              -- ^ The size (complexity) of the observation.
+observationGenSized :: Int              -- ^ The maximum size (complexity) of the observation.
                     -> Gen Observation  -- ^ Generator for a observation.
 observationGenSized s
   | s > 0 = oneof [ AndObs <$> observationGenSized (s `quot` 2)
@@ -350,7 +350,7 @@ boundListGen = do len <- listLengthGen
 
 
 -- | Generate an action at random.
-actionGenSized :: Int         -- ^ The size (complexity) of the action.
+actionGenSized :: Int         -- ^ The maximum size (complexity) of the action.
                -> Gen Action  -- ^ Generator for a action.
 actionGenSized s =
   oneof [ Deposit <$> partyGen <*> partyGen <*> tokenGen <*> valueGenSized (s - 1)
@@ -378,7 +378,7 @@ shrinkAction action = case action of
 
 
 -- | Generate a case at random.
-caseRelGenSized :: Int                  -- ^ The size (complexity) of the case.
+caseRelGenSized :: Int                  -- ^ The maximum size (complexity) of the case.
                 -> Integer              -- ^ The minimum timeout for continuations.
                 -> Gen (Case Contract)  -- ^ Generator for a contract.
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
@@ -394,7 +394,7 @@ shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction ac
 
 
 -- | Generate a contract at random.
-contractRelGenSized :: Int           -- ^ The size (complexity) of the contract.
+contractRelGenSized :: Int           -- ^ The maximum size (complexity) of the contract.
                     -> Integer       -- ^ The minimum timeout for continuations.
                     -> Gen Contract  -- ^ Generator for a contract.
 contractRelGenSized s bn
@@ -420,7 +420,7 @@ contractRelGenSized s bn
 
 
 -- | Generate a contract at random.
-contractGenSized :: Int           -- ^ The size (complexity) of the contract.
+contractGenSized :: Int           -- ^ The maximum size (complexity) of the contract.
                  -> Gen Contract  -- ^ Generator for a contract.
 contractGenSized s = do iniBn <- simpleIntegerGen
                         contractRelGenSized s iniBn
