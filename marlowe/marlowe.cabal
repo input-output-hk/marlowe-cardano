@@ -20,7 +20,7 @@ extra-doc-files: README.md
 
 source-repository head
   type: git
-  location: https://github.com/input-output-hk/plutus
+  location: https://github.com/input-output-hk/marlowe-cardano
 
 flag defer-plugin-errors
     description:
@@ -38,37 +38,36 @@ common lang
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
+    -Wunused-packages
 
 library
   import: lang
   hs-source-dirs: src
-  ghc-options:
-    -Wunused-packages
 
   if !(impl(ghcjs) || os(ghcjs))
     build-depends: plutus-tx-plugin -any
 
   build-depends:
+    base,
     aeson <2,
     base16-aeson,
-    base -any,
+    base16-bytestring,
     bytestring,
-    containers -any,
-    deriving-aeson -any,
+    containers,
+    deriving-aeson,
     mtl,
     newtype-generics,
-    template-haskell -any,
     plutus-ledger-ada,
-    plutus-ledger-api -any,
+    plutus-ledger-api,
     plutus-ledger-slot,
     plutus-script-utils,
     plutus-tx,
-    serialise -any,
-    base16-bytestring -any,
+    sbv >=8.4,
+    scientific,
+    serialise,
+    template-haskell,
     text,
-    sbv >= 8.4,
-    scientific -any,
-    wl-pprint -any,
+    wl-pprint,
 
   exposed-modules:
     Language.Marlowe
@@ -86,62 +85,52 @@ library
     Plutus.Debug
 
 test-suite marlowe-test
+    import: lang
+    hs-source-dirs: test
+
     if flag(defer-plugin-errors)
       ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
-    import: lang
-    hs-source-dirs: test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
+
     other-modules:
-        Spec.Marlowe.Arbitrary
-        Spec.Marlowe.AutoExecute
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
-        Spec.Marlowe.Orphans
         Spec.Marlowe.Semantics
-        Spec.Marlowe.Transaction
-        Spec.Marlowe.Util
-        Spec.Marlowe.Util.AssocMap
-
-    if !(impl(ghcjs) || os(ghcjs))
-      build-depends: plutus-tx-plugin -any
+        Spec.Marlowe.Semantics.Arbitrary
+        Spec.Marlowe.Semantics.AssocMap
+        Spec.Marlowe.Semantics.Compute
+        Spec.Marlowe.Semantics.Entropy
+        Spec.Marlowe.Semantics.Functions
+        Spec.Marlowe.Semantics.Golden
+        Spec.Marlowe.Semantics.Golden.Escrow
+        Spec.Marlowe.Semantics.Golden.Pangram
+        Spec.Marlowe.Semantics.Golden.Swap
+        Spec.Marlowe.Semantics.Golden.Trivial
+        Spec.Marlowe.Semantics.Golden.ZeroCouponBond
+        Spec.Marlowe.Semantics.Orphans
+        Spec.Marlowe.Semantics.Util
 
     build-depends:
-        aeson -any,
-        cardano-api -any,
         base >=4.9 && <5,
-        containers -any,
-        data-default -any,
-        hint -any,
-        lens -any,
-        bytestring -any,
-        freer-simple -any,
-        freer-extras -any,
-        mtl -any,
-        tasty -any,
-        tasty-hunit -any,
-        tasty-quickcheck,
-        text -any,
-        serialise,
-        cborg,
-        plutus-ledger-ada,
-        plutus-ledger-api -any,
-        plutus-ledger-slot,
-        plutus-ledger,
-        plutus-script-utils,
-        plutus-tx -any,
+        aeson,
+        bytestring,
+        containers,
+        data-default,
+        hint,
+        lens,
         marlowe,
+        mtl,
+        plutus-ledger,
+        plutus-ledger-api,
+        plutus-ledger-slot,
+        plutus-script-utils,
+        plutus-tx,
         QuickCheck,
-        quickcheck-instances -any,
-        template-haskell -any,
-        streaming -any,
-        async -any,
-        prettyprinter -any,
-        servant-client -any,
-        http-client -any,
-        websockets -any,
-        network -any,
-        openapi3,
-        uuid -any
-
+        quickcheck-instances,
+        serialise,
+        tasty,
+        tasty-hunit,
+        tasty-quickcheck,
+        text,
