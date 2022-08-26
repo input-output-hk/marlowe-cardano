@@ -19,8 +19,7 @@ import Network.Socket (AddrInfo (..), HostName, PortNumber, Socket, SocketType (
                        getAddrInfo, openSocket)
 import Network.TypedProtocol (Driver (..), runPeerWithDriver)
 import qualified Options.Applicative as O
-import System.Exit (exitFailure)
-import System.IO (hPutStrLn, stderr)
+import System.Exit (die)
 
 main :: IO ()
 main = run =<< getOptions
@@ -29,7 +28,7 @@ run :: Options -> IO ()
 run Options{..} = do
   case command of
     Add contractId -> runHistoryCommand (FollowContract contractId) >>= \case
-      Left err -> failWith $ "Failed to follow contract: " <> show err
+      Left err -> die $ "Failed to follow contract: " <> show err
       Right hadEffect -> do
         when hadEffect $ T.putStrLn $ renderContractId contractId
 
@@ -86,11 +85,6 @@ runLsCommand LsCommand{..} socket = void $ runPeerWithDriver driver peer (startD
       T.putStr $ renderContractId contractId
       putStr " Status: "
       print status
-
-failWith :: String -> IO a
-failWith msg = do
-  hPutStrLn stderr msg
-  exitFailure
 
 data Options = Options
   { commandPort :: !PortNumber
