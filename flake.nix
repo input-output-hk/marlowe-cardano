@@ -35,7 +35,6 @@
     };
     cardano-world = {
       url = "github:input-output-hk/cardano-world";
-      flake = false;
     };
     plutus-core = {
       url = "github:input-output-hk/plutus";
