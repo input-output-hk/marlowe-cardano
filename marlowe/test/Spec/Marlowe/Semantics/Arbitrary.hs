@@ -751,7 +751,7 @@ instance Arbitrary Contract where
   shrink _ = []
 
 
--- | Generate an arbitrary contract, weighted towards different contract types.
+-- | Generate an arbitrary contract, weighted towards different contract constructs.
 arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights of contract terms.
                           -> Context                           -- ^ The Marlowe context.
                           -> Gen Contract                      -- ^ Action for generating the contract.
