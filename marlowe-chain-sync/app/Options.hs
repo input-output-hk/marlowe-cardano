@@ -165,19 +165,17 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
         portOption :: O.Parser PortNumber
         portOption = O.option O.auto $ mconcat
           [ O.long "port-number"
-          , O.short 'p'
           , defaultPort
           , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the chain seek protocol on"
+          , O.help "The port number to serve the chain seek protocol on. Default value: 3715"
           ]
 
         queryPortOption :: O.Parser PortNumber
         queryPortOption = O.option O.auto $ mconcat
           [ O.long "query-port-number"
-          , O.short 'p'
           , defaultQueryPort
           , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the query protocol on"
+          , O.help "The port number to serve the query protocol on. Default value: 3716"
           ]
 
         hostOption :: O.Parser HostName
@@ -186,7 +184,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , O.short 'h'
           , defaultHost
           , O.metavar "HOST_NAME"
-          , O.help "The hostname to serve the chain seek protocol on"
+          , O.help "The hostname to serve the chain seek protocol on. Default value: 127.0.0.1"
           ]
 
         costModelParser :: O.Parser CostModel
