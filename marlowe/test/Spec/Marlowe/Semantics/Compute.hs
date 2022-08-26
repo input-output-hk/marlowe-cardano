@@ -143,7 +143,7 @@ arbitraryValid =
       pure MarloweContext{..}
 
 
--- | Recompute the output of a marlowe transaction in an transaction context.
+-- | Recompute the output of a Marlowe transaction in an transaction context.
 updateOutput :: MarloweContext -> MarloweContext
 updateOutput mc@MarloweContext{..} =
   mc {mcOutput = computeTransaction mcInput mcState mcContract}
