@@ -15,7 +15,8 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient (..), NodeClientDependencies (..), mkNodeClient)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel, NodeClient (..), NodeClientDependencies (..),
+                                                      mkNodeClient)
 import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServer (..), ChainSyncQueryServerDependencies (..),
                                                        RunQueryServer, mkChainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServer (..), ChainSyncServerDependencies (..),
@@ -26,6 +27,8 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
 data ChainSyncDependencies = ChainSyncDependencies
   { connectToLocalNode   :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
+  , maxCost              :: !Int
+  , costModel            :: !CostModel
   , databaseQueries      :: !(DatabaseQueries IO)
   , persistRateLimit     :: !NominalDiffTime
   , genesisBlock         :: !GenesisBlock

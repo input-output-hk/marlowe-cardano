@@ -6,6 +6,7 @@ module Options
 import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel (..))
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
@@ -20,6 +21,8 @@ data Options = Options
   , host              :: !HostName
   , port              :: !PortNumber
   , queryPort         :: !PortNumber
+  , costModel         :: !CostModel
+  , maxCost           :: !Int
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -91,6 +94,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> hostOption
               <*> portOption
               <*> queryPortOption
+              <*> costModelParser
+              <*> maxCostParser
           )
       where
         versionOption :: O.Parser (a -> a)
@@ -182,6 +187,33 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , defaultHost
           , O.metavar "HOST_NAME"
           , O.help "The hostname to serve the chain seek protocol on"
+          ]
+
+        costModelParser :: O.Parser CostModel
+        costModelParser = CostModel <$> blockCostParser <*> txCostParser
+
+        blockCostParser :: O.Parser Int
+        blockCostParser = O.option O.auto $ mconcat
+          [ O.long "block-cost"
+          , O.value 1
+          , O.metavar "COST_UNITS"
+          , O.help "The number of cost units to associate with persisting a block when computing the cost model. Default value: 1"
+          ]
+
+        txCostParser :: O.Parser Int
+        txCostParser = O.option O.auto $ mconcat
+          [ O.long "tx-cost"
+          , O.value 10
+          , O.metavar "COST_UNITS"
+          , O.help "The number of cost units to associate with persisting a transaction when computing the cost model. Default value: 10"
+          ]
+
+        maxCostParser :: O.Parser Int
+        maxCostParser = O.option O.auto $ mconcat
+          [ O.long "max-cost"
+          , O.value 100_000
+          , O.metavar "COST_UNITS"
+          , O.help "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block. Default value: 100,000"
           ]
 
     infoMod :: O.InfoMod Options

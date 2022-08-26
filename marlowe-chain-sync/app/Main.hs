@@ -76,6 +76,8 @@ run Options{..} = withSocketsDo do
               let peer = queryServerPeer server
               fst <$> runPeerWithDriver driver peer (startDState driver)
         , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
+        , maxCost
+        , costModel
         }
       runChainSync chainSync
   where
