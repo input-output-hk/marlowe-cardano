@@ -60,7 +60,7 @@ bug workarounds.
 
 === How to build the code with profiling
 
-VIf you launch `nix develop .#prof`, you will get a shell where all the dependencies have been built with profiling.
+If you launch `nix develop .#prof`, you will get a shell where all the dependencies have been built with profiling.
 
 [WARNING]
 ====
