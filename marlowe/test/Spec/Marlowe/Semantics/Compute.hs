@@ -659,7 +659,7 @@ instance Default TransactionTest where
 
 
 -- | Test a Marlowe transaction.
-test :: Bool             -- ^ Whether to perform shrinkage of generated valued.
+test :: Bool             -- ^ Whether to perform shrinkage of generated values.
      -> TransactionTest  -- ^ The test.
      -> TestTree         -- ^ The result.
 test doShrink TransactionTest{..} =
