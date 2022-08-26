@@ -7,7 +7,7 @@ stScriptOperations:
       role_token: "aParty"
     soTransaction: "TestTransaction-swap"
     soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
-    soMinAda: 0
+    soMinAda: 1000000
     soContract:
       template:
         tag: "TemplateSwap"
@@ -23,7 +23,8 @@ stScriptOperations:
           currency_symbol: ""
           token_name: ""
         bAmount: 30000000
-        minAda: 1000000
+        minAda: 30000000
+        price: 30000000
         aTimeout:
           relative: 20000
         bTimeout:

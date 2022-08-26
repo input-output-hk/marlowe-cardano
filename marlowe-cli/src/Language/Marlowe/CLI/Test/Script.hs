@@ -150,7 +150,6 @@ interpret Initialize {..} = do
                                           maturityDate'
                                           settlementDate'
         template -> throwError $ CliError $ "Template not implemented: " <> show template
-  -- liftIO $ print testContract
   transaction <- flip runReaderT (CliEnv seEra) $ initializeTransactionImpl
     marloweParams
     seSlotConfig
@@ -166,7 +165,7 @@ interpret Initialize {..} = do
 
 interpret Prepare {..} = do
   (_, marloweTransaction) <- findMarloweTransaction soTransaction
-  -- liftIO $ print marloweTransaction
+
   preparedMarloweTransaction <- withError (\(CliError originalMessage) -> CliError $ originalMessage <> " - from Prepare Impl") $ prepareTransactionImpl
                                   marloweTransaction
                                   soInputs
