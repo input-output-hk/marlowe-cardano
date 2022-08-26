@@ -20,7 +20,16 @@ stScriptOperations:
           currency_symbol: ""
           token_name: ""
         underlying:
-
+          currency_symbol: ""
+          token_name: ""
+        strike: 5
+        amount: 100
+        issueDate:
+          relative: 20000
+        maturityDate:
+          relative: 40000
+        settlementDate:
+          relative: 50000
   - tag: Prepare
     soTransaction: "TestTransaction-covered call"
     soOwner:
