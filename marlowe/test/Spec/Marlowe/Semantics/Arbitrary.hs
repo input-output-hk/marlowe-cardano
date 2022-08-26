@@ -728,7 +728,7 @@ instance Arbitrary (Case Contract) where
 instance SemiArbitrary (Case Contract) where
   semiArbitrary context = Case <$> semiArbitrary context <*> semiArbitrary context
 
--- | Generate a random case, weighted towards different contract types.
+-- | Generate a random case, weighted towards different contract constructs.
 arbitraryCaseWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights for contract terms.
                       -> Context                           -- ^ The Marlowe context.
                       -> Gen (Case Contract)               -- ^ Action for generating the case.
