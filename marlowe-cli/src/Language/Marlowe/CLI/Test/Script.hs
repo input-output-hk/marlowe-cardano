@@ -37,7 +37,7 @@ import Control.Monad.State.Strict (MonadState, execStateT, get)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), initialMarloweState, makeContract)
 import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction, toTimeout)
 import Language.Marlowe.Extended.V1 as E
-import Marlowe.Contracts (escrow, swap, trivial, zeroCouponBond)
+import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
@@ -135,19 +135,21 @@ interpret Initialize {..} = do
                                               (Constant principal `AddValue` Constant interest)
                                               ada
                                               Close
+        TemplateCoveredCall{..} -> do issueDate' <- toTimeout issueDate
+                                      maturityDate' <- toTimeout maturityDate
+                                      settlementDate' <- toTimeout settlementDate
+                                      makeContract $ coveredCall
+                                          issuer
+                                          counterparty
+                                          Nothing
+                                          currency
+                                          underlying
+                                          (Constant strike)
+                                          (Constant amount)
+                                          issueDate'
+                                          maturityDate'
+                                          settlementDate'
         template -> throwError $ CliError $ "Template not implemented: " <> show template
-        -- TemplateCoveredCall{..} -> makeContract $
-        --                             coveredCall
-        --                               issuer
-        --                               counterparty
-        --                               Nothing
-        --                               currency
-        --                               underlying
-        --                               (Constant strike)
-        --                               (Constant amount)
-        --                               issueDate
-        --                               maturityDate
-        --                               settlementDate
   -- liftIO $ print testContract
   transaction <- flip runReaderT (CliEnv seEra) $ initializeTransactionImpl
     marloweParams
