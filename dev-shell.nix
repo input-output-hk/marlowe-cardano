@@ -117,7 +117,6 @@ let
       cardano-address
       cardano-cli
       cardano-node
-      cardano-repo-tool
       marlowe-cli
       run-chainseekd
       start-cardano-node

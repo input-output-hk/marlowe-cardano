@@ -22,14 +22,6 @@ let
     inherit compiler-nix-name index-state checkMaterialization evalSystem;
     plan-sha256 = lib.removeSuffix "\n" (builtins.readFile ./cabal-install.sha);
   };
-  cardanoRepoToolProject = haskell-nix.cabalProject' {
-    src = inputs.cardano-repo-tool;
-    inherit compiler-nix-name index-state checkMaterialization evalSystem;
-    plan-sha256 = lib.removeSuffix "\n" (builtins.readFile ./cardano-repo-tool.sha);
-    sha256map = {
-      "https://github.com/input-output-hk/nix-archive"."7dcf21b2af54d0ab267f127b6bd8fa0b31cfa49d" = "0mhw896nfqbd2iwibzymydjlb3yivi9gm0v2g1nrjfdll4f7d8ly";
-    };
-  };
   # See https://github.com/input-output-hk/nix-tools/issues/97
   hlsShaFile = if stdenv.isLinux then ./hls-linux.sha else ./hls-darwin.sha;
   hlsProject = haskell-nix.cabalProject' {
@@ -69,12 +61,10 @@ let
   updateAllShaFiles = cabalInstallProject.pkg-set.config.evalPackages.writeShellScript "updateShaFiles" ''
     ${updateShaFile cabalInstallProject ./cabal-install.sha}
     ${updateShaFile hlsProject hlsShaFile}
-    ${updateShaFile cardanoRepoToolProject ./cardano-repo-tool.sha}
   '';
 in
 {
   inherit (hlsProject.hsPkgs) haskell-language-server hie-bios implicit-hie stylish-haskell hlint;
   inherit (cabalInstallProject.hsPkgs) cabal-install;
-  inherit (cardanoRepoToolProject.hsPkgs) cardano-repo-tool;
   inherit updateAllShaFiles;
 }
