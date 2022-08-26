@@ -12,7 +12,7 @@ let
   # limit supportedSystems to what the CI can actually build
   # currently that is linux and darwin.
   systems = filterSystems supportedSystems;
-  crossSystems = { inherit (pkgs.lib.systems.examples) mingwW64; };
+  crossSystems = { };
 
   # Collects haskell derivations and builds an attrset:
   #
