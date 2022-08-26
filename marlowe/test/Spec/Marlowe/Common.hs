@@ -208,7 +208,7 @@ rationalGen = do
 
 -- | Generate a value at random.
 valueGenSized :: Int                      -- ^ The size of the value.
-              -> Gen (Value Observation)  -- ^ Action to generated the value.
+              -> Gen (Value Observation)  -- ^ Generator for a value.
 valueGenSized s
   | s > 0 = oneof [ AvailableMoney <$> partyGen <*> tokenGen
                   , Constant <$> simpleIntegerGen
@@ -264,7 +264,7 @@ shrinkValue value = case value of
 
 -- | Generate an observation at random.
 observationGenSized :: Int              -- ^ The size of the observation.
-                    -> Gen Observation  -- ^ Action for generating the observation.
+                    -> Gen Observation  -- ^ Generator for a observation.
 observationGenSized s
   | s > 0 = oneof [ AndObs <$> observationGenSized (s `quot` 2)
                            <*> observationGenSized (s `quot` 2)
@@ -331,7 +331,7 @@ listLengthGen = frequency [ (1, return 0)
 -- | Generate a list of bounds at random.
 boundListGenAux :: Int          -- ^ The size of the list.
                 -> Integer      -- ^ The minimum lower bound.
-                -> Gen [Bound]  -- ^ Action for generating the bounds.
+                -> Gen [Bound]  -- ^ Generator for a bounds.
 boundListGenAux s lb
   | s > 0 = do inc1 <- simpleIntegerGen
                inc2 <- simpleIntegerGen
@@ -351,7 +351,7 @@ boundListGen = do len <- listLengthGen
 
 -- | Generate an action at random.
 actionGenSized :: Int         -- ^ The size of the action.
-               -> Gen Action  -- ^ Action to generate the action.
+               -> Gen Action  -- ^ Generator for a action.
 actionGenSized s =
   oneof [ Deposit <$> partyGen <*> partyGen <*> tokenGen <*> valueGenSized (s - 1)
         , Choice <$> choiceIdGen <*> boundListGen
@@ -380,7 +380,7 @@ shrinkAction action = case action of
 -- | Generate a case at random.
 caseRelGenSized :: Int                  -- ^ The size of the case.
                 -> Integer              -- ^ The minimum timeout for continuations.
-                -> Gen (Case Contract)  -- ^ Action to generate the contract.
+                -> Gen (Case Contract)  -- ^ Generator for a contract.
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
                                  , (1, merkleizedCase <$> actionGenSized s <*> contractRelGenSized s bn)
                                  ]
@@ -396,7 +396,7 @@ shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction ac
 -- | Generate a contract at random.
 contractRelGenSized :: Int           -- ^ The size of the contract.
                     -> Integer       -- ^ The minimum timeout for continuations.
-                    -> Gen Contract  -- ^ Action to generate the contract.
+                    -> Gen Contract  -- ^ Generator for a contract.
 contractRelGenSized s bn
   | s > 0 = oneof [ return Close
                   , Pay <$> partyGen <*> payeeGen <*> tokenGen
@@ -421,7 +421,7 @@ contractRelGenSized s bn
 
 -- | Generate a contract at random.
 contractGenSized :: Int           -- ^ The size of the contract.
-                 -> Gen Contract  -- ^ Action to generate the contract.
+                 -> Gen Contract  -- ^ Generator for a contract.
 contractGenSized s = do iniBn <- simpleIntegerGen
                         contractRelGenSized s iniBn
 

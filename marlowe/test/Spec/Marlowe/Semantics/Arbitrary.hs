@@ -95,7 +95,7 @@ shrinkByteString f universe selected =
 -- | Select an element of a list with high probability, or create a non-element at random with low probability.
 perturb :: Gen a   -- ^ The generator for a random item.
         -> [a]     -- ^ The list of pre-defined items.
-        -> Gen a   -- ^ Action for generating an item
+        -> Gen a   -- ^ Generator for an item
 perturb gen [] = gen
 perturb gen xs = frequency [(20, gen), (80, elements xs)]
 
@@ -517,7 +517,7 @@ instance SemiArbitrary ValueId where
 -- | Generate a semi-random integer.
 arbitraryNumber :: (Context -> [Integer])  -- ^ How to select the universe of some possibilities.
                 -> Context                 -- ^ The Marlowe context.
-                -> Gen Integer             -- ^ Action for generating the integer.
+                -> Gen Integer             -- ^ Generator for a integer.
 arbitraryNumber = (perturb arbitraryInteger .)
 
 -- | Generate a semi-random token amount.
@@ -731,7 +731,7 @@ instance SemiArbitrary (Case Contract) where
 -- | Generate a random case, weighted towards different contract constructs.
 arbitraryCaseWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights for contract terms.
                       -> Context                           -- ^ The Marlowe context.
-                      -> Gen (Case Contract)               -- ^ Action for generating the case.
+                      -> Gen (Case Contract)               -- ^ Generator for a case.
 arbitraryCaseWeighted w context =
   Case <$> semiArbitrary context <*> arbitraryContractWeighted w context
 
@@ -754,7 +754,7 @@ instance Arbitrary Contract where
 -- | Generate an arbitrary contract, weighted towards different contract constructs.
 arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights of contract terms.
                           -> Context                           -- ^ The Marlowe context.
-                          -> Gen Contract                      -- ^ Action for generating the contract.
+                          -> Gen Contract                      -- ^ Generator for a contract.
 arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) context =
   frequency
     [
@@ -798,7 +798,7 @@ assertContractWeights = (0, 0, 0, 0, 0, 1)
 -- | Generate a semi-random contract of a given depth.
 arbitraryContractSized :: Int           -- ^ The maximum depth.
                        -> Context       -- ^ The Marlowe context.
-                       -> Gen Contract  -- ^ Action for generating the contract.
+                       -> Gen Contract  -- ^ Generator for a contract.
 arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContractWeights)
 
 instance SemiArbitrary Contract where
@@ -924,7 +924,7 @@ instance SemiArbitrary TransactionInput where
 -- | Generate a random step for a contract.
 arbitraryValidStep :: State                 -- ^ The state of the contract.
                    -> Contract              -- ^ The contract.
-                   -> Gen TransactionInput  -- ^ Action for generating the transaction input for a single step.
+                   -> Gen TransactionInput  -- ^ Generator for a transaction input for a single step.
 arbitraryValidStep _ (When [] timeout _) =
   TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
 arbitraryValidStep state@State{..} (When cases timeout _) =
@@ -962,7 +962,7 @@ arbitraryValidStep State{minTime} contract =
 -- | Generate random transaction input.
 arbitraryValidInput :: State                 -- ^ The state of the contract.
                     -> Contract              -- ^ The contract.
-                    -> Gen TransactionInput  -- ^ Action for generating the transaction input.
+                    -> Gen TransactionInput  -- ^ Generator for a transaction input.
 arbitraryValidInput = arbitraryValidInput' Nothing
 
 arbitraryValidInput' :: Maybe TransactionInput -> State -> Contract -> Gen TransactionInput
@@ -983,7 +983,7 @@ arbitraryValidInput' (Just input) state contract =
 -- | Generate a random path through a contract.
 arbitraryValidInputs :: State                   -- ^ The state of the contract.
                      -> Contract                -- ^ The contract.
-                     -> Gen [TransactionInput]  -- ^ Action for generating the transaction inputs.
+                     -> Gen [TransactionInput]  -- ^ Generator for a transaction inputs.
 arbitraryValidInputs _ Close = pure []
 arbitraryValidInputs state contract =
   do

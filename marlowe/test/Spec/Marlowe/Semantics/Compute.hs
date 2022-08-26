@@ -114,7 +114,7 @@ instance SemiArbitrary MarloweContext where
 
 -- | Generate an arbitrary Marlowe transaction context.
 arbitraryMarloweContext :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights for contract terms.
-                        -> Gen MarloweContext                -- ^ Action for generating the transaction context.
+                        -> Gen MarloweContext                -- ^ Generator for a transaction context.
 arbitraryMarloweContext w =
     do
       context    <- arbitrary
