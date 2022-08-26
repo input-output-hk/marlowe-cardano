@@ -16,10 +16,6 @@
       url = "github:input-output-hk/cardano-repo-tool";
       flake = false;
     };
-    easy-purescript-nix = {
-      url = "github:justinwoo/easy-purescript-nix";
-      flake = false;
-    };
     gitignore-nix = {
       url = "github:hercules-ci/gitignore.nix";
       flake = false;
@@ -29,20 +25,20 @@
       url = "github:haskell/haskell-language-server?ref=1.3.0";
       flake = false;
     };
-    iohk-nix = {
-      url = "github:input-output-hk/iohk-nix/marlowe-dev-testnet";
-      flake = false;
-    };
     npmlock2nix = {
       url = "github:tweag/npmlock2nix";
       flake = false;
     };
-    plutus-core = {
-      url = "github:input-output-hk/plutus";
+    iohk-nix = {
+      url = "github:input-output-hk/iohk-nix/marlowe-dev-testnet";
       flake = false;
     };
-    plutus-apps = {
-      url = "github:input-output-hk/plutus-apps?rev=682977c8c9fe181a0dc066ac2b40a4b1c1b5072c";
+    cardano-world = {
+      url = "github:input-output-hk/cardano-world";
+      flake = false;
+    };
+    plutus-core = {
+      url = "github:input-output-hk/plutus";
       flake = false;
     };
     pre-commit-hooks-nix = {
@@ -52,10 +48,6 @@
     sphinxcontrib-haddock = {
       url = "github:michaelpj/sphinxcontrib-haddock";
       flake = false;
-    };
-    web-common = {
-      url = "github:input-output-hk/purescript-web-common";
-      flake = true;
     };
   };
 
@@ -76,12 +68,6 @@
             type = "app";
             program =
               "${packages.dev-scripts.updateMaterialized}/bin/updateMaterialized";
-          };
-
-          update-client-deps = {
-            type = "app";
-            program =
-              "${packages.marlowe.updateClientDeps}/bin/update-client-deps";
           };
 
           nixpkgs-fmt = {

@@ -67,6 +67,7 @@
           "Cardano/Logging/Types"
           "Cardano/Logging/Trace"
           "Cardano/Logging/Configuration"
+          "Cardano/Logging/ConfigurationParser"
           "Cardano/Logging/DocuGenerator"
           "Cardano/Logging/Formatter"
           "Cardano/Logging/Forwarding"
@@ -185,11 +186,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "8";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "8";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       };

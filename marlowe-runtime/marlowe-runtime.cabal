@@ -33,35 +33,61 @@ common lang
   default-language: Haskell2010
   default-extensions:
     BlockArguments
+    DeriveAnyClass
     DeriveFoldable
     DeriveFunctor
     DeriveGeneric
     DeriveLift
     DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    EmptyCase
     ExplicitForAll
     GeneralizedNewtypeDeriving
-    DeriveAnyClass
-    DerivingVia
-    DerivingStrategies
+    LambdaCase
+    NamedFieldPuns
+    NumericUnderscores
+    OverloadedStrings
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
     TypeApplications
+    TupleSections
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities
+    -Wredundant-constraints -Widentities -threaded
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
 library
   import: lang
   hs-source-dirs:   src
-  exposed-modules:  MyLib
+  exposed-modules:
+    Language.Marlowe.Runtime.Core.Api
+    Language.Marlowe.Runtime.History.Follower
   build-depends:
       base >= 4.9 && < 5
+    , aeson
+    , async
+    , base16
+    , binary
+    , bytestring
+    , containers
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , plutus-ledger-api
+    , split
+    , stm
+    , text
+    , these
+    , time
+    , transformers
+    , typed-protocols
+    , witherable
 
-executable marlowe-runtime
+executable marlowed
   import: lang
   hs-source-dirs:   app
   main-is: Main.hs
@@ -72,5 +98,54 @@ executable marlowe-runtime
   build-depends:
       base >= 4.9 && < 5
     , marlowe-runtime
-  ghc-options:
-    -threaded
+
+executable marlowe-follower
+  import: lang
+  hs-source-dirs:   marlowe-follower
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , containers
+    , marlowe
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
+    , network
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , text
+    , wl-pprint
+
+test-suite marlowe-runtime-test
+  import: lang
+  hs-source-dirs: test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Language.Marlowe.Runtime.History.FollowerSpec
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async
+    , bytestring
+    , containers
+    , hspec
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-protocols-test
+    , marlowe-runtime
+    , plutus-tx
+    , plutus-ledger-api
+    , stm
+    , time
+    , transformers
+  build-tool-depends: hspec-discover:hspec-discover

@@ -76,7 +76,7 @@ let
           inherit (marlowe.haskell.project) roots;
         } // pkgs.lib.optionalAttrs (!rootsOnly) (filterCross {
           # build relevant top level attributes from flake.nix
-          inherit (packages) tests marlowe-playground marlowe-dashboard;
+          inherit (packages) tests;
 
           # Build the shell expression to be sure it works on all platforms
           #

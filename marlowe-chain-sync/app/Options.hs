@@ -19,6 +19,7 @@ data Options = Options
   , genesisConfigFile :: !FilePath
   , host              :: !HostName
   , port              :: !PortNumber
+  , queryPort         :: !PortNumber
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -28,7 +29,8 @@ getOptions version = do
   defaultDatabaseUri <- maybe mempty O.value <$> readDatabaseUri
   defaultHost <- O.value . fromMaybe "127.0.0.1" <$> readHost
   defaultPort <- O.value . fromMaybe 3715 <$> readPort
-  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort version
+  defaultQueryPort <- O.value . fromMaybe 3716 <$> readQueryPort
+  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort version
   where
     readNetworkId :: IO (Maybe NetworkId)
     readNetworkId = do
@@ -61,15 +63,21 @@ getOptions version = do
       value <- lookupEnv "CHAIN_SYNC_PORT"
       pure $ readMaybe =<< value
 
+    readQueryPort :: IO (Maybe PortNumber)
+    readQueryPort = do
+      value <- lookupEnv "CHAIN_SYNC_QUERY_PORT"
+      pure $ readMaybe =<< value
+
 parseOptions
   :: O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.OptionFields String
   -> O.Mod O.OptionFields HostName
   -> O.Mod O.OptionFields PortNumber
+  -> O.Mod O.OptionFields PortNumber
   -> String
   -> O.ParserInfo Options
-parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort version = O.info parser infoMod
+parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort version = O.info parser infoMod
   where
     parser :: O.Parser Options
     parser = O.helper
@@ -82,6 +90,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> genesisConfigFileOption
               <*> hostOption
               <*> portOption
+              <*> queryPortOption
           )
       where
         versionOption :: O.Parser (a -> a)
@@ -155,6 +164,15 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , defaultPort
           , O.metavar "PORT_NUMBER"
           , O.help "The port number to serve the chain seek protocol on"
+          ]
+
+        queryPortOption :: O.Parser PortNumber
+        queryPortOption = O.option O.auto $ mconcat
+          [ O.long "query-port-number"
+          , O.short 'p'
+          , defaultQueryPort
+          , O.metavar "PORT_NUMBER"
+          , O.help "The port number to serve the query protocol on"
           ]
 
         hostOption :: O.Parser HostName

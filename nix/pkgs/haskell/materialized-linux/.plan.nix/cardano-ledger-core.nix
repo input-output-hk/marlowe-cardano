@@ -46,7 +46,6 @@
           (hsPkgs."cardano-ledger-byron" or (errorHandler.buildDepError "cardano-ledger-byron"))
           (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
-          (hsPkgs."compact-map" or (errorHandler.buildDepError "compact-map"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."data-default-class" or (errorHandler.buildDepError "data-default-class"))
           (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
@@ -58,6 +57,7 @@
           (hsPkgs."partial-order" or (errorHandler.buildDepError "partial-order"))
           (hsPkgs."quiet" or (errorHandler.buildDepError "quiet"))
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
+          (hsPkgs."set-algebra" or (errorHandler.buildDepError "set-algebra"))
           (hsPkgs."non-integral" or (errorHandler.buildDepError "non-integral"))
           (hsPkgs."primitive" or (errorHandler.buildDepError "primitive"))
           (hsPkgs."small-steps" or (errorHandler.buildDepError "small-steps"))
@@ -65,10 +65,12 @@
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+          (hsPkgs."validation-selective" or (errorHandler.buildDepError "validation-selective"))
           ];
         buildable = true;
         modules = [
           "Cardano/Ledger/Address"
+          "Cardano/Ledger/CompactAddress"
           "Cardano/Ledger/AuxiliaryData"
           "Cardano/Ledger/BaseTypes"
           "Cardano/Ledger/BHeaderView"
@@ -87,6 +89,7 @@
           "Cardano/Ledger/Serialization"
           "Cardano/Ledger/Slot"
           "Cardano/Ledger/TxIn"
+          "Cardano/Ledger/UnifiedMap"
           "Cardano/Ledger/Val"
           ];
         hsSourceDirs = [ "src" ];
@@ -94,11 +97,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       };

@@ -10,6 +10,7 @@ module Spec.Marlowe.Arbitrary (
   ContextuallyArbitrary(..)
 , IsValid(..)
 , arbitraryChoiceName
+, arbitraryFibonacci
 ) where
 
 

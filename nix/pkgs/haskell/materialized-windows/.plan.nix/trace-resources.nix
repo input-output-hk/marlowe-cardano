@@ -49,6 +49,7 @@
         modules = (([
           "Cardano/Logging/Resources"
           "Cardano/Logging/Resources/Types"
+          "Cardano/Logging/Resources/Dummy"
           ] ++ (pkgs.lib).optional (system.isLinux) "Cardano/Logging/Resources/Linux") ++ (pkgs.lib).optional (system.isWindows) "Cardano/Logging/Resources/Windows") ++ (pkgs.lib).optional (system.isOsx) "Cardano/Logging/Resources/Darwin";
         cSources = (pkgs.lib).optional (system.isWindows) "cbits/os-support-win.c" ++ (pkgs.lib).optional (system.isOsx) "cbits/os-support-darwin.c";
         hsSourceDirs = [ "src" ];
@@ -74,11 +75,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "8";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "8";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       };

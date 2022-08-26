@@ -10,7 +10,7 @@
   {
     flags = {};
     package = {
-      specVersion = "1.10";
+      specVersion = "3.0";
       identifier = {
         name = "ouroboros-network-framework";
         version = "0.1.0.0";
@@ -112,6 +112,27 @@
           ];
         hsSourceDirs = [ "src" ];
         };
+      sublibs = {
+        "testlib" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            (hsPkgs."io-sim" or (errorHandler.buildDepError "io-sim"))
+            (hsPkgs."io-classes" or (errorHandler.buildDepError "io-classes"))
+            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
+            (hsPkgs."ouroboros-network-framework" or (errorHandler.buildDepError "ouroboros-network-framework"))
+            ];
+          buildable = true;
+          modules = [
+            "TestLib/ConnectionManager"
+            "TestLib/InboundGovernor"
+            "TestLib/Utils"
+            ];
+          hsSourceDirs = [ "testlib" ];
+          };
+        };
       exes = {
         "demo-ping-pong" = {
           depends = [
@@ -178,6 +199,7 @@
             (hsPkgs."quickcheck-instances" or (errorHandler.buildDepError "quickcheck-instances"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
+            (hsPkgs."these" or (errorHandler.buildDepError "these"))
             (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
             (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
             (hsPkgs."io-sim" or (errorHandler.buildDepError "io-sim"))
@@ -186,6 +208,7 @@
             (hsPkgs."network-mux" or (errorHandler.buildDepError "network-mux"))
             (hsPkgs."monoidal-synchronisation" or (errorHandler.buildDepError "monoidal-synchronisation"))
             (hsPkgs."ouroboros-network-framework" or (errorHandler.buildDepError "ouroboros-network-framework"))
+            (hsPkgs."ouroboros-network-framework".components.sublibs.testlib or (errorHandler.buildDepError "ouroboros-network-framework:testlib"))
             (hsPkgs."ouroboros-network-testing" or (errorHandler.buildDepError "ouroboros-network-testing"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."typed-protocols-cborg" or (errorHandler.buildDepError "typed-protocols-cborg"))
@@ -212,11 +235,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "13";
+      url = "12";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "13";
+      url = "12";
       rev = "minimal";
       sha256 = "";
       };

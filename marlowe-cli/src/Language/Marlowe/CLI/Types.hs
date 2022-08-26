@@ -11,10 +11,17 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE BlockArguments             #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 
@@ -25,6 +32,8 @@ module Language.Marlowe.CLI.Types (
 , ValidatorInfo(..)
 , DatumInfo(..)
 , RedeemerInfo(..)
+, SomeMarloweTransaction(..)
+, CliEnv(..)
 -- * eUTxOs
 , PayFromScript(..)
 , PayToScript(..)
@@ -37,13 +46,41 @@ module Language.Marlowe.CLI.Types (
 , OutputQuery(..)
 -- * Merklization
 , Continuations
+-- * pattern matching boilerplate
+, withCardanoEra
+, withShelleyBasedEra
+, toAsType
+, toEraInMode
+, toShelleyBasedEra
+, toPlutusScriptV1LanguageInEra
+, toSimpleScriptV2LanguageInEra
+, toTxMetadataSupportedInEra
+, toMultiAssetSupportedInEra
+, toTxScriptValiditySupportedInEra
+, toCollateralSupportedInEra
+, toTxFeesExplicitInEra
+, toValidityLowerBoundSupportedInEra
+, toValidityUpperBoundSupportedInEra
+, toValidityNoUpperBoundSupportedInEra
+, toExtraKeyWitnessesSupportedInEra
+, askEra
+, asksEra
+, doWithCardanoEra
+, doWithShelleyBasedEra
+, toAddressAny'
 ) where
 
 
-import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), AssetId, Hash, IsCardanoEra, Lovelace, PaymentExtendedKey,
-                    PaymentKey, PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData,
-                    SigningKey, SlotNo, TxIn, VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope,
-                    serialiseAddress, serialiseToTextEnvelope)
+import Cardano.Api (AddressAny, AddressInEra (AddressInEra), AsType (..), AssetId, CardanoMode,
+                    CollateralSupportedInEra (..), EraInMode (..), HasTypeProxy (proxyToAsType), Hash, IsCardanoEra,
+                    IsShelleyBasedEra, Lovelace, MultiAssetSupportedInEra (..), PaymentExtendedKey, PaymentKey,
+                    PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData,
+                    ScriptDataSupportedInEra (..), ScriptLanguageInEra (..), ShelleyBasedEra (..), SigningKey,
+                    SimpleScriptV2, SlotNo, TxExtraKeyWitnessesSupportedInEra (..), TxFeesExplicitInEra (..), TxIn,
+                    TxMetadataSupportedInEra (..), TxScriptValiditySupportedInEra (..),
+                    ValidityLowerBoundSupportedInEra (..), ValidityNoUpperBoundSupportedInEra (..),
+                    ValidityUpperBoundSupportedInEra (..), VerificationKey, deserialiseAddress,
+                    deserialiseFromTextEnvelope, serialiseAddress, serialiseToTextEnvelope, toAddressAny)
 import Cardano.Api.Shelley (PlutusScript (..))
 import Codec.Serialise (deserialise)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
@@ -54,13 +91,16 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Core.V1.Semantics (Payment)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
-import Ledger.TimeSlot (SlotConfig)
+import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 import qualified Cardano.Api as Api (Value)
+import Control.Monad.Reader.Class (MonadReader (..), asks)
 import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort)
 import qualified Data.Map.Strict as M (Map)
+import Data.Proxy (Proxy (Proxy))
 
 
 -- | Exception for Marlowe CLI.
@@ -78,6 +118,126 @@ type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentE
 
 -- | Continuations for contracts.
 type Continuations = M.Map DatumHash Contract
+
+-- | A marlowe transaction in an existentially quantified era
+data SomeMarloweTransaction = forall era. SomeMarloweTransaction (ScriptDataSupportedInEra era) (MarloweTransaction era)
+
+doWithCardanoEra :: forall era m a. MonadReader (CliEnv era) m => (IsCardanoEra era => m a) -> m a
+doWithCardanoEra m = askEra >>= \era -> withCardanoEra era m
+
+doWithShelleyBasedEra :: forall era m a. MonadReader (CliEnv era) m => (IsShelleyBasedEra era => m a) -> m a
+doWithShelleyBasedEra m = askEra >>= \era -> withShelleyBasedEra era m
+
+withCardanoEra :: forall era a. ScriptDataSupportedInEra era -> (IsCardanoEra era => a) -> a
+withCardanoEra = \case
+  ScriptDataInAlonzoEra  -> id
+  ScriptDataInBabbageEra -> id
+
+withShelleyBasedEra :: forall era a. ScriptDataSupportedInEra era -> (IsShelleyBasedEra era => a) -> a
+withShelleyBasedEra = \case
+  ScriptDataInAlonzoEra  -> id
+  ScriptDataInBabbageEra -> id
+
+toAsType :: ScriptDataSupportedInEra era -> AsType era
+toAsType = \case
+  ScriptDataInAlonzoEra  -> AsAlonzoEra
+  ScriptDataInBabbageEra -> AsBabbageEra
+
+toEraInMode :: ScriptDataSupportedInEra era -> EraInMode era CardanoMode
+toEraInMode = \case
+  ScriptDataInAlonzoEra  -> AlonzoEraInCardanoMode
+  ScriptDataInBabbageEra -> BabbageEraInCardanoMode
+
+toShelleyBasedEra :: ScriptDataSupportedInEra era -> ShelleyBasedEra era
+toShelleyBasedEra = \case
+  ScriptDataInAlonzoEra  -> ShelleyBasedEraAlonzo
+  ScriptDataInBabbageEra -> ShelleyBasedEraBabbage
+
+toPlutusScriptV1LanguageInEra :: ScriptDataSupportedInEra era -> ScriptLanguageInEra PlutusScriptV1 era
+toPlutusScriptV1LanguageInEra = \case
+  ScriptDataInAlonzoEra  -> PlutusScriptV1InAlonzo
+  ScriptDataInBabbageEra -> PlutusScriptV1InBabbage
+
+toSimpleScriptV2LanguageInEra :: ScriptDataSupportedInEra era -> ScriptLanguageInEra SimpleScriptV2 era
+toSimpleScriptV2LanguageInEra = \case
+  ScriptDataInAlonzoEra  -> SimpleScriptV2InAlonzo
+  ScriptDataInBabbageEra -> SimpleScriptV2InBabbage
+
+toTxMetadataSupportedInEra :: ScriptDataSupportedInEra era -> TxMetadataSupportedInEra era
+toTxMetadataSupportedInEra = \case
+  ScriptDataInAlonzoEra  -> TxMetadataInAlonzoEra
+  ScriptDataInBabbageEra -> TxMetadataInBabbageEra
+
+toMultiAssetSupportedInEra :: ScriptDataSupportedInEra era -> MultiAssetSupportedInEra era
+toMultiAssetSupportedInEra = \case
+  ScriptDataInAlonzoEra  -> MultiAssetInAlonzoEra
+  ScriptDataInBabbageEra -> MultiAssetInBabbageEra
+
+toTxScriptValiditySupportedInEra :: ScriptDataSupportedInEra era -> TxScriptValiditySupportedInEra era
+toTxScriptValiditySupportedInEra = \case
+  ScriptDataInAlonzoEra  -> TxScriptValiditySupportedInAlonzoEra
+  ScriptDataInBabbageEra -> TxScriptValiditySupportedInBabbageEra
+
+toCollateralSupportedInEra :: ScriptDataSupportedInEra era -> CollateralSupportedInEra era
+toCollateralSupportedInEra = \case
+  ScriptDataInAlonzoEra  -> CollateralInAlonzoEra
+  ScriptDataInBabbageEra -> CollateralInBabbageEra
+
+toTxFeesExplicitInEra :: ScriptDataSupportedInEra era -> TxFeesExplicitInEra era
+toTxFeesExplicitInEra = \case
+  ScriptDataInAlonzoEra  -> TxFeesExplicitInAlonzoEra
+  ScriptDataInBabbageEra -> TxFeesExplicitInBabbageEra
+
+toValidityLowerBoundSupportedInEra :: ScriptDataSupportedInEra era -> ValidityLowerBoundSupportedInEra era
+toValidityLowerBoundSupportedInEra = \case
+  ScriptDataInAlonzoEra  -> ValidityLowerBoundInAlonzoEra
+  ScriptDataInBabbageEra -> ValidityLowerBoundInBabbageEra
+
+toValidityUpperBoundSupportedInEra :: ScriptDataSupportedInEra era -> ValidityUpperBoundSupportedInEra era
+toValidityUpperBoundSupportedInEra = \case
+  ScriptDataInAlonzoEra  -> ValidityUpperBoundInAlonzoEra
+  ScriptDataInBabbageEra -> ValidityUpperBoundInBabbageEra
+
+toValidityNoUpperBoundSupportedInEra :: ScriptDataSupportedInEra era -> ValidityNoUpperBoundSupportedInEra era
+toValidityNoUpperBoundSupportedInEra = \case
+  ScriptDataInAlonzoEra  -> ValidityNoUpperBoundInAlonzoEra
+  ScriptDataInBabbageEra -> ValidityNoUpperBoundInBabbageEra
+
+toExtraKeyWitnessesSupportedInEra :: ScriptDataSupportedInEra era -> TxExtraKeyWitnessesSupportedInEra era
+toExtraKeyWitnessesSupportedInEra = \case
+  ScriptDataInAlonzoEra  -> ExtraKeyWitnessesInAlonzoEra
+  ScriptDataInBabbageEra -> ExtraKeyWitnessesInBabbageEra
+
+toAddressAny' :: AddressInEra era -> AddressAny
+toAddressAny' (AddressInEra _ addr) = toAddressAny addr
+
+newtype CliEnv era = CliEnv { era :: ScriptDataSupportedInEra era }
+
+askEra :: MonadReader (CliEnv era) m => m (ScriptDataSupportedInEra era)
+askEra = asks era
+
+asksEra :: MonadReader (CliEnv era) m => (ScriptDataSupportedInEra era -> a) -> m a
+asksEra f = f <$> askEra
+
+instance ToJSON SomeMarloweTransaction where
+  toJSON (SomeMarloweTransaction era tx) = withShelleyBasedEra era $ object
+    let
+      eraStr :: String
+      eraStr = case era of
+        ScriptDataInAlonzoEra  -> "alonzo"
+        ScriptDataInBabbageEra -> "babbage"
+    in
+      [ "era" .= eraStr
+      , "tx" .= tx
+      ]
+
+instance FromJSON SomeMarloweTransaction where
+  parseJSON = withObject "SomeTransaction" $ \obj -> do
+    eraStr :: String <- obj .: "era"
+    case eraStr of
+      "alonzo"  -> SomeMarloweTransaction ScriptDataInAlonzoEra <$> obj .: "tx"
+      "babbage" -> SomeMarloweTransaction ScriptDataInBabbageEra <$> obj .: "tx"
+      _         -> fail $ "Unsupported era " <> show eraStr
 
 
 -- | Complete description of a Marlowe transaction.
@@ -97,7 +257,7 @@ data MarloweTransaction era =
   }
     deriving (Generic, Show)
 
-instance IsCardanoEra era => ToJSON (MarloweTransaction era) where
+instance IsShelleyBasedEra era => ToJSON (MarloweTransaction era) where
   toJSON MarloweTransaction{..} =
     object
       [
@@ -113,7 +273,7 @@ instance IsCardanoEra era => ToJSON (MarloweTransaction era) where
       , "slotConfig"       .= toJSON mtSlotConfig
       ]
 
-instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize eras.
+instance IsShelleyBasedEra era => FromJSON (MarloweTransaction era) where
   parseJSON =
     withObject "MarloweTransaction"
       $ \o ->
@@ -141,7 +301,7 @@ data MarloweInfo era =
   }
     deriving (Eq, Generic, Show)
 
-instance IsCardanoEra era => ToJSON (MarloweInfo era) where
+instance IsShelleyBasedEra era => ToJSON (MarloweInfo era) where
   toJSON MarloweInfo{..} =
     object
       [
@@ -150,7 +310,7 @@ instance IsCardanoEra era => ToJSON (MarloweInfo era) where
       , "redeemer"  .= toJSON redeemerInfo
       ]
 
-instance FromJSON (MarloweInfo AlonzoEra) where  -- FIXME: Generalize eras.
+instance IsShelleyBasedEra era => FromJSON (MarloweInfo era) where
   parseJSON =
     withObject "MarloweInfo"
       $ \o ->
@@ -174,7 +334,7 @@ data ValidatorInfo era =
   }
     deriving (Eq, Generic, Show)
 
-instance IsCardanoEra era => ToJSON (ValidatorInfo era) where
+instance IsShelleyBasedEra era => ToJSON (ValidatorInfo era) where
   toJSON ValidatorInfo{..} =
     object
       [
@@ -185,7 +345,7 @@ instance IsCardanoEra era => ToJSON (ValidatorInfo era) where
       , "cost"    .= toJSON viCost
       ]
 
-instance FromJSON (ValidatorInfo AlonzoEra) where  -- FIXME: Generalize eras.
+instance IsShelleyBasedEra era => FromJSON (ValidatorInfo era) where
   parseJSON =
     withObject "ValidatorInfo"
       $ \o ->
@@ -195,7 +355,7 @@ instance FromJSON (ValidatorInfo AlonzoEra) where  -- FIXME: Generalize eras.
           script    <- o .: "script"
           viSize    <- o .: "size"
           viCost    <- o .: "cost"
-          viAddress <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) address of
+          viAddress <- case deserialiseAddress (proxyToAsType (Proxy :: Proxy (AddressInEra era))) address of
                          Just address' -> pure address'
                          Nothing       -> fail "Failed deserialising address."
           viScript <- case deserialiseFromTextEnvelope (AsScript AsPlutusScriptV1) script of

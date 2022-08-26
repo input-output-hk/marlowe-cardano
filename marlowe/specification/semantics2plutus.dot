@@ -1,0 +1,64 @@
+digraph G {
+
+  rankdir=LR
+  node [shape=oval]
+  
+  subgraph cluster_v {
+    rank=same
+    Datum -> Redeemer -> ScriptContext0 -> Unit0 [constraint=false]
+    ScriptContext0 [label="ScriptContext"]
+    Unit0 [label="()"]
+    label=<<i>Validator</i>>
+  }
+  
+  Unit0 -> Fail [style=invis]
+  
+  subgraph cluster_m {
+    rank=same
+    MarloweData -> MarloweInput -> ScriptContext -> Unit [constraint=false]
+    Unit [label="Bool"]
+    label="smallMarloweValidator"
+  }
+
+  Fail [label=<<i>fail</i>> shape=circle]
+
+  Unit -> Fail [label="False" style=dashed constraint=false]
+  
+  Datum -> MarloweData [style=dashed]
+  Redeemer -> MarloweInput [style=dashed]
+  ScriptContext0 -> ScriptContext [style=dashed]
+  Unit -> Unit0 [label="True" style=dashed]
+ 
+  subgraph cluster_s {
+    rank=same
+    TransactionInput -> State -> Contract -> TransactionOutput [constraint=false]
+    label="computeTransaction"
+  } 
+  
+  MarloweData -> TransactionInput [style=invis]
+  MarloweInput -> State [style=invis]
+  ScriptContext -> Contract [style=invis]
+  Unit -> TransactionOutput [style=invis]
+  
+  MarloweData -> State [label="marloweState" style=dashed constraint=false]
+  MarloweData -> Contract [label="marloweContract" style=dashed constraint=false]
+  MarloweInput -> TransactionInput [label="\ntxInputs" style=dashed constraint=false]
+  ScriptContext -> TransactionInput [label="\ntxInterval" style=dashed constraint=false]
+  ScriptContext -> TransactionInput [label="txInfoData" style=dashed constraint=false]
+  TransactionOutput -> Unit [label="TransactionOutput" style=dashed constraint=false]
+  
+  subgraph cluster_n {
+    #rank=same
+    MarloweParams
+    State1 [label="State"]
+    Contract1 [label="Contract"]
+    label=<MarloweData <i>Output to Script</i>>
+  }
+  
+  MarloweData -> MarloweParams [label="marloweParams" style=dashed constraint=false]
+  TransactionOutput -> State1 [label="                          txOutState" style=dashed constraint=false]
+  TransactionOutput -> Contract1 [label="txOutContract" style=dashed constraint=false]
+  
+  TransactionOutput -> Fail [label="Error TransactionError" style=dashed constraint=false]
+    
+}

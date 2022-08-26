@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe
-version: 0.1.0.0
+version: 0.1.0.1
 license: Apache-2.0
 license-files:
   LICENSE
@@ -39,48 +39,37 @@ common lang
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
 
-  if flag(defer-plugin-errors)
-    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
-
 library
   import: lang
   hs-source-dirs: src
   ghc-options:
     -Wunused-packages
+
+  if !(impl(ghcjs) || os(ghcjs))
+    build-depends: plutus-tx-plugin -any
+
   build-depends:
-    aeson -any,
+    aeson <2,
+    base16-aeson,
     base -any,
     bytestring,
-    cardano-api -any,
-    cardano-binary -any,
-    cardano-ledger-alonzo -any,
-    cardano-ledger-core -any,
     containers -any,
-    data-default -any,
     deriving-aeson -any,
-    extra -any,
-    lens,
     mtl,
     newtype-generics,
     template-haskell -any,
-    plutus-chain-index-core -any,
-    plutus-contract -any,
-    plutus-core,
-    plutus-ledger,
+    plutus-ledger-ada,
     plutus-ledger-api -any,
-    plutus-ledger-constraints,
-    plutus-tx -any,
-    plutus-use-cases,
+    plutus-ledger-slot,
+    plutus-script-utils,
+    plutus-tx,
     serialise -any,
     base16-bytestring -any,
     text,
     sbv >= 8.4,
     scientific -any,
     wl-pprint -any,
-    unordered-containers -any,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
+
   exposed-modules:
     Language.Marlowe
     Language.Marlowe.Extended.V1
@@ -95,58 +84,13 @@ library
     Language.Marlowe.Pretty
     Language.Marlowe.Analysis.FSSemantics
     Plutus.Debug
-  other-modules:
-
-----test-suite marlowe-test-long-running
-----    import: lang
-----    hs-source-dirs:
-----      test
-----      pab
-----    type: exitcode-stdio-1.0
-----    main-is: SpecLongRunning.hs
-----    other-modules:
-----        Spec.PAB.Workflow
-----        MarloweContract
-----    build-depends:
-----        aeson -any,
-----        base >=4.9 && <5,
-----        containers -any,
-----        data-default  -any,
-----        hint -any,
-----        lens -any,
-----        bytestring -any,
-----        freer-simple -any,
-----        tasty -any,
-----        tasty-hunit -any,
-----        tasty-quickcheck,
-----        text -any,
-----        serialise,
-----        cborg,
-----        plutus-chain-index-core -any,
-----        plutus-contract -any,
-----        plutus-ledger -any,
-----        plutus-pab-executables -any,
-----        marlowe,
-----        plutus-tx -any,
-----        QuickCheck,
-----        template-haskell -any,
-----        streaming -any,
-----        plutus-pab -any,
-----        async -any,
-----        prettyprinter -any,
-----        purescript-bridge -any,
-----        servant-client -any,
-----        http-client -any,
-----        websockets -any,
-----        network -any,
-----        openapi3 -any,
-----        uuid -any,
 
 test-suite marlowe-test
+    if flag(defer-plugin-errors)
+      ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
     import: lang
-    hs-source-dirs:
-      test
-      pab
+    hs-source-dirs: test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
@@ -156,41 +100,44 @@ test-suite marlowe-test
         Spec.Marlowe.Marlowe
         Spec.Marlowe.Orphans
         Spec.Marlowe.Semantics
+        Spec.Marlowe.Transaction
         Spec.Marlowe.Util
         Spec.Marlowe.Util.AssocMap
-        MarloweContract
+
+    if !(impl(ghcjs) || os(ghcjs))
+      build-depends: plutus-tx-plugin -any
+
     build-depends:
         aeson -any,
         cardano-api -any,
         base >=4.9 && <5,
         containers -any,
-        data-default  -any,
+        data-default -any,
         hint -any,
         lens -any,
         bytestring -any,
         freer-simple -any,
         freer-extras -any,
+        mtl -any,
         tasty -any,
         tasty-hunit -any,
         tasty-quickcheck,
         text -any,
         serialise,
         cborg,
-        plutus-chain-index-core -any,
-        plutus-contract -any,
-        plutus-ledger -any,
+        plutus-ledger-ada,
         plutus-ledger-api -any,
-        plutus-ledger-constraints -any,
-        plutus-pab-executables -any,
-        marlowe,
+        plutus-ledger-slot,
+        plutus-ledger,
+        plutus-script-utils,
         plutus-tx -any,
+        marlowe,
         QuickCheck,
+        quickcheck-instances -any,
         template-haskell -any,
         streaming -any,
-        plutus-pab -any,
         async -any,
         prettyprinter -any,
-        purescript-bridge -any,
         servant-client -any,
         http-client -any,
         websockets -any,
@@ -198,65 +145,3 @@ test-suite marlowe-test
         openapi3,
         uuid -any
 
--- | The PAB Specialised to the marlowe contract(s)
-executable marlowe-pab
-  import: lang
-  main-is: Main.hs
-  hs-source-dirs: pab
-  ghc-options:
-    -threaded
-  other-modules:
-    MarloweContract
-  build-depends:
-    base >= 4.9 && < 5,
-    aeson -any,
-    containers -any,
-    data-default -any,
-    freer-simple -any,
-    prettyprinter -any,
-    freer-extras -any,
-    plutus-chain-index -any,
-    plutus-chain-index-core -any,
-    plutus-contract -any,
-    plutus-ledger -any,
-    plutus-pab -any,
-    plutus-pab-executables -any,
-    plutus-tx -any,
-    purescript-bridge -any,
-    marlowe -any,
-    openapi3,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
-
--- | The PAB purescript generation specialised to the marlowe contract(s)
-executable marlowe-pab-setup
-  import: lang
-  main-is: Setup.hs
-  hs-source-dirs: pab
-  ghc-options:
-    -threaded
-  other-modules:
-    SetupParser
-  build-depends:
-    base >= 4.9 && < 5,
-    aeson -any,
-    containers -any,
-    data-default -any,
-    freer-simple -any,
-    iohk-monitoring -any,
-    monad-logger -any,
-    prettyprinter -any,
-    freer-extras -any,
-    optparse-applicative -any,
-    plutus-contract -any,
-    plutus-ledger -any,
-    plutus-pab -any,
-    plutus-pab-executables -any,
-    plutus-tx -any,
-    purescript-bridge -any,
-    marlowe -any,
-    openapi3,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any

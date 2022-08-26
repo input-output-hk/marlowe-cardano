@@ -34,6 +34,7 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."array" or (errorHandler.buildDepError "array"))
           (hsPkgs."base-deriving-via" or (errorHandler.buildDepError "base-deriving-via"))
           (hsPkgs."base64-bytestring" or (errorHandler.buildDepError "base64-bytestring"))
@@ -58,12 +59,14 @@
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
           (hsPkgs."set-algebra" or (errorHandler.buildDepError "set-algebra"))
           (hsPkgs."cardano-ledger-shelley" or (errorHandler.buildDepError "cardano-ledger-shelley"))
+          (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
           (hsPkgs."small-steps" or (errorHandler.buildDepError "small-steps"))
           (hsPkgs."strict-containers" or (errorHandler.buildDepError "strict-containers"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."utf8-string" or (errorHandler.buildDepError "utf8-string"))
+          (hsPkgs."validation-selective" or (errorHandler.buildDepError "validation-selective"))
           ];
         buildable = true;
         modules = [
@@ -93,11 +96,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       };

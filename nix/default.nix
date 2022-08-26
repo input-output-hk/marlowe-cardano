@@ -21,24 +21,25 @@ let
 
   iohkNixMain = import inputs.iohk-nix { };
 
-  extraOverlays =
-    # Haskell.nix (https://github.com/input-output-hk/haskell.nix)
-    [ haskell-nix.overlay ]
-    # our own overlays:
-    # needed for cardano-api wich uses a patched libsodium
-    ++ iohkNixMain.overlays.crypto
-    ++ iohkNixMain.overlays.iohkNix
-    ++ ownOverlays;
-
-  pkgs = import inputs.nixpkgs {
+  nixpkgsArgs = {
+    overlays =
+      # Haskell.nix (https://github.com/input-output-hk/haskell.nix)
+      [ haskell-nix.overlay ]
+      # our own overlays:
+      # needed for cardano-api wich uses a patched libsodium
+      ++ iohkNixMain.overlays.crypto
+      ++ iohkNixMain.overlays.iohkNix
+      ++ [ (final: prev: { cardano = (import inputs.cardano-world { nixpkgs = final; }).${system}.cardano; }) ]
+      ++ ownOverlays;
+    inherit (haskell-nix) config;
     inherit crossSystem;
     # In nixpkgs versions older than 21.05, if we don't explicitly pass
     # in localSystem we will hit a code path that uses builtins.currentSystem,
     # which breaks flake's pure evaluation.
     localSystem = { inherit system; };
-    overlays = extraOverlays;
-    config = haskell-nix.config;
   };
+
+  pkgs = import inputs.nixpkgs nixpkgsArgs;
 
   marlowe = import ./pkgs { inherit pkgs checkMaterialization enableHaskellProfiling inputs source-repo-override system evalSystem; };
 

@@ -1,0 +1,2 @@
+CREATE DATABASE chain;
+GRANT ALL PRIVILEGES ON DATABASE chain to postgres;

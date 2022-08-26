@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-cli"; version = "0.0.5.0"; };
+      identifier = { name = "marlowe-cli"; version = "0.0.6.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "brian.bush@iohk.io";
@@ -44,8 +44,6 @@
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
-          (hsPkgs."cardano-wallet" or (errorHandler.buildDepError "cardano-wallet"))
-          (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
           (hsPkgs."cborg-json" or (errorHandler.buildDepError "cborg-json"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
@@ -56,6 +54,7 @@
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."marlowe-actus" or (errorHandler.buildDepError "marlowe-actus"))
           (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
@@ -65,13 +64,14 @@
           (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
           (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
-          (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
-          (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
-          (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
+          (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+          (hsPkgs."plutus-ledger-ada" or (errorHandler.buildDepError "plutus-ledger-ada"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-          (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
+          (hsPkgs."plutus-ledger-slot" or (errorHandler.buildDepError "plutus-ledger-slot"))
+          (hsPkgs."plutus-script-utils" or (errorHandler.buildDepError "plutus-script-utils"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
+          (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"))
           (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
           (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
           (hsPkgs."regex-posix" or (errorHandler.buildDepError "regex-posix"))
@@ -89,14 +89,11 @@
           ];
         buildable = true;
         modules = [
-          "Language/Marlowe/CLI/ChainIndex"
           "Language/Marlowe/CLI/Codec"
           "Language/Marlowe/CLI/Command"
           "Language/Marlowe/CLI/Command/Contract"
           "Language/Marlowe/CLI/Command/Input"
           "Language/Marlowe/CLI/Command/Parse"
-          "Language/Marlowe/CLI/Command/PAB"
-          "Language/Marlowe/CLI/Command/Query"
           "Language/Marlowe/CLI/Command/Role"
           "Language/Marlowe/CLI/Command/Run"
           "Language/Marlowe/CLI/Command/Template"
@@ -108,17 +105,14 @@
           "Language/Marlowe/CLI/Merkle"
           "Language/Marlowe/CLI/IO"
           "Language/Marlowe/CLI/Orphans"
-          "Language/Marlowe/CLI/PAB"
           "Language/Marlowe/CLI/Run"
           "Language/Marlowe/CLI/Sync"
           "Language/Marlowe/CLI/Sync/Types"
           "Language/Marlowe/CLI/Transaction"
           "Language/Marlowe/CLI/Test"
-          "Language/Marlowe/CLI/Test/PAB"
           "Language/Marlowe/CLI/Test/Script"
           "Language/Marlowe/CLI/Test/Types"
           "Language/Marlowe/CLI/Types"
-          "Language/Marlowe/Contract"
           "Paths_marlowe_cli"
           ];
         hsSourceDirs = [ "src" ];
@@ -129,6 +123,7 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."cardano-config" or (errorHandler.buildDepError "cardano-config"))
             (hsPkgs."marlowe-cli" or (errorHandler.buildDepError "marlowe-cli"))
+            (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             ];
           buildable = true;

@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:11.5-alpine
+    environment:
+      - POSTGRES_LOGGING=true
+      - POSTGRES_USER=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust # Do not use this in production!
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+
+volumes:
+  postgres:
