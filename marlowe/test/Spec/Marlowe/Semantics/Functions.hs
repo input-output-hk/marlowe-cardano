@@ -211,7 +211,7 @@ checkFixInterval invalid inPast =
       IntervalError (IntervalInPastError _ _) -> not invalid && inPast
 
 
--- | Test the evaluation of values.
+-- | Test the evaluation of values and observations.
 checkValue :: Arbitrary a
            => Show a
            => (Environment -> State -> Gen a)                                                                 -- ^ The test-case generator.
