@@ -594,7 +594,7 @@ extractLet =
       )
 
 
--- | Extract the variable, value, warnings, and post-transaction contract from a `If` at the start of the pre-transaction contract.
+-- | Extract the post-transaction contract from an `If` at the start of the pre-transaction contract.
 extractIf :: Testify Contract
 extractIf =
   do
