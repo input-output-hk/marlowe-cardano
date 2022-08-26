@@ -333,7 +333,7 @@ checkDivValueRounding =
 
 
 -- | Test `Language.Marlowe.Core.V1.Semantics.Types.ChoiceValue`.
-checkChoiceValue :: Bool      -- ^ Whether the choices is present in the state.
+checkChoiceValue :: Bool      -- ^ Whether the choice should be taken from the state.
                  -> Property  -- ^ The test.
 checkChoiceValue isElement =
   let
