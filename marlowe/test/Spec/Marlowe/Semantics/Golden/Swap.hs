@@ -88,7 +88,7 @@ instance IsString AccountId where
   fromString x               = Role $ fromString x
 
 
--- | A list of Pangram test cases and results that should succeed.
+-- | A list of Pangram test cases and results that should succeed, generated from `Language.Marlowe.FindInputs.getAllInputs`.
 valids :: [(POSIXTime, [TransactionInput], TransactionOutput)]
 valids =
   [
