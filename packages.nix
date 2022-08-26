@@ -23,7 +23,6 @@ rec {
 
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs;
-    inherit (marlowe.lib) gitignore-nix;
     inherit (marlowe) fixStylishHaskell fix-prettier;
     src = ./.;
   };

@@ -4,7 +4,6 @@
 { lib
 , rPackages
 , haskell-nix
-, gitignore-nix
 , z3
 , R
 , libsodium-vrf
@@ -23,15 +22,7 @@ let
   r-packages = with rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
   project = haskell-nix.cabalProject' ({ pkgs, ... }: {
     inherit compiler-nix-name evalSystem;
-    # This is incredibly difficult to get right, almost everything goes wrong, see https://github.com/input-output-hk/haskell.nix/issues/496
-    src = let root = ../../../.; in
-      haskell-nix.haskellLib.cleanSourceWith {
-        filter = gitignore-nix.gitignoreFilter root;
-        src = root;
-        # Otherwise this depends on the name in the parent directory, which reduces caching, and is
-        # particularly bad on Hercules, see https://github.com/hercules-ci/support/issues/40
-        name = "plutus";
-      };
+    src = ../../../.;
     # These files need to be regenerated when you change the cabal files.
     # See ../CONTRIBUTING.doc for more information.
     # Unfortuntely, they are *not* constant across all possible systems, so in some circumstances we need different sets of files

@@ -12,11 +12,9 @@
 let
   inherit (pkgs) stdenv;
 
-  gitignore-nix = pkgs.callPackage inputs.gitignore-nix { };
-
   # { index-state, compiler-nix-name, project, projectPackages, packages, extraPackages }
   haskell = pkgs.callPackage ./haskell {
-    inherit gitignore-nix inputs evalSystem;
+    inherit inputs evalSystem;
     inherit checkMaterialization enableHaskellProfiling;
     inherit source-repo-override;
     inherit (inputs) actus-tests;
@@ -90,7 +88,6 @@ let
 
   # Collect everything to be exported under `plutus.lib`: builders/functions/utils
   lib = rec {
-    inherit gitignore-nix;
     haddock-combine = pkgs.callPackage (inputs.plutus-core + "/nix/lib/haddock-combine.nix") { inherit sphinxcontrib-haddock; };
   };
 

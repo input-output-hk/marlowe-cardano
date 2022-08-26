@@ -1,5 +1,4 @@
 { pkgs
-, gitignore-nix
 , fixStylishHaskell
 , fix-prettier
 , src
@@ -8,23 +7,20 @@
 }:
 let
   inherit (pkgs) lib;
-  cleanSrc = gitignore-nix.gitignoreSource src;
 in
 pkgs.recurseIntoAttrs {
-  shellcheck = pkgs.callPackage ./shellcheck.nix { src = cleanSrc; };
+  shellcheck = pkgs.callPackage ./shellcheck.nix { inherit src; };
 
   stylishHaskell = pkgs.callPackage ./stylish-haskell.nix {
-    src = cleanSrc;
-    inherit fixStylishHaskell;
+    inherit src fixStylishHaskell;
   };
 
   prettier = pkgs.callPackage ./prettier.nix {
-    src = cleanSrc;
-    inherit fix-prettier;
+    inherit src fix-prettier;
   };
 
   nixpkgsFmt = pkgs.callPackage ./nixpkgs-fmt.nix {
-    src = cleanSrc;
+    inherit src;
     inherit (pkgs) nixpkgs-fmt;
   };
 }

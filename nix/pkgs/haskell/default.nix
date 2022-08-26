@@ -5,7 +5,6 @@
 , buildPackages
 , writeShellScript
 , checkMaterialization
-, gitignore-nix
 , R
 , libsodium-vrf
 , secp256k1
@@ -39,7 +38,7 @@ let
     { deferPluginErrors }:
     import ./haskell.nix {
       inherit lib haskell-nix R libsodium-vrf secp256k1 rPackages z3 evalSystem;
-      inherit checkMaterialization compiler-nix-name gitignore-nix;
+      inherit checkMaterialization compiler-nix-name;
       inherit enableHaskellProfiling;
       inherit deferPluginErrors;
       inherit actus-tests;

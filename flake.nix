@@ -16,10 +16,6 @@
       url = "github:input-output-hk/cardano-repo-tool";
       flake = false;
     };
-    gitignore-nix = {
-      url = "github:hercules-ci/gitignore.nix";
-      flake = false;
-    };
     haskell-language-server = {
       # Pinned to a release
       url = "github:haskell/haskell-language-server?ref=1.3.0";

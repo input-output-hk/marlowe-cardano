@@ -2598,22 +2598,6 @@
         "type": "github"
       }
     },
-    "gitignore-nix": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1611672876,
-        "narHash": "sha256-qHu3uZ/o9jBHiA3MEKHJ06k7w4heOhA+4HCSIvflRxo=",
-        "owner": "hercules-ci",
-        "repo": "gitignore.nix",
-        "rev": "211907489e9f198594c0eb0ca9256a1949c9d412",
-        "type": "github"
-      },
-      "original": {
-        "owner": "hercules-ci",
-        "repo": "gitignore.nix",
-        "type": "github"
-      }
-    },
     "gomod2nix": {
       "inputs": {
         "nixpkgs": "nixpkgs_57",
@@ -6457,7 +6441,6 @@
         "cardano-repo-tool": "cardano-repo-tool",
         "cardano-world": "cardano-world",
         "flake-utils": "flake-utils_28",
-        "gitignore-nix": "gitignore-nix",
         "haskell-language-server": "haskell-language-server",
         "haskell-nix": "haskell-nix_3",
         "iohk-nix": "iohk-nix_2",
