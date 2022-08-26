@@ -485,7 +485,7 @@ pangramContract = let
         ] (Ledger.POSIXTime 100) Close
 
 
--- | The number of seconds since the Shelley era.
+-- | The given number of seconds after the Shelley era as POSIX time (miliseconds).
 secondsSinceShelley :: SlotConfig -> Integer -> Ledger.POSIXTime
 secondsSinceShelley SlotConfig {scSlotZeroTime} seconds =
     scSlotZeroTime + Ledger.POSIXTime (seconds * 1000)
