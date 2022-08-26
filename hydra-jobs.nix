@@ -6,6 +6,7 @@
   # We explicitly pass true here in the GitHub action but don't want to slow down hydra
 , checkMaterialization ? false
 , plutus-apps ? null
+, marlowe-cardano ? null
 , evalSystem ? "x86_64-linux" # Assuming hydra doesn't run elsewhere...
 }:
 let
@@ -52,4 +53,7 @@ let
   # first), but we mainly just need to get rid of some extra attributes.
   ciJobsets = stripAttrsForHydra (filterDerivations ci);
 in
-traceNames "" (ciJobsets // { required = derivationAggregate "required-marlowe" ciJobsets; })
+traceNames "" (ciJobsets // {
+  required = derivationAggregate "required-marlowe" ciJobsets;
+  forceNewEval = pkgs.writeText "forceNewEval" (marlowe-cardano.rev or (marlowe-cardano.shortRev or "local"));
+})

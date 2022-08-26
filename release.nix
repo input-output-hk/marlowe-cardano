@@ -4,6 +4,7 @@
   # We explicitly pass true here in the GitHub action but don't want to slow down hydra
 , checkMaterialization ? false
 , plutus-apps ? null
+, marlowe-cardano ? null
 , evalSystem ? builtins.currentSystem
 }@args:
 let
