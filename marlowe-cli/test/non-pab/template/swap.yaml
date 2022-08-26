@@ -43,9 +43,18 @@ stScriptOperations:
           token_name: ""
         into_account:
           role_token: "aParty"
+    soMinimumTime: 1645590825000
+    soMaximumTime: 1898051625000
+
+
+  - tag: Prepare
+    soTransaction: "TestTransaction-swap"
+    soOwner:
+      role_token: "aParty"
+    soInputs:
       - input_from_party:
           role_token: "bParty"
-        that_deposits: 25000000
+        that_deposits: 30000000
         of_token:
           currency_symbol: ""
           token_name: ""
