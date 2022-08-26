@@ -564,7 +564,7 @@ hasError :: TransactionError -> Testify ()
 hasError e = view transactionError >>= throwUnless "Error not found."  (== e)
 
 
--- | Assert that inputs do not match any actions.
+-- | Assert that the type of the first input does not match the type of any of the actions in the next 'When'.
 requireIncompatibleInput :: Testify ()
 requireIncompatibleInput =
   do
