@@ -101,6 +101,9 @@ let
 
   defaultShellHook = ''
     ${pre-commit-check.shellHook}
+
+    # The green prompt familiar to those used to nix-shell
+    export PS1="\n\[\033[1;32m\][nix develop:\w]\$\[\033[0m\] "
   ''
   # Work around https://github.com/NixOS/nix/issues/3345, which makes
   # tests etc. run single-threaded in a nix shell.
