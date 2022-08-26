@@ -109,11 +109,11 @@ import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort)
 import qualified Data.Map.Strict as M (Map)
 import Data.Proxy (Proxy (Proxy))
-import Data.Time (NominalDiffTime, addUTCTime, getCurrentTime)
+import Data.Time (NominalDiffTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import GHC.Exts (IsString (fromString))
 import Language.Marlowe.Extended.V1 (Timeout (POSIXTime))
 import qualified Language.Marlowe.Extended.V1 as E
-import qualified Marlowe.Contracts.UTC.Common as UTC.Common
 
 
 -- | Exception for Marlowe CLI.
@@ -512,5 +512,8 @@ instance FromJSON AnyTimeout where
 
 toTimeout :: MonadIO m => AnyTimeout -> m E.Timeout
 toTimeout (AbsoluteTimeout t)       = pure $ POSIXTime t
-toTimeout (RelativeTimeout seconds) = liftIO $ UTC.Common.toTimeout . addUTCTime seconds <$> getCurrentTime
+toTimeout (RelativeTimeout seconds) = do
+  let
+    toPOSIXMilliseconds = E.POSIXTime . floor . (1e6 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
+  liftIO $ toPOSIXMilliseconds . addUTCTime seconds <$> getCurrentTime
 

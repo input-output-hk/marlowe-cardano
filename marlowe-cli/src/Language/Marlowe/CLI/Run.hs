@@ -269,6 +269,7 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
     transactionInput'@TransactionInput{..} <-
       merkleizeInputs marloweIn transactionInput
         `catchError` (const $ pure transactionInput)  -- TODO: Consider not catching errors here.
+
     case computeTransaction transactionInput' mtState mtContract of
       Error message          -> throwError . CliError . show $ message
       TransactionOutput{..} -> pure
