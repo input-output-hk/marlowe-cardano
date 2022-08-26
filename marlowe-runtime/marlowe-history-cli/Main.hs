@@ -117,24 +117,22 @@ getOptions = O.execParser $ O.info parser infoMod
     parser = O.helper <*> (Options <$> commandPortParser <*> queryPortParser <*> hostParser <*> commandParser)
     commandPortParser = O.option O.auto $ mconcat
       [ O.long "command-port"
-      , O.short 'p'
       , O.value 3717
       , O.metavar "PORT_NUMBER"
-      , O.help "The port number for issuing commands to the history server"
+      , O.help "The port number for issuing commands to the history server. Default: 3717"
       ]
     queryPortParser = O.option O.auto $ mconcat
       [ O.long "query-port"
-      , O.short 'p'
       , O.value 3718
       , O.metavar "PORT_NUMBER"
-      , O.help "The port number for issuing queries to the history server"
+      , O.help "The port number for issuing queries to the history server. Default: 3718"
       ]
     hostParser = O.strOption $ mconcat
       [ O.long "host"
       , O.short 'h'
       , O.value "127.0.0.1"
       , O.metavar "HOST_NAME"
-      , O.help "The hostname of the history server to connect to"
+      , O.help "The hostname of the history server to connect to. Default value: 127.0.0.1"
       ]
 
     commandParser = asum

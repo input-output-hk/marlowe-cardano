@@ -32,8 +32,8 @@ import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket (AddrInfo (..), HostName, PortNumber, SocketType (..), close, connect, defaultHints, getAddrInfo,
                        openSocket, withSocketsDo)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
-import Options.Applicative (argument, auto, execParser, fullDesc, header, help, info, long, maybeReader, metavar,
-                            option, progDesc, short, strOption, value)
+import Options.Applicative (argument, auto, execParser, fullDesc, header, help, helper, info, long, maybeReader,
+                            metavar, option, progDesc, short, strOption, value)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), setSGR)
 import System.IO (hPrint, stderr)
 import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
@@ -158,32 +158,30 @@ data Options = Options
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info parser infoMod
+getOptions = execParser $ info (helper <*> parser) infoMod
   where
     parser = Options <$> portParser <*> queryPortParser <*> hostParser <*> contractIdParser
 
     portParser = option auto $ mconcat
       [ long "port-number"
-      , short 'p'
       , value 3715
       , metavar "PORT_NUMBER"
-      , help "The port number of the chain seek server"
+      , help "The port number of the chain seek server. Default value: 3715"
       ]
 
     queryPortParser = option auto $ mconcat
       [ long "query-port-number"
-      , short 'p'
       , value 3716
       , metavar "PORT_NUMBER"
-      , help "The query port number of the chain seek server"
+      , help "The query port number of the chain seek server. Default value: 3716"
       ]
 
     hostParser = strOption $ mconcat
       [ long "host"
-      , short 'p'
+      , short 'h'
       , value "127.0.0.1"
       , metavar "HOST_NAME"
-      , help "The host name of the chain seek server"
+      , help "The host name of the chain seek server. Default value: 127.0.0.1"
       ]
 
     contractIdParser = argument (maybeReader parseContractId) $ mconcat
