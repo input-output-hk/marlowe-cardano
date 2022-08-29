@@ -118,8 +118,8 @@ runShowCommand contractId socket = void $ runPeerWithDriver driver peer (startDS
         Just next -> SendMsgRequestNext next ClientStNext
           { recvMsgNextPage = nextPage
           }
-    printBlock :: MarloweVersion v -> BlockHeader -> [ContractStep v] -> IO ()
-    printBlock version = traverse_ . logStep version contractId
+    printBlock :: MarloweVersion v -> BlockHeader -> PartialHistory v -> IO ()
+    printBlock version = logPartialHistory version contractId
 
 data Options = Options
   { commandPort :: !PortNumber
@@ -214,14 +214,45 @@ getOptions = O.execParser $ O.info parser infoMod
       , O.progDesc "Example Chain Seek client for the Marlowe Chain Sync"
       ]
 
+logPartialHistory :: MarloweVersion v -> ContractId -> BlockHeader -> PartialHistory v -> IO ()
+logPartialHistory version contractId blockHeader@BlockHeader{..} = \case
+  FromCreate CreateStep{..} steps -> do
+    setSGR [SetColor Foreground Vivid Yellow]
+    putStr "transaction "
+    putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
+    putStrLn " (creation)"
+    setSGR [Reset]
+    putStr "ContractId:      "
+    putStrLn $ T.unpack $ renderContractId contractId
+    putStr "SlotNo:          "
+    print $ unSlotNo slotNo
+    putStr "BlockNo:         "
+    print $ unBlockNo blockNo
+    putStr "BlockId:         "
+    putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+    for_ (toBech32 scriptAddress) \addr -> do
+      putStr "ScriptAddress:   "
+      putStrLn $ T.unpack addr
+    putStr "Marlowe Version: "
+    putStrLn case version of
+      MarloweV1 -> "1"
+    let
+      contractDoc :: Doc
+      contractDoc = indent 4 case version of
+        MarloweV1 -> pretty $ V1.marloweContract datum
+    putStrLn ""
+    putDoc contractDoc
+    putStrLn ""
+    putStrLn ""
+    traverse_ (logStep version contractId blockHeader) steps
+  FromStep steps -> do
+    traverse_ (logStep version contractId blockHeader) steps
+
 logStep :: MarloweVersion v -> ContractId -> BlockHeader -> ContractStep v -> IO ()
 logStep version contractId BlockHeader{..} step = do
   setSGR [SetColor Foreground Vivid Yellow]
   putStr "transaction "
   case step of
-    Create _ -> do
-      putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
-      putStrLn " (creation)"
     ApplyTransaction Transaction{transactionId} -> do
       putStrLn $ T.unpack $ encodeBase16 $ unTxId transactionId
     RedeemPayout RedeemStep{..}-> do
@@ -229,29 +260,6 @@ logStep version contractId BlockHeader{..} step = do
       putStrLn " (redeem)"
   setSGR [Reset]
   case step of
-    Create CreateStep{..} -> do
-      putStr "ContractId:      "
-      putStrLn $ T.unpack $ renderContractId contractId
-      putStr "SlotNo:          "
-      print $ unSlotNo slotNo
-      putStr "BlockNo:         "
-      print $ unBlockNo blockNo
-      putStr "BlockId:         "
-      putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
-      for_ (toBech32 scriptAddress) \addr -> do
-        putStr "ScriptAddress:   "
-        putStrLn $ T.unpack addr
-      putStr "Marlowe Version: "
-      putStrLn case version of
-        MarloweV1 -> "1"
-      let
-        contractDoc :: Doc
-        contractDoc = indent 4 case version of
-          MarloweV1 -> pretty $ V1.marloweContract datum
-      putStrLn ""
-      putDoc contractDoc
-      putStrLn ""
-      putStrLn ""
     ApplyTransaction Transaction{redeemer, output} -> do
       putStr "ContractId: "
       putStrLn $ T.unpack $ renderContractId contractId

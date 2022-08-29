@@ -26,7 +26,7 @@ import System.IO (hPutStrLn, stderr)
 
 newtype RunQueryServer m = RunQueryServer (forall a. RuntimeHistoryQueryServer m a -> IO a)
 
-data HistoryProducer v = HistoryProducer (Map BlockHeader [ContractStep v]) (Maybe (IO (HistoryProducer v)))
+data HistoryProducer v = HistoryProducer (Map BlockHeader (PartialHistory v)) (Maybe (IO (HistoryProducer v)))
 
 data SomeHistoryProducer = forall v. SomeHistoryProducer (MarloweVersion v) (IO (HistoryProducer v))
 
