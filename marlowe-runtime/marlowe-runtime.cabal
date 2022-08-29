@@ -71,6 +71,8 @@ library
     Language.Marlowe.Runtime.History.FollowerSupervisor
     Language.Marlowe.Runtime.History.JobServer
     Language.Marlowe.Runtime.History.QueryServer
+    Language.Marlowe.Protocol.Sync.Codec
+    Language.Marlowe.Protocol.Sync.Types
   build-depends:
       base >= 4.9 && < 5
     , aeson
