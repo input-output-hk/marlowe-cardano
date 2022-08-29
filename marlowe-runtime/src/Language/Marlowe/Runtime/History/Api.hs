@@ -102,8 +102,7 @@ instance Binary (RedeemStep 'V1) where
   get = RedeemStep <$> get <*> get <*> getPayoutDatum MarloweV1
 
 data ContractStep v
-  = Create (CreateStep v)
-  | ApplyTransaction (Transaction v)
+  = ApplyTransaction (Transaction v)
   | RedeemPayout (RedeemStep v)
   -- TODO add TimeoutElapsed
   deriving (Generic)
@@ -192,9 +191,21 @@ type RuntimeHistoryJobCodec m = Codec RuntimeHistoryJob DeserializeError m LBS.B
 historyJobCodec :: Applicative m => RuntimeHistoryJobCodec m
 historyJobCodec = codecJob
 
-type HistoryPage v = Map Chain.BlockHeader [ContractStep v]
+data PartialHistory v
+  = FromCreate (CreateStep v) [ContractStep v]
+  | FromStep [ContractStep v]
+  deriving Generic
 
-data SomeHistoryPage = forall v. SomeHistoryPage (MarloweVersion v) (HistoryPage v)
+deriving instance Show (PartialHistory 'V1)
+deriving instance Eq (PartialHistory 'V1)
+instance Binary (PartialHistory 'V1)
+
+instance Semigroup (PartialHistory v) where
+  _ <> FromCreate createStep steps                = FromCreate createStep steps
+  FromCreate createStep steps1 <> FromStep steps2 = FromCreate createStep $ steps1 <> steps2
+  FromStep steps1 <> FromStep steps2              = FromStep $ steps1 <> steps2
+
+data SomeHistoryPage = forall v. SomeHistoryPage (MarloweVersion v) (Map Chain.BlockHeader (PartialHistory v))
 
 instance Binary SomeHistoryPage where
   put (SomeHistoryPage version page) = do

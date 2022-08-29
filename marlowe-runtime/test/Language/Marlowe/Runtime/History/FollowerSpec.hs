@@ -424,7 +424,7 @@ checkCreation = do
     $ RollForward createTx point1 point1
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block1 [Create CreateStep {..}]
+            { steps = Map.singleton block1 $ FromCreate CreateStep{..} []
             , rollbackTo = Nothing
             }
         )
@@ -445,7 +445,7 @@ checkCreationWithClose = do
     $ RollForward (createTx { Chain.validityRange = Chain.MinMaxBound 0 100, Chain.inputs = Set.singleton closeTxIn }) point1 point1
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block1 [Create CreateStep {..}]
+            { steps = Map.singleton block1 $ FromCreate CreateStep{..} []
             , rollbackTo = Nothing
             }
         )
@@ -653,7 +653,7 @@ checkRollbackToCreationWithInputs = do
     $ RollForward (Map.singleton createUTxO applyInputsTx) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
@@ -691,7 +691,7 @@ checkRollbackToCreationClosed = do
     $ RollForward (Map.singleton createUTxO closeTx) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = closeTx in txId
                     , contractId = testContractId
@@ -720,7 +720,7 @@ checkRollbackToTransaction = do
     $ RollBackward point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
@@ -741,7 +741,7 @@ checkRollbackToTransaction = do
     $ RollForward (Map.singleton applyInputsUTxO close2Tx) point3 point3
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block3
+            { steps = Map.singleton block3 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = close2TxId
                     , contractId = testContractId
@@ -766,7 +766,7 @@ checkCloseTransaction = do
     $ RollForward (Map.singleton createUTxO closeTx) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = closeTx in txId
                     , contractId = testContractId
@@ -791,7 +791,7 @@ checkNonCloseTransaction = do
     $ RollForward (Map.singleton createUTxO applyInputsTx) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
@@ -819,7 +819,7 @@ checkCloseAndCreateInSameTransaction = do
     $ RollForward (Map.singleton createUTxO $ closeTx { Chain.outputs = [createOutput] }) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = closeTx in txId
                     , contractId = testContractId
@@ -844,7 +844,7 @@ checkPayoutOpenRedeemedBefore = do
     $ RollForward (Map.singleton createUTxO applyInputsPayoutTx) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
@@ -865,7 +865,7 @@ checkPayoutOpenRedeemedBefore = do
     $ RollForward (Map.singleton payoutUTxO redeemPayoutTx) point3 point3
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block3
+            { steps = Map.singleton block3 $ FromStep
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId
@@ -879,7 +879,7 @@ checkPayoutOpenRedeemedBefore = do
     $ RollForward (Map.singleton applyInputsUTxO close2Tx) point4 point4
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block4
+            { steps = Map.singleton block4 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = close2TxId
                     , contractId = testContractId
@@ -899,7 +899,7 @@ checkPayoutOpenRedeemedBefore = do
     $ RollForward (Map.singleton payoutUTxO redeemPayoutTx) point3 point3
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block3
+            { steps = Map.singleton block3 $ FromStep
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId
@@ -920,7 +920,7 @@ checkPayoutOpenRedeemedAfter = do
     $ RollForward (Map.singleton createUTxO applyInputsPayoutTx) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
@@ -941,7 +941,7 @@ checkPayoutOpenRedeemedAfter = do
     $ RollForward (Map.singleton applyInputsUTxO close2Tx) point3 point3
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block3
+            { steps = Map.singleton block3 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = close2TxId
                     , contractId = testContractId
@@ -959,7 +959,7 @@ checkPayoutOpenRedeemedAfter = do
     $ RollForward (Map.singleton payoutUTxO redeemPayoutTx) point4 point4
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block4
+            { steps = Map.singleton block4 $ FromStep
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId
@@ -980,7 +980,7 @@ checkPayoutOpenRedeemedTogether = do
     $ RollForward (Map.singleton createUTxO applyInputsPayoutTx) point2 point2
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
+            { steps = Map.singleton block2 $ FromStep
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
@@ -1001,7 +1001,7 @@ checkPayoutOpenRedeemedTogether = do
     $ RollForward (Map.fromList [(applyInputsUTxO, close2Tx), (payoutUTxO, redeemPayoutTx)]) point3 point3
     $ Do
         ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block3
+            { steps = Map.singleton block3 $ FromStep
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId

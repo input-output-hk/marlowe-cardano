@@ -58,7 +58,7 @@ import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime))
 data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
 
 data ContractChanges v = ContractChanges
-  { steps      :: Map BlockHeader [ContractStep v]
+  { steps      :: Map BlockHeader (PartialHistory v)
   , rollbackTo :: Maybe (WithGenesis SlotNo)
   }
 
@@ -149,7 +149,7 @@ mkFollower deps@FollowerDependencies{..} = do
               failWith $ ExtractContractFailed err
             Right (SomeCreateStep version create@CreateStep{..}) -> do
               changesVar <- atomically do
-                changesVar <- newTVar mempty { steps = Map.singleton blockHeader [Create create] }
+                changesVar <- newTVar mempty { steps = Map.singleton blockHeader $ FromCreate create [] }
                 writeTVar someChangesVar
                   $ Just
                   $ SomeContractChangesTVar
@@ -461,7 +461,7 @@ processScriptTx blockHeader FollowerContext{..} FollowerState{..} tx = do
   pure output
 
 tellStep :: BlockHeader -> ContractStep v -> WriterT (ContractChanges v) (Either ContractHistoryError) ()
-tellStep blockHeader step = tell mempty { steps = Map.singleton blockHeader [step] }
+tellStep blockHeader step = tell mempty { steps = Map.singleton blockHeader $ FromStep [step] }
 
 extractMarloweTransaction
   :: MarloweVersion v
