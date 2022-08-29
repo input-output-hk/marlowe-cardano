@@ -19,8 +19,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash
                                                ChainSyncQuery (..), RuntimeChainSeekClient, SlotNo (..), TxId (..),
                                                TxOutRef (..), WithGenesis (..), runtimeChainSeekCodec, toBech32)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
-                                          TransactionOutput (..), TransactionScriptOutput (..), parseContractId,
-                                          renderContractId)
+                                          TransactionOutput (..), TransactionScriptOutput (..), renderContractId)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
@@ -29,11 +28,10 @@ import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
-import Network.Socket (AddrInfo (..), HostName, PortNumber, SocketType (..), close, connect, defaultHints, getAddrInfo,
-                       openSocket, withSocketsDo)
+import Network.Socket (AddrInfo (..), SocketType (..), close, connect, defaultHints, getAddrInfo, openSocket,
+                       withSocketsDo)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
-import Options.Applicative (argument, auto, execParser, fullDesc, header, help, helper, info, long, maybeReader,
-                            metavar, option, progDesc, short, strOption, value)
+import Options (Options (..), getOptions)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), setSGR)
 import System.IO (hPrint, stderr)
 import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
@@ -48,19 +46,19 @@ run :: Options -> IO ()
 run Options{..} = withSocketsDo do
   chainSeekAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
   bracket (open chainSeekAddr) close \chainSeekSocket -> do
-      slotConfig <- queryChainSync GetSlotConfig
-      securityParameter <- queryChainSync GetSecurityParameter
-      let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
-      let
-        connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-        connectToChainSeek client = fst <$> runPeerWithDriver driver peer (startDState driver)
-          where peer = chainSeekClientPeer Genesis client
-      let getMarloweVersion = Core.getMarloweVersion
-      Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
-      Left result <- race runFollower (logChanges contractId changes)
-      case result of
-        Left err -> hPrint stderr err
-        Right () -> pure ()
+    slotConfig <- queryChainSync GetSlotConfig
+    securityParameter <- queryChainSync GetSecurityParameter
+    let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
+    let
+      connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+      connectToChainSeek client = fst <$> runPeerWithDriver driver peer (startDState driver)
+        where peer = chainSeekClientPeer Genesis client
+    let getMarloweVersion = Core.getMarloweVersion
+    Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
+    Left result <- race runFollower (logChanges contractId changes)
+    case result of
+      Left err -> hPrint stderr err
+      Right () -> pure ()
   where
     open addr = bracketOnError (openSocket addr) close \sock -> do
       connect sock $ addrAddress addr
@@ -149,48 +147,3 @@ logStep version contractId BlockHeader{..} step = do
       putStrLn ""
 
     RedeemPayout _ -> error "not implemented"
-
-data Options = Options
-  { port       :: PortNumber
-  , queryPort  :: PortNumber
-  , host       :: HostName
-  , contractId :: ContractId
-  }
-
-getOptions :: IO Options
-getOptions = execParser $ info (helper <*> parser) infoMod
-  where
-    parser = Options <$> portParser <*> queryPortParser <*> hostParser <*> contractIdParser
-
-    portParser = option auto $ mconcat
-      [ long "port-number"
-      , value 3715
-      , metavar "PORT_NUMBER"
-      , help "The port number of the chain seek server. Default value: 3715"
-      ]
-
-    queryPortParser = option auto $ mconcat
-      [ long "query-port-number"
-      , value 3716
-      , metavar "PORT_NUMBER"
-      , help "The query port number of the chain seek server. Default value: 3716"
-      ]
-
-    hostParser = strOption $ mconcat
-      [ long "host"
-      , short 'h'
-      , value "127.0.0.1"
-      , metavar "HOST_NAME"
-      , help "The host name of the chain seek server. Default value: 127.0.0.1"
-      ]
-
-    contractIdParser = argument (maybeReader parseContractId) $ mconcat
-      [ metavar "CONTRACT_ID"
-      , help "The UTxO that created the contract"
-      ]
-
-    infoMod = mconcat
-      [ fullDesc
-      , progDesc "Contract follower for Marlowe Runtime"
-      , header "marlowe-follower : a contract follower for the Marlowe Runtime."
-      ]

@@ -159,6 +159,7 @@ executable marlowe-follower
   main-is: Main.hs
   other-modules:
     Paths_marlowe_runtime
+    Options
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
