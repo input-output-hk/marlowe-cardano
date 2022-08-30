@@ -5,7 +5,7 @@ module Main where
 import Control.Category ((>>>))
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.ByteString.Base16 (encodeBase16)
-import Data.Foldable (asum, fold, for_, traverse_)
+import Data.Foldable (asum, fold, for_)
 import Data.Functor (void)
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -103,23 +103,7 @@ runLsCommand LsCommand{..} socket = void $ runPeerWithDriver driver peer (startD
       print status
 
 runShowCommand :: ContractId -> Socket -> IO ()
-runShowCommand contractId socket = void $ runPeerWithDriver driver peer (startDState driver)
-  where
-    driver = mkDriver throwIO historyQueryCodec $ socketAsChannel socket
-    peer = queryClientPeer client
-    client = QueryClient $ pure $ SendMsgRequest (GetHistory contractId) ClientStNextCanReject
-      { recvMsgReject = die . show
-      , recvMsgNextPage = nextPage
-      }
-    nextPage (SomeHistoryPage version page) mNext = do
-      void $ Map.traverseWithKey (printBlock version) page
-      pure case mNext of
-        Nothing -> SendMsgDone ()
-        Just next -> SendMsgRequestNext next ClientStNext
-          { recvMsgNextPage = nextPage
-          }
-    printBlock :: MarloweVersion v -> BlockHeader -> PartialHistory v -> IO ()
-    printBlock version = logPartialHistory version contractId
+runShowCommand = error "not implemented"
 
 data Options = Options
   { commandPort :: !PortNumber
@@ -214,39 +198,35 @@ getOptions = O.execParser $ O.info parser infoMod
       , O.progDesc "Example Chain Seek client for the Marlowe Chain Sync"
       ]
 
-logPartialHistory :: MarloweVersion v -> ContractId -> BlockHeader -> PartialHistory v -> IO ()
-logPartialHistory version contractId blockHeader@BlockHeader{..} = \case
-  FromCreate CreateStep{..} steps -> do
-    setSGR [SetColor Foreground Vivid Yellow]
-    putStr "transaction "
-    putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
-    putStrLn " (creation)"
-    setSGR [Reset]
-    putStr "ContractId:      "
-    putStrLn $ T.unpack $ renderContractId contractId
-    putStr "SlotNo:          "
-    print $ unSlotNo slotNo
-    putStr "BlockNo:         "
-    print $ unBlockNo blockNo
-    putStr "BlockId:         "
-    putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
-    for_ (toBech32 scriptAddress) \addr -> do
-      putStr "ScriptAddress:   "
-      putStrLn $ T.unpack addr
-    putStr "Marlowe Version: "
-    putStrLn case version of
-      MarloweV1 -> "1"
-    let
-      contractDoc :: Doc
-      contractDoc = indent 4 case version of
-        MarloweV1 -> pretty $ V1.marloweContract datum
-    putStrLn ""
-    putDoc contractDoc
-    putStrLn ""
-    putStrLn ""
-    traverse_ (logStep version contractId blockHeader) steps
-  FromStep steps -> do
-    traverse_ (logStep version contractId blockHeader) steps
+logCreateStep :: MarloweVersion v -> ContractId -> BlockHeader -> CreateStep v -> IO ()
+logCreateStep version contractId BlockHeader{..} CreateStep{..} = do
+  setSGR [SetColor Foreground Vivid Yellow]
+  putStr "transaction "
+  putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
+  putStrLn " (creation)"
+  setSGR [Reset]
+  putStr "ContractId:      "
+  putStrLn $ T.unpack $ renderContractId contractId
+  putStr "SlotNo:          "
+  print $ unSlotNo slotNo
+  putStr "BlockNo:         "
+  print $ unBlockNo blockNo
+  putStr "BlockId:         "
+  putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+  for_ (toBech32 scriptAddress) \addr -> do
+    putStr "ScriptAddress:   "
+    putStrLn $ T.unpack addr
+  putStr "Marlowe Version: "
+  putStrLn case version of
+    MarloweV1 -> "1"
+  let
+    contractDoc :: Doc
+    contractDoc = indent 4 case version of
+      MarloweV1 -> pretty $ V1.marloweContract datum
+  putStrLn ""
+  putDoc contractDoc
+  putStrLn ""
+  putStrLn ""
 
 logStep :: MarloweVersion v -> ContractId -> BlockHeader -> ContractStep v -> IO ()
 logStep version contractId BlockHeader{..} step = do

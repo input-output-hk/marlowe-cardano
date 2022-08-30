@@ -47,6 +47,7 @@ codecMarloweSync = binaryCodec putMessage getMessage
       MsgRollBackward blockHeader -> do
         putWord8 0x08
         put blockHeader
+      MsgRollBackwardToGenesis -> putWord8 0x0e
 
       MsgWait -> putWord8 0x09
 
@@ -125,5 +126,9 @@ codecMarloweSync = binaryCodec putMessage getMessage
       0x0d -> case tok of
         ServerAgency (TokIntersect _) -> pure $ SomeMessage MsgIntersectNotFound
         _                             -> fail "Invalid protocol state for MsgIntersectNotFound"
+
+      0x0e -> case tok of
+        ServerAgency (TokNext _) -> pure $ SomeMessage MsgRollBackwardToGenesis
+        _                        -> fail "Invalid protocol state for MsgRollBackwardToGenesis"
 
       _ -> fail $ "Invalid message tag " <> show tag

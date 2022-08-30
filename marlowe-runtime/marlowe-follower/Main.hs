@@ -81,41 +81,38 @@ logChanges contractId readChanges = forever do
     maybe retry pure mchanges
   for_ rollbackTo \slotNo -> do
     putStrLn $ "Rollback to slot: " <> show slotNo
-  void $ Map.traverseWithKey (logPartialHistory version contractId) steps
+  traverse_ (uncurry $ logCreateStep version contractId) create
+  void $ Map.traverseWithKey (traverse_ . logStep version contractId) steps
 
-logPartialHistory :: MarloweVersion v -> ContractId -> BlockHeader -> PartialHistory v -> IO ()
-logPartialHistory version contractId blockHeader@BlockHeader{..} = \case
-  FromCreate CreateStep{..} steps -> do
-    setSGR [SetColor Foreground Vivid Yellow]
-    putStr "transaction "
-    putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
-    putStrLn " (creation)"
-    setSGR [Reset]
-    putStr "ContractId:      "
-    putStrLn $ T.unpack $ renderContractId contractId
-    putStr "SlotNo:          "
-    print $ unSlotNo slotNo
-    putStr "BlockNo:         "
-    print $ unBlockNo blockNo
-    putStr "BlockId:         "
-    putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
-    for_ (toBech32 scriptAddress) \addr -> do
-      putStr "ScriptAddress:   "
-      putStrLn $ T.unpack addr
-    putStr "Marlowe Version: "
-    putStrLn case version of
-      MarloweV1 -> "1"
-    let
-      contractDoc :: Doc
-      contractDoc = indent 4 case version of
-        MarloweV1 -> pretty $ V1.marloweContract datum
-    putStrLn ""
-    putDoc contractDoc
-    putStrLn ""
-    putStrLn ""
-    traverse_ (logStep version contractId blockHeader) steps
-  FromStep steps -> do
-    traverse_ (logStep version contractId blockHeader) steps
+logCreateStep :: MarloweVersion v -> ContractId -> BlockHeader -> CreateStep v -> IO ()
+logCreateStep version contractId BlockHeader{..} CreateStep{..} = do
+  setSGR [SetColor Foreground Vivid Yellow]
+  putStr "transaction "
+  putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
+  putStrLn " (creation)"
+  setSGR [Reset]
+  putStr "ContractId:      "
+  putStrLn $ T.unpack $ renderContractId contractId
+  putStr "SlotNo:          "
+  print $ unSlotNo slotNo
+  putStr "BlockNo:         "
+  print $ unBlockNo blockNo
+  putStr "BlockId:         "
+  putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+  for_ (toBech32 scriptAddress) \addr -> do
+    putStr "ScriptAddress:   "
+    putStrLn $ T.unpack addr
+  putStr "Marlowe Version: "
+  putStrLn case version of
+    MarloweV1 -> "1"
+  let
+    contractDoc :: Doc
+    contractDoc = indent 4 case version of
+      MarloweV1 -> pretty $ V1.marloweContract datum
+  putStrLn ""
+  putDoc contractDoc
+  putStrLn ""
+  putStrLn ""
 
 logStep :: MarloweVersion v -> ContractId -> BlockHeader -> ContractStep v -> IO ()
 logStep version contractId BlockHeader{..} step = do
