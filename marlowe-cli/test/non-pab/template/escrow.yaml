@@ -4,7 +4,7 @@ stScriptOperations:
 
   - tag: Initialize
     soOwner:
-      role_token: "seller"
+      role_token: "buyer"
     soTransaction: "TestTransaction-escrow"
     soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
     soMinAda: 1000000
@@ -31,11 +31,11 @@ stScriptOperations:
   - tag: Prepare
     soTransaction: "TestTransaction-escrow"
     soOwner:
-      role_token: "seller"
+      role_token: "buyer"
     soInputs:
       - input_from_party:
           role_token: "buyer"
-        that_deposits: 2000000
+        that_deposits: 20000000
         of_token:
           currency_symbol: ""
           token_name: ""
