@@ -1,11 +1,13 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE KindSignatures     #-}
+{-# LANGUAGE RankNTypes         #-}
 
 module Test.Network.Protocol.ChainSeek where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Type.Equality (type (:~:) (Refl))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Types
 import Test.Hspec (Expectation, expectationFailure)
@@ -60,7 +62,7 @@ runClientWithScript showQuery assertQueryEq script ChainSeekClient{..} = do
           let tag = tagFromQuery move
           let tag' = tagFromQuery move'
           case tagEq tag tag' of
-            Just Refl -> do
+            Just (Refl, Refl) -> do
               liftIO $ move' `assertQueryEq` move
               runNext next waitNext script'
             Nothing -> do

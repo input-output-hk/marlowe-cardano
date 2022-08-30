@@ -89,6 +89,7 @@ import Data.These (These (..))
 import Data.Time (NominalDiffTime, UTCTime (..), addUTCTime, diffTimeToPicoseconds, nominalDiffTimeToSeconds,
                   picosecondsToDiffTime, secondsToNominalDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
@@ -472,23 +473,23 @@ instance Query Move where
   tagEq = curry \case
     (TagFork m1 m2, TagFork m3 m4)           ->
       case (,) <$> tagEq m1 m3 <*> tagEq m2 m4 of
-        Nothing           -> Nothing
-        Just (Refl, Refl) -> Just Refl
+        Nothing                           -> Nothing
+        Just ((Refl, Refl), (Refl, Refl)) -> Just (Refl, Refl)
     -- Please don't refactor this to use a single catch-all wildcard pattern.
     -- The idea of doing it this way is to cause an incomplete pattern match
     -- warning when a new 'Tag' constructor is added.
     (TagFork _ _, _)                         -> Nothing
-    (TagAdvanceSlots, TagAdvanceSlots)       -> Just Refl
+    (TagAdvanceSlots, TagAdvanceSlots)       -> Just (Refl, Refl)
     (TagAdvanceSlots, _)                     -> Nothing
-    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just Refl
+    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just (Refl, Refl)
     (TagAdvanceBlocks, _)                    -> Nothing
-    (TagIntersect, TagIntersect)             -> Just Refl
+    (TagIntersect, TagIntersect)             -> Just (Refl, Refl)
     (TagIntersect, _)                        -> Nothing
-    (TagFindConsumingTx, TagFindConsumingTx) -> Just Refl
+    (TagFindConsumingTx, TagFindConsumingTx) -> Just (Refl, Refl)
     (TagFindConsumingTx, _)                  -> Nothing
-    (TagFindTx, TagFindTx)                   -> Just Refl
+    (TagFindTx, TagFindTx)                   -> Just (Refl, Refl)
     (TagFindTx, _)                           -> Nothing
-    (TagFindConsumingTxs, TagFindConsumingTxs) -> Just Refl
+    (TagFindConsumingTxs, TagFindConsumingTxs) -> Just (Refl, Refl)
     (TagFindConsumingTxs, _)                  -> Nothing
 
   putTag = \case
@@ -646,9 +647,9 @@ instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
-  tagEq TagGetSlotConfig TagGetSlotConfig               = Just Query.Refl
+  tagEq TagGetSlotConfig TagGetSlotConfig               = Just (Refl, Refl, Refl)
   tagEq TagGetSlotConfig _                              = Nothing
-  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Query.Refl
+  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
   tagEq TagGetSecurityParameter _                       = Nothing
   putTag = \case
     TagGetSlotConfig        -> putWord8 0x01

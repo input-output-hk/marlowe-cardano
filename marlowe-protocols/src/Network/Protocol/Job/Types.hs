@@ -4,6 +4,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds      #-}
 {-# LANGUAGE TypeFamilies   #-}
+{-# LANGUAGE TypeOperators  #-}
 
 -- | The type of the job protocol.
 --
@@ -16,14 +17,12 @@ module Network.Protocol.Job.Types where
 
 import Data.Binary (Put)
 import Data.Binary.Get (Get)
+import Data.Type.Equality (type (:~:))
 import Network.TypedProtocol
 
 data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
 
-data TagEq status status' err err' result result' where
-  Refl :: TagEq status status err err result result
-
--- | A typeclass for commands. Defines associated types and conversion
+-- | A class for commands. Defines associated types and conversion
 -- functions needed to run the protocol.
 class Command (cmd :: * -> * -> * -> *) where
 
@@ -41,7 +40,7 @@ class Command (cmd :: * -> * -> * -> *) where
   tagFromJobId :: JobId cmd status err result -> Tag cmd status err result
 
   -- | Prove that two tags are the same.
-  tagEq :: Tag cmd status err result -> Tag cmd status' err' result' -> Maybe (TagEq status status' err err' result result')
+  tagEq :: Tag cmd status err result -> Tag cmd status' err' result' -> Maybe (status :~: status', err :~: err', result :~: result')
 
   putTag :: Tag cmd status err result -> Put
   getTag :: Get (SomeTag cmd)

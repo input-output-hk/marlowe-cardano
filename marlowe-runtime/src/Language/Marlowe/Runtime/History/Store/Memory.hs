@@ -9,8 +9,9 @@ import qualified Data.Map as Map
 import Data.Semialign (alignWith)
 import qualified Data.Set as Set
 import Data.These (These (..))
+import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..))
+import Language.Marlowe.Runtime.Core.Api (ContractId, assertVersionsEqual)
 import Language.Marlowe.Runtime.History.Api (History (..), SomeCreateStep (..), SomeHistory (..))
 import qualified Language.Marlowe.Runtime.History.Api as Api
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..))
@@ -89,9 +90,9 @@ mkHistoryQueriesInMemory = do
         Nothing -> do
           SomeHistory version' history@History{createBlock, steps = prevSteps} <- readTVar historyVar
           let
-            updateSteps prevSteps' = case (version, version') of
-              (MarloweV1, MarloweV1) -> do
-                writeTVar historyVar $ SomeHistory MarloweV1 history { Api.steps = Map.unionWith (<>) prevSteps' steps }
+            updateSteps prevSteps' = case assertVersionsEqual version version' of
+              Refl -> do
+                writeTVar historyVar $ SomeHistory version history { Api.steps = Map.unionWith (<>) prevSteps' steps }
                 pure $ Just historyVar
           case rollbackTo of
             -- No rollback to process, pass the steps from the current history

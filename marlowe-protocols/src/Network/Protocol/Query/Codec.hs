@@ -1,13 +1,15 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE PolyKinds      #-}
-{-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE KindSignatures     #-}
+{-# LANGUAGE PolyKinds          #-}
+{-# LANGUAGE RankNTypes         #-}
 
 module Network.Protocol.Query.Codec where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
+import Data.Type.Equality (type (:~:) (Refl))
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Query.Types
 import Network.TypedProtocol.Codec
@@ -58,15 +60,15 @@ codecQuery = binaryCodec putMsg getMsg
           ServerAgency (TokNext TokCanReject qtag) -> do
             SomeTag qtag' :: SomeTag query <- getTag
             case tagEq (coerceTag qtag) qtag' of
-              Nothing   -> fail "decoded query tag does not match expected query tag"
-              Just Refl -> SomeMessage . MsgReject <$> getErr qtag'
+              Nothing                 -> fail "decoded query tag does not match expected query tag"
+              Just (Refl, Refl, Refl) -> SomeMessage . MsgReject <$> getErr qtag'
           _ -> fail "Invalid protocol state for MsgReject"
         0x03 -> case tok of
           ServerAgency (TokNext _ qtag) -> do
             SomeTag qtag' :: SomeTag query <- getTag
             case tagEq (coerceTag qtag) qtag' of
               Nothing   -> fail "decoded query tag does not match expected query tag"
-              Just Refl -> do
+              Just (Refl, Refl, Refl) -> do
                 result <- getResult qtag'
                 maybeTag <- getWord8
                 delimiter <- case maybeTag of
@@ -79,8 +81,8 @@ codecQuery = binaryCodec putMsg getMsg
           ClientAgency (TokPage qtag) -> do
             SomeTag qtag' :: SomeTag query <- getTag
             case tagEq (coerceTag qtag) qtag' of
-              Nothing   -> fail "decoded query tag does not match expected query tag"
-              Just Refl -> SomeMessage . MsgRequestNext <$> getDelimiter qtag'
+              Nothing                 -> fail "decoded query tag does not match expected query tag"
+              Just (Refl, Refl, Refl) -> SomeMessage . MsgRequestNext <$> getDelimiter qtag'
           _                            -> fail "Invalid protocol state for MsgRequestNext"
         0x05 -> case tok of
           ClientAgency (TokPage _) -> pure $ SomeMessage MsgDone
