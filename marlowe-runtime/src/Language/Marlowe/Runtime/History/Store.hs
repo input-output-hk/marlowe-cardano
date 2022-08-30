@@ -1,8 +1,10 @@
-{-# LANGUAGE GADTs      #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE RankNTypes         #-}
 
 module Language.Marlowe.Runtime.History.Store where
 
+import Control.Applicative (empty)
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVarIO, writeTVar)
 import Control.Concurrent.STM.TVar (readTVar)
 import Control.Monad (forever, mfilter)
@@ -12,8 +14,9 @@ import qualified Data.Map as Map
 import Data.Maybe (listToMaybe)
 import Data.Semialign (Semialign (alignWith))
 import Data.These (These (..))
+import Data.Type.Equality (testEquality, type (:~:) (..))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..))
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), assertVersionsEqual)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..))
 import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract (..))
@@ -96,8 +99,9 @@ mkHistoryStore HistoryStoreDependencies{..} = do
     intersectContract :: ContractId -> MarloweVersion v -> [BlockHeader] -> IO (Maybe BlockHeader)
     intersectContract contractId version headers = runMaybeT do
       Intersection version' blockHeader <- MaybeT $ findIntersection contractId headers
-      case (version, version') of
-        (MarloweV1, MarloweV1) -> pure blockHeader
+      case testEquality version version' of
+        Just _  -> pure blockHeader
+        Nothing -> empty
 
     getNextSteps :: ContractId -> MarloweVersion v -> ChainPoint -> IO (GetNextStepsResponse v)
     getNextSteps contractId version point = do
@@ -109,8 +113,8 @@ mkHistoryStore HistoryStoreDependencies{..} = do
           case result of
             FindRollback point'      -> pure $ Rollback point'
             FindWait lastBlockHeader -> pure $ Wait lastBlockHeader $ maybe Genesis At <$> readTVar latestBlockVar
-            FindNext blockHeader (SomeContractSteps version' steps) -> case (version, version') of
-              (MarloweV1, MarloweV1) -> pure $ Next blockHeader steps
+            FindNext blockHeader (SomeContractSteps version' steps) -> case assertVersionsEqual version' version of
+              Refl -> pure $ Next blockHeader steps
 
   pure HistoryStore{..}
   where

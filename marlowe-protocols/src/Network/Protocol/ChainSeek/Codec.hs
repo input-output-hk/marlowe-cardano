@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExplicitNamespaces        #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE KindSignatures            #-}
 {-# LANGUAGE PolyKinds                 #-}
@@ -9,6 +10,7 @@ module Network.Protocol.ChainSeek.Codec (DeserializeError, codecChainSeek) where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
+import Data.Type.Equality (type (:~:) (Refl))
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.TypedProtocol.Codec
@@ -88,7 +90,7 @@ codecChainSeek = binaryCodec putMsg getMsg
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq (coerceTag qtag) qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
-            Just Refl -> do
+            Just (Refl, Refl) -> do
               err <- getErr qtag'
               tip <- get
               pure $ SomeMessage $ MsgRejectQuery err tip
@@ -97,7 +99,7 @@ codecChainSeek = binaryCodec putMsg getMsg
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq (coerceTag qtag) qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
-            Just Refl -> do
+            Just (Refl, Refl) -> do
               result <- getResult qtag'
               point <- get
               tip <- get

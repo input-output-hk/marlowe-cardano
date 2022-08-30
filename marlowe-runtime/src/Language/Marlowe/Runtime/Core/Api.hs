@@ -5,11 +5,11 @@
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Language.Marlowe.Runtime.Core.Api where
 
-import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), eitherDecode, encode, object, withText, (.:),
-                   (.=))
+import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), eitherDecode, encode, withText)
 import Data.Aeson.Types (Parser, parse, parseFail)
 import Data.Binary (Binary (..), Get, Put)
 import Data.Binary.Get (getWord32be)
@@ -17,11 +17,13 @@ import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
+import Data.Type.Equality (TestEquality (..), type (:~:) (Refl))
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -62,6 +64,14 @@ data MarloweVersionTag
 
 data MarloweVersion (v :: MarloweVersionTag) where
   MarloweV1 :: MarloweVersion 'V1
+
+instance TestEquality MarloweVersion where
+  testEquality MarloweV1 MarloweV1 = Just Refl
+
+assertVersionsEqual :: MarloweVersion v -> MarloweVersion v' -> v :~: v'
+assertVersionsEqual v1 v2 = fromMaybe
+  (error $ "getNextSteps: Marlowe version mismatch. Expected " <> show v1 <> ", got " <> show v2)
+  (testEquality v1 v2)
 
 deriving instance Show (MarloweVersion v)
 deriving instance Eq (MarloweVersion v)

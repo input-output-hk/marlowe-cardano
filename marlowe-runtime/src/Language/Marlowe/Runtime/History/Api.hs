@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.History.Api where
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash, TxError, TxId, TxOutRef, UTxOError)
@@ -131,9 +132,9 @@ instance Command HistoryCommand where
   tagFromJobId = \case
 
   tagEq = curry \case
-    (TagFollowContract, TagFollowContract)               -> Just Refl
+    (TagFollowContract, TagFollowContract)               -> Just (Refl, Refl, Refl)
     (TagFollowContract, _)                               -> Nothing
-    (TagStopFollowingContract, TagStopFollowingContract) -> Just Refl
+    (TagStopFollowingContract, TagStopFollowingContract) -> Just (Refl, Refl, Refl)
     (TagStopFollowingContract, _)                        -> Nothing
 
   putTag = \case
@@ -215,7 +216,7 @@ instance Query.IsQuery HistoryQuery where
   tagFromQuery = \case
     GetFollowedContracts -> TagGetFollowedContracts
 
-  tagEq TagGetFollowedContracts TagGetFollowedContracts = Just Query.Refl
+  tagEq TagGetFollowedContracts TagGetFollowedContracts = Just (Refl, Refl, Refl)
 
   putTag = \case
     TagGetFollowedContracts -> putWord8 0x01

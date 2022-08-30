@@ -4,6 +4,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds      #-}
 {-# LANGUAGE TypeFamilies   #-}
+{-# LANGUAGE TypeOperators  #-}
 
 -- | The type of the query protocol.
 --
@@ -14,17 +15,15 @@
 module Network.Protocol.Query.Types where
 
 import Data.Binary (Get, Put)
+import Data.Type.Equality (type (:~:))
 import Network.TypedProtocol
 
 data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)
 
-data TagEq delimiter delimiter' err err' result result' where
-  Refl :: TagEq delimiter delimiter err err result result
-
 class IsQuery (q :: * -> * -> * -> *) where
   data Tag q :: * -> * -> * -> *
   tagFromQuery :: q delimiter err result -> Tag q delimiter err result
-  tagEq :: Tag q delimiter err result -> Tag q delimiter' err' result' -> Maybe (TagEq delimiter delimiter' err err' result result')
+  tagEq :: Tag q delimiter err result -> Tag q delimiter' err' result' -> Maybe (delimiter :~: delimiter', err :~: err', result :~: result')
   putTag :: Tag q delimiter err result -> Put
   getTag :: Get (SomeTag q)
   putQuery :: q delimiter err result -> Put

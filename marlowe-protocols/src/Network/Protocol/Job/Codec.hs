@@ -1,13 +1,15 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE PolyKinds      #-}
-{-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE KindSignatures     #-}
+{-# LANGUAGE PolyKinds          #-}
+{-# LANGUAGE RankNTypes         #-}
 
 module Network.Protocol.Job.Codec where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
+import Data.Type.Equality (type (:~:) (Refl))
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Job.Types
 import Network.TypedProtocol.Codec
@@ -68,22 +70,22 @@ codecJob = binaryCodec putMsg getMsg
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
             case tagEq (coerceTag ctag) ctag' of
-              Nothing   -> fail "decoded command tag does not match expected command tag"
-              Just Refl -> SomeMessage . MsgFail <$> getErr ctag'
+              Nothing                 -> fail "decoded command tag does not match expected command tag"
+              Just (Refl, Refl, Refl) -> SomeMessage . MsgFail <$> getErr ctag'
           _ -> fail "Invalid protocol state for MsgFail"
         0x04 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
             case tagEq (coerceTag ctag) ctag' of
-              Nothing   -> fail "decoded command tag does not match expected command tag"
-              Just Refl -> SomeMessage . MsgSucceed <$> getResult ctag'
+              Nothing                 -> fail "decoded command tag does not match expected command tag"
+              Just (Refl, Refl, Refl) -> SomeMessage . MsgSucceed <$> getResult ctag'
           _ -> fail "Invalid protocol state for MsgSucceed"
         0x05 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
             case tagEq (coerceTag ctag) ctag' of
-              Nothing   -> fail "decoded command tag does not match expected command tag"
-              Just Refl -> SomeMessage <$> (MsgAwait <$> getStatus ctag' <*> getJobId ctag')
+              Nothing                 -> fail "decoded command tag does not match expected command tag"
+              Just (Refl, Refl, Refl) -> SomeMessage <$> (MsgAwait <$> getStatus ctag' <*> getJobId ctag')
           _ -> fail "Invalid protocol state for MsgAwait"
         0x06 -> case tok of
           ClientAgency (TokAwait _) -> pure $ SomeMessage MsgPoll
