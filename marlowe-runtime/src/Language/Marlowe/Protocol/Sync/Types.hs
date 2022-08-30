@@ -44,6 +44,9 @@ instance Protocol MarloweSync where
     MsgRollBackward :: BlockHeader -> Message MarloweSync
       ('StNext v)
       ('StIdle v)
+    MsgRollBackwardToGenesis :: Message MarloweSync
+      ('StNext v)
+      'StDone
     MsgWait :: Message MarloweSync
       ('StNext v)
       ('StWait v)

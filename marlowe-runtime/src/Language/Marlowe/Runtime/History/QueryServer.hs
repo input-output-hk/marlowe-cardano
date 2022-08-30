@@ -26,15 +26,10 @@ import System.IO (hPutStrLn, stderr)
 
 newtype RunQueryServer m = RunQueryServer (forall a. RuntimeHistoryQueryServer m a -> IO a)
 
-data HistoryProducer v = HistoryProducer (Map BlockHeader (PartialHistory v)) (Maybe (IO (HistoryProducer v)))
-
-data SomeHistoryProducer = forall v. SomeHistoryProducer (MarloweVersion v) (IO (HistoryProducer v))
-
 data HistoryQueryServerDependencies = HistoryQueryServerDependencies
   { acceptRunQueryServer :: IO (RunQueryServer IO)
   , followerStatuses     :: STM (Map ContractId FollowerStatus)
   , followerPageSize     :: Natural
-  , getHistory           :: ContractId -> IO (Either ContractHistoryError SomeHistoryProducer)
   }
 
 newtype HistoryQueryServer = HistoryQueryServer
@@ -58,7 +53,6 @@ data WorkerDependencies = WorkerDependencies
   { runQueryServer   :: RunQueryServer IO
   , followerStatuses :: STM (Map ContractId FollowerStatus)
   , followerPageSize :: Natural
-  , getHistory       :: ContractId -> IO (Either ContractHistoryError SomeHistoryProducer)
   }
 
 newtype Worker = Worker
@@ -76,7 +70,6 @@ mkWorker WorkerDependencies{..} =
     server :: RuntimeHistoryQueryServer IO ()
     server = QueryServer $ pure $ ServerStInit \case
       GetFollowedContracts  -> getFollowedContractsServer followerPageSize followerStatuses
-      GetHistory contractId -> getHistoryServer getHistory contractId
 
 getFollowedContractsServer
   :: Natural
@@ -104,23 +97,3 @@ getFollowedContractsServer followerPageSize followerStatuses = do
             $ Map.fromDistinctAscList
             $ dropWhile ((/= delimiter) . fst) remaining
         }
-
-getHistoryServer
-  :: (ContractId -> IO (Either ContractHistoryError SomeHistoryProducer))
-  -> ContractId
-  -> IO (ServerStNext HistoryQuery 'CanReject () ContractHistoryError SomeHistoryPage IO ())
-getHistoryServer getHistory contractId = do
-  result <- getHistory contractId
-  case result of
-    Left err                                     -> pure $ SendMsgReject err ()
-    Right (SomeHistoryProducer version producer) -> next version <$> producer
-  where
-  next
-    :: MarloweVersion v
-    -> HistoryProducer v
-    -> ServerStNext HistoryQuery k () ContractHistoryError SomeHistoryPage IO ()
-  next version (HistoryProducer page mNextPage) =
-    SendMsgNextPage (SomeHistoryPage version page) (void mNextPage) ServerStPage
-      { recvMsgDone = pure ()
-      , recvMsgRequestNext = \_ -> next version <$> fromMaybe (pure $ HistoryProducer mempty Nothing) mNextPage
-      }

@@ -78,6 +78,8 @@ data CreateStep v = CreateStep
 deriving instance Show (CreateStep 'V1)
 deriving instance Eq (CreateStep 'V1)
 
+data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
+
 instance Binary (CreateStep 'V1) where
   put CreateStep{..} = do
     putDatum MarloweV1 datum
@@ -191,92 +193,62 @@ type RuntimeHistoryJobCodec m = Codec RuntimeHistoryJob DeserializeError m LBS.B
 historyJobCodec :: Applicative m => RuntimeHistoryJobCodec m
 historyJobCodec = codecJob
 
-data PartialHistory v
-  = FromCreate (CreateStep v) [ContractStep v]
-  | FromStep [ContractStep v]
-  deriving Generic
+data History v = History
+  { create      :: CreateStep v
+  , createBlock :: Chain.BlockHeader
+  , steps       :: Map Chain.BlockHeader [ContractStep v]
+  } deriving Generic
 
-deriving instance Show (PartialHistory 'V1)
-deriving instance Eq (PartialHistory 'V1)
-instance Binary (PartialHistory 'V1)
+deriving instance Show (History 'V1)
+deriving instance Eq (History 'V1)
+instance Binary (History 'V1)
 
-instance Semigroup (PartialHistory v) where
-  _ <> FromCreate createStep steps                = FromCreate createStep steps
-  FromCreate createStep steps1 <> FromStep steps2 = FromCreate createStep $ steps1 <> steps2
-  FromStep steps1 <> FromStep steps2              = FromStep $ steps1 <> steps2
-
-data SomeHistoryPage = forall v. SomeHistoryPage (MarloweVersion v) (Map Chain.BlockHeader (PartialHistory v))
-
-instance Binary SomeHistoryPage where
-  put (SomeHistoryPage version page) = do
-    put $ SomeMarloweVersion version
-    case version of
-      MarloweV1 -> put page
-  get = do
-    SomeMarloweVersion version <- get
-    case version of
-      MarloweV1 -> SomeHistoryPage version <$> get
+data SomeHistory = forall v. SomeHistory (MarloweVersion v) (History v)
 
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
-  GetHistory :: ContractId -> HistoryQuery () ContractHistoryError SomeHistoryPage
 
 instance Query.IsQuery HistoryQuery where
   data Tag HistoryQuery delimiter err result where
     TagGetFollowedContracts :: Query.Tag HistoryQuery ContractId Void (Map ContractId FollowerStatus)
-    TagGetHistory :: Query.Tag HistoryQuery () ContractHistoryError SomeHistoryPage
 
   tagFromQuery = \case
     GetFollowedContracts -> TagGetFollowedContracts
-    GetHistory _         -> TagGetHistory
 
   tagEq TagGetFollowedContracts TagGetFollowedContracts = Just Query.Refl
-  tagEq TagGetFollowedContracts _                       = Nothing
-  tagEq TagGetHistory TagGetHistory                     = Just Query.Refl
-  tagEq TagGetHistory _                                 = Nothing
 
   putTag = \case
     TagGetFollowedContracts -> putWord8 0x01
-    TagGetHistory           -> putWord8 0x02
 
   getTag = do
     tagWord <- getWord8
     case tagWord of
       0x01 -> pure $ Query.SomeTag TagGetFollowedContracts
-      0x02 -> pure $ Query.SomeTag TagGetHistory
       _    -> fail "invalid tag bytes"
 
   putQuery = \case
     GetFollowedContracts  -> mempty
-    GetHistory contractId -> put contractId
 
   getQuery = \case
     TagGetFollowedContracts -> pure GetFollowedContracts
-    TagGetHistory           -> GetHistory <$> get
 
   putDelimiter = \case
     TagGetFollowedContracts -> put
-    TagGetHistory           -> put
 
   getDelimiter = \case
     TagGetFollowedContracts -> get
-    TagGetHistory           -> get
 
   putErr = \case
     TagGetFollowedContracts -> put
-    TagGetHistory           -> put
 
   getErr = \case
     TagGetFollowedContracts -> get
-    TagGetHistory           -> get
 
   putResult = \case
     TagGetFollowedContracts -> put
-    TagGetHistory           -> put
 
   getResult = \case
     TagGetFollowedContracts -> get
-    TagGetHistory           -> get
 
 type RuntimeHistoryQuery = Query.Query HistoryQuery
 
