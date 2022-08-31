@@ -3,7 +3,7 @@ module Component.MetadataTab.View (metadataView) where
 import Prologue hiding (div, min)
 
 import Component.MetadataTab.Types (MetadataAction(..))
-import Contrib.Data.Array.Builder (build, cons) as AB
+import Contrib.Data.Array.Builder (cons, unsafeBuild) as AB
 import Contrib.Data.List.Infinite.Finalize (zip) as Infinite.Finalize
 import Contrib.Halogen.Components.Sortable (DragHandlers(..), GenDragHandlers)
 import Data.Array (concat, concatMap)
@@ -48,19 +48,20 @@ import Halogen.HTML.Properties
   , type_
   , value
   )
-import Marlowe.Extended
+import Language.Marlowe.Extended.V1.Metadata
   ( contractTypeArray
   , contractTypeInitials
   , contractTypeName
+  , defaultForFormatType
+  , fromString
+  , getFormatType
   , initialsToContractType
+  , isDecimalFormat
+  , isDefaultFormat
+  , toString
   )
-import Marlowe.Extended.Metadata
-  ( ChoiceInfo
-  , MetaData
-  , MetadataHintInfo
-  , NumberFormat(..)
-  , NumberFormatType(..)
-  , _choiceInfo
+import Language.Marlowe.Extended.V1.Metadata.Lenses
+  ( _choiceInfo
   , _choiceNames
   , _roleDescriptions
   , _roles
@@ -68,12 +69,14 @@ import Marlowe.Extended.Metadata
   , _timeParameters
   , _valueParameterInfo
   , _valueParameters
-  , defaultForFormatType
-  , fromString
-  , getFormatType
-  , isDecimalFormat
-  , isDefaultFormat
-  , toString
+
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ChoiceInfo
+  , MetaData
+  , MetadataHintInfo
+  , NumberFormat(..)
+  , NumberFormatType(..)
   )
 import Record (merge, set) as Record
 import Type.Prelude (Proxy(..))
@@ -414,7 +417,7 @@ sortableMetadataList
       div props children
   if OMap.isEmpty combinedMap then
     []
-  else AB.build $
+  else AB.unsafeBuild $
     AB.cons do
       div [ class_ $ ClassName "metadata-group-title" ]
         [ h6_ [ em_ [ text $ typeNameTitle <> " descriptions" ] ] ]

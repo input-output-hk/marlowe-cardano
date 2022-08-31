@@ -14,7 +14,12 @@ import Data.Show.Generic (genericShow)
 import Data.Time.Duration (Minutes)
 import Halogen.Monaco as Monaco
 import Help (HelpContext)
-import Marlowe.Semantics (Bound, ChoiceId, ChosenNum, Input)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Bound
+  , ChoiceId
+  , ChosenNum
+  , Input
+  )
 import Marlowe.Symbolic.Types.Response (Result)
 import Network.RemoteData (RemoteData)
 import Simulator.Types (MarloweState)

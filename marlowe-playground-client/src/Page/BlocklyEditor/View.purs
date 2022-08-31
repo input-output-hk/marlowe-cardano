@@ -27,9 +27,9 @@ import Halogen.Extra (renderSubmodule)
 import Halogen.HTML (HTML, button, div, section, slot, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes, enabled, id)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots, _blocklySlot)
 import Marlowe.Blockly as MB
-import Marlowe.Extended.Metadata (MetaData)
 import Page.BlocklyEditor.BottomPanel (panelContents)
 import Page.BlocklyEditor.Types
   ( Action(..)

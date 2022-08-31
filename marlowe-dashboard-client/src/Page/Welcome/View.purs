@@ -134,7 +134,7 @@ useWalletBox =
     , p
         [ classNames [ "text-center" ] ]
         [ text
-            "To begin using the Marlowe Run demo, generate o restore a testnet wallet."
+            "To begin using the Marlowe Run demo, generate or restore a testnet wallet."
         ]
     , B.button
         B.Primary

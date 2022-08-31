@@ -28,7 +28,6 @@ import Data.Array
   )
 import Data.DateTime (adjust)
 import Data.DateTime.Instant (Instant, fromDateTime, toDateTime)
-import Data.DateTime.Instant as Instant
 import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Function (on)
 import Data.Lens (modifying, over, previewOn, set, to, use, (^.))
@@ -40,27 +39,23 @@ import Data.List.Types (NonEmptyList)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
-import Data.Maybe (fromMaybe, maybe)
+import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap, wrap)
 import Data.NonEmpty ((:|))
 import Data.NonEmptyList.Extra (extendWith)
 import Data.NonEmptyList.Lens (_Tail)
 import Data.Semigroup.Foldable (foldl1)
-import Data.Set.Ordered.OSet (OSet)
-import Data.Time.Duration (class Duration, Minutes(..))
-import Data.Traversable (scanl)
+import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested ((/\))
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Holes
-  ( Contract(..)
-  , Term(..)
-  , TransactionOutput(..)
-  , computeTransaction
-  , fromTerm
-  , reduceContractUntilQuiescent
+import Language.Marlowe.Core.V1.Semantics
+  ( boundFrom
+  , emptyState
+  , evalValue
+  , fixInterval
+  , moneyInContract
   )
-import Marlowe.Holes as T
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (evalObservation) as S
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Action(..)
   , Bound(..)
   , ChoiceId(..)
@@ -76,20 +71,22 @@ import Marlowe.Semantics
   , TransactionError(..)
   , TransactionInput(..)
   , _minTime
-  , boundFrom
-  , emptyState
-  , evalValue
-  , fixInterval
-  , moneyInContract
   , timeouts
   )
-import Marlowe.Semantics as S
+import Language.Marlowe.Core.V1.Semantics.Types (Case(..)) as S
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
+import Marlowe.Holes
+  ( Contract(..)
+  , Term(..)
+  , TransactionOutput(..)
+  , computeTransaction
+  , fromTerm
+  , reduceContractUntilQuiescent
+  )
+import Marlowe.Holes as T
 import Marlowe.Template
-  ( Placeholders(..)
-  , TemplateContent(..)
-  , getPlaceholderIds
-  , initializeWith
-  , orderContentUsingMetadata
+  ( getPlaceholderIds
+  , initializeTemplateContentWithIncreasingTime
   )
 import Marlowe.Time (unixEpoch)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
@@ -135,58 +132,16 @@ emptyExecutionStateWithTime time cont =
     , contract: cont
     }
 
--- Adjust an Instant by a duration and if it overflows returns the same instant.
-adjustInstantIfPossible :: forall d. Duration d => d -> Instant -> Instant
-adjustInstantIfPossible duration instant = maybe
-  instant
-  Instant.fromDateTime
-  ( adjust duration
-      $ Instant.toDateTime instant
-  )
-
--- Similar to Marlowe.Template::initializeTemplateContent this function gets all the parameters placeholders
--- and initializes the value params with zero, but unlike that function it starts the time parameter using the
--- initialTime + duration iteratively.
-initializeTemplateContentWithIncreasingTime
-  :: forall d
-   . Duration d
-  => Instant
-  -> d
-  -> OSet String
-  -> Placeholders
-  -> TemplateContent
-initializeTemplateContentWithIncreasingTime initialTime d orderSet placeholders =
-  let
-    Placeholders { timeoutPlaceholderIds, valuePlaceholderIds } = placeholders
-
-    valueContent = initializeWith (const zero) valuePlaceholderIds
-
-    orderedTimeContent =
-      orderContentUsingMetadata
-        (initializeWith (const initialTime) timeoutPlaceholderIds)
-        orderSet
-
-    timeContent = Map.fromFoldable
-      $ scanl
-          ( \(_ /\ prevTime) (key /\ _) ->
-              let
-                adjustedTime = adjustInstantIfPossible d prevTime
-              in
-                key /\ adjustedTime
-          )
-          ("discarded" /\ initialTime)
-      $ (OMap.toUnfoldable orderedTimeContent :: Array _)
-  in
-    TemplateContent { timeContent, valueContent }
-
 simulationNotStarted
   :: Instant -> Term T.Contract -> MetaData -> ExecutionState
 simulationNotStarted initialTime termContract metadata =
   let
     templateContent =
-      initializeTemplateContentWithIncreasingTime initialTime (Minutes 5.0)
-        (OMap.keys metadata.timeParameterDescriptions) $ getPlaceholderIds
-        termContract
+      initializeTemplateContentWithIncreasingTime
+        initialTime
+        (Minutes 5.0)
+        (OMap.keys metadata.timeParameterDescriptions)
+        (getPlaceholderIds termContract)
 
   in
     SimulationNotStarted

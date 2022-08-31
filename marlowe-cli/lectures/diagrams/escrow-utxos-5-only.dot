@@ -1,0 +1,61 @@
+digraph EscrowUtxos {
+
+
+rankdir=LR
+
+node [shape=record]
+
+
+Tx1_0 [label="Christopher\nMarlowe|1962.5 ADA" color=darkred fontcolor=darkred]
+
+Tx0MediatorToken [label="Christopher\nMarlowe|2 ADA + 1 CM" color=darkred fontcolor=darkred]
+
+
+Tx4_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}" color=darkred fontcolor=darkred]
+
+
+Tx5 [shape=oval label="Tx 5" color=darkred fontcolor=darkred]
+
+Tx4_1 -> Tx5 [label="Dismiss claim" color=darkred fontcolor=darkred]
+
+Tx1_0 -> Tx5 [color=darkred fontcolor=darkred]
+
+Tx0MediatorToken -> Tx5 [color=darkred fontcolor=darkred]
+
+
+subgraph cluster_5 {
+
+peripheries=0
+
+Tx5_0 [label="Christopher\nMarlowe|1960.1 ADA" color=black fontcolor=black]
+
+Tx5_3 [label="Christopher\nMarlowe|3 ADA + 1 CM" color=black fontcolor=black]
+
+}
+
+Tx5 -> Tx5_0 [label="#0" color=darkred fontcolor=darkred]
+
+Tx5 -> Tx5_3 [label="#3" color=darkred fontcolor=darkred]
+
+
+subgraph cluster_5p {
+
+peripheries=0
+
+Tx5_1 [label="Payout Script|3 ADA|{Payout|C.M. has 3 ADA}" color=black fontcolor=black]
+
+Tx5_2 [label="Payout Script|256 ADA|{Payout|F.B. has 256 ADA}" color=black fontcolor=black]
+
+}
+
+Tx5 -> Tx5_1 [label="#1" color=darkred fontcolor=darkred]
+
+Tx5 -> Tx5_2 [label="#2" color=darkred fontcolor=darkred]
+
+
+Tx5_Fee [label="Fee\n1.4 ADA" color=darkred fontcolor=darkred]
+
+Tx5 -> Tx5_Fee [color=darkred fontcolor=darkred]
+
+
+}

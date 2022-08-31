@@ -17,19 +17,22 @@ import Data.Foldable (for_)
 import Data.Lens (assign, modifying, over, preview, set, use)
 import Data.Lens.Index (ix)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, maybe)
+import Data.Map.Ordered.OMap as OMap
+import Data.Maybe (fromMaybe)
 import Data.String (Pattern(..), codePointFromChar, contains)
 import Data.String as String
+import Data.Time.Duration (Minutes(..))
 import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Now (now)
 import Examples.Marlowe.Contracts (example) as ME
 import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
+import Language.Marlowe.Extended.V1 as Extended
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, MetadataHintInfo)
 import MainFrame.Types (ChildSlots, _marloweEditorPageSlot)
 import Marlowe (Api)
-import Marlowe.Extended as Extended
-import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Holes as Holes
 import Marlowe.LinterText as Linter
 import Marlowe.Monaco (updateAdditionalContext)
@@ -86,22 +89,24 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => Action
+  => MetaData
+  -> Action
   -> HalogenM State Action ChildSlots Void m Unit
-handleAction DoNothing = pure unit
+handleAction _ DoNothing = pure unit
 
-handleAction (ChangeKeyBindings bindings) = do
+handleAction _ (ChangeKeyBindings bindings) = do
   assign _keybindings bindings
   void $ query _marloweEditorPageSlot unit (Monaco.SetKeyBindings bindings unit)
 
-handleAction (HandleEditorMessage Monaco.EditorReady) = do
+handleAction metadata (HandleEditorMessage Monaco.EditorReady) = do
   editorSetTheme
   mContents <- liftEffect $ SessionStorage.getItem marloweBufferLocalStorageKey
   editorSetValue $ fromMaybe ME.example mContents
-  for_ mContents processMarloweCode
+  for_ mContents $ processMarloweCode metadata
   assign _editorReady true
 
-handleAction (HandleEditorMessage (Monaco.TextChanged text)) = do
+handleAction metadata (HandleEditorMessage (Monaco.TextChanged text)) = do
+  clearAnalysisResults
   -- When the Monaco component start it fires two messages at the same time, an EditorReady
   -- and TextChanged. Because of how Halogen works, it interwines the handleActions calls which
   -- can cause problems while setting and getting the values of the session storage. To avoid
@@ -112,20 +117,20 @@ handleAction (HandleEditorMessage (Monaco.TextChanged text)) = do
   when editorReady do
     assign _selectedHole Nothing
     liftEffect $ SessionStorage.setItem marloweBufferLocalStorageKey text
-    processMarloweCode text
+    processMarloweCode metadata text
 
-handleAction (HandleDragEvent event) = liftEffect $ preventDefault event
+handleAction _ (HandleDragEvent event) = liftEffect $ preventDefault event
 
-handleAction (HandleDropEvent event) = do
+handleAction _ (HandleDropEvent event) = do
   liftEffect $ preventDefault event
   contents <- liftAff $ readFileFromDragEvent event
   void $ editorSetValue contents
 
-handleAction (MoveToPosition lineNumber column) = do
+handleAction _ (MoveToPosition lineNumber column) = do
   void $ query _marloweEditorPageSlot unit
     (Monaco.SetPosition { column, lineNumber } unit)
 
-handleAction (LoadScript key) = do
+handleAction _ (LoadScript key) = do
   for_ (preview (ix key) StaticData.marloweContracts) \contents -> do
     let
       prettyContents = case parseContract contents of
@@ -135,57 +140,63 @@ handleAction (LoadScript key) = do
     liftEffect $ SessionStorage.setItem marloweBufferLocalStorageKey
       prettyContents
 
-handleAction (SetEditorText contents) = editorSetValue contents
+handleAction _ (SetEditorText contents) = editorSetValue contents
 
-handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
-  action
+handleAction metadata (BottomPanelAction (BottomPanel.PanelAction action)) =
+  handleAction
+    metadata
+    action
 
-handleAction (BottomPanelAction action) = do
+handleAction _ (BottomPanelAction action) = do
   toBottomPanel (BottomPanel.handleAction action)
 
-handleAction (ShowErrorDetail val) = assign _showErrorDetail val
+handleAction _ (ShowErrorDetail val) = assign _showErrorDetail val
 
-handleAction SendToSimulator = pure unit
+handleAction _ SendToSimulator = pure unit
 
-handleAction ViewAsBlockly = pure unit
+handleAction _ ViewAsBlockly = pure unit
 
-handleAction (InitMarloweProject contents) = do
+handleAction _ (InitMarloweProject contents) = do
   editorSetValue contents
   liftEffect $ SessionStorage.setItem marloweBufferLocalStorageKey contents
 
-handleAction (SelectHole hole) = assign _selectedHole hole
+handleAction _ (SelectHole hole) = assign _selectedHole hole
 
-handleAction (SetValueTemplateParam key value) =
+handleAction _ (SetValueTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._valueContent)
     (Map.insert key value)
 
-handleAction (SetTimeTemplateParam key value) =
+handleAction _ (SetTimeTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._timeContent)
     (Map.insert key value)
 
-handleAction (MetadataAction _) = pure unit
+handleAction _ (MetadataAction _) = pure unit
 
-handleAction AnalyseContract = runAnalysis $ analyseContract
+handleAction metadata AnalyseContract = runAnalysis metadata $ analyseContract
 
-handleAction AnalyseReachabilityContract = runAnalysis $ analyseReachability
+handleAction metadata AnalyseReachabilityContract = runAnalysis metadata $
+  analyseReachability
 
-handleAction AnalyseContractForCloseRefund = runAnalysis $ analyseClose
+handleAction metadata AnalyseContractForCloseRefund = runAnalysis metadata $
+  analyseClose
 
-handleAction ClearAnalysisResults = do
-  assign (_analysisState <<< _analysisExecutionState) NoneAsked
-  mContents <- editorGetValue
-  for_ mContents processMarloweCode
+handleAction _ Save = pure unit
 
-handleAction Save = pure unit
+clearAnalysisResults :: forall m. HalogenM State Action ChildSlots Void m Unit
+clearAnalysisResults = assign (_analysisState <<< _analysisExecutionState)
+  NoneAsked
 
 runAnalysis
   :: forall m
    . MonadAff m
-  => (Extended.Contract -> HalogenM State Action ChildSlots Void m Unit)
+  => MetaData
+  -> (Extended.Contract -> HalogenM State Action ChildSlots Void m Unit)
   -> HalogenM State Action ChildSlots Void m Unit
-runAnalysis doAnalyze =
+runAnalysis metadata doAnalyze =
   void
     $ runMaybeT do
         contents <- MaybeT $ editorGetValue
@@ -193,7 +204,7 @@ runAnalysis doAnalyze =
         lift
           $ do
               doAnalyze contract
-              processMarloweCode contents
+              processMarloweCode metadata contents
 
 parseContract' :: String -> Maybe Extended.Contract
 parseContract' = Holes.fromTerm <=< hush <<< parseContract
@@ -202,11 +213,14 @@ parseContract' = Holes.fromTerm <=< hush <<< parseContract
 processMarloweCode
   :: forall m
    . MonadAff m
-  => String
+  => MetaData
+  -> String
   -> HalogenM State Action ChildSlots Void m Unit
-processMarloweCode text = do
+processMarloweCode metadata text = do
   analysisExecutionState <- use (_analysisState <<< _analysisExecutionState)
   oldMetadataInfo <- use _metadataHintInfo
+  currentTime <- liftEffect now
+
   let
     eParsedContract = parseContract text
 
@@ -249,9 +263,14 @@ processMarloweCode text = do
     -- If we can get an Extended contract from the holes contract (basically if it has no holes)
     -- then update the template content. If not, leave them as they are
     maybeUpdateTemplateContent :: TemplateContent -> TemplateContent
-    maybeUpdateTemplateContent = maybe identity
-      (Template.updateTemplateContent <<< Template.getPlaceholderIds)
-      mContract
+    maybeUpdateTemplateContent = case mContract of
+      Nothing -> identity
+      Just contract ->
+        Template.updateTemplateContent
+          currentTime
+          (Minutes 5.0)
+          (OMap.keys metadata.timeParameterDescriptions)
+          (Template.getPlaceholderIds contract)
   void $ H.request _marloweEditorPageSlot unit $ Monaco.SetModelMarkers
     markerData
   modify_

@@ -57,16 +57,21 @@ import Halogen.HTML.Properties.ARIA (describedBy, labelledBy)
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (contractIcon)
-import Marlowe.Extended.Metadata
-  ( ContractTemplate
-  , MetaData
-  , ValueParameterInfo
-  , _metaData
+import Language.Marlowe.Core.V1.Semantics.Types (Assets, adaToken, getAda)
+import Language.Marlowe.Extended.V1 (Module, _metadata)
+import Language.Marlowe.Extended.V1.Metadata.Lenses
+  ( _contractLongDescription
+  , _contractName
+  , _contractShortDescription
+  , _contractType
   , _timeParameterDescriptions
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( MetaData
+  , ValueParameterInfo
   )
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
-import Marlowe.Semantics (Assets, adaToken, getAda)
 import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)
 
@@ -131,33 +136,33 @@ contractTemplateBreadcrumb state =
     ]
     case state.wizard of
       Start -> [ activeItem "Templates" ]
-      Overview template _ ->
+      Overview module' _ ->
         [ previousItem "Templates" OnBack
         , arrow
-        , activeItem template.metaData.contractName
+        , activeItem $ view (_metadata <<< _contractName) module'
         ]
-      Setup template _ ->
+      Setup module' _ ->
         [ previousItem "Templates" OnReset
         , arrow
-        , previousItem template.metaData.contractName OnBack
+        , previousItem (view (_metadata <<< _contractName) module') OnBack
         , arrow
         , activeItem "Setup"
         ]
-      AddContact _ template _ ->
+      AddContact _ module' _ ->
         [ previousItem "Templates" OnReset
         , arrow
-        , previousItem template.metaData.contractName
-            $ OnTemplateChosen template
+        , previousItem (view (_metadata <<< _contractName) module')
+            $ OnTemplateChosen module'
         , arrow
         , previousItem "Setup" OnBack
         , arrow
         , activeItem "new contact"
         ]
-      Review template _ ->
+      Review module' _ ->
         [ previousItem "Templates" OnReset
         , arrow
-        , previousItem template.metaData.contractName
-            $ OnTemplateChosen template
+        , previousItem (view (_metadata <<< _contractName) module')
+            $ OnTemplateChosen module'
         , arrow
         , previousItem "Setup" OnBack
         , arrow
@@ -208,7 +213,7 @@ contractSelection =
   -- these `divs` (even though they are never rendered at the same time). Anyway, changing these
   -- to `li` items inside a `ul` (a perfectly reasonable semantic choice anyway) solves this
   -- problem.
-  contractTemplateLink i contractTemplate =
+  contractTemplateLink i module' =
     a
       [ classNames
           [ "flex"
@@ -219,31 +224,32 @@ contractSelection =
           , "border-b"
           , "cursor-pointer"
           ]
-      , onClick_ $ OnTemplateChosen contractTemplate
+      , onClick_ $ OnTemplateChosen module'
       , href "#"
       , labelledBy $ "contract-name-" <> show i
       , describedBy $ "contract-description-" <> show i
       ]
-      [ contractIcon contractTemplate.metaData.contractType
+      [ contractIcon (view (_metadata <<< _contractType) module')
       , div_
           [ h2
               [ classNames [ "font-semibold", "mb-2" ]
               , id $ "contract-name-" <> show i
               ]
-              [ text contractTemplate.metaData.contractName ]
+              [ text $ view (_metadata <<< _contractName) module' ]
           , p
               [ classNames [ "font-xs" ]
               , id $ "contract-description-" <> show i
               ]
               $ markdownToHTML
-                  contractTemplate.metaData.contractShortDescription
+              $ view (_metadata <<< _contractShortDescription) module'
+
           ]
       , icon_ Icon.Next
       ]
 
 contractOverview
-  :: forall p. ContractTemplate -> Maybe ContractFields -> HTML p Action
-contractOverview contractTemplate fields =
+  :: forall p. Module -> Maybe ContractFields -> HTML p Action
+contractOverview module' fields =
   div
     [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
     [ div
@@ -258,12 +264,13 @@ contractOverview contractTemplate fields =
                 , "mb-2"
                 ]
             ]
-            [ contractIcon contractTemplate.metaData.contractType
-            , text $ contractTemplate.metaData.contractName <> " overview"
+            [ contractIcon $ view (_metadata <<< _contractType) module'
+            , text $ (view (_metadata <<< _contractName) module') <> " overview"
             ]
-        , p [ classNames [ "mb-4" ] ] $ markdownToHTML
-            contractTemplate.metaData.contractShortDescription
-        , p_ $ markdownToHTML contractTemplate.metaData.contractLongDescription
+        , p [ classNames [ "mb-4" ] ] $ markdownToHTML $
+            view (_metadata <<< _contractShortDescription) module'
+        , p_ $ markdownToHTML $ view (_metadata <<< _contractLongDescription)
+            module'
         ]
     , div
         [ classNames
@@ -277,7 +284,7 @@ contractOverview contractTemplate fields =
         , button
             [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <>
                 Css.withIcon Icon.ArrowRight
-            , onClick_ $ OnSetup contractTemplate fields
+            , onClick_ $ OnSetup module' fields
             ]
             [ text "Setup" ]
         ]
@@ -287,10 +294,10 @@ contractReview
   :: forall m
    . MonadAff m
   => Assets
-  -> ContractTemplate
+  -> Module
   -> ContractParams
   -> ComponentHTML m
-contractReview assets template params =
+contractReview assets module' params =
   let
     minAda = fromInt 2_000_000
     roleCount = Map.size params.roles
@@ -299,7 +306,7 @@ contractReview assets template params =
 
     hasSufficientFunds = getAda assets >= totalFees
 
-    metaData = view _metaData template
+    metaData = view _metadata module'
 
     { timeouts, values } = params
   in
@@ -415,8 +422,8 @@ contractReview assets template params =
                       { ref: "action-pay-and-start"
                       , caption: "Pay and start"
                       , styles: [ "flex-1" ]
-                      , enabled: true
-                      , handler: OnStartContract template params
+                      , enabled: hasSufficientFunds
+                      , handler: OnStartContract module' params
                       }
                   ]
               , div

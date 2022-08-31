@@ -5,7 +5,6 @@ import Prologue hiding (div)
 import Component.BottomPanel.Types as BottomPanelTypes
 import Component.BottomPanel.View as BottomPanel
 import Component.CurrencyInput.State (component) as CurrencyInput
-import Component.CurrencyInput.Types (Message(..)) as CurrencyInput
 import Component.DateTimeLocalInput.State (component) as DateTimeLocalInput
 import Component.DateTimeLocalInput.Types (Message(..)) as DateTimeLocalInput
 import Component.Hint.State (hint)
@@ -28,12 +27,14 @@ import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.Newtype (unwrap)
+import Data.Numbers.Natural (Natural)
+import Data.Numbers.Natural as N
 import Data.Set.Ordered.OSet (OSet)
 import Data.String (trim)
 import Data.Time.Duration (Minutes)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
-import Effect.Class (liftEffect)
+import Effect.Class (class MonadEffect, liftEffect)
 import Halogen.Classes
   ( aHorizontal
   , bold
@@ -104,16 +105,8 @@ import Humanize
   , localToUtc
   , utcToLocal
   )
-import MainFrame.Types
-  ( ChildSlots
-  , _currencyInputSlot
-  , _dateTimeInputSlot
-  , _simulatorEditorSlot
-  )
-import Marlowe.Extended.Metadata (MetaData, NumberFormat(..), getChoiceFormat)
-import Marlowe.Holes as Holes
-import Marlowe.Monaco as MM
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (inBounds)
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Assets(..)
   , Bound(..)
@@ -127,9 +120,20 @@ import Marlowe.Semantics
   , Token(..)
   , TokenName
   , TransactionInput(..)
-  , inBounds
   , timeouts
   )
+import Language.Marlowe.Extended.V1.Metadata
+  ( getChoiceFormat
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData, NumberFormat(..))
+import MainFrame.Types
+  ( ChildSlots
+  , _currencyInputSlot
+  , _dateTimeInputSlot
+  , _simulatorEditorSlot
+  )
+import Marlowe.Holes as Holes
+import Marlowe.Monaco as MM
 import Marlowe.Template (TemplateContent(..), orderContentUsingMetadata)
 import Marlowe.Time (unixEpoch)
 import Monaco as Monaco
@@ -443,12 +447,12 @@ templateParameters
     valueParameters = templateParametersSection
       refPrefix
       ( \fieldName fieldValue ->
-          case extractValueParameterNuberFormat fieldName of
+          case extractValueParameterNumberFormat fieldName of
             Just (currencyLabel /\ numDecimals) ->
               marloweCurrencyInput (templateFieldRef refPrefix fieldName)
                 inputCss
                 (valueAction fieldName)
-                currencyLabel
+                (Just currencyLabel)
                 numDecimals
                 fieldValue
             Nothing -> marloweActionInput (templateFieldRef refPrefix fieldName)
@@ -478,10 +482,10 @@ templateParameters
       , title: "Value template parameters"
       , orderedMetadataSet: OMap.keys metadata.valueParameterInfo
       }
-    extractValueParameterNuberFormat fieldName =
+    extractValueParameterNumberFormat fieldName =
       case OMap.lookup fieldName metadata.valueParameterInfo of
         Just { valueParameterFormat: DecimalFormat numDecimals currencyLabel } ->
-          Just (currencyLabel /\ numDecimals)
+          Just (currencyLabel /\ N.fromInt numDecimals)
         _ -> Nothing
   in
     div_ (timeoutParameters <> valueParameters)
@@ -755,8 +759,8 @@ inputItem
                       marloweCurrencyInput ref
                         [ "mx-2", "flex-grow", "flex-shrink-0" ]
                         (SetChoice choiceId)
-                        currencyLabel
-                        numDecimals
+                        (Just currencyLabel)
+                        (N.fromInt numDecimals)
                         chosenNum
                     _ -> marloweActionInput ref
                       [ "mx-2", "flex-grow", "flex-shrink-0" ]
@@ -872,20 +876,27 @@ inputItem _ state (MoveToTime moveType time) =
 
 marloweCurrencyInput
   :: forall m action
-   . String
+   . MonadEffect m
+  => String
   -> Array String
   -> (BigInt -> action)
-  -> String
-  -> Int
+  -> Maybe String
+  -> Maybe Natural
   -> BigInt
   -> ComponentHTML action ChildSlots m
-marloweCurrencyInput ref classList f currencyLabel numDecimals value =
+marloweCurrencyInput
+  ref
+  classList
+  f
+  currencySymbol
+  majorCurrencyFactor
+  amountInMinor =
   slot
     _currencyInputSlot
     ref
     CurrencyInput.component
-    { classList, value, prefix: currencyLabel, numDecimals }
-    (\(CurrencyInput.ValueChanged n) -> f n)
+    { classList, amountInMinor, currencySymbol, majorCurrencyFactor }
+    f
 
 -- This component builds on top of the DateTimeLocal component to work
 -- with Instant and to do the UTC convertion. Value in and out are expressed
@@ -920,13 +931,15 @@ marloweInstantInput ref classList f current tzOffset =
 
 marloweActionInput
   :: forall m action
-   . String
+   . MonadEffect m
+  => String
   -> Array String
   -> (BigInt -> action)
   -> BigInt
   -> ComponentHTML action ChildSlots m
-marloweActionInput ref classes f current = marloweCurrencyInput ref classes f ""
-  0
+marloweActionInput ref classes f current = marloweCurrencyInput ref classes f
+  Nothing
+  Nothing
   current
 
 renderDeposit

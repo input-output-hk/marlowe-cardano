@@ -1,0 +1,73 @@
+{
+    "timeout": 1655621320000,
+    "when": [
+        {
+            "then": {
+                "timeout": 1655664520000,
+                "when": [
+                    {
+                        "then": {
+                            "then": {
+                                "then": "close",
+                                "to": {
+                                    "party": {
+                                        "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                                    }
+                                },
+                                "from_account": {
+                                    "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
+                                },
+                                "pay": 500,
+                                "token": {
+                                    "currency_symbol": "ffd80473e79426fef5de6c124369bb96a67a8b5814211009354e311e",
+                                    "token_name": "Swan"
+                                }
+                            },
+                            "to": {
+                                "party": {
+                                    "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
+                                }
+                            },
+                            "from_account": {
+                                "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                            },
+                            "pay": 300,
+                            "token": {
+                                "currency_symbol": "d537d311e915c4d815607ead0bcd5880807895871ce9be7c1eaf72a6",
+                                "token_name": "Globe"
+                            }
+                        },
+                        "case": {
+                            "deposits": 500,
+                            "into_account": {
+                                "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
+                            },
+                            "of_token": {
+                                "currency_symbol": "ffd80473e79426fef5de6c124369bb96a67a8b5814211009354e311e",
+                                "token_name": "Swan"
+                            },
+                            "party": {
+                                "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
+                            }
+                        }
+                    }
+                ],
+                "timeout_continuation": "close"
+            },
+            "case": {
+                "deposits": 300,
+                "into_account": {
+                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                },
+                "of_token": {
+                    "currency_symbol": "d537d311e915c4d815607ead0bcd5880807895871ce9be7c1eaf72a6",
+                    "token_name": "Globe"
+                },
+                "party": {
+                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                }
+            }
+        }
+    ],
+    "timeout_continuation": "close"
+}

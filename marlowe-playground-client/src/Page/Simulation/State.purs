@@ -44,21 +44,22 @@ import Halogen (HalogenM, query, tell)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Help (HelpContext(..))
-import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
-import Marlowe (Api)
-import Marlowe as Server
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Holes (Contract) as Term
-import Marlowe.Holes (Location(..), Term, fromTerm, getLocation)
-import Marlowe.Monaco as MM
-import Marlowe.Parser (parseContract)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (inBounds)
+import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(..)
   , Contract
   , Input(..)
   , Party(..)
-  , inBounds
+
   )
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
+import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
+import Marlowe (Api)
+import Marlowe as Server
+import Marlowe.Holes (Contract) as Term
+import Marlowe.Holes (Location(..), Term, fromTerm, getLocation)
+import Marlowe.Monaco as MM
+import Marlowe.Parser (parseContract)
 import Marlowe.Template (_timeContent, _valueContent, fillTemplate)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
@@ -191,12 +192,12 @@ handleAction metadata StartSimulation = do
   {- The marloweState is a non empty list of an object that includes the ExecutionState (SimulationRunning | SimulationNotStarted)
   Inside the SimulationNotStarted we can find the information needed to start the simulation. By running
   this code inside of a maybeT, we make sure that the Head of the list has the state SimulationNotStarted -}
-  initialTime <- peruse
+  mInitialTime <- peruse
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
         <<< _initialTime
     )
-  contract <- mkContract
-  void $ sequence $ startSimulation <$> initialTime <*> contract
+  mContract <- mkContract
+  void $ sequence $ startSimulation <$> mInitialTime <*> mContract
   updateOracleAndContractEditor metadata
 
 handleAction _ DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
@@ -243,7 +244,7 @@ handleAction metadata (LoadContract contents) = do
   liftEffect $ SessionStorage.setItem simulatorBufferLocalStorageKey contents
   let
     mTermContract = hush $ parseContract contents
-  currentTime <- liftEffect $ now
+  currentTime <- liftEffect now
   for_ mTermContract \termContract ->
     assign
       _marloweState

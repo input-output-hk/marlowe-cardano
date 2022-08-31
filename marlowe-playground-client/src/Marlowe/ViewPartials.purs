@@ -12,8 +12,11 @@ import Halogen.Css (classNames)
 import Halogen.HTML (ClassName(..), b_, div_, h4, li_, ol, text)
 import Halogen.HTML.Properties (classes)
 import Humanize (humanizeValue)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Payee(..)
+  , TransactionWarning(..)
+  )
 import MainFrame.Types (ChildSlots)
-import Marlowe.Semantics (Payee(..), TransactionWarning(..))
 
 displayWarningList
   :: forall m action
@@ -99,7 +102,7 @@ displayWarning index (TransactionPartialPay owner payee tok amount expected) =
           (Party dest) -> ("party " <> (show dest))
       ]
   , text " but there is only "
-  , b_ [ text $ BigInt.toString amount ]
+  , b_ [ text $ humanizeValue tok amount ]
   , text "."
   ]
 

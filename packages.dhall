@@ -5,6 +5,17 @@ let upstream =
       https://github.com/purescript/package-sets/releases/download/psc-0.14.7-20220315/packages.dhall sha256:708ca6d205ab5ecc1a3522e4bbe44fa576a0ebebbbc094a3aa9417be7b246974
 
 in  upstream
+  with js-object =
+      mkPackage
+        [ "aff"
+        , "console"
+        , "effect"
+        , "prelude"
+        , "psci-support"
+        , "typelevel-prelude"
+        ]
+        "https://git@github.com/paluh/purescript-js-object"
+        "c1e765914e107cece6e0f5442eabdd278d45c103"
   with infinite-lists =
       mkPackage
         [ "console"
@@ -195,7 +206,7 @@ in  upstream
         , "web-uievents"
         ]
         "https://github.com/input-output-hk/purescript-web-common"
-        "v3.2.1"
+        "v3.2.2"
   with halogen-nselect =
       mkPackage
         [ "aff"

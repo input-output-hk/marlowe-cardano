@@ -1,7 +1,7 @@
 module Examples.PureScript.EscrowWithCollateral
-  ( contractTemplate
+  ( contractModule
   , fullExtendedContract
-  , metaData
+  , metadata
   , fixedTimeoutContract
   , defaultTimeContent
   ) where
@@ -12,29 +12,35 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Map.Ordered.OMap as OMap
 import Data.Tuple.Nested (type (/\), (/\))
-import Examples.Metadata as Metadata
-import Marlowe.Extended
-  ( Action(..)
-  , Case(..)
-  , Contract(..)
-  , Payee(..)
-  , Timeout(..)
-  , Value(..)
-  )
-import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Bound(..)
   , ChoiceId(..)
   , ChoiceName
   , Party(..)
   , Token(..)
   )
+import Language.Marlowe.Extended.V1
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Module(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
+import Language.Marlowe.Extended.V1.Metadata (lovelaceFormat)
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ContractType(..)
+  , MetaData
+  , NumberFormat(..)
+  )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (unsafeInstantFromInt)
 
-contractTemplate :: ContractTemplate
-contractTemplate = { metaData, extendedContract: fullExtendedContract }
+contractModule :: Module
+contractModule = Module { metadata, contract: fullExtendedContract }
 
 fixedTimeoutContract :: Contract
 fixedTimeoutContract =
@@ -56,8 +62,80 @@ defaultTimeContent =
     , "Complaint deadline" /\ unsafeInstantFromInt 3600000
     ]
 
-metaData :: MetaData
-metaData = Metadata.escrowWithCollateral
+metadata :: MetaData
+metadata =
+  { contractType: Escrow
+  , contractName: "Escrow with collateral"
+  , contractShortDescription:
+      "In this contract a _**seller**_ wants to sell an item (like a bicycle) to a _**buyer**_ for a _price_."
+  , contractLongDescription:
+      "In order to incentivise collaboration between the _**seller**_ and the _**buyer**_, at the beginning of the contract both parties deposit the _collateral amount_ that is burned if the parties disagree."
+  , choiceInfo:
+      ( Map.fromFoldable
+          [ "Confirm problem"
+              /\
+                { choiceFormat: DefaultFormat
+                , choiceDescription:
+                    "Acknowledge that there was a problem and a refund must be granted."
+                }
+          , "Dispute problem"
+              /\
+                { choiceFormat: DefaultFormat
+                , choiceDescription:
+                    "The _**Seller**_ disagrees with the _**Buyer**_ about the claim that something went wrong and the collateral will be burnt."
+                }
+          , "Everything is alright"
+              /\
+                { choiceFormat: DefaultFormat
+                , choiceDescription:
+                    "The exchange was successful and the _**Buyer**_ agrees to pay the _**Seller**_."
+                }
+          , "Report problem"
+              /\
+                { choiceFormat: DefaultFormat
+                , choiceDescription:
+                    "The _**Buyer**_ claims not having received the product that was paid for as agreed and would like a refund."
+                }
+          ]
+      )
+  , roleDescriptions:
+      ( Map.fromFoldable
+          [ "Buyer" /\ "The party that pays for the item on sale."
+          , "Seller" /\
+              "The party that sells the item and gets the money if the exchange is successful."
+          ]
+      )
+  , timeParameterDescriptions:
+      ( OMap.fromFoldable
+          [ "Collateral deposit by seller timeout" /\
+              "The deadline by which the _**Seller**_ must deposit the _**Collateral amount**_ in the contract."
+          , "Deposit of collateral by buyer timeout" /\
+              "The deadline by which the _**Buyer**_ must deposit the _**Collateral amount**_ in the contract."
+          , "Deposit of price by buyer timeout" /\
+              "The deadline by which the _**Buyer**_ must deposit the _**Price**_ in the contract."
+          , "Dispute by buyer timeout" /\
+              "The deadline by which, if the _**Buyer**_ has not opened a dispute, the _**Seller**_ will be paid."
+          , "Complaint deadline" /\
+              "The deadline by which, if the _**Seller**_ has not responded to the dispute, the _**Buyer**_ will be refunded."
+          ]
+      )
+  , valueParameterInfo:
+      ( OMap.fromFoldable
+          [ "Collateral amount"
+              /\
+                { valueParameterFormat: lovelaceFormat
+                , valueParameterDescription:
+                    "The amount of Lovelace to be deposited by both parties at the start of the contract to serve as an incentive for collaboration."
+                }
+          , "Price"
+              /\
+                { valueParameterFormat: lovelaceFormat
+                , valueParameterDescription:
+                    "The amount of Lovelace to be paid by the _**Buyer**_ as part of the exchange."
+                }
+          ]
+      )
+  }
 
 ada :: Token
 ada = Token "" ""

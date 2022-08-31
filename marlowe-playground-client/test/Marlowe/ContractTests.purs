@@ -29,13 +29,7 @@ import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral
 import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
-import Marlowe.Extended (resolveRelativeTimes)
-import Marlowe.Extended as EM
-import Marlowe.Extended.Metadata (emptyContractMetadata)
-import Marlowe.Holes (Term(..), fromTerm)
-import Marlowe.Holes as T
-import Marlowe.Parser (parseContract)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Bound(..)
   , ChoiceId(..)
   , Contract(..)
@@ -45,6 +39,12 @@ import Marlowe.Semantics
   , TransactionError
   , TransactionWarning
   )
+import Language.Marlowe.Extended.V1 (resolveRelativeTimes)
+import Language.Marlowe.Extended.V1 as EM
+import Language.Marlowe.Extended.V1.Metadata (emptyContractMetadata)
+import Marlowe.Holes (Term(..), fromTerm)
+import Marlowe.Holes as T
+import Marlowe.Parser (parseContract)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (secondsSinceShelley, shelleyEpoch, unixEpoch)
 import Page.Simulation.State (mkStateBase)
@@ -126,16 +126,16 @@ examplesMatch =
       $ shouldEqual (Just ZeroCouponBond.fullExtendedContract)
           (contractToExtended Contracts.zeroCouponBond)
     it "Coupon bond guaranteed"
-      $ shouldEqual (Just CouponBondGuaranteed.extendedContract)
+      $ shouldEqual (Just CouponBondGuaranteed.contract)
           (contractToExtended Contracts.couponBondGuaranteed)
     it "Swap"
       $ shouldEqual (Just Swap.fullExtendedContract)
           (contractToExtended Contracts.swap)
     it "Contract for differences"
-      $ shouldEqual (Just ContractForDifferences.extendedContract)
+      $ shouldEqual (Just ContractForDifferences.contract)
           (contractToExtended Contracts.contractForDifferences)
     it "Contract for differences with oracle"
-      $ shouldEqual (Just ContractForDifferencesWithOracle.extendedContract)
+      $ shouldEqual (Just ContractForDifferencesWithOracle.contract)
           (contractToExtended Contracts.contractForDifferencesWithOracle)
 
 seller :: Party
@@ -158,8 +158,8 @@ filledEscrow =
             { timeContent:
                 Map.fromFoldable
                   [ "Payment deadline" /\ secondsSinceShelley 10
-                  , "Complaint response deadline" /\ secondsSinceShelley 50
-                  , "Complaint deadline" /\ secondsSinceShelley 100
+                  , "Complaint deadline" /\ secondsSinceShelley 50
+                  , "Complaint response deadline" /\ secondsSinceShelley 100
                   , "Mediation deadline" /\ secondsSinceShelley 1000
                   ]
             , valueContent:
@@ -220,7 +220,7 @@ filledCouponBondGuaranteed =
                   ]
             }
         )
-        CouponBondGuaranteed.extendedContract
+        CouponBondGuaranteed.contract
     )
 
 filledSwap :: Term T.Contract
@@ -260,7 +260,7 @@ filledContractForDifferences =
                   ]
             }
         )
-        ContractForDifferences.extendedContract
+        ContractForDifferences.contract
     )
 
 filledContractForDifferencesWithOracle :: Term T.Contract
@@ -285,7 +285,7 @@ filledContractForDifferencesWithOracle =
                   ]
             }
         )
-        ContractForDifferencesWithOracle.extendedContract
+        ContractForDifferencesWithOracle.contract
     )
 
 -- TODO:  We should combine this test with the ones defined in Marlowe.Holes.SemanticTest

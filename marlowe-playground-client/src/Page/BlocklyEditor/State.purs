@@ -13,17 +13,21 @@ import Data.Array as Array
 import Data.Either (hush, note)
 import Data.Lens (assign, modifying, over, set, use, view)
 import Data.Map as Map
+import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe)
+import Data.Time.Duration (Minutes(..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
+import Effect.Now (now)
 import Examples.Marlowe.Contracts (example) as ME
 import Halogen (HalogenM, modify_)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
+import Language.Marlowe.Extended.V1 as Extended
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots, _blocklySlot)
 import Marlowe (Api)
 import Marlowe.Blockly as MB
-import Marlowe.Extended as Extended
 import Marlowe.Holes as Holes
 import Marlowe.Linter as Linter
 import Marlowe.Template (TemplateContent)
@@ -71,15 +75,18 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAjax Api m
-  => Action
+  => MetaData
+  -> Action
   -> HalogenM State Action ChildSlots Void m Unit
-handleAction (HandleBlocklyMessage Blockly.BlocklyReady) = do
+handleAction metadata (HandleBlocklyMessage Blockly.BlocklyReady) = do
   mContents <- liftEffect $ SessionStorage.getItem marloweBufferLocalStorageKey
-  handleAction $ InitBlocklyProject $ fromMaybe ME.example mContents
+  handleAction metadata $ InitBlocklyProject $ fromMaybe ME.example mContents
 
-handleAction (HandleBlocklyMessage Blockly.CodeChange) = processBlocklyCode
+handleAction metadata (HandleBlocklyMessage Blockly.CodeChange) = do
+  clearAnalysisResults
+  processBlocklyCode metadata
 
-handleAction (HandleBlocklyMessage (Blockly.BlockSelection selection)) =
+handleAction _ (HandleBlocklyMessage (Blockly.BlockSelection selection)) =
   case mBlockDefinition of
     Nothing -> H.tell _blocklySlot unit $ Blockly.SetToolbox MB.toolbox
     Just definition -> H.tell _blocklySlot unit $ Blockly.SetToolbox $
@@ -89,7 +96,7 @@ handleAction (HandleBlocklyMessage (Blockly.BlockSelection selection)) =
     { blockType } <- selection
     Map.lookup blockType MB.definitionsMap
 
-handleAction (InitBlocklyProject code) = do
+handleAction metadata (InitBlocklyProject code) = do
   -- NOTE: We already save the code in session storage as part of the processBlocklyCode.
   --       The reason to also add it here was to solve a small bug introduced in PR 3478.
   --       The problem is that when we create a new project, the BlocklyReady event is
@@ -99,53 +106,59 @@ handleAction (InitBlocklyProject code) = do
   --       when we start a new project, so we might want to revisit this later.
   liftEffect $ SessionStorage.setItem marloweBufferLocalStorageKey code
   H.tell _blocklySlot unit $ Blockly.SetCode code
-  processBlocklyCode
+  processBlocklyCode metadata
   -- Reset the toolbox
   H.tell _blocklySlot unit $ Blockly.SetToolbox MB.toolbox
 
-handleAction SendToSimulator = pure unit
+handleAction _ SendToSimulator = pure unit
 
-handleAction ViewAsMarlowe = pure unit
+handleAction _ ViewAsMarlowe = pure unit
 
-handleAction Save = pure unit
+handleAction _ Save = pure unit
 
-handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
-  action
+handleAction metadata (BottomPanelAction (BottomPanel.PanelAction action)) =
+  handleAction metadata action
 
-handleAction (BottomPanelAction action) = toBottomPanel
+handleAction _ (BottomPanelAction action) = toBottomPanel
   (BottomPanel.handleAction action)
 
-handleAction (SetValueTemplateParam key value) =
+handleAction _ (SetValueTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._valueContent)
     (Map.insert key value)
 
-handleAction (SetTimeTemplateParam key value) =
+handleAction _ (SetTimeTemplateParam key value) = do
+  clearAnalysisResults
   modifying
     (_analysisState <<< _templateContent <<< Template._timeContent)
     (Map.insert key value)
 
-handleAction (MetadataAction _) = pure unit
+handleAction _ (MetadataAction _) = pure unit
 
-handleAction AnalyseContract = runAnalysis $ analyseContract
+handleAction metadata AnalyseContract = runAnalysis metadata analyseContract
 
-handleAction AnalyseReachabilityContract = runAnalysis $ analyseReachability
+handleAction metadata AnalyseReachabilityContract = runAnalysis metadata
+  analyseReachability
 
-handleAction AnalyseContractForCloseRefund = runAnalysis $ analyseClose
+handleAction metadata AnalyseContractForCloseRefund = runAnalysis metadata
+  analyseClose
 
-handleAction ClearAnalysisResults = assign
+handleAction _ (SelectWarning warning) = H.tell _blocklySlot unit $
+  Blockly.SelectWarning warning
+
+clearAnalysisResults :: forall m. HalogenM State Action ChildSlots Void m Unit
+clearAnalysisResults = assign
   (_analysisState <<< _analysisExecutionState)
   NoneAsked
-
-handleAction (SelectWarning warning) = H.tell _blocklySlot unit $
-  Blockly.SelectWarning warning
 
 -- This function reads the Marlowe code from blockly and, process it and updates the component state
 processBlocklyCode
   :: forall m
    . MonadAff m
-  => HalogenM State Action ChildSlots Void m Unit
-processBlocklyCode = do
+  => MetaData
+  -> HalogenM State Action ChildSlots Void m Unit
+processBlocklyCode metadata = do
   eContract <-
     runExceptT do
       block <- ExceptT $ note "Blockly Workspace is empty" <$> H.request
@@ -153,6 +166,8 @@ processBlocklyCode = do
         unit
         Blockly.GetBlockRepresentation
       except $ MB.blockToContract block
+
+  currentTime <- liftEffect now
   case eContract of
     Left e ->
       modify_
@@ -173,7 +188,10 @@ processBlocklyCode = do
         maybeUpdateTemplateContent :: TemplateContent -> TemplateContent
         maybeUpdateTemplateContent = case Holes.fromTerm holesContract of
           Just (contract :: Extended.Contract) -> Template.updateTemplateContent
-            $ Template.getPlaceholderIds contract
+            currentTime
+            (Minutes 5.0)
+            (OMap.keys metadata.timeParameterDescriptions)
+            (Template.getPlaceholderIds contract)
           Nothing -> identity
       liftEffect $ SessionStorage.setItem marloweBufferLocalStorageKey
         prettyContract
@@ -195,9 +213,10 @@ processBlocklyCode = do
 runAnalysis
   :: forall m
    . MonadAff m
-  => (Extended.Contract -> HalogenM State Action ChildSlots Void m Unit)
+  => MetaData
+  -> (Extended.Contract -> HalogenM State Action ChildSlots Void m Unit)
   -> HalogenM State Action ChildSlots Void m Unit
-runAnalysis doAnalyze =
+runAnalysis metadata doAnalyze =
   void
     $ runMaybeT do
         block <- MaybeT $ H.request _blocklySlot unit
@@ -207,7 +226,7 @@ runAnalysis doAnalyze =
           (hush $ MB.blockToContract block)
         lift do
           doAnalyze contract
-          processBlocklyCode
+          processBlocklyCode metadata
 
 editorGetValue
   :: forall state action msg m

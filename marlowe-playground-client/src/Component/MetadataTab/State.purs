@@ -13,6 +13,27 @@ import Data.Maybe (fromMaybe)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Query (HalogenM)
+import Language.Marlowe.Extended.V1.Metadata
+  ( updateChoiceInfo
+  , updateValueParameterInfo
+  )
+import Language.Marlowe.Extended.V1.Metadata.Lenses
+  ( _choiceInfo
+  , _contractLongDescription
+  , _contractName
+  , _contractShortDescription
+  , _contractType
+  , _roleDescriptions
+  , _timeParameterDescriptions
+  , _valueParameterInfo
+
+  )
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ChoiceInfo
+  , NumberFormat
+  , ValueParameterInfo
+
+  )
 import MainFrame.Types
   ( Action
   , ChildSlots
@@ -21,21 +42,6 @@ import MainFrame.Types
   , _hasUnsavedChanges
   )
 import Marlowe (Api)
-import Marlowe.Extended.Metadata
-  ( ChoiceInfo
-  , NumberFormat
-  , ValueParameterInfo
-  , _choiceInfo
-  , _contractLongDescription
-  , _contractName
-  , _contractShortDescription
-  , _contractType
-  , _roleDescriptions
-  , _timeParameterDescriptions
-  , _valueParameterInfo
-  , updateChoiceInfo
-  , updateValueParameterInfo
-  )
 import Servant.PureScript (class MonadAjax)
 
 moveTo

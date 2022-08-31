@@ -148,7 +148,7 @@ nix-build cardano-wallet/default.nix -A cardano-wallet -o build-wallet
 git clone git@github.com:input-output-hk/plutus-apps.git -b marlowe-run-development
 
 # Build the executable.
-nix-shell plutus-apps/shell.nix --run "cd plutus-apps; cabal install --installdir=../build-chain-index exe:plutus-chain-index"
+nix-shell plutus-apps/shell.nix --run "cd plutus-apps; cabal update; cabal install --installdir=../build-chain-index exe:plutus-chain-index"
 
 # Create the database directory.
 mkdir chain-index.db
@@ -163,7 +163,7 @@ Optionally, one can build Daedalus.
 git clone git@github.com:input-output-hk/daedalus.git -b 4.7.0
 
 # Patch Daedalus for use with the Marlowe testnet.
-pushd daedalus.git
+pushd daedalus
 git apply << EOI
 diff --git a/installer-clusters.cfg b/installer-clusters.cfg
 index aa6f7770b..a26dfe400 100644
@@ -267,11 +267,12 @@ popd
 
 # Build Daedalus.
 
+```
 pushd daedalus
 NETWORK=alonzo_purple nix-shell shell.nix --argstr nodeImplementation cardano --argstr cluster alonzo_purple --command 'yarn build'
 popd
 
-````
+```
 
 ## Setup Wallet(s)
 
@@ -280,7 +281,7 @@ For each wallet, generate a seed phrase:
 ```console
 $ ./build-wallet/bin/cardano-wallet recovery-phrase generate
 success riot top midnight sauce present sport shadow million canyon finger slam refuse dad december forget picture onion problem bid setup skull master vessel
-````
+```
 
 ## Run Services
 
@@ -356,7 +357,7 @@ You should see a list of blocks and slots. Wait until the slot number is close t
 In a terminal for the dashboard server, run the following:
 
 ```bash
-./build-run/bin/marlowe-dashboard-server webserver --config marlowe-run.json -n 1564
+./build-run/bin/marlowe-dashboard-server webserver --config marlowe-run.json --network-id 1564
 ```
 
 The server is generally silent, except for a few messages like when wallets are created.

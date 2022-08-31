@@ -31,6 +31,7 @@ import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
+import Data.Array (concat)
 import Data.Array as Array
 import Data.Compactable (compact)
 import Data.ContractNickname as CN
@@ -74,6 +75,7 @@ import Halogen.HTML
   , main
   , nav
   , p
+  , p_
   , slot
   , span
   , span_
@@ -89,7 +91,12 @@ import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
-import Marlowe.Semantics (PubKey, _rolesCurrency, adaToken, getAda)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( PubKey
+  , _rolesCurrency
+  , adaToken
+  , getAda
+  )
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
@@ -248,36 +255,41 @@ dashboardCard state =
       [ ref $ RefLabel "card", classNames $ Css.sidebarCardOverlay cardOpen ]
       [ div
           [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
-          $
-            [ a
-                [ classNames [ "absolute", "top-4", "right-4" ]
-                , onClick_ CloseCard
-                ]
-                [ icon_ Icon.Close ]
-            , case state ^. _card of
-                Just TutorialsCard -> tutorialsCard
-                Just CurrentWalletCard -> currentWalletCard wallet
-                Just ContactsCard -> HH.slot
-                  _contacts
-                  unit
-                  Contacts.component
-                  wallet
-                  OnContactsMsg
-                Just ContractTemplateCard -> slot
-                  _template
-                  unit
-                  Template.component
-                  templateInput
-                  OnTemplateMsg
-                Just (ContractActionConfirmationCard input) ->
-                  slot
-                    _confirmActionDialog
+          $ concat
+              [ case state ^. _card of
+                  Just WalletNotFoundCard -> []
+                  _ ->
+                    [ a
+                        [ classNames [ "absolute", "top-4", "right-4" ]
+                        , onClick_ CloseCard
+                        ]
+                        [ icon_ Icon.Close ]
+                    ]
+              , pure case state ^. _card of
+                  Just TutorialsCard -> tutorialsCard
+                  Just CurrentWalletCard -> currentWalletCard wallet
+                  Just ContactsCard -> HH.slot
+                    _contacts
                     unit
-                    ConfirmContractActionDialog.component
-                    input
-                    (\DialogClosed -> CloseCard)
-                Nothing -> HH.text ""
-            ]
+                    Contacts.component
+                    wallet
+                    OnContactsMsg
+                  Just ContractTemplateCard -> slot
+                    _template
+                    unit
+                    Template.component
+                    templateInput
+                    OnTemplateMsg
+                  Just (ContractActionConfirmationCard input) ->
+                    slot
+                      _confirmActionDialog
+                      unit
+                      ConfirmContractActionDialog.component
+                      input
+                      (\DialogClosed -> CloseCard)
+                  Just WalletNotFoundCard -> walletNotFoundCard
+                  Nothing -> HH.text ""
+              ]
       ]
 
 ------------------------------------------------------------
@@ -487,8 +499,8 @@ dashboardFooter =
 dashboardLinks :: forall w i. Array (HTML w i)
 dashboardLinks =
   -- FIXME: SCP-2589 Add link to Docs
-  [ link "Docs" ""
-  , link "marlowe-finance.io" "https://marlowe-finance.io"
+  [ -- link "Docs" ""
+    link "marlowe-finance.io" "https://marlowe-finance.io"
   , link "play.marlowe-finance.io" "https://play.marlowe-finance.io"
   {- disabled for phase 1, link "Market" ""
   , link "Support" "" -}
@@ -637,21 +649,23 @@ contractNavigation contractFilter =
                   Right
               ]
           ]
-      , div
-          [ classNames
-              [ "row-start-1", "col-start-1", "lg:row-start-3", "lg:self-end" ]
-          ]
-          [ nav
-              [ classNames navClasses ]
-              [ a
-                  [ classNames $ navItemClasses false
-                  , onClick_ $ OpenCard TutorialsCard
-                  , id "tutorialsButton"
-                  ]
-                  [ icon Icon.Help [ "text-purple" ] ]
-              , tooltip "Tutorials" (RefId "tutorialsButton") Right
-              ]
-          ]
+      -- SCP-3771: Hide empty tutorial section.
+      -- We want to bring it back when tutorials are ready.
+      -- , div
+      --     [ classNames
+      --         [ "row-start-1", "col-start-1", "lg:row-start-3", "lg:self-end" ]
+      --     ]
+      --     [ nav
+      --         [ classNames navClasses ]
+      --         [ a
+      --             [ classNames $ navItemClasses false
+      --             , onClick_ $ OpenCard TutorialsCard
+      --             , id "tutorialsButton"
+      --             ]
+      --             [ icon Icon.Help [ "text-purple" ] ]
+      --         , tooltip "Tutorials" (RefId "tutorialsButton") Right
+      --         ]
+      --     ]
       ]
 
 contractCards
@@ -877,4 +891,41 @@ tutorialsCard =
     [ h2
         [ classNames [ "font-semibold", "text-lg", "mb-4" ] ]
         [ text "Tutorials" ]
+    ]
+
+walletNotFoundCard :: forall p. HTML p Action
+walletNotFoundCard =
+  div
+    [ classNames
+        [ "h-full"
+        , "grid"
+        , "grid-rows-auto-1fr-auto"
+        , "divide-y"
+        , "divide-gray"
+        ]
+    ]
+    [ h2
+        [ classNames Css.cardHeader ]
+        [ text "Wallet backend disconnected" ]
+    , div
+        [ classNames
+            [ "p-4", "overflow-y-auto", "overflow-x-hidden", "space-y-4" ]
+        ]
+        [ p_
+            [ text
+                "Connection to the wallet backend has been lost, and your wallet will need to be restored again."
+            ]
+        , p_
+            [ text
+                "For our centralized deployment, for performance purposes, we periodically restart the wallet backend and clear its database of wallets."
+            ]
+        ]
+    , div
+        [ classNames [ "p-4", "flex", "gap-4" ] ]
+        [ button
+            [ classNames $ Css.primaryButton <> [ "flex-1" ]
+            , onClick_ (DisconnectWallet Nothing)
+            ]
+            [ text "Drop wallet" ]
+        ]
     ]

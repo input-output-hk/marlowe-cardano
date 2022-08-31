@@ -49,9 +49,9 @@ import Cardano.Wallet.Primitive.Types (WalletName (..))
 import Cardano.Wallet.Primitive.Types.TokenPolicy (TokenName (UnsafeTokenName), TokenPolicyId (UnsafeTokenPolicyId))
 import Cardano.Wallet.Primitive.Types.TokenQuantity (TokenQuantity (TokenQuantity))
 import Cardano.Wallet.Shelley.Compatibility (fromCardanoAddress)
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (forkFinally, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
-import Control.Exception (SomeException, catch, displayException)
+import Control.Exception (Exception (fromException), SomeException, catch, displayException)
 import Control.Lens (use, (%=), (^.))
 import Control.Monad (unless, void, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
@@ -79,8 +79,8 @@ import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
                                 EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
-import Language.Marlowe.Semantics (MarloweParams (rolesCurrency))
-import Language.Marlowe.Semantics.Types (Party (Role))
+import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency))
+import Language.Marlowe.Core.V1.Semantics.Types (Party (Role))
 import Network.WebSockets (Connection)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (PabClient, activateContract, instanceClient))
@@ -108,6 +108,7 @@ import qualified Data.Quantity as W (Quantity (..))
 import qualified Data.Text as T (pack, unpack)
 import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
 import qualified Data.Vector as V (all, zip)
+import Network.HTTP.Client (HttpException)
 import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
 
@@ -813,7 +814,11 @@ runContract PabAccess{..} contract walletId =
             caID     = contract
           , caWallet = Just $ Wallet Nothing walletId
           }
+
     let
+      logMsg msg = when verbose $ logTraceMsg
+        ("runContract:" <> show contract <> ":" <> show (unContractInstanceId instanceId))
+        msg
       go :: Connection -> ExceptT CliError IO ()
       go connection =
         do
@@ -822,8 +827,7 @@ runContract PabAccess{..} contract walletId =
             repr other                  = show other
 
           status <- receiveStatus connection
-          when verbose
-            $ liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> repr status <> "."
+          logMsg $ "Received " <> repr status <> "."
           case status of
             NewObservableState s -> do
                                       state <- liftCli $ parseEither parseJSON s
@@ -831,10 +835,19 @@ runContract PabAccess{..} contract walletId =
                                       go connection
             ContractFinished _   -> pure ()
             _                    -> go connection
+
+      notifyErr (Right res) = pure res
+      notifyErr (Left ex) = case fromException ex of
+        Just (ex' :: HttpException) ->
+          logMsg $ "Websocket read out failed: " <> displayException ex'
+        Nothing                   ->
+          logMsg $ "PAB communication thread failure: " <> displayException ex
+
     void
       . liftIO
-      . forkIO
-      $ runWs instanceId go
+      . forkFinally
+        (runWs instanceId go)
+      $ notifyErr
     pure (instanceId, instanceChan)
 
 

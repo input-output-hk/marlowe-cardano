@@ -40,6 +40,7 @@ module Language.Marlowe.CLI.Test.Types (
 , PabResponseComparison(..)
 , PabResponse(..)
 , CompanionInstanceInfo(..)
+, TransactionNickname
 -- * Lenses
 , psFaucetKey
 , psFaucetAddress
@@ -55,7 +56,7 @@ module Language.Marlowe.CLI.Test.Types (
 ) where
 
 
-import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, Value)
+import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, StakeAddressReference, Value)
 import Cardano.Wallet.Primitive.AddressDerivation (Passphrase)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Chan (Chan)
@@ -66,8 +67,8 @@ import Language.Marlowe.CLI.PAB (WsRunner)
 import Language.Marlowe.CLI.Types (CliError, SomePaymentSigningKey)
 import Language.Marlowe.Client (MarloweClientInput, MarloweContractState)
 import Language.Marlowe.Contract (MarloweContract)
-import Language.Marlowe.Semantics (MarloweParams)
-import Language.Marlowe.Semantics.Types (Contract, State, TimeInterval)
+import Language.Marlowe.Core.V1.Semantics (MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input, State, TimeInterval)
 import Plutus.Contract (ContractInstanceId)
 import Plutus.PAB.Webserver.Client (PabClient)
 import Plutus.V1.Ledger.Api (PubKeyHash)
@@ -81,6 +82,8 @@ import Control.Lens.Lens (lens)
 import qualified Data.Aeson as A (Value (..))
 import qualified Data.Map.Strict as M (Map)
 import Data.Maybe (fromMaybe)
+import Data.Text
+import Ledger (CurrencySymbol)
 import Options.Applicative (optional)
 
 
@@ -125,10 +128,10 @@ data ScriptTest =
   ScriptTest
   {
     stTestName         :: String             -- ^ The name of the test.
-  , stSlotLength       :: Integer            -- ^ The slot length, in milliseconds.
-  , stSlotZeroOffset   :: Integer            -- ^ The effective POSIX time of slot zero, in milliseconds.
-  , stInitialContract  :: Contract           -- ^ The contract.
-  , stInitialState     :: State              -- ^ The the contract's initial state.
+  -- , stSlotLength       :: Integer            -- ^ The slot length, in milliseconds.
+  -- , stSlotZeroOffset   :: Integer            -- ^ The effective POSIX time of slot zero, in milliseconds.
+  -- , stInitialContract  :: Contract           -- ^ The contract.
+  -- , stInitialState     :: State              -- ^ The the contract's initial state.
   , stScriptOperations :: [ScriptOperation]  -- ^ The sequence of test operations.
   }
     deriving stock (Eq, Generic, Show)
@@ -146,9 +149,32 @@ data PabTest =
     deriving anyclass (FromJSON, ToJSON)
 
 
+type TransactionNickname = String
+
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
-  ScriptOperation
+  Initialize
+    {
+      soOwner        :: AccountId             -- ^ The name of the wallet's owner.
+    , soMinAda       :: Integer
+    , soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
+    , soRoleCurrency :: Text                  -- ^ We derive
+    , soContract     :: Contract              -- ^ The Marlowe contract to be created.
+    -- | FIXME: No *JSON instances for this
+    -- , soStake :: Maybe StakeAddressReference
+    }
+  | Prepare
+    {
+      soOwner       :: AccountId -- ^ The name of the wallet's owner.
+    , soTransaction :: TransactionNickname   -- ^ The name of the wallet's owner.
+    , soInputs      :: [Input]
+    , soMinimumTime :: POSIXTime
+    , soMaximumTime :: POSIXTime
+    }
+  | Fail
+    {
+      soFailureMessage :: String
+    }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 

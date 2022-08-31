@@ -16,7 +16,7 @@ import Data.Show.Generic (genericShow)
 import Data.Time.Duration (Minutes)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
-import Marlowe.Extended.Metadata (MetadataHintInfo)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetadataHintInfo)
 import Monaco (IMarkerData)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Type.Proxy (Proxy(..))
@@ -44,7 +44,6 @@ data Action
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
-  | ClearAnalysisResults
   | Save
   | DoNothing
 
@@ -75,7 +74,6 @@ instance actionIsEvent :: IsEvent Action where
     "AnalyseReachabilityContract"
   toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
     "AnalyseContractForCloseRefund"
-  toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent Save = Just $ defaultEvent "Save"
   toEvent DoNothing = Nothing
 

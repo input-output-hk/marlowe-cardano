@@ -17,9 +17,7 @@ import Data.UserNamedActions (UserNamedActions)
 import Halogen (RefLabel(..))
 import Halogen as H
 import Halogen.Store.Connect (Connected)
-import Marlowe.Execution.Types (NamedAction)
-import Marlowe.Execution.Types (State) as Execution
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Accounts
   , ChosenNum
   , MarloweParams
@@ -27,6 +25,8 @@ import Marlowe.Semantics
   , Payment
   , TransactionInput
   )
+import Marlowe.Execution.Types (NamedAction)
+import Marlowe.Execution.Types (State) as Execution
 import Store.Contracts (ContractStore)
 import Store.RoleTokens (RoleTokenStore)
 import Type.Proxy (Proxy(..))

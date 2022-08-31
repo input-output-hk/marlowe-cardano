@@ -1,0 +1,14 @@
+{
+    "accounts": [
+        [
+            [
+                { "role_token": "CM" },
+                { "currency_symbol": "", "token_name": "" }
+            ],
+            2000000
+        ]
+    ],
+    "choices": [],
+    "boundValues": [],
+    "minTime": 1655566091000
+}

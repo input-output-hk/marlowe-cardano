@@ -9,19 +9,19 @@ import Data.Set as Set
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (HalogenM)
-import Marlowe (Api)
-import Marlowe.Extended (toCore)
-import Marlowe.Extended as EM
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (emptyState)
+import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Contract(..)
   , Observation(..)
   , Payee(..)
   , Token
   , Value(..)
-  , emptyState
   )
-import Marlowe.Semantics as S
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 (toCore)
+import Language.Marlowe.Extended.V1 as EM
+import Marlowe (Api)
 import Marlowe.Template (fillTemplate)
 import Servant.PureScript (class MonadAjax)
 import StaticAnalysis.StaticTools

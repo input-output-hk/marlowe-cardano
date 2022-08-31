@@ -3,21 +3,16 @@ module Main(main) where
 
 import qualified Spec.Marlowe.AutoExecute
 import qualified Spec.Marlowe.Marlowe
-
-import Data.Default (def)
-import Plutus.Contract.Unsafe (setSlotConfig)
+import qualified Spec.Marlowe.Semantics (tests)
 
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
 main :: IO ()
-main =
-  do
-    setSlotConfig def
-    defaultMain tests
+main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Marlowe"
+tests = testGroup "Marlowe" $
     [ testGroup "Contracts" [ Spec.Marlowe.Marlowe.tests
                             , Spec.Marlowe.AutoExecute.tests
 -- Does not work when invoking it from nix
@@ -31,3 +26,4 @@ tests = testGroup "Marlowe"
         [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
         ]
     ]
+    <> Spec.Marlowe.Semantics.tests

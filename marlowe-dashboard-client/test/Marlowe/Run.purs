@@ -74,9 +74,13 @@ import Env (Env(..), WalletFunds)
 import Halogen as H
 import Halogen.Subscription (Listener, SubscribeIO)
 import Halogen.Subscription as HS
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Assets(..)
+  , CurrencySymbol
+  , TokenName
+  )
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types as MF
-import Marlowe.Semantics (Assets(..), CurrencySymbol, TokenName)
 import Marlowe.Time (unixEpoch)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient

@@ -1,0 +1,82 @@
+ptTestName: Followers notifies correctly about already closed contracts without payouts
+
+ptPabOperations:
+  - tag: Comment
+    poComment: Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
+
+  - tag: CreateWallet
+    poOwner: PAB
+
+  - tag: FundWallet
+    poOwner: PAB
+    poValue:
+      lovelace: 80000000
+
+  - tag: ActivateApp
+    poOwner: PAB
+    poInstance: PAB
+
+  - tag: PrintWallet
+    poOwner: PAB
+
+  - tag: CallCreate
+    poInstance: PAB
+    poOwners:
+      - PAB
+    poContract:
+      when:
+        - case:
+            party:
+              role_token: PAB
+            deposits: 50000000
+            of_token:
+              currency_symbol: ""
+              token_name: ""
+            into_account:
+              role_token: PAB
+          then: close
+        - case:
+            notify_if: true
+          then: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+  - tag: AwaitCreate
+    poInstance: PAB
+
+  - tag: CallApplyInputs
+    poInstance: PAB
+    poInputs:
+      - input_notify
+    poTimes:
+      - 1645590825000
+      - 1898051625000
+
+  - tag: AwaitApplyInputs
+    poInstance: PAB
+
+  - tag: Comment
+    poComment: Return unused funds.
+
+  - tag: ActivateFollower
+    poAppInstance: PAB
+    poInstance: PAB
+    poOwner: PAB
+
+  - tag: CallFollow
+    poInstance: PAB
+
+  - tag: AwaitFollow
+    poInstance: PAB
+    poResponses:
+      - equals: null
+      - matches:
+          chHistory: [tx_inputs: ["input_notify"]]
+          chUnspentPayouts: []
+
+  - tag: ReturnFunds
+    poOwner: PAB
+    poInstances: [PAB]
+
+  - tag: Stop
+    poInstance: PAB

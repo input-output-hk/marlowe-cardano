@@ -22,6 +22,7 @@ module Language.Marlowe.CLI.Test (
 
 
 import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..))
+import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Bifunctor (first)
 import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
@@ -35,6 +36,7 @@ import Network.Socket (withSocketsDo)
 import Network.WebSockets (runClient)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (pabClient)
+import Plutus.V1.Ledger.Api (defaultCostModelParams)
 import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
 
 
@@ -45,18 +47,22 @@ runTests :: MonadError CliError m
          -> m ()                   -- ^ Action for running the tests.
 runTests ScriptTests{..} =
   do
+    costModel <-
+      maybe
+        (throwError $ CliError "Missing default cost model.")
+        pure
+        defaultCostModelParams
     let
-      network' = network
       connection =
         LocalNodeConnectInfo
         {
           localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-        , localNodeNetworkId       = network'
+        , localNodeNetworkId       = network
         , localNodeSocketPath      = socketPath
         }
     slotConfig <- querySlotConfig connection
     tests' <- mapM decodeFileStrict tests
-    mapM_ (scriptTest network' connection slotConfig) tests'
+    mapM_ (scriptTest costModel network connection slotConfig) tests'
 runTests PabTests{..} =
   do
     manager <- liftIO $ newManager defaultManagerSettings

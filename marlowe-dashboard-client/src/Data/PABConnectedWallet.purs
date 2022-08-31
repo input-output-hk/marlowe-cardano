@@ -24,8 +24,8 @@ import Data.Wallet (SyncStatus, WalletDetails)
 import Data.Wallet as Wallet
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
+import Language.Marlowe.Core.V1.Semantics.Types (Assets, MarloweParams)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweParams)
 import Type.Proxy (Proxy(..))
 
 type PABConnectedWalletFields =

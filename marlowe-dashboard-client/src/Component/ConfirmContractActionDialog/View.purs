@@ -46,11 +46,16 @@ import Data.PABConnectedWallet (_assets)
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, div_, p, span, text)
+import Language.Marlowe.Core.V1.Semantics (computeTransaction)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ChoiceId(..)
+  , Contract(..)
+  , TransactionOutput(..)
+  ) as Semantics
+import Language.Marlowe.Core.V1.Semantics.Types (Token(..), getAda)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Execution.Types (NamedAction(..))
-import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
-import Marlowe.Semantics (Token(..), computeTransaction, getAda)
 
 render :: forall m. MonadAff m => State -> ComponentHTML m
 render state =

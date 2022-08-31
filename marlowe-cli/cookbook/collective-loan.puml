@@ -1,0 +1,90 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+actor Borrower as borrower
+actor Lender as lender
+participant "Administrative Oracle" as oracle
+participant "Marlowe Contract" as loanpool
+participant "Marlowe Payout" as payout
+
+== Administrator Mints Tokens ==
+
+oracle -> oracle: design contract (maximum size, borrowers, borrowers)
+oracle -> oracle: mint ""Liquidity"" tokens
+oracle -> oracle: mint Marlowe role tokens
+
+== Administrator Creates Collective Loan ==
+
+oracle -> loanpool: create Marlowe collective loan for X ""Djed"" with N lenders and M borrowers
+
+oracle -> loanpool: apply //deposit// of ""Liquidity"" tokens
+
+== Lenders Deposit Funds ==
+
+lender -> oracle: request to deposit ""Djed""
+
+oracle -> loanpool: apply //choice// to approve request
+
+oracle -> lender: send next role token for lender deposit
+
+lender -> loanpool: apply //deposit// for ""Djed""
+
+loanpool -> payout: pay ""Liquidity"" tokens for lender
+
+lender -> payout: authorize withdrawal of ""Liquidity"" tokens
+
+payout -> lender: send ""Liquidity"" tokens
+
+== Borrowers Withdraw Funds ==
+
+borrower -> oracle: request loan of ""Djed""
+
+oracle -> loanpool: apply //choice// to approve request
+
+loanpool -> payout: pay ""Djed"" for borrower
+
+oracle -> borrower: send next role token for borrower withdrawal
+
+borrower -> payout: authorize withdrawal of ""Djed""
+
+payout -> borrower: send ""Djed""
+
+== Borrowers Pay Back Loans Plus Interest ==
+
+borrower -> oracle: request to pay back ""Djed""
+
+oracle -> loanpool: apply //choice// to approve request
+
+oracle -> borrower: send next role token for borrower deposit
+
+borrower -> loanpool: apply //deposit// for ""Djed""
+
+== Lenders Redeem Liquidity Tokens ==
+
+lender -> oracle: request to deposit ""Liquidity"" tokens
+
+oracle -> loanpool: apply //choice// to approve request
+
+oracle -> lender: send next role token for lender withdrawal
+
+lender -> loanpool: apply //deposit// for ""Liquidity"" tokens
+
+loanpool -> payout: pay ""Djed"" for lender
+
+lender -> payout: authorize withdrawal of ""Djed""
+
+payout -> lender: send ""Djed""
+
+== Close the Contract ==
+
+oracle -> loanpool: apply //notify// to close contract
+
+loanpool -> payout: send ""Liquidity"" tokens for administrator
+
+oracle -> payout: authorize withdrawal of ""Liquidity"" tokens
+
+payout -> oracle: send ""Liquidity"" tokens
+
+@enduml

@@ -20,15 +20,16 @@ module Language.Marlowe.CLI.Command.Template (
   TemplateCommand(..)
 , parseTemplateCommand
 , runTemplateCommand
+, initialMarloweState
 ) where
 
 
 import Control.Monad.Except (MonadIO)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken)
 import Language.Marlowe.CLI.Examples (makeExample)
-import Language.Marlowe.Extended as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
-import Language.Marlowe.Semantics (MarloweData (..))
-import Language.Marlowe.Semantics.Types as C (Contract, State (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
+import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
+import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 

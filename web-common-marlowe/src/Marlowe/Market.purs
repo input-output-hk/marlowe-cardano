@@ -5,11 +5,11 @@ module Marlowe.Market (contractTemplates) where
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
-import Marlowe.Extended.Metadata (ContractTemplate)
+import Language.Marlowe.Extended.V1 (Module)
 
-contractTemplates :: Array ContractTemplate
+contractTemplates :: Array Module
 contractTemplates =
-  [ Escrow.contractTemplate
-  , ZeroCouponBond.contractTemplate
-  , ContractForDifferences.contractTemplate
+  [ Escrow.contractModule
+  , ZeroCouponBond.contractModule
+  , ContractForDifferences.contractModule
   ]

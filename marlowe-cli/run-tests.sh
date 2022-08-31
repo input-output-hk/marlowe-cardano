@@ -71,7 +71,7 @@ do
 done
 
 if [[ "${#@}" -eq 0 ]]; then
-  TEST_CASES=(wait refund simple follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption companion-notifications-for-two-contracts wallet-failure escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada)
+  TEST_CASES=(wait refund simple follower-non-empty-payouts-initialization follower-notifies-about-payout-redemption companion-notifications wallet-failure escrow escrow-with-collateral zero-coupon-bond zero-coupon-bond-too-late zero-coupon-bond-immediate-timeout coupon-bond-guaranteed contract-for-differences contract-for-differences-with-oracle swap-of-ada-for-ada follower-notifies-about-already-closed-contract-without-payouts follower-notifies-about-closing-contract-without-payouts)
 else
   TEST_CASES=("$@")
 fi
@@ -137,7 +137,7 @@ runTest() {
         --socket-path "$NODE_SOCKET_PATH"         \
         --wallet-url "$WALLET_URL"                \
         --pab-url "$PAB_URL"                      \
-        --faucet-key "$FAUCET_SKEY_FILE"               \
+        --faucet-key "$FAUCET_SKEY_FILE"          \
         --faucet-address "$FAUCET_ADDR"           \
         --burn-address "$BURN_ADDRESS"            \
         --passphrase "$PAB_PASSPHRASE"            \

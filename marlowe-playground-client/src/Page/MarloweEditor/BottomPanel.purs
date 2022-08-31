@@ -14,23 +14,21 @@ import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Classes
-  ( flex
-  , flexCol
-  , fontBold
+  ( fontBold
   , fullWidth
   , grid
   , gridColsDescriptionLocation
   , justifySelfEnd
   , minW0
   , overflowXScroll
-  , paddingRight
   , underline
   )
-import Halogen.HTML (a, div, div_, pre_, section, section_, span_, text)
+import Halogen.Css (classNames)
+import Halogen.HTML (a, div, pre_, section, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots)
-import Marlowe.Extended.Metadata (MetaData)
 import Page.MarloweEditor.Types
   ( Action(..)
   , BottomPanelView(..)
@@ -40,21 +38,8 @@ import Page.MarloweEditor.Types
   , _hasHoles
   , _metadataHintInfo
   , _showErrorDetail
-  , contractHasErrors
   )
-import StaticAnalysis.BottomPanel
-  ( analysisResultPane
-  , analyzeButton
-  , clearButton
-  )
-import StaticAnalysis.Types
-  ( _analysisExecutionState
-  , _analysisState
-  , isCloseAnalysisLoading
-  , isNoneAsked
-  , isReachabilityLoading
-  , isStaticLoading
-  )
+import StaticAnalysis.BottomPanel (analysisPane)
 import Text.Extra (lines)
 
 panelContents
@@ -65,62 +50,37 @@ panelContents
   -> BottomPanelView
   -> ComponentHTML Action ChildSlots m
 panelContents state metadata MetadataView =
-  MetadataTab.render
-    { metadata
-    , metadataHintInfo: state ^. _metadataHintInfo
-    }
-    MetadataAction
+  section [ classNames [ "py-4" ] ]
+    [ MetadataTab.render
+        { metadata
+        , metadataHintInfo: state ^. _metadataHintInfo
+        }
+        MetadataAction
+    ]
 
 panelContents state metadata StaticAnalysisView =
-  section [ classes [ flex, flexCol ] ]
+  section [ classNames [ "flex", "flex-col" ] ]
     if (state ^. _hasHoles) then
-      [ div_
+      [ div [ classNames [ "py-4" ] ]
           [ text
               "The contract needs to be complete (no holes) before doing static analysis."
           ]
       ]
     else
-      [ analysisResultPane
+      [ analysisPane
           metadata
+          { warnings: AnalyseContract
+          , reachability: AnalyseReachabilityContract
+          , refund: AnalyseContractForCloseRefund
+          }
           { valueAction: SetValueTemplateParam
           , timeAction: SetTimeTemplateParam
           }
           state
-      , div [ classes [ paddingRight ] ]
-          [ analyzeButton loadingWarningAnalysis analysisEnabled
-              "Analyse for warnings"
-              AnalyseContract
-          , analyzeButton loadingReachability analysisEnabled
-              "Analyse reachability"
-              AnalyseReachabilityContract
-          , analyzeButton loadingCloseAnalysis analysisEnabled
-              "Analyse for refunds on Close"
-              AnalyseContractForCloseRefund
-          , clearButton clearEnabled "Clear" ClearAnalysisResults
-          ]
       ]
-  where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
-    <<< to isStaticLoading
-
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isReachabilityLoading
-
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isCloseAnalysisLoading
-
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
-    isNoneAsked
-
-  nothingLoading = not loadingWarningAnalysis && not loadingReachability && not
-    loadingCloseAnalysis
-
-  clearEnabled = nothingLoading && not noneAskedAnalysis
-
-  analysisEnabled = nothingLoading && not contractHasErrors state
 
 panelContents state _ MarloweWarningsView =
-  section_
+  section [ classNames [ "py-4" ] ]
     if Array.null warnings then
       [ pre_ [ text "No warnings" ] ]
     else
@@ -146,7 +106,7 @@ panelContents state _ MarloweWarningsView =
     ]
 
 panelContents state _ MarloweErrorsView =
-  section_
+  section [ classNames [ "py-4" ] ]
     if Array.null errors then
       [ pre_ [ text "No errors" ] ]
     else

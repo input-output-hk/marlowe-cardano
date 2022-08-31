@@ -17,6 +17,7 @@ import Affjax.ResponseFormat as ResponseFormat
 import Affjax.StatusCode (StatusCode(..))
 import AppM (AppM)
 import Control.Concurrent.AVarMap as AVarMap
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
 import Control.Monad.Fork.Class (class MonadBracket, bracket)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
@@ -34,7 +35,7 @@ import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String (Pattern(..), contains)
 import Data.These (theseLeft)
-import Data.Time.Duration (Milliseconds(..), Minutes(..), fromDuration)
+import Data.Time.Duration (Minutes(..), fromDuration)
 import Data.Traversable (sequence)
 import Data.UUID.Argonaut as UUID
 import Data.WalletId (WalletId)
@@ -48,6 +49,7 @@ import Foreign.Class (decode)
 import Halogen (HalogenM)
 import Halogen.Subscription as HS
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Run.Server as Marlowe
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint)
 import Plutus.PAB.Webserver as PAB
@@ -67,7 +69,8 @@ class Monad m <= ManagePAB m where
   invokeEndpoint
     :: forall d
      . EncodeJson d
-    => PlutusAppId
+    => WalletId
+    -> PlutusAppId
     -> String
     -> d
     -> m (AjaxResponse Unit)
@@ -78,11 +81,41 @@ class Monad m <= ManagePAB m where
   subscribeToPlutusApp :: PlutusAppId -> m Unit
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
 
+-- This is a hack to protect the PAB from its own poor handling of wallet
+-- backend failures. Some of our contracts perform `ownPublicKey` requests
+-- which perform wallet backend API calls. If these calls fail, the contract
+-- instance's thread dies and the instance becomes an unkillable zombie which
+-- can only be cleared by restarting the PAB and deleting the contract instance
+-- from the database.
+--
+-- The most common reason why these calls fail is because we provide a wallet
+-- ID that the wallet backend doesn't have in its database (this happens often
+-- with the in memory wallet store). The safeguard against this, we call our
+-- own `GET total-funds` endpoint which also calls the wallet backend and fails
+-- if the wallet backend does. If this call fails, we don't even try sending
+-- anything to the PAB.
+--
+-- The common case of this is starting a wallet companion before we've polled
+-- the wallet backend (e.g. when refreshing and using the locally saved wallet
+-- information to connect). This results in an apparently "active" wallet
+-- companion instance which is nonetheless dead, and never sends any updates.
+assertWalletStatus
+  :: forall m
+   . MonadAjax Marlowe.Api m
+  => MonadError Error m
+  => MonadEffect m
+  => WalletId
+  -> AppM m (AjaxResponse Unit)
+assertWalletStatus wallet = do
+  response <- Marlowe.getApiWalletV1ByWalletidTotalfunds wallet
+  pure $ void response
+
 instance
   ( MonadRec m
   , MonadAff m
   , MonadBracket Error f m
   , MonadAjax PAB.Api m
+  , MonadAjax Marlowe.Api m
   ) =>
   ManagePAB (AppM m) where
   stopContract instanceId = do
@@ -102,9 +135,13 @@ instance
     bracket
       (liftAff $ AVar.take pabAvar)
       (\_ -> liftAff <<< flip AVar.put pabAvar)
-      \_ -> do
-        liftAff $ delay $ Milliseconds 100.0
-        PAB.postApiContractActivate
+      \_ -> runExceptT do
+        -- Ugly hack to prevent the PAB getting called with a wallet ID the wallet
+        -- backend doesn't know about. This can cause zombie app instances to be
+        -- spawned.
+        ExceptT $ assertWalletStatus wallet
+
+        ExceptT $ PAB.postApiContractActivate
           $ ContractActivationArgs
               { caID: contractActivationId
               , caWallet: Just $ Wallet
@@ -113,7 +150,7 @@ instance
                   }
               }
 
-  invokeEndpoint appId endpoint payload =
+  invokeEndpoint wallet appId endpoint payload =
     runExceptT $ untilJust $ runMaybeT do
       endpointAvarMap <- asks $ view _endpointAVarMap
       -- Try to take the endpoint's availability AVar with a 5 minute timeout
@@ -121,6 +158,11 @@ instance
         [ Right <$> AVarMap.take (Tuple appId endpoint) endpointAvarMap
         , Left timeoutError <$ delay (fromDuration $ Minutes 5.0)
         ]
+      -- Ugly hack to prevent the PAB getting called with a wallet ID the wallet
+      -- backend doesn't know about. This can cause zombie app instances to be
+      -- spawned.
+      lift $ ExceptT $ assertWalletStatus wallet
+
       ajaxResult <- lift $ lift $
         PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
           (encodeJson payload)
@@ -162,8 +204,14 @@ instance
           _ -> false
       _ -> false
 
-  getWalletContractInstances wallet =
-    PAB.getApiContractInstancesWalletByWalletid (WalletId.toString wallet)
+  getWalletContractInstances wallet = runExceptT do
+    -- Ugly hack to prevent the PAB getting called with a wallet ID the wallet
+    -- backend doesn't know about. This can cause zombie app instances to be
+    -- spawned.
+    ExceptT $ assertWalletStatus wallet
+
+    ExceptT $ PAB.getApiContractInstancesWalletByWalletid
+      (WalletId.toString wallet)
       Nothing
 
   onNewActiveEndpoints appId endpoints = do
@@ -200,10 +248,8 @@ instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
-  invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
-    plutusAppId
-    endpointDescription
-    payload
+  invokeEndpoint wallet plutusAppId endpointDescription payload = lift $
+    invokeEndpoint wallet plutusAppId endpointDescription payload
   getWalletContractInstances = lift <<< getWalletContractInstances
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
@@ -214,10 +260,8 @@ instance ManagePAB m => ManagePAB (MaybeT m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
-  invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
-    plutusAppId
-    endpointDescription
-    payload
+  invokeEndpoint wallet plutusAppId endpointDescription payload = lift $
+    invokeEndpoint wallet plutusAppId endpointDescription payload
   getWalletContractInstances = lift <<< getWalletContractInstances
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
@@ -228,10 +272,8 @@ instance ManagePAB m => ManagePAB (ReaderT r m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
-  invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
-    plutusAppId
-    endpointDescription
-    payload
+  invokeEndpoint wallet plutusAppId endpointDescription payload = lift $
+    invokeEndpoint wallet plutusAppId endpointDescription payload
   getWalletContractInstances = lift <<< getWalletContractInstances
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp

@@ -68,9 +68,9 @@
         buildable = true;
         modules = [
           "Language/Marlowe"
-          "Language/Marlowe/Extended"
-          "Language/Marlowe/Semantics"
-          "Language/Marlowe/Semantics/Types"
+          "Language/Marlowe/Extended/V1"
+          "Language/Marlowe/Core/V1/Semantics"
+          "Language/Marlowe/Core/V1/Semantics/Types"
           "Language/Marlowe/FindInputs"
           "Language/Marlowe/Client"
           "Language/Marlowe/Client/History"
@@ -185,9 +185,14 @@
             ];
           buildable = true;
           modules = [
+            "Spec/Marlowe/Arbitrary"
+            "Spec/Marlowe/AutoExecute"
             "Spec/Marlowe/Common"
             "Spec/Marlowe/Marlowe"
-            "Spec/Marlowe/AutoExecute"
+            "Spec/Marlowe/Orphans"
+            "Spec/Marlowe/Semantics"
+            "Spec/Marlowe/Util"
+            "Spec/Marlowe/Util/AssocMap"
             "MarloweContract"
             ];
           hsSourceDirs = [ "test" "pab" ];
