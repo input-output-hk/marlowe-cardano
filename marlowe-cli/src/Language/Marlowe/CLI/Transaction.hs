@@ -30,6 +30,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildOutgoing
 , buildClean
 , buildFaucet
+, buildFaucetImpl
 , buildFaucet'
 , buildMinting
 , querySlotting
@@ -215,7 +216,6 @@ buildClean connection signingKeyFiles lovelace changeAddress range mintValue met
     pure
       $ getTxId body
 
-
 -- | Build a non-Marlowe transaction that fills and address from a faucet.
 buildFaucet :: MonadError CliError m
             => MonadIO m
@@ -229,6 +229,31 @@ buildFaucet :: MonadError CliError m
             -> m TxId                            -- ^ Action to build the transaction body.
 buildFaucet connection value destAddresses fundAddress fundSigningKeyFile timeout =
   do
+    fundSigningKey <- readSigningKey fundSigningKeyFile
+    body <-
+      buildFaucetImpl
+        connection
+        value
+        destAddresses
+        fundAddress
+        fundSigningKey
+        timeout
+    pure
+      $ getTxId body
+
+-- | Build a non-Marlowe transaction that fills and address from a faucet.
+buildFaucetImpl :: MonadError CliError m
+            => MonadIO m
+            => MonadReader (CliEnv era) m
+            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+            -> Value                             -- ^ The value to be sent to the funded addresses.
+            -> [AddressInEra era]                      -- ^ The addresses to receive funds.
+            -> AddressInEra era                        -- ^ The faucet address.
+            -> SomePaymentSigningKey                   -- ^ The required signing key.
+            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            -> m (TxBody era)                                -- ^ Action to build the transaction body.
+buildFaucetImpl connection value destAddresses fundAddress fundSigningKey timeout =
+  do
     utxos <-
       fmap (M.toList . unUTxO)
         . queryInEra connection
@@ -236,7 +261,6 @@ buildFaucet connection value destAddresses fundAddress fundSigningKeyFile timeou
         . QueryUTxOByAddress
         . S.singleton
         $ toAddressAny' fundAddress
-    fundSigningKey <- readSigningKey fundSigningKeyFile
     let
       inputs = fst <$> utxos
       extractValue (TxOut _ v _ _) = txOutValueToValue v
@@ -260,9 +284,7 @@ buildFaucet connection value destAddresses fundAddress fundSigningKeyFile timeou
         False
     forM_ timeout
       $ submitBody connection body [fundSigningKey]
-    pure
-      $ getTxId body
-
+    pure body
 
 -- | Build a non-Marlowe transaction that fills and address from a faucet.
 buildFaucet' :: MonadError CliError m
