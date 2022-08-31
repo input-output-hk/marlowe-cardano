@@ -92,7 +92,7 @@ mkWorker WorkerDependencies{..} =
     nextServer contractId version point = do
       result <- getNextSteps contractId version point
       pure case result of
-        Rollback Genesis -> SendMsgRollBackwardToGenesis ()
+        Rollback Genesis -> SendMsgRollBackCreation ()
         Rollback (At blockHeader) -> SendMsgRollBackward blockHeader $ idleServer contractId version $ At blockHeader
         Next blockHeader steps -> SendMsgRollForward blockHeader steps $ idleServer contractId version $ At blockHeader
         Wait lastUpdateAtRequest lastUpdated -> SendMsgWait $ waitServer contractId version point lastUpdateAtRequest lastUpdated
@@ -100,9 +100,9 @@ mkWorker WorkerDependencies{..} =
     waitServer :: ContractId -> MarloweVersion v -> ChainPoint -> BlockHeader -> STM ChainPoint -> ServerStWait v IO ()
     waitServer contractId version blockHeader requestedAt lastUpdated = ServerStWait
       { recvMsgPoll = do
-          hasUpdated <- atomically $ fmap (> requestedAt) <$> lastUpdated
-          case hasUpdated of
-            Genesis  -> pure $ SendMsgRollBackwardToGenesis ()
+          hasChanged <- atomically $ fmap (== requestedAt) <$> lastUpdated
+          case hasChanged of
+            Genesis  -> pure $ SendMsgRollBackCreation ()
             At True  -> nextServer contractId version blockHeader
             At False -> pure $ SendMsgWait $ waitServer contractId version blockHeader requestedAt lastUpdated
       , recvMsgCancel = pure $ idleServer contractId version blockHeader
