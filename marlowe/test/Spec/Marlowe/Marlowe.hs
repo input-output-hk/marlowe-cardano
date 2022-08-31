@@ -14,6 +14,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -63,6 +64,7 @@ import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), ValidatorHash (ValidatorHash),
                              toBuiltin)
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
+import System.Timeout (timeout)
 import Test.QuickCheck (Gen, arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate,
                         withMaxSuccess, (.&&.), (=/=), (===))
 import Test.QuickCheck.Instances.ByteString ()
@@ -82,6 +84,12 @@ import qualified Plutus.Script.Utils.V1.Typed.Scripts as TS
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P
+
+
+-- | Timeout seconds for static analysis, which can take so much time on a complex contract
+--   that it exceeds hydra/CI resource limits, see SCP-4267.
+_STATIC_ANALYSIS_TIMEOUT_ :: Maybe Int
+_STATIC_ANALYSIS_TIMEOUT_ = Just $ 3 * 60
 
 
 -- | Set to `True` to print the JSON for the pangram contract.
@@ -381,11 +389,14 @@ interpretContractString contractStr = interpret contractStr (as :: Contract)
 -- | Test that a contract execution does not exhibit false positives for warnings.
 noFalsePositivesForContract :: Contract -> Property
 noFalsePositivesForContract cont =
-  unsafePerformIO (do res <- catch (first Right <$> warningsTrace cont)
-                                   (\exc -> return $ Left (Left (exc :: SomeException)))
+  unsafePerformIO (do res <- catch (limitTime $ first Right <$> warningsTrace cont)
+                                   (\exc -> return . Just . Left $ Left (exc :: SomeException))
                       return (case res of
-                                Left err -> counterexample (show err) False
-                                Right answer ->
+                                Nothing -> tabulate ("Timed out after "
+                                             <> show _STATIC_ANALYSIS_TIMEOUT_
+                                             <> " seconds") ["True"] True
+                                Just (Left err) -> counterexample (show err) False
+                                Just (Right answer) ->
                                    tabulate "Has counterexample" [show (isJust answer)]
                                    (case answer of
                                       Nothing ->
@@ -395,6 +406,7 @@ noFalsePositivesForContract cont =
                                          counterexample ("Trace: " ++ show (is, li)) $
                                          tabulate "Number of warnings" [show (length warns)]
                                                   (warns =/= []))))
+    where limitTime = maybe (Just <$>) timeout $ (1_000_000 *) <$> _STATIC_ANALYSIS_TIMEOUT_
 
 
 -- | Test that contract execution does not exhibit false positives for warnings.
