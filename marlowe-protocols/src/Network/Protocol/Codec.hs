@@ -24,16 +24,16 @@ data DeserializeError = DeserializeError
 
 instance Exception DeserializeError where
 
-type PutMessage ps =
-  forall (pr :: PeerRole) (st :: ps) (st' :: ps)
-     . PeerHasAgency pr st
-    -> Message ps st st'
+type PutMessage protocolState =
+  forall (peerRole :: PeerRole) (fromState :: protocolState) (toState :: protocolState)
+     . PeerHasAgency peerRole fromState
+    -> Message protocolState fromState toState
     -> Put
 
-type GetMessage ps =
-  forall (pr :: PeerRole) (st :: ps)
-     . PeerHasAgency pr st
-    -> Get (SomeMessage st)
+type GetMessage protocolState =
+  forall (peerRole :: PeerRole) (fromState :: protocolState)
+     . PeerHasAgency peerRole fromState
+    -> Get (SomeMessage fromState)
 
 binaryCodec
   :: Applicative m

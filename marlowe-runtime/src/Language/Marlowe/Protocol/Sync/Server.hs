@@ -37,7 +37,7 @@ data ServerStIdle v m a = ServerStIdle
 data ServerStNext v m a where
   SendMsgRollForward :: BlockHeader -> [ContractStep v] -> ServerStIdle v m a -> ServerStNext v m a
   SendMsgRollBackward :: BlockHeader -> ServerStIdle v m a -> ServerStNext v m a
-  SendMsgRollBackwardToGenesis :: a -> ServerStNext v m a
+  SendMsgRollBackCreation :: a -> ServerStNext v m a
   SendMsgWait :: ServerStWait v m a -> ServerStNext v m a
 
 deriving instance Functor m => Functor (ServerStNext v m)
@@ -81,7 +81,7 @@ hoistMarloweSyncServer nat = MarloweSyncServer . nat . fmap hoistInit . runMarlo
     hoistNext = \case
       SendMsgRollForward blockHeader steps idle -> SendMsgRollForward blockHeader steps $ hoistIdle idle
       SendMsgRollBackward blockHeader idle      -> SendMsgRollBackward blockHeader $ hoistIdle idle
-      SendMsgRollBackwardToGenesis a            -> SendMsgRollBackwardToGenesis a
+      SendMsgRollBackCreation a                 -> SendMsgRollBackCreation a
       SendMsgWait wait                          -> SendMsgWait $ hoistWait wait
 
     hoistWait :: ServerStWait v m a -> ServerStWait v n a
@@ -129,8 +129,8 @@ marloweSyncServerPeer = Effect . fmap peerInit . runMarloweSyncServer
       SendMsgRollBackward blockHeader idle ->
         Yield (ServerAgency (TokNext version)) (MsgRollBackward blockHeader) $
         peerIdle version idle
-      SendMsgRollBackwardToGenesis a ->
-        Yield (ServerAgency (TokNext version)) MsgRollBackwardToGenesis $
+      SendMsgRollBackCreation a ->
+        Yield (ServerAgency (TokNext version)) MsgRollBackCreation $
         Done TokDone a
       SendMsgWait wait ->
         Yield (ServerAgency (TokNext version)) MsgWait $
