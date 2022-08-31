@@ -118,11 +118,17 @@ data ScriptOperation =
     }
   | Execute
     { soTransaction :: TransactionNickname
+    -- , soOwner       :: Role
     -- , soTimeout     :: Maybe Integer
     }
   | CreateWallet
     {
       soOwner       :: AccountId
+    }
+  | FundWallet
+    {
+      soOwner :: AccountId
+    , soValue :: Int
     }
   | Fail
     {

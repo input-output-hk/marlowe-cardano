@@ -51,12 +51,14 @@ import qualified Data.Map as Map
 import qualified Data.Map.Strict as M (lookup)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl)
 import Language.Marlowe.CLI.Test.Types
+import Language.Marlowe.CLI.Transaction (buildFaucetImpl)
 import Language.Marlowe.CLI.Types (CliEnv (..))
 import qualified Language.Marlowe.Client as Client
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
 data ScriptState era = ScriptState
-  { transactions :: Map String (Maybe (MarloweTransaction era), MarloweTransaction era)
+  { faucet       :: Maybe Wallet
+  , transactions :: Map String (Maybe (MarloweTransaction era), MarloweTransaction era)
   , wallets      :: Map AccountId Wallet
   }
 
@@ -73,6 +75,19 @@ interpret :: MonadError CliError m
           => MonadIO m
           => ScriptOperation
           -> m ()
+interpret FundWallet {..} = do
+  ScriptEnv {..} <- ask
+  let
+    (_, faucetSigningKey, faucetAddress, _) = findFaucetWallet
+    testWallets = findTestWallets
+  destAddresses <- (_, _, address, _) <$> testWallets
+  transactionBody <- withError (\(CliError originalMessage) -> CliError $ originalMessage <> "- from FundWallet") $ buildFaucetImpl
+    seConnection
+    soValue
+    destAddresses
+    faucetAddress
+    faucetSigningKey
+    Just 5
 interpret Initialize {..} = do
   ScriptEnv {..} <- ask
   let
@@ -150,6 +165,7 @@ interpret Initialize {..} = do
                                           maturityDate'
                                           settlementDate'
         template -> throwError $ CliError $ "Template not implemented: " <> show template
+  liftIO $ print testContract
   transaction <- flip runReaderT (CliEnv seEra) $ initializeTransactionImpl
     marloweParams
     seSlotConfig
@@ -218,6 +234,20 @@ findMarloweTransaction nickname = do
   case M.lookup nickname transactions of
     Nothing -> throwError $ CliError ("[findMarloweTransaction] Marlowe Transaction was not found for nickname " <> show nickname <> ".")
     Just t -> pure t
+
+findFaucetWallet :: MonadError CliError m
+              => MonadState (ScriptState era) m
+              -> m (Maybe Wallet)
+findFaucetWallet = do
+  ScriptState { faucet } <- get
+  faucet
+
+findTestWallets :: MonadError CliError m
+              => MonadState (ScriptState era) m
+              -> [m (Maybe Wallet)]
+findTestWallets = do
+  ScriptState { wallets } <- get
+  wallets
 
 -- | Test a Marlowe contract.
 scriptTest  :: forall era m
