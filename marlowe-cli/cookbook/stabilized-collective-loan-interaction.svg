@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="589px" preserveAspectRatio="none" style="width:728px;height:589px;background:#FFFFFF;" version="1.1" viewBox="0 0 728 589" width="728px" zoomAndPan="magnify"><defs/><g><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="58" x2="58" y1="81.2969" y2="509.1563"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="158" x2="158" y1="81.2969" y2="509.1563"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="245" x2="245" y1="81.2969" y2="509.1563"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="332" x2="332" y1="81.2969" y2="509.1563"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="423" x2="423" y1="81.2969" y2="509.1563"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="518" x2="518" y1="81.2969" y2="509.1563"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="660" x2="660" y1="81.2969" y2="509.1563"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="100" x="5" y="77.9951">Administrator</text><ellipse cx="58" cy="13.5" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M58,21.5 L58,48.5 M45,29.5 L71,29.5 M58,48.5 L45,63.5 M58,48.5 L71,63.5 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="100" x="5" y="521.1514">Administrator</text><ellipse cx="58" cy="532.9531" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M58,540.9531 L58,567.9531 M45,548.9531 L71,548.9531 M58,567.9531 L45,582.9531 M58,567.9531 L71,582.9531 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="69" x="121" y="77.9951">Stabilizer</text><ellipse cx="158.5" cy="13.5" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M158.5,21.5 L158.5,48.5 M145.5,29.5 L171.5,29.5 M158.5,48.5 L145.5,63.5 M158.5,48.5 L171.5,63.5 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="69" x="121" y="521.1514">Stabilizer</text><ellipse cx="158.5" cy="532.9531" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M158.5,540.9531 L158.5,567.9531 M145.5,548.9531 L171.5,548.9531 M158.5,567.9531 L145.5,582.9531 M158.5,567.9531 L171.5,582.9531 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="72" x="206" y="77.9951">Investor 1</text><ellipse cx="245" cy="13.5" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M245,21.5 L245,48.5 M232,29.5 L258,29.5 M245,48.5 L232,63.5 M245,48.5 L258,63.5 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="72" x="206" y="521.1514">Investor 1</text><ellipse cx="245" cy="532.9531" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M245,540.9531 L245,567.9531 M232,548.9531 L258,548.9531 M245,567.9531 L232,582.9531 M245,567.9531 L258,582.9531 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="71" x="294" y="77.9951">Investor 2</text><ellipse cx="332.5" cy="13.5" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M332.5,21.5 L332.5,48.5 M319.5,29.5 L345.5,29.5 M332.5,48.5 L319.5,63.5 M332.5,48.5 L345.5,63.5 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="71" x="294" y="521.1514">Investor 2</text><ellipse cx="332.5" cy="532.9531" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M332.5,540.9531 L332.5,567.9531 M319.5,548.9531 L345.5,548.9531 M332.5,567.9531 L319.5,582.9531 M332.5,567.9531 L345.5,582.9531 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="79" x="381" y="77.9951">Borrower 1</text><ellipse cx="423.5" cy="13.5" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M423.5,21.5 L423.5,48.5 M410.5,29.5 L436.5,29.5 M423.5,48.5 L410.5,63.5 M423.5,48.5 L436.5,63.5 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="79" x="381" y="521.1514">Borrower 1</text><ellipse cx="423.5" cy="532.9531" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M423.5,540.9531 L423.5,567.9531 M410.5,548.9531 L436.5,548.9531 M423.5,567.9531 L410.5,582.9531 M423.5,567.9531 L436.5,582.9531 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="78" x="476" y="77.9951">Borrower 2</text><ellipse cx="518" cy="13.5" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M518,21.5 L518,48.5 M505,29.5 L531,29.5 M518,48.5 L505,63.5 M518,48.5 L531,63.5 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="78" x="476" y="521.1514">Borrower 2</text><ellipse cx="518" cy="532.9531" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M518,540.9531 L518,567.9531 M505,548.9531 L531,548.9531 M518,567.9531 L505,582.9531 M518,567.9531 L531,582.9531 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="124" x="598" y="50"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="110" x="605" y="69.9951">Collective Loan</text><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="124" x="598" y="508.1563"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="110" x="605" y="528.1514">Collective Loan</text><polygon fill="#181818" points="648,108.4297,658,112.4297,648,116.4297,652,112.4297" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="58" x2="654" y1="112.4297" y2="112.4297"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="65" y="107.3638">1</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="51" x="78" y="107.3638">initialize</text><polygon fill="#181818" points="648,137.5625,658,141.5625,648,145.5625,652,141.5625" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="158.5" x2="654" y1="141.5625" y2="141.5625"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="165.5" y="136.4966">2</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="123" x="178.5" y="136.4966">deposit 5000k Djed</text><polygon fill="#181818" points="648,166.6953,658,170.6953,648,174.6953,652,170.6953" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="245" x2="654" y1="170.6953" y2="170.6953"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="8" x="252" y="165.6294">3</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="123" x="264" y="165.6294">deposit 1000k Djed</text><polygon fill="#181818" points="648,195.8281,658,199.8281,648,203.8281,652,199.8281" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="332.5" x2="654" y1="199.8281" y2="199.8281"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="339.5" y="194.7622">4</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="115" x="352.5" y="194.7622">deposit 500k Djed</text><polygon fill="#181818" points="648,224.9609,658,228.9609,648,232.9609,652,228.9609" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="58" x2="654" y1="228.9609" y2="228.9609"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="65" y="223.895">5</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="219" x="78" y="223.895">authorize 900k Djed to Borrower 1</text><polygon fill="#181818" points="434.5,254.0938,424.5,258.0938,434.5,262.0938,430.5,258.0938" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="428.5" x2="659" y1="258.0938" y2="258.0938"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="440.5" y="253.0278">6</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="92" x="453.5" y="253.0278">pay 900k Djed</text><polygon fill="#181818" points="648,283.2266,658,287.2266,648,291.2266,652,287.2266" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="58" x2="654" y1="287.2266" y2="287.2266"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="65" y="282.1606">7</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="219" x="78" y="282.1606">authorize 600k Djed to Borrower 2</text><polygon fill="#181818" points="529,312.3594,519,316.3594,529,320.3594,525,316.3594" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="523" x2="659" y1="316.3594" y2="316.3594"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="535" y="311.2935">8</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="92" x="548" y="311.2935">pay 600k Djed</text><polygon fill="#181818" points="648,341.4922,658,345.4922,648,349.4922,652,345.4922" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="518" x2="654" y1="345.4922" y2="345.4922"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="9" x="525" y="340.4263">9</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="105" x="538" y="340.4263">repay 720k Djed</text><polygon fill="#181818" points="648,370.625,658,374.625,648,378.625,652,374.625" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="423.5" x2="654" y1="374.625" y2="374.625"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="19" x="430.5" y="369.5591">10</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="136" x="453.5" y="369.5591">repay only 840k Djed</text><polygon fill="#181818" points="648,399.7578,658,403.7578,648,407.7578,652,403.7578" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="58" x2="654" y1="403.7578" y2="403.7578"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="18" x="65" y="398.6919">11</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="120" x="87" y="398.6919">terminate contract</text><polygon fill="#181818" points="169.5,428.8906,159.5,432.8906,169.5,436.8906,165.5,432.8906" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="163.5" x2="659" y1="432.8906" y2="432.8906"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="18" x="175.5" y="427.8247">12</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="100" x="197.5" y="427.8247">pay 4910k Djed</text><polygon fill="#181818" points="256,458.0234,246,462.0234,256,466.0234,252,462.0234" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="250" x2="659" y1="462.0234" y2="462.0234"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="17" x="262" y="456.9575">13</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="100" x="283" y="456.9575">pay 1100k Djed</text><polygon fill="#181818" points="343.5,487.1563,333.5,491.1563,343.5,495.1563,339.5,491.1563" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="337.5" x2="659" y1="491.1563" y2="491.1563"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="18" x="349.5" y="486.0903">14</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="92" x="371.5" y="486.0903">pay 550k Djed</text><!--MD5=[676be3e565b20d66eca5b9cae818b870]
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+
+actor Administrator as administrator
+actor Stabilizer    as stabilizer
+actor "Investor 1"  as investor1
+actor "Investor 2"  as investor2
+actor "Borrower 1"  as borrower1
+actor "Borrower 2"  as borrower2
+participant "Collective Loan" as pool
+
+administrator -> pool: initialize
+
+stabilizer -> pool: deposit 5000k Djed
+
+investor1 -> pool: deposit 1000k Djed
+investor2 -> pool: deposit 500k Djed
+
+administrator -> pool: authorize 900k Djed to Borrower 1
+pool -> borrower1: pay 900k Djed
+
+administrator -> pool: authorize 600k Djed to Borrower 2
+pool -> borrower2: pay 600k Djed
+
+borrower2 -> pool: repay 720k Djed
+
+borrower1 -> pool: repay only 840k Djed
+
+administrator -> pool: terminate contract
+
+pool -> stabilizer: pay 4910k Djed
+pool -> investor1:  pay 1100k Djed
+pool -> investor2:  pay 550k Djed
+@enduml
+
+@startuml
+
+autonumber
+
+
+actor Administrator as administrator
+actor Stabilizer    as stabilizer
+actor "Investor 1"  as investor1
+actor "Investor 2"  as investor2
+actor "Borrower 1"  as borrower1
+actor "Borrower 2"  as borrower2
+participant "Collective Loan" as pool
+
+administrator -> pool: initialize
+
+stabilizer -> pool: deposit 5000k Djed
+
+investor1 -> pool: deposit 1000k Djed
+investor2 -> pool: deposit 500k Djed
+
+administrator -> pool: authorize 900k Djed to Borrower 1
+pool -> borrower1: pay 900k Djed
+
+administrator -> pool: authorize 600k Djed to Borrower 2
+pool -> borrower2: pay 600k Djed
+
+borrower2 -> pool: repay 720k Djed
+
+borrower1 -> pool: repay only 840k Djed
+
+administrator -> pool: terminate contract
+
+pool -> stabilizer: pay 4910k Djed
+pool -> investor1:  pay 1100k Djed
+pool -> investor2:  pay 550k Djed
+@enduml
+
+PlantUML version 1.2022.8beta2(Unknown compile time)
+(GPL source distribution)
+Java Runtime: Java(TM) SE Runtime Environment
+JVM: Java HotSpot(TM) 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>
