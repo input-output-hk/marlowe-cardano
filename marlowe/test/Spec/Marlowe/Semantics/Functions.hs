@@ -64,11 +64,6 @@ _ALLOW_ZERO_PAYMENT :: Bool
 _ALLOW_ZERO_PAYMENT = True
 
 
--- | FIXME: Turn this off when the `Language.Marlowe.Core.V1.Semantics.getContinuation` test is fixed, see SCP-4268.
-_ALLOW_FAILED_CONTINUATION_ :: Bool
-_ALLOW_FAILED_CONTINUATION_ = True
-
-
 -- | Run the tests.
 tests :: TestTree
 tests =
@@ -882,11 +877,11 @@ checkGetContinuation =
            case' <- elements [Case action contract, MerkleizedCase action contractHash]
            pure (input, case', contract, contractHash == contractHash')
     forAll' gen $ \(input, case', contract, hashesMatch) ->
-      _ALLOW_FAILED_CONTINUATION_ || case (input, case', getContinuation input case') of
-        (NormalInput{}    , Case{}          , contract') -> Just contract == contract'
-        (MerkleizedInput{}, MerkleizedCase{}, contract') -> (Just contract == contract') == hashesMatch
-        (_                , _               , Nothing  ) -> True
-        _                                                -> False
+      case (input, case', getContinuation input case') of
+        (NormalInput{}    , Case{}                                       , contract') -> Just contract == contract'
+        (MerkleizedInput _ contractHash _, MerkleizedCase _ contractHash', _        ) -> (contractHash == contractHash') == hashesMatch
+        (_                , _                                            , Nothing  ) -> True
+        _                                                                             -> False
 
 
 -- | Test `Language.Marlowe.Core.V1.Semantics.applyCases`.
