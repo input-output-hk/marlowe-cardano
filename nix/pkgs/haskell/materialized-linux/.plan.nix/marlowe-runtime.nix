@@ -44,6 +44,7 @@
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+          (hsPkgs."semialign" or (errorHandler.buildDepError "semialign"))
           (hsPkgs."split" or (errorHandler.buildDepError "split"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -55,6 +56,9 @@
           ];
         buildable = true;
         modules = [
+          "Language/Marlowe/Protocol/Sync/Codec"
+          "Language/Marlowe/Protocol/Sync/Server"
+          "Language/Marlowe/Protocol/Sync/Types"
           "Language/Marlowe/Runtime/Core/Api"
           "Language/Marlowe/Runtime/History"
           "Language/Marlowe/Runtime/History/Api"
@@ -62,6 +66,9 @@
           "Language/Marlowe/Runtime/History/FollowerSupervisor"
           "Language/Marlowe/Runtime/History/JobServer"
           "Language/Marlowe/Runtime/History/QueryServer"
+          "Language/Marlowe/Runtime/History/Store"
+          "Language/Marlowe/Runtime/History/Store/Memory"
+          "Language/Marlowe/Runtime/History/SyncServer"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -111,6 +118,7 @@
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
@@ -146,7 +154,7 @@
             (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
             ];
           buildable = true;
-          modules = [ "Paths_marlowe_runtime" ];
+          modules = [ "Paths_marlowe_runtime" "Options" ];
           hsSourceDirs = [ "marlowe-follower" ];
           mainPath = [
             "Main.hs"
