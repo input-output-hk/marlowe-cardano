@@ -11,12 +11,10 @@ import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
 import Data.Bifunctor (bimap)
-import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (listToMaybe)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Query.Server
