@@ -59,11 +59,6 @@ import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, Testable (property)
 import qualified PlutusTx.AssocMap as AM (delete, empty, filter, fromList, insert, keys, lookup, member, null, toList)
 
 
--- | FIXME: Turn this off when semantics are fixed, see SCP-4269.
-_ALLOW_ZERO_PAYMENT :: Bool
-_ALLOW_ZERO_PAYMENT = True
-
-
 -- | Run the tests.
 tests :: TestTree
 tests =
@@ -746,7 +741,7 @@ checkReduceContractStepPay =
           && Party payee' == payee
           && case flattenMoney money of
                [(token', amount)] -> token == token' && amount == debit && state' `stateEq` newState
-               []                 -> _ALLOW_ZERO_PAYMENT && state' `stateEq` state
+               []                 -> state' `stateEq` state
                _                  -> False
       checkPayment (Payment account' (Account payee') money) state' =
         let
@@ -757,7 +752,7 @@ checkReduceContractStepPay =
             && Account payee' == payee
             && case flattenMoney money of
                  [(token', amount)] -> token' == token && amount == debit && state' `stateEq` newState'
-                 []                 -> _ALLOW_ZERO_PAYMENT && state' `stateEq` state
+                 []                 -> state' `stateEq` state
                  _                  -> False
     in
       case reduceContractStep environment state (Pay account payee token value contract) of
@@ -772,7 +767,7 @@ checkReduceContractStepPay =
                                                                                                                             && fullAmount
                                                                                                                             && checkPayment payment state'
                                                                                                                             && contract' == contract
-        Reduced (ReducePartialPay account' payee' token' debit' request') (ReduceWithPayment payment) state' contract' -> (positiveAmount || _ALLOW_ZERO_PAYMENT && debit' == 0)
+        Reduced (ReducePartialPay account' payee' token' debit' request') (ReduceWithPayment payment) state' contract' -> (positiveAmount || debit' == 0)
                                                                                                                             && not fullAmount
                                                                                                                             && account' == account
                                                                                                                             && payee' == payee
