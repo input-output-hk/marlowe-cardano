@@ -58,6 +58,7 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Language.Marlowe.Client (ContractHistory(..))
+import Language.Marlowe.Core.V1.Semantics.Types (MarloweParams)
 import MainFrame.Lenses
   ( _dashboardState
   , _enteringDashboardState
@@ -79,7 +80,6 @@ import MainFrame.Types
 import MainFrame.View (render)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Server as MarloweRun
-import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome

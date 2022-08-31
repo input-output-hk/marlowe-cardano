@@ -25,6 +25,7 @@ import Data.ContractTimeout as CT
 import Data.DateTime.Instant (unInstant)
 import Data.Either (hush)
 import Data.FunctorWithIndex (mapWithIndex)
+import Data.Lens (view)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
@@ -42,10 +43,13 @@ import Halogen (HalogenM)
 import Halogen as H
 import Halogen.Form.Injective (blank, inject)
 import Halogen.Store.Monad (class MonadStore)
-import Marlowe.Extended (ContractType(..))
-import Marlowe.Extended.Metadata (ContractTemplate, NumberFormat(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
+import Language.Marlowe.Extended.V1 (Module, _contract, _metadata)
+import Language.Marlowe.Extended.V1.Metadata.Types
+  ( ContractType(..)
+  , NumberFormat(..)
+  )
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics (Party(..))
 import Marlowe.Template
   ( TemplateContent(..)
   , getPlaceholderIds
@@ -73,9 +77,9 @@ component = H.mkComponent
 initialState :: Input -> State
 initialState wallet = { wallet, wizard: Start }
 
-setup :: ContractTemplate -> Maybe ContractFields -> Wizard
-setup { metaData, extendedContract } mFields = Setup
-  { metaData, extendedContract }
+setup :: Module -> Maybe ContractFields -> Wizard
+setup module' mFields = Setup
+  module'
   { templateRoles: getParties extendedContract # Set.mapMaybe case _ of
       Role name -> Just name
       _ -> Nothing
@@ -86,6 +90,8 @@ setup { metaData, extendedContract } mFields = Setup
   , metaData
   }
   where
+  metaData = view _metadata module'
+  extendedContract = view _contract module'
   TemplateContent { timeContent, valueContent } =
     initializeTemplateContent $ getPlaceholderIds extendedContract
   defaultTimeContent = case metaData.contractType of

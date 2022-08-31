@@ -10,7 +10,7 @@ import Data.Lens.Record (prop)
 import Data.Newtype (class Newtype)
 import Effect.Aff (Aff)
 import Effect.Uncurried (EffectFn3, runEffectFn3)
-import Marlowe.Extended (Contract)
+import Language.Marlowe.Extended.V1 (Contract)
 import Monaco (ITextModel)
 import Type.Proxy (Proxy(..))
 

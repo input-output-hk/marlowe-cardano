@@ -34,14 +34,20 @@ import Data.Set as Set
 import Data.Set.Ordered.OSet as OSet
 import Data.Tuple.Nested (type (/\), (/\))
 import Humanize (humanizeValue)
-import Marlowe.Extended as EM
-import Marlowe.Extended.Metadata
-  ( MetadataHintInfo
-  , _choiceNames
+import Language.Marlowe.Core.V1.Semantics
+  ( emptyState
+  , evalValue
+  , makeEnvironment
+  )
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 as EM
+import Language.Marlowe.Extended.V1.Metadata.Lenses
+  ( _choiceNames
   , _roles
   , _timeParameters
   , _valueParameters
   )
+import Language.Marlowe.Extended.V1.Metadata.Types (MetadataHintInfo)
 import Marlowe.Holes
   ( Action(..)
   , Bound(..)
@@ -63,8 +69,6 @@ import Marlowe.Holes
   , insertHole
   )
 import Marlowe.Holes as MH
-import Marlowe.Semantics (emptyState, evalValue, makeEnvironment)
-import Marlowe.Semantics as S
 import Marlowe.Time (unixEpoch)
 import Monaco (TextEdit)
 import Plutus.V1.Ledger.Time (POSIXTime(..))

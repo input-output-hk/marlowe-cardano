@@ -16,19 +16,27 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff (Error)
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
-import Marlowe.Extended (toCore)
-import Marlowe.Extended as EM
-import Marlowe.Holes (Term, fromTerm)
-import Marlowe.Holes as T
-import Marlowe.Parser (parseContract)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics (computeTransaction) as S
+import Language.Marlowe.Core.V1.Semantics (emptyState)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ChoiceId(..)
+  , Contract
+  , Input(..)
+  , TimeInterval(..)
+  , TransactionInput(..)
+  , TransactionOutput(..)
+  ) as S
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Input
   , Party(..)
   , Token(..)
   , TransactionInput
-  , emptyState
   )
-import Marlowe.Semantics as S
+import Language.Marlowe.Extended.V1 (toCore)
+import Language.Marlowe.Extended.V1 as EM
+import Marlowe.Holes (Term, fromTerm)
+import Marlowe.Holes as T
+import Marlowe.Parser (parseContract)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (unixEpoch, unsafeInstantFromInt)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
@@ -185,7 +193,7 @@ contractForDifferences =
               ]
         }
     )
-    ContractForDifferences.extendedContract
+    ContractForDifferences.contract
 
 contractForDifferencesFlows :: ContractFlows
 contractForDifferencesFlows =

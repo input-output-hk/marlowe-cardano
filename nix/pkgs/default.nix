@@ -94,7 +94,12 @@ let
   # client on Linux, so that's okay. However, it does
   # mean that e.g. we can't build the client dep updating
   # script on Darwin.
-  easyPS = pkgs.callPackage (sources.easy-purescript-nix) { };
+  easyPS =
+    let
+      p = pkgs.callPackage (sources.easy-purescript-nix) { };
+    in
+    p // { purs = p.purs-0_14_9; };
+
 
   # We pull out some packages from easyPS that are a pain to get otherwise.
   # This does mean we can't as easily control the version we get, though.

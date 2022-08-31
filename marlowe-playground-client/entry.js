@@ -25,4 +25,6 @@ global.monacoExtraTypeScriptLibs = [
 JSON.stringify = stringify;
 JSON.parse = parse;
 
-main();
+main({
+  webpackBuildMode: process.env.NODE_ENV,
+})();

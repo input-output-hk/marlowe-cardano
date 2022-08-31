@@ -8,9 +8,9 @@ import Data.Maybe (maybe)
 import Data.Tuple.Nested ((/\))
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
+import Language.Marlowe.Core.V1.Semantics.Types (Contract)
+import Language.Marlowe.Extended.V1 (Module(..), toCore)
 import Marlowe.Deinstantiate (findTemplate)
-import Marlowe.Extended (toCore)
-import Marlowe.Semantics (Contract)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (unsafeInstantFromInt)
 import Test.Spec (Spec, describe, it)
@@ -21,6 +21,8 @@ all =
   describe "Deinstantiator Tests" do
     it "Escrow" do
       let
+        Module { contract: extendedContract } = Escrow.contractModule
+
         mFilledEscrow :: Maybe Contract
         mFilledEscrow =
           toCore
@@ -29,9 +31,9 @@ all =
                     { timeContent:
                         Map.fromFoldable
                           [ "Payment deadline" /\ unsafeInstantFromInt 600
+                          , "Complaint deadline" /\ unsafeInstantFromInt 1800
                           , "Complaint response deadline" /\
-                              unsafeInstantFromInt 1800
-                          , "Complaint deadline" /\ unsafeInstantFromInt 2400
+                              unsafeInstantFromInt 2400
                           , "Mediation deadline" /\ unsafeInstantFromInt 3600
                           ]
                     , valueContent:
@@ -40,14 +42,16 @@ all =
                           ]
                     }
                 )
-                Escrow.contractTemplate.extendedContract
+                extendedContract
             )
       shouldSatisfy (mFilledEscrow == Nothing) not
       shouldEqual
-        (Just Escrow.contractTemplate)
+        (Just Escrow.contractModule)
         (maybe Nothing findTemplate mFilledEscrow)
     it "Zero Coupon Bond" do
       let
+        Module { contract: extendedContract } = ZeroCouponBond.contractModule
+
         mFilledZeroCouponBond :: Maybe Contract
         mFilledZeroCouponBond =
           toCore
@@ -65,9 +69,9 @@ all =
                           ]
                     }
                 )
-                ZeroCouponBond.contractTemplate.extendedContract
+                extendedContract
             )
       shouldSatisfy (mFilledZeroCouponBond == Nothing) not
       shouldEqual
-        (Just ZeroCouponBond.contractTemplate)
+        (Just ZeroCouponBond.contractModule)
         (maybe Nothing findTemplate mFilledZeroCouponBond)

@@ -11,15 +11,13 @@ import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
-import Halogen.Classes (first, rTable, rTable4cols, rTableCell, rTableEmptyRow)
+import Halogen.Classes (first, rTableCell, rTableEmptyRow)
 import Halogen.Classes as Classes
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, br_, div, div_, h4, text)
+import Halogen.HTML (HTML, br_, div, div_, h4, section, text)
 import Halogen.HTML.Properties (class_, classes)
 import Humanize (humanizeValue)
-import MainFrame.Types (ChildSlots)
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(..)
   , Party
   , Token
@@ -30,6 +28,8 @@ import Marlowe.Semantics
   , _boundValues
   , _choices
   )
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
+import MainFrame.Types (ChildSlots)
 import Marlowe.ViewPartials (displayWarningList)
 import Page.Simulation.Types (BottomPanelView(..), State)
 import Pretty (renderPrettyParty)
@@ -65,11 +65,12 @@ panelContents _ state WarningsAndErrorsView =
       )
       state
   in
-    warningsAndErrorsView runtimeWarnings mRuntimeError
+    section [ classNames [ "py-4" ] ] $
+      [ warningsAndErrorsView runtimeWarnings mRuntimeError ]
 
 currentStateView :: forall p action. MetaData -> State -> HTML p action
 currentStateView metadata state =
-  div [ classes [ rTable, rTable4cols ] ]
+  div [ classNames [ "Rtable", "Rtable--4cols", "py-4" ] ]
     ( tableRow
         { title: "Accounts"
         , emptyMessage: "No accounts have been used"

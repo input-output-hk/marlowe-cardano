@@ -19,10 +19,14 @@ import Data.String.Extra (capitalize)
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, text)
 import Humanize (humanizeDuration)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( CurrencySymbol
+  , Party(..)
+  , Token(..)
+  )
 import Marlowe.Execution.Lenses (_mNextTimeout)
 import Marlowe.Execution.State (isClosed)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (CurrencySymbol, Party(..), Token(..))
 import Store.RoleTokens (RoleTokenStore, getDisplayName)
 
 timeoutString :: Instant -> Execution.State -> String

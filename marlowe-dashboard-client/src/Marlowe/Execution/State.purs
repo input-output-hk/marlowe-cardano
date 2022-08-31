@@ -30,18 +30,14 @@ import Data.Newtype (unwrap)
 import Data.Time.Duration (Days(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
 import Language.Marlowe.Client (ContractHistory)
-import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
-import Marlowe.Execution.Lenses (_resultingPayments)
-import Marlowe.Execution.Types
-  ( NamedAction(..)
-  , PastAction(..)
-  , PendingTimeouts
-  , State
-  , TimeoutInfo
+import Language.Marlowe.Core.V1.Semantics
+  ( computeTransaction
+  , emptyState
+  , evalValue
+  , makeEnvironment
+  , reduceContractUntilQuiescent
   )
-import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Accounts
   , Action(..)
   , Case(..)
@@ -61,14 +57,20 @@ import Marlowe.Semantics
   , TransactionInput(..)
   , TransactionOutput(..)
   , _accounts
-  , computeTransaction
-  , emptyState
-  , evalValue
-  , makeEnvironment
-  , reduceContractUntilQuiescent
   , timeouts
   )
-import Marlowe.Semantics (State) as Semantic
+import Language.Marlowe.Core.V1.Semantics.Types (State) as Semantic
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
+import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
+import Marlowe.Execution.Lenses (_resultingPayments)
+import Marlowe.Execution.Types
+  ( NamedAction(..)
+  , PastAction(..)
+  , PendingTimeouts
+  , State
+  , TimeoutInfo
+  )
+import Marlowe.PAB (PlutusAppId)
 import Partial.Unsafe (unsafePartial)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Plutus.V1.Ledger.Time as POSIXTime

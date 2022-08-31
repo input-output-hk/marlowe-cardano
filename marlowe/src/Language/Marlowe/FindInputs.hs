@@ -4,8 +4,8 @@ import Data.Bifunctor (Bifunctor (second), bimap)
 import Data.Maybe (catMaybes)
 import Data.SBV (ThmResult)
 import Language.Marlowe.Analysis.FSSemantics (onlyAssertionsWithState)
-import Language.Marlowe.Semantics (TransactionInput)
-import Language.Marlowe.Semantics.Types (Case (..), Contract (..), Observation (..))
+import Language.Marlowe.Core.V1.Semantics (TransactionInput)
+import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Observation (..))
 import Plutus.V1.Ledger.Api (POSIXTime)
 
 -- | Removes all the assertions from a contract

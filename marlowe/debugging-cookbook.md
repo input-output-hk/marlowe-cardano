@@ -10,6 +10,7 @@
     *   [TEApplyNoMatchError](#reapplynomatcherror)
     *   [TEAmbiguousTimeIntervalError](#teambiguoustimeintervalerror)
 *   [Debugging Plutus](#debugging-plutus)
+*   [Profiling Marlowe](#profiling-marlowe)
 
 
 # General Approaches
@@ -79,6 +80,7 @@ Transaction failures occur in either phase 1 validation (ledger rules) or phase 
 *   `TxBodyError TxBodyEmptyTxIns` indicates that a faucet or wallet is empty.
 *   `TxBodyError TxBodyOutputNegative` indicates that a faucet or wallet has insufficient funds.
 *   `TxBodyError NonAdaAssetsUnbalanced` indicates that the presence of native tokens have caused a problem.
+*   Mysterious deserialization errors such as `Tag "toCardanoPaymentKeyHash (32 bytes)" DeserialisationError` may occur in cases where the Marlowe state (in the `Datum`) contains an invalid public key hash, currency symbol, or other byte sequence. (Generally, problems in the contract state in its creation transaction or in the contract itself can cause problems like this.) Check to make sure that all public key hashes and currency symbols are 28 bytes long. The Marlowe semantics do not enforce the size of these bytestrings, but the ledger rules do: this means that a contract might operate normally until a transaction is created that uses such a public key hash or currency symbol, at which time CBOR deserialization will fail and the contract will become unexecutable.
 *   Script transactions for wallets that only contain UTxOs with native tokens will fail because collateral must be a pure-ADA UTxO.
 *   Be careful regarding whether addresses contain staking keys or not, as this can affect the result of UTxO queries. The PAB and chain index mostly ignore the staking part of an address, but the Wallet does not. If it looks like the Marlowe backend is not finding UTxOs that are clearly on chain, then the presence or absence of staking information in the address may be the culprit.
 *   Transactions whose size in bytes exceed the protocol limits will be rejected.
@@ -284,3 +286,17 @@ Right (
 ```
 which gives a clearer view of the on-chain data.
 
+
+## Profiling Marlowe
+
+[Chapter 25 of *Real World Haskell*](http://book.realworldhaskell.org/read/profiling-and-optimization.html) provides an excellent, though now slightly dated, overview of profiling Haskell programs. The techniques there are applicable to Marlowe.
+
+In this example we will profile the `marlowe-pab` executable.
+
+1.  Add runtime options to the `.cabal` file for the executable that you want to profile. This isn't strictly necessary, but it does give you more options to control the profiling. In this case we add `-rtpopts -fprof-auto -fprof-cafs` to the `ghc-options` field of the `executable marlowe-pab` section in [marlowe-cardano/marlowe.cabal](marlowe.cabal).
+2.  In Marlowe's top folder, open a Nix shell for profiling: `nix-shell --arg enableHaskellProfiling true`. It may take hours to build all dependencies with profiling.
+3.  Run the executable with extra runtime options for profiling: for example, `marlowe-pab +RTS -p -hc -RTS`.
+4.  The executable will run far slower than normally. You can adjust the number of time slices and profiling resolution with RTS options like `-i`, `-C`, or `-V`. Run `marlowe-pab +RTS -?` to get a list of the available options along with a brief description of each.
+5.  When the program terminates or is killed, there will be a pair of files, `marlowe-pab.prof` and `marlowe-pab.hp`.
+6.  Examine `marlowe-pab.prof` in a text editor to see where time was spent and memory allocations occured.
+7.  Use `hp2ps -c marlowe-pab.hp` to generate a PostScript file `marlowe-pab.ps` that displays memory usage over time. A tool like `ps2pdf` will convert that file from PostScript to a PDF that is more convenient to view.

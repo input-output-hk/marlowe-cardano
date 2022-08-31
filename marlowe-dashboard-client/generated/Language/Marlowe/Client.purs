@@ -25,7 +25,7 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
 import Language.Marlowe.Client.History (RolePayout)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( MarloweData
   , MarloweParams
   , TransactionError

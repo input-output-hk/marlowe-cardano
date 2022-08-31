@@ -27,7 +27,18 @@ import Data.NonEmpty (NonEmpty, (:|))
 import Data.Semigroup.Foldable (foldl1)
 import Data.String.CodeUnits (fromCharArray)
 import Data.Time.Duration (Milliseconds(..))
-import Marlowe.Extended as EM
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( CurrencySymbol
+  , Input(..)
+  , PubKey
+  , Rational(..)
+  , TimeInterval(..)
+  , TokenName
+  , TransactionInput(..)
+  , TransactionWarning(..)
+  )
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 as EM
 import Marlowe.Holes
   ( Action(..)
   , Bound(..)
@@ -47,17 +58,6 @@ import Marlowe.Holes
   , mkArgName
   )
 import Marlowe.Holes as H
-import Marlowe.Semantics
-  ( CurrencySymbol
-  , Input(..)
-  , PubKey
-  , Rational(..)
-  , TimeInterval(..)
-  , TokenName
-  , TransactionInput(..)
-  , TransactionWarning(..)
-  )
-import Marlowe.Semantics as S
 import Partial.Unsafe (unsafePartial)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 

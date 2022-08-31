@@ -90,7 +90,7 @@ number
 
 timeout
    -> hole {% ([hole]) => hole %}
-    | number {% ([n]) => opts.mkTerm(opts.mkExtendedTimeValue(n))({startLineNumber: n.line, startColumn: n.col, endLineNumber: n.line, endColumn: n.col + n.toString(10).length}) %}
+    | %number {% ([n]) => opts.mkTerm(opts.mkExtendedTimeValue(n.value))({startLineNumber: n.line, startColumn: n.col, endLineNumber: n.line, endColumn: n.col + n.toString(10).length}) %}
     | lparen "TimeParam" someWS string rparen {% ([start,{line,col},,s,end]) => opts.mkTerm(opts.mkExtendedTimeParam(s))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col}) %}
 
 string

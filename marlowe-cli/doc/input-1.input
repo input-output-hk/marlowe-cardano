@@ -1,0 +1,9 @@
+{
+    "for_choice_id": {
+        "choice_name": "ADA/GBP Price",
+        "choice_owner": {
+            "role_token": "Christopher Marlowe"
+        }
+    },
+    "input_that_chooses_num": 1000000
+}

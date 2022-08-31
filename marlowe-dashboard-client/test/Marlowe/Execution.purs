@@ -18,18 +18,7 @@ import Effect.Exception.Unsafe (unsafeThrow)
 import Errors.Explain (explainString)
 import Examples.PureScript.ZeroCouponBond as Loan
 import Language.Marlowe.Client (ContractHistory(..))
-import Marlowe.Execution.State
-  ( currentStep
-  , extractNamedActions
-  , getAllPayments
-  , isClosed
-  , pendingTimeouts
-  , restoreState
-  )
-import Marlowe.Execution.Types (NamedAction(..), State)
-import Marlowe.Extended (resolveRelativeTimes, toCore)
-import Marlowe.PAB (PlutusAppId(..))
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Contract
   , Input(..)
   , MarloweData(..)
@@ -41,7 +30,18 @@ import Marlowe.Semantics
   , TransactionInput(..)
   , ada
   )
-import Marlowe.Semantics as Semantic
+import Language.Marlowe.Core.V1.Semantics.Types as Semantic
+import Language.Marlowe.Extended.V1 (resolveRelativeTimes, toCore)
+import Marlowe.Execution.State
+  ( currentStep
+  , extractNamedActions
+  , getAllPayments
+  , isClosed
+  , pendingTimeouts
+  , restoreState
+  )
+import Marlowe.Execution.Types (NamedAction(..), State)
+import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Time (unsafeInstantFromInt)
 import Plutus.V1.Ledger.Address (Address(..))
@@ -294,7 +294,7 @@ restoreLoanState { currentTime, startTime } loanParams chHistory = do
     mState = restoreState
       (PlutusAppId UUID.emptyUUID)
       currentTime
-      Loan.metaData
+      Loan.metadata
       contractHistory
   case mState of
     Left err -> throwError $ error $ "Can't restore state: " <> explainString

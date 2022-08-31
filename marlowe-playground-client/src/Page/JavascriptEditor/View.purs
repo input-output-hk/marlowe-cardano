@@ -8,7 +8,7 @@ import Component.MetadataTab (render) as MetadataTab
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
-import Data.Lens (to, view, (^.))
+import Data.Lens (view, (^.))
 import Data.Maybe (maybe)
 import Data.String (Pattern(..), split)
 import Data.String as String
@@ -51,8 +51,8 @@ import Language.Javascript.Interpreter
   ( CompilationError(..)
   , InterpreterResult(..)
   )
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import MainFrame.Types (ChildSlots, _jsEditorSlot)
-import Marlowe.Extended.Metadata (MetaData)
 import Page.JavascriptEditor.State (mkEditor)
 import Page.JavascriptEditor.Types
   ( Action(..)
@@ -65,17 +65,7 @@ import Page.JavascriptEditor.Types
   )
 import Page.JavascriptEditor.Types as JS
 import StaticAnalysis.BottomPanel
-  ( analysisResultPane
-  , analyzeButton
-  , clearButton
-  )
-import StaticAnalysis.Types
-  ( _analysisExecutionState
-  , _analysisState
-  , isCloseAnalysisLoading
-  , isNoneAsked
-  , isReachabilityLoading
-  , isStaticLoading
+  ( analysisPane
   )
 import Text.Pretty (pretty)
 
@@ -193,7 +183,7 @@ panelContents
   -> BottomPanelView
   -> ComponentHTML Action ChildSlots m
 panelContents state _ GeneratedOutputView =
-  section_ case view _compilationResult state of
+  section [ classNames [ "py-4" ] ] case view _compilationResult state of
     JS.CompiledSuccessfully (InterpreterResult result) ->
       [ div [ HP.classes [ bgWhite, spaceBottom, ClassName "code" ] ]
           numberedText
@@ -206,67 +196,42 @@ panelContents state _ GeneratedOutputView =
 
 panelContents state metadata StaticAnalysisView =
   section_
-    ( [ analysisResultPane
+    if isCompiled then
+      [ analysisPane
           metadata
+          { warnings: AnalyseContract
+          , reachability: AnalyseReachabilityContract
+          , refund: AnalyseContractForCloseRefund
+          }
           { valueAction: SetValueTemplateParam
           , timeAction: SetTimeTemplateParam
           }
           state
-      , analyzeButton loadingWarningAnalysis analysisEnabled
-          "Analyse for warnings"
-          AnalyseContract
-      , analyzeButton loadingReachability analysisEnabled "Analyse reachability"
-          AnalyseReachabilityContract
-      , analyzeButton loadingCloseAnalysis analysisEnabled
-          "Analyse for refunds on Close"
-          AnalyseContractForCloseRefund
-      , clearButton clearEnabled "Clear" ClearAnalysisResults
       ]
-        <>
-          ( if isCompiled then []
-            else
-              [ div [ HP.classes [ ClassName "choice-error" ] ]
-                  [ text
-                      "JavaScript code needs to be compiled in order to run static analysis"
-                  ]
-              ]
-          )
-    )
+    else
+      [ div [ HP.classes [ ClassName "choice-error" ] ]
+          [ text
+              "JavaScript code needs to be compiled in order to run static analysis"
+          ]
+      ]
   where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
-    <<< to isStaticLoading
-
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isReachabilityLoading
-
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
-    to isCloseAnalysisLoading
-
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
-    isNoneAsked
-
-  anyAnalysisLoading = loadingWarningAnalysis || loadingReachability ||
-    loadingCloseAnalysis
-
-  analysisEnabled = not anyAnalysisLoading && isCompiled
-
-  clearEnabled = not (anyAnalysisLoading || noneAskedAnalysis)
-
   isCompiled = case view _compilationResult state of
     JS.CompiledSuccessfully _ -> true
     _ -> false
 
 panelContents state _ ErrorsView =
-  section_ case view _compilationResult state of
+  section [ classNames [ "py-4" ] ] case view _compilationResult state of
     JS.CompilationError err -> [ compilationErrorPane err ]
     _ -> [ text "No errors" ]
 
 panelContents state metadata MetadataView =
-  MetadataTab.render
-    { metadataHintInfo: state ^. _metadataHintInfo
-    , metadata
-    }
-    MetadataAction
+  section [ classNames [ "py-4" ] ]
+    [ MetadataTab.render
+        { metadataHintInfo: state ^. _metadataHintInfo
+        , metadata
+        }
+        MetadataAction
+    ]
 
 compilationErrorPane :: forall p. CompilationError -> HTML p Action
 compilationErrorPane (RawError error) = div_

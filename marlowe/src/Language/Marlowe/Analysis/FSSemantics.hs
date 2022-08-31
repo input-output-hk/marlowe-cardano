@@ -17,8 +17,8 @@ import qualified Data.SBV.Maybe as SM
 import qualified Data.SBV.Tuple as ST
 import Data.Set (Set)
 import qualified Data.Set as S
-import Language.Marlowe.Semantics
-import Language.Marlowe.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
 import Ledger (POSIXTime (..))
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
@@ -191,15 +191,7 @@ symEvalVal (MulValue lhs rhs) symState = symEvalVal lhs symState *
 symEvalVal (DivValue lhs rhs) symState =
   let n = symEvalVal lhs symState
       d = symEvalVal rhs symState
-      ar = abs r * 2
-      ad = abs d
-      (q, r) = n `sQuotRem` d
-      qIsOdd = (q `sRem` 2 ./= 0)
-  in ite (n .== 0 .|| d .== 0)
-         0
-         (ite (ar .> ad .|| ar .== ad .&& qIsOdd)
-              (q + signum n * signum d)
-              q)
+  in ite (d .== 0) 0 (n `sQuot` d)
 symEvalVal (ChoiceValue choId) symState =
   M.findWithDefault (literal 0) choId (symChoices symState)
 symEvalVal TimeIntervalStart symState = lowTime symState

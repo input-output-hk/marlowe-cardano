@@ -17,9 +17,11 @@ import Auth.Types (OAuthClientId (OAuthClientId), OAuthClientSecret (OAuthClient
 import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (LoggingT, MonadLogger, logInfoN, runStderrLoggingT)
+import Control.Monad.Now (MonadNow (getCurrentTime, getPOSIXTime))
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Data.Aeson (FromJSON, ToJSON, eitherDecode, encode)
 import Data.Aeson as Aeson
+import qualified Data.Aeson as A
 import Data.Bits (toIntegralSized)
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import qualified Data.HashMap.Strict as HM
@@ -27,6 +29,8 @@ import Data.Proxy (Proxy (Proxy))
 import Data.String as S
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.Text.Encoding (encodeUtf8)
+import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime)
 import Data.Time.LocalTime (LocalTime)
 import Data.Time.Units (Second, toMicroseconds)
 import qualified Data.Validation as Validation
@@ -45,11 +49,13 @@ import Network.HTTP.Client.Conduit (defaultManagerSettings, managerResponseTimeo
 import Network.HTTP.Conduit (newManager)
 import Network.HTTP.Simple (getResponseBody, httpJSON)
 import Network.Wai.Middleware.Cors (cors, corsRequestHeaders, simpleCorsResourcePolicy)
-import Servant (Application, Handler (Handler), Server, ServerError, err400, errBody, hoistServer, serve,
-                (:<|>) ((:<|>)), (:>))
+import Servant (Application, Handler (Handler), Header, Headers, NoContent (NoContent), Server, ServerError,
+                ToHttpApiData, addHeader, err400, errBody, hoistServer, serve, (:<|>) ((:<|>)), (:>))
 import Servant.Client (ClientEnv, mkClientEnv, parseBaseUrl)
 import System.Environment (lookupEnv)
 import System.IO (hPutStrLn, stderr)
+import Web.Cookie (SetCookie (setCookieExpires, setCookieHttpOnly, setCookieMaxAge, setCookieName, setCookiePath, setCookieSecure, setCookieValue),
+                   defaultSetCookie)
 import qualified Web.JWT as JWT
 import Webghc.Client (runscript)
 import Webghc.Server (CompileRequest)
@@ -87,6 +93,23 @@ oracle exchange pair = do
     let result = getResponseBody response :: Value
     pure result
 
+
+hSessionIdCookie :: Text
+hSessionIdCookie = "sessionId"
+
+logout :: MonadIO m => m (Headers '[ Header "Set-Cookie" SetCookie ] Value)
+logout = do
+  now <- liftIO getCurrentTime
+  let
+    cookie = defaultSetCookie
+      { setCookieName = encodeUtf8 hSessionIdCookie
+      , setCookieExpires = Just now
+      , setCookiePath = Just "/"
+      }
+  -- We are forced to return something from here
+  -- because generated PureScript expects JSON.
+  pure . addHeader cookie $ A.object []
+
 compile ::
        ClientEnv
     -> CompileRequest
@@ -117,7 +140,7 @@ mkHandlers AppConfig {..} = do
   pure (mhandlers webghcClientEnv :<|> liftedAuthServer githubEndpoints authConfig)
 
 mhandlers :: ClientEnv -> Server API
-mhandlers webghcClientEnv = oracle :<|> (genActusContract :<|> genActusContractStatic :<|> genActusCashflows) :<|> compile webghcClientEnv
+mhandlers webghcClientEnv = oracle :<|> (genActusContract :<|> genActusContractStatic :<|> genActusCashflows) :<|> compile webghcClientEnv :<|> logout
 
 app :: Server Web -> Application
 app handlers =

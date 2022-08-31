@@ -1,0 +1,76 @@
+cabal-version: 2.4
+name: marlowe-runtime
+version: 0.0.0.0
+synopsis:
+  Runtime system for running Marlowe financial contracts on the Cardano Computation Layer
+description:
+  Runtime system for running and monitoring Marlowe financial contracts on
+  Cardano. It provides query access to search for and inspect contracts,
+  command access for creating and interacting with contracts, and streaming
+  access for real-time updates to contracts.
+bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
+license: Apache-2.0
+author: Jamie Bertram
+maintainer: jamie.bertram@iohk.io
+stability: experimental
+category: Language
+license-files:
+  LICENSE
+  NOTICE
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: marlowe-runtime
+
+flag defer-plugin-errors
+    description:
+        Defer errors from the plugin, useful for things like Haddock that can't handle it.
+    default: False
+    manual: True
+
+common lang
+  default-language: Haskell2010
+  default-extensions:
+    BlockArguments
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    ExplicitForAll
+    GeneralizedNewtypeDeriving
+    DeriveAnyClass
+    DerivingVia
+    DerivingStrategies
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TypeApplications
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+  if flag(defer-plugin-errors)
+    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
+library
+  import: lang
+  hs-source-dirs:   src
+  exposed-modules:  MyLib
+  build-depends:
+      base >= 4.9 && < 5
+
+executable marlowe-runtime
+  import: lang
+  hs-source-dirs:   app
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , marlowe-runtime
+  ghc-options:
+    -threaded

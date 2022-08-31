@@ -38,9 +38,7 @@ import Data.WalletNickname as WN
 import Effect.Aff (Error)
 import Language.Marlowe.Client (ContractHistory, UnspentPayouts(..))
 import Language.Marlowe.Client.History (RolePayout(..))
-import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
-import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Assets(..)
   , Contract
   , MarloweData
@@ -49,7 +47,9 @@ import Marlowe.Semantics
   , TokenName
   , _rolesCurrency
   )
-import Marlowe.Semantics as Semantics
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import MarloweContract (MarloweContract(..))
 import Plutus.V1.Ledger.Tx (TxOutRef(..))
 import Test.Control.Monad.UUID (class MonadMockUUID, getLastUUID, getNextUUID)
@@ -159,12 +159,12 @@ createWallet walletName mnemonic walletInfo = do
       , pubKeyHash: PPKH.toPubKeyHash pubKeyHash
       , walletId
       }
-    handleGetContractInstances walletId []
+    handleGetContractInstances walletName []
 
     walletCompanionId <- generateUUID
     marloweAppId <- generateUUID
-    handlePostActivate walletId WalletCompanion walletCompanionId
-    handlePostActivate walletId MarloweApp marloweAppId
+    handlePostActivate walletName WalletCompanion walletCompanionId
+    handlePostActivate walletName MarloweApp marloweAppId
     recvInstanceSubscribe walletCompanionId
     sendNewActiveEndpoints walletCompanionId companionEndpoints
     recvInstanceSubscribe marloweAppId
@@ -223,7 +223,7 @@ restoreWallet walletName contracts = do
       [ [ marloweAppInstance, walletCompanionInstance ]
       , followerInstances
       ]
-  handleGetContractInstances walletId instances
+  handleGetContractInstances walletName instances
   recvInstanceSubscribe walletCompanionId
   sendNewActiveEndpoints walletCompanionId companionEndpoints
   recvInstanceSubscribe marloweAppId
@@ -264,12 +264,12 @@ dropWallet
   => MonadUser m
   => MonadAsk Coenv m
   => MonadMockHTTP m
-  => WalletInfo
+  => WalletNickname
   -> m Unit
-dropWallet (WalletInfo { walletId }) = do
+dropWallet walletName = do
   info "Drop wallet"
   openMyWalletDialog clickDrop
-  handleGetContractInstances walletId []
+  handleGetContractInstances walletName []
 
 addContact
   :: forall m
@@ -332,10 +332,10 @@ createLoan
     [ Tuple params $ marloweData contract contractState
     ]
   followerId <- generateUUID
-  handlePostActivate wallet.walletId MarloweFollower followerId
+  handlePostActivate wallet.nickname MarloweFollower followerId
   recvInstanceSubscribe followerId
   sendNewActiveEndpoints followerId followerEndpoints
-  handlePostFollow followerId params
+  handlePostFollow wallet.nickname followerId params
   sendFollowerUpdate followerId
     $ contractHistory params (marloweData contract contractState) [] mempty
   handleGetRoleToken params "Borrower" borrower
@@ -389,7 +389,7 @@ createLoanWithoutUpdates
     typeContractValue "interest" $ Int.toStringAs decimal interest
     clickReview
     clickPayAndStart
-  handlePostCreate marloweAppId reqId
+  handlePostCreate wallet.nickname marloweAppId reqId
     (loanRoles borrowerWallet.address lenderWallet.address)
     contract
   fundWallet lender (params ^. _rolesCurrency) "Lender" one
@@ -415,7 +415,8 @@ applyDeposit
   => MonadAsk Coenv m
   => MonadMockUUID m
   => MonadMockHTTP m
-  => UUID
+  => TestWallet
+  -> UUID
   -> UUID
   -> MarloweParams
   -> MarloweData
@@ -425,6 +426,7 @@ applyDeposit
   -> Int
   -> m Unit
 applyDeposit
+  wallet
   marloweAppId
   followerId
   params
@@ -459,7 +461,7 @@ applyDeposit
       txOutRef
     unspentPayouts = UnspentPayouts [ borrowerPayout ]
 
-  handlePostApplyInputs marloweAppId reqId params input
+  handlePostApplyInputs wallet.nickname marloweAppId reqId params input
 
   sendFollowerUpdate followerId
     $ contractHistory params datum [ input ] unspentPayouts
@@ -477,20 +479,21 @@ applyClose
   => MonadAsk Coenv m
   => MonadMockUUID m
   => MonadMockHTTP m
-  => UUID
+  => TestWallet
+  -> UUID
   -> UUID
   -> MarloweParams
   -> MarloweData
   -> Instant
   -> Array { tokenName :: TokenName, lovelace :: Int }
   -> m Unit
-applyClose marloweAppId followerId params datum startTime payouts = do
+applyClose wallet marloweAppId followerId params datum startTime payouts = do
   info "Apply input (close)"
   intervalMin <- adjustInstant (Minutes (10.0)) startTime
   let intervalMax = top
   reqId <- getLastUUID
   let input = transactionInput (timeInterval intervalMin intervalMax) []
-  handlePostApplyInputs marloweAppId reqId params input
+  handlePostApplyInputs wallet.nickname marloweAppId reqId params input
   sendApplyInputsSuccess marloweAppId reqId
   let
     toPayout { tokenName, lovelace } = do

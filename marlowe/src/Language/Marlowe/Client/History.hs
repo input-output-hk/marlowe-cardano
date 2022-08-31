@@ -17,10 +17,13 @@ module Language.Marlowe.Client.History (
 , RolePayoutTxOut
 , RolePayoutTxOutRef
 , RolePayout(..)
+, IncludePkhTxns(..)
 -- * Helpers
 , foldlHistory
+, foldrHistory
 -- * Contract History
 , marloweHistory
+, marloweHistory'
 , marloweHistoryFrom
 , marloweUtxoStatesAt
 , marloweStatesFrom
@@ -52,9 +55,9 @@ import Data.List (nub)
 import Data.Maybe (catMaybes, isJust, isNothing, mapMaybe)
 import Data.Tuple.Extra (secondM)
 import GHC.Generics (Generic)
+import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
 import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, TypedRolePayoutValidator,
                                  smallUntypedValidator)
-import Language.Marlowe.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
 import Ledger (ChainIndexTxOut (..), ciTxOutAddress, toTxOut)
 import Ledger.TimeSlot (SlotConfig, slotRangeToPOSIXTimeRange)
 import Ledger.Tx.CardanoAPI (SomeCardanoApiTx (SomeTx))
@@ -63,14 +66,14 @@ import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
 import qualified Ledger.Value (TokenName, Value)
 import Plutus.ChainIndex.Tx (ChainIndexTx, ChainIndexTxOutputs (..), citxCardanoTx, citxData, citxInputs, citxOutputs,
                              citxScripts, citxTxId, citxValidRange)
-import Plutus.Contract (Contract)
+import Plutus.Contract (Contract, ownPaymentPubKeyHash)
 import Plutus.Contract.Error (AsContractError)
 import Plutus.Contract.Logging (logInfo)
 import Plutus.Contract.Request (txsAt, utxosTxOutTxAt, utxosTxOutTxFromTx)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V1.Ledger.Api (Address (..), CurrencySymbol (..), Datum (..), Extended (..), Interval (..),
-                             LowerBound (..), Redeemer (..), TxId (..), TxOut (..), TxOutRef (..), UpperBound (..),
-                             dataToBuiltinData, fromBuiltinData, toBuiltin)
+import Plutus.V1.Ledger.Api (Address (..), Credential (PubKeyCredential), CurrencySymbol (..), Datum (..),
+                             Extended (..), Interval (..), LowerBound (..), Redeemer (..), TxId (..), TxOut (..),
+                             TxOutRef (..), UpperBound (..), dataToBuiltinData, fromBuiltinData, toBuiltin)
 import Plutus.V1.Ledger.Scripts (ScriptHash (..))
 import Plutus.V1.Ledger.Tx (txInRef)
 
@@ -82,6 +85,7 @@ import qualified Data.ByteString as BS (drop)
 import qualified Data.Map.Strict as M (Map, keys, lookup, toList)
 import qualified Data.Set as S (toList)
 import Data.Traversable (for)
+import Ledger.Address (PaymentPubKeyHash (unPaymentPubKeyHash))
 import qualified PlutusTx.IsData.Class
 
 
@@ -120,14 +124,20 @@ data History =
     deriving anyclass (ToJSON, FromJSON)
 
 
+nextEntry :: History -> Maybe History
+nextEntry Created { historyNext=n }     = n
+nextEntry InputApplied { historyNext=n} = n
+nextEntry Closed {}                     = Nothing
+
 foldlHistory :: forall a. (a -> History -> a) -> a -> History -> a
-foldlHistory f acc entry = case next entry of
+foldlHistory f acc entry = case nextEntry entry of
   Just n  -> foldlHistory f (f acc entry) n
   Nothing -> f acc entry
-  where
-    next Created { historyNext=n }     = n
-    next InputApplied { historyNext=n} = n
-    next Closed {}                     = Nothing
+
+foldrHistory :: forall a. (History -> a -> a) -> a -> History -> a
+foldrHistory f zero entry = case nextEntry entry of
+  Just n  -> f entry (foldrHistory f zero n)
+  Nothing -> f entry zero
 
 
 -- | A transaction-output reference specific to Marlowe role payout.
@@ -146,13 +156,15 @@ data RolePayout =
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON, FromJSON)
 
+newtype IncludePkhTxns = IncludePkhTxns Bool
 
 -- | Retrieve the history of a role-based Marlowe contract.
 marloweHistory :: AsContractError e
                => SlotConfig                      -- ^ The slot configuration.
                -> MarloweParams                   -- ^ The Marlowe validator parameters.
+               -> IncludePkhTxns
                -> Contract w s e (Maybe History)  -- ^ The original contract and the sequence of redemptions, if any.
-marloweHistory slotConfig params =
+marloweHistory slotConfig params (IncludePkhTxns includePkhTxns) =
   do
     let address = validatorAddress $ smallUntypedValidator params
     logInfo $ "[DEBUG:marloweHistory] address = " <> show address
@@ -162,18 +174,21 @@ marloweHistory slotConfig params =
     -- When a contract closes, there may be a UTxO at the role address.
     roleTxns <- txsAt . scriptHashAddress $ rolePayoutValidatorHash params
     logInfo $ "[DEBUG:marloweHistory] length roleTxns = " <> show (length roleTxns)
-{-
-    FIXME: Commented out in order to stress the PAB/CI lesss, just as a workaround for PAB queries freezing.
+
     -- When a contract closes, there may be a UTxO at the owner's public key hash address.
-    pkhTxns <- txsAt . flip Address Nothing . PubKeyCredential . unPaymentPubKeyHash =<< ownPaymentPubKeyHash
+    -- We use this heavy query only on demand.
+    pkhTxns <- if includePkhTxns
+      then txsAt . flip Address Nothing . PubKeyCredential . unPaymentPubKeyHash =<< ownPaymentPubKeyHash
+      else pure []
     logInfo $ "[DEBUG:marloweHistory] length pkhTxns = " <> show (length pkhTxns)
--}
     -- TODO: Extract all PKHs from the contract, and query these addresses, too.
     pure
       . history slotConfig params address
       . nub
-      $ addressTxns <> roleTxns {- <> pkhTxns -}
+      $ addressTxns <> roleTxns <> pkhTxns
 
+marloweHistory' :: AsContractError e => SlotConfig -> MarloweParams -> Contract w s e (Maybe History)
+marloweHistory' slotConfig params = marloweHistory slotConfig params (IncludePkhTxns False)
 
 -- | Retrieve the history of a role-based Marlowe contract.
 history :: SlotConfig      -- ^ The slot configuration.
@@ -198,7 +213,7 @@ histories :: SlotConfig      -- ^ The slot configuration.
 histories slotConfig params address citxs =
   [
     Created (tyTxOutRefRef creation) (toMarloweState creation)
-      $ historyFrom slotConfig address citxs creation
+      $ historyFrom slotConfig address citxs (tyTxOutRefRef creation)
   |
     creation <- creationTxOut params address `mapMaybe` citxs
   ]
@@ -208,29 +223,28 @@ histories slotConfig params address citxs =
 historyFrom :: SlotConfig          -- ^ The slot configuration.
             -> Address             -- ^ The Marlowe validator address.
             -> [ChainIndexTx]      -- ^ The transactions at the Marlowe validator and role validator addresses.
-            -> MarloweTxOutRef     -- ^ The Marlowe transaction to start from.
+            -> TxOutRef            -- ^ The Marlowe transaction to start from.
             -> Maybe History       -- ^ The sequence of subsequent redemptions.
 historyFrom slotConfig address citxs consumed =
   let
-    consumed' = tyTxOutRefRef consumed
     anyInputsConsumed citx =
       let
         inputs = S.toList $ citx ^. citxInputs
       in
-        any (\txIn -> consumed' == txInRef txIn) inputs
+        any (\txIn -> consumed == txInRef txIn) inputs
   in
     -- The next redemption must consume the input.
     case filter anyInputsConsumed citxs of
       -- Only one transaction can consume the output of the previous step.
       [citx] -> -- Find the redeemer
-                case lookup consumed' $ txInputs slotConfig citx of
+                case lookup consumed $ txInputs slotConfig citx of
                   -- The output of the previous step was consumed with a redeemer.
                   Just inputs -> -- Determine whether there is output to the script.
                                  case filterOutputs address citx of
                                    [mo] -> -- There was datum UTxO to the script, so the contract continues.
                                            Just
                                              . InputApplied inputs (tyTxOutRefRef mo) (toMarloweState mo)
-                                             $ historyFrom slotConfig address citxs mo
+                                             $ historyFrom slotConfig address citxs (tyTxOutRefRef mo)
                                    _    -> -- There was no datum UTxO to the script, so the contract is now closed.
                                            Just
                                              . Closed inputs

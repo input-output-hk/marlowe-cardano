@@ -59,7 +59,7 @@ escrow =
                                    (Choice
                                       (ChoiceId "Confirm problem"
                                          (Role "Mediator")) [
-                                      (Bound 1 1)]) Close)] (TimeParam "Mediation deadline") Close))] (TimeParam "Complaint deadline") Close)))] (TimeParam "Complaint response deadline") Close))] (TimeParam "Payment deadline") Close"""
+                                      (Bound 1 1)]) Close)] (TimeParam "Mediation deadline") Close))] (TimeParam "Complaint response deadline") Close)))] (TimeParam "Complaint deadline") Close))] (TimeParam "Payment deadline") Close"""
 
 escrowWithCollateral :: String
 escrowWithCollateral =

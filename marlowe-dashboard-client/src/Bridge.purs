@@ -13,7 +13,7 @@ import Data.Lens (Iso', iso)
 import Data.Map (Map, fromFoldable, toUnfoldable) as Front
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Semantics (Assets(..)) as Front
+import Language.Marlowe.Core.V1.Semantics.Types (Assets(..)) as Front
 import Network.RemoteData (RemoteData)
 import Plutus.V1.Ledger.Crypto (PubKey(..)) as Back
 import Plutus.V1.Ledger.Value (CurrencySymbol(..), TokenName(..), Value(..)) as Back

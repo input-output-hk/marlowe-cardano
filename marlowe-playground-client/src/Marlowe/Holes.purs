@@ -37,9 +37,18 @@ import Data.String.CodeUnits (dropRight)
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception.Unsafe (unsafeThrow)
-import Marlowe.Extended (toCore)
-import Marlowe.Extended as EM
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics
+  ( applyInput
+  , computeTransaction
+  , evalObservation
+  , evalValue
+  , inBounds
+  , reduceContractStep
+  ) as S
+import Language.Marlowe.Core.V1.Semantics
+  ( fixInterval
+  )
+import Language.Marlowe.Core.V1.Semantics.Types
   ( class HasTimeout
   , CurrencySymbol
   , IntervalResult(..)
@@ -47,12 +56,33 @@ import Marlowe.Semantics
   , Timeouts(..)
   , TokenName
   , _timeInterval
-  , fixInterval
   , ivFrom
   , ivTo
   , timeouts
   )
-import Marlowe.Semantics as S
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ApplyResult(..)
+  , Bound(..)
+  , Case
+  , ChoiceId(..)
+  , Contract(..)
+  , Environment
+  , Input(..)
+  , Observation
+  , Party(..)
+  , Payment
+  , ReduceStepResult(..)
+  , State
+  , Token(..)
+  , TransactionError(..)
+  , TransactionInput
+  , TransactionOutput(..)
+  , TransactionWarning
+  , Value
+  , ValueId(..)
+  ) as S
+import Language.Marlowe.Extended.V1 (toCore)
+import Language.Marlowe.Extended.V1 as EM
 import Marlowe.Template
   ( class Fillable
   , class Template

@@ -44,11 +44,11 @@ import Halogen.Component.Reactive as HR
 import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore, getStore)
 import Halogen.Store.Select (selectEq)
+import Language.Marlowe.Core.V1.Semantics.Types (ChosenNum)
+import Language.Marlowe.Core.V1.Semantics.Types as Semantic
 import Marlowe.Execution.State (mkTx)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (applyInputsFee)
-import Marlowe.Semantics (ChosenNum)
-import Marlowe.Semantics as Semantic
 import Store as Store
 import Store.Contracts (getFollowerContract)
 

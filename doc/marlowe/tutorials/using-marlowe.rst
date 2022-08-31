@@ -42,7 +42,7 @@ where the types are defined like this:
    data TransactionInput = TransactionInput
        { txInterval :: TimeInterval
        , txInputs   :: [Input] }
-          
+
    data TransactionOutput =
       TransactionOutput
          { txOutWarnings :: [TransactionWarning]
@@ -79,7 +79,7 @@ and create utility functions:
 
    Prelude> :set -XOverloadedStrings
    Prelude> import qualified Marlowe.Contracts.Escrow as Escrow
-   Prelude Escrow> import qualified Language.Marlowe.Extended as EM
+   Prelude Escrow> import qualified Language.Marlowe.Extended.V1 as EM
    Prelude Escrow EM> import Language.Marlowe as M
    Prelude Escrow EM M> import qualified Data.Time.Clock.POSIX as P
    Prelude Escrow EM M P> :set prompt "> "

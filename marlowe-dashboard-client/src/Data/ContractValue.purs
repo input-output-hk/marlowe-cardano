@@ -34,7 +34,7 @@ import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.String.Extra (leftPadTo, rightPadTo)
-import Marlowe.Semantics (CurrencySymbol)
+import Language.Marlowe.Core.V1.Semantics.Types (CurrencySymbol)
 
 data ContractValueError = Empty | Invalid
 

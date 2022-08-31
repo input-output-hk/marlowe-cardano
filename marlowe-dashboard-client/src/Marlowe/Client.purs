@@ -20,7 +20,7 @@ import Data.Lens (Lens', view)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Language.Marlowe.Client (ContractHistory)
-import Marlowe.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
   ( Contract
   , MarloweData
   , MarloweParams

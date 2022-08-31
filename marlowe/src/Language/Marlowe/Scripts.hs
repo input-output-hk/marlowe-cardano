@@ -28,9 +28,9 @@
 
 module Language.Marlowe.Scripts where
 import GHC.Generics
+import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Pretty (Pretty (..))
-import Language.Marlowe.Semantics
-import Language.Marlowe.Semantics.Types
 import Ledger
 import Ledger.Ada (adaSymbol)
 import qualified Ledger.Interval as Interval
@@ -201,6 +201,10 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                     txOutValue == value && hsh == Just svh && txOutAddress == addr
     checkScriptOutput _ _ _ _ = False
 
+    checkScriptOutputRelaxed addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
+                    txOutValue `Val.geq` value && hsh == Just svh && txOutAddress == addr
+    checkScriptOutputRelaxed _ _ _ _ = False
+
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
 
@@ -243,7 +247,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
             Role role -> let
                 hsh = findDatumHash' role
                 addr = Ledger.scriptHashAddress rolePayoutValidatorHash
-                in traceIfFalse "R" $ any (checkScriptOutput addr hsh value) allOutputs
+                in traceIfFalse "R" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
 
 
 smallTypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator

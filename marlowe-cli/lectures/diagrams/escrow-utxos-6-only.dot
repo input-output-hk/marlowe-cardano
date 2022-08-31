@@ -1,0 +1,56 @@
+digraph EscrowUtxos {
+
+
+rankdir=LR
+
+node [shape=record]
+
+
+subgraph cluster_4 {
+
+peripheries=0
+
+Tx4_0 [label="Francis\nBeaumont|3001.3 ADA" color=darkred fontcolor=darkred]
+
+Tx4_2 [label="Francis\nBeaumont|3 ADA + 1 FB" color=darkred fontcolor=darkred]
+
+}
+
+
+Tx5_2 [label="Payout Script|256 ADA|{Payout|F.B. has 256 ADA}" color=darkred fontcolor=darkred]
+
+
+Tx6 [shape=oval label="Tx 6" color=darkred fontcolor=darkred]
+
+Tx4_0 -> Tx6 [color=darkred fontcolor=darkred]
+
+Tx4_2 -> Tx6 [color=darkred fontcolor=darkred]
+
+Tx5_2 -> Tx6 [color=darkred fontcolor=darkred]
+
+
+Tx6_Fee [label="Fee\n0.5 ADA" color=darkred fontcolor=darkred]
+
+Tx6 -> Tx6_Fee [color=darkred fontcolor=darkred]
+
+
+  subgraph cluster_6 {
+
+  peripheries=0
+
+  Tx6_0 [label="Francis\nBeaumont|3000.9 ADA" color=black fontcolor=black]
+
+  Tx6_1 [label="Francis\nBeaumont|256 ADA" color=black fontcolor=black]
+
+  Tx6_2 [label="Francis\nBeaumont|3 ADA + 1 FB" color=black fontcolor=black]
+
+  }
+
+Tx6 -> Tx6_0 [label="#0" color=darkred fontcolor=darkred]
+
+Tx6 -> Tx6_1 [label="#1" color=darkred fontcolor=darkred]
+
+Tx6 -> Tx6_2 [label="#2" color=darkred fontcolor=darkred]
+
+
+}

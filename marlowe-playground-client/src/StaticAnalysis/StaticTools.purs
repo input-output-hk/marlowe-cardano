@@ -22,12 +22,17 @@ import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (HalogenM, liftEffect)
+import Language.Marlowe.Core.V1.Semantics (emptyState)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Case(..)
+  , Contract(..)
+  , Observation(..)
+  )
+import Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1 (toCore)
+import Language.Marlowe.Extended.V1 as EM
 import Marlowe (Api)
 import Marlowe as Server
-import Marlowe.Extended (toCore)
-import Marlowe.Extended as EM
-import Marlowe.Semantics (Case(..), Contract(..), Observation(..), emptyState)
-import Marlowe.Semantics as S
 import Marlowe.Symbolic.Types.Request as MSReq
 import Marlowe.Symbolic.Types.Response (Response(..), Result(..))
 import Marlowe.Template (fillTemplate)

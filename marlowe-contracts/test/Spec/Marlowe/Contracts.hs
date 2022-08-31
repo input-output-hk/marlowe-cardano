@@ -10,7 +10,7 @@ where
 
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Language.Marlowe as C
-import Language.Marlowe.Extended
+import Language.Marlowe.Extended.V1
 import Ledger.Ada
 import Ledger.Value
 import Marlowe.Contracts.Common
@@ -31,7 +31,7 @@ tests = testGroup "Marlowe Contract"
   , testCase "Swap Contract" swapContractTest
   , testCase "Future Contract (repayment of initial margin)" futureNoChange
   , testCase "Future Contract (without margin calls)" futureNoMarginCall
-  , testCase "Future Contract (with margins calls)" futureWithMarinCall
+  , testCase "Future Contract (with margins calls)" futureWithMarginCall
   , testCase "American Call Option test" americanCallOptionTest
   , testCase "American Call Option (exercised) test" americanCallOptionExercisedTest
   , testCase "European Call Option test" europeanCallOptionTest
@@ -57,7 +57,7 @@ tokValueOf :: Integer -> C.Money
 tokValueOf = singleton tokSymbol tokName
 
 assertTotalPayments :: Party -> [C.Payment] -> C.Money -> Assertion
-assertTotalPayments p t x = assertBool "total payments to party" (totalPayments t == x)
+assertTotalPayments p t = assertEqual "total payments to party" $ totalPayments t
   where
     totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party p)
 
@@ -355,14 +355,14 @@ futureNoMarginCall =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 1_333_333)
-          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 1_333_334)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_666)
         C.Error err ->
           assertNoFailedTransactions err
 
 -- |Future, scenario with margin call
-futureWithMarinCall :: IO ()
-futureWithMarinCall =
+futureWithMarginCall :: IO ()
+futureWithMarginCall =
   let Just contract = toCore $
         future
           w1Pk
@@ -395,8 +395,8 @@ futureWithMarinCall =
         C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
-          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 61_333_333)
-          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 61_333_334)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_666)
         C.Error err ->
           assertNoFailedTransactions err
 

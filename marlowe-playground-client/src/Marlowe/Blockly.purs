@@ -330,7 +330,6 @@ data ValueType
   | SubValueValueType
   | MulValueValueType
   | DivValueValueType
-  | ScaleValueType
   | ChoiceValueValueType
   | TimeIntervalStartValueType
   | TimeIntervalEndValueType
@@ -1155,35 +1154,6 @@ toDefinition blockType@(ValueType SubValueValueType) =
         , colour: blockColour blockType
         , output: Just "value"
         , inputsInline: Just true
-        }
-        defaultBlockDefinition
-
-toDefinition blockType@(ValueType ScaleValueType) =
-  BlockDefinition
-    $ merge
-        { type: show ScaleValueType
-        , message0: "(%1 / %2) * %3"
-        , args0:
-            [ Number
-                { name: "numerator"
-                , value: 1.0
-                , min: Nothing
-                , max: Nothing
-                , precision: Just 1.0
-                }
-            , Number
-                { name: "denominator"
-                , value: 1.0
-                , min: Just 1.0
-                , max: Nothing
-                , precision: Just 1.0
-                }
-            , Value { name: "value", check: "value", align: AlignRight }
-            ]
-        , colour: blockColour blockType
-        , output: Just "value"
-        , inputsInline: Just true
-        , extensions: [ "number_validator" ]
         }
         defaultBlockDefinition
 

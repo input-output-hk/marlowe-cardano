@@ -17,7 +17,7 @@ import Humanize
   , localToUtc
   , utcToLocal
   )
-import Marlowe.Semantics (Token(..), adaToken)
+import Language.Marlowe.Core.V1.Semantics.Types (Token(..), adaToken)
 import Partial.Unsafe (unsafePartial)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Test.Spec (Spec, describe, it)
