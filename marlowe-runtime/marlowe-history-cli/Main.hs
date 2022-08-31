@@ -5,7 +5,7 @@ module Main where
 import Control.Category ((>>>))
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.ByteString.Base16 (encodeBase16)
-import Data.Foldable (asum, fold, for_)
+import Data.Foldable (asum, fold, for_, traverse_)
 import Data.Functor (void)
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -14,6 +14,8 @@ import Data.Void (Void, absurd)
 import GHC.Base (when)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Pretty (pretty)
+import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
+import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..), SlotNo (..),
                                                TxId (..), TxOutRef (..), toBech32)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
@@ -27,7 +29,7 @@ import Network.Protocol.Query.Client (ClientStInit (..), ClientStNext (..), Clie
                                       ClientStPage (..), QueryClient (..), queryClientPeer)
 import Network.Socket (AddrInfo (..), HostName, PortNumber, Socket, SocketType (..), close, connect, defaultHints,
                        getAddrInfo, openSocket)
-import Network.TypedProtocol (Driver (..), runPeerWithDriver)
+import Network.TypedProtocol (Driver (..), Peer (..), PeerHasAgency (..), PeerRole (..), runPeerWithDriver)
 import qualified Options.Applicative as O
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), setSGR)
 import System.Exit (die)
@@ -54,8 +56,8 @@ run Options{..} = do
       bracket (open queryAddr) close $ runLsCommand lsCommand
 
     Show contractId -> do
-      queryAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show queryPort)
-      bracket (open queryAddr) close $ runShowCommand contractId
+      syncAddr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show syncPort)
+      bracket (open syncAddr) close $ runShowCommand contractId
   where
     hints = defaultHints { addrSocketType = Stream }
 
@@ -103,11 +105,45 @@ runLsCommand LsCommand{..} socket = void $ runPeerWithDriver driver peer (startD
       print status
 
 runShowCommand :: ContractId -> Socket -> IO ()
-runShowCommand = error "not implemented"
+runShowCommand contractId socket = do
+  (result, _) <- runPeerWithDriver driver peerInit (startDState driver)
+  either die (logHistory contractId) result
+  where
+    driver = mkDriver throwIO codecMarloweSync $ socketAsChannel socket
+
+    -- TODO replace with MarloweSyncClient
+    peerInit :: Peer Sync.MarloweSync 'AsClient 'Sync.StInit m (Either String SomeHistory)
+    peerInit = Yield (ClientAgency Sync.TokInit) (Sync.MsgFollowContract contractId) peerFollow
+
+    peerFollow :: Peer Sync.MarloweSync 'AsClient 'Sync.StFollow m (Either String SomeHistory)
+    peerFollow = Await (ServerAgency Sync.TokFollow) \case
+      Sync.MsgContractNotFound                         -> Done Sync.TokDone $ Left "Contract not found"
+      Sync.MsgContractFound createBlock version create -> let steps = mempty in peerIdle version History {..}
+
+    peerIdle :: MarloweVersion v -> History v -> Peer Sync.MarloweSync 'AsClient ('Sync.StIdle v) m (Either String SomeHistory)
+    peerIdle version history = Yield (ClientAgency (Sync.TokIdle version)) Sync.MsgRequestNext $ peerNext version history
+
+    peerNext :: MarloweVersion v -> History v -> Peer Sync.MarloweSync 'AsClient ('Sync.StNext v) m (Either String SomeHistory)
+    peerNext version history@History{..} = Await (ServerAgency (Sync.TokNext version)) \case
+      Sync.MsgRollBackward blockHeader -> peerIdle version $ history
+        { steps = Map.fromDistinctAscList
+            $ takeWhile ((<= blockHeader) . fst)
+            $ Map.toAscList steps
+        }
+      Sync.MsgRollBackCreation -> Done Sync.TokDone $ Left "Contract not found"
+      Sync.MsgRollForward blockHeader steps' -> peerIdle version $ history { steps = Map.insert blockHeader steps' steps }
+      Sync.MsgWait -> peerWait version history
+
+    peerWait :: MarloweVersion v -> History v -> Peer Sync.MarloweSync 'AsClient ('Sync.StWait v) m (Either String SomeHistory)
+    peerWait version history =
+      Yield (ClientAgency (Sync.TokWait version)) Sync.MsgCancel $
+      Yield (ClientAgency (Sync.TokIdle version)) Sync.MsgDone $
+      Done Sync.TokDone $ Right $ SomeHistory version history
 
 data Options = Options
   { commandPort :: !PortNumber
   , queryPort   :: !PortNumber
+  , syncPort    :: !PortNumber
   , host        :: !HostName
   , command     :: !Command
   }
@@ -134,19 +170,29 @@ data LsCommand = LsCommand
 getOptions :: IO Options
 getOptions = O.execParser $ O.info parser infoMod
   where
-    parser = O.helper <*> (Options <$> commandPortParser <*> queryPortParser <*> hostParser <*> commandParser)
+    parser = O.helper <*> (Options <$> commandPortParser <*> queryPortParser <*> syncPortParser <*> hostParser <*> commandParser)
+
     commandPortParser = O.option O.auto $ mconcat
       [ O.long "command-port"
       , O.value 3717
       , O.metavar "PORT_NUMBER"
       , O.help "The port number for issuing commands to the history server. Default: 3717"
       ]
+
     queryPortParser = O.option O.auto $ mconcat
       [ O.long "query-port"
       , O.value 3718
       , O.metavar "PORT_NUMBER"
       , O.help "The port number for issuing queries to the history server. Default: 3718"
       ]
+
+    syncPortParser = O.option O.auto $ mconcat
+      [ O.long "sync-port"
+      , O.value 3719
+      , O.metavar "PORT_NUMBER"
+      , O.help "The port number for synchronizing with the history server. Default: 3719"
+      ]
+
     hostParser = O.strOption $ mconcat
       [ O.long "host"
       , O.short 'h'
@@ -197,6 +243,11 @@ getOptions = O.execParser $ O.info parser infoMod
       [ O.fullDesc
       , O.progDesc "Example Chain Seek client for the Marlowe Chain Sync"
       ]
+
+logHistory :: ContractId -> SomeHistory -> IO ()
+logHistory contractId (SomeHistory version History{..}) = do
+  logCreateStep version contractId createBlock create
+  void $ Map.traverseWithKey (traverse_ . logStep version contractId) steps
 
 logCreateStep :: MarloweVersion v -> ContractId -> BlockHeader -> CreateStep v -> IO ()
 logCreateStep version contractId BlockHeader{..} CreateStep{..} = do
