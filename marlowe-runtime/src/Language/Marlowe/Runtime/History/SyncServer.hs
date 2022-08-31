@@ -8,8 +8,10 @@
 module Language.Marlowe.Runtime.History.SyncServer where
 
 import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
-import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (SomeException, catch)
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Language.Marlowe.Protocol.Sync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
 import Language.Marlowe.Runtime.Core.Api
@@ -24,6 +26,8 @@ data HistorySyncServerDependencies = HistorySyncServerDependencies
   , findContract        :: ContractId -> IO (Maybe (BlockHeader, SomeCreateStep))
   , intersectContract   :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> IO (Maybe BlockHeader)
   , getNextSteps        :: forall v. ContractId -> MarloweVersion v -> ChainPoint -> IO (GetNextStepsResponse v)
+  , followContract      :: ContractId -> STM Bool
+  , followerStatuses    :: STM (Map ContractId FollowerStatus)
   }
 
 newtype HistorySyncServer = HistorySyncServer
@@ -48,6 +52,8 @@ data WorkerDependencies = WorkerDependencies
   , findContract      :: ContractId -> IO (Maybe (BlockHeader, SomeCreateStep))
   , intersectContract :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> IO (Maybe BlockHeader)
   , getNextSteps      :: forall v. ContractId -> MarloweVersion v -> ChainPoint -> IO (GetNextStepsResponse v)
+  , followContract    :: ContractId -> STM Bool
+  , followerStatuses  :: STM (Map ContractId FollowerStatus)
   }
 
 newtype Worker = Worker
@@ -70,6 +76,17 @@ mkWorker WorkerDependencies{..} =
 
     followServer :: ContractId -> IO (ServerStFollow IO ())
     followServer contractId = do
+      _ <- atomically $ followContract contractId
+      atomically do
+        statuses <- followerStatuses
+        case Map.lookup contractId statuses of
+          -- retry on pending, Nothing, or following so we can be sure we have the whole history.
+          -- On waiting and error, we continue (findContract will pick up on
+          -- the error).
+          Just Pending       -> retry
+          Just (Following _) -> retry
+          Nothing            -> retry
+          _                  -> pure ()
       result <- findContract contractId
       pure case result of
         Nothing                                               -> SendMsgContractNotFound ()

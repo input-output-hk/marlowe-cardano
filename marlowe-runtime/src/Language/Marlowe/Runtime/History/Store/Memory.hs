@@ -9,7 +9,7 @@ import qualified Data.Map as Map
 import Data.Semialign (alignWith)
 import qualified Data.Set as Set
 import Data.These (These (..))
-import Data.Type.Equality (testEquality, (:~:) (Refl))
+import Data.Type.Equality ((:~:) (Refl))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, assertVersionsEqual)
 import Language.Marlowe.Runtime.History.Api (History (..), SomeCreateStep (..), SomeHistory (..))
