@@ -37,11 +37,12 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (..), NetworkId, PaymentCredential (..),
-                    QueryInShelleyBasedEra (..), QueryUTxOFilter (..), Script (..), ScriptDataSupportedInEra (..),
-                    SlotNo (..), StakeAddressReference (..), TxId, TxIn, TxMintValue (..), TxOut (..), TxOutDatum (..),
-                    TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId, lovelaceToValue, makeShelleyAddressInEra,
-                    selectLovelace, shelleyBasedEra, txOutValueToValue, writeFileTextEnvelope)
+import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (..), Lovelace (..), NetworkId,
+                    PaymentCredential (..), QueryInShelleyBasedEra (..), QueryUTxOFilter (..), Script (..),
+                    ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..), TxId, TxIn,
+                    TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..), calculateMinimumUTxO,
+                    getTxId, lovelaceToValue, makeShelleyAddressInEra, selectLovelace, shelleyBasedEra,
+                    txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
@@ -416,6 +417,17 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
       (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
 
 
+-- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
+ensureAtLeastHalfAnAda :: Api.Value -> Api.Value
+ensureAtLeastHalfAnAda origValue =
+  if origLovelace < minLovelace
+    then origValue <> lovelaceToValue (minLovelace - origLovelace)
+    else origValue
+  where
+    origLovelace = selectLovelace origValue
+    minLovelace = Lovelace 500_000
+
+
 -- | Adjust the lovelace in an output to confirm to the minimum ADA requirement.
 adjustMinimumUTxO :: forall m era
                    . MonadError CliError m
@@ -425,9 +437,10 @@ adjustMinimumUTxO :: forall m era
                   -> Maybe Datum              -- ^ The datum, if any.
                   -> Api.Value                -- ^ The output value.
                   -> m Api.Value              -- ^ Action to compute the adjusted value.
-adjustMinimumUTxO era protocol address datum value =
+adjustMinimumUTxO era protocol address datum origValue =
   do
     let
+      value = ensureAtLeastHalfAnAda origValue
       txOut =
         TxOut
           address

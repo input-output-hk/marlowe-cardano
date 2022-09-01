@@ -22,12 +22,12 @@ echo "Signing and verification keys must be provided below for the two parties, 
 
 echo "## Preliminaries"
 
+: "${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}"
+: "${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}"
+
 echo "### Select Network"
 
-if [[ -z "$MAGIC" ]]
-then
-  MAGIC=1567
-fi
+: "${MAGIC:=2}"
 echo "MAGIC=$MAGIC"
 
 SLOT_LENGTH=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
@@ -67,6 +67,8 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 100000000                      \
+                        --faucet-address "$FAUCET_ADDRESS"        \
+                        --required-signer "$FAUCET_SKEY_FILE"     \
                         "$PARTY_A_ADDRESS"
 
 echo "The first party mints their tokens for the swap."
@@ -143,6 +145,8 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 100000000                      \
+                        --faucet-address "$FAUCET_ADDRESS"        \
+                        --required-signer "$FAUCET_SKEY_FILE"     \
                         "$PARTY_B_ADDRESS"
 
 echo "The second party mints their tokens for the swap."
@@ -229,7 +233,7 @@ marlowe-cli run initialize --testnet-magic "$MAGIC"                  \
 
 echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."
 
-CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
+CONTRACT_ADDRESS=$(jq -r '.tx.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
@@ -344,22 +348,34 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_B_ADDRESS" | s
 
 echo "## Clean Up"
 
-FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
+TX_CLEANUP_TOKEN_B=$(
+marlowe-cli util select --testnet-magic "$MAGIC"                   \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                        --asset-only "$TOKEN_B" "$PARTY_A_ADDRESS" \
+| sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/'                  \
+)
 
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                               \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"              \
                                --tx-in "$TX_2"#0                                      \
-                               --tx-in "$TX_3"#2                                      \
+                               --tx-in "$TX_CLEANUP_TOKEN_B"                          \
                                --tx-out "$PARTY_B_ADDRESS+1500000+$AMOUNT_B $TOKEN_B" \
                                --required-signer "$PARTY_A_PAYMENT_SKEY"              \
                                --change-address "$PARTY_A_ADDRESS"                    \
                                --out-file /dev/null                                   \
                                --submit 600
 
+TX_CLEANUP_TOKEN_A=$(
+marlowe-cli util select --testnet-magic "$MAGIC"                   \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                        --asset-only "$TOKEN_A" "$PARTY_B_ADDRESS" \
+| sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/'                  \
+)
+
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                               \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"              \
                                --tx-in "$TX_3"#0                                      \
-                               --tx-in "$TX_3"#1                                      \
+                               --tx-in "$TX_CLEANUP_TOKEN_A"                          \
                                --tx-out "$PARTY_A_ADDRESS+1500000+$AMOUNT_A $TOKEN_A" \
                                --required-signer "$PARTY_B_PAYMENT_SKEY"              \
                                --change-address "$PARTY_B_ADDRESS"                    \

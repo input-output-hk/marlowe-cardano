@@ -53,12 +53,12 @@ echo "Signing and verification keys must be provided below for the bystander and
 
 echo "## Preliminaries"
 
+: "${FAUCET_ADDRESS:?FAUCET_ADDRESS not set}"
+: "${FAUCET_SKEY_FILE:?FAUCET_SKEY_FILE not set}"
+
 echo "### Select Network"
 
-if [[ -z "$MAGIC" ]]
-then
-  MAGIC=1567
-fi
+: "${MAGIC:=2}"
 echo "MAGIC=$MAGIC"
 
 SLOT_LENGTH=$(marlowe-cli util slotting --testnet-magic "$MAGIC" --socket-path "$CARDANO_NODE_SOCKET_PATH" | jq .scSlotLength)
@@ -95,6 +95,8 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 50000000                       \
+                        --faucet-address "$FAUCET_ADDRESS"        \
+                        --required-signer "$FAUCET_SKEY_FILE"     \
                         "$BYSTANDER_ADDRESS"
 
 echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'" and public-key hash "'`'"$BYSTANDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
@@ -148,6 +150,8 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 50000000                       \
+                        --faucet-address "$FAUCET_ADDRESS"        \
+                        --required-signer "$FAUCET_SKEY_FILE"     \
                         "$PARTY_ADDRESS"
 
 echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and the public-key hash "'`'"$PARTY_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
@@ -223,7 +227,7 @@ marlowe-cli run initialize --testnet-magic "$MAGIC"                  \
 
 echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."
 
-CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
+CONTRACT_ADDRESS=$(jq -r '.tx.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
@@ -370,21 +374,45 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_ADDRESS" | sed
 
 echo "## Clean Up"
 
-FAUCET_ADDRESS=addr_test1wr2yzgn42ws0r2t9lmnavzs0wf9ndrw3hhduyzrnplxwhncaya5f8
+TX_CLEANUP_ADA_1=$(
+marlowe-cli util select --testnet-magic "$MAGIC" \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --all \
+                        "$BYSTANDER_ADDRESS" \
+| grep "${TX_1}" | sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/' \
+)
+
+TX_CLEANUP_ADA_4=$(
+marlowe-cli util select --testnet-magic "$MAGIC" \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --all \
+                        "$BYSTANDER_ADDRESS" \
+| grep "${TX_4}" | sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/' \
+)
 
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                    \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
-                               --tx-in "$TX_1"#0                           \
-                               --tx-in "$TX_4"#1                           \
+                               --tx-in "$TX_CLEANUP_ADA_1"                 \
+                               --tx-in "$TX_CLEANUP_ADA_4"                 \
                                --required-signer "$BYSTANDER_PAYMENT_SKEY" \
                                --change-address "$FAUCET_ADDRESS"          \
                                --out-file /dev/null                        \
                                --submit 600
 
+# shellcheck disable=SC2207
+# shellcheck wants us to use read -a or mapfile for this but array notation with =( ) is fine IMO!
+TX_CLEANUP_ADA_ARR=($(
+marlowe-cli util select --testnet-magic "$MAGIC" \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --all \
+                        "$PARTY_ADDRESS" \
+| grep "${TX_4}" | sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/' \
+))
+
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                  \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                               --tx-in "$TX_4"#0                         \
-                               --tx-in "$TX_4"#2                         \
+                               --tx-in "${TX_CLEANUP_ADA_ARR[0]}"        \
+                               --tx-in "${TX_CLEANUP_ADA_ARR[1]}"        \
                                --required-signer "$PARTY_PAYMENT_SKEY"   \
                                --change-address "$FAUCET_ADDRESS"        \
                                --out-file /dev/null                      \
