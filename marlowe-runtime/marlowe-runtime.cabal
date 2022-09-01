@@ -193,8 +193,10 @@ test-suite marlowe-runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-    Language.Marlowe.Runtime.History.FollowerSpec
+    Language.Marlowe.Protocol.Sync.ClientScript
     Language.Marlowe.Runtime.ChainSyncTest
+    Language.Marlowe.Runtime.History.FollowerSpec
+    Language.Marlowe.Runtime.HistorySpec
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
