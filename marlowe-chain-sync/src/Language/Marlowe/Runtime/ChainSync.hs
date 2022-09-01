@@ -1,27 +1,37 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE RankNTypes            #-}
 
 module Language.Marlowe.Runtime.ChainSync
   ( ChainSync (..)
   , ChainSyncDependencies (..)
   , mkChainSync
+  , TestChainSync (..)
+  , TestChainSyncDependencies (..)
+  , mkTestChainSync
   ) where
 
 import Cardano.Api (CardanoMode)
 import qualified Cardano.Api as Cardano
 import Control.Concurrent.Async (concurrently_)
-import Control.Concurrent.STM (STM)
-import Control.Monad (unless)
-import qualified Data.ByteString.Lazy as LBS
-import Data.Time (NominalDiffTime)
-import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..))
+import Control.Concurrent.STM (STM, TVar, atomically, newEmptyTMVar, newTQueue, putTMVar, readTMVar, readTQueue,
+                               readTVar, writeTQueue, writeTVar)
+import Control.Monad (guard, unless)
+import Data.Time (NominalDiffTime, secondsToNominalDiffTime)
+import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis (Genesis), chainSeekClientPeer,
+                                               chainSeekServerPeer)
+import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..),
+                                                    hoistDatabaseQueries)
+import qualified Language.Marlowe.Runtime.ChainSync.Database.Memory as Memory
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes, isEmptyChanges, toEmptyChanges)
 import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServer (..), ChainSyncQueryServerDependencies (..),
                                                        RunQueryServer, mkChainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServer (..), ChainSyncServerDependencies (..),
-                                                  mkChainSyncServer)
+                                                  RunChainSeekServer (..), mkChainSyncServer)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), mkChainStore)
-import Network.Channel (Channel)
+import Network.Protocol.Driver (runPeers)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
 data ChainSyncDependencies = ChainSyncDependencies
@@ -29,7 +39,7 @@ data ChainSyncDependencies = ChainSyncDependencies
   , databaseQueries      :: !(DatabaseQueries IO)
   , persistRateLimit     :: !NominalDiffTime
   , genesisBlock         :: !GenesisBlock
-  , acceptChannel        :: IO (Channel IO LBS.ByteString, IO ())
+  , acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
   , acceptRunQueryServer :: IO (RunQueryServer IO)
   , queryLocalNodeState
       :: forall result
@@ -57,3 +67,46 @@ mkChainSync ChainSyncDependencies{..} = do
     runChainStore
       `concurrently_` runChainSyncServer
       `concurrently_` runChainSyncQueryServer
+
+data TestChainSyncDependencies = TestChainSyncDependencies
+  { changesVar   :: !(TVar Changes)
+  , genesisBlock :: !GenesisBlock
+  , queryLocalNodeState
+      :: forall result
+       . Maybe Cardano.ChainPoint
+      -> Cardano.QueryInMode CardanoMode result
+      -> IO (Either AcquireFailure result)
+  }
+
+data TestChainSync = TestChainSync
+  { runChainSync       :: IO ()
+  , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+  }
+
+mkTestChainSync :: TestChainSyncDependencies -> STM TestChainSync
+mkTestChainSync TestChainSyncDependencies{..} = do
+  chainSeekQueue <- newTQueue
+  queryQueue <- newTQueue
+  databaseQueries <- hoistDatabaseQueries atomically <$> Memory.databaseQueries genesisBlock
+  let
+    getChanges = do
+      changes <- readTVar changesVar
+      guard $ not $ isEmptyChanges changes
+      writeTVar changesVar $ toEmptyChanges changes
+      pure changes
+  let persistRateLimit = secondsToNominalDiffTime 0
+  let acceptRunChainSeekServer = atomically $ readTQueue chainSeekQueue
+  let acceptRunQueryServer = atomically $ readTQueue queryQueue
+  ChainSync{..} <- mkChainSync ChainSyncDependencies{..}
+  let
+    connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+    connectToChainSeek client = do
+      resultVar <- atomically do
+        resultVar <- newEmptyTMVar
+        writeTQueue chainSeekQueue $ RunChainSeekServer \server -> do
+          (a, b) <- runPeers (chainSeekClientPeer Genesis client) (chainSeekServerPeer Genesis server)
+          atomically $ putTMVar resultVar a
+          pure b
+        pure resultVar
+      atomically $ readTMVar resultVar
+  pure TestChainSync{..}

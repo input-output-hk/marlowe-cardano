@@ -11,27 +11,25 @@ import Control.Concurrent.Async (wait, waitEitherCatch, withAsync)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (throwIO)
 import Control.Monad (guard)
-import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Short (toShort)
 import Data.Functor (void)
 import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (BlockHeader), BlockHeaderHash (unBlockHeaderHash),
-                                               ChainPoint, Move, WithGenesis (..), runtimeChainSeekCodec,
+                                               ChainPoint, Move, RuntimeChainSeekServer, WithGenesis (..),
                                                schemaVersion1_0)
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient (..), MoveResult (..))
-import Network.Channel (Channel (..))
 import Network.Protocol.ChainSeek.Server (ChainSeekServer (..), ServerStHandshake (..), ServerStIdle (..),
-                                          ServerStInit (..), ServerStNext (..), chainSeekServerPeer)
-import Network.Protocol.Driver (mkDriver)
-import Network.TypedProtocol (Driver (..), runPeerWithDriver)
+                                          ServerStInit (..), ServerStNext (..))
 import System.IO (stderr)
 
+newtype RunChainSeekServer m = RunChainSeekServer (forall a. RuntimeChainSeekServer m a -> IO a)
+
 data ChainSyncServerDependencies = ChainSyncServerDependencies
-  { acceptChannel :: IO (Channel IO LBS.ByteString, IO ())
-  , moveClient    :: !(MoveClient IO)
-  , localTip      :: !(STM Cardano.ChainTip)
+  { acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
+  , moveClient               :: !(MoveClient IO)
+  , localTip                 :: !(STM Cardano.ChainTip)
   }
 
 newtype ChainSyncServer = ChainSyncServer
@@ -42,13 +40,12 @@ mkChainSyncServer :: ChainSyncServerDependencies -> STM ChainSyncServer
 mkChainSyncServer ChainSyncServerDependencies{..} = do
   let
     runChainSyncServer = do
-      (channel, close) <- acceptChannel
+      runChainSeekServer <- acceptRunChainSeekServer
       hPutStrLn stderr "New client connected"
       worker <- atomically $ mkWorker WorkerDependencies {..}
       withAsync (runWorker worker) \aworker ->
         withAsync runChainSyncServer \aserver -> do
           result <- waitEitherCatch aworker aserver
-          close
           case result of
             Right (Left ex) -> throwIO ex
             Right (Right x) -> absurd x
@@ -60,9 +57,9 @@ mkChainSyncServer ChainSyncServerDependencies{..} = do
   pure $ ChainSyncServer { runChainSyncServer }
 
 data WorkerDependencies = WorkerDependencies
-  { channel    :: !(Channel IO LBS.ByteString)
-  , moveClient :: !(MoveClient IO)
-  , localTip   :: !(STM Cardano.ChainTip)
+  { runChainSeekServer :: !(RunChainSeekServer IO)
+  , moveClient         :: !(MoveClient IO)
+  , localTip           :: !(STM Cardano.ChainTip)
   }
 
 newtype Worker = Worker
@@ -72,11 +69,8 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} = do
   let
-    runWorker = void $ runPeerWithDriver driver peer (startDState driver)
-
-    driver = mkDriver throwIO runtimeChainSeekCodec channel
-
-    peer = chainSeekServerPeer Genesis server
+    RunChainSeekServer runServer = runChainSeekServer
+    runWorker = void $ runServer server
 
     server = ChainSeekServer $ pure stInit
 
