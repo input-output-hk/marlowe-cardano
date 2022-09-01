@@ -28,38 +28,37 @@
 module Language.Marlowe.CLI.Test.Script where
 
 import Cardano.Api (AsType (AsPaymentKey), CardanoMode, ConsensusModeParams (CardanoModeParams),
-                    EpochSlots (EpochSlots), Key (getVerificationKey, verificationKeyHash), LocalNodeConnectInfo (..),
-                    NetworkId (..), PaymentCredential (PaymentCredentialByKey), ScriptDataSupportedInEra,
-                    StakeAddressReference (NoStakeAddress), generateSigningKey, makeShelleyAddress)
+                    EpochSlots (EpochSlots), IsShelleyBasedEra, Key (getVerificationKey, verificationKeyHash),
+                    LocalNodeConnectInfo (..), NetworkId (..), PaymentCredential (PaymentCredentialByKey),
+                    ScriptDataSupportedInEra, StakeAddressReference (NoStakeAddress), generateSigningKey,
+                    makeShelleyAddressInEra)
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT, get)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand (..), initialMarloweState, makeContract)
-import Language.Marlowe.CLI.Types (CliError (..), MarloweTransaction, toTimeout)
+import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), MarloweTransaction, toTimeout)
 import Language.Marlowe.Extended.V1 as E
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 import Plutus.V1.Ledger.Api (CostModelParams)
 
 import Control.Monad.RWS.Class (MonadReader)
-import Control.Monad.Reader (ReaderT (runReaderT))
+import Control.Monad.Reader (ReaderT (runReaderT), asks)
 import Control.Monad.Reader.Class (MonadReader (ask))
 import Control.Monad.State (modify)
 import qualified Data.Aeson as JSON
 import Data.Foldable.Extra (for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.Map.Strict as M (lookup)
+import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl)
 import Language.Marlowe.CLI.Test.Types
 import Language.Marlowe.CLI.Transaction (buildFaucetImpl)
-import Language.Marlowe.CLI.Types (CliEnv (..))
 import qualified Language.Marlowe.Client as Client
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 
 data ScriptState era = ScriptState
-  { faucet       :: Maybe Wallet
-  , transactions :: Map String (Maybe (MarloweTransaction era), MarloweTransaction era)
-  , wallets      :: Map AccountId Wallet
+  { transactions :: Map String (Maybe (MarloweTransaction era), MarloweTransaction era)
+  , wallets      :: Map WalletNickname (Wallet era)
   }
 
 data ScriptEnv era = ScriptEnv
@@ -67,9 +66,14 @@ data ScriptEnv era = ScriptEnv
   , seSlotConfig       :: SlotConfig
   , seConstModelParams :: CostModelParams
   , seEra              :: ScriptDataSupportedInEra era
+  , seFaucet           :: Faucet era
   }
 
-interpret :: MonadError CliError m
+askEra :: MonadReader (ScriptEnv era) m => m (ScriptDataSupportedInEra era)
+askEra = asks seEra
+
+interpret :: IsShelleyBasedEra era
+          => MonadError CliError m
           => MonadState (ScriptState era) m
           => MonadReader (ScriptEnv era) m
           => MonadIO m
@@ -78,16 +82,18 @@ interpret :: MonadError CliError m
 interpret FundWallet {..} = do
   ScriptEnv {..} <- ask
   let
-    (_, faucetSigningKey, faucetAddress, _) = findFaucetWallet
-    testWallets = findTestWallets
-  destAddresses <- (_, _, address, _) <$> testWallets
-  transactionBody <- withError (\(CliError originalMessage) -> CliError $ originalMessage <> "- from FundWallet") $ buildFaucetImpl
+    Faucet faucetSigningKey faucetAddress = seFaucet
+  Wallet _ _ destAddress _ <- findWallet soWalletNickname
+
+  era <- askEra
+  void $ withCliErrorMsg (mappend "- from FundWallet") $ flip runReaderT (CliEnv era) $ buildFaucetImpl
     seConnection
     soValue
-    destAddresses
+    [destAddress]
     faucetAddress
     faucetSigningKey
-    Just 5
+    (Just 5)
+
 interpret Initialize {..} = do
   ScriptEnv {..} <- ask
   let
@@ -182,7 +188,7 @@ interpret Initialize {..} = do
 interpret Prepare {..} = do
   (_, marloweTransaction) <- findMarloweTransaction soTransaction
 
-  preparedMarloweTransaction <- withError (\(CliError originalMessage) -> CliError $ originalMessage <> " - from Prepare Impl") $ prepareTransactionImpl
+  preparedMarloweTransaction <- withCliErrorMsg (mappend " - from Prepare Impl") $ prepareTransactionImpl
                                   marloweTransaction
                                   soInputs
                                   soMinimumTime
@@ -196,9 +202,9 @@ interpret CreateWallet {..} = do
   let vkey = getVerificationKey skey
   let LocalNodeConnectInfo {localNodeNetworkId} = seConnection
   let
-    address = makeShelleyAddress localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
+    address = makeShelleyAddressInEra localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
   let wallet = Wallet vkey skey address (verificationKeyHash vkey)
-  modify $ insertWallet soOwner wallet
+  modify $ insertWallet soWalletNickname wallet
 
 -- interpret Execute {..} = do
 --   (prev, marloweTransaction) <- findMarloweTransaction soTransaction
@@ -212,6 +218,9 @@ withError :: MonadError e m => (e -> e) -> m a -> m a
 withError modifyError action = catchError action \e -> do
                                 throwError $ modifyError e
 
+withCliErrorMsg :: MonadError CliError m => (String -> String) -> m a -> m a
+withCliErrorMsg f = withError (\(CliError msg) -> CliError (f msg))
+
 insertMarloweTransaction :: TransactionNickname -> MarloweTransaction era -> ScriptState era -> ScriptState era
 insertMarloweTransaction nickname transaction scriptState@ScriptState { transactions } = do
   let
@@ -219,7 +228,7 @@ insertMarloweTransaction nickname transaction scriptState@ScriptState { transact
     f Nothing                     = Just (Nothing, transaction)
   scriptState{ transactions = Map.alter f nickname transactions }
 
-insertWallet :: AccountId -> Wallet -> ScriptState era -> ScriptState era
+insertWallet :: WalletNickname -> Wallet era -> ScriptState era -> ScriptState era
 insertWallet ownerName wallet scriptState@ScriptState { wallets } =
   scriptState{ wallets = Map.insert ownerName wallet wallets }
 
@@ -231,36 +240,32 @@ findMarloweTransaction :: MonadError CliError m
                 -> m (Maybe (MarloweTransaction era), MarloweTransaction era) -- ^ Action returning the instance.
 findMarloweTransaction nickname = do
   ScriptState { transactions } <- get
-  case M.lookup nickname transactions of
+  case Map.lookup nickname transactions of
     Nothing -> throwError $ CliError ("[findMarloweTransaction] Marlowe Transaction was not found for nickname " <> show nickname <> ".")
     Just t -> pure t
 
-findFaucetWallet :: MonadError CliError m
+findWallet :: MonadError CliError m
               => MonadState (ScriptState era) m
-              -> m (Maybe Wallet)
-findFaucetWallet = do
-  ScriptState { faucet } <- get
-  faucet
-
-findTestWallets :: MonadError CliError m
-              => MonadState (ScriptState era) m
-              -> [m (Maybe Wallet)]
-findTestWallets = do
+              => WalletNickname
+              -> m (Wallet era)
+findWallet nickname = do
   ScriptState { wallets } <- get
-  wallets
+  liftCliMaybe ("[findWallet] Unable to find wallet:" <> show nickname) $ Map.lookup nickname wallets
 
 -- | Test a Marlowe contract.
 scriptTest  :: forall era m
              . MonadError CliError m
+            => IsShelleyBasedEra era
             => MonadIO m
             => ScriptDataSupportedInEra era
             -> CostModelParams
             -> NetworkId                         -- ^ The network magic.
             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
+            -> Faucet era
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest era costModel networkId _ slotConfig ScriptTest{..} =
+scriptTest era costModel networkId _ faucet slotConfig ScriptTest{..} =
   do
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
@@ -277,10 +282,12 @@ scriptTest era costModel networkId _ slotConfig ScriptTest{..} =
         , localNodeSocketPath      = "FIXME:NODESOCEKTPATH"
         }
     void $ catchError
-      (runReaderT (execStateT interpretLoop (ScriptState mempty mempty)) (ScriptEnv connection slotConfig costModel era))
+      (runReaderT (execStateT interpretLoop (ScriptState mempty mempty)) (ScriptEnv connection slotConfig costModel era faucet))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
         liftIO (putStrLn "***** FAILED *****")
         throwError (e :: CliError)
     liftIO $ putStrLn "***** PASSED *****"
+
+

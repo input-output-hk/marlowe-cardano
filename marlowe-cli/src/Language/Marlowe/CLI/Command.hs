@@ -41,7 +41,7 @@ import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTest
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
-import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..))
+import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), withShelleyBasedEra)
 import System.Exit (exitFailure)
 import System.IO (BufferMode (LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 
@@ -81,7 +81,7 @@ runCLI version =
     networkId <- maybe mempty O.value <$> liftIO getNetworkMagic
     socketPath <- maybe mempty O.value <$> liftIO getNodeSocketPath
     SomeCommand era command <- O.execParser $ parseCommand networkId socketPath version
-    result <- runExceptT $ runCommand era command
+    result <- runExceptT $ withShelleyBasedEra era $ runCommand era command
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -90,7 +90,8 @@ runCLI version =
 
 
 -- | Run a CLI command.
-runCommand :: MonadError CliError m
+runCommand :: IsShelleyBasedEra era
+           => MonadError CliError m
            => MonadIO m
            => ScriptDataSupportedInEra era
            -> Command era  -- ^ The command.
