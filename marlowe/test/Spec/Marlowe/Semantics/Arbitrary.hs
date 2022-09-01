@@ -487,6 +487,56 @@ choiceNotInBounds bounds =
     suchThat arbitrary $ \chosenNum -> not $ any (inBound chosenNum) bounds
 
 
+-- | Generate relevant Input content for a given input action
+interestingInput :: Bool -> Action -> [InputContent]
+interestingInput validity (Choice choiceId) bounds =
+  map (IChoice choiceId) (interestingChoiceNum bounds)
+  ++ map (\choiceId -> IChoice choiceId bounds) (interestingChoiceId choiceId)
+interestingInput validity (Choice choiceId) bounds = IChoice choiceId <$> interestingChoiceNum' validity bounds
+
+interestingChoiceId :: ChoiceId -> [ChoiceId]
+interestingChoiceId _ = error "not implemented yet"
+
+interestingParties :: Party -> [Party]
+interestingParties (Role "Alice") = [Role "Alice", Role "Alic", Role "Alices"]
+
+interestingChoiceNum :: [Bound] -> [ChoiceNum]
+interestingChoiceNum bounds = concatMap interestingChoiceNum' bounds
+
+interestingChoiceNum' :: Bool -> Bound -> [ChoiceNum]
+interestingChoiceNum' True (Bound lower upper) =
+  Data.List.nub
+  [
+    lower - 1
+  , lower
+  , lower + 1
+  , upper - 1
+  , upper
+  , upper + 1
+  , 0
+  , 1
+  , -1
+  , (lower + upper) `div` 2
+  , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
+  , - 10 * lower   -- FIXME: ditto
+  ]
+
+interestingChoiceNum' False (Bound lower upper) =
+  Data.List.nub
+  [
+    lower - 1
+  , lower
+  , lower + 1
+  , upper - 1
+  , upper
+  , upper + 1
+  , 0
+  , 1
+  , -1
+  , (lower + upper) `div` 2
+  , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
+  , - 10 * lower   -- FIXME: ditto
+  ]
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
 arbitraryTimeInterval =
