@@ -11,8 +11,12 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE BlockArguments    #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 
 module Language.Marlowe.CLI.Test (
@@ -21,21 +25,23 @@ module Language.Marlowe.CLI.Test (
 ) where
 
 
-import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
-                    ScriptDataSupportedInEra)
+import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
+                    Key (getVerificationKey, verificationKeyHash), LocalNodeConnectInfo (..), ScriptDataSupportedInEra)
+import Control.Lens (Bifunctor (bimap))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO)
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Language.Marlowe.CLI.IO (decodeFileStrict)
+import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (..))
+import Language.Marlowe.CLI.Test.Types (Faucet (Faucet), MarloweTests (..), Wallet (Wallet))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..))
 import PlutusCore (defaultCostModelParams)
 
 
 -- | Run tests of a Marlowe contract.
-runTests :: MonadError CliError m
+runTests :: IsShelleyBasedEra era
+         => MonadError CliError m
          => MonadIO m
          => ScriptDataSupportedInEra era
          -> MarloweTests era FilePath  -- ^ The tests.
@@ -55,6 +61,10 @@ runTests era ScriptTests{..} =
         , localNodeNetworkId       = network
         , localNodeSocketPath      = socketPath
         }
+    faucetSigningKey <- readSigningKey faucetSigningKeyFile
+    let faucet = Faucet faucetSigningKey faucetAddress
+
     slotConfig <- runReaderT (querySlotConfig connection) $ CliEnv era
     tests' <- mapM decodeFileStrict tests
-    mapM_ (scriptTest era costModel network connection slotConfig) tests'
+    mapM_ (scriptTest era costModel network connection faucet slotConfig) tests'
+

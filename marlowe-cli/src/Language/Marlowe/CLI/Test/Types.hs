@@ -25,23 +25,26 @@
 
 
 module Language.Marlowe.CLI.Test.Types (
--- * Type
-  MarloweTests(..)
+  Faucet(..)
+, MarloweTests(..)
+, ScriptContract(..)
 , ScriptTest(..)
 , ScriptOperation(..)
 , TransactionNickname
-, ScriptContract(..)
 , Wallet(..)
+, WalletNickname(..)
 ) where
 
 
-import Cardano.Api (Address, AddressInEra, Hash, Key (VerificationKey), NetworkId, PaymentKey, ShelleyAddr, SigningKey)
+import Cardano.Api (AddressInEra, Hash, Key (VerificationKey), NetworkId, PaymentKey, SigningKey, Value)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
+import Data.String (IsString (fromString))
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand)
+import Language.Marlowe.CLI.Types (SomePaymentSigningKey)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Time (POSIXTime)
@@ -52,12 +55,12 @@ data MarloweTests era a =
     -- | Test contracts on-chain.
     ScriptTests
     {
-      network       :: NetworkId   -- ^ The network ID, if any.
-    , socketPath    :: FilePath    -- ^ The path to the node socket.
-    , faucetFile    :: FilePath    -- ^ The file containing the faucet's signing key.
-    , faucetAddress :: AddressInEra era  -- ^ The faucet address.
-    , burnAddress   :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
-    , tests         :: [a]         -- ^ Input for the tests.
+      network              :: NetworkId   -- ^ The network ID, if any.
+    , socketPath           :: FilePath    -- ^ The path to the node socket.
+    , faucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
+    , faucetAddress        :: AddressInEra era  -- ^ The faucet address.
+    , burnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
+    , tests                :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
 
@@ -123,12 +126,12 @@ data ScriptOperation =
     }
   | CreateWallet
     {
-      soOwner       :: AccountId
+      soWalletNickname :: WalletNickname
     }
   | FundWallet
     {
-      soOwner :: AccountId
-    , soValue :: Int
+      soWalletNickname :: WalletNickname
+    , soValue          :: Cardano.Api.Value
     }
   | Fail
     {
@@ -138,11 +141,27 @@ data ScriptOperation =
     deriving anyclass (FromJSON, ToJSON)
 
 
-data Wallet =
+data Wallet era =
   Wallet
   {
     waVerificationKey :: VerificationKey PaymentKey
   , waSigningKey      :: SigningKey PaymentKey
-  , waAddress         :: Address ShelleyAddr
+  , waAddress         :: AddressInEra era
   , waPubKeyHash      :: Hash PaymentKey
   }
+  deriving stock (Generic, Show)
+
+data Faucet era =
+  Faucet
+  {
+    faSigningKey :: SomePaymentSigningKey
+  , faAddress    :: AddressInEra era
+  }
+  deriving stock (Generic, Show)
+
+newtype WalletNickname = WalletNickname String
+    deriving stock (Eq, Ord, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+
+instance IsString WalletNickname where
+  fromString = WalletNickname

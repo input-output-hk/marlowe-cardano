@@ -39,7 +39,8 @@ type TestCommand era = MarloweTests era FilePath
 
 
 -- | Run a contract-testing command.
-runTestCommand :: MonadError CliError m
+runTestCommand :: IsShelleyBasedEra era
+               => MonadError CliError m
                => MonadIO m
                => MonadReader (CliEnv era) m
                => TestCommand era  -- ^ The command.
