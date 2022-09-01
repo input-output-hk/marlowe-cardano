@@ -6,7 +6,7 @@ module Language.Marlowe.Runtime.ChainSync
   , mkChainSync
   ) where
 
-import Cardano.Api (CardanoMode, LocalNodeClientProtocolsInMode)
+import Cardano.Api (CardanoMode)
 import qualified Cardano.Api as Cardano
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.STM (STM)
@@ -15,8 +15,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel, NodeClient (..), NodeClientDependencies (..),
-                                                      mkNodeClient)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes)
 import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServer (..), ChainSyncQueryServerDependencies (..),
                                                        RunQueryServer, mkChainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServer (..), ChainSyncServerDependencies (..),
@@ -26,9 +25,7 @@ import Network.Channel (Channel)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
 data ChainSyncDependencies = ChainSyncDependencies
-  { connectToLocalNode   :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
-  , maxCost              :: !Int
-  , costModel            :: !CostModel
+  { getChanges           :: !(STM Changes)
   , databaseQueries      :: !(DatabaseQueries IO)
   , persistRateLimit     :: !NominalDiffTime
   , genesisBlock         :: !GenesisBlock
@@ -46,7 +43,6 @@ newtype ChainSync = ChainSync { runChainSync :: IO () }
 mkChainSync :: ChainSyncDependencies -> STM ChainSync
 mkChainSync ChainSyncDependencies{..} = do
   let DatabaseQueries{..} = databaseQueries
-  NodeClient{..} <- mkNodeClient NodeClientDependencies{..}
   let rateLimit = persistRateLimit
   ChainStore{..} <- mkChainStore ChainStoreDependencies{..}
   ChainSyncServer{..} <- mkChainSyncServer ChainSyncServerDependencies{..}
@@ -58,7 +54,6 @@ mkChainSync ChainSyncDependencies{..} = do
         fail "Existing genesis block does not match computed genesis block"
       Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
 
-    runNodeClient
-      `concurrently_` runChainStore
+    runChainStore
       `concurrently_` runChainSyncServer
       `concurrently_` runChainSyncQueryServer

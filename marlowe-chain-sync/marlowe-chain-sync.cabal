@@ -114,6 +114,7 @@ executable chainseekd
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , async
     , base16
     , bytestring
     , cardano-api

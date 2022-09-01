@@ -6,9 +6,10 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
+import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.STM (atomically, modifyTVar, newTVarIO, readTVar)
 import Control.Exception (bracket, bracketOnError, throwIO)
-import Control.Monad ((<=<))
+import Control.Monad (join, (<=<))
 import Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT, withExceptT)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.String (IsString (fromString))
@@ -19,9 +20,10 @@ import Hasql.Pool (UsageError (..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSync (..), ChainSyncDependencies (..), mkChainSync)
-import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
+import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries (..), hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient (..), NodeClientDependencies (..), mkNodeClient)
 import Language.Marlowe.Runtime.ChainSync.QueryServer (RunQueryServer (..))
 import Network.Channel (effectChannel, socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
@@ -53,33 +55,41 @@ run Options{..} = withSocketsDo do
           (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
       (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
       let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
-      chainSync <- atomically $ mkChainSync ChainSyncDependencies
-        { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
-        , databaseQueries = hoistDatabaseQueries
+      join $ atomically do
+        let
+          databaseQueries@DatabaseQueries{..} = hoistDatabaseQueries
             (either throwUsageError pure <=< Pool.use pool)
             (PostgreSQL.databaseQueries genesisBlock)
-        , persistRateLimit
-        , genesisBlock
-        , acceptChannel = do
-            socketId <- atomically do
-              modifyTVar socketIdVar (+1)
-              readTVar socketIdVar
-            (conn, _ :: SockAddr) <- accept chainSeekSocket
-            pure
-              ( effectChannel (logSend socketId) (logRecv socketId) $ socketAsChannel conn
-              , close conn
-              )
-        , acceptRunQueryServer = do
-            (conn, _ :: SockAddr) <- accept querySocket
-            let driver = mkDriver throwIO codecQuery $ socketAsChannel conn
-            pure $ RunQueryServer \server -> do
-              let peer = queryServerPeer server
-              fst <$> runPeerWithDriver driver peer (startDState driver)
-        , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
-        , maxCost
-        , costModel
-        }
-      runChainSync chainSync
+        NodeClient{..} <- mkNodeClient NodeClientDependencies
+          { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+          , maxCost
+          , costModel
+          , getHeaderAtPoint
+          , getIntersectionPoints
+          }
+        ChainSync{..} <- mkChainSync ChainSyncDependencies
+          { getChanges
+          , databaseQueries
+          , persistRateLimit
+          , genesisBlock
+          , acceptChannel = do
+              socketId <- atomically do
+                modifyTVar socketIdVar (+1)
+                readTVar socketIdVar
+              (conn, _ :: SockAddr) <- accept chainSeekSocket
+              pure
+                ( effectChannel (logSend socketId) (logRecv socketId) $ socketAsChannel conn
+                , close conn
+                )
+          , acceptRunQueryServer = do
+              (conn, _ :: SockAddr) <- accept querySocket
+              let driver = mkDriver throwIO codecQuery $ socketAsChannel conn
+              pure $ RunQueryServer \server -> do
+                let peer = queryServerPeer server
+                fst <$> runPeerWithDriver driver peer (startDState driver)
+          , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
+          }
+        pure $ runChainSync `concurrently_` runNodeClient
   where
     logSend i bytes =
       hPutStr stderr ("send[" <> show i <> "]: ") *> TL.hPutStrLn stderr (encodeBase16 bytes)
