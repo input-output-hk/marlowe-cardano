@@ -86,12 +86,6 @@ import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P
 
 
--- | Timeout seconds for static analysis, which can take so much time on a complex contract
---   that it exceeds hydra/CI resource limits, see SCP-4267.
-_STATIC_ANALYSIS_TIMEOUT_ :: Maybe Int
-_STATIC_ANALYSIS_TIMEOUT_ = Just $ 3 * 60
-
-
 -- | Set to `True` to print the JSON for the pangram contract.
 _PRINT_PANGRAM_JSON_ :: Bool
 _PRINT_PANGRAM_JSON_ = False
@@ -387,13 +381,13 @@ interpretContractString contractStr = interpret contractStr (as :: Contract)
 
 
 -- | Test that a contract execution does not exhibit false positives for warnings.
-noFalsePositivesForContract :: Contract -> Property
-noFalsePositivesForContract cont =
+noFalsePositivesForContract :: Maybe Int -> Contract -> Property
+noFalsePositivesForContract timeLimit cont =
   unsafePerformIO (do res <- catch (limitTime $ first Right <$> warningsTrace cont)
                                    (\exc -> return . Just . Left $ Left (exc :: SomeException))
                       return (case res of
                                 Nothing -> tabulate ("Timed out after "
-                                             <> show _STATIC_ANALYSIS_TIMEOUT_
+                                             <> show timeLimit
                                              <> " seconds") ["True"] True
                                 Just (Left err) -> counterexample (show err) False
                                 Just (Right answer) ->
@@ -406,12 +400,12 @@ noFalsePositivesForContract cont =
                                          counterexample ("Trace: " ++ show (is, li)) $
                                          tabulate "Number of warnings" [show (length warns)]
                                                   (warns =/= []))))
-    where limitTime = maybe (Just <$>) timeout $ (1_000_000 *) <$> _STATIC_ANALYSIS_TIMEOUT_
+    where limitTime = maybe (Just <$>) timeout $ (1_000_000 *) <$> timeLimit
 
 
 -- | Test that contract execution does not exhibit false positives for warnings.
-prop_noFalsePositives :: Property
-prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
+prop_noFalsePositives :: Maybe Int -> Property
+prop_noFalsePositives = forAllShrink contractGen shrinkContract . noFalsePositivesForContract
 
 
 -- | Test that JSON decoding inverts encoding for a contract.
