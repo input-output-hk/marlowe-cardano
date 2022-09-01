@@ -400,7 +400,7 @@ marlowe-cli transaction simple --testnet-magic "$MAGIC"                    \
                                --submit 600
 
 # shellcheck disable=SC2207
-# shellcheck wants us to use read -a or mapfile for this but array notation with =( ) is fine IMO!
+# "shellcheck" wants us to use read -a or mapfile for this but array notation with =( ) is fine IMO!
 TX_CLEANUP_ADA_ARR=($(
 marlowe-cli util select --testnet-magic "$MAGIC" \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
