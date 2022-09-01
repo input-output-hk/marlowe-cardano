@@ -82,7 +82,7 @@ See <<nix-advice>> for further advice on using Nix.
 ===== Non-Nix
 
 You can build some of the Haskell packages without Nix, but this is not recommended and we don't guarantee that these prerequisites are sufficient.
-If you use Nix, these tools are provided for you via `shell.nix`, and you do *not* need to install them yourself.
+If you use Nix, these tools are provided for you via `nix develop`, and you do *not* need to install them yourself.
 
 * If you want to build our Haskell packages with https://www.haskell.org/cabal/[`cabal`], then install it.
 * If you want to build our Haskell packages with https://haskellstack.org/[`stack`], then install it.
@@ -91,7 +91,7 @@ If you use Nix, these tools are provided for you via `shell.nix`, and you do *no
 [[building-with-nix]]
 ==== How to build the Haskell packages and other artifacts with Nix
 
-Run `nix build -f default.nix marlowe.haskell.packages.marlowe.components.library` from the root to build the Marlowe library.
+Run `nix build .#marlowe.haskell.packages.marlowe.components.library` from the root to build the Marlowe library.
 
 See <<nix-build-attributes>> to find out what other attributes you can build.
 
@@ -99,7 +99,7 @@ See <<nix-build-attributes>> to find out what other attributes you can build.
 
 The Haskell packages can be built directly with `cabal`.
 We do this during development (see <<how-to-develop>>).
-The best way is to do this is inside a `nix-shell`.
+The best way is to do this is inside a `nix develop`.
 
 [NOTE]
 ====
@@ -178,19 +178,19 @@ sudo launchctl start org.nixos.nix-daemon
 [[nix-build-attributes]]
 === Which attributes to use to build different artifacts
 
-link:./default.nix[`default.nix`] defines a package set with attributes for all the artifacts you can build from this repository.
+link:./packages.nix[`packages.nix`] defines a package set with attributes for all the artifacts you can build from this repository.
 These can be built using `nix build`.
 For example:
 
 ----
-nix build -f default.nix docs.site
+nix build .#docs.site
 ----
 
 .Example attributes
 * Project packages: defined inside `marlowe.haskell.packages`
 ** e.g. `marlowe.haskell.packages.marlowe.components.library`
 
-There are other attributes defined in link:./default.nix[`default.nix`].
+There are other attributes defined in link:./packages.nix[`packages.nix`].
 
 == Licensing
 

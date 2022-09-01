@@ -11,8 +11,6 @@ where
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Language.Marlowe as C
 import Language.Marlowe.Extended.V1
-import Ledger.Ada
-import Ledger.Value
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.UTC.Common
 import Marlowe.Contracts.UTC.CouponBond
@@ -21,6 +19,9 @@ import Marlowe.Contracts.UTC.Options
 import Marlowe.Contracts.UTC.StructuredProducts
 import Marlowe.Contracts.UTC.Swap
 import Marlowe.Contracts.UTC.ZeroCouponBond
+import Plutus.V1.Ledger.Ada (lovelaceValueOf)
+import Plutus.V1.Ledger.Api (TokenName, singleton)
+import Plutus.V1.Ledger.Value (CurrencySymbol)
 import Test.Tasty
 import Test.Tasty.HUnit
 

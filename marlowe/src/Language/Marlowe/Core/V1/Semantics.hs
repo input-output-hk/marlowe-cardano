@@ -45,11 +45,14 @@ module Language.Marlowe.Core.V1.Semantics where
 
 import Control.Applicative ((<*>), (<|>))
 import qualified Data.Aeson as JSON
-import Data.Aeson.Types hiding (Error, Value)
+import Data.Aeson.Types (FromJSON (parseJSON), KeyValue ((.=)), Parser, ToJSON (toJSON, toJSONList), object, withArray,
+                         withObject, (.:), (.:?))
+import qualified Data.Aeson.Types as JSON
+import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
 import qualified Data.Foldable as F
 import Data.Scientific (Scientific)
 import Data.Text (pack)
-import Deriving.Aeson
+import Deriving.Aeson (Generic)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..),
                                                  Environment (..), Input (..), InputContent (..), IntervalError (..),
                                                  IntervalResult (..), Money, Observation (..), Party, Payee (..),
@@ -57,14 +60,17 @@ import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..
                                                  getAction, getInputContent, inBounds)
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Ledger (POSIXTime (..), ValidatorHash)
-import Ledger.Value (CurrencySymbol (..))
-import qualified Ledger.Value as Val
+import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (..), ValidatorHash)
+import qualified Plutus.V1.Ledger.Value as Val
+import Plutus.V2.Ledger.Api (ValidatorHash (ValidatorHash))
 import PlutusTx (makeIsDataIndexed)
 import qualified PlutusTx.AssocMap as Map
 import qualified PlutusTx.Builtins as Builtins
 import PlutusTx.Lift (makeLift)
-import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
+import PlutusTx.Prelude (AdditiveGroup ((-)), AdditiveSemigroup ((+)), Bool (..), Eq (..), Foldable (foldMap), Integer,
+                         Maybe (..), MultiplicativeSemigroup ((*)), Ord (max, min, (<), (<=), (>), (>=)), all, foldr,
+                         fromBuiltin, fst, map, negate, not, otherwise, return, reverse, snd, toBuiltin, ($), (&&),
+                         (++), (.), (=<<), (>>=), (||))
 import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
 import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, (<>))
@@ -199,6 +205,21 @@ data TransactionOutput =
     | Error TransactionError
   deriving stock (Haskell.Show)
 
+validatorHashFromJSON :: JSON.Value -> Parser ValidatorHash
+validatorHashFromJSON v = do
+  EncodeBase16 bs <- parseJSON v
+  return $ ValidatorHash $ toBuiltin bs
+
+validatorHashToJSON :: ValidatorHash -> JSON.Value
+validatorHashToJSON (ValidatorHash h) = toJSON . EncodeBase16 . fromBuiltin $ h
+
+currencySymbolFromJSON :: JSON.Value -> Parser CurrencySymbol
+currencySymbolFromJSON v = do
+  EncodeBase16 bs <- parseJSON v
+  return $ CurrencySymbol $ toBuiltin bs
+
+currencySymbolToJSON :: CurrencySymbol -> JSON.Value
+currencySymbolToJSON (CurrencySymbol h) = toJSON . EncodeBase16 . fromBuiltin $ h
 
 {-|
     This data type is a content of a contract's /Datum/
@@ -215,8 +236,23 @@ data MarloweParams = MarloweParams {
         rolesCurrency           :: CurrencySymbol
     }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
-  deriving anyclass (FromJSON,ToJSON)
 
+instance FromJSON MarloweParams where
+  parseJSON (JSON.Object v) = do
+      pv <- v .: "rolePayoutValidatorHash"
+      c <- v .: "rolesCurrency"
+      MarloweParams
+        <$> validatorHashFromJSON pv
+        <*> currencySymbolFromJSON c
+
+  parseJSON invalid =
+      JSON.prependFailure "parsing MarloweParams failed, " (JSON.typeMismatch "Object" invalid)
+
+instance ToJSON MarloweParams where
+  toJSON (MarloweParams v c) = JSON.object
+    [ ("rolePayoutValidatorHash", validatorHashToJSON v)
+    , ("rolesCurrency", currencySymbolToJSON c)
+    ]
 
 {- Checks 'interval' and trim it if necessary. -}
 fixInterval :: TimeInterval -> State -> IntervalResult
@@ -527,7 +563,7 @@ computeTransaction tx state contract = let
     in case fixInterval (txInterval tx) state of
         IntervalTrimmed env fixState -> case applyAllInputs env fixState contract inputs of
             ApplyAllSuccess reduced warnings payments newState cont ->
-                    if not reduced && (not (isClose contract) || (Map.null $ accounts state))
+                   if not reduced && (not (isClose contract) || (Map.null $ accounts state))
                     then Error TEUselessTransaction
                     else TransactionOutput { txOutWarnings = warnings
                                            , txOutPayments = payments
@@ -596,7 +632,7 @@ validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList acco
 -- Typeclass instances
 
 instance FromJSON TransactionInput where
-  parseJSON (Object v) =
+  parseJSON (JSON.Object v) =
         TransactionInput <$> (parseTimeInterval =<< (v .: "tx_interval"))
                          <*> ((v .: "tx_inputs") >>=
                    withArray "Transaction input list" (\cl ->
@@ -619,8 +655,8 @@ instance ToJSON TransactionInput where
                                     ]
 
 instance FromJSON TransactionWarning where
-  parseJSON (String "assertion_failed") = return TransactionAssertionFailed
-  parseJSON (Object v) =
+  parseJSON (JSON.String "assertion_failed") = return TransactionAssertionFailed
+  parseJSON (JSON.Object v) =
         (TransactionNonPositiveDeposit <$> (v .: "party")
                                        <*> (v .: "in_account")
                                        <*> (v .: "of_token")

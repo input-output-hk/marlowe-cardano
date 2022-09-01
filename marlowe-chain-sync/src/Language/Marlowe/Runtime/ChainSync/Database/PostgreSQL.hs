@@ -30,8 +30,11 @@ import Data.ByteString.Short (fromShort, toShort)
 import Data.Int (Int16, Int64)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Monoid (Sum (..))
 import Data.Profunctor (rmap)
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -197,12 +200,13 @@ data PerformMoveResult err result
 
 performMove :: Api.Move err result -> Api.ChainPoint -> Transaction (PerformMoveResult err result)
 performMove = \case
-  Api.Fork left right          -> performFork left right
-  Api.AdvanceSlots slots       -> performAdvanceSlots slots
-  Api.AdvanceBlocks blocks     -> performAdvanceBlocks blocks
-  Api.FindConsumingTx txOutRef -> performFindConsumingTx txOutRef
-  Api.FindTx txId              -> performFindTx txId
-  Api.Intersect points         -> performIntersect points
+  Api.Fork left right           -> performFork left right
+  Api.AdvanceSlots slots        -> performAdvanceSlots slots
+  Api.AdvanceBlocks blocks      -> performAdvanceBlocks blocks
+  Api.FindConsumingTx txOutRef  -> performFindConsumingTx txOutRef
+  Api.FindTx txId               -> performFindTx txId
+  Api.Intersect points          -> performIntersect points
+  Api.FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
 
 performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
 performFork left right point = do
@@ -305,7 +309,7 @@ performFindConsumingTx Api.TxOutRef{..} point = do
       , tokenName
       , quantity
       ) | slotNo <= pointSlot point = MoveAbort $ Api.UTxOSpent $ Api.TxId spendingTxId
-        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Api.Transaction
+        | otherwise                 = MoveArrive (decodeBlockHeader (slotNo, hash, blockNo)) Api.Transaction
           { txId = Api.TxId spendingTxId
           , validityRange = case (validityLowerBound, validityUpperBound) of
               (Nothing, Nothing) -> Api.Unbounded
@@ -318,6 +322,54 @@ performFindConsumingTx Api.TxOutRef{..} point = do
           , mintedTokens = decodeTokens policyId tokenName quantity
           }
     readFirstTxRow _ = MoveWait
+
+performFindConsumingTxs
+  :: Set Api.TxOutRef
+  -> Api.ChainPoint
+  -> Transaction (PerformMoveResult (Map Api.TxOutRef Api.UTxOError) (Map Api.TxOutRef Api.Transaction))
+performFindConsumingTxs utxos point = do
+  -- TODO consider refactoring this to perform a bulk query rather than querying in a loop
+  -- For each requested Tx, perform a FindConsumingTx query
+  results <- traverse (flip performFindConsumingTx point) $ Map.fromSet id utxos
+
+  -- partition the results obtained from the individual queries
+  let (aborts, Sum waits, arrives) = partitionResults results
+
+  -- limit the found transactions to the ones from the earliest block in the
+  -- future.
+  let txsFromEarliestBlock = Map.foldrWithKey foldEarliestBlockTxs Nothing arrives
+
+  -- did any of the queries indicate that a result should be awaited?
+  let encounteredWaits = waits > 0
+
+  pure case (not $ Map.null aborts, txsFromEarliestBlock, encounteredWaits) of
+    -- There were no errors, no consuming Txs were found, and there were UTxOs to
+    -- wait for. In this case, the client should wait for results.
+    (False, Nothing, True)              -> MoveWait
+
+    -- There were no errors, no consuming Txs were found, and no UTxOs to wait
+    -- for. In this case, the client provided an empty set of UTxOs and this is
+    -- an error.
+    (False, Nothing, False)             -> MoveAbort mempty
+
+    -- There were no errors and some consuming Txs were found. move the client
+    -- to the block where the Txs reside and return them.
+    (False, Just (blockHeader, txs), _) -> MoveArrive blockHeader txs
+
+    -- There were some errors. Pass these back.
+    (True, _, _)                        -> MoveAbort aborts
+
+  where
+    foldEarliestBlockTxs utxo (header, tx) Nothing = Just (header, Map.singleton utxo tx)
+    foldEarliestBlockTxs utxo (header', tx) (Just (header, txs)) = Just case compare header' header of
+      LT -> (header', Map.singleton utxo tx)
+      EQ -> (header, Map.insert utxo tx txs)
+      GT -> (header, txs)
+
+    partitionResults = Map.foldMapWithKey \utxo -> \case
+      MoveArrive header tx -> (mempty, mempty, Map.singleton utxo (header, tx))
+      MoveWait             -> (mempty, 1 :: Sum Int, mempty)
+      MoveAbort err        -> (Map.singleton utxo err, mempty, mempty)
 
 performFindTx :: Api.TxId -> Api.ChainPoint -> Transaction (PerformMoveResult Api.TxError Api.Transaction)
 performFindTx txId point = do
@@ -372,8 +424,8 @@ performFindTx txId point = do
       , policyId
       , tokenName
       , quantity
-      ) | slotNo <= pointSlot point = MoveAbort $ Api.TxInPast $ decodeBlockHader (slotNo, hash, blockNo)
-        | otherwise                 = MoveArrive (decodeBlockHader (slotNo, hash, blockNo)) Api.Transaction
+      ) | slotNo <= pointSlot point = MoveAbort $ Api.TxInPast $ decodeBlockHeader (slotNo, hash, blockNo)
+        | otherwise                 = MoveArrive (decodeBlockHeader (slotNo, hash, blockNo)) Api.Transaction
           { txId = Api.TxId spendingTxId
           , validityRange = case (validityLowerBound, validityUpperBound) of
               (Nothing, Nothing) -> Api.Unbounded
@@ -395,15 +447,22 @@ mergeTxRow tx@Api.Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, toke
 queryTxIns :: Api.SlotNo -> Api.TxId -> Transaction (Set.Set Api.TransactionInput)
 queryTxIns slotNo txInId = HT.statement (Api.unTxId txInId, fromIntegral slotNo) $
   [foldStatement|
-    SELECT txOutId :: bytea, txOutIx :: smallint, redeemerDatumBytes :: bytea?
-      FROM chain.txIn as txIn
-     WHERE txInId = $1 :: bytea AND slotNo = $2 :: bigint
+    SELECT txIn.txOutId :: bytea
+         , txIn.txOutIx :: smallint
+         , txOut.address :: bytea
+         , txOut.datumBytes :: bytea?
+         , txIn.redeemerDatumBytes :: bytea?
+      FROM chain.txIn  as txIn
+      JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
+     WHERE txIn.txInId = $1 :: bytea AND txIn.slotNo = $2 :: bigint
   |] (Fold.foldMap (Set.singleton . decodeTxIn) id)
   where
     decodeTxIn :: ReadTxInRow -> Api.TransactionInput
-    decodeTxIn (txId, txIx, redeemerDatumBytes) = Api.TransactionInput
+    decodeTxIn (txId, txIx, address, datumBytes, redeemerDatumBytes) = Api.TransactionInput
       { txId = Api.TxId txId
       , txIx = fromIntegral txIx
+      , address = Api.Address address
+      , datumBytes = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
       , redeemer = Api.Redeemer . Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
       }
 
@@ -453,23 +512,25 @@ decodeTokens (Just policyId) (Just tokenName) (Just quantity) =
 decodeTokens _ _ _ = mempty
 
 type ReadTxRow =
-  ( Maybe Int64      -- Tx's Block's SlotNo
-  , Maybe ByteString -- Tx's Block's BlockHeaderHash
-  , Maybe Int64      -- Tx's Block's BlockNo
+  ( Maybe Int64      -- Tx Block's SlotNo
+  , Maybe ByteString -- Tx Block's BlockHeaderHash
+  , Maybe Int64      -- Tx Block's BlockNo
 
-  , Maybe ByteString -- Tx's id
-  , Maybe Int64      -- Tx's validityLowerBound
-  , Maybe Int64      -- Tx's validityUpperBound
-  , Maybe ByteString -- Tx's metadataKey1564
+  , Maybe ByteString -- Tx id
+  , Maybe Int64      -- Tx validityLowerBound
+  , Maybe Int64      -- Tx validityUpperBound
+  , Maybe ByteString -- Tx metadataKey1564
 
-  , Maybe ByteString -- Tx's minted Token's PolicyId
-  , Maybe ByteString -- Tx's minted Token's TokenName
-  , Maybe Int64      -- Tx's minted Token's Quantity
+  , Maybe ByteString -- Tx minted Token's PolicyId
+  , Maybe ByteString -- Tx minted Token's TokenName
+  , Maybe Int64      -- Tx minted Token's Quantity
   )
 
 type ReadTxInRow =
   ( ByteString       -- TxIn's TxId
   , Int16            -- TxIn's TxIx
+  , ByteString       -- TxIn's Address
+  , Maybe ByteString -- TxIn's datumBytes
   , Maybe ByteString -- TxIn's redeemerDatumBytes
   )
 
@@ -946,12 +1007,12 @@ slotNoToParam (SlotNo slotNo) = fromIntegral slotNo
 txIxToParam :: TxIx -> Int16
 txIxToParam (TxIx txIx) = fromIntegral txIx
 
-decodeBlockHader :: (Int64, ByteString, Int64) -> Api.BlockHeader
-decodeBlockHader (slotNo, hash, blockNo) = Api.BlockHeader (decodeSlotNo slotNo) (Api.BlockHeaderHash hash) (decodeBlockNo blockNo)
+decodeBlockHeader :: (Int64, ByteString, Int64) -> Api.BlockHeader
+decodeBlockHeader (slotNo, hash, blockNo) = Api.BlockHeader (decodeSlotNo slotNo) (Api.BlockHeaderHash hash) (decodeBlockNo blockNo)
 
 decodeChainPoint :: (Int64, ByteString, Int64) -> Api.ChainPoint
 decodeChainPoint (-1, _, _) = Api.Genesis
-decodeChainPoint row        = Api.At $ decodeBlockHader row
+decodeChainPoint row        = Api.At $ decodeBlockHeader row
 
 decodeSlotNo :: Int64 -> Api.SlotNo
 decodeSlotNo = Api.SlotNo . fromIntegral
@@ -965,4 +1026,4 @@ pointSlot (Api.At Api.BlockHeader{..}) = fromIntegral slotNo
 
 decodeAdvance :: Maybe (Int64, ByteString, Int64) -> PerformMoveResult err ()
 decodeAdvance Nothing    = MoveWait
-decodeAdvance (Just row) = MoveArrive (decodeBlockHader row) ()
+decodeAdvance (Just row) = MoveArrive (decodeBlockHeader row) ()

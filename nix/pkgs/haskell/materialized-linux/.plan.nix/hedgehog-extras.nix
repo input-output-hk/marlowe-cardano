@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "2.4";
-      identifier = { name = "hedgehog-extras"; version = "0.1.0.0"; };
+      identifier = { name = "hedgehog-extras"; version = "0.2.0.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "operations@iohk.io";
@@ -43,6 +43,7 @@
           (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
+          (hsPkgs."hw-aeson" or (errorHandler.buildDepError "hw-aeson"))
           (hsPkgs."mmorph" or (errorHandler.buildDepError "mmorph"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
@@ -89,11 +90,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "11";
+      url = "4";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "11";
+      url = "4";
       rev = "minimal";
       sha256 = "";
       };

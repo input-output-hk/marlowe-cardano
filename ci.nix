@@ -1,23 +1,18 @@
-{
-  # 'supportedSystems' restricts the set of systems that we will evaluate for. Useful when you're evaluting
-  # on a machine with e.g. no way to build the Darwin IFDs you need!
-  # TODO re-enable Darwin after Hydra Darwin build issues are resolved.
-  supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
-, rootsOnly ? false
-  # We explicitly pass true here in the GitHub action but don't want to slow down hydra
-, checkMaterialization ? false
-, sourcesOverride ? { }
-, sources ? import ./nix/sources.nix { system = builtins.currentSystem; } // sourcesOverride
-, source-repo-override ? { }
+{ supportedSystems
+, rootsOnly
+, checkMaterialization
+, inputs
+, source-repo-override
+, pkgs
+, internal
+, evalSystem
 }:
 let
-  inherit (import (sources.plutus-core + "/nix/lib/ci.nix")) dimension platformFilterGeneric filterAttrsOnlyRecursive filterSystems;
+  inherit (import (inputs.plutus-core + "/nix/lib/ci.nix")) dimension platformFilterGeneric filterAttrsOnlyRecursive filterSystems;
   # limit supportedSystems to what the CI can actually build
   # currently that is linux and darwin.
   systems = filterSystems supportedSystems;
-  crossSystems =
-    let pkgs = (import ./default.nix { }).pkgs;
-    in { inherit (pkgs.lib.systems.examples) mingwW64; };
+  crossSystems = { };
 
   # Collects haskell derivations and builds an attrset:
   #
@@ -58,7 +53,7 @@ let
       # given a system ("x86_64-linux") return an attrset of derivations to build
       _select = _: system: crossSystem:
         let
-          packages = import ./default.nix { inherit system crossSystem checkMaterialization source-repo-override; };
+          packages = internal.packagesFun { inherit system crossSystem checkMaterialization source-repo-override evalSystem; };
           pkgs = packages.pkgs;
           marlowe = packages.marlowe;
           # Map `crossSystem.config` to a name used in `lib.platforms`
@@ -80,8 +75,8 @@ let
           # cache for users
           inherit (marlowe.haskell.project) roots;
         } // pkgs.lib.optionalAttrs (!rootsOnly) (filterCross {
-          # build relevant top level attributes from default.nix
-          inherit (packages) tests marlowe-playground marlowe-dashboard;
+          # build relevant top level attributes from flake.nix
+          inherit (packages) tests;
 
           # Build the shell expression to be sure it works on all platforms
           #
@@ -91,7 +86,7 @@ let
           # FIXME: this should simply be set on the main shell derivation, but this breaks
           # lorri: https://github.com/target/lorri/issues/489. In the mean time, we set it
           # only on the CI version, so that we still catch it, but lorri doesn't see it.
-          shell = (import ./shell.nix { inherit packages; }).overrideAttrs (attrs: attrs // {
+          shell = (import ./dev-shell.nix { inherit packages system; }).overrideAttrs (attrs: attrs // {
             disallowedRequisites = [ marlowe.haskell.packages.plutus-core.components.library ];
           });
 

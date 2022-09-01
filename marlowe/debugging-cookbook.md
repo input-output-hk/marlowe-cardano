@@ -294,7 +294,7 @@ which gives a clearer view of the on-chain data.
 In this example we will profile the `marlowe-pab` executable.
 
 1.  Add runtime options to the `.cabal` file for the executable that you want to profile. This isn't strictly necessary, but it does give you more options to control the profiling. In this case we add `-rtpopts -fprof-auto -fprof-cafs` to the `ghc-options` field of the `executable marlowe-pab` section in [marlowe-cardano/marlowe.cabal](marlowe.cabal).
-2.  In Marlowe's top folder, open a Nix shell for profiling: `nix-shell --arg enableHaskellProfiling true`. It may take hours to build all dependencies with profiling.
+2.  In Marlowe's top folder, open a Nix shell for profiling: `nix develop .#prof`. It may take hours to build all dependencies with profiling.
 3.  Run the executable with extra runtime options for profiling: for example, `marlowe-pab +RTS -p -hc -RTS`.
 4.  The executable will run far slower than normally. You can adjust the number of time slices and profiling resolution with RTS options like `-i`, `-C`, or `-V`. Run `marlowe-pab +RTS -?` to get a list of the available options along with a brief description of each.
 5.  When the program terminates or is killed, there will be a pair of files, `marlowe-pab.prof` and `marlowe-pab.hp`.

@@ -1,29 +1,63 @@
-{-# LANGUAGE OverloadedStrings #-}
-module Main(main) where
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Marlowe tests.
+--
+-----------------------------------------------------------------------------
 
-import qualified Spec.Marlowe.AutoExecute
-import qualified Spec.Marlowe.Marlowe
+
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+
+module Main(
+-- * Testing
+  main
+) where
+
+
+import Test.Tasty (TestTree, defaultMain, testGroup)
+import Test.Tasty.QuickCheck (testProperty)
+
+import qualified Spec.Marlowe.Marlowe (prop_contractJsonLoops, prop_marloweParamsJsonLoops, prop_noFalsePositives,
+                                       tests)
 import qualified Spec.Marlowe.Semantics (tests)
 
-import Test.Tasty
-import Test.Tasty.QuickCheck
 
+-- | Timeout seconds for static analysis, which can take so much time on a complex contract
+--   that it exceeds hydra/CI resource limits, see SCP-4267.
+timeout :: Maybe Int
+#ifdef STATIC_ANALYSIS_TIMEOUT
+timeout = Just $ STATIC_ANALYSIS_TIMEOUT
+#else
+timeout = Nothing
+#endif
+
+
+-- | Entry point for the tests.
 main :: IO ()
 main = defaultMain tests
 
+
+-- | Run the tests.
 tests :: TestTree
-tests = testGroup "Marlowe" $
-    [ testGroup "Contracts" [ Spec.Marlowe.Marlowe.tests
-                            , Spec.Marlowe.AutoExecute.tests
--- Does not work when invoking it from nix
---                            , testProperty "Correct Show instance for Contract"
---                                           Spec.Marlowe.Marlowe.prop_showWorksForContracts
-                            ]
+tests =
+  testGroup "Marlowe"
+    [
+      Spec.Marlowe.Marlowe.tests
     , testGroup "Static Analysis"
-        [ testProperty "No false positives" Spec.Marlowe.Marlowe.prop_noFalsePositives
-        ]
-    , testGroup "Marlowe JSON"
-        [ testProperty "Serialise deserialise loops" Spec.Marlowe.Marlowe.prop_jsonLoops
-        ]
+      [
+        testProperty "No false positives" $ Spec.Marlowe.Marlowe.prop_noFalsePositives timeout
+      ]
+    , testGroup "JSON Serialisation"
+      [
+        testProperty "Serialise deserialise Contract loops" Spec.Marlowe.Marlowe.prop_contractJsonLoops
+      , testProperty "Serialise deserialise MarloweParams loops" Spec.Marlowe.Marlowe.prop_marloweParamsJsonLoops
+      ]
+    , Spec.Marlowe.Semantics.tests
     ]
-    <> Spec.Marlowe.Semantics.tests

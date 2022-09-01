@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "plutus-ledger-api"; version = "0.1.0.0"; };
+      identifier = { name = "plutus-ledger-api"; version = "1.0.0.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "michael.peyton-jones@iohk.io";
@@ -33,53 +33,51 @@
     components = {
       "library" = {
         depends = [
+          (hsPkgs."barbies" or (errorHandler.buildDepError "barbies"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
-          (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+          (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+          (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
           (hsPkgs."flat" or (errorHandler.buildDepError "flat"))
-          (hsPkgs."hashable" or (errorHandler.buildDepError "hashable"))
-          (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
-          (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
+          (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+          (hsPkgs."nothunks" or (errorHandler.buildDepError "nothunks"))
+          (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
+          (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
+          (hsPkgs."tagged" or (errorHandler.buildDepError "tagged"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
-          (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
-          (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
-          (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
-          (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
-          (hsPkgs."tagged" or (errorHandler.buildDepError "tagged"))
-          (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
-          (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
           ];
         buildable = true;
         modules = [
-          "Data/Aeson/Extras"
+          "Codec/CBOR/Extras"
           "Data/Either/Extras"
           "Prettyprinter/Extras"
+          "Plutus/ApiCommon"
           "Plutus/V1/Ledger/Address"
-          "Plutus/V1/Ledger/Ada"
           "Plutus/V1/Ledger/Api"
           "Plutus/V1/Ledger/Bytes"
           "Plutus/V1/Ledger/Contexts"
           "Plutus/V1/Ledger/Credential"
           "Plutus/V1/Ledger/Crypto"
           "Plutus/V1/Ledger/DCert"
+          "Plutus/V1/Ledger/EvaluationContext"
           "Plutus/V1/Ledger/Examples"
           "Plutus/V1/Ledger/Interval"
-          "Plutus/V1/Ledger/Orphans"
+          "Plutus/V1/Ledger/ProtocolVersions"
           "Plutus/V1/Ledger/Scripts"
-          "Plutus/V1/Ledger/Slot"
-          "Plutus/V1/Ledger/Tx"
-          "Plutus/V1/Ledger/TxId"
           "Plutus/V1/Ledger/Time"
+          "Plutus/V1/Ledger/Tx"
           "Plutus/V1/Ledger/Value"
           "Plutus/V2/Ledger/Api"
           "Plutus/V2/Ledger/Contexts"
+          "Plutus/V2/Ledger/EvaluationContext"
+          "Plutus/V2/Ledger/Tx"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -87,21 +85,27 @@
         "plutus-ledger-api-test" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
-            (hsPkgs."plutus-core".components.sublibs.plutus-core-testlib or (errorHandler.buildDepError "plutus-core:plutus-core-testlib"))
-            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."extra" or (errorHandler.buildDepError "extra"))
             (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+            (hsPkgs."nothunks" or (errorHandler.buildDepError "nothunks"))
+            (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
             (hsPkgs."tasty-hedgehog" or (errorHandler.buildDepError "tasty-hedgehog"))
             (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
-            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             ];
           buildable = true;
-          modules = [ "Spec/Interval" "Spec/Time" "Spec/Eval" ];
+          modules = [
+            "Spec/Builtins"
+            "Spec/Eval"
+            "Spec/Interval"
+            "Spec/NoThunks"
+            ];
           hsSourceDirs = [ "test" ];
           mainPath = [ "Spec.hs" ];
           };
@@ -109,11 +113,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "3";
+      url = "15";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "3";
+      url = "15";
       rev = "minimal";
       sha256 = "";
       };

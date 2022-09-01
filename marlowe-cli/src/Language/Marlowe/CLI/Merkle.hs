@@ -45,7 +45,7 @@ import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ReduceResult (..), 
                                            reduceContractUntilQuiescent)
 import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Input (..), IntervalResult (..), State,
                                                  TimeInterval)
-import Ledger.Scripts (dataHash)
+import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltinData)
 
 import qualified Data.Map.Strict as M (lookup, singleton)

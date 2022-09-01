@@ -8,7 +8,7 @@ pkgs.recurseIntoAttrs {
   };
 
   build-and-serve-docs = pkgs.writeShellScriptBin "build-and-serve-docs" ''
-    cd $(nix-build default.nix -A docs.site) && \
+    cd $(nix build .#docs.site --no-link --json | jq -r .[0].outputs.out) && \
     ${pkgs.python3}/bin/python3 -m http.server 8002
   '';
 }

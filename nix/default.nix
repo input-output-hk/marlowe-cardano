@@ -1,13 +1,11 @@
-{ system ? builtins.currentSystem
+{ system
 , crossSystem ? null
-, config ? { }
-, overlays ? [ ]
-, sourcesOverride ? { }
-, sources
-, haskellNix
+, inputs
+, haskell-nix
 , checkMaterialization ? false
 , enableHaskellProfiling ? false
-, source-repo-override
+, source-repo-override ? { }
+, evalSystem ? system
 }:
 let
   ownOverlays =
@@ -21,30 +19,31 @@ let
       (final: prev: { stdenv = prev.stdenv // { inherit (final) lib; }; })
     ];
 
-  iohkNixMain = import sources.iohk-nix { };
+  iohkNixMain = import inputs.iohk-nix { };
 
-  extraOverlays =
-    # Haskell.nix (https://github.com/input-output-hk/haskell.nix)
-    haskellNix.nixpkgsArgs.overlays
-    # our own overlays:
-    # needed for cardano-api wich uses a patched libsodium
-    ++ iohkNixMain.overlays.crypto
-    ++ iohkNixMain.overlays.iohkNix
-    ++ ownOverlays;
-
-  pkgs = import sources.nixpkgs {
+  nixpkgsArgs = {
+    overlays =
+      # Haskell.nix (https://github.com/input-output-hk/haskell.nix)
+      [ haskell-nix.overlay ]
+      # our own overlays:
+      # needed for cardano-api wich uses a patched libsodium
+      ++ iohkNixMain.overlays.crypto
+      ++ iohkNixMain.overlays.iohkNix
+      ++ [ (final: prev: { cardano = inputs.cardano-world.${system}.cardano; }) ]
+      ++ ownOverlays;
+    inherit (haskell-nix) config;
     inherit crossSystem;
     # In nixpkgs versions older than 21.05, if we don't explicitly pass
     # in localSystem we will hit a code path that uses builtins.currentSystem,
     # which breaks flake's pure evaluation.
     localSystem = { inherit system; };
-    overlays = extraOverlays ++ overlays;
-    config = haskellNix.nixpkgsArgs.config // config;
   };
 
-  marlowe = import ./pkgs { inherit pkgs checkMaterialization enableHaskellProfiling sources source-repo-override; };
+  pkgs = import inputs.nixpkgs nixpkgsArgs;
+
+  marlowe = import ./pkgs { inherit pkgs checkMaterialization enableHaskellProfiling inputs source-repo-override system evalSystem; };
 
 in
 {
-  inherit pkgs marlowe sources;
+  inherit pkgs marlowe;
 }

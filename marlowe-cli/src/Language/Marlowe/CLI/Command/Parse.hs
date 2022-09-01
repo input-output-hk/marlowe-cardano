@@ -1,3 +1,5 @@
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -10,17 +12,15 @@
 --
 -----------------------------------------------------------------------------
 
-
 module Language.Marlowe.CLI.Command.Parse (
 -- * Parsers
-  parseAddressAny
+  parseAddress
 , parseAssetId
 , parseOutputQuery
 , parseByteString
 , parseCurrencySymbol
 , parseInput
 , parseInputContent
-, parseMarloweClientInput
 , parseLovelaceValue
 , parseNetworkId
 , parseRole
@@ -38,20 +38,18 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseTxOut
 , parseUrl
 , parseValue
-, parseWalletId
 , readTokenName
 ) where
 
 
-import Cardano.Api (AddressAny, AsType (AsAddressAny, AsPolicyId, AsStakeAddress, AsTxId), AssetId (..), AssetName (..),
-                    Lovelace (..), NetworkId (..), NetworkMagic (..), Quantity (..), SlotNo (..),
+import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsShelleyBasedEra, Lovelace (..),
+                    NetworkId (..), NetworkMagic (..), Quantity (..), ShelleyBasedEra (..), SlotNo (..),
                     StakeAddressReference (..), TxId (..), TxIn (..), TxIx (..), Value, deserialiseAddress,
-                    deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace, valueFromList)
+                    deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace, shelleyBasedEra, valueFromList)
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
 import Language.Marlowe.CLI.Types (OutputQuery (..))
-import Language.Marlowe.Client (MarloweClientInput (..))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -60,7 +58,6 @@ import Plutus.V1.Ledger.Slot (Slot (..))
 import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
-import Wallet.Emulator.Wallet (WalletId, fromBase16)
 
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
@@ -132,8 +129,8 @@ readTxIdEither :: String              -- ^ The string to be read.
                -> Either String TxId  -- ^ Either the transaction ID or an error message.
 readTxIdEither s =
   case deserialiseFromRawBytesHex AsTxId $ BS8.pack s of
-    Nothing   -> Left "Invalid transaction ID."
-    Just txId -> Right txId
+    Left msg   -> Left ("Invalid transaction ID: " <> show msg)
+    Right txId -> Right txId
 
 
 -- | Parser for `TxIx`.
@@ -142,13 +139,13 @@ parseTxIx = TxIx <$> O.auto
 
 
 -- | Parser for `TxOut` information.
-parseTxOut :: O.ReadM (AddressAny, Value)
+parseTxOut :: IsShelleyBasedEra era => O.ReadM (AddressInEra era, Value)
 parseTxOut =
   O.eitherReader
     $ \s ->
       case splitOn "+" s of
         address : lovelace' : tokens -> do
-                                          address' <- readAddressAnyEither address
+                                          address' <- readAddressEither address
                                           lovelace'' <- readLovelaceEither lovelace'
                                           tokens' <- mapM readAssetValueEither tokens
                                           pure (address', lovelace'' <> mconcat tokens')
@@ -204,26 +201,35 @@ readAssetIdEither :: String                 -- ^ The string to be read.
 readAssetIdEither s =
   case s =~ "^([[:xdigit:]]{56})\\.([^+]+)$" of
     [[_, symbol, name]] -> case deserialiseFromRawBytesHex AsPolicyId $ BS8.pack symbol of
-                             Just symbol' -> Right
+                             Right symbol' -> Right
                                                 $ AssetId symbol'
                                                   (AssetName . BS8.pack $ name)
-                             Nothing      -> Left "Invalid policy ID."
+                             Left msg      -> Left ("Invalid policy ID: " <> show msg)
     _                   -> Left "Invalid token."
 
 
 
--- | Parser for `AddressAny`.
-parseAddressAny :: O.ReadM AddressAny
-parseAddressAny = O.eitherReader readAddressAnyEither
+-- | Parser for `AddressInEra era`.
+parseAddress :: IsShelleyBasedEra era => O.ReadM (AddressInEra era)
+parseAddress = O.eitherReader readAddressEither
 
 
--- | Parser for `AddressAny`.
-readAddressAnyEither :: String                    -- ^ The string to be read.
-                     -> Either String AddressAny  -- ^ Either the address or an error message.
-readAddressAnyEither s =
-  case deserialiseAddress AsAddressAny $ T.pack s of
+-- | Parser for `AddressInEra era`.
+readAddressEither :: forall era
+                   . IsShelleyBasedEra era
+                  => String                    -- ^ The string to be read.
+                  -> Either String (AddressInEra era)  -- ^ Either the address or an error message.
+readAddressEither s = do
+  era <- eraAsType
+  case deserialiseAddress (AsAddressInEra era) $ T.pack s of
     Nothing      -> Left "Invalid address."
     Just address -> Right address
+  where
+    eraAsType :: Either String (AsType era)
+    eraAsType = case shelleyBasedEra :: ShelleyBasedEra era of
+      ShelleyBasedEraAlonzo  -> Right AsAlonzo
+      ShelleyBasedEraBabbage -> Right AsBabbage
+      era                    -> Left $ "unsupported era: " <> show era
 
 
 -- | Parser for `Party`.
@@ -293,10 +299,6 @@ parseByteString =
         Right currency -> Right . toBuiltin $ currency
 
 
--- | Parse input to a contract.
-parseMarloweClientInput :: O.Parser MarloweClientInput
-parseMarloweClientInput = ClientInput <$> parseInputContent
-
 
 -- | Parse input to a contract.
 parseInput :: O.Parser Input
@@ -335,14 +337,6 @@ parseUrl =
     . parseBaseUrl
 
 
--- | Parse a WalletId.
-parseWalletId :: O.ReadM WalletId
-parseWalletId =
-  O.eitherReader
-    $ fromBase16
-    . T.pack
-
-
 -- | Read a public key hash.
 readPubKeyHashEither :: String                    -- ^ The string to be read.
                      -> Either String PubKeyHash  -- ^ Either the public key hash or an error message.
@@ -353,13 +347,13 @@ readPubKeyHashEither s =
 
 
 -- | Parse a role.
-parseRole :: O.ReadM (TokenName, AddressAny)
+parseRole :: IsShelleyBasedEra era => O.ReadM (TokenName, AddressInEra era)
 parseRole =
   O.eitherReader
     $ \s ->
       case splitOn "=" s of
         [name, address] -> do
-                             address' <- readAddressAnyEither address
+                             address' <- readAddressEither address
                              pure (readTokenName name, address')
         _               -> Left "Invalid role assigment."
 

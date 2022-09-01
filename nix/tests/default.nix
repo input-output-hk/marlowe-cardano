@@ -1,60 +1,26 @@
 { pkgs
-, gitignore-nix
 , fixStylishHaskell
-, fix-purs-tidy
 , fix-prettier
-, fixPngOptimization
 , src
-, marlowe-playground
-, marlowe-dashboard
-, run-generated
-, play-generated
-, web-ghc
-, plutus-pab
-, marlowe-pab
 , docs
-, sources
 , vmCompileTests ? false
 }:
 let
   inherit (pkgs) lib;
-  cleanSrc = gitignore-nix.gitignoreSource src;
 in
 pkgs.recurseIntoAttrs {
-  shellcheck = pkgs.callPackage ./shellcheck.nix { src = cleanSrc; };
+  shellcheck = pkgs.callPackage ./shellcheck.nix { inherit src; };
 
   stylishHaskell = pkgs.callPackage ./stylish-haskell.nix {
-    src = cleanSrc;
-    inherit fixStylishHaskell;
-  };
-
-  generated = pkgs.callPackage ./generated.nix {
-    src = cleanSrc;
-    inherit run-generated play-generated;
-  };
-
-  pursTidy = pkgs.callPackage ./purs-tidy.nix {
-    src = cleanSrc;
-    inherit fix-purs-tidy;
+    inherit src fixStylishHaskell;
   };
 
   prettier = pkgs.callPackage ./prettier.nix {
-    src = cleanSrc;
-    inherit fix-prettier;
+    inherit src fix-prettier;
   };
 
   nixpkgsFmt = pkgs.callPackage ./nixpkgs-fmt.nix {
-    src = cleanSrc;
+    inherit src;
     inherit (pkgs) nixpkgs-fmt;
-  };
-
-  pngOptimization = pkgs.callPackage ./png-optimization.nix {
-    src = cleanSrc;
-    inherit fixPngOptimization;
-  };
-
-  vmTests = pkgs.callPackage ./vm.nix {
-    inherit vmCompileTests marlowe-playground
-      marlowe-dashboard web-ghc plutus-pab marlowe-pab docs sources;
   };
 }

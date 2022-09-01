@@ -1,18 +1,19 @@
 { lib
-, sources
+, inputs
 , stdenv
 , haskell-nix
 , buildPackages
 , writeShellScript
 , checkMaterialization
-, gitignore-nix
 , R
 , libsodium-vrf
+, secp256k1
 , rPackages
 , z3
 , enableHaskellProfiling
 , actus-tests
 , source-repo-override
+, evalSystem
 }:
 let
   # The Hackage index-state from cabal.project
@@ -36,8 +37,8 @@ let
   baseProject =
     { deferPluginErrors }:
     import ./haskell.nix {
-      inherit lib haskell-nix R libsodium-vrf rPackages z3;
-      inherit checkMaterialization compiler-nix-name gitignore-nix;
+      inherit lib haskell-nix R libsodium-vrf secp256k1 rPackages z3 evalSystem;
+      inherit checkMaterialization compiler-nix-name;
       inherit enableHaskellProfiling;
       inherit deferPluginErrors;
       inherit actus-tests;
@@ -54,11 +55,11 @@ let
   # Just the packages in the project
   projectPackages = haskell-nix.haskellLib.selectProjectPackages packages;
   projectPackagesAllHaddock = (haskell-nix.haskellLib.selectProjectPackages projectAllHaddock.hsPkgs) // {
-    inherit (projectAllHaddock.hsPkgs) plutus-core plutus-tx plutus-tx-plugin plutus-ledger-api plutus-pab plutus-contract plutus-chain-index-core plutus-chain-index plutus-ledger;
+    inherit (projectAllHaddock.hsPkgs) plutus-core plutus-tx plutus-tx-plugin plutus-ledger-api;
   };
 
   extraPackages = import ./extra.nix {
-    inherit stdenv lib haskell-nix sources buildPackages writeShellScript;
+    inherit stdenv lib haskell-nix inputs buildPackages writeShellScript evalSystem;
     inherit index-state checkMaterialization compiler-nix-name;
   };
 

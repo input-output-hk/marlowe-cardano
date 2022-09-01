@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe
-version: 0.1.0.0
+version: 0.1.0.1
 license: Apache-2.0
 license-files:
   LICENSE
@@ -20,7 +20,7 @@ extra-doc-files: README.md
 
 source-repository head
   type: git
-  location: https://github.com/input-output-hk/plutus
+  location: https://github.com/input-output-hk/marlowe-cardano
 
 flag defer-plugin-errors
     description:
@@ -38,49 +38,37 @@ common lang
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
-
-  if flag(defer-plugin-errors)
-    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+    -Wunused-packages
 
 library
   import: lang
   hs-source-dirs: src
-  ghc-options:
-    -Wunused-packages
-  build-depends:
-    aeson -any,
-    base -any,
-    bytestring,
-    cardano-api -any,
-    cardano-binary -any,
-    cardano-ledger-alonzo -any,
-    cardano-ledger-core -any,
-    containers -any,
-    data-default -any,
-    deriving-aeson -any,
-    extra -any,
-    lens,
-    mtl,
-    newtype-generics,
-    template-haskell -any,
-    plutus-chain-index-core -any,
-    plutus-contract -any,
-    plutus-core,
-    plutus-ledger,
-    plutus-ledger-api -any,
-    plutus-ledger-constraints,
-    plutus-tx -any,
-    plutus-use-cases,
-    serialise -any,
-    base16-bytestring -any,
-    text,
-    sbv >= 8.4,
-    scientific -any,
-    wl-pprint -any,
-    unordered-containers -any,
-    uuid -any
+
   if !(impl(ghcjs) || os(ghcjs))
     build-depends: plutus-tx-plugin -any
+
+  build-depends:
+    base,
+    aeson <2,
+    base16-aeson,
+    base16-bytestring,
+    bytestring,
+    containers,
+    deriving-aeson,
+    mtl,
+    newtype-generics,
+    plutus-ledger-ada,
+    plutus-ledger-api,
+    plutus-ledger-slot,
+    plutus-script-utils,
+    plutus-tx,
+    sbv >=8.4,
+    scientific,
+    serialise,
+    template-haskell,
+    text,
+    wl-pprint,
+
   exposed-modules:
     Language.Marlowe
     Language.Marlowe.Extended.V1
@@ -95,168 +83,66 @@ library
     Language.Marlowe.Pretty
     Language.Marlowe.Analysis.FSSemantics
     Plutus.Debug
-  other-modules:
 
-----test-suite marlowe-test-long-running
-----    import: lang
-----    hs-source-dirs:
-----      test
-----      pab
-----    type: exitcode-stdio-1.0
-----    main-is: SpecLongRunning.hs
-----    other-modules:
-----        Spec.PAB.Workflow
-----        MarloweContract
-----    build-depends:
-----        aeson -any,
-----        base >=4.9 && <5,
-----        containers -any,
-----        data-default  -any,
-----        hint -any,
-----        lens -any,
-----        bytestring -any,
-----        freer-simple -any,
-----        tasty -any,
-----        tasty-hunit -any,
-----        tasty-quickcheck,
-----        text -any,
-----        serialise,
-----        cborg,
-----        plutus-chain-index-core -any,
-----        plutus-contract -any,
-----        plutus-ledger -any,
-----        plutus-pab-executables -any,
-----        marlowe,
-----        plutus-tx -any,
-----        QuickCheck,
-----        template-haskell -any,
-----        streaming -any,
-----        plutus-pab -any,
-----        async -any,
-----        prettyprinter -any,
-----        purescript-bridge -any,
-----        servant-client -any,
-----        http-client -any,
-----        websockets -any,
-----        network -any,
-----        openapi3 -any,
-----        uuid -any,
+
+flag limit-static-analysis-time
+  description:
+    This flag sets the timeout seconds for static analysis testing of arbitrary
+    contracts, which can take so much time on a complex contract that it exceeds
+    hydra/CI resource limits, see SCP-4267.
+  default: True
+
 
 test-suite marlowe-test
     import: lang
-    hs-source-dirs:
-      test
-      pab
+    hs-source-dirs: test
+
+    if flag(limit-static-analysis-time)
+      cpp-options: -DSTATIC_ANALYSIS_TIMEOUT=180
+
+    if flag(defer-plugin-errors)
+      ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
     type: exitcode-stdio-1.0
     main-is: Spec.hs
+
     other-modules:
-        Spec.Marlowe.Arbitrary
-        Spec.Marlowe.AutoExecute
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
-        Spec.Marlowe.Orphans
         Spec.Marlowe.Semantics
-        Spec.Marlowe.Util
-        Spec.Marlowe.Util.AssocMap
-        MarloweContract
+        Spec.Marlowe.Semantics.Arbitrary
+        Spec.Marlowe.Semantics.AssocMap
+        Spec.Marlowe.Semantics.Compute
+        Spec.Marlowe.Semantics.Entropy
+        Spec.Marlowe.Semantics.Functions
+        Spec.Marlowe.Semantics.Golden
+        Spec.Marlowe.Semantics.Golden.Escrow
+        Spec.Marlowe.Semantics.Golden.Pangram
+        Spec.Marlowe.Semantics.Golden.Swap
+        Spec.Marlowe.Semantics.Golden.Trivial
+        Spec.Marlowe.Semantics.Golden.ZeroCouponBond
+        Spec.Marlowe.Semantics.Orphans
+        Spec.Marlowe.Semantics.Util
+
     build-depends:
-        aeson -any,
-        cardano-api -any,
         base >=4.9 && <5,
-        containers -any,
-        data-default  -any,
-        hint -any,
-        lens -any,
-        bytestring -any,
-        freer-simple -any,
-        freer-extras -any,
-        tasty -any,
-        tasty-hunit -any,
-        tasty-quickcheck,
-        text -any,
-        serialise,
-        cborg,
-        plutus-chain-index-core -any,
-        plutus-contract -any,
-        plutus-ledger -any,
-        plutus-ledger-api -any,
-        plutus-ledger-constraints -any,
-        plutus-pab-executables -any,
+        aeson,
+        bytestring,
+        containers,
+        data-default,
+        hint,
+        lens,
         marlowe,
-        plutus-tx -any,
+        mtl,
+        plutus-ledger,
+        plutus-ledger-api,
+        plutus-ledger-slot,
+        plutus-script-utils,
+        plutus-tx,
         QuickCheck,
-        template-haskell -any,
-        streaming -any,
-        plutus-pab -any,
-        async -any,
-        prettyprinter -any,
-        purescript-bridge -any,
-        servant-client -any,
-        http-client -any,
-        websockets -any,
-        network -any,
-        openapi3,
-        uuid -any
-
--- | The PAB Specialised to the marlowe contract(s)
-executable marlowe-pab
-  import: lang
-  main-is: Main.hs
-  hs-source-dirs: pab
-  ghc-options:
-    -threaded
-  other-modules:
-    MarloweContract
-  build-depends:
-    base >= 4.9 && < 5,
-    aeson -any,
-    containers -any,
-    data-default -any,
-    freer-simple -any,
-    prettyprinter -any,
-    freer-extras -any,
-    plutus-chain-index -any,
-    plutus-chain-index-core -any,
-    plutus-contract -any,
-    plutus-ledger -any,
-    plutus-pab -any,
-    plutus-pab-executables -any,
-    plutus-tx -any,
-    purescript-bridge -any,
-    marlowe -any,
-    openapi3,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
-
--- | The PAB purescript generation specialised to the marlowe contract(s)
-executable marlowe-pab-setup
-  import: lang
-  main-is: Setup.hs
-  hs-source-dirs: pab
-  ghc-options:
-    -threaded
-  other-modules:
-    SetupParser
-  build-depends:
-    base >= 4.9 && < 5,
-    aeson -any,
-    containers -any,
-    data-default -any,
-    freer-simple -any,
-    iohk-monitoring -any,
-    monad-logger -any,
-    prettyprinter -any,
-    freer-extras -any,
-    optparse-applicative -any,
-    plutus-contract -any,
-    plutus-ledger -any,
-    plutus-pab -any,
-    plutus-pab-executables -any,
-    plutus-tx -any,
-    purescript-bridge -any,
-    marlowe -any,
-    openapi3,
-    uuid -any
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
+        quickcheck-instances,
+        serialise,
+        tasty,
+        tasty-hunit,
+        tasty-quickcheck,
+        text,

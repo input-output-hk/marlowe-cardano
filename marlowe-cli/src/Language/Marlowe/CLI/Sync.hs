@@ -14,6 +14,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -51,7 +52,8 @@ import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), CardanoMode,
                     TxValidityLowerBound (..), TxValidityUpperBound (..), ValueNestedBundle (..), ValueNestedRep (..),
                     connectToLocalNode, getTxBody, getTxId, metadataToJson, txOutValueToValue, valueToNestedRep)
 import Cardano.Api.ChainSync.Client (ChainSyncClient (..), ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), TxBodyScriptData (..), fromAlonzoData, toPlutusData)
+import Cardano.Api.Shelley (ShelleyLedgerEra, TxBody (ShelleyTxBody), TxBodyScriptData (..), fromAlonzoData,
+                            toPlutusData)
 import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr (..), Redeemers (..), TxDats (..))
 import Codec.CBOR.Encoding (encodeBreak, encodeListLenIndef)
 import Codec.CBOR.JSON (encodeValue)
@@ -69,23 +71,25 @@ import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Language.Marlowe.CLI.Sync.Types (MarloweAddress (..), MarloweEvent (..), MarloweIn (..), MarloweOut (..),
                                         SavedPoint (..))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliError (..))
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
 import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), smallUntypedValidator)
-import Ledger.Scripts (dataHash)
-import Ledger.TimeSlot (SlotConfig, slotRangeToPOSIXTimeRange)
-import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddress, fromCardanoPolicyId, toCardanoScriptHash)
-import Ledger.Typed.Scripts (validatorHash)
+import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
+import Plutus.Script.Utils.Scripts (dataHash)
+import Plutus.Script.Utils.V1.Typed.Scripts (validatorHash)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), Extended (..), FromData, Interval (..),
                              LowerBound (..), MintingPolicyHash (..), TokenName (..), UpperBound (..),
                              dataToBuiltinData, fromData)
 import Plutus.V1.Ledger.Slot (Slot (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
 import System.Directory (doesFileExist, renameFile)
 import System.IO (BufferMode (LineBuffering), Handle, IOMode (WriteMode), hClose, hSetBuffering, openFile, stderr,
                   stdout)
 
+import Cardano.Ledger.Era (Era)
+import Control.Monad.Reader (MonadReader)
 import qualified Data.Aeson as A (Value)
 import qualified Data.ByteArray as BA (length)
 import qualified Data.ByteString as BS (hPutStr)
@@ -171,6 +175,7 @@ walkBlocks connection start record notifyIdle revertPoint processBlock =
         localChainSyncClient    = LocalChainSyncClient
                                     $ client start record notifyIdle revertPoint processBlock
       , localTxSubmissionClient = Nothing
+      , localTxMonitoringClient = Nothing
       , localStateQueryClient   = Nothing
       }
   in
@@ -259,6 +264,7 @@ processChain :: BlockHandler             -- ^ Handle blocks.
              -> BlockInMode CardanoMode  -- ^ The block.
              -> ChainTip                 -- ^ The chain tip.
              -> IO ()                    -- ^ Action to process transactions.
+processChain blockHandler txHandler (BlockInMode block BabbageEraInCardanoMode ) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block AlonzoEraInCardanoMode ) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block MaryEraInCardanoMode   ) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block AllegraEraInCardanoMode) = processChain' blockHandler txHandler block
@@ -282,6 +288,7 @@ processChain' blockHandler txHandler (Block header txs) tip =
 -- | Watch for Marlowe transactions.
 watchMarlowe :: MonadError CliError m
              => MonadIO m
+             => MonadReader (CliEnv era) m
              => LocalNodeConnectInfo CardanoMode  -- ^ The local node connection.
              -> Bool                              -- ^ Include non-Marlowe transactions.
              -> Bool                              -- ^ Whether to output CBOR instead of JSON.
@@ -337,6 +344,7 @@ printCBOR hOut =
 -- | Watch for Marlowe transactions.
 watchMarloweWithPrinter :: MonadError CliError m
                         => MonadIO m
+                        => MonadReader (CliEnv era) m
                         => LocalNodeConnectInfo CardanoMode  -- ^ The local node connection.
                         -> Bool                              -- ^ Include non-Marlowe transactions.
                         -> Bool                              -- ^ Whether to continue processing when the tip is reached.
@@ -345,7 +353,6 @@ watchMarloweWithPrinter :: MonadError CliError m
                         -> m ()                              -- ^ Action for watching for potential Marlowe transactions.
 watchMarloweWithPrinter connection includeAll continue pointFile printer =
   do
-    -- FIXME: This query should be specific to the era of each block.
     slotConfig <- querySlotConfig connection
     (start, state) <- loadPoint pointFile
     stateRef <- liftIO $ newIORef state
@@ -503,19 +510,19 @@ classifyOutputs txId txOuts =
 classifyOutput :: TxIn                                -- ^ The transaction output ID.
                -> TxOut CtxTx era                     -- ^ The transaction output content.
                -> Either FromCardanoError MarloweOut  -- ^ The classified transaction output.
-classifyOutput moTxIn (TxOut address value datum) =
+classifyOutput moTxIn (TxOut address value datum _) =
   do
-    moAddress <- fromCardanoAddress address
+    moAddress <- fromCardanoAddressInEra address
     let
       moValue = txOutValueToValue value
     pure
       $ case datum of
-          TxOutDatum _ datum' -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
-                                   (Just moOutput, _) -> ApplicationOut{..}
-                                   (_, Just name)     -> if BA.length name <= 32
-                                                           then let moPayout = TokenName name in PayoutOut{..}
-                                                           else PlainOut{..}
-                                   _                  -> PlainOut{..}
+          TxOutDatumInTx _ datum' -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
+                                    (Just moOutput, _) -> ApplicationOut{..}
+                                    (_, Just name)     -> if BA.length name <= 32
+                                                            then let moPayout = TokenName name in PayoutOut{..}
+                                                            else PlainOut{..}
+                                    _                  -> PlainOut{..}
           _                   -> PlainOut{..}
 
 
@@ -577,32 +584,41 @@ extractMints (TxMintValue _ value _) =
 
 
 -- | Find the datums input to scripts in a transaction.
-inDatums :: FromData a
+inDatums :: forall a era
+          . FromData a
          => TxBody era                -- ^ The transaction.
          -> [(BuiltinByteString, a)]  -- ^ The datums.
-inDatums (ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _) =
-  case scriptData of
-    TxBodyScriptData _ (TxDats datumMap) _ -> catMaybes
-                                                [
-                                                  (dataHash $ dataToBuiltinData dat, ) <$> fromData dat
-                                                |
-                                                  dat <- toPlutusData . fromAlonzoData <$> M.elems datumMap
-                                                ]
-    _                                      -> mempty
-inDatums _ = mempty
+inDatums = \case
+  ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _  -> inDatums' scriptData
+  ShelleyTxBody ShelleyBasedEraBabbage _ _ scriptData _ _ -> inDatums' scriptData
+  _                                                       -> mempty
+  where
+    inDatums' :: Era (ShelleyLedgerEra era) => TxBodyScriptData era -> [(BuiltinByteString, a)]
+    inDatums' (TxBodyScriptData _ (TxDats datumMap) _) = catMaybes
+      [
+        (dataHash $ dataToBuiltinData dat, ) <$> fromData dat
+      |
+        dat <- toPlutusData . fromAlonzoData <$> M.elems datumMap
+      ]
+    inDatums' _ = mempty
 
 
 -- | Find the redeemers input to scripts in a transaction.
-inRedeemers :: FromData a
+inRedeemers :: forall era a
+             . FromData a
             => TxBody era  -- ^ The transaction.
             -> [(Int, a)]  -- ^ The redeemers for each input.
-inRedeemers (ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _) =
-  case scriptData of
-    TxBodyScriptData _ _ (Redeemers redeemerMap) -> catMaybes
-                                                      [
-                                                        (fromEnum i, ) <$> fromData (toPlutusData $ fromAlonzoData dat)
-                                                      |
-                                                        (RdmrPtr _ i, (dat, _)) <- M.toList redeemerMap
-                                                      ]
-    _                                            -> []
-inRedeemers _ = []
+inRedeemers = \case
+  ShelleyTxBody ShelleyBasedEraAlonzo _ _ scriptData _ _  -> inRedeemers' scriptData
+  ShelleyTxBody ShelleyBasedEraBabbage _ _ scriptData _ _ -> inRedeemers' scriptData
+  _                                                       -> mempty
+  where
+    inRedeemers' :: Era (ShelleyLedgerEra era) => TxBodyScriptData era -> [(Int, a)]
+    inRedeemers' = \case
+      TxBodyScriptData _ _ (Redeemers redeemerMap) -> catMaybes
+        [
+          (fromEnum i, ) <$> fromData (toPlutusData $ fromAlonzoData dat)
+        |
+          (RdmrPtr _ i, (dat, _)) <- M.toList redeemerMap
+        ]
+      _                                            -> []

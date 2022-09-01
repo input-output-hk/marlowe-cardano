@@ -55,13 +55,13 @@ All five backend services (`cardano-node`, `cardano-wallet`,
 be launched from within a Nix shell using a script for Docker Compose.
 
 ``` console
-[nix-shell] $ start-marlowe-run
+[nix develop shell] $ start-marlowe-run
 ```
 
 If needed, the Marlowe Run frontend can be launched similarly.
 
 ``` console
-[nix-shell] $ npm run start
+[nix develop shell] $ npm run start
 ```
 
 See

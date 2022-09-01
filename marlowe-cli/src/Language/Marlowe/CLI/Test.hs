@@ -21,31 +21,26 @@ module Language.Marlowe.CLI.Test (
 ) where
 
 
-import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..))
+import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
+                    ScriptDataSupportedInEra)
 import Control.Monad.Error.Class (throwError)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
-import Data.Bifunctor (first)
-import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
-import Language.Marlowe.CLI.Test.PAB (pabTest)
+import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.Reader (ReaderT (runReaderT))
+import Language.Marlowe.CLI.IO (decodeFileStrict)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (..), PabAccess (..))
+import Language.Marlowe.CLI.Test.Types (MarloweTests (..))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliError (..))
-import Network.HTTP.Client (defaultManagerSettings, newManager)
-import Network.Socket (withSocketsDo)
-import Network.WebSockets (runClient)
-import Plutus.PAB.Events.Contract (ContractInstanceId (..))
-import Plutus.PAB.Webserver.Client (pabClient)
-import Plutus.V1.Ledger.Api (defaultCostModelParams)
-import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
+import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..))
+import PlutusCore (defaultCostModelParams)
 
 
 -- | Run tests of a Marlowe contract.
 runTests :: MonadError CliError m
          => MonadIO m
-         => MarloweTests FilePath  -- ^ The tests.
+         => ScriptDataSupportedInEra era
+         -> MarloweTests era FilePath  -- ^ The tests.
          -> m ()                   -- ^ Action for running the tests.
-runTests ScriptTests{..} =
+runTests era ScriptTests{..} =
   do
     costModel <-
       maybe
@@ -60,37 +55,6 @@ runTests ScriptTests{..} =
         , localNodeNetworkId       = network
         , localNodeSocketPath      = socketPath
         }
-    slotConfig <- querySlotConfig connection
+    slotConfig <- runReaderT (querySlotConfig connection) $ CliEnv era
     tests' <- mapM decodeFileStrict tests
-    mapM_ (scriptTest costModel network connection slotConfig) tests'
-runTests PabTests{..} =
-  do
-    manager <- liftIO $ newManager defaultManagerSettings
-    let
-      network' = network
-      localConnection =
-        LocalNodeConnectInfo
-        {
-          localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-        , localNodeNetworkId       = network'
-        , localNodeSocketPath      = socketPath
-        }
-      BaseUrl{..} = pabUrl
-      client = pabClient
-      runHttp url f =
-        first (CliError . show)
-          <$> runClientM f (mkClientEnv manager url)
-      runWallet = runHttp walletUrl
-      runApi = runHttp pabUrl
-      runWs ContractInstanceId{..} f =
-        do
-          result <-
-            withSocketsDo
-              . runClient baseUrlHost baseUrlPort ("/ws/" <> show unContractInstanceId)
-              $ runExceptT . f
-          case result of
-            Right () -> pure ()
-            Left  e  -> print e
-    tests' <- mapM decodeFileStrict tests
-    faucetKey <- readSigningKey faucetFile
-    mapM_ (pabTest PabAccess{..} faucetKey faucetAddress burnAddress passphrase) tests'
+    mapM_ (scriptTest era costModel network connection slotConfig) tests'

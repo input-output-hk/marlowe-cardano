@@ -6,6 +6,7 @@ module Options
 import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel (..))
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
@@ -19,6 +20,9 @@ data Options = Options
   , genesisConfigFile :: !FilePath
   , host              :: !HostName
   , port              :: !PortNumber
+  , queryPort         :: !PortNumber
+  , costModel         :: !CostModel
+  , maxCost           :: !Int
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -28,7 +32,8 @@ getOptions version = do
   defaultDatabaseUri <- maybe mempty O.value <$> readDatabaseUri
   defaultHost <- O.value . fromMaybe "127.0.0.1" <$> readHost
   defaultPort <- O.value . fromMaybe 3715 <$> readPort
-  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort version
+  defaultQueryPort <- O.value . fromMaybe 3716 <$> readQueryPort
+  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort version
   where
     readNetworkId :: IO (Maybe NetworkId)
     readNetworkId = do
@@ -61,15 +66,21 @@ getOptions version = do
       value <- lookupEnv "CHAIN_SYNC_PORT"
       pure $ readMaybe =<< value
 
+    readQueryPort :: IO (Maybe PortNumber)
+    readQueryPort = do
+      value <- lookupEnv "CHAIN_SYNC_QUERY_PORT"
+      pure $ readMaybe =<< value
+
 parseOptions
   :: O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.OptionFields String
   -> O.Mod O.OptionFields HostName
   -> O.Mod O.OptionFields PortNumber
+  -> O.Mod O.OptionFields PortNumber
   -> String
   -> O.ParserInfo Options
-parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort version = O.info parser infoMod
+parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort version = O.info parser infoMod
   where
     parser :: O.Parser Options
     parser = O.helper
@@ -82,6 +93,9 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> genesisConfigFileOption
               <*> hostOption
               <*> portOption
+              <*> queryPortOption
+              <*> costModelParser
+              <*> maxCostParser
           )
       where
         versionOption :: O.Parser (a -> a)
@@ -151,10 +165,17 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
         portOption :: O.Parser PortNumber
         portOption = O.option O.auto $ mconcat
           [ O.long "port-number"
-          , O.short 'p'
           , defaultPort
           , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the chain seek protocol on"
+          , O.help "The port number to serve the chain seek protocol on. Default value: 3715"
+          ]
+
+        queryPortOption :: O.Parser PortNumber
+        queryPortOption = O.option O.auto $ mconcat
+          [ O.long "query-port-number"
+          , defaultQueryPort
+          , O.metavar "PORT_NUMBER"
+          , O.help "The port number to serve the query protocol on. Default value: 3716"
           ]
 
         hostOption :: O.Parser HostName
@@ -163,7 +184,34 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , O.short 'h'
           , defaultHost
           , O.metavar "HOST_NAME"
-          , O.help "The hostname to serve the chain seek protocol on"
+          , O.help "The hostname to serve the chain seek protocol on. Default value: 127.0.0.1"
+          ]
+
+        costModelParser :: O.Parser CostModel
+        costModelParser = CostModel <$> blockCostParser <*> txCostParser
+
+        blockCostParser :: O.Parser Int
+        blockCostParser = O.option O.auto $ mconcat
+          [ O.long "block-cost"
+          , O.value 1
+          , O.metavar "COST_UNITS"
+          , O.help "The number of cost units to associate with persisting a block when computing the cost model. Default value: 1"
+          ]
+
+        txCostParser :: O.Parser Int
+        txCostParser = O.option O.auto $ mconcat
+          [ O.long "tx-cost"
+          , O.value 10
+          , O.metavar "COST_UNITS"
+          , O.help "The number of cost units to associate with persisting a transaction when computing the cost model. Default value: 10"
+          ]
+
+        maxCostParser :: O.Parser Int
+        maxCostParser = O.option O.auto $ mconcat
+          [ O.long "max-cost"
+          , O.value 100_000
+          , O.metavar "COST_UNITS"
+          , O.help "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block. Default value: 100,000"
           ]
 
     infoMod :: O.InfoMod Options

@@ -1,0 +1,17 @@
+cabal-version:      2.4
+name:               aeson-via-serialise
+version:            0.1.0.0
+
+library
+    exposed-modules:
+      Data.Aeson.ViaSerialise
+
+    build-depends:
+      , aeson
+      , base >=4.9  && <5
+      , base16-aeson
+      , bytestring
+      , cborg
+      , serialise
+    hs-source-dirs:   src
+    default-language: Haskell2010

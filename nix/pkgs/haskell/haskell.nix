@@ -4,10 +4,10 @@
 { lib
 , rPackages
 , haskell-nix
-, gitignore-nix
 , z3
 , R
 , libsodium-vrf
+, secp256k1
 , checkMaterialization
 , compiler-nix-name
 , enableHaskellProfiling
@@ -16,20 +16,13 @@
 , deferPluginErrors
 , actus-tests
 , source-repo-override
+, evalSystem
 }:
 let
   r-packages = with rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
   project = haskell-nix.cabalProject' ({ pkgs, ... }: {
-    inherit compiler-nix-name;
-    # This is incredibly difficult to get right, almost everything goes wrong, see https://github.com/input-output-hk/haskell.nix/issues/496
-    src = let root = ../../../.; in
-      haskell-nix.haskellLib.cleanSourceWith {
-        filter = gitignore-nix.gitignoreFilter root;
-        src = root;
-        # Otherwise this depends on the name in the parent directory, which reduces caching, and is
-        # particularly bad on Hercules, see https://github.com/hercules-ci/support/issues/40
-        name = "plutus";
-      };
+    inherit compiler-nix-name evalSystem;
+    src = ../../../.;
     # These files need to be regenerated when you change the cabal files.
     # See ../CONTRIBUTING.doc for more information.
     # Unfortuntely, they are *not* constant across all possible systems, so in some circumstances we need different sets of files
@@ -43,7 +36,6 @@ let
       else builtins.error "Don't have materialized files for this platform";
     # If true, we check that the generated files are correct. Set in the CI so we don't make mistakes.
     inherit checkMaterialization source-repo-override;
-    sha256map = import ./sha256map.nix;
     # Configuration settings needed for cabal configure to work when cross compiling
     # for windows. We can't use `modules` for these as `modules` are only applied
     # after cabal has been configured.
@@ -68,20 +60,8 @@ let
           marlowe-actus.package.buildable = false;
           marlowe-contracts.package.buildable = false;
           marlowe-cli.package.buildable = false;
-          marlowe-dashboard-server.package.buildable = false;
-          marlowe-playground-server.package.buildable = false; # Would also require libpq
-          marlowe-symbolic.package.buildable = false;
-          playground-common.package.buildable = false;
-          plutus-benchmark.package.buildable = false;
-          plutus-chain-index-core.package.buildable = false;
-          plutus-contract.package.buildable = false;
-          plutus-errors.package.buildable = false;
           plutus-ledger.package.buildable = false;
-          plutus-pab.package.buildable = false;
-          plutus-playground-server.package.buildable = false; # Would also require libpq
           plutus-tx-plugin.package.buildable = false;
-          plutus-use-cases.package.buildable = false;
-          web-ghc.package.buildable = false;
           # These need R
           plutus-core.components.benchmarks.cost-model-test.buildable = lib.mkForce false;
           plutus-core.components.benchmarks.update-cost-model.buildable = lib.mkForce false;
@@ -149,6 +129,7 @@ let
             plutus-benchmark.doHaddock = false;
             # FIXME: Haddock mysteriously gives a spurious missing-home-modules warning
             plutus-tx-plugin.doHaddock = false;
+            plutus-script-utils.doHaddock = false;
 
             # Fix missing executables on the paths of the test runners. This is arguably
             # a bug, and the fix is a bit of a hack.
@@ -183,7 +164,7 @@ let
 
             # The marlowe-actus tests depend on external data which is
             # provided from Nix (as niv dependency)
-            marlowe-actus.components.tests.marlowe-actus-test.preCheck = ''
+            marlowe-actus.components.tests.actus-core-test.preCheck = ''
               export ACTUS_TEST_DATA_DIR=${actus-tests}/tests/
             '';
 
@@ -206,23 +187,15 @@ let
             iohk-monitoring.doHaddock = false;
 
             # Werror everything. This is a pain, see https://github.com/input-output-hk/haskell.nix/issues/519
-            plutus-core.ghcOptions = [ "-Werror" ];
+            plutus-core.ghcOptions = [ "-Werror" "-Wno-unused-packages" "-Wno-name-shadowing" ];
             marlowe.ghcOptions = [ "-Werror" ];
             marlowe-symbolic.ghcOptions = [ "-Werror" ];
             marlowe-actus.ghcOptions = [ "-Werror" ];
-            marlowe-playground-server.ghcOptions = [ "-Werror" ];
-            marlowe-dashboard-server.ghcOptions = [ "-Werror" ];
             marlowe-contract.ghcOptions = [ "-Werror" ];
-            playground-common.ghcOptions = [ "-Werror" ];
-            plutus-contract.ghcOptions = [ "-Werror" ];
             plutus-ledger.ghcOptions = [ "-Werror" ];
-            plutus-ledger-api.ghcOptions = [ "-Werror" ];
-            plutus-playground-server.ghcOptions = [ "-Werror" ];
-            plutus-pab.ghcOptions = [ "-Werror" ];
             plutus-tx.ghcOptions = [ "-Werror" ];
             plutus-tx-plugin.ghcOptions = [ "-Werror" ];
             plutus-doc.ghcOptions = [ "-Werror" ];
-            plutus-use-cases.ghcOptions = [ "-Werror" ];
 
             # External package settings
 
@@ -233,8 +206,12 @@ let
             ieee.components.library.libs = lib.mkForce [ ];
 
             # See https://github.com/input-output-hk/iohk-nix/pull/488
-            cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf ] ];
-            cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf ] ];
+            cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf secp256k1 ] ];
+            cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ libsodium-vrf secp256k1 ] ];
+
+            # hpack fails due to modified cabal file, can remove when we bump to 3.12.0
+            cardano-addresses.cabal-generator = lib.mkForce null;
+            cardano-addresses-cli.cabal-generator = lib.mkForce null;
           };
       })
     ] ++ lib.optional enableHaskellProfiling {

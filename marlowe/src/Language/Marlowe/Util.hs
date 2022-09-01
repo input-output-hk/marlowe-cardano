@@ -11,9 +11,9 @@ import qualified Data.Set as Set
 import Data.String
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
-import Ledger.Ada (adaSymbol, adaToken)
-import Ledger.Scripts (dataHash)
-import qualified Ledger.Value as Val
+import Plutus.Script.Utils.Scripts (dataHash)
+import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
+import qualified Plutus.V1.Ledger.Value as Val
 import qualified PlutusTx
 import qualified PlutusTx.Prelude as P
 

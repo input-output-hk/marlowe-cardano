@@ -37,8 +37,6 @@
           (hsPkgs."ansi-wl-pprint" or (errorHandler.buildDepError "ansi-wl-pprint"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
-          (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
-          (hsPkgs."compact-map" or (errorHandler.buildDepError "compact-map"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           ];
         buildable = true;
@@ -51,14 +49,34 @@
           ];
         hsSourceDirs = [ "src" ];
         };
+      tests = {
+        "tests" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."set-algebra" or (errorHandler.buildDepError "set-algebra"))
+            (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
+            (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
+            (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
+            (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
+            ];
+          buildable = true;
+          modules = [
+            "Test/Control/Iterate/SetAlgebra"
+            "Test/Control/Iterate/RelationReference"
+            ];
+          hsSourceDirs = [ "test" ];
+          mainPath = [ "Main.hs" ];
+          };
+        };
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       };

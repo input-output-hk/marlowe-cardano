@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
   ( Changes(..)
   , NodeClientDependencies(..)
   , NodeClient(..)
+  , CostModel(..)
   , isEmptyChanges
   , mkNodeClient
   ) where
@@ -38,7 +39,7 @@ data Changes = Changes
   , changesTxCount    :: !Int                -- ^ Number of transactions in the change set.
   }
 
--- | An emtpy Changes collection.
+-- | An empty Changes collection.
 emptyChanges :: Changes
 emptyChanges = Changes Nothing [] ChainTipAtGenesis ChainTipAtGenesis 0 0
 
@@ -56,21 +57,26 @@ isEmptyChanges :: Changes -> Bool
 isEmptyChanges (Changes Nothing [] _ _ _ _) = True
 isEmptyChanges _                            = False
 
--- | The maximum cost a set of changes is allowed to incur before the
--- NodeClient blocks.
-maxCost :: Int
-maxCost = 100_000
+-- | Parameters for estimating the cost of writing a batch of changes.
+data CostModel = CostModel
+  { blockCost :: Int
+  , txCost    :: Int
+  } deriving (Show, Eq)
 
 -- | Computes the cost of a change set. The value is a unitless heuristic.
 --   Prevents large numbers of transactions and blocks being held in memory.
-cost :: Changes -> Int
-cost Changes{..} = changesBlockCount + changesTxCount * 10
+cost :: CostModel -> Changes -> Int
+cost CostModel{..} Changes{..} = changesBlockCount * blockCost + changesTxCount * txCost
 
 -- | The set of dependencies needed by the NodeClient component.
 data NodeClientDependencies = NodeClientDependencies
   { connectToLocalNode    :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ()) -- ^ Connect to the local node.
   , getHeaderAtPoint      :: !(GetHeaderAtPoint IO)                                 -- ^ How to load a block header at a given point.
   , getIntersectionPoints :: !(GetIntersectionPoints IO)                            -- ^ How to load the set of initial intersection points for the chain sync client.
+  -- | The maximum cost a set of changes is allowed to incur before the
+  -- NodeClient blocks.
+  , maxCost               :: Int
+  , costModel             :: CostModel
   }
 
 -- | The public API of the NodeClient component.
@@ -93,7 +99,7 @@ mkNodeClient NodeClientDependencies{..} = do
 
     pipelinedClient' :: ChainSyncClientPipelined CardanoBlock ChainPoint ChainTip IO ()
     pipelinedClient' = mapChainSyncClientPipelined id id (blockToBlockNo &&& id) (chainTipToBlockNo &&& id)
-        $ pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints
+        $ pipelinedClient costModel maxCost changesVar getHeaderAtPoint getIntersectionPoints
 
     runNodeClient :: IO ()
     runNodeClient = connectToLocalNode LocalNodeClientProtocols
@@ -117,11 +123,13 @@ chainTipToBlockNo = \case
   ChainTip _ _ blockNo -> At blockNo
 
 pipelinedClient
-  :: TVar Changes
+  :: CostModel
+  -> Int
+  -> TVar Changes
   -> GetHeaderAtPoint IO
   -> GetIntersectionPoints IO
   -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints =
+pipelinedClient costModel maxCost changesVar getHeaderAtPoint getIntersectionPoints =
   ChainSyncClientPipelined do
     points <- sortPoints <$> runGetIntersectionPoints getIntersectionPoints
     pure $ SendMsgFindIntersect points ClientPipelinedStIntersect
@@ -138,7 +146,7 @@ pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints =
       -> IO (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip IO ())
     clientStIdle point nodeTip = do
       clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
-      pure $ mkClientStIdle changesVar getHeaderAtPoint pipelinePolicy Zero clientTip nodeTip
+      pure $ mkClientStIdle costModel maxCost changesVar getHeaderAtPoint pipelinePolicy Zero clientTip nodeTip
 
     -- How to pipeline. If we have fewer than 50 requests in flight, send
     -- another request. When we hit 50, start collecting responses until we
@@ -149,14 +157,16 @@ pipelinedClient changesVar getHeaderAtPoint getIntersectionPoints =
 
 mkClientStIdle
   :: forall n
-   . TVar Changes
+   . CostModel
+  -> Int
+  -> TVar Changes
   -> GetHeaderAtPoint IO
   -> MkPipelineDecision
   -> Nat n
   -> WithOrigin BlockNo
   -> NumberedChainTip
   -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip nodeTip =
+mkClientStIdle costModel maxCost changesVar getHeaderAtPoint pipelineDecision n clientTip nodeTip =
   case (n, runPipelineDecision pipelineDecision n clientTip (fst nodeTip)) of
     (_, (Request, pipelineDecision')) ->
       SendMsgRequestNext (collect pipelineDecision' n) $ pure (collect pipelineDecision' n)
@@ -177,22 +187,24 @@ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip nodeTip 
       :: MkPipelineDecision
       -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
     nextPipelineRequest pipelineDecision' = SendMsgRequestNextPipelined
-      $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision' (Succ n) clientTip nodeTip
+      $ mkClientStIdle costModel maxCost changesVar getHeaderAtPoint pipelineDecision' (Succ n) clientTip nodeTip
 
     collect
       :: forall n'
         . MkPipelineDecision
         -> Nat n'
         -> ClientStNext n' NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-    collect pipelineDecision' = mkClientStNext changesVar getHeaderAtPoint pipelineDecision'
+    collect pipelineDecision' = mkClientStNext costModel maxCost changesVar getHeaderAtPoint pipelineDecision'
 
 mkClientStNext
-  :: TVar Changes
+  :: CostModel
+  -> Int
+  -> TVar Changes
   -> GetHeaderAtPoint IO
   -> MkPipelineDecision
   -> Nat n
   -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
+mkClientStNext costModel maxCost changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
   { recvMsgRollForward = \(blockNo, block@(BlockInMode (Block (BlockHeader slotNo hash _) txs) _)) tip -> do
       atomically do
         changes <- readTVar changesVar
@@ -206,10 +218,10 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
             }
         -- Retry unless either the current change set is empty, or the next
         -- change set would not be too expensive.
-        guard $ isEmptyChanges changes || cost nextChanges <= maxCost
+        guard $ isEmptyChanges changes || cost costModel nextChanges <= maxCost
         writeTVar changesVar nextChanges
       let clientTip = At blockNo
-      pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
+      pure $ mkClientStIdle costModel maxCost changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   , recvMsgRollBackward = \point tip -> do
       clientTip <- fmap blockHeaderToBlockNo <$> runGetHeaderAtPoint getHeaderAtPoint point
       atomically $ modifyTVar changesVar \Changes{..} ->
@@ -237,7 +249,7 @@ mkClientStNext changesVar getHeaderAtPoint pipelineDecision n = ClientStNext
             , changesBlockCount = length changesBlocks'
             , changesTxCount = sum $ blockTxCount <$> changesBlocks
             }
-      pure $ mkClientStIdle changesVar getHeaderAtPoint pipelineDecision n clientTip tip
+      pure $ mkClientStIdle costModel maxCost changesVar getHeaderAtPoint pipelineDecision n clientTip tip
   }
 
 minPoint :: ChainPoint -> ChainPoint -> ChainPoint

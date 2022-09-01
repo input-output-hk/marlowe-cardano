@@ -2,7 +2,6 @@ module SkippingBlocks where
 
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
-import Network.Protocol.ChainSeek.Client
 
 -- This client advances 1000 blocks at a time until it reaches the tip.
 client :: RuntimeChainSeekClient IO ()

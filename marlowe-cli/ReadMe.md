@@ -50,7 +50,7 @@ and simply enter a nix shell.
 
     git clone https://github.com/input-output-hk/marlowe-cardano.git
     cd marlowe-cardano
-    nix-shell
+    nix develop
 
 ``` bash
 marlowe-cli --version

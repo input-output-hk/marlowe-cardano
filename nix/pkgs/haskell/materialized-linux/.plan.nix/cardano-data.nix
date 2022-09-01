@@ -38,7 +38,7 @@
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-          (hsPkgs."compact-map" or (errorHandler.buildDepError "compact-map"))
+          (hsPkgs."vector-map" or (errorHandler.buildDepError "vector-map"))
           (hsPkgs."cryptonite" or (errorHandler.buildDepError "cryptonite"))
           (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
           (hsPkgs."formatting" or (errorHandler.buildDepError "formatting"))
@@ -55,24 +55,52 @@
         buildable = true;
         modules = [
           "Data/AbstractSize"
-          "Data/Relation"
           "Data/CanonicalMaps"
           "Data/MemoBytes"
           "Data/Coders"
           "Data/Pulse"
           "Data/Sharing"
           "Data/BiMap"
+          "Data/MapExtras"
+          "Data/Roundtrip"
+          "Data/UMap"
           ];
         hsSourceDirs = [ "src" ];
+        };
+      tests = {
+        "cardano-data-tests" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-binary" or (errorHandler.buildDepError "cardano-binary"))
+            (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."strict-containers" or (errorHandler.buildDepError "strict-containers"))
+            (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
+            (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
+            (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."cardano-data" or (errorHandler.buildDepError "cardano-data"))
+            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            ];
+          buildable = true;
+          modules = [
+            "Test/Data/UMap"
+            "Test/Data/Coders"
+            "Test/Data/MapExtras"
+            ];
+          hsSourceDirs = [ "test" ];
+          mainPath = [ "Main.hs" ];
+          };
         };
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "12";
+      url = "7";
       rev = "minimal";
       sha256 = "";
       };
