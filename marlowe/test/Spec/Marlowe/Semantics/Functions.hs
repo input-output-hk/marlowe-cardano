@@ -870,12 +870,14 @@ checkGetContinuation =
            action <- arbitrary
            input <- elements [NormalInput content, MerkleizedInput content contractHash' contract']
            case' <- elements [Case action contract, MerkleizedCase action contractHash]
-           pure (input, case', contract, contractHash == contractHash')
-    forAll' gen $ \(input, case', contract, hashesMatch) ->
+           pure (input, case', contract)
+    forAll' gen $ \(input, case', contract) ->
       case (input, case', getContinuation input case') of
-        (NormalInput{}    , Case{}                                       , contract') -> Just contract == contract'
-        (MerkleizedInput _ contractHash _, MerkleizedCase _ contractHash', _        ) -> (contractHash == contractHash') == hashesMatch
-        (_                , _                                            , Nothing  ) -> True
+        (NormalInput{}                   , Case{}                        , contract') -> Just contract == contract'
+        (MerkleizedInput _ contractHash _, MerkleizedCase _ contractHash', Just _   ) -> contractHash == contractHash'
+        (MerkleizedInput _ contractHash _, MerkleizedCase _ contractHash', Nothing  ) -> contractHash /= contractHash'
+        (NormalInput{}                   , MerkleizedCase{}              , Nothing  ) -> True
+        (MerkleizedInput{}               , Case{}                        , Nothing  ) -> True
         _                                                                             -> False
 
 
