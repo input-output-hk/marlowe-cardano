@@ -14,6 +14,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -63,6 +64,7 @@ import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), ValidatorHash (ValidatorHash),
                              toBuiltin)
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
+import System.Timeout (timeout)
 import Test.QuickCheck (Gen, arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate,
                         withMaxSuccess, (.&&.), (=/=), (===))
 import Test.QuickCheck.Instances.ByteString ()
@@ -379,13 +381,16 @@ interpretContractString contractStr = interpret contractStr (as :: Contract)
 
 
 -- | Test that a contract execution does not exhibit false positives for warnings.
-noFalsePositivesForContract :: Contract -> Property
-noFalsePositivesForContract cont =
-  unsafePerformIO (do res <- catch (first Right <$> warningsTrace cont)
-                                   (\exc -> return $ Left (Left (exc :: SomeException)))
+noFalsePositivesForContract :: Maybe Int -> Contract -> Property
+noFalsePositivesForContract timeLimit cont =
+  unsafePerformIO (do res <- catch (limitTime $ first Right <$> warningsTrace cont)
+                                   (\exc -> return . Just . Left $ Left (exc :: SomeException))
                       return (case res of
-                                Left err -> counterexample (show err) False
-                                Right answer ->
+                                Nothing -> tabulate ("Timed out after "
+                                             <> show timeLimit
+                                             <> " seconds") ["True"] True
+                                Just (Left err) -> counterexample (show err) False
+                                Just (Right answer) ->
                                    tabulate "Has counterexample" [show (isJust answer)]
                                    (case answer of
                                       Nothing ->
@@ -395,11 +400,12 @@ noFalsePositivesForContract cont =
                                          counterexample ("Trace: " ++ show (is, li)) $
                                          tabulate "Number of warnings" [show (length warns)]
                                                   (warns =/= []))))
+    where limitTime = maybe (Just <$>) timeout $ (1_000_000 *) <$> timeLimit
 
 
 -- | Test that contract execution does not exhibit false positives for warnings.
-prop_noFalsePositives :: Property
-prop_noFalsePositives = forAllShrink contractGen shrinkContract noFalsePositivesForContract
+prop_noFalsePositives :: Maybe Int -> Property
+prop_noFalsePositives = forAllShrink contractGen shrinkContract . noFalsePositivesForContract
 
 
 -- | Test that JSON decoding inverts encoding for a contract.

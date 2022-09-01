@@ -8,7 +8,7 @@
   , config
   , ... }:
   {
-    flags = { defer-plugin-errors = false; };
+    flags = { defer-plugin-errors = false; limit-static-analysis-time = true; };
     package = {
       specVersion = "2.2";
       identifier = { name = "marlowe"; version = "0.1.0.1"; };

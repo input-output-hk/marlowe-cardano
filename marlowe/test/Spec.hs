@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 
@@ -28,6 +29,16 @@ import qualified Spec.Marlowe.Marlowe (prop_contractJsonLoops, prop_marloweParam
 import qualified Spec.Marlowe.Semantics (tests)
 
 
+-- | Timeout seconds for static analysis, which can take so much time on a complex contract
+--   that it exceeds hydra/CI resource limits, see SCP-4267.
+timeout :: Maybe Int
+#ifdef STATIC_ANALYSIS_TIMEOUT
+timeout = Just $ STATIC_ANALYSIS_TIMEOUT
+#else
+timeout = Nothing
+#endif
+
+
 -- | Entry point for the tests.
 main :: IO ()
 main = defaultMain tests
@@ -41,7 +52,7 @@ tests =
       Spec.Marlowe.Marlowe.tests
     , testGroup "Static Analysis"
       [
-        testProperty "No false positives" Spec.Marlowe.Marlowe.prop_noFalsePositives
+        testProperty "No false positives" $ Spec.Marlowe.Marlowe.prop_noFalsePositives timeout
       ]
     , testGroup "JSON Serialisation"
       [

@@ -84,9 +84,21 @@ library
     Language.Marlowe.Analysis.FSSemantics
     Plutus.Debug
 
+
+flag limit-static-analysis-time
+  description:
+    This flag sets the timeout seconds for static analysis testing of arbitrary
+    contracts, which can take so much time on a complex contract that it exceeds
+    hydra/CI resource limits, see SCP-4267.
+  default: True
+
+
 test-suite marlowe-test
     import: lang
     hs-source-dirs: test
+
+    if flag(limit-static-analysis-time)
+      cpp-options: -DSTATIC_ANALYSIS_TIMEOUT=180
 
     if flag(defer-plugin-errors)
       ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors

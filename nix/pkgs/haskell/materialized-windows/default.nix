@@ -862,7 +862,10 @@
           "hedgehog-extras" = { flags = {}; };
           "cardano-submit-api" = { flags = {}; };
           "marlowe" = {
-            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            flags = {
+              "limit-static-analysis-time" = lib.mkOverride 900 true;
+              "defer-plugin-errors" = lib.mkOverride 900 false;
+              };
             };
           "cardano-git-rev" = {
             flags = { "systemd" = lib.mkOverride 900 true; };
