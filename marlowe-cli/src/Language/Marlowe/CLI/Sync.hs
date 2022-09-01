@@ -75,12 +75,10 @@ import Language.Marlowe.CLI.Sync.Types (MarloweAddress (..), MarloweEvent (..), 
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
-import Language.Marlowe.Core.V1.Semantics (MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), smallUntypedValidator)
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), marloweValidator, rolePayoutValidatorHash)
 import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.Script.Utils.V1.Typed.Scripts (validatorHash)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), Extended (..), FromData, Interval (..),
                              LowerBound (..), MintingPolicyHash (..), TokenName (..), UpperBound (..),
                              dataToBuiltinData, fromData)
@@ -98,6 +96,7 @@ import qualified Data.ByteString as BS (hPutStr)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (hPutStrLn)
 import qualified Data.Map.Strict as M (elems, filter, null, toList)
 import qualified Data.Set as S (singleton, toList)
+import qualified Plutus.Script.Utils.V1.Typed.Scripts as Scripts
 
 
 -- | Record the point on the chain.
@@ -563,8 +562,15 @@ makeParameters meBlock meTxId meMetadata policy =
       let
         anomaly = liftAnomaly meBlock meTxId
         MintingPolicyHash currencyHash = fromCardanoPolicyId policy
-        meParams@MarloweParams{..} = marloweParams $ CurrencySymbol currencyHash
-      meApplicationAddress <- anomaly $ ApplicationCredential <$> toCardanoScriptHash (validatorHash $ smallUntypedValidator meParams)
+        meParams = marloweParams $ CurrencySymbol currencyHash
+        marloweValidatorHash = Scripts.validatorHash marloweValidator
+      -- FIXME (paluh):
+      --  * Previous version of this code also computed hashes on the fly so I changed this to constants.
+      --  * This is method is used by `watchMarloweWithPrinter` so we should really extract validators using
+      --    known version hashes + policy to follow them or probably abort the action with anomaly?
+      -- meApplicationAddress <- anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidator
+      -- mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
+      meApplicationAddress <-  anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidatorHash
       mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
       pure Parameters{..}
 

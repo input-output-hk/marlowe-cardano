@@ -31,7 +31,7 @@ module Language.Marlowe.CLI.Merkle (
 ) where
 
 
-import Cardano.Api (AlonzoEra)
+import Cardano.Api (AlonzoEra, PlutusScriptV2)
 import Control.Monad (foldM)
 import Control.Monad.Except (MonadError, MonadIO, catchError, throwError)
 import Control.Monad.Fix (fix)
@@ -61,12 +61,12 @@ merkleize contractFile outputFile =
   do
     marlowe <- decodeFileStrict contractFile
     maybeWriteJson outputFile
-      (merkleizeMarlowe marlowe :: MarloweTransaction AlonzoEra)  -- FIXME: Generalize eras.
+      (merkleizeMarlowe marlowe :: MarloweTransaction PlutusScriptV2 AlonzoEra)  -- FIXME: Generalize eras.
 
 
 -- | Deeply merkleize a Marlowe transaction.
-merkleizeMarlowe :: MarloweTransaction era  -- ^ The Marlowe transaction information.
-                 -> MarloweTransaction era  -- ^ Action for the merkleized Marlowe transaction information.
+merkleizeMarlowe :: MarloweTransaction lang era  -- ^ The Marlowe transaction information.
+                 -> MarloweTransaction lang era  -- ^ Action for the merkleized Marlowe transaction information.
 merkleizeMarlowe marlowe =
   let
     (contract, continuations) =
@@ -135,7 +135,7 @@ demerkleize contractFile outputFile =
           mtContract      = contract
         , mtContinuations = mempty
         }
-        :: MarloweTransaction AlonzoEra
+        :: MarloweTransaction PlutusScriptV2 AlonzoEra
     maybeWriteJson outputFile marlowe'
 
 
@@ -175,9 +175,9 @@ demerkleize' f (When cases timeout contract) = When <$> mapM demerkleizeCase cas
 
 -- | Merkleize whatever inputs need merkleization before application to a contract.
 merkleizeInputs :: MonadError CliError m
-                => MarloweTransaction era  -- ^ The transaction information.
-                -> TransactionInput        -- ^ The input to the contract.
-                -> m TransactionInput      -- ^ Action for the merkleized input to the contract.
+                => MarloweTransaction lang era  -- ^ The transaction information.
+                -> TransactionInput             -- ^ The input to the contract.
+                -> m TransactionInput           -- ^ Action for the merkleized input to the contract.
 merkleizeInputs MarloweTransaction{..} TransactionInput{..} =
   TransactionInput txInterval
     . snd

@@ -37,7 +37,7 @@ import Control.Monad (foldM, forM, forM_, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState, makeContract)
-import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), MarloweTransaction, toTimeout)
+import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..), MarlowePlutusVersion, MarloweTransaction, toTimeout)
 import Language.Marlowe.Extended.V1 as E (ChoiceId (ChoiceId), Party)
 import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
@@ -74,6 +74,7 @@ import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import Ledger.Tx.CardanoAPI (fromCardanoPaymentKeyHash, fromCardanoPolicyId)
+import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import Plutus.V1.Ledger.Value (mpsSymbol, valueOf)
 import qualified Plutus.V1.Ledger.Value as Value
@@ -186,6 +187,7 @@ interpret Initialize {..} = do
   marloweTransaction <- runCli "[Initialize] " $ initializeTransactionImpl
     marloweParams
     slotConfig
+    seProtocolVersion
     costModelParams
     localNodeNetworkId
     NoStakeAddress
@@ -352,6 +354,7 @@ scriptTest  :: forall era m
             => IsShelleyBasedEra era
             => MonadIO m
             => ScriptDataSupportedInEra era
+            -> ProtocolVersion
             -> CostModelParams
             -> NetworkId                         -- ^ The network magic.
             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
@@ -359,7 +362,7 @@ scriptTest  :: forall era m
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest era costModel networkId _ faucet slotConfig ScriptTest{..} =
+scriptTest era protocolVersion costModel networkId _ slotConfig ScriptTest{..} =
   do
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
@@ -376,7 +379,7 @@ scriptTest era costModel networkId _ faucet slotConfig ScriptTest{..} =
         , localNodeSocketPath      = "FIXME:NODESOCEKTPATH"
         }
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection slotConfig costModel era))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection slotConfig protocolVersion costModel era))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)

@@ -49,11 +49,7 @@ runTests :: IsShelleyBasedEra era
          -> m ()                   -- ^ Action for running the tests.
 runTests era ScriptTests{..} =
   do
-    costModel <-
-      maybe
-        (throwError $ CliError "Missing default cost model.")
-        pure
-        defaultCostModelParams
+    costModel <- getDefaultCostModel
     let
       connection =
         LocalNodeConnectInfo
@@ -70,5 +66,4 @@ runTests era ScriptTests{..} =
 
     slotConfig <- runReaderT (querySlotConfig connection) $ CliEnv era
     tests' <- mapM decodeFileStrict tests
-    mapM_ (scriptTest era costModel network connection faucet slotConfig) tests'
-
+    mapM_ (scriptTest era protocolVersion costModel network connection slotConfig) tests'

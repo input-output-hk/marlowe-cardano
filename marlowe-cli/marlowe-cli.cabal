@@ -49,6 +49,9 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
+    Language.Marlowe.CLI.Cardano.Api
+    Language.Marlowe.CLI.Cardano.Api.PlutusScript
+    Language.Marlowe.CLI.Plutus.Script.Utils
     Language.Marlowe.CLI.Codec
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
@@ -91,6 +94,7 @@ library
     containers,
     data-default,
     directory,
+    errors,
     extra -any,
     freer-simple,
     http-client,

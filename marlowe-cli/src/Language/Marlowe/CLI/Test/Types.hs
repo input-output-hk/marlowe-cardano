@@ -87,6 +87,7 @@ import Ledger.Orphans ()
 import qualified Ledger.Tx.CardanoAPI as L
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
+import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Time (POSIXTime)
 import qualified Plutus.V2.Ledger.Api as P
 
@@ -101,6 +102,7 @@ data MarloweTests era a =
     , faucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
     , faucetAddress        :: AddressInEra era  -- ^ The faucet address.
     , burnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
+    , protocolVersion :: ProtocolVersion
     , tests                :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)

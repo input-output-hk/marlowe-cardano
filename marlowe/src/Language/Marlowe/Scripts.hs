@@ -98,6 +98,7 @@ rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
 
 -- | To simplify discovery process of the reference script UTxO we
 -- | use a unique unspendable validator at its output.
+-- TODO: Compute "proof of burn" address: https://gist.github.com/bwbush/fe3f8f5d2ea2ea585a8f09a57e33c1bb
 referenceUnspendableValidator :: ValidatorHash -> Scripts.TypedValidator TypedReferenceUnspendableValidator
 referenceUnspendableValidator referenceValidator = mkTypedValidator @TypedReferenceUnspendableValidator
   $$(PlutusTx.compile [|| mkReferenceUnspendableValidator referenceValidator ||])
