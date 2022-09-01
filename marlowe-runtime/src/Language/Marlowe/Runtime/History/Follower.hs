@@ -82,7 +82,7 @@ instance Eq SomeContractChanges where
 
 instance Semigroup (ContractChanges v) where
   c1@ContractChanges{create = create1} <> ContractChanges{..} =
-    c1' { steps = steps1 <> steps, create = create1 <|> create }
+    c1' { steps = Map.unionWith (<>) steps1 steps, create = create1 <|> create }
     where
       c1'@ContractChanges{steps=steps1} = maybe c1 (flip applyRollback c1) rollbackTo
 

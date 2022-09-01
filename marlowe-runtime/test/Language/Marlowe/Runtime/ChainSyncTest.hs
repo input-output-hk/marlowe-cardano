@@ -4,7 +4,7 @@
 
 module Language.Marlowe.Runtime.ChainSyncTest where
 
-import Control.Concurrent.Async (concurrently_)
+import Control.Concurrent.Async (race_)
 import Control.Concurrent.STM (TVar, atomically, newTVar)
 import Control.Monad (join)
 import Language.Marlowe.Runtime.ChainSync
@@ -17,4 +17,4 @@ withTestChainSync :: GenesisBlock -> ((forall a. RuntimeChainSeekClient IO a -> 
 withTestChainSync genesisBlock test = join $ atomically do
   changesVar <- newTVar emptyChanges
   TestChainSync{..} <- mkTestChainSync TestChainSyncDependencies{..}
-  pure $ concurrently_ runChainSync $ test connectToChainSeek changesVar
+  pure $ race_ runChainSync $ test connectToChainSeek changesVar
