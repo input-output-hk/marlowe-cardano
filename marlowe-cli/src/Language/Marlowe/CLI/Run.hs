@@ -28,8 +28,10 @@ module Language.Marlowe.CLI.Run (
 , prepareTransactionImpl
 , makeMarlowe
 , runTransaction
+, autoRunTransaction
 -- * Roles
 , withdrawFunds
+, autoWithdrawFunds
 -- * Input
 , makeDeposit
 , makeChoice
@@ -519,3 +521,41 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
           else submitBody connection body signingKeys
     pure
       $ getTxId body
+
+
+-- | Run a Marlowe transaction, without selecting inputs or outputs.
+autoRunTransaction :: forall era m
+                . MonadError CliError m
+               => MonadIO m
+               => MonadReader (CliEnv era) m
+               => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
+               -> Maybe (FilePath, TxIn)                  -- ^ The JSON file with the Marlowe initial state and initial contract, unless the transaction opens the contract.
+               -> FilePath                                -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+               -> AddressInEra era                        -- ^ The change address.
+               -> [FilePath]                              -- ^ The files for required signing keys.
+               -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
+               -> FilePath                                -- ^ The output file for the transaction body.
+               -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Bool                                    -- ^ Whether to print statistics about the transaction.
+               -> Bool                                    -- ^ Assertion that the transaction is invalid.
+               -> m TxId                                  -- ^ Action to build the transaction body.
+autoRunTransaction connection _marloweInBundle marloweOutFile changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
+  runTransaction connection undefined marloweOutFile undefined undefined changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid
+
+
+-- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.
+autoWithdrawFunds :: (MonadError CliError m, MonadReader (CliEnv era) m)
+                  => MonadIO m
+                  => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
+                  -> FilePath                                -- ^ The JSON file with the Marlowe state and contract.
+                  -> TokenName                               -- ^ The role name for the redemption.
+                  -> AddressInEra era                              -- ^ The change address.
+                  -> [FilePath]                              -- ^ The files for required signing keys.
+                  -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
+                  -> FilePath                                -- ^ The output file for the transaction body.
+                  -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+                  -> Bool                                    -- ^ Whether to print statistics about the transaction.
+                  -> Bool                                    -- ^ Assertion that the transaction is invalid.
+                  -> m TxId                                  -- ^ Action to build the transaction body.
+autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
+  withdrawFunds connection marloweOutFile roleName undefined undefined undefined changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid

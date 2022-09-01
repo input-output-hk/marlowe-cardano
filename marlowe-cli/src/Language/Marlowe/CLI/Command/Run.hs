@@ -32,7 +32,8 @@ import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseCurrencySymbol, parseInput, parseNetworkId,
                                            parsePOSIXTime, parseStakeAddressReference, parseTokenName, parseTxIn,
                                            parseTxOut)
-import Language.Marlowe.CLI.Run (initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
+import Language.Marlowe.CLI.Run (autoRunTransaction, autoWithdrawFunds, initializeTransaction, prepareTransaction,
+                                 runTransaction, withdrawFunds)
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
@@ -104,6 +105,36 @@ data RunCommand era =
     , submitTimeout   :: Maybe Int                 -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                      -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                      -- ^ Assertion that the transaction is invalid.
+    }
+    -- | Run a Marlowe transaction, without specifying inputs and outputs.
+  | AutoRun
+    {
+      network         :: NetworkId               -- ^ The network ID, if any.
+    , socketPath      :: FilePath                -- ^ The path to the node socket.
+    , marloweIn'      :: Maybe (FilePath, TxIn)  -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spend and the collateral, unless the transaction opens the contract.
+    , marloweOut      :: FilePath                -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+    , change          :: AddressInEra era        -- ^ The change address.
+    , signingKeyFiles :: [FilePath]              -- ^ The files containing the required signing keys.
+    , metadataFile    :: Maybe FilePath          -- ^ The file containing JSON metadata, if any.
+    , bodyFile        :: FilePath                -- ^ The output file for the transaction body.
+    , submitTimeout   :: Maybe Int               -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , printStats      :: Bool                    -- ^ Whether to print statistics about the contract and transaction.
+    , invalid         :: Bool                    -- ^ Assertion that the transaction is invalid.
+    }
+    -- | Withdraw funds from a role address, without specifying inputs and outputs.
+  | AutoWithdraw
+    {
+      network         :: NetworkId         -- ^ The network ID, if any.
+    , socketPath      :: FilePath          -- ^ The path to the node socket.
+    , marloweOut      :: FilePath          -- ^ The JSON file with Marlowe state and contract.
+    , roleName        :: TokenName         -- ^ The role name for the redemption.
+    , change          :: AddressInEra era  -- ^ The change address.
+    , signingKeyFiles :: [FilePath]        -- ^ The files containing the required signing keys.
+    , metadataFile    :: Maybe FilePath    -- ^ The file containing JSON metadata, if any.
+    , bodyFile        :: FilePath          -- ^ The output file for the transaction body.
+    , submitTimeout   :: Maybe Int         -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , printStats      :: Bool              -- ^ Whether to print statistics about the contract and transaction.
+    , invalid         :: Bool              -- ^ Assertion that the transaction is invalid.
     }
 
 
@@ -186,6 +217,32 @@ runRunCommand command =
                             printStats
                             invalid
                           >>= printTxId
+      AutoRun{..}      -> guardMainnet
+                          >> autoRunTransaction
+                            connection
+                            marloweIn'
+                            marloweOut
+                            change
+                            signingKeyFiles
+                            metadataFile
+                            bodyFile
+                            submitTimeout
+                            printStats
+                            invalid
+                          >>= printTxId
+      AutoWithdraw{..} -> guardMainnet
+                          >> autoWithdrawFunds
+                            connection
+                            marloweOut
+                            roleName
+                            change
+                            signingKeyFiles
+                            metadataFile
+                            bodyFile
+                            submitTimeout
+                            printStats
+                            invalid
+                          >>= printTxId
 
 
 -- | Parser for contract commands.
@@ -199,6 +256,8 @@ parseRunCommand network socket =
     <> initializeCommand network socket
     <> prepareCommand
     <> withdrawCommand network socket
+    <> autoRunCommand network socket
+    <> autoWithdrawCommand network socket
 
 
 -- | Parser for the "initialize" command.
@@ -311,6 +370,71 @@ withdrawOptions network socket =
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"            <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"           <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
     <*> O.option parseAddress               (O.long "change-address"   <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> (O.many . O.strOption)                 (O.long "required-signer"  <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
+    <*> O.strOption                            (O.long "out-file"         <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
+    <*> (O.optional . O.option O.auto)         (O.long "submit"           <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> O.switch                               (O.long "print-stats"                                              <> O.help "Print statistics."                                                                                               )
+    <*> O.switch                               (O.long "script-invalid"                                           <> O.help "Assert that the transaction is invalid."                                                                         )
+
+
+-- | Parser for the "auto-execute" command.
+autoRunCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
+           -> O.Mod O.OptionFields FilePath
+           -> O.Mod O.CommandFields (RunCommand era)
+autoRunCommand network socket =
+  O.command "auto-execute"
+    $ O.info (autoRunOptions network socket)
+    $ O.progDesc "Run a Marlowe transaction."
+
+
+-- | Parser for the "auto-execute" options.
+autoRunOptions :: IsShelleyBasedEra era
+           => O.Mod O.OptionFields NetworkId
+           -> O.Mod O.OptionFields FilePath
+           -> O.Parser (RunCommand era)
+autoRunOptions network socket =
+  AutoRun
+    <$> O.option parseNetworkId                (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.optional parseMarloweIn
+    <*> O.strOption                            (O.long "marlowe-out-file"<> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the Marlowe inputs, final state, and final contract."                                             )
+    <*> O.option parseAddress                  (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
+    <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE"           <> O.help "JSON file containing metadata."                                                                                  )
+    <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
+    <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> O.switch                               (O.long "print-stats"                                             <> O.help "Print statistics."                                                                                               )
+    <*> O.switch                               (O.long "script-invalid"                                          <> O.help "Assert that the transaction is invalid."                                                                         )
+    where
+      parseMarloweIn :: O.Parser (FilePath, TxIn)
+      parseMarloweIn =
+        (,)
+          <$> O.strOption        (O.long "marlowe-in-file"  <> O.metavar "MARLOWE_FILE" <> O.help "JSON file with the Marlowe initial state and initial contract, if any.")
+          <*> O.option parseTxIn (O.long "tx-in-marlowe"    <> O.metavar "TXID#TXIX"    <> O.help "UTxO spent from Marlowe contract, if any."                             )
+
+
+-- | Parser for the "auto-withdraw" command.
+autoWithdrawCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
+                -> O.Mod O.OptionFields FilePath
+                -> O.Mod O.CommandFields (RunCommand era)
+autoWithdrawCommand network socket =
+  O.command "auto-withdraw"
+    $ O.info (autoWithdrawOptions network socket)
+    $ O.progDesc "Withdraw funds from the Marlowe role address."
+
+
+-- | Parser for the "auto-withdraw" options.
+autoWithdrawOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
+                -> O.Mod O.OptionFields FilePath
+                -> O.Parser (RunCommand era)
+autoWithdrawOptions network socket =
+  AutoWithdraw
+    <$> O.option parseNetworkId                (O.long "testnet-magic"    <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                            (O.long "socket-path"      <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.strOption                            (O.long "marlowe-file"     <> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the Marlowe inputs, final state, and final contract."                                             )
+    <*> O.option parseTokenName                (O.long "role-name"        <> O.metavar "TOKEN_NAME"               <> O.help "The role name for the withdrawal."                                                                               )
+    <*> O.option parseAddress                  (O.long "change-address"   <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.many . O.strOption)                 (O.long "required-signer"  <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
     <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
     <*> O.strOption                            (O.long "out-file"         <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
