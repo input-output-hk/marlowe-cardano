@@ -71,11 +71,6 @@ mkChainSync ChainSyncDependencies{..} = do
 data TestChainSyncDependencies = TestChainSyncDependencies
   { changesVar   :: !(TVar Changes)
   , genesisBlock :: !GenesisBlock
-  , queryLocalNodeState
-      :: forall result
-       . Maybe Cardano.ChainPoint
-      -> Cardano.QueryInMode CardanoMode result
-      -> IO (Either AcquireFailure result)
   }
 
 data TestChainSync = TestChainSync
@@ -97,6 +92,7 @@ mkTestChainSync TestChainSyncDependencies{..} = do
   let persistRateLimit = secondsToNominalDiffTime 0
   let acceptRunChainSeekServer = atomically $ readTQueue chainSeekQueue
   let acceptRunQueryServer = atomically $ readTQueue queryQueue
+  let queryLocalNodeState _ _ = fail "Query local node state not supported in test chain sync"
   ChainSync{..} <- mkChainSync ChainSyncDependencies{..}
   let
     connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
