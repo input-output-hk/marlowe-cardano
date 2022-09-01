@@ -146,7 +146,8 @@ runTemplateCommand TemplateTrivial{..} OutputFiles{..} = do timeout' <- toTimeou
                                                                 withdrawalLovelace
                                                                 timeout'
                                                             let marloweState = initialMarloweState bystander minAda
-                                                            makeExample contractFile stateFile MarloweData{..}
+                                                            makeExample contractFile stateFile (marloweContract, marloweState)
+
 runTemplateCommand TemplateEscrow{..}  OutputFiles{..} = do paymentDeadline' <- toTimeout paymentDeadline
                                                             complaintDeadline' <- toTimeout complaintDeadline
                                                             disputeDeadline' <- toTimeout disputeDeadline
@@ -162,7 +163,7 @@ runTemplateCommand TemplateEscrow{..}  OutputFiles{..} = do paymentDeadline' <- 
                                                                   disputeDeadline'
                                                                   mediationDeadline'
                                                             let marloweState = initialMarloweState mediator minAda
-                                                            makeExample contractFile stateFile MarloweData{..}
+                                                            makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateSwap{..}  OutputFiles{..} = do aTimeout' <- toTimeout aTimeout
                                                           bTimeout' <- toTimeout bTimeout
                                                           marloweContract <- makeContract $
@@ -177,7 +178,7 @@ runTemplateCommand TemplateSwap{..}  OutputFiles{..} = do aTimeout' <- toTimeout
                                                               bTimeout'
                                                               Close
                                                           let marloweState = initialMarloweState aParty minAda
-                                                          makeExample contractFile stateFile MarloweData{..}
+                                                          makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do lendingDeadline' <- toTimeout lendingDeadline
                                                                    paybackDeadline' <- toTimeout paybackDeadline
                                                                    marloweContract <- makeContract $
@@ -191,7 +192,7 @@ runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do lendingDeadli
                                                                       ada
                                                                       Close
                                                                    let marloweState = initialMarloweState lender minAda
-                                                                   makeExample contractFile stateFile MarloweData{..}
+                                                                   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do issueDate' <- toTimeout issueDate
                                                                 maturityDate' <- toTimeout maturityDate
                                                                 settlementDate' <- toTimeout settlementDate
@@ -208,11 +209,12 @@ runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do issueDate' <- to
                                                                     maturityDate'
                                                                     settlementDate'
                                                                 let marloweState = initialMarloweState issuer minAda
-                                                                makeExample contractFile stateFile MarloweData{..}
+                                                                makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateActus{..}      OutputFiles{..} = do ct <- decodeFileStrict actusTermsFile
                                                                marloweContract <- makeContract $ genContract' (party, counterparty) defaultRiskFactors (toMarlowe ct)
                                                                let marloweState = initialMarloweState party minAda
                                                                makeExample contractFile stateFile MarloweData{..}
+                                                               makeExample contractFile stateFile (marloweContract, marloweState)
 
 
 -- | Conversion from Extended to Core Marlowe.

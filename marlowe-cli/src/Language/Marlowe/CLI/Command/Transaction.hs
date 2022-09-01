@@ -29,9 +29,10 @@ import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), Epoch
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseSlotNo, parseTxIn, parseTxOut, parseValue)
+import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseSlotNo, parseTxIn, parseTxOut, parseValue,
+                                           requiredSignersOpt, txBodyFileOpt)
 import Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
-import Language.Marlowe.CLI.Types (CliEnv, CliError)
+import Language.Marlowe.CLI.Types (CliEnv, CliError, SigningKeyFile, TxBodyFile (TxBodyFile))
 
 import qualified Cardano.Api as Api (Value)
 import Control.Monad.Reader.Class (MonadReader)
@@ -45,12 +46,12 @@ data TransactionCommand era =
     {
       network         :: NetworkId                  -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
+    , signingKeyFiles :: [SigningKeyFile]                 -- ^ The files containing the required signing keys.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
     , outputs         :: [(AddressInEra era, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressInEra era                 -- ^ The change address.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
@@ -61,14 +62,14 @@ data TransactionCommand era =
       network         :: NetworkId                  -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
     , scriptAddress   :: AddressInEra era                 -- ^ The script address.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
+    , signingKeyFiles :: [SigningKeyFile]                 -- ^ The files containing the required signing keys.
     , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
     , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
     , outputs         :: [(AddressInEra era, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressInEra era                 -- ^ The change address.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
@@ -82,7 +83,7 @@ data TransactionCommand era =
     , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
     , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
     , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
+    , signingKeyFiles :: [SigningKeyFile]                 -- ^ The files containing the required signing keys.
     , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
     , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
     , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
@@ -93,7 +94,7 @@ data TransactionCommand era =
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
@@ -106,7 +107,7 @@ data TransactionCommand era =
     , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
     , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
     , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
+    , signingKeyFiles :: [SigningKeyFile]                 -- ^ The files containing the required signing keys.
     , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
     , outputs         :: [(AddressInEra era, Api.Value)]  -- ^ The transaction outputs.
@@ -115,7 +116,7 @@ data TransactionCommand era =
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
@@ -125,8 +126,8 @@ data TransactionCommand era =
     {
       network         :: NetworkId   -- ^ The network ID, if any.
     , socketPath      :: FilePath    -- ^ The path to the node socket.
-    , bodyFile        :: FilePath    -- ^ The JSON file containing the transaction body.
-    , signingKeyFiles :: [FilePath]  -- ^ The signing key files.
+    , bodyFile        :: TxBodyFile    -- ^ The JSON file containing the transaction body.
+    , signingKeyFiles :: [SigningKeyFile]  -- ^ The signing key files.
     , submitTimeout   :: Maybe Int   -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
 
@@ -255,12 +256,14 @@ buildSimpleOptions network socket =
   BuildTransact
     <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                    (O.long "socket-path"     <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> (O.some . O.strOption)         (O.long "required-signer" <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
+    <*> requiredSignersOpt
+
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"           <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
     <*> O.option parseAddress       (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"   <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
-    <*> O.strOption                    (O.long "out-file"        <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
+    <*> txBodyFileOpt
+
     <*> (O.optional . O.option O.auto) (O.long "submit"          <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                       (O.long "print-stats"                                             <> O.help "Print statistics."                                                                                               )
     <*> O.switch                       (O.long "script-invalid"                                          <> O.help "Assert that the transaction is invalid."                                                                         )
@@ -285,14 +288,16 @@ buildIncomingOptions network socket =
     <$> O.option parseNetworkId        (O.long "testnet-magic"     <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                    (O.long "socket-path"       <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.option parseAddress       (O.long "script-address"    <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
-    <*> (O.some . O.strOption)         (O.long "required-signer"   <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
+    <*> requiredSignersOpt
+
     <*> O.strOption                    (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"               <> O.help "Datum JSON file datum paid to Marlowe contract."                                                                 )
     <*> O.option parseValue            (O.long "tx-out-marlowe"    <> O.metavar "VALUE"                    <> O.help "Value paid to Marlowe contract."                                                                                 )
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"             <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
     <*> O.option parseAddress       (O.long "change-address"    <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"     <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
-    <*> O.strOption                    (O.long "out-file"          <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
+    <*> txBodyFileOpt
+
     <*> (O.optional . O.option O.auto) (O.long "submit"            <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                       (O.long "print-stats"                                               <> O.help "Print statistics."                                                                                               )
     <*> O.switch                       (O.long "script-invalid"                                            <> O.help "Assert that the transaction is invalid."                                                                         )
@@ -320,7 +325,8 @@ buildContinuingOptions network socket =
     <*> O.strOption                    (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"              <> O.help "Plutus file for Marlowe contract."                                                                               )
     <*> O.strOption                    (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"            <> O.help "Redeemer JSON file spent from Marlowe contract."                                                                 )
     <*> O.strOption                    (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"               <> O.help "Datum JSON file spent from Marlowe contract."                                                                    )
-    <*> (O.some . O.strOption)         (O.long "required-signer"     <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
+    <*> requiredSignersOpt
+
     <*> O.option parseTxIn             (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"                <> O.help "UTxO spent from Marlowe contract."                                                                               )
     <*> O.strOption                    (O.long "tx-out-datum-file"   <> O.metavar "DATUM_FILE"               <> O.help "Datum JSON file datum paid to Marlowe contract."                                                                 )
     <*> O.option parseValue            (O.long "tx-out-marlowe"      <> O.metavar "VALUE"                    <> O.help "Value paid to Marlowe contract."                                                                                 )
@@ -331,7 +337,8 @@ buildContinuingOptions network socket =
     <*> O.option parseSlotNo           (O.long "invalid-before"      <> O.metavar "SLOT"                     <> O.help "Minimum slot for the redemption."                                                                                )
     <*> O.option parseSlotNo           (O.long "invalid-hereafter"   <> O.metavar "SLOT"                     <> O.help "Maximum slot for the redemption."                                                                                )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"       <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
-    <*> O.strOption                    (O.long "out-file"            <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
+    <*> txBodyFileOpt
+
     <*> (O.optional . O.option O.auto) (O.long "submit"              <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                       (O.long "print-stats"                                                 <> O.help "Print statistics."                                                                                               )
     <*> O.switch                       (O.long "script-invalid"                                              <> O.help "Assert that the transaction is invalid."                                                                         )
@@ -358,7 +365,8 @@ buildOutgoingOptions network socket =
     <*> O.strOption                    (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"              <> O.help "Plutus file for Marlowe contract."                                                                               )
     <*> O.strOption                    (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"            <> O.help "Redeemer JSON file spent from Marlowe contract."                                                                 )
     <*> O.strOption                    (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"               <> O.help "Datum JSON file spent from Marlowe contract."                                                                    )
-    <*> (O.some . O.strOption)         (O.long "required-signer"     <> O.metavar "SIGNING_FILE"             <> O.help "File containing a required signing key."                                                                         )
+    <*> requiredSignersOpt
+
     <*> O.option parseTxIn             (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"                <> O.help "UTxO spent from Marlowe contract."                                                                               )
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"               <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
@@ -367,7 +375,8 @@ buildOutgoingOptions network socket =
     <*> O.option parseSlotNo           (O.long "invalid-before"      <> O.metavar "SLOT"                     <> O.help "Minimum slot for the redemption."                                                                                )
     <*> O.option parseSlotNo           (O.long "invalid-hereafter"   <> O.metavar "SLOT"                     <> O.help "Maximum slot for the redemption."                                                                                )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"       <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
-    <*> O.strOption                    (O.long "out-file"            <> O.metavar "FILE"                     <> O.help "Output file for transaction body."                                                                               )
+    <*> txBodyFileOpt
+
     <*> (O.optional . O.option O.auto) (O.long "submit"              <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                       (O.long "print-stats"                                                 <> O.help "Print statistics."                                                                                               )
     <*> O.switch                       (O.long "script-invalid"                                              <> O.help "Assert that the transaction is invalid."                                                                         )
@@ -391,6 +400,7 @@ submitOptions network socket =
   Submit
     <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                    (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> O.strOption                    (O.long "tx-body-file"    <> O.metavar "BODY_FILE"               <> O.help "File containing the transaction body."                                                                           )
-    <*> (O.many . O.strOption)         (O.long "required-signer" <> O.metavar "SIGNING_FILE"            <> O.help "File containing a required signing key."                                                                         )
+    <*> (TxBodyFile <$> O.strOption    (O.long "tx-body-file"    <> O.metavar "BODY_FILE"               <> O.help "File containing the transaction body."                                                                           ))
+    <*> requiredSignersOpt
+
     <*> (O.optional . O.option O.auto) (O.long "timeout"         <> O.metavar "SECONDS"                 <> O.help "Also submit the transaction, and wait for confirmation."                                                         )

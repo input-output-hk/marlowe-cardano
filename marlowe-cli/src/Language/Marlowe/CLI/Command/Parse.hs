@@ -1,4 +1,6 @@
+{-# LANGUAGE BlockArguments      #-}
 {-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
@@ -26,6 +28,7 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseRole
 , parseParty
 , parsePOSIXTime
+, parseProtocolVersion
 , parseSlot
 , parseSlotNo
 , parseStakeAddressReference
@@ -38,8 +41,13 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseTxOut
 , parseUrl
 , parseValue
+, protocolVersionOpt
+, protocolVersionOpt'
+, requiredSignerOpt
+, requiredSignersOpt
 , readTokenName
 , timeoutHelpMsg
+, txBodyFileOpt
 ) where
 
 
@@ -50,7 +58,7 @@ import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsS
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
-import Language.Marlowe.CLI.Types (AnyTimeout (AbsoluteTimeout, RelativeTimeout), OutputQuery (..))
+import Language.Marlowe.CLI.Types (AnyTimeout(..), OutputQuery (..), SigningKeyFile (SigningKeyFile), TxBodyFile (TxBodyFile))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -62,8 +70,11 @@ import Text.Regex.Posix ((=~))
 
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T (pack)
 import qualified Options.Applicative as O
+import Plutus.ApiCommon (ProtocolVersion)
+import Plutus.V1.Ledger.ProtocolVersions (alonzoPV, vasilPV)
 
 
 -- | Parser for network ID.
@@ -388,3 +399,27 @@ parseOutputQuery =
       parseAssetOnly =
         AssetOnly
           <$> O.option parseAssetId (O.long "asset-only" <> O.metavar "CURRENCY_SYMBOL.TOKEN_NAME" <> O.help "The current symbol and token name for the sole native asset in the value.")
+
+
+parseProtocolVersion :: O.ReadM ProtocolVersion
+parseProtocolVersion = O.eitherReader \case
+  "alonzo" -> pure alonzoPV
+  "vasil"  -> pure vasilPV
+  s        -> Left $ "Invalid protocol version: " <> s <> ". Expecting [alonzo|vasil]."
+
+
+protocolVersionOpt :: O.Parser ProtocolVersion
+protocolVersionOpt = fromMaybe vasilPV <$> protocolVersionOpt'
+
+protocolVersionOpt' :: O.Parser (Maybe ProtocolVersion)
+protocolVersionOpt' = (O.optional . O.option parseProtocolVersion)  (O.long "protocol-version" <> O.metavar "PROTOCOL_VERSION" <> O.help "Protocol version: [alonzo|vasil]")
+
+requiredSignerOpt :: O.Parser SigningKeyFile
+requiredSignerOpt = SigningKeyFile <$> O.strOption (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
+
+requiredSignersOpt :: O.Parser [SigningKeyFile]
+requiredSignersOpt =  map SigningKeyFile <$> (O.some . O.strOption) (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
+
+txBodyFileOpt :: O.Parser TxBodyFile
+txBodyFileOpt = TxBodyFile <$> O.strOption (O.long "out-file" <> O.metavar "FILE"         <> O.help "Output file for transaction body.")
+
