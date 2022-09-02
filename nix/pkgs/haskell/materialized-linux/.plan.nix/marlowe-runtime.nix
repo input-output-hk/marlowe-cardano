@@ -56,6 +56,7 @@
           ];
         buildable = true;
         modules = [
+          "Language/Marlowe/Protocol/Sync/Client"
           "Language/Marlowe/Protocol/Sync/Codec"
           "Language/Marlowe/Protocol/Sync/Server"
           "Language/Marlowe/Protocol/Sync/Types"
