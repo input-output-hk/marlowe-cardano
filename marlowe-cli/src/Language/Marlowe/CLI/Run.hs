@@ -61,8 +61,8 @@ import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, b
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, hashSigningKey, queryInEra,
-                                         submitBody)
+import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey,
+                                         queryInEra, selectCoins, submitBody)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
                                    SomeMarloweTransaction (..), ValidatorInfo (..), askEra, doWithCardanoEra,
                                    toAddressAny', toMultiAssetSupportedInEra, withShelleyBasedEra)
@@ -76,7 +76,7 @@ import Ledger.Tx.CardanoAPI (toCardanoPaymentKeyHash, toCardanoScriptDataHash, t
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
 import Plutus.V1.Ledger.Api (CostModelParams, Datum (..), POSIXTime, TokenName, toBuiltinData, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot)
-import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue)
+import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue, singleton)
 import qualified PlutusTx.AssocMap as AM (toList)
 import Prettyprinter.Extras (Pretty (..))
 import System.IO (hPutStrLn, stderr)
@@ -549,7 +549,7 @@ autoWithdrawFunds :: (MonadError CliError m, MonadReader (CliEnv era) m)
                   => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
                   -> FilePath                                -- ^ The JSON file with the Marlowe state and contract.
                   -> TokenName                               -- ^ The role name for the redemption.
-                  -> AddressInEra era                              -- ^ The change address.
+                  -> AddressInEra era                        -- ^ The change address.
                   -> [FilePath]                              -- ^ The files for required signing keys.
                   -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
                   -> FilePath                                -- ^ The output file for the transaction body.
@@ -558,4 +558,79 @@ autoWithdrawFunds :: (MonadError CliError m, MonadReader (CliEnv era) m)
                   -> Bool                                    -- ^ Assertion that the transaction is invalid.
                   -> m TxId                                  -- ^ Action to build the transaction body.
 autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
-  withdrawFunds connection marloweOutFile roleName undefined undefined undefined changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid
+  do
+    -- Fetch the protocol parameters.
+    protocol <- queryInEra connection QueryProtocolParameters
+    -- Read any metadata for the transaction.
+    metadata <- readMaybeMetadata metadataFile
+    -- Read the Marlowe transaction information that was used to populate the role-payout address.
+    SomeMarloweTransaction _ marloweOut <- decodeFileStrict marloweOutFile
+    -- Read the signing keys.
+    signingKeys <- mapM readSigningKey signingKeyFiles
+    -- Compute the hash of the role name.
+    roleHash <- liftCli . toCardanoScriptDataHash . diHash $ buildRoleDatum roleName
+    let
+      -- Compute the validator information.
+      validatorInfo = mtRoleValidator marloweOut
+      -- Fetch the role-payout validator script.
+      PlutusScript _ roleScript = viScript validatorInfo
+      -- Fetch the role address.
+      roleAddress = viAddress validatorInfo
+      -- Build the datum corresponding to the role name.
+      roleDatum = diDatum $ buildRoleDatum roleName
+      -- Build the necessary redeemer.
+      roleRedeemer = riRedeemer buildRoleRedeemer
+      -- Test if a `TxOut` contains the role token.
+      checkRole (TxOut _ _ datum _) =
+        case datum of
+          TxOutDatumInline _ _       -> False
+          TxOutDatumNone             -> False
+          TxOutDatumHash _ datumHash -> datumHash == roleHash
+    -- Find the role token.
+    utxos <-
+      fmap (filter (checkRole . snd) . M.toList . unUTxO)
+        . queryInEra connection
+        . QueryUTxO
+        . QueryUTxOByAddress
+        . S.singleton
+        . toAddressAny'
+        $ roleAddress
+    -- Set the value of one role token.
+    role <- liftCli $ toCardanoValue $ singleton (mtRoles marloweOut) roleName 1
+    let
+      -- Build the spending from the script.
+      spend = buildPayFromScript roleScript roleDatum roleRedeemer . fst <$> utxos
+      -- Find how much is being spent from the script.
+      -- The output value should include the spending from the script and the role token.
+      withdrawn = mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos]
+    -- Ensure that the output meets the min-Ada requirement.
+    output <- ensureMinUtxo protocol (changeAddress, Nothing, withdrawn <> role)
+    -- Select the coins.
+    (collateral, extraInputs, revisedOutputs) <-
+      selectCoins
+        connection
+        withdrawn
+        [output]
+        changeAddress
+    -- Build the transaction body.
+    body <-
+      buildBody connection
+        spend Nothing
+        [] extraInputs revisedOutputs
+        (Just collateral) changeAddress
+        (mtRange marloweOut)
+        (hashSigningKey <$> signingKeys)
+        TxMintNone
+        metadata
+        printStats
+        invalid
+    -- Write the transaction file.
+    doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+    -- Optionally submit the transaction, waiting for a timeout.
+    forM_ timeout
+      $ if invalid
+          then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
+          else submitBody connection body signingKeys
+    -- Return the transaction identifier.
+    pure
+      $ getTxId body

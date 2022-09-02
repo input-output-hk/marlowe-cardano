@@ -13,7 +13,6 @@
 
 {-# LANGUAGE BlockArguments     #-}
 {-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -46,6 +45,9 @@ module Language.Marlowe.CLI.Transaction (
 , selectUtxos
 , submitBody
 , querySlotConfig
+-- * Balancing
+, findMinUtxo
+, ensureMinUtxo
 , selectCoins
 ) where
 
@@ -85,7 +87,7 @@ import Control.Monad (forM_, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExcept, throwError)
 import Data.Fixed (div')
 import Data.Function (on)
-import Data.List (delete, sortBy)
+import Data.List (delete, minimumBy)
 import Data.Maybe (isNothing, maybeToList)
 import Data.Ratio ((%))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
@@ -1009,19 +1011,61 @@ maximumFee ProtocolParameters{..} =
     txFee + round executionFee
 
 
+-- | Calculate the minimum UTxO requirement for a value.
+findMinUtxo :: MonadError CliError m
+            => MonadReader (CliEnv era) m
+            => ProtocolParameters
+            -> (AddressInEra era, Maybe Datum, Value)
+            -> m Value
+findMinUtxo protocol (address, datum, value) =
+  do
+    era <- askEra
+    let
+      value' = value <> lovelaceToValue (maximum [500_000, selectLovelace value] - selectLovelace value)
+      trial =
+        TxOut
+          address
+          (TxOutValue (toMultiAssetSupportedInEra era) value')
+          (maybe TxOutDatumNone (TxOutDatumInTx era . fromPlutusData . toData) datum)
+          ReferenceScriptNone
+    case calculateMinimumUTxO (withShelleyBasedEra era shelleyBasedEra) trial protocol of
+       Right value'' -> pure value''
+       Left  e       -> throwError . CliError $ show e
+
+
+-- | Ensure that the minimum UTxO requirement is satisfied for outputs.
+ensureMinUtxo :: MonadError CliError m
+              => MonadReader (CliEnv era) m
+              => ProtocolParameters
+              -> (AddressInEra era, Maybe Datum, Value)
+              -> m (AddressInEra era, Maybe Datum, Value)
+ensureMinUtxo protocol (address, datum, value) =
+  do
+    era <- askEra
+    let
+      value' = value <> lovelaceToValue (maximum [500_000, selectLovelace value] - selectLovelace value)
+      trial =
+        TxOut
+          address
+          (TxOutValue (toMultiAssetSupportedInEra era) value')
+          (maybe TxOutDatumNone (TxOutDatumInTx era . fromPlutusData . toData) datum)
+          ReferenceScriptNone
+    case calculateMinimumUTxO (withShelleyBasedEra era shelleyBasedEra) trial protocol of
+       Right value'' -> pure (address, datum, value <> (lovelaceToValue $ maximum [selectLovelace value'', selectLovelace value] - selectLovelace value))
+       Left  e       -> throwError . CliError $ show e
+
+
 -- | Build a non-Marlowe transaction that cleans an address.
 selectCoins :: MonadError CliError m
             => MonadIO m
             => MonadReader (CliEnv era) m
-            => LocalNodeConnectInfo CardanoMode                      -- ^ The connection info for the local node.
-            -> Value                                                 -- ^ The value of the input from the script, if any.
-            -> [(AddressInEra era, Maybe Datum, Value)]              -- ^ The transaction outputs.
-            -> AddressInEra era                                      -- ^ The change address.
-            -> m ([TxIn], [(AddressInEra era, Maybe Datum, Value)])  -- ^ Action select the inputs and outputs.
+            => LocalNodeConnectInfo CardanoMode                            -- ^ The connection info for the local node.
+            -> Value                                                       -- ^ The value of the input from the script, if any.
+            -> [(AddressInEra era, Maybe Datum, Value)]                    -- ^ The transaction outputs.
+            -> AddressInEra era                                            -- ^ The change address.
+            -> m (TxIn, [TxIn], [(AddressInEra era, Maybe Datum, Value)])  -- ^ Action select the collateral, inputs, and outputs.
 selectCoins connection inputs outputs changeAddress =
   do
-    -- Determine the era.
-    era <- askEra
     -- Find the UTxOs that we have to work with.
     utxos <-
       fmap (M.toList . unUTxO)
@@ -1036,25 +1080,21 @@ selectCoins connection inputs outputs changeAddress =
     let
       -- Extract the value of a UTxO.
       txOutToValue (TxOut _ value _ _) = txOutValueToValue value
-      -- Compute min-UTxO.
-      findMinUtxo value =
-        do
-          let
-            trial =
-              TxOut changeAddress
-                (TxOutValue (toMultiAssetSupportedInEra era) $ value <> lovelaceToValue 500_000)
-                TxOutDatumNone ReferenceScriptNone
-          case calculateMinimumUTxO (withShelleyBasedEra era shelleyBasedEra) trial protocol of
-             Right value' -> pure value'
-             Left  e      -> throwError . CliError $ show e
       -- Compute the value of all of the available UTxOs.
       universe = foldMap (txOutToValue . snd) utxos
       -- Bound the possible fee.
       fee = lovelaceToValue $ 2 * maximumFee protocol
+      -- Test whether value only contains lovelace.
+      onlyLovelace value = lovelaceToValue (selectLovelace value) == value
+    -- Select the collateral.
+    collateral <-
+      case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && selectLovelace value >= selectLovelace fee) utxos of
+        utxo : _ -> pure $ fst utxo
+        []       -> throwError . CliError $ "No collateral found."
     -- Bound the lovelace that must be included with change
     minUtxo <-
-       (<>) <$> findMinUtxo universe  -- Output to native tokens.
-            <*> findMinUtxo mempty    -- Pure lovelace to change address.
+       (<>) <$> findMinUtxo protocol (changeAddress, Nothing, universe)  -- Output to native tokens.
+            <*> findMinUtxo protocol (changeAddress, Nothing, mempty  )  -- Pure lovelace to change address.
     let
       -- Compute the value of the outputs.
       outgoing = foldMap (\(_, _, value) -> value) outputs
@@ -1087,7 +1127,7 @@ selectCoins connection inputs outputs changeAddress =
         let
           candidate' = txOutToValue $ snd candidate
           (excess, deficit) = matchingCoins required candidate'
-          notOnlyLovelace = deleteLovelace candidate' /= candidate'
+          notOnlyLovelace = not $ onlyLovelace candidate'
           insufficientLovelace = selectLovelace candidate' < selectLovelace required
         in
           (
@@ -1101,7 +1141,7 @@ selectCoins connection inputs outputs changeAddress =
       select required candidates =
         let
           -- Choose the best UTxO from the candidates.
-          next = head $ sortBy (compare `on` priority required) candidates
+          next = minimumBy (compare `on` priority required) candidates
           -- Determine the remaining candidates.
           candidates' = delete next candidates
           -- Ignore negative quantities.
@@ -1118,14 +1158,19 @@ selectCoins connection inputs outputs changeAddress =
       -- Select the coins.
       selection = select incoming utxos
       -- Compute the native token change, if any.
-      change = deleteLovelace . mconcat $ txOutToValue . snd <$> selection
+      change =
+        deleteLovelace
+          $ (mconcat $ txOutToValue . snd <$> selection)
+          <> negateValue outgoing
+    -- Compute the change that contains native tokens used for balancing, omitting ones explicitly specified in the outputs.
     output <-
       if change == mempty
         then pure []
-        else (: []) . (changeAddress, Nothing, ) <$> findMinUtxo change
+        else (: []) <$> ensureMinUtxo protocol (changeAddress, Nothing, change)
     pure
       (
-        fst <$> selection
+        collateral
+      , fst <$> selection
       , outputs <> output
       )
     -- FIXME: There are pathological failures that could happen if there are very many native tokens.

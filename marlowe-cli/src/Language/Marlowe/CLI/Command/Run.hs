@@ -141,8 +141,8 @@ data RunCommand era =
 -- | Run a contract-related command.
 runRunCommand :: (MonadError CliError m, MonadReader (CliEnv era) m)
               => MonadIO m
-              => (RunCommand era)  -- ^ The command.
-              -> m ()        -- ^ Action for running the command.
+              => RunCommand era  -- ^ The command.
+              -> m ()            -- ^ Action for running the command.
 runRunCommand command =
   do
     costModel <-
