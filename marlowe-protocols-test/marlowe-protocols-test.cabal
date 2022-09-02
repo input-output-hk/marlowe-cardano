@@ -50,6 +50,5 @@ library
     Test.Network.Protocol.ChainSeek
   build-depends:
       base >= 4.9 && < 5
-    , cardano-api
     , hspec
     , marlowe-protocols
