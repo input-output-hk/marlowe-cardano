@@ -41,6 +41,7 @@ mkChainSyncServer ChainSyncServerDependencies{..} = do
   let
     runChainSyncServer = do
       runChainSeekServer <- acceptRunChainSeekServer
+      hPutStrLn stderr "New client connected"
       worker <- atomically $ mkWorker WorkerDependencies {..}
       withAsync (runWorker worker) \aworker ->
         withAsync runChainSyncServer \aserver -> do
@@ -50,7 +51,8 @@ mkChainSyncServer ChainSyncServerDependencies{..} = do
             Right (Right x) -> absurd x
             Left (Left ex)  -> do
               hPutStrLn stderr $ "Lost client with exception " <> T.pack (show ex)
-            Left _  -> pure ()
+            Left _  -> do
+              hPutStrLn stderr "Client terminated normally"
           wait aserver
   pure $ ChainSyncServer { runChainSyncServer }
 

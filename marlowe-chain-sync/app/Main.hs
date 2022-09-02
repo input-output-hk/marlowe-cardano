@@ -38,7 +38,7 @@ import Network.Socket (AddrInfo (..), AddrInfoFlag (..), SockAddr, SocketOption 
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options (Options (..), getOptions)
-import System.IO (hPrint, hPutStr, hPutStrLn, stderr)
+import System.IO (hPrint, hPutStr, stderr)
 
 main :: IO ()
 main = run =<< getOptions "0.0.0.0"
@@ -80,7 +80,6 @@ run Options{..} = withSocketsDo do
                 modifyTVar socketIdVar (+1)
                 readTVar socketIdVar
               (conn, _ :: SockAddr) <- accept chainSeekSocket
-              hPutStrLn stderr "New client connected"
               let
                 driver = mkDriver throwIO runtimeChainSeekCodec
                   $ effectChannel (logSend socketId) (logRecv socketId)
