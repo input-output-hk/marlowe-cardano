@@ -7,7 +7,6 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
   , NodeClientDependencies(..)
   , NodeClient(..)
   , CostModel(..)
-  , emptyChanges
   , isEmptyChanges
   , mkNodeClient
   , toEmptyChanges
