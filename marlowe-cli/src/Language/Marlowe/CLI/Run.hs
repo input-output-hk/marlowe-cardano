@@ -63,14 +63,14 @@ import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey,
                                          queryInEra, selectCoins, submitBody)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
-                                   SomeMarloweTransaction (..), ValidatorInfo (..), askEra, doWithCardanoEra,
-                                   toAddressAny', toMultiAssetSupportedInEra, withShelleyBasedEra)
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarloweTransaction (..), PayFromScript (txIn),
+                                   RedeemerInfo (..), SomeMarloweTransaction (..), ValidatorInfo (..), askEra,
+                                   doWithCardanoEra, toAddressAny', toMultiAssetSupportedInEra, withShelleyBasedEra)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
                                            TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                                  InputContent (..), Party (..), Payee (..), State (accounts),
-                                                 Token (..))
+                                                 Token (..), getInputContent)
 import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash))
 import Ledger.Tx.CardanoAPI (toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
@@ -539,8 +539,160 @@ autoRunTransaction :: forall era m
                -> Bool                                    -- ^ Whether to print statistics about the transaction.
                -> Bool                                    -- ^ Assertion that the transaction is invalid.
                -> m TxId                                  -- ^ Action to build the transaction body.
-autoRunTransaction connection _marloweInBundle marloweOutFile changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
-  runTransaction connection undefined marloweOutFile undefined undefined changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid
+autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signingKeyFiles metadataFile bodyFile timeout printStats invalid =
+  do
+    metadata <- readMaybeMetadata metadataFile
+    protocol <- queryInEra connection QueryProtocolParameters
+    SomeMarloweTransaction era' marloweOut' <- decodeFileStrict marloweOutFile
+    era <- askEra @era
+    let
+      go :: MarloweTransaction era -> m TxId
+      go marloweOut = do
+        (spend, datumOutputs, roles) <-
+          case marloweInBundle of
+            Nothing                     -> pure ([], [], [])
+            Just (marloweInFile, spend) -> do
+                                            SomeMarloweTransaction _ marloweIn  <- decodeFileStrict marloweInFile
+                                            let
+                                              validatorInfo = mtValidator marloweIn
+                                              PlutusScript _ validator = viScript validatorInfo
+                                              redeemer = riRedeemer $ buildRedeemer (mtInputs marloweOut)
+                                              inputDatum  = diDatum $ buildDatum (mtContract marloweIn) (mtState marloweIn)
+                                              spend' = buildPayFromScript validator inputDatum redeemer spend
+                                              -- SCP-3610: Remove when Babbage era features become available and the validator is revised.
+                                              merkles =
+                                                catMaybes
+                                                  [
+                                                    case input of
+                                                      NormalInput     _                -> Nothing
+                                                      MerkleizedInput _ _ continuation -> Just
+                                                                                          (
+                                                                                            -- Send the ancillary datum to the change address.
+                                                                                            changeAddress
+                                                                                            -- Astonishing that this eUTxO can be spent without script or redeemer!
+                                                                                          , Just . Datum $ toBuiltinData continuation
+                                                                                            -- FIXME: Replace with protocol-dependent min-Ada.
+                                                                                          , lovelaceToValue 1_500_000
+                                                                                          )
+                                                  |
+                                                    input <- mtInputs marloweOut
+                                                  ]
+                                              roles [] = []
+                                              roles (input : inputs) =
+                                                case getInputContent input of
+                                                  IDeposit _ (Role role) _ _         -> role : roles inputs
+                                                  IChoice (ChoiceId _ (Role role)) _ -> role : roles inputs
+                                                  _                                  -> roles inputs
+                                            pure ([spend'], merkles, roles $ mtInputs marloweIn)
+        let
+          network = localNodeNetworkId connection
+
+          scriptAddress = viAddress $ mtValidator marloweOut
+
+          outputDatum = diDatum $ buildDatum (mtContract marloweOut) (mtState marloweOut)
+        outputValue <-
+          mconcat
+            <$> sequence
+            [
+              liftCli . toCardanoValue $ assetClassValue (AssetClass (currency, name)) amount
+            |
+              ((_, Token currency name), amount) <- AM.toList . accounts $ mtState marloweOut
+            ]
+        let
+          continue =
+            do
+              guard (outputValue /= mempty)
+              pure
+                $ buildPayToScript scriptAddress outputValue outputDatum
+
+          roleAddress = viAddress $ mtRoleValidator marloweOut
+        payments <-
+          catMaybes
+          <$> sequence
+            [
+              case payee of
+                Party (PK pkh)    -> do
+                                      address <-
+                                        liftCli $
+                                          withShelleyBasedEra era $ makeShelleyAddressInEra network
+                                            <$> (PaymentCredentialByKey <$> toCardanoPaymentKeyHash (PaymentPubKeyHash pkh))
+                                            <*> pure NoStakeAddress
+                                      money' <-
+                                        liftCli
+                                          $ toCardanoValue money
+                                      money'' <- adjustMinimumUTxO era protocol address Nothing money'
+                                      pure $ Just (address, Nothing, money'')
+                Party (Role role) -> do
+                                      money' <-
+                                        liftCli
+                                          $ toCardanoValue money
+                                      let
+                                        datum = Just . diDatum $ buildRoleDatum role
+                                      money'' <- adjustMinimumUTxO era protocol roleAddress datum money'
+                                      pure $ Just (roleAddress, datum, money'')
+
+                Account _         -> pure Nothing
+            |
+              (payee, money) <- bimap head mconcat . unzip
+                                  <$> (groupBy ((==) `on` fst) . sortBy (compare `on` fst))
+                                  [
+                                    (payee, money)
+                                  | Payment _ payee money <- mtPayments marloweOut
+                                  ]
+            ]
+        signingKeys <- mapM readSigningKey signingKeyFiles
+        let
+          incomingValue (txIn', TxOut _ value _ _)
+            | txIn' `elem` fmap txIn spend = txOutValueToValue value
+            | otherwise                    = mempty
+        incoming <-
+          fmap (mconcat . fmap incomingValue . M.toList . unUTxO)
+            . queryInEra connection
+            . QueryUTxO
+            . QueryUTxOByAddress
+            . S.singleton
+            . toAddressAny'
+            $ scriptAddress
+        roleOutputs <-
+          sequence
+            [
+              do
+                value <- liftCli . toCardanoValue $ singleton (mtRoles marloweOut) role 1
+                ensureMinUtxo protocol (changeAddress, Nothing, value)
+            |
+              role <- roles
+            ]
+        (collateral, extraInputs, revisedOutputs)
+          <- selectCoins
+               connection
+               incoming
+               (payments <> roleOutputs <> datumOutputs)
+               continue
+               changeAddress
+        body <-
+          buildBody connection
+            spend continue
+            [] extraInputs revisedOutputs
+            (Just collateral) changeAddress
+            (mtRange marloweOut)
+            (hashSigningKey <$> signingKeys)
+            TxMintNone
+            metadata
+            printStats
+            invalid
+        doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+        forM_ timeout
+          $ if invalid
+              then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
+              else submitBody connection body signingKeys
+        pure
+          $ getTxId body
+    case (era, era') of
+      (ScriptDataInAlonzoEra, ScriptDataInBabbageEra)  -> throwError "Running in Alonzo era, read file in Babbage era"
+      (ScriptDataInBabbageEra, ScriptDataInAlonzoEra)  -> throwError "Running in Babbage era, read file in Alonzo era"
+      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra)   -> go marloweOut'
+      (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
+
 
 
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.
@@ -580,7 +732,7 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
       roleDatum = diDatum $ buildRoleDatum roleName
       -- Build the necessary redeemer.
       roleRedeemer = riRedeemer buildRoleRedeemer
-      -- Test if a `TxOut` contains the role token.
+      -- Test if a `TxOut` contains the role token datum.
       checkRole (TxOut _ _ datum _) =
         case datum of
           TxOutDatumInline _ _       -> False
@@ -611,6 +763,7 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
         connection
         withdrawn
         [output]
+        Nothing
         changeAddress
     -- Build the transaction body.
     body <-

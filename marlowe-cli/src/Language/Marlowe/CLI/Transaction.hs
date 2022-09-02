@@ -116,6 +116,7 @@ import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (unpack)
 import qualified Data.Map.Strict as M (elems, keysSet, singleton, toList)
 import qualified Data.Set as S (empty, fromList, singleton)
+import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript (value))
 
 -- | Build a non-Marlowe transaction.
 buildSimple :: MonadError CliError m
@@ -1062,9 +1063,10 @@ selectCoins :: MonadError CliError m
             => LocalNodeConnectInfo CardanoMode                            -- ^ The connection info for the local node.
             -> Value                                                       -- ^ The value of the input from the script, if any.
             -> [(AddressInEra era, Maybe Datum, Value)]                    -- ^ The transaction outputs.
+            -> Maybe (PayToScript era)                                     -- ^ Otherwise unlisted outputs to the script address.
             -> AddressInEra era                                            -- ^ The change address.
             -> m (TxIn, [TxIn], [(AddressInEra era, Maybe Datum, Value)])  -- ^ Action select the collateral, inputs, and outputs.
-selectCoins connection inputs outputs changeAddress =
+selectCoins connection inputs outputs pay changeAddress =
   do
     -- Find the UTxOs that we have to work with.
     utxos <-
@@ -1097,7 +1099,7 @@ selectCoins connection inputs outputs changeAddress =
             <*> findMinUtxo protocol (changeAddress, Nothing, mempty  )  -- Pure lovelace to change address.
     let
       -- Compute the value of the outputs.
-      outgoing = foldMap (\(_, _, value) -> value) outputs
+      outgoing = foldMap (\(_, _, value) -> value) outputs <> maybe mempty PayToScript.value pay
       -- Find the net additional input that is needed.
       incoming = outgoing <> fee <> minUtxo <> negateValue inputs
       -- Remove the lovelace from a value.
@@ -1161,7 +1163,7 @@ selectCoins connection inputs outputs changeAddress =
       change =
         deleteLovelace
           $ (mconcat $ txOutToValue . snd <$> selection)
-          <> negateValue outgoing
+          <> negateValue incoming
     -- Compute the change that contains native tokens used for balancing, omitting ones explicitly specified in the outputs.
     output <-
       if change == mempty
