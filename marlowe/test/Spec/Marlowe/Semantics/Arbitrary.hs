@@ -504,39 +504,47 @@ interestingChoiceNum :: [Bound] -> [ChoiceNum]
 interestingChoiceNum bounds = concatMap interestingChoiceNum' bounds
 
 interestingChoiceNum' :: Bool -> Bound -> [ChoiceNum]
-interestingChoiceNum' True (Bound lower upper) =
-  Data.List.nub
-  [
-    lower - 1
-  , lower
-  , lower + 1
-  , upper - 1
-  , upper
-  , upper + 1
-  , 0
-  , 1
-  , -1
-  , (lower + upper) `div` 2
-  , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
-  , - 10 * lower   -- FIXME: ditto
-  ]
+interestingChoiceNum' True (Bound lower upper)
+  | lower > upper = Nothing
+  | lower == upper =
+      [
+        lower
+      ]
+  | otherwise =
+      Data.List.nub
+      [
+        lower
+      , lower + 1
+      , upper - 1
+      , upper
+      , (lower + upper) `div` 2
+      ]
 
-interestingChoiceNum' False (Bound lower upper) =
-  Data.List.nub
-  [
-    lower - 1
-  , lower
-  , lower + 1
-  , upper - 1
-  , upper
-  , upper + 1
-  , 0
-  , 1
-  , -1
-  , (lower + upper) `div` 2
-  , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
-  , - 10 * lower   -- FIXME: ditto
-  ]
+interestingChoiceNum' False (Bound lower upper)
+  | lower > upper = Nothing
+  | lower == upper =
+    Data.List.nub
+    [
+      lower - 1
+    , lower + 1
+    , 0
+    , 1
+    , - 1
+    , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
+    , - 10 * lower   -- FIXME: ditto
+    ]
+  | otherwise =
+    Data.List.nub
+    [
+      lower - 1
+    , upper + 1
+    , 0
+    , 1
+    , -1
+    , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
+    , - 10 * lower   -- FIXME: ditto
+    ]
+
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
 arbitraryTimeInterval =
