@@ -57,7 +57,6 @@ library
   exposed-modules:
     Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
-    Language.Marlowe.Runtime.ChainSync.Database.Memory
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
     Language.Marlowe.Runtime.ChainSync.Genesis
     Language.Marlowe.Runtime.ChainSync.NodeClient
