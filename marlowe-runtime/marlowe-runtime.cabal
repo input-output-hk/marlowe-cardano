@@ -194,7 +194,6 @@ test-suite marlowe-runtime-test
   main-is: Spec.hs
   other-modules:
     Language.Marlowe.Runtime.History.FollowerSpec
-    Language.Marlowe.Runtime.ChainSyncTest
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
