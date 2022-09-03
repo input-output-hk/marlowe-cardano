@@ -709,7 +709,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
         -- Return the transaction identifier.
         pure
           $ getTxId body
-    -- Deal with era. I'm skeptical that this is necessary--do we have a test case showing that it is needed?
+    -- Deal with era.
     case (era, era') of
       (ScriptDataInAlonzoEra, ScriptDataInBabbageEra)  -> throwError "Running in Alonzo era, read file in Babbage era"
       (ScriptDataInBabbageEra, ScriptDataInAlonzoEra)  -> throwError "Running in Babbage era, read file in Alonzo era"
