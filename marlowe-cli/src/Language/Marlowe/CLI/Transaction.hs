@@ -1092,7 +1092,7 @@ selectCoins connection inputs outputs pay changeAddress =
     collateral <-
       case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && selectLovelace value >= selectLovelace fee) utxos of
         utxo : _ -> pure $ fst utxo
-        []       -> throwError . CliError $ "No collateral found."
+        []       -> throwError . CliError $ "No collateral found in " <> show utxos <> "."
     -- Bound the lovelace that must be included with change
     minUtxo <-
        (<>) <$> findMinUtxo protocol (changeAddress, Nothing, universe)  -- Output to native tokens.
@@ -1116,12 +1116,18 @@ selectCoins connection inputs outputs pay changeAddress =
           deficit = length $ filter (< 0) delta
         in
           (excess, deficit)
-    -- Ensure that coin selection is possible.
+    -- Ensure that coin selection for tokens is possible.
     unless (snd (matchingCoins incoming universe) == 0)
       . throwError
       . CliError
-      $ "Insufficient value available for coin selection: "
-      <> show incoming <> "required, but " <> show universe <> " available."
+      $ "Insufficient tokens available for coin selection: "
+      <> show incoming <> " required, but " <> show universe <> " available."
+    -- Ensure that coin selection for lovelace is possible.
+    unless (selectLovelace incoming <= selectLovelace universe)
+      . throwError
+      . CliError
+      $ "Insufficient lovelace available for coin selection: "
+      <> show incoming <> " required, but " <> show universe <> " available."
     -- Satisfy the native-token requirements.
     let
       -- Sort the UTxOs by their deficit, excess, and lovelace in priority order.
@@ -1169,6 +1175,7 @@ selectCoins connection inputs outputs pay changeAddress =
       if change == mempty
         then pure []
         else (: []) <$> ensureMinUtxo protocol (changeAddress, Nothing, change)
+    -- Return the coin selection.
     pure
       (
         collateral
