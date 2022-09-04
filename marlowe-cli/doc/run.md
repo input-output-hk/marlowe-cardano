@@ -1,6 +1,6 @@
 ---
-date: 18 June 2022
-version: marlowe-cli 0.0.5.0
+date: 04 September 2022
+version: marlowe-cli 0.0.7.0
 ---
 
 # Marlowe CLI `run` Subcommands
@@ -9,7 +9,7 @@ The `marlowe-cli run` subcommands support [a high-level
 workflow](../ReadMe.md#high-level-workflow) for interacting with Marlowe
 contracts without dealing with the underlying its Plutus mechanics.
 
-The [\"contract for differences\" example](../examples/cfd/ReadMe.md)
+The ["contract for differences" example](../examples/cfd/ReadMe.md)
 illustrates the use of `marlowe-cli run`.
 
 ## Contents
@@ -25,7 +25,7 @@ illustrates the use of `marlowe-cli run`.
 marlowe-cli run --help
 ```
 
-    Usage: marlowe-cli run COMMAND
+    Usage: marlowe-cli run (COMMAND | COMMAND)
 
       Run a contract.
 
@@ -39,6 +39,13 @@ marlowe-cli run --help
       prepare                  Prepare the next step of a Marlowe contract and write
                                the output to a JSON file.
       withdraw                 Withdraw funds from the Marlowe role address.
+
+    Experimental commands for running contracts, with automatic balancing.
+      auto-execute             [EXPERIMENTAL] Run a Marlowe transaction, selecting
+                               transaction inputs and outputs automatically.
+      auto-withdraw            [EXPERIMENTAL] Withdraw funds from the Marlowe role
+                               address, selecting transaction inputs and outputs
+                               automatically.
 
 ## Initialize
 
@@ -313,6 +320,142 @@ $ marlowe-cli run withdraw --testnet-magic 1566 \
                            --out-file run-6.raw \
                            --print-stats \
                            --submit=600
+```
+
+``` console
+Fee: Lovelace 426563
+Size: 2885 / 32768 = 8%
+Execution units:
+  Memory: 1461810 / 30000000 = 4%
+  Steps: 557930172 / 10000000000 = 5%
+```
+
+## Automatically Execute
+
+``` bash
+marlowe-cli run auto-execute --help
+```
+
+    Usage: marlowe-cli run auto-execute 
+             --testnet-magic INTEGER --socket-path SOCKET_FILE 
+             [--marlowe-in-file MARLOWE_FILE --tx-in-marlowe TXID#TXIX]
+             --marlowe-out-file MARLOWE_FILE --change-address ADDRESS 
+             [--required-signer SIGNING_FILE] [--metadata-file METADATA_FILE]
+             --out-file FILE [--submit SECONDS] [--print-stats] [--script-invalid]
+
+      [EXPERIMENTAL] Run a Marlowe transaction, selecting transaction inputs and
+      outputs automatically.
+
+    Available options:
+      --testnet-magic INTEGER  Network magic. Defaults to the CARDANO_TESTNET_MAGIC
+                               environment variable's value.
+      --socket-path SOCKET_FILE
+                               Location of the cardano-node socket file. Defaults to
+                               the CARDANO_NODE_SOCKET_PATH environment variable's
+                               value.
+      --marlowe-in-file MARLOWE_FILE
+                               JSON file with the Marlowe initial state and initial
+                               contract, if any.
+      --tx-in-marlowe TXID#TXIX
+                               UTxO spent from Marlowe contract, if any.
+      --marlowe-out-file MARLOWE_FILE
+                               JSON file with the Marlowe inputs, final state, and
+                               final contract.
+      --change-address ADDRESS Address to receive ADA in excess of fee.
+      --required-signer SIGNING_FILE
+                               File containing a required signing key.
+      --metadata-file METADATA_FILE
+                               JSON file containing metadata.
+      --out-file FILE          Output file for transaction body.
+      --submit SECONDS         Also submit the transaction, and wait for
+                               confirmation.
+      --print-stats            Print statistics.
+      --script-invalid         Assert that the transaction is invalid.
+      -h,--help                Show this help text
+
+### Example
+
+Here is a sample invocation of `marlowe-cli run execute`: it takes the
+comprehensive Marlowe information for the prior and new transaction,
+respectively [run-1.marlowe](run-1.marlowe) and
+[run-2.marlowe](run-2.marlowe) as input and it outputs the Cardano
+transaction body [run-2.raw](run-2.raw).
+
+``` bash
+$ marlowe-cli run auto-execute --testnet-magic 1566 \
+                               --socket-path node.socket \
+                               --marlowe-in-file run-1.marlowe \
+                               --tx-in-marlowe 'c2044f136b94a9c8f272ef8108c859733d43e2afc36ffb0c68de0d4894f44cbe#1' \
+                               --required-signer francis-beaumont.skey \
+                               --marlowe-out-file run-2.marlowe \
+                               --change-address addr_test1vzzpzll6gsl9npf8wfhk2zg8sy2we50jcqc7w8w46gua2pqq7cw2q \
+                               --out-file run-2.raw \
+                               --print-stats \
+                               --submit=600
+```
+
+``` console
+Fee: Lovelace 1392248
+Size: 14729 / 32768 = 44%
+Execution units:
+  Memory: 6779848 / 30000000 = 22%
+  Steps: 2467753419 / 10000000000 = 24%
+```
+
+## Automatically Withdraw
+
+``` bash
+marlowe-cli run auto-withdraw --help
+```
+
+    Usage: marlowe-cli run auto-withdraw 
+             --testnet-magic INTEGER --socket-path SOCKET_FILE
+             --marlowe-file MARLOWE_FILE --role-name TOKEN_NAME
+             --change-address ADDRESS [--required-signer SIGNING_FILE] 
+             [--metadata-file METADATA_FILE] --out-file FILE [--submit SECONDS] 
+             [--print-stats] [--script-invalid]
+
+      [EXPERIMENTAL] Withdraw funds from the Marlowe role address, selecting
+      transaction inputs and outputs automatically.
+
+    Available options:
+      --testnet-magic INTEGER  Network magic. Defaults to the CARDANO_TESTNET_MAGIC
+                               environment variable's value.
+      --socket-path SOCKET_FILE
+                               Location of the cardano-node socket file. Defaults to
+                               the CARDANO_NODE_SOCKET_PATH environment variable's
+                               value.
+      --marlowe-file MARLOWE_FILE
+                               JSON file with the Marlowe inputs, final state, and
+                               final contract.
+      --role-name TOKEN_NAME   The role name for the withdrawal.
+      --change-address ADDRESS Address to receive ADA in excess of fee.
+      --required-signer SIGNING_FILE
+                               File containing a required signing key.
+      --metadata-file METADATA_FILE
+                               JSON file containing metadata.
+      --out-file FILE          Output file for transaction body.
+      --submit SECONDS         Also submit the transaction, and wait for
+                               confirmation.
+      --print-stats            Print statistics.
+      --script-invalid         Assert that the transaction is invalid.
+      -h,--help                Show this help text
+
+### Example
+
+Here is a sample invocation of `marlowe-cli run withdraw`: it takes the
+comprehensive Marlowe transaction information
+[run-5.marlowe](run-5.marlowe) as input and it outputs the Cardano
+transaction body file [run-6.raw](run-6.raw).
+
+``` bash
+$ marlowe-cli run auto-withdraw --marlowe-file run-5.marlowe \
+                                --role-name FB \
+                                --required-signer francis-beaumont.skey \
+                                --change-address addr_test1vzzpzll6gsl9npf8wfhk2zg8sy2we50jcqc7w8w46gua2pqq7cw2q \
+                                --out-file run-6.raw \
+                                --print-stats \
+                                --submit=600
 ```
 
 ``` console

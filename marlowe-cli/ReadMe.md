@@ -1,6 +1,6 @@
 ---
-date: 18 June 2022
-version: marlowe-cli 0.0.5.0
+date: 24 September 2022
+version: marlowe-cli 0.0.7.0
 ---
 
 # Marlowe Command-Line Interface (CLI) Tool
@@ -56,7 +56,7 @@ and simply enter a nix shell.
 marlowe-cli --version
 ```
 
-    marlowe-cli 0.0.5.0
+    marlowe-cli 0.0.7.0
 
 ### Installation via Cabal
 
@@ -103,7 +103,6 @@ marlowe-cli --help
 
     High-level commands:
       run                      Run a contract.
-      pab                      Run a contract via the PAB.
       template                 Create a contract from a template.
       test                     Test contracts.
 
@@ -112,7 +111,6 @@ marlowe-cli --help
                                redeemer.
       input                    Create inputs to a contract.
       role                     Export role address, validator, datum, or redeemer.
-      query                    Blockchain queries for Marlowe.
       transaction              Create and submit transactions.
       util                     Miscellaneous utilities.
 
@@ -120,14 +118,12 @@ Further help is available for each subcommand:
 
 -   high-level commands
     -   [`marlowe-cli run`](doc/run.md)
-    -   [`marlowe-cli pab`](doc/pab.md)
     -   [`marlowe-cli template`](doc/template.md)
     -   [`marlowe-cli test`](doc/test.md)
 -   low-level commands
     -   [`marlowe-cli contract`](doc/contract.md)
     -   [`marlowe-cli input`](doc/input.md)
     -   [`marlowe-cli role`](doc/role.md)
-    -   [`marlowe-cli query`](doc/query.md)
     -   [`marlowe-cli transaction`](doc/transaction.md)
     -   [`marlowe-cli util`](doc/util.md)
 
@@ -140,8 +136,6 @@ Marlowe CLI supports workflows for specific use cases:
     mechanics.
 -   [A low-level workflow](#low-level-workflow) that exposes the Plutus
     mechanics of Marlowe contracts.
--   [A backend workflow](#backend-worfklow) for interacting with Marlowe
-    via the Plutus Application Backend (PAB).
 
 ### High-Level Workflow
 
@@ -226,22 +220,15 @@ commands can be used in conjunction with `cardano-cli`.
 
 A tutorial for this workflow is available [here](doc/granular.md).
 
-## Backend Workflow
-
-Marlowe currently uses the Plutus Application Backend (PAB) as its
-backend. A [detailed tutorial](pab-tutorial.md) provides step-by-step
-instructions for interacting with it via the command line.
 
 ## Automated Tests
 
 -   Tests that interact directly with the Cardano blockchain:
     [run-nonpab-tests.sh](run-nonpab-tests.sh)
--   Tests that interact with the Cardano blockchain via the Marlowe
-    backend: [run-tests.sh](run-tests.sh).
 
 ## Editing and Rebuilding This Documentation
 
 Most of this documentation is edited in Jupyter notebooks, execute
-`nix run` to launch Jupyter.
+`nix develop --command jupyter-lab` to launch Jupyter.
 
 Execute `make` or `./Makefile` to rebuild this documentation.
