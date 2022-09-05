@@ -75,6 +75,10 @@ Here is a diagram that shows how the clock on the node jumps over slot numbers, 
 
 ![Node clock vs POSIX clock](../marlowe-cli/doc/diagrams/node-clock.svg)
 
+Some of the possible timing errors are illustrated in the next diagram:
+
+![Time errors for Marlowe and Cardano](../marlowe-cli/doc/diagrams/time-errors.svg)
+
 
 ## Transactions
 

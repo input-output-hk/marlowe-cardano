@@ -3,8 +3,8 @@
 
 <svg
    width="310mm"
-   height="71.816833mm"
-   viewBox="0 0 310 71.816833"
+   height="72mm"
+   viewBox="0 0 310 72"
    version="1.1"
    id="svg5"
    inkscape:version="1.1.1 (3bf5ae0d25, 2021-09-20)"
@@ -31,9 +31,9 @@
      fit-margin-top="5"
      fit-margin-right="5"
      fit-margin-bottom="5"
-     inkscape:zoom="1.5219183"
-     inkscape:cx="247.71369"
-     inkscape:cy="132.3987"
+     inkscape:zoom="0.8117387"
+     inkscape:cx="557.44539"
+     inkscape:cy="132.43178"
      inkscape:window-width="1889"
      inkscape:window-height="1056"
      inkscape:window-x="31"
@@ -232,10 +232,24 @@
     </marker>
   </defs>
   <g
-     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="Background"
+     sodipodi:insensitive="true">
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.264583, 0.264583;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect47805"
+       width="310"
+       height="72"
+       x="0.21803537"
+       y="0.62911397" />
+  </g>
+  <g
+     inkscape:label="Diagram"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(75.364133,59.945582)">
+     transform="translate(75.364133,59.945582)"
+     sodipodi:insensitive="true">
     <path
        style="fill:none;stroke:#0000fe;stroke-width:0.230126px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
        d="m 20.115063,-35 v 10"
