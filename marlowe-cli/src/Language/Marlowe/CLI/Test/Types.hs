@@ -60,6 +60,7 @@ module Language.Marlowe.CLI.Test.Types (
 , seSlotConfig
 , seCostModelParams
 , seEra
+, seProtocolVersion
 , ssContracts
 , ssCurrencies
 , ssWallets
@@ -85,9 +86,9 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
 import qualified Ledger.Tx.CardanoAPI as L
+import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Time (POSIXTime)
 import qualified Plutus.V2.Ledger.Api as P
 
@@ -102,7 +103,7 @@ data MarloweTests era a =
     , faucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
     , faucetAddress        :: AddressInEra era  -- ^ The faucet address.
     , burnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
-    , protocolVersion :: ProtocolVersion
+    , protocolVersion      :: ProtocolVersion
     , tests                :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
@@ -338,52 +339,52 @@ data Running
 
 data Finished
 
-data MarloweThread era status where
-  Created :: MarloweTransaction era
+data MarloweThread lang era status where
+  Created :: MarloweTransaction lang era
           -> C.TxBody era
           -> C.TxIn
-          -> MarloweThread era Running
-  InputsApplied :: MarloweTransaction era
+          -> MarloweThread lang era Running
+  InputsApplied :: MarloweTransaction lang era
                 -> C.TxBody era
                 -> C.TxIn
                 -> List.NonEmpty M.Input
-                -> MarloweThread era Running
-                -> MarloweThread era Running
-  Closed :: MarloweTransaction era
+                -> MarloweThread lang era Running
+                -> MarloweThread lang era Running
+  Closed :: MarloweTransaction lang era
          -> C.TxBody era
          -> [M.Input]
-         -> MarloweThread era Running
-         -> MarloweThread era Finished
+         -> MarloweThread lang era Running
+         -> MarloweThread lang era Finished
 
 
-foldlMarloweThread :: (forall status'. b -> MarloweThread era status' -> b) -> b -> MarloweThread era status -> b
+foldlMarloweThread :: (forall status'. b -> MarloweThread lang era status' -> b) -> b -> MarloweThread lang era status -> b
 foldlMarloweThread step acc m@(Closed _ _ _ th)          = foldlMarloweThread step (step acc m) th
 foldlMarloweThread step acc m@(InputsApplied _ _ _ _ th) = foldlMarloweThread step (step acc m) th
 foldlMarloweThread step acc m                            = step acc m
 
 
-foldrMarloweThread :: (forall status'. MarloweThread era status' -> b -> b) -> b -> MarloweThread era status -> b
+foldrMarloweThread :: (forall status'. MarloweThread lang era status' -> b -> b) -> b -> MarloweThread lang era status -> b
 foldrMarloweThread step acc m@(Closed _ _ _ th)          = step m (foldrMarloweThread step acc th)
 foldrMarloweThread step acc m@(InputsApplied _ _ _ _ th) = step m (foldrMarloweThread step acc th)
 foldrMarloweThread step acc m                            = step m acc
 
 
-getMarloweThreadTransaction :: MarloweThread era status -> MarloweTransaction era
+getMarloweThreadTransaction :: MarloweThread lang era status -> MarloweTransaction lang era
 getMarloweThreadTransaction (Created mt _ _)           = mt
 getMarloweThreadTransaction (InputsApplied mt _ _ _ _) = mt
 getMarloweThreadTransaction (Closed mt _ _ _)          = mt
 
-getMarloweThreadTxIn :: MarloweThread era status -> Maybe C.TxIn
+getMarloweThreadTxIn :: MarloweThread lang era status -> Maybe C.TxIn
 getMarloweThreadTxIn (Created _ _ txIn)           = Just txIn
 getMarloweThreadTxIn (InputsApplied _ _ txIn _ _) = Just txIn
 getMarloweThreadTxIn Closed {}                    = Nothing
 
 
-data AnyMarloweThread era where
-  AnyMarloweThread :: MarloweThread era status -> AnyMarloweThread era
+data AnyMarloweThread lang era where
+  AnyMarloweThread :: MarloweThread lang era status -> AnyMarloweThread lang era
 
 
-anyMarloweThread :: MarloweTransaction era -> C.TxBody era -> Maybe C.TxIn -> Maybe (AnyMarloweThread era) -> Maybe (AnyMarloweThread era)
+anyMarloweThread :: MarloweTransaction lang era -> C.TxBody era -> Maybe C.TxIn -> Maybe (AnyMarloweThread lang era) -> Maybe (AnyMarloweThread lang era)
 anyMarloweThread mt@MarloweTransaction{..} txBody mTxIn mth = case (mTxIn, mtInputs, mth) of
   (Just txIn, [], Nothing) -> Just (AnyMarloweThread (Created mt txBody txIn))
 
@@ -405,18 +406,18 @@ anyMarloweThread mt@MarloweTransaction{..} txBody mTxIn mth = case (mTxIn, mtInp
   (Nothing, _, Nothing) -> Nothing
 
 
-overAnyMarloweThread :: forall a era. (forall status'. MarloweThread era status' -> a) -> AnyMarloweThread era -> a
+overAnyMarloweThread :: forall a era lang. (forall status'. MarloweThread lang era status' -> a) -> AnyMarloweThread lang era -> a
 overAnyMarloweThread f (AnyMarloweThread th) = f th
 
 
-data MarloweContract era = MarloweContract
+data MarloweContract lang era = MarloweContract
   {
     mcContract :: M.Contract
   , mcCurrency :: CurrencyNickname
   -- , mcCurr     :: PossiblyOnChainMarloweTransaction era
   -- , mcPrev       :: Maybe (PossiblyOnChainMarloweTransaction era)
-  , mcPlan     :: List.NonEmpty (MarloweTransaction era)
-  , mcThread   :: Maybe (AnyMarloweThread era)
+  , mcPlan     :: List.NonEmpty (MarloweTransaction lang era)
+  , mcThread   :: Maybe (AnyMarloweThread lang era)
   }
 
 data CustomCurrency = CustomCurrency
@@ -426,9 +427,9 @@ data CustomCurrency = CustomCurrency
   }
 
 
-data ScriptState era = ScriptState
+data ScriptState lang era = ScriptState
   {
-    _ssContracts  :: Map ContractNickname (MarloweContract era)
+    _ssContracts  :: Map ContractNickname (MarloweContract lang era)
   , _ssCurrencies :: Map CurrencyNickname CustomCurrency
   , _ssWallets    :: Map WalletNickname (Wallet era)               -- ^ Faucet wallet should be included here.
   }
@@ -438,7 +439,7 @@ faucetNickname :: WalletNickname
 faucetNickname = "_faucet"
 
 
-scriptState :: Wallet era -> ScriptState era
+scriptState :: Wallet era -> ScriptState lang era
 scriptState faucet = do
   let
     wallets = Map.singleton faucetNickname faucet
@@ -447,9 +448,10 @@ scriptState faucet = do
 
 data ScriptEnv era = ScriptEnv
   { _seConnection      :: LocalNodeConnectInfo CardanoMode
-  , _seSlotConfig      :: SlotConfig
   , _seCostModelParams :: CostModelParams
   , _seEra             :: ScriptDataSupportedInEra era
+  , _seProtocolVersion :: ProtocolVersion
+  , _seSlotConfig      :: SlotConfig
   }
 
 makeLenses ''ScriptState

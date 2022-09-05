@@ -28,11 +28,10 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (AsType (AsPaymentKey), CardanoMode, ConsensusModeParams (CardanoModeParams),
-                    EpochSlots (EpochSlots), IsShelleyBasedEra, Key (getVerificationKey, verificationKeyHash),
-                    LocalNodeConnectInfo (..), NetworkId (..), PaymentCredential (PaymentCredentialByKey),
-                    ScriptDataSupportedInEra, StakeAddressReference (NoStakeAddress), generateSigningKey,
-                    makeShelleyAddressInEra)
+import Cardano.Api (AsType (AsPaymentKey), CardanoMode, IsShelleyBasedEra,
+                    Key (getVerificationKey, verificationKeyHash), LocalNodeConnectInfo (..),
+                    PaymentCredential (PaymentCredentialByKey), ScriptDataSupportedInEra,
+                    StakeAddressReference (NoStakeAddress), generateSigningKey, makeShelleyAddressInEra)
 import Control.Monad (foldM, forM, forM_, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT)
@@ -54,7 +53,8 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust)
 import qualified Data.Set as S (singleton)
-import Language.Marlowe.CLI.IO (liftCliMaybe)
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
+import Language.Marlowe.CLI.IO (liftCliMaybe, queryInEra)
 import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl, runTransactionImpl)
 import Language.Marlowe.CLI.Sync (classifyOutputs, isMarloweOut)
 import Language.Marlowe.CLI.Sync.Types (MarloweOut (ApplicationOut, moTxIn))
@@ -67,9 +67,9 @@ import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), C
                                         WalletTransaction (WalletTransaction, wtFees, wtTxBody), anyMarloweThread,
                                         faucetNickname, foldrMarloweThread, getMarloweThreadTransaction,
                                         getMarloweThreadTxIn, overAnyMarloweThread, scriptState, seConnection,
-                                        seCostModelParams, seEra, seSlotConfig, ssContracts, ssCurrencies, ssWallets,
-                                        walletPubKeyHash)
-import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, queryInEra, selectUtxosImpl)
+                                        seCostModelParams, seEra, seProtocolVersion, seSlotConfig, ssContracts,
+                                        ssCurrencies, ssWallets, walletPubKeyHash)
+import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, selectUtxosImpl)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
@@ -88,7 +88,7 @@ minCollateral = C.Lovelace 10_000_000
 interpret :: forall era m
           .  IsShelleyBasedEra era
           => MonadError CliError m
-          => MonadState (ScriptState era) m
+          => MonadState (ScriptState MarlowePlutusVersion era) m
           => MonadReader (ScriptEnv era) m
           => MonadIO m
           => ScriptOperation
@@ -183,11 +183,12 @@ interpret Initialize {..} = do
 
   slotConfig <- view seSlotConfig
   costModelParams <- view seCostModelParams
+  protocolVersion <- view seProtocolVersion
   LocalNodeConnectInfo { localNodeNetworkId } <- view seConnection
   marloweTransaction <- runCli "[Initialize] " $ initializeTransactionImpl
     marloweParams
     slotConfig
-    seProtocolVersion
+    protocolVersion
     costModelParams
     localNodeNetworkId
     NoStakeAddress
@@ -240,7 +241,7 @@ interpret AutoRun {..} = do
         Nothing -> whole
     step th mt = do
       let
-        prev :: Maybe (MarloweTransaction era, C.TxIn)
+        prev :: Maybe (MarloweTransaction MarlowePlutusVersion era, C.TxIn)
         prev = do
           pmt <- overAnyMarloweThread getMarloweThreadTransaction <$> th
           txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< th
@@ -259,14 +260,15 @@ interpret AutoRun {..} = do
 interpret (Fail message) = throwError $ CliError message
 
 
-autoRunTransaction :: forall era era' m
-                   . MonadError CliError m
+autoRunTransaction :: forall era era' lang m
+                    . IsPlutusScriptLanguage lang
+                   => MonadError CliError m
                    => MonadReader (ScriptEnv era) m
-                   => MonadState (ScriptState era) m
+                   => MonadState (ScriptState lang era) m
                    => MonadIO m
                    => CurrencyNickname
-                   -> Maybe (MarloweTransaction era', C.TxIn)
-                   -> MarloweTransaction era
+                   -> Maybe (MarloweTransaction lang era', C.TxIn)
+                   -> MarloweTransaction lang era
                    -> m (C.TxBody era, Maybe C.TxIn)
 autoRunTransaction currency prev curr = do
   let
@@ -338,9 +340,9 @@ withCliErrorMsg f = withError (\(CliError msg) -> CliError (f msg))
 
 
 findMarloweContract :: MonadError CliError m
-                => MonadState (ScriptState era) m
+                => MonadState (ScriptState lang era) m
                 => ContractNickname   -- ^ The nickname.
-                -> m (MarloweContract era)
+                -> m (MarloweContract lang era)
 findMarloweContract nickname = do
   contracts <- use ssContracts
   liftCliMaybe
@@ -356,13 +358,12 @@ scriptTest  :: forall era m
             => ScriptDataSupportedInEra era
             -> ProtocolVersion
             -> CostModelParams
-            -> NetworkId                         -- ^ The network magic.
             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
             -> Wallet era                        -- ^ Wallet which should be used as faucet.
             -> SlotConfig                        -- ^ The time and slot correspondence.
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest era protocolVersion costModel networkId _ slotConfig ScriptTest{..} =
+scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest{..} =
   do
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
@@ -370,16 +371,8 @@ scriptTest era protocolVersion costModel networkId _ slotConfig ScriptTest{..} =
     let
       interpretLoop = for_ stScriptOperations \operation ->
         interpret operation
-    let
-      connection =
-        LocalNodeConnectInfo
-        {
-          localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-        , localNodeNetworkId       = networkId
-        , localNodeSocketPath      = "FIXME:NODESOCEKTPATH"
-        }
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection slotConfig protocolVersion costModel era))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
@@ -389,7 +382,7 @@ scriptTest era protocolVersion costModel networkId _ slotConfig ScriptTest{..} =
 
 
 useTemplate :: MonadError CliError m
-            => MonadState (ScriptState era) m
+            => MonadState (ScriptState lang era) m
             => MonadIO m
             => UseTemplate
             -> m M.Contract
@@ -471,7 +464,7 @@ useTemplate = do
 
 
 findWallet :: MonadError CliError m
-              => MonadState (ScriptState era) m
+              => MonadState (ScriptState lang era) m
               => WalletNickname
               -> m (Wallet era)
 findWallet nickname = do
@@ -479,7 +472,7 @@ findWallet nickname = do
   liftCliMaybe ("[findWallet] Unable to find wallet:" <> show nickname) $ Map.lookup nickname wallets
 
 updateWallet :: MonadError CliError m
-             => MonadState (ScriptState era) m
+             => MonadState (ScriptState lang era) m
              => WalletNickname
              -> (Wallet era -> Wallet era)
              -> m ()
@@ -490,13 +483,13 @@ updateWallet nickname update = do
   modifying ssWallets $ Map.insert nickname wallet'
 
 getFaucet :: MonadError CliError m
-          => MonadState (ScriptState era) m
+          => MonadState (ScriptState lang era) m
           => m (Wallet era)
 getFaucet = do
   findWallet faucetNickname
 
 updateFaucet :: MonadError CliError m
-             => MonadState (ScriptState era) m
+             => MonadState (ScriptState lang era) m
              => (Wallet era -> Wallet era)
              -> m ()
 updateFaucet update = do
@@ -504,7 +497,7 @@ updateFaucet update = do
 
 
 findWalletByUniqueToken :: MonadError CliError m
-                        => MonadState (ScriptState era) m
+                        => MonadState (ScriptState lang era) m
                         => CurrencyNickname
                         -> TokenName
                         -> m (WalletNickname, Wallet era)
@@ -530,7 +523,7 @@ findWalletByUniqueToken currencyNickname tokenName = do
 
 
 findWalletByPkh :: MonadError CliError m
-                        => MonadState (ScriptState era) m
+                        => MonadState (ScriptState lang era) m
                         => P.PubKeyHash
                         -> m (WalletNickname, Wallet era)
 findWalletByPkh pkh = do
@@ -557,7 +550,7 @@ runCli msg action = do
 
 
 getCurrency :: MonadError CliError m
-                => MonadState (ScriptState era) m
+                => MonadState (ScriptState lang era) m
                 => m (CurrencyNickname, CustomCurrency)
 getCurrency = do
   currencies <- use ssCurrencies
@@ -565,20 +558,19 @@ getCurrency = do
     [c] -> pure c
     _   -> throwError "Ambigious currency lookup."
 
-findCurrency :: (MonadState (ScriptState era) m, MonadError CliError m) => CurrencyNickname -> m CustomCurrency
+findCurrency :: (MonadState (ScriptState lang era) m, MonadError CliError m) => CurrencyNickname -> m CustomCurrency
 findCurrency nickname = do
   currencies <- use ssCurrencies
   liftCliMaybe ("[findWallet] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
 
 
-selectWalletUTxOs :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> T.OutputQuery -> m (T.OutputQueryResult era)
+selectWalletUTxOs :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState lang era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> T.OutputQuery -> m (T.OutputQueryResult era)
 selectWalletUTxOs w q = do
   Wallet address _ _ _ _ <- either findWallet pure w
   connection <- view seConnection
   runCli "[selectUtxosImpl]" $ selectUtxosImpl connection address q
 
-
-getWalletUTxO :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> m (C.UTxO era)
+getWalletUTxO :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState lang era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> m (C.UTxO era)
 getWalletUTxO w = do
   Wallet address _ _ _ _ <- either findWallet pure w
   connection <- view seConnection
