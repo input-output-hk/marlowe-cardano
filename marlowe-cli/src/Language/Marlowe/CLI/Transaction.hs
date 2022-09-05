@@ -78,36 +78,32 @@ import Cardano.Api (AddressInEra (..), AsType (..), AssetId (..), AssetName (..)
                     TxOutValue (..), TxReturnCollateral (TxReturnCollateralNone), TxScriptValidity (..),
                     TxTotalCollateral (TxTotalCollateralNone), TxUpdateProposal (..), TxValidityLowerBound (..),
                     TxValidityUpperBound (..), TxWithdrawals (..), UTxO (..), Value, WitCtxTxIn, Witness (..),
-<<<<<<< HEAD
                     calculateMinimumUTxO, castVerificationKey, getTxId, getVerificationKey, hashScript, hashScriptData,
                     lovelaceToValue, makeShelleyAddressInEra, makeTransactionBodyAutoBalance, metadataFromJson,
                     negateValue, queryNodeLocalState, readFileTextEnvelope, selectAsset, selectLovelace,
                     serialiseToCBOR, serialiseToRawBytesHex, shelleyBasedEra, signShelleyTransaction,
                     submitTxToNodeLocal, txOutValueToValue, valueFromList, valueToList, valueToLovelace,
-                    verificationKeyHash, writeFileTextEnvelope)
-import Cardano.Api.Shelley (ExecutionUnitPrices (..), PlutusScriptOrReferenceInput (PScript), ProtocolParameters (..),
-                            ReferenceScript (ReferenceScriptNone), SimpleScriptOrReferenceInput (SScript),
-                            TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
-                            protocolParamMaxTxExUnits, protocolParamMaxTxSize)
-=======
+                    verificationKeyHash, writeFileTextEnvelope,
                     castVerificationKey, getTxId, getVerificationKey, hashScript, hashScriptData, lovelaceToValue,
                     makeShelleyAddressInEra, makeTransactionBodyAutoBalance, metadataFromJson, negateValue,
                     queryNodeLocalState, readFileTextEnvelope, selectAsset, selectLovelace, serialiseToCBOR,
                     serialiseToRawBytesHex, signShelleyTransaction, submitTxToNodeLocal, toScriptInAnyLang,
                     txOutValueToValue, valueFromList, valueToList, valueToLovelace, verificationKeyHash,
                     writeFileTextEnvelope)
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (Address (ShelleyAddress), PlutusScriptOrReferenceInput (PScript),
                             ProtocolParameters (protocolParamProtocolVersion),
                             ReferenceScript (ReferenceScript, ReferenceScriptNone),
                             SimpleScriptOrReferenceInput (SScript), TxBody (ShelleyTxBody), fromPlutusData,
                             fromShelleyStakeReference, protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits,
-                            protocolParamMaxTxSize)
->>>>>>> 14eb1f848 (Generalize plutus version in and add publishing to marlow-cli.)
+                            protocolParamMaxTxSize, ExecutionUnitPrices (..), PlutusScriptOrReferenceInput (PScript), ProtocolParameters (..),
+                            ReferenceScript (ReferenceScriptNone), SimpleScriptOrReferenceInput (SScript),
+                            TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
+                            protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
 import Control.Concurrent (threadDelay)
-<<<<<<< HEAD
 import Control.Monad (forM_, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExcept, throwError)
 import Data.Fixed (div')
@@ -116,10 +112,6 @@ import Data.List (delete, minimumBy)
 import Data.Maybe (isNothing, maybeToList)
 import Control.Monad (forM, forM_, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExcept, throwError)
-=======
-import Control.Monad (forM_, void, when)
-import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO, runExcept, throwError)
->>>>>>> 14eb1f848 (Generalize plutus version in and add publishing to marlow-cli.)
 import Data.Fixed (div')
 import Data.Maybe (fromMaybe, isNothing, maybeToList)
 import Data.Ratio ((%))
@@ -144,7 +136,10 @@ import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import System.IO (hPutStrLn, stderr)
 import qualified Cardano.Api as C
 import Control.Arrow ((***))
+import Control.Concurrent (threadDelay)
 import Control.Error (note)
+import Control.Monad (forM, forM_, when)
+import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO, runExcept, throwError)
 import Control.Monad.Reader (MonadReader)
 import qualified Data.Aeson as A (Value (Object))
 import qualified Data.Aeson as Aeson
@@ -152,23 +147,43 @@ import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (unpack)
+import Data.Fixed (div')
 import Data.Foldable (Foldable (fold))
 import Data.Functor ((<&>))
 import Data.List (partition)
-import qualified Data.Map.Strict as M (elems, filter, fromList, keys, keysSet, singleton, toList)
+import qualified Data.Map.Strict as M (elems, fromList, keys, keysSet, singleton, toList)
+import Data.Maybe (fromMaybe, isNothing, maybeToList)
+import Data.Ratio ((%))
 import qualified Data.Set as S (empty, fromList, singleton)
-<<<<<<< HEAD
 import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript (value))
-=======
+import Data.Time.Clock (nominalDiffTimeToSeconds)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO, toPlutusProtocolVersion)
 import qualified Language.Marlowe.CLI.Cardano.Api as MCA
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript as PS
 import Language.Marlowe.CLI.Export (buildValidatorImpl)
+import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, getDefaultCostModel, liftCli, liftCliIO,
+                                maybeWriteJson, queryInEra, readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV2))
 import qualified Language.Marlowe.CLI.Plutus.Script.Utils as PSU
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..), OutputQuery (..), OutputQueryResult (..), PayFromScript (..),
+                                   PayToScript (..), PrintStats (PrintStats), PublishScript (..), SigningKeyFile,
+                                   SomePaymentSigningKey, TxBodyFile (TxBodyFile), ValidatorInfo (viAddress, viScript),
+                                   askEra, asksEra, doWithCardanoEra, toAddressAny', toAsType,
+                                   toCollateralSupportedInEra, toEraInMode, toExtraKeyWitnessesSupportedInEra,
+                                   toMultiAssetSupportedInEra, toPlutusScriptV1LanguageInEra,
+                                   toPlutusScriptV2LanguageInEra, toSimpleScriptV2LanguageInEra, toTxFeesExplicitInEra,
+                                   toTxMetadataSupportedInEra, toTxScriptValiditySupportedInEra,
+                                   toValidityLowerBoundSupportedInEra, toValidityNoUpperBoundSupportedInEra,
+                                   toValidityUpperBoundSupportedInEra, withCardanoEra, withShelleyBasedEra)
 import Language.Marlowe.Scripts (marloweValidator, referenceUnspendableValidator, rolePayoutValidator)
->>>>>>> 14eb1f848 (Generalize plutus version in and add publishing to marlow-cli.)
+import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
+import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
+import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
+import System.IO (hPutStrLn, stderr)
 
 -- | Build a non-Marlowe transaction.
 buildSimple :: MonadError CliError m
@@ -324,12 +339,14 @@ buildFaucetImpl connection values destAddresses fundAddress fundSigningKey timeo
     outputs <- sequence $
         makeTxOut fundAddress Nothing (total <> negateValue value' <> negateValue lovelace) ReferenceScriptNone
           : [makeTxOut destAddress Nothing value ReferenceScriptNone | value <- values, destAddress <- destAddresses]
+
     body <-
       buildBody
         connection
         ([] :: [PayFromScript PlutusScriptV2])
         Nothing
-        [] inputs outputs Nothing fundAddress
+        [] inputs outputs
+        Nothing fundAddress
         Nothing
         []
         TxMintNone
@@ -417,7 +434,7 @@ buildMinting :: MonadError CliError m
              -> TxBodyFile                                        -- ^ The output file for the transaction body.
              -> Maybe Int                                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
              -> m ()                                              -- ^ Action to build the transaction body.
-buildMinting connection signingKeyFile tokenDistribution metadataFile expires lovelace changeAddress bodyFile timeout = do
+buildMinting connection signingKeyFile tokenDistribution metadataFile expires lovelace changeAddress (TxBodyFile bodyFile) timeout = do
   signingKey <- readSigningKey signingKeyFile
   metadataJson <- sequence $ decodeFileStrict <$> metadataFile
   metadata <- forM metadataJson \case
@@ -486,12 +503,13 @@ buildMintingImpl connection signingKey tokenDistribution metadataProps expires l
 
     let
       inputs = fst <$> utxos
-      outputs = minting <&> \(address, mintedValue) ->
-          (address, Nothing, mintedValue <> lovelaceToValue lovelace)
+    outputs <- for minting \(address, mintedValue) -> do
+        makeTxOut address Nothing (mintedValue <> lovelaceToValue lovelace) ReferenceScriptNone
+
     body <-
       buildBody
         connection
-        []
+        ([] :: [PayFromScript PlutusScriptV2])
         Nothing
         [] inputs outputs Nothing changeAddress
         ((0, ) <$> expires)
@@ -650,7 +668,7 @@ buildPublishingImpl connection signingKeyFile expires changeAddress timeout (Pri
                           pure (outputs, psMinAda publishMarloweScript <> psMinAda publishRolePayoutScript)
 
   input <- do
-    UTxO utxos <- selectUtxosImpl connection changeAddress (LovelaceOnly minAda)
+    OutputQueryResult (UTxO utxos) _ <- selectUtxosImpl connection changeAddress (LovelaceOnly (minAda <=))
     case M.keys utxos of
       (txIn:_) -> pure txIn
       _        -> throwError "Naive coin selection failed to find rich enough UTxO"
@@ -1162,7 +1180,7 @@ selectUtxosImpl connection address query =
   do
     UTxO candidates <- queryUtxos connection address
     let
-      query' (TxOut _ value' _ _) =
+      query' (_, TxOut _ value' _ _) =
         let
           value = txOutValueToValue value'
           count = length $ valueToList value
@@ -1186,7 +1204,7 @@ selectUtxos :: MonadError CliError m
             => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
             -> AddressInEra era                        -- ^ The address.
             -> OutputQuery                       -- ^ Filter for the results.
-            -> m (UTxO era)
+            -> m ()
 selectUtxos connection address query =
   do
     OutputQueryResult { oqrMatching } <- selectUtxosImpl connection address query
@@ -1242,7 +1260,6 @@ querySlotting connection outputFile =
     >>= maybeWriteJson outputFile
 
 
-<<<<<<< HEAD
 -- | Compute the maximum fee for any transaction.
 maximumFee :: ProtocolParameters
            -> Lovelace

@@ -24,6 +24,7 @@ import Cardano.Api (AddressInEra (..), IsShelleyBasedEra, Lovelace, MinimumUTxOE
                     ScriptDataSupportedInEra (..), TxOut (..), TxOutDatum (..), TxOutValue (..), calculateMinimumUTxO,
                     lovelaceToValue, selectLovelace, shelleyBasedEra)
 import qualified Cardano.Api as Api (Value)
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript,
                             ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
                             fromPlutusData)
@@ -51,6 +52,21 @@ toReferenceTxInsScriptsInlineDatumsSupportedInEra = \case
   ScriptDataInBabbageEra -> Just ReferenceTxInsScriptsInlineDatumsInBabbageEra
 
 
+toPlutusProtocolVersion :: (Natural, Natural) -> ProtocolVersion
+toPlutusProtocolVersion (major, minor) = ProtocolVersion (fromInteger . naturalToInteger $ major) (fromInteger . naturalToInteger $ minor)
+
+
+-- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
+ensureAtLeastHalfAnAda :: Api.Value -> Api.Value
+ensureAtLeastHalfAnAda origValue =
+  if origLovelace < minLovelace
+    then origValue <> lovelaceToValue (minLovelace - origLovelace)
+    else origValue
+  where
+    origLovelace = selectLovelace origValue
+    minLovelace = C.Lovelace 500_000
+
+
 -- | Compute the `minAda` and adjust the lovelace in an output to confirm to the minimum ADA requirement.
 adjustMinimumUTxO :: forall era
                   . ScriptDataSupportedInEra era
@@ -60,11 +76,10 @@ adjustMinimumUTxO :: forall era
                   -> Api.Value                -- ^ The output value.
                   -> ReferenceScript era
                   -> Either MinimumUTxOError (Lovelace, Api.Value)  -- ^ Action to compute the adjusted value.
-adjustMinimumUTxO era protocol address datum value mRefScript =
+adjustMinimumUTxO era protocol address datum origValue mRefScript =
   do
     let
-      -- minCalcLovelace = 500_000
-      -- calcDeficit = maximum [selectLovelace value <> minCalcLovelace, 0]
+      value = ensureAtLeastHalfAnAda origValue
       txOut =
         TxOut
           address
@@ -78,5 +93,3 @@ adjustMinimumUTxO era protocol address datum value mRefScript =
     pure (minLovelace, value <> lovelaceToValue deficit)
 
 
-toPlutusProtocolVersion :: (Natural, Natural) -> ProtocolVersion
-toPlutusProtocolVersion (major, minor) = ProtocolVersion (fromInteger . naturalToInteger $ major) (fromInteger . naturalToInteger $ minor)

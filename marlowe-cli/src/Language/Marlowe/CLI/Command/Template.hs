@@ -40,7 +40,6 @@ import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken,
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCliMaybe)
 import Language.Marlowe.CLI.Types (AnyTimeout, CliError (..), toTimeout)
-import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
 import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
 import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Token, Value (..), toCore)
 import Language.Marlowe.Util (ada)
@@ -213,7 +212,6 @@ runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do issueDate' <- to
 runTemplateCommand TemplateActus{..}      OutputFiles{..} = do ct <- decodeFileStrict actusTermsFile
                                                                marloweContract <- makeContract $ genContract' (party, counterparty) defaultRiskFactors (toMarlowe ct)
                                                                let marloweState = initialMarloweState party minAda
-                                                               makeExample contractFile stateFile MarloweData{..}
                                                                makeExample contractFile stateFile (marloweContract, marloweState)
 
 

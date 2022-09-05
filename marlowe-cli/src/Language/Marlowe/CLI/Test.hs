@@ -31,11 +31,11 @@ import Control.Lens (Bifunctor (bimap))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO)
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
+import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, readSigningKey)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
 import Language.Marlowe.CLI.Test.Types (MarloweTests (..), Wallet (Wallet))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..))
+import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..), SigningKeyFile (SigningKeyFile))
 import qualified Language.Marlowe.CLI.Types as T
 import PlutusCore (defaultCostModelParams)
 
@@ -58,7 +58,7 @@ runTests era ScriptTests{..} =
         , localNodeNetworkId       = network
         , localNodeSocketPath      = socketPath
         }
-    faucetSigningKey <- readSigningKey faucetSigningKeyFile
+    faucetSigningKey <- readSigningKey (SigningKeyFile faucetSigningKeyFile)
 
     let
       vkey = T.toPaymentVerificationKey . T.getVerificationKey $ faucetSigningKey
@@ -66,4 +66,4 @@ runTests era ScriptTests{..} =
 
     slotConfig <- runReaderT (querySlotConfig connection) $ CliEnv era
     tests' <- mapM decodeFileStrict tests
-    mapM_ (scriptTest era protocolVersion costModel network connection slotConfig) tests'
+    mapM_ (scriptTest era protocolVersion costModel connection faucet slotConfig) tests'

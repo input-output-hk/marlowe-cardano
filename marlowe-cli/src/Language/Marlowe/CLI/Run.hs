@@ -22,7 +22,8 @@
 
 module Language.Marlowe.CLI.Run (
 -- * Computation
-  initializeTransaction
+  adjustMinimumUTxO
+,  initializeTransaction
 , initializeTransactionImpl
 , prepareTransaction
 , prepareTransactionImpl
@@ -40,18 +41,11 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (localNodeNetworkId), NetworkId,
-                    PaymentCredential (PaymentCredentialByKey),
-                    QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
-                    Script (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..), TxBody, TxId,
-                    TxIn, TxMetadataInEra, TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..),
-                    UTxO (..), calculateMinimumUTxO, getTxId, lovelaceToValue, makeShelleyAddressInEra, selectLovelace,
-                    shelleyBasedEra, txOutValueToValue, writeFileTextEnvelope, Lovelace (Lovelace),
-                    AddressInEra (..), CardanoMode, LocalNodeConnectInfo (..), NetworkId, PaymentCredential (..),
+import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (..), NetworkId, PaymentCredential (..),
                     PlutusScriptVersion (PlutusScriptV1, PlutusScriptV2), QueryInShelleyBasedEra (..),
-                    QueryUTxOFilter (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..), TxId,
-                    TxIn, TxMintValue (..), TxOut (..), TxOutDatum (..), UTxO (..), getTxId, lovelaceToValue,
-                    makeShelleyAddressInEra, txOutValueToValue, writeFileTextEnvelope)
+                    QueryUTxOFilter (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..),
+                    TxBody, TxId, TxIn, TxMetadataInEra, TxMintValue (..), TxOut (..), TxOutDatum (..), UTxO (..),
+                    getTxId, lovelaceToValue, makeShelleyAddressInEra, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
@@ -69,14 +63,15 @@ import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWrite
 import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey,
-                                         queryInEra, selectCoins, submitBody)
+                                         queryInEra, selectCoins, submitBody, buildBody, buildPayFromScript, buildPayToScript, hashSigningKey, makeTxOut',
+                                         submitBody)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
                                    SomeMarloweTransaction (..), SomePaymentSigningKey, ValidatorInfo (..), askEra,
                                    doWithCardanoEra, toAddressAny', toMultiAssetSupportedInEra, withShelleyBasedEra,
                                    CliEnv, CliError (..), DatumInfo (..), MarlowePlutusVersion, MarloweTransaction (..),
                                    RedeemerInfo (..), SigningKeyFile, SomeMarloweTransaction (..),
-                                   TxBodyFile (TxBodyFile), ValidatorInfo (..), askEra, doWithCardanoEra, toAddressAny',
-                                   withShelleyBasedEra)
+                                   SomePaymentSigningKey, TxBodyFile (TxBodyFile), ValidatorInfo (..), askEra,
+                                   doWithCardanoEra, toAddressAny', withShelleyBasedEra)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
                                            TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
@@ -86,6 +81,7 @@ import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash))
 import Ledger.Tx.CardanoAPI (toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoValue)
 -- import Plutus.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
 import Cardano.Api.Shelley (ReferenceScript (ReferenceScriptNone))
+import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion))
@@ -314,9 +310,6 @@ readMarloweTransactionFile era lang marloweInFile = do
     _ -> throwError "Era or  in Babbage era, read file in Alonzo era"
 
 
--- FIXME: We are able to run transaction which was build
--- against older Plutus as long as its scrpit is still available
--- on chain.
 -- | Run a Marlowe transaction.
 runTransaction :: forall era m
                 . MonadError CliError m
@@ -338,42 +331,38 @@ runTransaction :: forall era m
 runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles metadataFile (TxBodyFile bodyFile) timeout printStats invalid =
   do
     metadata <- readMaybeMetadata metadataFile
-    protocol <- queryInEra connection QueryProtocolParameters
     SomeMarloweTransaction _ era' marloweOut' <- decodeFileStrict marloweOutFile
-
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
-    marloweInBundle' <-
-      case marloweInBundle of
-          Nothing                                 -> pure Nothing
-          Just (marloweInFile, spend, collateral) -> do
-                                                      (someMarloweIn :: SomeMarloweTransaction) <- decodeFileStrict marloweInFile
-                                                      pure $ Just (someMarloweIn, spend, collateral)
     let
-      go :: Maybe (MarloweTransaction era', TxIn, TxIn) -> MarloweTransaction era -> m TxId
-      go marloweInBundle'' marloweOut'' = do
-        (body :: TxBody era) <- runTransactionImpl connection marloweInBundle'' marloweOut'' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
+      go :: forall lang. IsPlutusScriptLanguage lang =>  MarloweTransaction lang era -> m TxId
+      go marloweOut'' = do
+        marloweInBundle' <- case marloweInBundle of
+          Nothing -> pure Nothing
+          Just (marloweInFile, marloweTxIn, collateralTxIn) -> do
+            marloweIn <- readMarloweTransactionFile era (plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
+            pure $ Just (marloweIn, marloweTxIn, collateralTxIn)
+
+        (body :: TxBody era) <- runTransactionImpl connection marloweInBundle' marloweOut'' inputs outputs changeAddress signingKeys metadata timeout printStats invalid
         doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
         pure $ getTxId body
 
-    case (era, era', marloweInBundle') of
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Nothing)   -> go Nothing marloweOut'
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Nothing) -> go Nothing marloweOut'
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra, Just (SomeMarloweTransaction _ marloweIn, spend, collateral)) ->
-          go (Just (marloweIn, spend, collateral)) marloweOut'
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra, Just (SomeMarloweTransaction _ marloweIn, spend, collateral)) ->
-          go (Just (marloweIn, spend, collateral)) marloweOut'
-      (_, _, _)  -> throwError "Eras mistmatch"
+    case (era, era') of
+      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra)   -> go marloweOut'
+      (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
+      (ScriptDataInAlonzoEra, ScriptDataInBabbageEra)  -> throwError "Running in Alonzo era, read file in Babbage era"
+      (ScriptDataInBabbageEra, ScriptDataInAlonzoEra)  -> throwError "Running in Babbage era, read file in Alonzo era"
 
 
 -- | Run a Marlowe transaction.
-runTransactionImpl :: forall era era' m
+runTransactionImpl :: forall era era' lang m
                 . MonadError CliError m
+               => IsPlutusScriptLanguage lang
                => MonadIO m
                => MonadReader (CliEnv era) m
                => LocalNodeConnectInfo CardanoMode              -- ^ The connection info for the local node.
-               -> Maybe (MarloweTransaction era', TxIn, TxIn)   -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
-               -> MarloweTransaction era                        -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+               -> Maybe (MarloweTransaction lang era', TxIn, TxIn)   -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
+               -> MarloweTransaction lang era                        -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
                -> [TxIn]                                        -- ^ The transaction inputs.
                -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
                -> AddressInEra era                              -- ^ The change address.
@@ -388,8 +377,10 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
     protocol <- queryInEra connection QueryProtocolParameters
     era <- askEra @era
     let
-      go :: MarloweTransaction era -> m (TxBody era)
+      marloweParams = MC.marloweParams $ mtRolesCurrency marloweOut'
+      go :: MarloweTransaction lang era -> m (TxBody era)
       go marloweOut = do
+
         (spend, collateral, datumOutputs) <-
           case marloweInBundle of
             Nothing                                 -> pure ([], Nothing, [])
@@ -479,8 +470,7 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
                                   | Payment _ payee money <- mtPayments marloweOut
                                   ]
             ]
-        let
-          outputs' = payments <> outputs <> datumOutputs
+        outputs' <- for (payments <> outputs <> datumOutputs) (uncurry3 makeTxOut')
         body <-
           buildBody connection
             spend
@@ -500,16 +490,6 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
               else submitBody connection body signingKeys
         pure body
     go marloweOut'
-
--- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
-ensureAtLeastHalfAnAda :: Api.Value -> Api.Value
-ensureAtLeastHalfAnAda origValue =
-  if origLovelace < minLovelace
-    then origValue <> lovelaceToValue (minLovelace - origLovelace)
-    else origValue
-  where
-    origLovelace = selectLovelace origValue
-    minLovelace = Lovelace 500_000
 
 
 -- | Withdraw funds for a specific role from the role address.
