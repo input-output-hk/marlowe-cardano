@@ -13,6 +13,8 @@
 
 {-# LANGUAGE BlockArguments     #-}
 {-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -33,6 +35,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildFaucetImpl
 , buildFaucet'
 , buildMinting
+, buildMintingImpl
 , querySlotting
 -- * Submitting
 , submit
@@ -44,6 +47,7 @@ module Language.Marlowe.CLI.Transaction (
 , queryInEra
 , queryUtxos
 , selectUtxos
+, selectUtxosImpl
 , submitBody
 , querySlotConfig
 -- * Balancing
@@ -90,32 +94,42 @@ import Data.Fixed (div')
 import Data.Function (on)
 import Data.List (delete, minimumBy)
 import Data.Maybe (isNothing, maybeToList)
+import Control.Monad (forM, forM_, when)
+import Control.Monad.Except (MonadError, MonadIO, liftIO, runExcept, throwError)
+import Data.Fixed (div')
+import Data.Maybe (fromMaybe, isNothing, maybeToList)
 import Data.Ratio ((%))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, maybeWriteJson,
                                 readMaybeMetadata, readSigningKey)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), OutputQuery (..), PayFromScript (..), PayToScript (..),
-                                   SomePaymentSigningKey, askEra, asksEra, doWithCardanoEra, toAddressAny', toAsType,
-                                   toCollateralSupportedInEra, toEraInMode, toExtraKeyWitnessesSupportedInEra,
-                                   toMultiAssetSupportedInEra, toPlutusScriptV1LanguageInEra, toShelleyBasedEra,
-                                   toSimpleScriptV2LanguageInEra, toTxFeesExplicitInEra, toTxMetadataSupportedInEra,
-                                   toTxScriptValiditySupportedInEra, toValidityLowerBoundSupportedInEra,
-                                   toValidityNoUpperBoundSupportedInEra, toValidityUpperBoundSupportedInEra,
-                                   withCardanoEra, withShelleyBasedEra)
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..), OutputQuery (..), OutputQueryResult (..), PayFromScript (..),
+                                   PayToScript (..), SomePaymentSigningKey, askEra, asksEra, doWithCardanoEra,
+                                   toAddressAny', toAsType, toCollateralSupportedInEra, toEraInMode,
+                                   toExtraKeyWitnessesSupportedInEra, toMultiAssetSupportedInEra,
+                                   toPlutusScriptV1LanguageInEra, toShelleyBasedEra, toSimpleScriptV2LanguageInEra,
+                                   toTxFeesExplicitInEra, toTxMetadataSupportedInEra, toTxScriptValiditySupportedInEra,
+                                   toValidityLowerBoundSupportedInEra, toValidityNoUpperBoundSupportedInEra,
+                                   toValidityUpperBoundSupportedInEra, withCardanoEra, withShelleyBasedEra)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import System.IO (hPutStrLn, stderr)
 
+import qualified Cardano.Api as C
+import Control.Arrow ((***))
 import Control.Monad.Reader (MonadReader)
 import qualified Data.Aeson as A (Value (Object))
+import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (unpack)
-import qualified Data.Map.Strict as M (elems, keysSet, singleton, toList)
+import Data.Foldable (Foldable (fold))
+import Data.Functor ((<&>))
+import Data.List (partition)
+import qualified Data.Map.Strict as M (elems, fromList, keysSet, singleton, toList)
 import qualified Data.Set as S (empty, fromList, singleton)
 import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript (value))
 
@@ -233,7 +247,7 @@ buildFaucet connection value destAddresses fundAddress fundSigningKeyFile timeou
     body <-
       buildFaucetImpl
         connection
-        value
+        [value]
         destAddresses
         fundAddress
         fundSigningKey
@@ -245,14 +259,14 @@ buildFaucet connection value destAddresses fundAddress fundSigningKeyFile timeou
 buildFaucetImpl :: MonadError CliError m
             => MonadIO m
             => MonadReader (CliEnv era) m
-            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-            -> Value                             -- ^ The value to be sent to the funded addresses.
-            -> [AddressInEra era]                      -- ^ The addresses to receive funds.
-            -> AddressInEra era                        -- ^ The faucet address.
-            -> SomePaymentSigningKey                   -- ^ The required signing key.
-            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            => LocalNodeConnectInfo CardanoMode   -- ^ The connection info for the local node.
+            -> [Value]                            -- ^ The list of values to be sent to the funded addresses as separate outputs.
+            -> [AddressInEra era]                 -- ^ The addresses to receive funds.
+            -> AddressInEra era                   -- ^ The faucet address.
+            -> SomePaymentSigningKey              -- ^ The required signing key.
+            -> Maybe Int                          -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> m (TxBody era)                                -- ^ Action to build the transaction body.
-buildFaucetImpl connection value destAddresses fundAddress fundSigningKey timeout =
+buildFaucetImpl connection values destAddresses fundAddress fundSigningKey timeout =
   do
     utxos <-
       fmap (M.toList . unUTxO)
@@ -266,10 +280,10 @@ buildFaucetImpl connection value destAddresses fundAddress fundSigningKey timeou
       extractValue (TxOut _ v _ _) = txOutValueToValue v
       total = mconcat $ extractValue . snd <$> utxos
       lovelace = lovelaceToValue . toEnum . (`div` 2) . fromEnum $ selectLovelace total
-      value' = mconcat $ replicate (length destAddresses) value
+      value' = mconcat $ replicate (length destAddresses) (fold values)
       outputs =
         (fundAddress, Nothing, total <> negateValue value' <> negateValue lovelace)
-          : [(destAddress, Nothing, value) | destAddress <- destAddresses]
+          : [(destAddress, Nothing, value) | value <- values, destAddress <- destAddresses]
     body <-
       buildBody
         connection
@@ -348,26 +362,46 @@ buildFaucet' connection value addresses bodyFile timeout =
     pure
       $ getTxId body
 
-
--- | Build a non-Marlowe transaction that mints tokens.
+-- | Build and submit a non-Marlowe transaction that mints tokens
+-- | using files as a data exchange medium.
 buildMinting :: MonadError CliError m
              => MonadIO m
              => MonadReader (CliEnv era) m
-             => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-             -> FilePath                          -- ^ The file for required signing key.
-             -> [TokenName]                       -- ^ The token names.
-             -> Maybe FilePath                    -- ^ The CIP-25 metadata for the minting, with keys for each token name.
-             -> Integer                           -- ^ The number of each token to mint.
-             -> Maybe SlotNo                      -- ^ The slot number after which minting is no longer possible.
-             -> Lovelace                          -- ^ The value to be sent to addresses with tokens.
-             -> AddressInEra era                        -- ^ The change address.
-             -> FilePath                          -- ^ The output file for the transaction body.
-             -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-             -> m ()                              -- ^ Action to build the transaction body.
-buildMinting connection signingKeyFile tokenNames metadataFile count expires lovelace changeAddress bodyFile timeout =
+             => LocalNodeConnectInfo CardanoMode                  -- ^ The connection info for the local node.
+             -> FilePath                                          -- ^ The file for required signing key.
+             -> [(TokenName, Integer, Maybe (AddressInEra era))]  -- ^ The token names, amount and a possible receipient addresses.
+             -> Maybe FilePath                                    -- ^ The CIP-25 metadata for the minting, with keys for each token name.
+             -> Maybe SlotNo                                      -- ^ The slot number after which minting is no longer possible.
+             -> Lovelace                                          -- ^ The value to be sent to addresses with tokens.
+             -> AddressInEra era                                  -- ^ The change address.
+             -> FilePath                                          -- ^ The output file for the transaction body.
+             -> Maybe Int                                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+             -> m ()                                              -- ^ Action to build the transaction body.
+buildMinting connection signingKeyFile tokenDistribution metadataFile expires lovelace changeAddress bodyFile timeout = do
+  signingKey <- readSigningKey signingKeyFile
+  metadataJson <- sequence $ decodeFileStrict <$> metadataFile
+  metadata <- forM metadataJson \case
+    A.Object metadataProps -> pure metadataProps
+    _                      -> throwError "Metadata should file should contain a json object"
+  (body, _) <- buildMintingImpl connection signingKey tokenDistribution metadata expires lovelace changeAddress timeout
+  doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+
+
+-- | Build and submit a non-Marlowe transaction that mints tokens.
+buildMintingImpl :: MonadError CliError m
+             => MonadIO m
+             => MonadReader (CliEnv era) m
+             => LocalNodeConnectInfo CardanoMode                  -- ^ The connection info for the local node.
+             -> SomePaymentSigningKey                             -- ^ The file for required signing key.
+             -> [(TokenName, Integer, Maybe (AddressInEra era))]  -- ^ The token names, amount and a possible receipient addresses.
+             -> Maybe Aeson.Object                                -- ^ The CIP-25 metadata for the minting, with keys for each token name.
+             -> Maybe SlotNo                                      -- ^ The slot number after which minting is no longer possible.
+             -> Lovelace                                          -- ^ The value to be sent to addresses with tokens.
+             -> AddressInEra era                                  -- ^ The change address.
+             -> Maybe Int                                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+             -> m (TxBody era, PolicyId)                          -- ^ Action to build the transaction body.
+buildMintingImpl connection signingKey tokenDistribution metadataProps expires lovelace changeAddress timeout =
   do
-    metadata <- sequence $ decodeFileStrict <$> metadataFile
-    signingKey <- readSigningKey signingKeyFile
     era <- askEra
     let
       verification =
@@ -377,44 +411,60 @@ buildMinting connection signingKeyFile tokenNames metadataFile count expires lov
               Right k -> castVerificationKey $ getVerificationKey k
       (script, scriptHash) = mintingScript verification expires
       policy = PolicyId scriptHash
-      minting =
-        valueFromList
-          [
-            (
-              AssetId policy (AssetName $ fromBuiltin name)
-            , Quantity count
-            )
-          |
-            TokenName name <- tokenNames
-          ]
+      minting = tokenDistribution <&> \(TokenName name, count, recipient) -> do
+        let
+          value = valueFromList . pure $
+              (AssetId policy (AssetName $ fromBuiltin name) , Quantity count)
+        (fromMaybe changeAddress recipient, value)
+
       mintValue =
-        TxMintValue (toMultiAssetSupportedInEra era) minting
+        TxMintValue (toMultiAssetSupportedInEra era) (foldMap snd minting)
           . BuildTxWith
           . M.singleton policy
           $ SimpleScriptWitness (toSimpleScriptV2LanguageInEra era) SimpleScriptV2 (SScript script)
+
     metadata' <-
-      case metadata of
-        Just (A.Object metadata'') -> fmap (TxMetadataInEra (toTxMetadataSupportedInEra era))
-                                        . liftCli
-                                        . metadataFromJson TxMetadataJsonNoSchema
-                                        . A.Object
-                                        . KeyMap.singleton "721"
-                                        . A.Object
-                                        . KeyMap.singleton (Aeson.Key.fromString . BS8.unpack $ serialiseToRawBytesHex policy)
-                                        $ A.Object metadata''
-        _                          -> pure TxMetadataNone
-    void
-      $ buildClean
-          connection
-          [signingKeyFile]
-          lovelace
-          changeAddress
-          ((0, ) <$> expires)
-          mintValue
-          metadata'
-          bodyFile
-          timeout
+      case metadataProps of
+        Just metadataProps' -> fmap (TxMetadataInEra (toTxMetadataSupportedInEra era))
+                              . liftCli
+                              . metadataFromJson TxMetadataJsonNoSchema
+                              . A.Object
+                              . KeyMap.singleton "721"
+                              . A.Object
+                              . KeyMap.singleton (Aeson.Key.fromString . BS8.unpack $ serialiseToRawBytesHex policy)
+                              $ A.Object metadataProps'
+        _               -> pure TxMetadataNone
+
+    -- TODO: use sensible coin selection here.
+    utxos <-
+      fmap (M.toList . unUTxO)
+        . queryInEra connection
+        . QueryUTxO
+        . QueryUTxOByAddress
+        . S.singleton
+        $ toAddressAny' changeAddress
+
+    let
+      inputs = fst <$> utxos
+      outputs = minting <&> \(address, mintedValue) ->
+          (address, Nothing, mintedValue <> lovelaceToValue lovelace)
+    body <-
+      buildBody
+        connection
+        []
+        Nothing
+        [] inputs outputs Nothing changeAddress
+        ((0, ) <$> expires)
+        []
+        mintValue
+        metadata'
+        False
+        False
+
     liftIO . putStrLn $ "PolicyID " <> show policy
+    forM_ timeout
+      $ submitBody connection body [signingKey]
+    pure (body, policy)
 
 
 -- | Create a minting script.
@@ -957,6 +1007,24 @@ selectUtxos :: MonadError CliError m
             -> m ()                              -- ^ Action query the UTxOs.
 selectUtxos connection address query =
   do
+    OutputQueryResult { oqrMatching } <- selectUtxosImpl connection address query
+    liftIO
+      . mapM_ (print . fst)
+      . M.toList
+      . C.unUTxO
+      $ oqrMatching
+
+
+-- | Select a UTxOs at an address.
+selectUtxosImpl :: MonadError CliError m
+                => MonadIO m
+                => MonadReader (CliEnv era) m
+                => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+                -> AddressInEra era                        -- ^ The address.
+                -> OutputQuery                       -- ^ Filter for the results.
+                -> m (OutputQueryResult era)
+selectUtxosImpl connection address query =
+  do
     UTxO candidates <- queryUtxos connection address
     let
       query' (_, TxOut _ value' _ _) =
@@ -966,12 +1034,14 @@ selectUtxos connection address query =
         in
           case query of
             AllOutput        -> True
-            LovelaceOnly{..} -> count == 1 && selectLovelace value    >= lovelace
+            LovelaceOnly{..} -> count == 1 && amountCheck (selectLovelace value)
             AssetOnly{..}    -> count == 2 && selectAsset value asset >= 1
-    liftIO
-      . mapM_ (print . fst)
-      . filter query'
-      $ M.toList candidates
+      fromList = UTxO . M.fromList
+      (oqrMatching, oqrNonMatching) =
+          (fromList *** fromList)
+          . partition query'
+          $ M.toList candidates
+    pure $ OutputQueryResult {..}
 
 
 -- | Query the slot configuration parameters.

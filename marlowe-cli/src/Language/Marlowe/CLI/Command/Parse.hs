@@ -383,7 +383,7 @@ parseOutputQuery =
         AllOutput
           <$ O.flag' () (O.long "all" <> O.help "Report all output.")
       parseLovelaceOnly =
-        LovelaceOnly . Lovelace
+        LovelaceOnly . (>=) . Lovelace
           <$> O.option O.auto (O.long "lovelace-only" <> O.metavar "LOVELACE" <> O.help "The minimum Lovelace that must be the sole asset in the output value.")
       parseAssetOnly =
         AssetOnly

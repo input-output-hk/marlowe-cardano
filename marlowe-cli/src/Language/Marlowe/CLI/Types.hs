@@ -47,6 +47,7 @@ module Language.Marlowe.CLI.Types (
 , CliError(..)
 -- * Queries
 , OutputQuery(..)
+, OutputQueryResult(..)
 -- * Merklization
 , Continuations
 -- * pattern matching boilerplate
@@ -71,6 +72,8 @@ module Language.Marlowe.CLI.Types (
 , doWithCardanoEra
 , doWithShelleyBasedEra
 , toAddressAny'
+, toPaymentVerificationKey
+, getVerificationKey
 , AnyTimeout(..)
 , toTimeout
 ) where
@@ -84,7 +87,7 @@ import Cardano.Api (AddressAny, AddressInEra (AddressInEra), AsType (..), AssetI
                     SimpleScriptV2, SlotNo, TxExtraKeyWitnessesSupportedInEra (..), TxFeesExplicitInEra (..), TxIn,
                     TxMetadataSupportedInEra (..), TxScriptValiditySupportedInEra (..),
                     ValidityLowerBoundSupportedInEra (..), ValidityNoUpperBoundSupportedInEra (..),
-                    ValidityUpperBoundSupportedInEra (..), VerificationKey, deserialiseAddress,
+                    ValidityUpperBoundSupportedInEra (..), VerificationKey, castVerificationKey, deserialiseAddress,
                     deserialiseFromTextEnvelope, serialiseAddress, serialiseToTextEnvelope, toAddressAny)
 import Cardano.Api.Shelley (PlutusScript (..))
 import Codec.Serialise (deserialise)
@@ -101,6 +104,7 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeeme
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 import qualified Cardano.Api as Api (Value)
+import qualified Cardano.Api as C
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader.Class (MonadReader (..), asks)
 import qualified Data.Aeson as Aeson
@@ -126,10 +130,17 @@ instance IsString CliError where
 -- | A payment key.
 type SomePaymentVerificationKey = Either (VerificationKey PaymentKey) (VerificationKey PaymentExtendedKey)
 
+toPaymentVerificationKey :: SomePaymentVerificationKey -> VerificationKey PaymentKey
+toPaymentVerificationKey (Left vkey)  = vkey
+toPaymentVerificationKey (Right vkey) = castVerificationKey vkey
+
 
 -- | A payment signing key.
 type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentExtendedKey)
 
+getVerificationKey :: SomePaymentSigningKey -> SomePaymentVerificationKey
+getVerificationKey (Left skey)  = Left $ C.getVerificationKey skey
+getVerificationKey (Right skey) = Right $ C.getVerificationKey skey
 
 -- | Continuations for contracts.
 type Continuations = M.Map DatumHash Contract
@@ -270,7 +281,7 @@ data MarloweTransaction era =
   , mtPayments      :: [Payment]               -- ^ The payments from the transaction.
   , mtSlotConfig    :: SlotConfig              -- ^ The POSIXTime-to-Slot configuration.
   }
-    deriving (Generic, Show)
+    deriving (Eq, Generic, Show)
 
 instance IsShelleyBasedEra era => ToJSON (MarloweTransaction era) where
   toJSON MarloweTransaction{..} =
@@ -476,18 +487,25 @@ data PayToScript era =
 
 -- | Options for address queries.
 data OutputQuery =
-    -- | Return all UTxOs.
+    -- | Match all UTxOs.
     AllOutput
-    -- | Only return pure-ADA UTxOs with at least the specified amount.
+    -- | Match pure-ADA UTxOs which pass the check.
   | LovelaceOnly
     {
-      lovelace :: Lovelace
+      amountCheck :: Lovelace -> Bool
     }
     -- | Only require UTxOs containing only the specified asset.
   | AssetOnly
     {
       asset :: AssetId
     }
+
+
+data OutputQueryResult era = OutputQueryResult
+  {
+    oqrMatching    :: C.UTxO era
+  , oqrNonMatching :: C.UTxO era
+  }
 
 
 data AnyTimeout = AbsoluteTimeout Integer | RelativeTimeout NominalDiffTime
