@@ -15,6 +15,7 @@
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -25,29 +26,69 @@
 
 
 module Language.Marlowe.CLI.Test.Types (
-  Faucet(..)
+  AnyMarloweThread
+, ContractNickname(..)
+, ContractSource(..)
+, CustomCurrency(..)
+, CurrencyNickname(..)
+, Finished
+, MarloweContract(..)
 , MarloweTests(..)
-, ScriptContract(..)
+, MarloweThread(..)
+, PartyRef(..)
+, Running
 , ScriptTest(..)
 , ScriptOperation(..)
-, TransactionNickname
+, ScriptState
+, ScriptEnv(..)
+, TokenAssignment(..)
+, TokenName(..)
+, UseTemplate(..)
 , Wallet(..)
 , WalletNickname(..)
+, WalletTransaction(..)
+, anyMarloweThread
+, faucetNickname
+, foldlMarloweThread
+, foldrMarloweThread
+, getMarloweThreadTransaction
+, getMarloweThreadTxIn
+, overAnyMarloweThread
+, scriptState
+, walletPubKeyHash
+, seConnection
+, seSlotConfig
+, seCostModelParams
+, seEra
+, ssContracts
+, ssCurrencies
+, ssWallets
 ) where
 
 
-import Cardano.Api (AddressInEra, Hash, Key (VerificationKey), NetworkId, PaymentKey, SigningKey, Value)
+import Cardano.Api (AddressInEra, CardanoMode, Key (VerificationKey), LocalNodeConnectInfo, Lovelace, NetworkId,
+                    PaymentKey, PolicyId, ScriptDataSupportedInEra, TxBody, Value)
+import qualified Cardano.Api as C
+import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty as List
+import Data.Map (Map)
+import qualified Data.Map.Strict as Map
 import Data.String (IsString (fromString))
-import Data.Text (Text)
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Command.Template (TemplateCommand)
-import Language.Marlowe.CLI.Types (SomePaymentSigningKey)
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Contract, Input)
+import Language.Marlowe.CLI.Types (AnyTimeout, MarloweTransaction (MarloweTransaction, mtInputs), SomePaymentSigningKey)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as M
+import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
+import qualified Ledger.Tx.CardanoAPI as L
+import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 import Plutus.V1.Ledger.Time (POSIXTime)
+import qualified Plutus.V2.Ledger.Api as P
 
 
 -- | Configuration for a set of Marlowe tests.
@@ -64,7 +105,6 @@ data MarloweTests era a =
     }
     deriving stock (Eq, Generic, Show)
 
-type TransactionNickname = String
 
 -- | An on-chain test of the Marlowe contract and payout validators.
 data ScriptTest =
@@ -81,48 +121,79 @@ data ScriptTest =
     deriving anyclass (FromJSON, ToJSON)
 
 
-data ScriptContract = InlineContract Contract | TemplateContract TemplateCommand
+-- TODO: We should accept JSON as a `Contract` which we process
+-- resolving `PartyRef` into proper `Party` values and decode
+-- into a `Contract` value. This should allow us to use PKH in
+-- tests.
+data ContractSource = InlineContract Contract | UseTemplate UseTemplate
     deriving stock (Eq, Generic, Show)
 
-instance ToJSON ScriptContract where
-    toJSON (InlineContract c)                 = Aeson.object [("inline", toJSON c)]
-    toJSON (TemplateContract templateCommand) = Aeson.object [("template", toJSON templateCommand)]
 
-instance FromJSON ScriptContract where
+instance ToJSON ContractSource where
+    toJSON (InlineContract c)            = Aeson.object [("inline", toJSON c)]
+    toJSON (UseTemplate templateCommand) = Aeson.object [("template", toJSON templateCommand)]
+
+
+instance FromJSON ContractSource where
     parseJSON json = case json of
       Aeson.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
         parsedContract <- parseJSON contractJson
         pure $ InlineContract parsedContract
       Aeson.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
         parsedTemplateCommand <- parseJSON templateCommandJson
-        pure $ TemplateContract parsedTemplateCommand
+        pure $ UseTemplate parsedTemplateCommand
       _ -> fail "Expected object with a single field of either `inline` or `template`"
+
+
+newtype CurrencyNickname = CurrencyNickname String
+    deriving stock (Eq, Ord, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+instance IsString CurrencyNickname where fromString = CurrencyNickname
+
+
+data TokenAssignment = TokenAssignment
+  { taAmount         :: Integer
+  , taTokenName      :: TokenName
+  , taWalletNickname :: Maybe WalletNickname  -- ^ Default to the same wallet nickname as a token name.
+  }
+  deriving stock (Eq, Generic, Show)
+  -- TODO: provide more concise encoding:
+  -- - "Alice" or
+  -- - roleName: "Alice"
+  --   walletNickname: "TestWallet"
+  --      -- ^ Amount defaults to 1 during role minting.
+  deriving anyclass (FromJSON, ToJSON)
 
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
-  Initialize
+    Mint
     {
-      soOwner        :: AccountId             -- ^ The name of the wallet's owner.
-    , soMinAda       :: Integer
-    , soTransaction  :: TransactionNickname   -- ^ The name of the wallet's owner.
-    , soRoleCurrency :: Text                  -- ^ We derive
-    , soContract     :: ScriptContract        -- ^ The Marlowe contract to be created.
+      soCurrencyNickname  :: CurrencyNickname
+    , soIssuer            :: Maybe WalletNickname   -- ^ Fallbacks to faucet
+    , soMetadata          :: Maybe Aeson.Object
+    , soTokenDistribution :: [TokenAssignment]
+    }
+  | Initialize
+    {
+      soMinAda           :: Integer
+    , soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
+    , soRoleCurrency     :: CurrencyNickname
+    , soContractSource   :: ContractSource     -- ^ The Marlowe contract to be created.
     -- | FIXME: No *JSON instances for this
     -- , soStake :: Maybe StakeAddressReference
     }
   | Prepare
     {
-      soOwner       :: AccountId             -- ^ The name of the wallet's owner.
-    , soTransaction :: TransactionNickname   -- ^ The name of the wallet's owner.
-    , soInputs      :: [Input]
-    , soMinimumTime :: POSIXTime
-    , soMaximumTime :: POSIXTime
+      soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
+    , soInputs           :: [Input]
+    , soMinimumTime      :: POSIXTime
+    , soMaximumTime      :: POSIXTime
     }
-  | Execute
-    { soTransaction :: TransactionNickname
-    -- , soOwner       :: Role
-    -- , soTimeout     :: Maybe Integer
+  | AutoRun
+    {
+      soContractNickname :: ContractNickname
+    , soSubmitter        :: Maybe WalletNickname   -- ^ By default we use role token owner or faucet to perform notification.
     }
   | CreateWallet
     {
@@ -141,27 +212,243 @@ data ScriptOperation =
     deriving anyclass (FromJSON, ToJSON)
 
 
+data WalletTransaction era = WalletTransaction
+  {
+    wtFees   :: Lovelace
+  , wtTxBody :: TxBody era
+  }
+  deriving stock (Generic, Show)
+
+
 data Wallet era =
   Wallet
   {
-    waVerificationKey :: VerificationKey PaymentKey
-  , waSigningKey      :: SigningKey PaymentKey
-  , waAddress         :: AddressInEra era
-  , waPubKeyHash      :: Hash PaymentKey
+    waAddress         :: AddressInEra era
+  , waSigningKey      :: SomePaymentSigningKey
+  , waTokens          :: P.Value                      -- ^ Custom tokens cache which simplifies
+                                                      -- ^ autoexecution and swap transfers asserts.
+  , waTransactions    :: [WalletTransaction era]
+  , waVerificationKey :: VerificationKey PaymentKey
   }
   deriving stock (Generic, Show)
 
-data Faucet era =
-  Faucet
-  {
-    faSigningKey :: SomePaymentSigningKey
-  , faAddress    :: AddressInEra era
-  }
-  deriving stock (Generic, Show)
 
-newtype WalletNickname = WalletNickname String
+walletPubKeyHash :: Wallet era -> P.PubKeyHash
+walletPubKeyHash Wallet { waVerificationKey } =
+  L.fromCardanoPaymentKeyHash . C.verificationKeyHash $ waVerificationKey
+
+
+-- | In many contexts this defaults to the `RoleName` but at some
+-- | point we want to also support multiple marlowe contracts scenarios
+-- | in a one transaction.
+newtype WalletNickname = WalletNickname { unWalletNickname :: String }
     deriving stock (Eq, Ord, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
-instance IsString WalletNickname where
-  fromString = WalletNickname
+instance IsString WalletNickname where fromString = WalletNickname
+
+
+data PartyRef =
+    WalletRef WalletNickname
+  | TokenRef
+    { tpRoleName         :: TokenName
+    , tpCurruncyNickname :: Maybe CurrencyNickname
+    }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
+
+data UseTemplate =
+    UseTrivial
+    {
+      utBystander          :: WalletNickname       -- ^ The party providing the min-ADA.
+    , utMinAda             :: Integer              -- ^ Lovelace in the initial state.
+    , utParty              :: PartyRef             -- ^ The party.
+    , utDepositLovelace    :: Integer              -- ^ Lovelace in the deposit.
+    , utWithdrawalLovelace :: Integer              -- ^ Lovelace in the withdrawal.
+    , utTimeout            :: AnyTimeout           -- ^ The timeout.
+    }
+    -- | Use for escrow contract.
+  | UseEscrow
+    {
+      utPrice             :: Lovelace    -- ^ Price of the item for sale, in lovelace.
+    , utSeller            :: PartyRef   -- ^ Defaults to a wallet with the "Buyer" nickname.
+    , utBuyer             :: PartyRef    -- ^ Defaults to a wallet with the "Seller" ncikname.
+    , utMediator          :: PartyRef   -- ^ The mediator.
+    , utPaymentDeadline   :: AnyTimeout -- ^ The deadline for the buyer to pay.
+    , utComplaintDeadline :: AnyTimeout -- ^ The deadline for the buyer to complain.
+    , utDisputeDeadline   :: AnyTimeout -- ^ The deadline for the seller to dispute a complaint.
+    , utMediationDeadline :: AnyTimeout -- ^ The deadline for the mediator to decide.
+    }
+    -- | Use for swap contract.
+  | UseSwap
+    {
+      utAParty   :: PartyRef    -- ^ First party.
+    , utAToken   :: E.Token      -- ^ First party's token.
+    , utAAmount  :: Integer    -- ^ Amount of first party's token.
+    , utATimeout :: AnyTimeout -- ^ Timeout for first party's deposit.
+    , utBParty   :: PartyRef    -- ^ Second party.
+    , utBToken   :: E.Token      -- ^ Second party's token.
+    , utBAmount  :: Integer    -- ^ Amount of second party's token.
+    , utBTimeout :: AnyTimeout -- ^ Timeout for second party's deposit.
+    }
+    -- | Use for zero-coupon bond.
+  | UseZeroCouponBond
+    {
+      utLender          :: PartyRef    -- ^ The lender.
+    , utBorrower        :: PartyRef    -- ^ The borrower.
+    , utPrincipal       :: Integer    -- ^ The principal.
+    , utInterest        :: Integer    -- ^ The interest.
+    , utLendingDeadline :: AnyTimeout -- ^ The lending deadline.
+    , utPaybackDeadline :: AnyTimeout -- ^ The payback deadline.
+    }
+    -- | Use for covered call.
+  | UseCoveredCall
+    {
+      utIssuer         :: PartyRef  -- ^ The issuer.
+    , utCounterparty   :: PartyRef  -- ^ The counter-party.
+    , utCurrency       :: E.Token    -- ^ The currency token.
+    , utUnderlying     :: E.Token    -- ^ The underlying token.
+    , utStrike         :: Integer    -- ^ The strike in currency.
+    , utAmount         :: Integer    -- ^ The amount of underlying.
+    , utIssueDate      :: AnyTimeout -- ^ The issue date.
+    , utMaturityDate   :: AnyTimeout -- ^ The maturity date.
+    , utSettlementDate :: AnyTimeout -- ^ The settlement date.
+    }
+    -- | Use for actus contracts.
+  | UseActus
+    {
+      utParty          :: PartyRef   -- ^ The party.
+    , utCounterparty   :: PartyRef   -- ^ The counter-party.
+    , utActusTermsFile :: FilePath  -- ^ The Actus contract terms.
+    }
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+
+
+newtype ContractNickname = ContractNickname String
+    deriving stock (Eq, Ord, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+instance IsString ContractNickname where fromString = ContractNickname
+
+
+data Running
+
+data Finished
+
+data MarloweThread era status where
+  Created :: MarloweTransaction era
+          -> C.TxBody era
+          -> C.TxIn
+          -> MarloweThread era Running
+  InputsApplied :: MarloweTransaction era
+                -> C.TxBody era
+                -> C.TxIn
+                -> List.NonEmpty M.Input
+                -> MarloweThread era Running
+                -> MarloweThread era Running
+  Closed :: MarloweTransaction era
+         -> C.TxBody era
+         -> [M.Input]
+         -> MarloweThread era Running
+         -> MarloweThread era Finished
+
+
+foldlMarloweThread :: (forall status'. b -> MarloweThread era status' -> b) -> b -> MarloweThread era status -> b
+foldlMarloweThread step acc m@(Closed _ _ _ th)          = foldlMarloweThread step (step acc m) th
+foldlMarloweThread step acc m@(InputsApplied _ _ _ _ th) = foldlMarloweThread step (step acc m) th
+foldlMarloweThread step acc m                            = step acc m
+
+
+foldrMarloweThread :: (forall status'. MarloweThread era status' -> b -> b) -> b -> MarloweThread era status -> b
+foldrMarloweThread step acc m@(Closed _ _ _ th)          = step m (foldrMarloweThread step acc th)
+foldrMarloweThread step acc m@(InputsApplied _ _ _ _ th) = step m (foldrMarloweThread step acc th)
+foldrMarloweThread step acc m                            = step m acc
+
+
+getMarloweThreadTransaction :: MarloweThread era status -> MarloweTransaction era
+getMarloweThreadTransaction (Created mt _ _)           = mt
+getMarloweThreadTransaction (InputsApplied mt _ _ _ _) = mt
+getMarloweThreadTransaction (Closed mt _ _ _)          = mt
+
+getMarloweThreadTxIn :: MarloweThread era status -> Maybe C.TxIn
+getMarloweThreadTxIn (Created _ _ txIn)           = Just txIn
+getMarloweThreadTxIn (InputsApplied _ _ txIn _ _) = Just txIn
+getMarloweThreadTxIn Closed {}                    = Nothing
+
+
+data AnyMarloweThread era where
+  AnyMarloweThread :: MarloweThread era status -> AnyMarloweThread era
+
+
+anyMarloweThread :: MarloweTransaction era -> C.TxBody era -> Maybe C.TxIn -> Maybe (AnyMarloweThread era) -> Maybe (AnyMarloweThread era)
+anyMarloweThread mt@MarloweTransaction{..} txBody mTxIn mth = case (mTxIn, mtInputs, mth) of
+  (Just txIn, [], Nothing) -> Just (AnyMarloweThread (Created mt txBody txIn))
+
+  (Just txIn, input:inputs, Just (AnyMarloweThread th)) -> case th of
+    m@Created {}       -> Just $ AnyMarloweThread $ InputsApplied mt txBody txIn (input :| inputs) m
+    m@InputsApplied {} -> Just $ AnyMarloweThread $ InputsApplied mt txBody txIn (input :| inputs) m
+    _                  -> Nothing
+
+  (Nothing, inputs, Just (AnyMarloweThread th)) -> case th of
+    m@Created {}       -> Just $ AnyMarloweThread $ Closed mt txBody inputs m
+    m@InputsApplied {} -> Just $ AnyMarloweThread $ Closed mt txBody inputs m
+    _                  -> Nothing
+
+  -- Inputs are not allowed in the initial transaction.
+  (Just _, _:_, Nothing) -> Nothing
+  -- Auto application should not be possible becaue contract on chain is quiescent.
+  (Just _, [], Just _) -> Nothing
+  -- It is impossible to deploy anything without marlowe output.
+  (Nothing, _, Nothing) -> Nothing
+
+
+overAnyMarloweThread :: forall a era. (forall status'. MarloweThread era status' -> a) -> AnyMarloweThread era -> a
+overAnyMarloweThread f (AnyMarloweThread th) = f th
+
+
+data MarloweContract era = MarloweContract
+  {
+    mcContract :: M.Contract
+  , mcCurrency :: CurrencyNickname
+  -- , mcCurr     :: PossiblyOnChainMarloweTransaction era
+  -- , mcPrev       :: Maybe (PossiblyOnChainMarloweTransaction era)
+  , mcPlan     :: List.NonEmpty (MarloweTransaction era)
+  , mcThread   :: Maybe (AnyMarloweThread era)
+  }
+
+data CustomCurrency = CustomCurrency
+  {
+    ccPolicyId       :: PolicyId
+  , ccCurrencySymbol :: CurrencySymbol
+  }
+
+
+data ScriptState era = ScriptState
+  {
+    _ssContracts  :: Map ContractNickname (MarloweContract era)
+  , _ssCurrencies :: Map CurrencyNickname CustomCurrency
+  , _ssWallets    :: Map WalletNickname (Wallet era)               -- ^ Faucet wallet should be included here.
+  }
+
+
+faucetNickname :: WalletNickname
+faucetNickname = "_faucet"
+
+
+scriptState :: Wallet era -> ScriptState era
+scriptState faucet = do
+  let
+    wallets = Map.singleton faucetNickname faucet
+  ScriptState mempty mempty wallets
+
+
+data ScriptEnv era = ScriptEnv
+  { _seConnection      :: LocalNodeConnectInfo CardanoMode
+  , _seSlotConfig      :: SlotConfig
+  , _seCostModelParams :: CostModelParams
+  , _seEra             :: ScriptDataSupportedInEra era
+  }
+
+makeLenses ''ScriptState
+makeLenses ''ScriptEnv

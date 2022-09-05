@@ -41,6 +41,8 @@ module Language.Marlowe.CLI.Sync (
 , isMarloweTransaction
 , isMarloweIn
 , isMarloweOut
+-- * Utils
+, classifyOutputs
 ) where
 
 
@@ -378,18 +380,18 @@ extractMarlowe :: IORef ()                 -- ^ State information (unused).
                -> IO ()                    -- ^ Action to output potential Marlowe transactions.
 extractMarlowe _ printer slotConfig includeAll meBlock tx =
   mapM_ printer
-    $ classifyMarlowe slotConfig includeAll meBlock tx
+    $ classifyMarlowe slotConfig includeAll meBlock (getTxBody tx)
 
 
 -- | Classify a transaction's Marlowe content.
 classifyMarlowe :: SlotConfig      -- ^ The slot configuration.
                 -> Bool            -- ^ Include non-Marlowe transactions.
                 -> BlockHeader     -- ^ The block's header.
-                -> Tx era          -- ^ The transaction.
+                -> TxBody era          -- ^ The transaction.
                 -> [MarloweEvent]  -- ^ Any Marlowe events in the transaction.
-classifyMarlowe slotConfig includeAll meBlock tx =
+classifyMarlowe slotConfig includeAll meBlock txBody =
   let
-    txBody@(TxBody TxBodyContent{..}) = getTxBody tx
+    TxBody TxBodyContent{..} = txBody
     meTxId = getTxId txBody
     meMetadata = extractMetadata txMetadata
     parameters = makeParameters meBlock meTxId meMetadata <$> extractMints txMintValue
