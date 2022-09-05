@@ -14,6 +14,7 @@
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TupleSections      #-}
 
 
 module Language.Marlowe.CLI.Command.Util (
@@ -160,17 +161,19 @@ runUtilCommand command =
                             bodyFile
                             submitTimeout
                             >>= printTxId
-      Mint{..}         -> buildMinting
-                            connection
-                            signingKeyFile
-                            tokenNames
-                            metadataFile
-                            count
-                            expires
-                            lovelace
-                            change
-                            bodyFile
-                            submitTimeout
+      Mint{..}         -> do
+                            let
+                              tokenDistribution = (, count, Nothing) <$> tokenNames
+                            buildMinting
+                              connection
+                              signingKeyFile
+                              tokenDistribution
+                              metadataFile
+                              expires
+                              lovelace
+                              change
+                              bodyFile
+                              submitTimeout
       Faucet{..}       -> buildFaucet
                             connection
                             (lovelaceToValue lovelace)
