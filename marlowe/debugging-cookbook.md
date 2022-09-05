@@ -71,6 +71,10 @@ Remember . ..
 *   Confirmation delay: `blockTime at confirmation > clockTime at submission`.
     *   The `blockTime` can be seconds or minutes after the `nodeTime` when the transaction is submitted.
 
+Here is a diagram that shows how the clock on the node jumps over slot numbers, whereas the POSIX clock progresses steadily. Each time a block is made, the node clock will report the current slot to be one plus the slot of the previous block; when a new block is make, the node would report that slot as the current slot. The time between blocks varies between about 2 seconds and 90+ seconds, depending upon network conditions, so the node clock is quite jerky. It is the node clock that is used to check the validity range (`--invalid-before` and `--invalid-hereafter`) in Marlowe and Plutus transactions, so that might be out of sync with the wall clock. Slot numbers at the node are reported as POSIX milliseconds to the Marlowe contract or any Plutus script, which means that the contract only sees integral seconds (if `scSLotLength = 1000`, as it is for most networks). 
+
+![Node clock vs POSIX clock](../marlowe-cli/doc/diagrams/node-clock.svg)
+
 
 ## Transactions
 
