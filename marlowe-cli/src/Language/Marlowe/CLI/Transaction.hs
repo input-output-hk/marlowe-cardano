@@ -1176,7 +1176,7 @@ selectCoins connection inputs outputs pay changeAddress =
           )
       -- Use a simple greedy algorithm to select coins.
       select :: Value -> [(TxIn, TxOut CtxUTxO era)] -> [(TxIn, TxOut CtxUTxO era)]
-      select _ [] = []  --
+      select _ [] = []
       select required candidates =
         let
           -- Choose the best UTxO from the candidates.
@@ -1203,10 +1203,10 @@ selectCoins connection inputs outputs pay changeAddress =
       selection = select incoming utxos
       -- Compute the native token change, if any.
       change :: Value
-      change =
-        deleteLovelace
-          $ (mconcat $ txOutToValue . snd <$> selection)
-          <> negateValue incoming
+      change =                                            -- This is the change required to balance native tokens.
+        deleteLovelace                                    -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
+          $ (mconcat $ txOutToValue . snd <$> selection)  -- The inputs selected by the algorithm for spending many include native tokens that weren't in the required `outputs`.
+          <> negateValue incoming                         -- The tokens required by `outputs` (as represented in the `incoming` requirement) shouldn't be included as change.
     -- Compute the change that contains native tokens used for balancing, omitting ones explicitly specified in the outputs.
     output <-
       if change == mempty
