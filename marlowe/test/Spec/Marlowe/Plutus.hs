@@ -20,6 +20,7 @@ tests
 import Test.Tasty (TestTree, testGroup)
 
 import qualified Spec.Marlowe.Plutus.Specification (tests)
+import qualified Spec.Marlowe.Plutus.Value (tests)
 
 
 -- | Run tests.
@@ -27,6 +28,7 @@ tests :: TestTree
 tests =
   testGroup "Plutus"
     [
-      Spec.Marlowe.Plutus.Specification.tests
+      Spec.Marlowe.Plutus.Value.tests
+    , Spec.Marlowe.Plutus.Specification.tests
     ]
 

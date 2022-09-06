@@ -11,5 +11,17 @@
 -----------------------------------------------------------------------------
 
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
+
 module Spec.Marlowe.Plutus.Arbitrary
 where
+
+
+import Plutus.V1.Ledger.Api (Value (..))
+import Spec.Marlowe.Semantics.Arbitrary
+import Test.Tasty.QuickCheck (Arbitrary (..))
+
+
+instance Arbitrary Value where
+  arbitrary = Value <$> arbitraryAssocMap arbitrary (arbitraryAssocMap arbitrary arbitrary)
