@@ -14,6 +14,7 @@ import Data.Void (Void, absurd)
 import GHC.Base (when)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Pretty (pretty)
+import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..), SlotNo (..),
@@ -106,39 +107,40 @@ runLsCommand LsCommand{..} socket = void $ runPeerWithDriver driver peer (startD
 
 runShowCommand :: ContractId -> Socket -> IO ()
 runShowCommand contractId socket = do
-  (result, _) <- runPeerWithDriver driver peerInit (startDState driver)
+  let client = MarloweSync.MarloweSyncClient $ pure clientInit
+  let peer = MarloweSync.marloweSyncClientPeer client
+  (result, _) <- runPeerWithDriver driver peer (startDState driver)
   either die (logHistory contractId) result
   where
     driver = mkDriver throwIO codecMarloweSync $ socketAsChannel socket
 
-    -- TODO replace with MarloweSyncClient
-    peerInit :: Peer Sync.MarloweSync 'AsClient 'Sync.StInit m (Either String SomeHistory)
-    peerInit = Yield (ClientAgency Sync.TokInit) (Sync.MsgFollowContract contractId) peerFollow
+    clientInit :: MarloweSync.ClientStInit IO (Either String SomeHistory)
+    clientInit = MarloweSync.SendMsgFollowContract contractId clientFollow
 
-    peerFollow :: Peer Sync.MarloweSync 'AsClient 'Sync.StFollow m (Either String SomeHistory)
-    peerFollow = Await (ServerAgency Sync.TokFollow) \case
-      Sync.MsgContractNotFound                         -> Done Sync.TokDone $ Left "Contract not found"
-      Sync.MsgContractFound createBlock version create -> let steps = mempty in peerIdle version History {..}
+    clientFollow :: MarloweSync.ClientStFollow IO (Either String SomeHistory)
+    clientFollow = MarloweSync.ClientStFollow
+      { recvMsgContractNotFound = pure $ Left "Contract not found"
+      , recvMsgContractFound = \createBlock version create -> pure let steps = mempty in clientIdle version History {..}
+      }
 
-    peerIdle :: MarloweVersion v -> History v -> Peer Sync.MarloweSync 'AsClient ('Sync.StIdle v) m (Either String SomeHistory)
-    peerIdle version history = Yield (ClientAgency (Sync.TokIdle version)) Sync.MsgRequestNext $ peerNext version history
+    clientIdle :: MarloweVersion v -> History v -> MarloweSync.ClientStIdle v IO (Either String SomeHistory)
+    clientIdle version history = MarloweSync.SendMsgRequestNext $ clientNext version history
 
-    peerNext :: MarloweVersion v -> History v -> Peer Sync.MarloweSync 'AsClient ('Sync.StNext v) m (Either String SomeHistory)
-    peerNext version history@History{..} = Await (ServerAgency (Sync.TokNext version)) \case
-      Sync.MsgRollBackward blockHeader -> peerIdle version $ history
+    clientNext :: MarloweVersion v -> History v -> MarloweSync.ClientStNext v IO (Either String SomeHistory)
+    clientNext version history@History{..} = MarloweSync.ClientStNext
+      { recvMsgRollBackward = \blockHeader -> pure $ clientIdle version $ history
         { steps = Map.fromDistinctAscList
             $ takeWhile ((<= blockHeader) . fst)
             $ Map.toAscList steps
         }
-      Sync.MsgRollBackCreation -> Done Sync.TokDone $ Left "Contract not found"
-      Sync.MsgRollForward blockHeader steps' -> peerIdle version $ history { steps = Map.insert blockHeader steps' steps }
-      Sync.MsgWait -> peerWait version history
+      , recvMsgRollBackCreation = pure $ Left "Contract not found"
+      , recvMsgRollForward = \blockHeader steps' -> pure $ clientIdle version $ history { steps = Map.insert blockHeader steps' steps }
+      , recvMsgWait = pure $ clientWait version history
+      }
 
-    peerWait :: MarloweVersion v -> History v -> Peer Sync.MarloweSync 'AsClient ('Sync.StWait v) m (Either String SomeHistory)
-    peerWait version history =
-      Yield (ClientAgency (Sync.TokWait version)) Sync.MsgCancel $
-      Yield (ClientAgency (Sync.TokIdle version)) Sync.MsgDone $
-      Done Sync.TokDone $ Right $ SomeHistory version history
+    clientWait :: MarloweVersion v -> History v -> MarloweSync.ClientStWait v m (Either String SomeHistory)
+    clientWait version history =
+      MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone $ Right $ SomeHistory version history
 
 data Options = Options
   { commandPort :: !PortNumber
