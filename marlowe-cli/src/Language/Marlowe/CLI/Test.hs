@@ -27,11 +27,14 @@ module Language.Marlowe.CLI.Test (
 
 import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
                     Key (getVerificationKey, verificationKeyHash), LocalNodeConnectInfo (..), ScriptDataSupportedInEra)
+import qualified Cardano.Api as C
+import Cardano.Api.Shelley (protocolParamProtocolVersion)
 import Control.Lens (Bifunctor (bimap))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO)
-import Control.Monad.Reader (ReaderT (runReaderT))
-import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, readSigningKey)
+import Control.Monad.Reader (ReaderT (runReaderT), runReader)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
+import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, queryInEra, readSigningKey)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
 import Language.Marlowe.CLI.Test.Types (MarloweTests (..), Wallet (Wallet))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
@@ -51,6 +54,8 @@ runTests era ScriptTests{..} =
   do
     costModel <- getDefaultCostModel
     let
+      runCli action = runReaderT action (CliEnv era)
+
       connection =
         LocalNodeConnectInfo
         {
@@ -58,12 +63,14 @@ runTests era ScriptTests{..} =
         , localNodeNetworkId       = network
         , localNodeSocketPath      = socketPath
         }
-    faucetSigningKey <- readSigningKey (SigningKeyFile faucetSigningKeyFile)
 
+    protocol <- runCli $ queryInEra connection C.QueryProtocolParameters
+    faucetSigningKey <- readSigningKey (SigningKeyFile faucetSigningKeyFile)
     let
+      protocolVersion = toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
       vkey = T.toPaymentVerificationKey . T.getVerificationKey $ faucetSigningKey
       faucet = Wallet faucetAddress faucetSigningKey mempty mempty vkey
 
-    slotConfig <- runReaderT (querySlotConfig connection) $ CliEnv era
+    slotConfig <- runCli $ querySlotConfig connection
     tests' <- mapM decodeFileStrict tests
     mapM_ (scriptTest era protocolVersion costModel connection faucet slotConfig) tests'

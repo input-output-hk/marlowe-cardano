@@ -20,6 +20,7 @@
 module Language.Marlowe.CLI.Command.Util (
 -- * Marlowe CLI Commands
   UtilCommand(..)
+, findPublishedCommand
 , parseUtilCommand
 , publishCommand
 , runUtilCommand
@@ -35,8 +36,8 @@ import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseOu
                                            requiredSignerOpt, requiredSignersOpt, txBodyFileOpt)
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
-import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, buildPublishing, querySlotting,
-                                         selectUtxos)
+import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, buildPublishing, findPublished,
+                                         querySlotting, selectUtxos)
 import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery, PrintStats (PrintStats), SigningKeyFile, TxBodyFile)
 import Plutus.V1.Ledger.Api (TokenName)
 
@@ -133,16 +134,22 @@ data UtilCommand era =
       marloweFile :: FilePath        -- ^ The Marlowe JSON file containing the contract to be demerkleized.
     , outputFile  :: Maybe FilePath  -- ^ The output file for the Marlowe JSON containing the demerkleized contract, if any.
     }
-
   | Publish
     {
-      network        :: NetworkId         -- ^ The network ID, if any.
-    , socketPath     :: FilePath          -- ^ The path to the node socket.
-    , signingKeyFile :: SigningKeyFile    -- ^ The files containing the required signing keys.
-    , change         :: AddressInEra era  -- ^ The change address.
-    , bodyFile       :: TxBodyFile        -- ^ The output file for the transaction body.
-    , submitTimeout  :: Maybe Int         -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , expires        :: Maybe SlotNo      -- ^ The slot number after which minting is no longer possible.
+      network        :: NetworkId                     -- ^ The network ID, if any.
+    , socketPath     :: FilePath                      -- ^ The path to the node socket.
+    , signingKeyFile :: SigningKeyFile                -- ^ The files containing the required signing keys.
+    , change         :: AddressInEra era              -- ^ The change address.
+    , permanently    :: Maybe StakeAddressReference
+    , bodyFile       :: TxBodyFile                    -- ^ The output file for the transaction body.
+    , submitTimeout  :: Maybe Int                     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , expires        :: Maybe SlotNo                  -- ^ The slot number after which minting is no longer possible.
+    }
+  | FindPublished
+    {
+      network    :: NetworkId                     -- ^ The network ID, if any.
+    , socketPath :: FilePath                      -- ^ The path to the node socket.
+    -- , publisher      :: Maybe (AddressInEra era)   -- ^ If publisher address is not given we search at unspendable validator address.
     }
 
 
@@ -229,6 +236,8 @@ runUtilCommand command =
                             bodyFile
                             submitTimeout
                             (PrintStats True)
+      FindPublished{}   -> findPublished
+                            connection
 
 --
 -- | Parser for miscellaneous commands.
@@ -241,8 +250,10 @@ parseUtilCommand network socket =
     <> demerkleizeCommand
     <> encodeBechCommand
     <> faucetCommand network socket
+    <> findPublishedCommand network socket
     <> merkleizeCommand
     <> mintCommand network socket
+    <> publishCommand network socket
     <> selectCommand network socket
     <> slottingCommand network socket
     <> watchCommand network socket
@@ -327,7 +338,7 @@ publishCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.M
 publishCommand network socket =
   O.command "publish"
     $ O.info (publishOptions network socket)
-    $ O.progDesc "Publish marlowe validator and role validator on chain."
+    $ O.progDesc "Publish Marlowe validator and role validator on the chain."
 
 
 -- | Parser for the "publish" options.
@@ -343,6 +354,23 @@ publishOptions network socket =
 
     <*> (O.optional . O.option O.auto)       (O.long "submit"                               <> O.metavar "SECONDS"      <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                    )
+
+
+-- | Parser for the "find-publish" command.
+findPublishedCommand :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
+findPublishedCommand network socket =
+  O.command "find-published"
+    $ O.info (findPublishedOptions network socket)
+    $ O.progDesc "Publish Marlowe validator and role validator on the chain."
+
+
+-- | Parser for the "find-publish" options.
+findPublishedOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+findPublishedOptions network socket =
+  FindPublished
+    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                          (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+
 
 -- | Parser for the "select" command.
 selectCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)

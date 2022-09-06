@@ -25,7 +25,7 @@ module Language.Marlowe.CLI.Command.Test (
 
 import Cardano.Api (IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
-import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, protocolVersionOpt)
+import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
 import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
@@ -82,6 +82,4 @@ scriptsOptions network socket =
     <*> O.strOption              (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"            <> O.help "The file containing the signing key for the faucet."                                                             )
     <*> O.option parseAddress    (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
     <*> O.option parseAddress    (O.long "burn-address"   <> O.metavar "ADDRESS"                 <> O.help "Burn address for discarding used tokens."                                                                        )
-    <*> protocolVersionOpt
-
     <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )

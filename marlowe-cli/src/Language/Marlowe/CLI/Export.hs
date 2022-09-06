@@ -253,12 +253,12 @@ exportMarloweAddress = exportAddress (TypedValidatorV2 marloweValidator)
 
 -- | Build validator info.
 buildValidatorImpl :: IsPlutusScriptLanguage lang
-                   => TypedValidator' lang t                  -- ^ The validator.
-                   -> ScriptDataSupportedInEra era         -- ^ The era to build the validator in.
+                   => TypedValidator' lang t                    -- ^ The validator.
+                   -> ScriptDataSupportedInEra era              -- ^ The era to build the validator in.
                    -> ProtocolVersion
-                   -> CostModelParams                      -- ^ The cost model parameters.
-                   -> NetworkId                            -- ^ The network ID.
-                   -> StakeAddressReference                -- ^ The stake address.
+                   -> CostModelParams                           -- ^ The cost model parameters.
+                   -> NetworkId                                 -- ^ The network ID.
+                   -> StakeAddressReference                     -- ^ The stake address.
                    -> Either CliError (ValidatorInfo lang era)  -- ^ The validator information, or an error message.
 buildValidatorImpl anyValidator era protocolVersion costModel network stake =
   let
