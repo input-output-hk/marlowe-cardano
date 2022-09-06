@@ -1,3 +1,4 @@
+-- | Additional conersion functions for `PlutusScript` plus a copy of not exposed `IsPlutusScriptLanguage` class.
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE LambdaCase         #-}
@@ -25,7 +26,6 @@ import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidator
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as V1.Scripts
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as V2.Scripts
 import qualified Plutus.V2.Ledger.Api as Plutus
-
 
 withPlutusScriptVersion :: PlutusScriptVersion lang -> (IsPlutusScriptLanguage lang => a) -> a
 withPlutusScriptVersion PlutusScriptV1 = id

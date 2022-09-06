@@ -52,9 +52,11 @@ module Language.Marlowe.CLI.Types (
 , OutputQueryResult(..)
 -- * Merklization
 , Continuations
+, Publisher(..)
 , PublishScript(..)
 -- * Newtype wrappers
 , PrintStats(..)
+, PublishingStrategy(..)
 , TxBodyFile(..)
 , SigningKeyFile(..)
 -- * pattern matching boilerplate
@@ -80,6 +82,7 @@ module Language.Marlowe.CLI.Types (
 , asksEra
 , doWithCardanoEra
 , doWithShelleyBasedEra
+, publisherAddress
 , toAddressAny'
 , toPaymentVerificationKey
 , getVerificationKey
@@ -114,6 +117,7 @@ import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
+import qualified Cardano.Api.Shelley as CS
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader.Class (MonadReader (..), asks)
 import qualified Data.Aeson as Aeson
@@ -125,11 +129,11 @@ import Data.Proxy (Proxy (Proxy))
 import Data.Time (NominalDiffTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import GHC.Exts (IsString (fromString))
-import Language.Marlowe.Extended.V1 (Timeout (POSIXTime))
-import qualified Language.Marlowe.Extended.V1 as E
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage, plutusScriptVersion,
                                                       withPlutusScriptVersion)
+import Language.Marlowe.Extended.V1 (Timeout (POSIXTime))
+import qualified Language.Marlowe.Extended.V1 as E
 
 
 -- | Exception for Marlowe CLI.
@@ -381,8 +385,8 @@ instance (IsScriptLanguage lang, IsShelleyBasedEra era) => FromJSON (MarloweInfo
 data ValidatorInfo lang era =
   ValidatorInfo
   {
-    -- TODO: Change this to more fine grained type like `APlutusScript`.
-    -- It seems that Cardano.Api
+    -- TODO: We probably want to introduce `AnyPlutusScript` (`Cardano.Api` provides only `ScriptInAnyLang`) so
+    -- we can hide the `lang` behind it.
     viScript  :: PlutusScript lang           -- ^ The Plutus script.
   , viBytes   :: ShortByteString             -- ^ The serialisation of the validator.
   , viHash    :: ValidatorHash               -- ^ The validator hash.
@@ -570,13 +574,30 @@ toTimeout (RelativeTimeout seconds) = do
   liftIO $ toPOSIXMilliseconds . addUTCTime seconds <$> getCurrentTime
 
 
+data PublishingStrategy era =
+    PublishPermanently C.StakeAddressReference
+  | PublishAtAddress (AddressInEra era)
+
+
+data Publisher era =
+    DesignatedPublisher (AddressInEra era)
+  | UnspendableValidator
+      (ValidatorInfo PlutusScriptV2 era)
+
+
+publisherAddress :: Publisher era -> AddressInEra era
+publisherAddress (DesignatedPublisher addr) = addr
+publisherAddress (UnspendableValidator v)   = viAddress v
+
+
 -- | Information required to publish a script
 data PublishScript lang era =
   PublishScript
   {
-    psMinAda               :: Lovelace
-  , psUnspendableValidator :: ValidatorInfo PlutusScriptV2 era
-  , psReferenceValidator   :: ValidatorInfo lang era
+    psMinAda             :: Lovelace
+  , psPublisher          :: Publisher era
+  , psReferenceScript    :: CS.ReferenceScript era
+  , psReferenceValidator :: ValidatorInfo lang era
   }
 
 newtype PrintStats = PrintStats { unPrintStats :: Bool }

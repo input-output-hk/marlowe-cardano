@@ -33,6 +33,7 @@ module Language.Marlowe.CLI.Test.Types (
 , CurrencyNickname(..)
 , Finished
 , MarloweContract(..)
+, MarloweReferenceScripts(..)
 , MarloweTests(..)
 , MarloweThread(..)
 , PartyRef(..)
@@ -63,6 +64,7 @@ module Language.Marlowe.CLI.Test.Types (
 , seProtocolVersion
 , ssContracts
 , ssCurrencies
+, ssReferenceScripts
 , ssWallets
 ) where
 
@@ -103,7 +105,6 @@ data MarloweTests era a =
     , faucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
     , faucetAddress        :: AddressInEra era  -- ^ The faucet address.
     , burnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
-    , protocolVersion      :: ProtocolVersion
     , tests                :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
@@ -193,6 +194,10 @@ data ScriptOperation =
     , soMinimumTime      :: POSIXTime
     , soMaximumTime      :: POSIXTime
     }
+  | Publish
+    { soPublisher        :: Maybe WalletNickname -- ^ By default use faucet wallet.
+    }
+  | FindPublished
   | AutoRun
     {
       soContractNickname :: ContractNickname
@@ -426,12 +431,17 @@ data CustomCurrency = CustomCurrency
   , ccCurrencySymbol :: CurrencySymbol
   }
 
+data MarloweReferenceScripts = MarloweReferenceScripts
+  { mrsMarloweValidator :: C.TxIn
+  , mrsPayoutValidator  :: C.TxIn
+  }
 
 data ScriptState lang era = ScriptState
   {
-    _ssContracts  :: Map ContractNickname (MarloweContract lang era)
-  , _ssCurrencies :: Map CurrencyNickname CustomCurrency
-  , _ssWallets    :: Map WalletNickname (Wallet era)               -- ^ Faucet wallet should be included here.
+    _ssContracts        :: Map ContractNickname (MarloweContract lang era)
+  , _ssCurrencies       :: Map CurrencyNickname CustomCurrency
+  , _ssReferenceScripts :: Maybe MarloweReferenceScripts
+  , _ssWallets          :: Map WalletNickname (Wallet era)               -- ^ Faucet wallet should be included here.
   }
 
 
@@ -443,7 +453,7 @@ scriptState :: Wallet era -> ScriptState lang era
 scriptState faucet = do
   let
     wallets = Map.singleton faucetNickname faucet
-  ScriptState mempty mempty wallets
+  ScriptState mempty mempty Nothing wallets
 
 
 data ScriptEnv era = ScriptEnv

@@ -36,7 +36,8 @@ import Control.Monad (foldM, forM, forM_, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState, makeContract)
-import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..), MarlowePlutusVersion, MarloweTransaction, toTimeout)
+import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..), MarlowePlutusVersion, MarloweTransaction,
+                                   PrintStats (PrintStats), PublishingStrategy (PublishPermanently), toTimeout)
 import Language.Marlowe.Extended.V1 as E (ChoiceId (ChoiceId), Party)
 import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
@@ -69,7 +70,7 @@ import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), C
                                         getMarloweThreadTxIn, overAnyMarloweThread, scriptState, seConnection,
                                         seCostModelParams, seEra, seProtocolVersion, seSlotConfig, ssContracts,
                                         ssCurrencies, ssWallets, walletPubKeyHash)
-import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, selectUtxosImpl)
+import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, buildPublishingImpl, selectUtxosImpl)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
@@ -84,6 +85,11 @@ import qualified Plutus.V2.Ledger.Api as P
 -- FIXME: Drop this when proper coin selection is in place.
 minCollateral :: C.Lovelace
 minCollateral = C.Lovelace 10_000_000
+
+
+transactionTimeout :: Int
+transactionTimeout = 30
+
 
 interpret :: forall era m
           .  IsShelleyBasedEra era
@@ -120,7 +126,7 @@ interpret FundWallet {..} = do
     [address]
     faucetAddress
     faucetSigningKey
-    (Just 30)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
+    (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
 
   let
     transaction = WalletTransaction { wtFees = 0, wtTxBody=txBody  }
@@ -150,7 +156,7 @@ interpret Mint {..} = do
     Nothing
     2_000_000       -- FIXME: should we compute minAda here?
     faucetAddress
-    (Just 30)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
+    (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
 
   let
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
@@ -257,6 +263,27 @@ interpret AutoRun {..} = do
     marloweContract' = marloweContract { mcThread = thread' }
   ssContracts `modifying`  Map.insert soContractNickname marloweContract'
 
+interpret Publish {..} = do
+  Wallet { waAddress, waSigningKey } <- maybe getFaucet findWallet soPublisher
+
+  connection <- view seConnection
+  txBody <- runCli "[Publish]" $ buildPublishingImpl
+    connection
+    waSigningKey
+    Nothing
+    waAddress
+    (PublishPermanently NoStakeAddress)
+    (Just transactionTimeout)
+    (PrintStats True)
+
+
+
+  liftIO $ print txBody
+
+interpret FindPublished {..} = do
+
+
+
 interpret (Fail message) = throwError $ CliError message
 
 
@@ -348,37 +375,6 @@ findMarloweContract nickname = do
   liftCliMaybe
     ("[findMarloweContract] Marlowe contract structure was not found for a given nickname " <> show nickname <> ".")
     $ Map.lookup nickname contracts
-
-
--- | Test a Marlowe contract.
-scriptTest  :: forall era m
-             . MonadError CliError m
-            => IsShelleyBasedEra era
-            => MonadIO m
-            => ScriptDataSupportedInEra era
-            -> ProtocolVersion
-            -> CostModelParams
-            -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
-            -> Wallet era                        -- ^ Wallet which should be used as faucet.
-            -> SlotConfig                        -- ^ The time and slot correspondence.
-            -> ScriptTest                        -- ^ The tests to be run.
-            -> m ()                              -- ^ Action for running the tests.
-scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest{..} =
-  do
-    liftIO $ putStrLn ""
-    liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
-
-    let
-      interpretLoop = for_ stScriptOperations \operation ->
-        interpret operation
-    void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig))
-      $ \e -> do
-        -- TODO: Clean up wallets and instances.
-        liftIO (print e)
-        liftIO (putStrLn "***** FAILED *****")
-        throwError (e :: CliError)
-    liftIO $ putStrLn "***** PASSED *****"
 
 
 useTemplate :: MonadError CliError m
@@ -581,3 +577,33 @@ getWalletUTxO w = do
     . T.toAddressAny'
     $ address
 
+
+-- | Test a Marlowe contract.
+scriptTest  :: forall era m
+             . MonadError CliError m
+            => IsShelleyBasedEra era
+            => MonadIO m
+            => ScriptDataSupportedInEra era
+            -> ProtocolVersion
+            -> CostModelParams
+            -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
+            -> Wallet era                        -- ^ Wallet which should be used as faucet.
+            -> SlotConfig                        -- ^ The time and slot correspondence.
+            -> ScriptTest                        -- ^ The tests to be run.
+            -> m ()                              -- ^ Action for running the tests.
+scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest{..} =
+  do
+    liftIO $ putStrLn ""
+    liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
+
+    let
+      interpretLoop = for_ stScriptOperations \operation ->
+        interpret operation
+    void $ catchError
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig))
+      $ \e -> do
+        -- TODO: Clean up wallets and instances.
+        liftIO (print e)
+        liftIO (putStrLn "***** FAILED *****")
+        throwError (e :: CliError)
+    liftIO $ putStrLn "***** PASSED *****"
