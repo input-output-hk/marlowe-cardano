@@ -1128,12 +1128,15 @@ selectCoins connection inputs outputs pay changeAddress =
       matchingCoins :: Value -> Value -> (Int, Int)
       matchingCoins required candidate =
         let
+          delta :: [Quantity]
           delta =
             fmap snd
               . valueToList
               . deleteLovelace
               $ candidate <> negateValue required
+          excess :: Int
           excess  = length $ filter (> 0) delta
+          deficit :: Int
           deficit = length $ filter (< 0) delta
         in
           (excess, deficit)
@@ -1155,9 +1158,14 @@ selectCoins connection inputs outputs pay changeAddress =
       priority :: Value -> (TxIn, TxOut CtxUTxO era) -> (Int, Int, Bool, Bool)
       priority required candidate =
         let
+          candidate' :: Value
           candidate' = txOutToValue $ snd candidate
+          excess :: Int
+          deficit :: Int
           (excess, deficit) = matchingCoins required candidate'
+          notOnlyLovelace :: Bool
           notOnlyLovelace = not $ onlyLovelace candidate'
+          insufficientLovelace :: Bool
           insufficientLovelace = selectLovelace candidate' < selectLovelace required
         in
           (
@@ -1172,12 +1180,16 @@ selectCoins connection inputs outputs pay changeAddress =
       select required candidates =
         let
           -- Choose the best UTxO from the candidates.
+          next :: (TxIn, TxOut CtxUTxO era)
           next = minimumBy (compare `on` priority required) candidates
           -- Determine the remaining candidates.
+          candidates' :: [(TxIn, TxOut CtxUTxO era)]
           candidates' = delete next candidates
           -- Ignore negative quantities.
+          filterPositive :: Value -> Value
           filterPositive = valueFromList . filter ((> 0) . snd) . valueToList
           -- Compute the remaining requirement.
+          required' :: Value
           required' = filterPositive $ required <> negateValue (txOutToValue $ snd next)
         in
           -- Decide whether to continue.
