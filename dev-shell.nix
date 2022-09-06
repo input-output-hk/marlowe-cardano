@@ -5,7 +5,7 @@ let
   inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
   inherit (dev-scripts) nix-flakes-alias start-cardano-node run-chainseekd;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
-  inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address cardano-cli cardano-node;
+  inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address cardano-cli cardano-node;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
 
   set-xdg = ''
@@ -66,37 +66,35 @@ let
   # marlowe and subproject independent dev tools
   #
   # IMPORTANT: Do not add git to the dev shell, It breaks Lorri. See https://github.com/input-output-hk/plutus/pull/2422
-  devToolsInputs = (with pkgs; with marlowe; [
+  devToolsInputs = (with marlowe; [
     cabal-install
-    curl
+    pkgs.curl
     docs.build-and-serve-docs
-    editorconfig-core-c
+    pkgs.editorconfig-core-c
     fix-prettier
     fixStylishHaskell
-    ghc
-    ghcid
+    pkgs.ghcid
     haskell-language-server
     haskell-language-server-wrapper
     hie-bios
     hlint
-    jq
+    pkgs.jq
     nix-flakes-alias
     nixpkgs-fmt
-    openssl
-    pkg-config
-    pre-commit
-    shellcheck
-    sqlite-interactive
+    pkgs.openssl
+    pkgs.pkg-config
+    pkgs.pre-commit
+    pkgs.shellcheck
+    pkgs.sqlite-interactive
     stylish-haskell
-    tmux
     updateMaterialized
-    yq
-    zlib
-    z3
+    pkgs.yq
+    pkgs.zlib
+    pkgs.z3
 
-    docker-compose
-    sqitchPg
-    postgresql
+    pkgs.docker-compose
+    pkgs.sqitchPg
+    pkgs.postgresql
   ]);
 
   defaultShellHook = ''
@@ -129,7 +127,6 @@ let
       pkgs.sqitchPg
       # FIXME: I'm not sure why I'm not able to grap rPackages here
     ]); # ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
-
     # We don't currently use this, and it's a pain to materialize, and otherwise
     # costs a fair bit of eval time.
     withHoogle = false;
@@ -149,19 +146,19 @@ let
         cardano-cli
         start-cardano-node
       ];
-      develShell = { buildInputs, name, shellHook ? "" }:
-        let
-          libs = [
-            pkgs.glibcLocales
-            pkgs.libsodium-vrf
-            pkgs.lzma
-            pkgs.openssl_3_0.dev
-            pkgs.secp256k1
-            pkgs.zlib
-          ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
-        in
-        pkgs.mkShell {
+      libs = [
+        pkgs.glibcLocales
+        pkgs.libsodium-vrf
+        pkgs.lzma
+        pkgs.openssl_3_0.dev
+        pkgs.secp256k1
+        pkgs.zlib
+      ] ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [ pkgs.systemd ];
+
+      develShell = { packages, buildInputs, name, shellHook ? "" }:
+        haskell.project.shellFor {
           name = "marlowe-core-shell";
+          packages = packages;
           buildInputs = libs ++ buildInputs;
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libs;
           shellHook = ''
@@ -169,18 +166,21 @@ let
             ${defaultShellHook}
             ${shellHook}
           '';
+          withHoogle = true;
+
         };
     in
     {
       marloweActus = develShell {
         buildInputs = marloweCoreBuildInputs;
         name = "actus";
+        packages = cmps: [ cmps.marlowe-actus ];
         shellHook = ''
           export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
         '';
       };
-      marloweCli = develShell { buildInputs = marloweCliBuildInputs; name = "cli"; };
-      marloweCore = develShell { buildInputs = marloweCoreBuildInputs; name = "core"; };
+      marloweCli = develShell { buildInputs = marloweCliBuildInputs; name = "cli"; packages = cmps: [ cmps.marlowe-cli ]; };
+      marloweCore = develShell { buildInputs = marloweCoreBuildInputs; name = "core"; packages = cmps: [ cmps.marlowe ]; };
     };
 in
 defaultShell // {
