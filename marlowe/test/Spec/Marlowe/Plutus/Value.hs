@@ -19,13 +19,15 @@ module Spec.Marlowe.Plutus.Value (
 ) where
 
 
-import Data.List (union)
+import Data.List (permutations, union)
 import Plutus.V1.Ledger.Value (CurrencySymbol, TokenName, Value (..), geq, leq, singleton, valueOf)
+import PlutusTx.Numeric (zero)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Property, forAll, property, testProperty, (===))
+import Test.Tasty.QuickCheck (Arbitrary (..), Property, elements, forAll, property, testProperty, (===))
 
-import qualified PlutusTx.AssocMap as AM (empty, toList)
+import qualified PlutusTx.AssocMap as AM (empty, fromList, toList)
+import qualified PlutusTx.Eq as P ((==))
 
 
 -- | Run tests.
@@ -35,10 +37,12 @@ tests =
     [
       testProperty "`mempty` has no tokens"              checkMempty
     , testProperty "`mappend` sums corresponding tokens" checkMappend
+    , testProperty "`(==)` detects equality"             checkEq
     , testProperty "`leq` is partial order"              checkLeq
     , testProperty "`geq` is partial order"              checkGeq
     , testProperty "`valueOf` extracts quanity"          checkValueOf
     , testProperty "`singleton` creates a single token"  checkSingleton
+    , testProperty "`zero` has no value"                 checkZero
     ]
 
 
@@ -63,6 +67,33 @@ checkMappend =
         check (c, t) = valueOf' z c t == valueOf' x c t + valueOf' y c t
       in
         all check . foldl1 union $ tokens <$> [x, y, z]
+
+
+-- | Check equality operator.
+checkEq :: Property
+checkEq =
+  property
+    $ let
+        gen = do
+          isEqual <- arbitrary
+          x <- arbitrary
+          x' <- elements . permutations . AM.toList $ getValue x
+          x'' <- Value
+                   . AM.fromList
+                   <$> sequence
+                   [
+                     (c, ) . AM.fromList <$> elements (permutations $ AM.toList ts)
+                   |
+                     (c, ts) <- x'
+                   ]
+          y <- if isEqual then pure x'' else arbitrary
+          pure (x, y)
+      in forAll gen
+        $ \(x, y) ->
+          let
+            check (c, t) = valueOf' x c t == valueOf' y c t
+          in
+            (x P.== y) == (all check . foldl1 union $ tokens <$> [x, y])
 
 
 -- | Check that `leq` is a partial ordering requiring that quantity of each token in the first
@@ -122,3 +153,8 @@ checkSingleton =
         v = singleton c t i
       in
         valueOf v c t == i && length (AM.toList $ getValue v) == 1
+
+
+-- | Check the `zero` function.
+checkZero :: Property
+checkZero = getValue zero === AM.empty

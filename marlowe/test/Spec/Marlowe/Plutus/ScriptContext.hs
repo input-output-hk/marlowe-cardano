@@ -24,4 +24,15 @@ tests :: TestTree
 tests =
   testGroup "Plutus ScriptContext"
     [
+--    findDatum
+--    findDatumHash
+--    txInInfoResolved
+--    txInfoInputs
+--    txInfoOutputs
+--    txInfoValidRange
+--    txOutValue
+--    txSignedBy
+--    valuePaidTo
+--    valueSpent
+--    find
     ]
