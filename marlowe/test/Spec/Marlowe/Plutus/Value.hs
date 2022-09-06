@@ -6,7 +6,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Test the `Plutus.V1.Ledger.Value` functions used by the Marlowe validators.
+-- | Test the `Plutus.V1.Ledger.Value.Value` functions used by the Marlowe validators.
 --
 -----------------------------------------------------------------------------
 
@@ -23,22 +23,22 @@ import Data.List (union)
 import Plutus.V1.Ledger.Value (CurrencySymbol, TokenName, Value (..), geq, leq, singleton, valueOf)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Property, arbitrary, forAll, property, testProperty, (===))
+import Test.Tasty.QuickCheck (Arbitrary (..), Property, forAll, property, testProperty, (===))
 
-import qualified PlutusTx.AssocMap as AM
+import qualified PlutusTx.AssocMap as AM (empty, toList)
 
 
 -- | Run tests.
 tests :: TestTree
 tests =
-  testGroup "Plutus Value"
+  testGroup "Value"
     [
-      testProperty "mempty has no tokens"              checkMempty
-    , testProperty "mappend sums corresponding tokens" checkMappend
-    , testProperty "leq is partial order"              checkLeq
-    , testProperty "geq is partial order"              checkGeq
-    , testProperty "valueOf extracts quanity"          checkValueOf
-    , testProperty "singleton creates a single token"  checkSingleton
+      testProperty "`mempty` has no tokens"              checkMempty
+    , testProperty "`mappend` sums corresponding tokens" checkMappend
+    , testProperty "`leq` is partial order"              checkLeq
+    , testProperty "`geq` is partial order"              checkGeq
+    , testProperty "`valueOf` extracts quanity"          checkValueOf
+    , testProperty "`singleton` creates a single token"  checkSingleton
     ]
 
 
@@ -49,7 +49,7 @@ checkMempty = getValue mempty === AM.empty
 
 -- | Extract the currency symbols and token names in a value.
 tokens :: Value -> [(CurrencySymbol, TokenName)]
-tokens = concatMap (\(c, ts) -> fmap (c, ) . fmap fst $ AM.toList ts) . AM.toList . getValue
+tokens = concatMap (\(c, ts) -> (c, ) . fst <$> AM.toList ts) . AM.toList . getValue
 
 
 -- | Check that the `mappend` instance for `Value` sums quantities of corresponding tokens.

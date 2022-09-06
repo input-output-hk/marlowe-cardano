@@ -20,6 +20,7 @@ module Spec.Marlowe.Semantics.AssocMap (
 , assocMapValid
 , assocMapMember
 , assocMapLookup
+, assocMapDelete
 ) where
 
 
@@ -79,3 +80,8 @@ assocMapMember k = any ((== k) . fst) . AM.toList
 -- | Lookup a value in a map.
 assocMapLookup :: Eq k => k -> AM.Map k v -> Maybe v
 assocMapLookup k = lookup k . AM.toList
+
+
+-- | Delete a key from a map.
+assocMapDelete :: Eq k => k -> AM.Map k v -> AM.Map k v
+assocMapDelete k = AM.fromList . filter ((/= k) . fst) . AM.toList

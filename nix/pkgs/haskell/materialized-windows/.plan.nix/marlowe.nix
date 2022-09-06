@@ -104,6 +104,8 @@
             "Spec/Marlowe/Semantics"
             "Spec/Marlowe/Plutus"
             "Spec/Marlowe/Plutus/Arbitrary"
+            "Spec/Marlowe/Plutus/AssocMap"
+            "Spec/Marlowe/Plutus/ScriptContext"
             "Spec/Marlowe/Plutus/Specification"
             "Spec/Marlowe/Plutus/Types"
             "Spec/Marlowe/Plutus/Value"

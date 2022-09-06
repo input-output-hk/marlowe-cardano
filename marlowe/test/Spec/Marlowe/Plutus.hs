@@ -19,6 +19,8 @@ tests
 
 import Test.Tasty (TestTree, testGroup)
 
+import qualified Spec.Marlowe.Plutus.AssocMap (tests)
+import qualified Spec.Marlowe.Plutus.ScriptContext (tests)
 import qualified Spec.Marlowe.Plutus.Specification (tests)
 import qualified Spec.Marlowe.Plutus.Value (tests)
 
@@ -29,6 +31,8 @@ tests =
   testGroup "Plutus"
     [
       Spec.Marlowe.Plutus.Value.tests
+    , Spec.Marlowe.Plutus.AssocMap.tests
+    , Spec.Marlowe.Plutus.ScriptContext.tests
     , Spec.Marlowe.Plutus.Specification.tests
     ]
 
