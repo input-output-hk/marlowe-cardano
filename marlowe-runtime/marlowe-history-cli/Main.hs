@@ -114,33 +114,50 @@ runShowCommand contractId socket = do
   where
     driver = mkDriver throwIO codecMarloweSync $ socketAsChannel socket
 
+    -- Step 1: Send a request to follow the contract by its ID
     clientInit :: MarloweSync.ClientStInit IO (Either String SomeHistory)
     clientInit = MarloweSync.SendMsgFollowContract contractId clientFollow
 
+    -- Step 2: Handle the result of step 1
     clientFollow :: MarloweSync.ClientStFollow IO (Either String SomeHistory)
     clientFollow = MarloweSync.ClientStFollow
+      -- Step 2(a): If the contract is not found, return an error to display
       { recvMsgContractNotFound = pure $ Left "Contract not found"
+      -- Step 2(b): If the contract is found, create a new History record with
+      -- the creation event and start collecting transactions
       , recvMsgContractFound = \createBlock version create -> pure let steps = mempty in clientIdle version History {..}
       }
 
+    -- Step 3: Request the next event in the contract history
     clientIdle :: MarloweVersion v -> History v -> MarloweSync.ClientStIdle v IO (Either String SomeHistory)
     clientIdle version history = MarloweSync.SendMsgRequestNext $ clientNext version history
 
+    -- Step 4: Handle the result of step 3
     clientNext :: MarloweVersion v -> History v -> MarloweSync.ClientStNext v IO (Either String SomeHistory)
     clientNext version history@History{..} = MarloweSync.ClientStNext
+      -- Step 4(a): If a rollback has occurred, unwind any steps collected
+      -- after the rollback.
       { recvMsgRollBackward = \blockHeader -> pure $ clientIdle version $ history
         { steps = Map.fromDistinctAscList
             $ takeWhile ((<= blockHeader) . fst)
             $ Map.toAscList steps
         }
+      -- Step 4(b): If the contract's creation transaction has been rolled
+      -- back, return an error to display.
       , recvMsgRollBackCreation = pure $ Left "Contract not found"
+      -- Step 4(c): If we get a next contract step, append it to the history
+      -- and repeat step 3.
       , recvMsgRollForward = \blockHeader steps' -> pure $ clientIdle version $ history { steps = Map.insert blockHeader steps' steps }
-      , recvMsgWait = pure $ clientWait version history
+      -- Step 4(d): If we are told to wait, it means we have reached the end of
+      -- the current history (incomplete though it may be). In this case, we
+      -- cancel the wait and end the protocol session with a `Done` message to
+      -- the server, returning the history to be displayed.
+      , recvMsgWait = pure
+          $ MarloweSync.SendMsgCancel
+          $ MarloweSync.SendMsgDone
+          $ Right
+          $ SomeHistory version history
       }
-
-    clientWait :: MarloweVersion v -> History v -> MarloweSync.ClientStWait v m (Either String SomeHistory)
-    clientWait version history =
-      MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone $ Right $ SomeHistory version history
 
 data Options = Options
   { commandPort :: !PortNumber
