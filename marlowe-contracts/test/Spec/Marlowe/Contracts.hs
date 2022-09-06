@@ -19,6 +19,7 @@ import Marlowe.Contracts.UTC.Options
 import Marlowe.Contracts.UTC.StructuredProducts
 import Marlowe.Contracts.UTC.Swap
 import Marlowe.Contracts.UTC.ZeroCouponBond
+import Marlowe.Contracts.Valuation
 import Plutus.V1.Ledger.Ada (lovelaceValueOf)
 import Plutus.V1.Ledger.Api (TokenName, singleton)
 import Plutus.V1.Ledger.Value (CurrencySymbol)
@@ -39,6 +40,8 @@ tests = testGroup "Marlowe Contract"
   , testCase "European Call Option (exercised) test" europeanCallOptionExercisedTest
   , testCase "Reverse Convertible test" reverseConvertibleTest
   , testCase "Reverse Convertible (exercised) test" reverseConvertibleExercisedTest
+  , testCase "European Call Option Valuation test" europeanCallOptionPricingTest
+  , testCase "European Put Option Valuation test" europeanPutOptionPricingTest
   ]
 
 w1Pk, w2Pk :: Party
@@ -46,10 +49,10 @@ w1Pk = Role "party1"
 w2Pk = Role "party2"
 
 tokName :: TokenName
-tokName = "testcoin"
+tokName = "DjedUSD"
 
 tokSymbol :: CurrencySymbol
-tokSymbol = ""
+tokSymbol = "f4cf384ddd1b1377b08302b17990e9618b62924f5705458c17ee4f7d"
 
 tok :: Token
 tok = Token tokSymbol tokName
@@ -462,3 +465,53 @@ reverseConvertibleTest =
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 10_000_000)
         C.Error err ->
           assertNoFailedTransactions err
+
+-- |European Call pricing test
+europeanCallOptionPricingTest :: IO ()
+europeanCallOptionPricingTest =
+  let contract =
+        option
+          European
+          Call
+          w1Pk
+          w2Pk
+          Nothing
+          (tok, Constant 5)
+          (ada, Constant 5_000_000)
+          (read "2022-03-19 17:30:00.000000 UTC")
+          (read "2022-03-20 17:30:00.000000 UTC")
+      now = read "2021-03-19 17:30:00.000000 UTC"
+   in assertEqual "valuation matches" (Just 500_000) (evalBS (toTimeout now) price vola 0.0 contract)
+  where
+    price :: (Token, Token) -> Maybe Double
+    price (Token "f4cf384ddd1b1377b08302b17990e9618b62924f5705458c17ee4f7d" "DjedUSD", Token "" "") = Just 1_100_000
+    price _                                                                                         = Nothing
+
+    vola :: Token -> Maybe Double
+    vola (Token "f4cf384ddd1b1377b08302b17990e9618b62924f5705458c17ee4f7d" "DjedUSD") = Just 0.0
+    vola _                                                                            = Nothing
+
+-- |European Put pricing test
+europeanPutOptionPricingTest :: IO ()
+europeanPutOptionPricingTest =
+  let contract =
+        option
+          European
+          Put
+          w1Pk
+          w2Pk
+          Nothing
+          (tok, Constant 5)
+          (ada, Constant 5_000_000)
+          (read "2022-03-19 17:30:00.000000 UTC")
+          (read "2022-03-20 17:30:00.000000 UTC")
+      now = read "2021-03-19 17:30:00.000000 UTC"
+   in assertEqual "valuation matches" (Just 500_000) (evalBS (toTimeout now) price vola 0.0 contract)
+  where
+    price :: (Token, Token) -> Maybe Double
+    price (Token "f4cf384ddd1b1377b08302b17990e9618b62924f5705458c17ee4f7d" "DjedUSD", Token "" "") = Just 900_000
+    price _                                                                                         = Nothing
+
+    vola :: Token -> Maybe Double
+    vola (Token "f4cf384ddd1b1377b08302b17990e9618b62924f5705458c17ee4f7d" "DjedUSD") = Just 0.0
+    vola _                                                                            = Nothing

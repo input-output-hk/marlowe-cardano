@@ -53,6 +53,7 @@ library
     Marlowe.Contracts.StructuredProducts
     Marlowe.Contracts.Swap
     Marlowe.Contracts.Trivial
+    Marlowe.Contracts.Valuation
     Marlowe.Contracts.ZeroCouponBond
     Marlowe.Contracts.UTC.Common
     Marlowe.Contracts.UTC.CouponBond
@@ -65,6 +66,7 @@ library
   other-modules:
   build-depends:
     base >= 4.9 && < 5,
+    erf,
     marlowe -any,
     time -any
 

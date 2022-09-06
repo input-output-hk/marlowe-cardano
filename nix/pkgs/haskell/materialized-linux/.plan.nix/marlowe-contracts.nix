@@ -34,6 +34,7 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."erf" or (errorHandler.buildDepError "erf"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           ];
@@ -48,6 +49,7 @@
           "Marlowe/Contracts/StructuredProducts"
           "Marlowe/Contracts/Swap"
           "Marlowe/Contracts/Trivial"
+          "Marlowe/Contracts/Valuation"
           "Marlowe/Contracts/ZeroCouponBond"
           "Marlowe/Contracts/UTC/Common"
           "Marlowe/Contracts/UTC/CouponBond"
