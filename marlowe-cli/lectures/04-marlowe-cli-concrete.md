@@ -1530,7 +1530,5 @@ Lectures on Marlowe CLI:
 -   [Running Marlowe Contracts without Blockchain
     Transactions](03-marlowe-cli-abstract.ipynb)
 -   ~~Running Marlowe Contacts on the Blockchain~~
--   [Running Marlowe Contracts with the Marlowe
-    Backend](05-marlowe-cli-pab.ipynb)
 
 </div>

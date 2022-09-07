@@ -1,0 +1,48 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+
+actor Administrator as administrator
+actor Stabilizer    as stabilizer
+actor "Investor 1"  as investor1
+actor "Investor 2"  as investor2
+actor "Borrower 1"  as borrower1
+actor "Borrower 2"  as borrower2
+participant "Collective Loan" as pool
+
+=== Stabilization ==
+
+administrator -> pool: initialize
+
+stabilizer -> pool: deposit 5000k Djed
+
+=== Investment ==
+
+investor1 -> pool: deposit 1000k Djed
+investor2 -> pool: deposit 500k Djed
+
+=== Lending ==
+
+administrator -> pool: authorize 900k Djed to Borrower 1
+pool -> borrower1: pay 900k Djed
+
+administrator -> pool: authorize 600k Djed to Borrower 2
+pool -> borrower2: pay 600k Djed
+
+=== Repayment ==
+
+borrower2 -> pool: repay 720k Djed
+
+borrower1 -> pool: repay only 840k Djed
+
+=== Final Settlement ==
+
+administrator -> pool: terminate contract
+
+pool -> stabilizer: pay 4910k Djed
+pool -> investor1:  pay 1100k Djed
+pool -> investor2:  pay 550k Djed
+
+@enduml
