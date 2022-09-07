@@ -42,9 +42,9 @@ tests =
               testProperty "Valid datum deserializes"                    $ check1Valid   (arbitrary :: Gen MarloweData  )
             , testProperty "Valid redeemer deserializes"                 $ check1Valid   (arbitrary :: Gen MarloweInput )
             , testProperty "Valid script context deserializes"           $ check1Valid   (arbitrary :: Gen ScriptContext)
-            , testProperty "Invalid datum does not deserialize"          $ check1Invalid (Proxy :: Proxy MarloweData  ) True
-            , testProperty "Invalid redeemer does not deserialize"       $ check1Invalid (Proxy :: Proxy MarloweInput ) False
-            , testProperty "Invalid script context does not deserialize" $ check1Invalid (Proxy :: Proxy ScriptContext) True
+            , testProperty "Invalid datum does not deserialize"          $ check1Invalid (Proxy :: Proxy MarloweData  ) True  True
+            , testProperty "Invalid redeemer does not deserialize"       $ check1Invalid (Proxy :: Proxy MarloweInput ) False True
+            , testProperty "Invalid script context does not deserialize" $ check1Invalid (Proxy :: Proxy ScriptContext) True  True
             ]
         , testGroup "Constraint 2. Single Marlowe script input"
             [
@@ -93,6 +93,12 @@ tests =
         [
           testGroup "Constraint 16. Typed validation"
             [
+              testProperty "Valid datum deserializes"                    $ check1Valid   (arbitrary :: Gen TokenName    )
+            , testProperty "Valid redeemer deserializes"                 $ check1Valid   (arbitrary :: Gen ()           )
+            , testProperty "Valid script context deserializes"           $ check1Valid   (arbitrary :: Gen ScriptContext)
+            , testProperty "Invalid datum does not deserialize"          $ check1Invalid (Proxy :: Proxy TokenName    ) True  False
+            , testProperty "Invalid redeemer does not deserialize"       $ check1Invalid (Proxy :: Proxy ()           ) False True
+            , testProperty "Invalid script context does not deserialize" $ check1Invalid (Proxy :: Proxy ScriptContext) True  True
             ]
         , testGroup "Constraint 17. Payment authorized"
             [
@@ -108,9 +114,18 @@ check1Valid gen =
     $ \x -> fromBuiltinData (toBuiltinData x) == Just x
 
 
-check1Invalid :: forall a . (FromData a, Eq a) => Proxy a -> Bool -> Property
-check1Invalid _ allowEmptyList =
+check1Invalid :: forall a . (FromData a, Eq a) => Proxy a -> Bool -> Bool -> Property
+check1Invalid _ allowEmptyList allowByteString =
   property
-    -- FIXME: There is a very slight chance that a valid item might be generated at random.
-    . forAll (arbitrary `suchThat` (\x -> allowEmptyList || x /= BuiltinData (List [])))
-    $ \x -> fromBuiltinData x == (Nothing :: Maybe a)
+    $ let
+        gen =
+          let
+            restrictEmptyList x = allowEmptyList || x /= BuiltinData (List [])
+            restrictByteString (BuiltinData (B _)) = allowByteString
+            restrictByteString _                   = True
+          in
+            -- FIXME: There is a very slight chance that a valid item might be generated at random.
+            arbitrary `suchThat` (\x -> restrictEmptyList x && restrictByteString x)
+      in
+        forAll gen
+          $ \x -> fromBuiltinData x == (Nothing :: Maybe a)
