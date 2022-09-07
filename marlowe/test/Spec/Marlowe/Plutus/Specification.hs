@@ -42,9 +42,9 @@ tests =
               testProperty "Valid datum deserializes"                    $ check1Valid   (arbitrary :: Gen MarloweData  )
             , testProperty "Valid redeemer deserializes"                 $ check1Valid   (arbitrary :: Gen MarloweInput )
             , testProperty "Valid script context deserializes"           $ check1Valid   (arbitrary :: Gen ScriptContext)
-            , testProperty "Invalid datum does not deserialize"          $ check1Invalid (Proxy :: Proxy MarloweData  ) True  True
-            , testProperty "Invalid redeemer does not deserialize"       $ check1Invalid (Proxy :: Proxy MarloweInput ) False True
-            , testProperty "Invalid script context does not deserialize" $ check1Invalid (Proxy :: Proxy ScriptContext) True  True
+            , testProperty "Invalid datum does not deserialize"          $ check1Invalid (Proxy :: Proxy MarloweData  ) True  True True
+            , testProperty "Invalid redeemer does not deserialize"       $ check1Invalid (Proxy :: Proxy MarloweInput ) False True True
+            , testProperty "Invalid script context does not deserialize" $ check1Invalid (Proxy :: Proxy ScriptContext) True  True True
             ]
         , testGroup "Constraint 2. Single Marlowe script input"
             [
@@ -96,9 +96,9 @@ tests =
               testProperty "Valid datum deserializes"                    $ check1Valid   (arbitrary :: Gen TokenName    )
             , testProperty "Valid redeemer deserializes"                 $ check1Valid   (arbitrary :: Gen ()           )
             , testProperty "Valid script context deserializes"           $ check1Valid   (arbitrary :: Gen ScriptContext)
-            , testProperty "Invalid datum does not deserialize"          $ check1Invalid (Proxy :: Proxy TokenName    ) True  False
-            , testProperty "Invalid redeemer does not deserialize"       $ check1Invalid (Proxy :: Proxy ()           ) False True
-            , testProperty "Invalid script context does not deserialize" $ check1Invalid (Proxy :: Proxy ScriptContext) True  True
+            , testProperty "Invalid datum does not deserialize"          $ check1Invalid (Proxy :: Proxy TokenName    ) True  False True
+            , testProperty "Invalid redeemer does not deserialize"       $ check1Invalid (Proxy :: Proxy ()           ) False True  False
+            , testProperty "Invalid script context does not deserialize" $ check1Invalid (Proxy :: Proxy ScriptContext) True  True  True
             ]
         , testGroup "Constraint 17. Payment authorized"
             [
@@ -107,6 +107,7 @@ tests =
     ]
 
 
+-- | Check round-trip serialization of `Data`.
 check1Valid :: (FromData a, ToData a, Eq a, Show a) => Gen a -> Property
 check1Valid gen =
   property
@@ -114,18 +115,22 @@ check1Valid gen =
     $ \x -> fromBuiltinData (toBuiltinData x) == Just x
 
 
-check1Invalid :: forall a . (FromData a, Eq a) => Proxy a -> Bool -> Bool -> Property
-check1Invalid _ allowEmptyList allowByteString =
+-- | Check that invalid `BuiltinData` fails to deserialize to `Data`.
+check1Invalid :: forall a . (FromData a, Eq a) => Proxy a -> Bool -> Bool -> Bool -> Property
+check1Invalid _ allowEmptyList allowByteString allowUnit =
   property
     $ let
         gen =
           let
-            restrictEmptyList x = allowEmptyList || x /= BuiltinData (List [])
+            restrictEmptyList (BuiltinData (List [])) = allowEmptyList
+            restrictEmptyList _                       = True
             restrictByteString (BuiltinData (B _)) = allowByteString
             restrictByteString _                   = True
+            restrictUnit (BuiltinData (Constr 0 [])) = allowUnit
+            restrictUnit _                           = True
           in
             -- FIXME: There is a very slight chance that a valid item might be generated at random.
-            arbitrary `suchThat` (\x -> restrictEmptyList x && restrictByteString x)
+            arbitrary `suchThat` (\x -> restrictEmptyList x && restrictByteString x && restrictUnit x)
       in
         forAll gen
           $ \x -> fromBuiltinData x == (Nothing :: Maybe a)
