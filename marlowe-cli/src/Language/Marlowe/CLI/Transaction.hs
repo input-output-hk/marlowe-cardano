@@ -87,63 +87,20 @@ import Cardano.Api (AddressInEra (..), AsType (..), AssetId (..), AssetName (..)
                     lovelaceToValue, makeShelleyAddressInEra, makeTransactionBodyAutoBalance, metadataFromJson,
                     negateValue, queryNodeLocalState, readFileTextEnvelope, selectAsset, selectLovelace,
                     serialiseToCBOR, serialiseToRawBytesHex, shelleyBasedEra, signShelleyTransaction,
-                    submitTxToNodeLocal, txOutValueToValue, valueFromList, valueToList, valueToLovelace,
-                    verificationKeyHash, writeFileTextEnvelope,
-                    castVerificationKey, getTxId, getVerificationKey, hashScript, hashScriptData, lovelaceToValue,
-                    makeShelleyAddressInEra, makeTransactionBodyAutoBalance, metadataFromJson, negateValue,
-                    queryNodeLocalState, readFileTextEnvelope, selectAsset, selectLovelace, serialiseToCBOR,
-                    serialiseToRawBytesHex, signShelleyTransaction, submitTxToNodeLocal, toScriptInAnyLang,
-                    txOutValueToValue, valueFromList, valueToList, valueToLovelace, verificationKeyHash,
-                    writeFileTextEnvelope)
+                    submitTxToNodeLocal, toScriptInAnyLang, txOutValueToValue, valueFromList, valueToList,
+                    valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (PlutusScriptOrReferenceInput (PScript), ProtocolParameters (protocolParamProtocolVersion),
+import Cardano.Api.Shelley (ExecutionUnitPrices (..), PlutusScriptOrReferenceInput (PScript), ProtocolParameters (..),
                             ReferenceScript (ReferenceScript, ReferenceScriptNone),
                             SimpleScriptOrReferenceInput (SScript), TxBody (ShelleyTxBody), fromPlutusData,
-                            fromShelleyStakeReference, protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits,
-                            protocolParamMaxTxSize, ExecutionUnitPrices (..), PlutusScriptOrReferenceInput (PScript), ProtocolParameters (..),
-                            ReferenceScript (ReferenceScriptNone), SimpleScriptOrReferenceInput (SScript),
-                            TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
-                            protocolParamMaxTxExUnits, protocolParamMaxTxSize,
                             protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
-import Control.Concurrent (threadDelay)
-import Control.Monad (forM_, unless, void, when)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, runExcept, throwError)
-import Data.Fixed (div')
-import Data.Function (on)
-import Data.List (delete, minimumBy)
-import Data.Maybe (isNothing, maybeToList)
-import Control.Monad (forM, forM_, when)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, runExcept, throwError)
-import Data.Fixed (div')
-import Data.Maybe (fromMaybe, isNothing, maybeToList)
-import Data.Ratio ((%))
-import Data.Time.Clock (nominalDiffTimeToSeconds)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, getDefaultCostModel, liftCli, liftCliIO,
-                                maybeWriteJson, queryInEra, readMaybeMetadata, readSigningKey)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), OutputQuery (..), PayFromScript (..), PayToScript (..),
-                                   PrintStats (PrintStats), PublishScript (..), SigningKeyFile, SomePaymentSigningKey,
-                                   TxBodyFile (TxBodyFile), ValidatorInfo (viAddress, viScript), askEra, asksEra,
-                                   doWithCardanoEra, toAddressAny', toAsType, toCollateralSupportedInEra, toEraInMode,
-                                   toExtraKeyWitnessesSupportedInEra, toMultiAssetSupportedInEra,
-                                   toPlutusScriptV1LanguageInEra, toPlutusScriptV2LanguageInEra,
-                                   toSimpleScriptV2LanguageInEra, toTxFeesExplicitInEra, toTxMetadataSupportedInEra,
-                                   toTxScriptValiditySupportedInEra, toValidityLowerBoundSupportedInEra,
-                                   toValidityNoUpperBoundSupportedInEra, toValidityUpperBoundSupportedInEra,
-                                   withCardanoEra, withShelleyBasedEra)
-import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
-import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
-import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-import System.IO (hPutStrLn, stderr)
-import qualified Cardano.Api as C
 import Control.Arrow ((***))
 import Control.Concurrent (threadDelay)
 import Control.Error (note)
-import Control.Monad (forM, forM_, void, when)
+import Control.Monad (forM, forM_, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO, runExcept, throwError)
 import Control.Monad.Reader (MonadReader)
 import qualified Data.Aeson as A (Value (Object))
@@ -154,14 +111,14 @@ import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (unpack)
 import Data.Fixed (div')
 import Data.Foldable (Foldable (fold, foldr'), for_)
+import Data.Function (on)
 import Data.Functor ((<&>))
-import Data.List (partition)
+import Data.List (delete, minimumBy, partition)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.Map.Strict as M (elems, fromList, keys, keysSet, singleton, toList)
 import Data.Maybe (catMaybes, fromMaybe, isNothing, maybeToList)
 import Data.Ratio ((%))
 import qualified Data.Set as S (empty, fromList, singleton)
-import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript (value))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
@@ -185,6 +142,7 @@ import Language.Marlowe.CLI.Types (CliEnv, CliError (..), OutputQuery (..), Outp
                                    toTxMetadataSupportedInEra, toTxScriptValiditySupportedInEra,
                                    toValidityLowerBoundSupportedInEra, toValidityNoUpperBoundSupportedInEra,
                                    toValidityUpperBoundSupportedInEra, withCardanoEra, withShelleyBasedEra)
+import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript (value))
 import Language.Marlowe.Scripts (referenceUnspendableValidator, rolePayoutValidator, smallMarloweValidator)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
@@ -192,6 +150,7 @@ import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenNam
 import qualified Plutus.V1.Ledger.Api as P
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import System.IO (hPutStrLn, stderr)
+
 
 -- | Build a non-Marlowe transaction.
 buildSimple :: MonadError CliError m

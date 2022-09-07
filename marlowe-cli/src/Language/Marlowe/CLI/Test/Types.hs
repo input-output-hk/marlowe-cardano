@@ -17,6 +17,7 @@
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -42,6 +43,7 @@ module Language.Marlowe.CLI.Test.Types (
 , ScriptOperation(..)
 , ScriptState
 , ScriptEnv(..)
+, AUTxO(..)
 , TokenAssignment(..)
 , TokenName(..)
 , UseTemplate(..)
@@ -52,6 +54,7 @@ module Language.Marlowe.CLI.Test.Types (
 , faucetNickname
 , foldlMarloweThread
 , foldrMarloweThread
+, fromUTxO
 , getMarloweThreadTransaction
 , getMarloweThreadTxIn
 , overAnyMarloweThread
@@ -66,14 +69,16 @@ module Language.Marlowe.CLI.Test.Types (
 , ssCurrencies
 , ssReferenceScripts
 , ssWallets
+, toUTxO
 ) where
 
 
 import Cardano.Api (AddressInEra, CardanoMode, Key (VerificationKey), LocalNodeConnectInfo, Lovelace, NetworkId,
-                    PaymentKey, PolicyId, ScriptDataSupportedInEra, TxBody, Value)
+                    PaymentKey, PolicyId, ScriptDataSupportedInEra, TxBody)
 import qualified Cardano.Api as C
 import Control.Lens (makeLenses)
-import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
+import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -81,9 +86,10 @@ import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.String (IsString (fromString))
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Types (AnyTimeout, MarloweTransaction (MarloweTransaction, mtInputs), SomePaymentSigningKey)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
@@ -92,6 +98,7 @@ import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 import Plutus.V1.Ledger.Time (POSIXTime)
+import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V2.Ledger.Api as P
 
 
@@ -125,11 +132,7 @@ data ScriptTest =
     deriving anyclass (FromJSON, ToJSON)
 
 
--- TODO: We should accept JSON as a `Contract` which we process
--- resolving `PartyRef` into proper `Party` values and decode
--- into a `Contract` value. This should allow us to use PKH in
--- tests.
-data ContractSource = InlineContract Contract | UseTemplate UseTemplate
+data ContractSource = InlineContract A.Value | UseTemplate UseTemplate
     deriving stock (Eq, Generic, Show)
 
 
@@ -182,7 +185,7 @@ data ScriptOperation =
     {
       soMinAda           :: Integer
     , soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
-    , soRoleCurrency     :: CurrencyNickname
+    , soRoleCurrency     :: Maybe CurrencyNickname
     , soContractSource   :: ContractSource     -- ^ The Marlowe contract to be created.
     -- | FIXME: No *JSON instances for this
     -- , soStake :: Maybe StakeAddressReference
@@ -190,7 +193,7 @@ data ScriptOperation =
   | Prepare
     {
       soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
-    , soInputs           :: [Input]
+    , soInputs           :: [A.Value]
     , soMinimumTime      :: POSIXTime
     , soMaximumTime      :: POSIXTime
     }
@@ -209,8 +212,9 @@ data ScriptOperation =
     }
   | FundWallet
     {
-      soWalletNickname :: WalletNickname
-    , soValue          :: Cardano.Api.Value
+      soWalletNickname   :: WalletNickname
+    , soValue            :: Lovelace
+    , soCreateCollateral :: Maybe Bool
     }
   | Fail
     {
@@ -249,32 +253,50 @@ walletPubKeyHash Wallet { waVerificationKey } =
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios
 -- | in a one transaction.
-newtype WalletNickname = WalletNickname { unWalletNickname :: String }
+newtype WalletNickname = WalletNickname String
     deriving stock (Eq, Ord, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
 instance IsString WalletNickname where fromString = WalletNickname
 
 
+-- | We encode `PartyRef` as `Party` so we can use role based contracts
+-- | without any change in the JSON structure.
+-- | In the case of the `PubKeyHash` you should use standard encoding but
+-- | reference a wallet instead of providing hash value:
+-- | ```
+-- |  "pk_hash": "Wallet-1"
+-- | ```
 data PartyRef =
     WalletRef WalletNickname
-  | TokenRef
-    { tpRoleName         :: TokenName
-    , tpCurruncyNickname :: Maybe CurrencyNickname
-    }
+  | RoleRef TokenName
   deriving stock (Eq, Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+
+
+instance FromJSON PartyRef where
+  parseJSON = \case
+    Aeson.Object (KeyMap.toList -> [("pk_hash", A.String walletNickname)]) ->
+      pure . WalletRef . WalletNickname . T.unpack $ walletNickname
+    Aeson.Object (KeyMap.toList -> [("role_token", A.String roleToken)]) ->
+      pure . RoleRef . P.tokenName . T.encodeUtf8 $ roleToken
+    _ -> fail "Expecting a Party object."
+
+
+instance ToJSON PartyRef where
+    toJSON (WalletRef (WalletNickname walletNickname)) = A.object
+        [ "pk_hash" .= A.String (T.pack walletNickname) ]
+    toJSON (RoleRef (P.TokenName name)) = A.object
+        [ "role_token" .= (A.String $ T.decodeUtf8 $ P.fromBuiltin name) ]
 
 
 data UseTemplate =
     UseTrivial
     {
-      utBystander          :: WalletNickname       -- ^ The party providing the min-ADA.
-    , utMinAda             :: Integer              -- ^ Lovelace in the initial state.
-    , utParty              :: PartyRef             -- ^ The party.
-    , utDepositLovelace    :: Integer              -- ^ Lovelace in the deposit.
-    , utWithdrawalLovelace :: Integer              -- ^ Lovelace in the withdrawal.
-    , utTimeout            :: AnyTimeout           -- ^ The timeout.
+      utBystander          :: Maybe WalletNickname        -- ^ The party providing the min-ADA. Falls back to the faucet wallet.
+    , utParty              :: Maybe PartyRef              -- ^ The party. Falls back to the faucet wallet pkh.
+    , utDepositLovelace    :: Integer                     -- ^ Lovelace in the deposit.
+    , utWithdrawalLovelace :: Integer                     -- ^ Lovelace in the withdrawal.
+    , utTimeout            :: AnyTimeout                  -- ^ The timeout.
     }
     -- | Use for escrow contract.
   | UseEscrow
@@ -326,9 +348,9 @@ data UseTemplate =
     -- | Use for actus contracts.
   | UseActus
     {
-      utParty          :: PartyRef   -- ^ The party.
-    , utCounterparty   :: PartyRef   -- ^ The counter-party.
-    , utActusTermsFile :: FilePath  -- ^ The Actus contract terms.
+      utParty          :: Maybe PartyRef   -- ^ The party. Fallsback to the faucet wallet.
+    , utCounterparty   :: PartyRef         -- ^ The counter-party.
+    , utActusTermsFile :: FilePath         -- ^ The Actus contract terms.
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
@@ -418,7 +440,7 @@ overAnyMarloweThread f (AnyMarloweThread th) = f th
 data MarloweContract lang era = MarloweContract
   {
     mcContract :: M.Contract
-  , mcCurrency :: CurrencyNickname
+  , mcCurrency :: Maybe CurrencyNickname
   -- , mcCurr     :: PossiblyOnChainMarloweTransaction era
   -- , mcPrev       :: Maybe (PossiblyOnChainMarloweTransaction era)
   , mcPlan     :: List.NonEmpty (MarloweTransaction lang era)
@@ -446,7 +468,7 @@ data ScriptState lang era = ScriptState
 
 
 faucetNickname :: WalletNickname
-faucetNickname = "_faucet"
+faucetNickname = "Faucet"
 
 
 scriptState :: Wallet era -> ScriptState lang era
@@ -454,6 +476,16 @@ scriptState faucet = do
   let
     wallets = Map.singleton faucetNickname faucet
   ScriptState mempty mempty Nothing wallets
+
+
+newtype AUTxO era = AUTxO { unAUTxO :: (C.TxIn, C.TxOut C.CtxUTxO era) }
+
+fromUTxO :: C.UTxO era -> [AUTxO era]
+fromUTxO (Map.toList . C.unUTxO -> items) = map AUTxO items
+
+
+toUTxO :: [AUTxO era] -> C.UTxO era
+toUTxO (map unAUTxO -> utxos) = C.UTxO . Map.fromList $ utxos
 
 
 data ScriptEnv era = ScriptEnv
@@ -464,5 +496,8 @@ data ScriptEnv era = ScriptEnv
   , _seSlotConfig      :: SlotConfig
   }
 
+
 makeLenses ''ScriptState
 makeLenses ''ScriptEnv
+
+
