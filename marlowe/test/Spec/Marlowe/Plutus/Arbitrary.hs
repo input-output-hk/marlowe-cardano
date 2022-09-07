@@ -20,6 +20,8 @@ module Spec.Marlowe.Plutus.Arbitrary
 where
 
 
+import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Scripts
 import Plutus.V1.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
                              Extended (..), Interval (..), LowerBound (..), ScriptContext (..), ScriptPurpose (..),
                              StakingCredential (..), TxId (..), TxInInfo (..), TxInfo (..), TxOut (..), TxOutRef (..),
@@ -64,10 +66,10 @@ instance Arbitrary Data where
     frequency
       [
         ( 1, Constr <$> arbitrary <*> arbitrary `suchThat` ((< 5) . length))
-      , ( 2, Map    <$> arbitrary `suchThat` ((< 5) . length)              )
-      , ( 5, List   <$> arbitrary `suchThat` ((< 5) . length)              )
-      , (10, I      <$> arbitrary              )
-      , (20, B      <$> arbitrary              )
+      , ( 2, Map    <$> arbitrary `suchThat` ((< 5) . length))
+      , ( 5, List   <$> arbitrary `suchThat` ((< 5) . length))
+      , (10, I      <$> arbitrary)
+      , (20, B      <$> arbitrary)
       ]
 
 
@@ -148,3 +150,12 @@ instance Arbitrary ValidatorHash where
 
 instance Arbitrary Value where
   arbitrary = Value <$> arbitraryAssocMap arbitrary (arbitraryAssocMap arbitrary arbitrary)
+
+
+
+instance Arbitrary MarloweData where
+  arbitrary = MarloweData <$> arbitrary <*> arbitrary
+
+
+instance Arbitrary MarloweTxInput where
+  arbitrary = Input <$> arbitrary  -- FIXME: Add merkleized case.
