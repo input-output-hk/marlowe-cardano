@@ -30,6 +30,7 @@ import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), Is
 import Control.Lens (Bifunctor (bimap))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
@@ -63,12 +64,11 @@ runTests era ScriptTests{..} =
         , localNodeSocketPath      = socketPath
         }
     faucetSigningKey <- readSigningKey faucetSigningKeyFile
-
     let
       vkey = T.toPaymentVerificationKey . T.getVerificationKey $ faucetSigningKey
       faucet = Wallet faucetAddress faucetSigningKey mempty mempty vkey
 
     slotConfig <- runReaderT (querySlotConfig connection) $ CliEnv era
     tests' <- mapM decodeFileStrict tests
-    mapM_ (scriptTest era costModel network connection faucet slotConfig) tests'
+    mapM_ (scriptTest era costModel connection faucet slotConfig) tests'
 

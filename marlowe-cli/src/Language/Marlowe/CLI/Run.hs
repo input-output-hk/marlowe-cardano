@@ -40,8 +40,8 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (localNodeNetworkId), NetworkId,
-                    PaymentCredential (PaymentCredentialByKey),
+import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (localNodeNetworkId), Lovelace (Lovelace),
+                    NetworkId, PaymentCredential (PaymentCredentialByKey),
                     QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
                     Script (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..), TxId, TxIn,
                     TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
@@ -50,7 +50,7 @@ import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (localN
                     Script (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..), TxBody, TxId,
                     TxIn, TxMetadataInEra, TxMintValue (TxMintNone), TxOut (..), TxOutDatum (..), TxOutValue (..),
                     UTxO (..), calculateMinimumUTxO, getTxId, lovelaceToValue, makeShelleyAddressInEra, selectLovelace,
-                    shelleyBasedEra, txOutValueToValue, writeFileTextEnvelope, Lovelace (Lovelace))
+                    shelleyBasedEra, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript (ReferenceScriptNone), fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
@@ -345,8 +345,8 @@ runTransactionImpl :: forall era era' m
                -> [TxIn]                                        -- ^ The transaction inputs.
                -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
                -> AddressInEra era                              -- ^ The change address.
-               -> [SomePaymentSigningKey]                              -- ^ The files for required signing keys.
-               -> TxMetadataInEra era                           -- ^ The file containing JSON metadata, if any.
+               -> [SomePaymentSigningKey]                       -- ^ Required signing keys.
+               -> TxMetadataInEra era                           -- ^ Tx metadata.
                -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                -> Bool                                          -- ^ Whether to print statistics about the transaction.
                -> Bool                                          -- ^ Assertion that the transaction is invalid.
