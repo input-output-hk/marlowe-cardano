@@ -27,7 +27,7 @@ import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, insert, 
 -- | Run tests.
 tests :: TestTree
 tests =
-  testGroup "Plutus AssocMap"
+  testGroup "AssocMap"
     [
       testProperty "`fromList` is the inverse of toList" checkFromList
     , testProperty "`toList` is the inverse of fromList" checkToList

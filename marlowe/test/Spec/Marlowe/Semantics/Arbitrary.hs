@@ -24,13 +24,14 @@ module Spec.Marlowe.Semantics.Arbitrary (
   SemiArbitrary(..)
 , IsValid(..)
 -- * Generators
-, arbitraryChoiceName
-, arbitraryFibonacci
 , arbitraryAssocMap
+, arbitraryChoiceName
 , arbitraryContractWeighted
-, arbitraryValidStep
+, arbitraryFibonacci
+, arbitraryPositiveInteger
 , arbitraryValidInput
 , arbitraryValidInputs
+, arbitraryValidStep
 , choiceInBoundsIfNonempty
 , choiceNotInBounds
 , goldenContract

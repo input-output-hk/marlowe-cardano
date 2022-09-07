@@ -24,6 +24,6 @@ import Test.Tasty (TestTree, testGroup)
 -- | Run tests.
 tests :: TestTree
 tests =
-  testGroup "Specification Constraints"
+  testGroup "Marlowe On-Chain Specification"
     [
     ]
