@@ -22,7 +22,7 @@ import Test.Tasty (TestTree, testGroup)
 -- | Run tests.
 tests :: TestTree
 tests =
-  testGroup "Plutus ScriptContext"
+  testGroup "ScriptContext"
     [
 --    findDatum
 --    findDatumHash
@@ -34,5 +34,4 @@ tests =
 --    txSignedBy
 --    valuePaidTo
 --    valueSpent
---    find
     ]
