@@ -63,15 +63,11 @@ import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWrite
 import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey,
-                                         queryInEra, selectCoins, submitBody, buildBody, buildPayFromScript, buildPayToScript, hashSigningKey, makeTxOut',
-                                         submitBody)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarloweTransaction (..), RedeemerInfo (..),
-                                   SomeMarloweTransaction (..), SomePaymentSigningKey, ValidatorInfo (..), askEra,
-                                   doWithCardanoEra, toAddressAny', toMultiAssetSupportedInEra, withShelleyBasedEra,
-                                   CliEnv, CliError (..), DatumInfo (..), MarlowePlutusVersion, MarloweTransaction (..),
-                                   RedeemerInfo (..), SigningKeyFile, SomeMarloweTransaction (..),
-                                   SomePaymentSigningKey, TxBodyFile (TxBodyFile), ValidatorInfo (..), askEra,
-                                   doWithCardanoEra, toAddressAny', withShelleyBasedEra)
+                                         makeTxOut', selectCoins, submitBody)
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarlowePlutusVersion, MarloweTransaction (..),
+                                   RedeemerInfo (..), SigningKeyFile (..), SomeMarloweTransaction (..),
+                                   SomePaymentSigningKey, TxBodyFile (TxBodyFile, unTxBodyFile), ValidatorInfo (..),
+                                   askEra, doWithCardanoEra, toAddressAny', txIn, withShelleyBasedEra)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
                                            TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
@@ -322,10 +318,10 @@ runTransaction :: forall era m
                -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
                -> AddressInEra era                              -- ^ The change address.
                -> [SigningKeyFile]                              -- ^ The files for required signing keys.
-               -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
-               -> TxBodyFile                              -- ^ The output file for the transaction body.
-               -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-               -> Bool                                    -- ^ Whether to print statistics about the transaction.
+               -> Maybe FilePath                                -- ^ The file containing JSON metadata, if any.
+               -> TxBodyFile                                    -- ^ The output file for the transaction body.
+               -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Bool                                          -- ^ Whether to print statistics about the transaction.
                -> Bool                                    -- ^ Assertion that the transaction is invalid.
                -> m TxId                                  -- ^ Action to build the transaction body.
 runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles metadataFile (TxBodyFile bodyFile) timeout printStats invalid =
@@ -355,23 +351,23 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
 
 
 -- | Run a Marlowe transaction.
-runTransactionImpl :: forall era era' lang m
+runTransactionImpl :: forall era lang m
                 . MonadError CliError m
                => IsPlutusScriptLanguage lang
                => MonadIO m
                => MonadReader (CliEnv era) m
-               => LocalNodeConnectInfo CardanoMode              -- ^ The connection info for the local node.
-               -> Maybe (MarloweTransaction lang era', TxIn, TxIn)   -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
-               -> MarloweTransaction lang era                        -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
-               -> [TxIn]                                        -- ^ The transaction inputs.
-               -> [(AddressInEra era, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
-               -> AddressInEra era                              -- ^ The change address.
-               -> [SomePaymentSigningKey]                              -- ^ The files for required signing keys.
-               -> TxMetadataInEra era                           -- ^ The file containing JSON metadata, if any.
-               -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-               -> Bool                                          -- ^ Whether to print statistics about the transaction.
-               -> Bool                                          -- ^ Assertion that the transaction is invalid.
-               -> m (TxBody era)                                -- ^ Action to build the transaction body.
+               => LocalNodeConnectInfo CardanoMode                    -- ^ The connection info for the local node.
+               -> Maybe (MarloweTransaction lang era, TxIn, TxIn)    -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
+               -> MarloweTransaction lang era                         -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+               -> [TxIn]                                              -- ^ The transaction inputs.
+               -> [(AddressInEra era, Maybe Datum, Api.Value)]        -- ^ The transaction outputs.
+               -> AddressInEra era                                    -- ^ The change address.
+               -> [SomePaymentSigningKey]                             -- ^ Required signing keys.
+               -> TxMetadataInEra era                                 -- ^ Tx metadata.
+               -> Maybe Int                                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Bool                                                -- ^ Whether to print statistics about the transaction.
+               -> Bool                                                -- ^ Assertion that the transaction is invalid.
+               -> m (TxBody era)                                      -- ^ Action to build the transaction body.
 runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid =
   do
     protocol <- queryInEra connection QueryProtocolParameters
@@ -560,7 +556,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
     pure
       $ getTxId body
 
-
+--
 -- | Run a Marlowe transaction, without selecting inputs or outputs.
 autoRunTransaction :: forall era m
                 . MonadError CliError m
@@ -570,9 +566,9 @@ autoRunTransaction :: forall era m
                -> Maybe (FilePath, TxIn)                  -- ^ The JSON file with the Marlowe initial state and initial contract, unless the transaction opens the contract.
                -> FilePath                                -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
                -> AddressInEra era                        -- ^ The change address.
-               -> [FilePath]                              -- ^ The files for required signing keys.
+               -> [SigningKeyFile]                        -- ^ The files for required signing keys.
                -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
-               -> FilePath                                -- ^ The output file for the transaction body.
+               -> TxBodyFile                              -- ^ The output file for the transaction body.
                -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                -> Bool                                    -- ^ Whether to print statistics about the transaction.
                -> Bool                                    -- ^ Assertion that the transaction is invalid.
@@ -584,12 +580,15 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
     -- Read any metadata for the transaction.
     metadata <- readMaybeMetadata metadataFile
     -- Read the Marlowe transaction information for the output.
-    SomeMarloweTransaction era' marloweOut' <- decodeFileStrict marloweOutFile
+    SomeMarloweTransaction _ era' marloweOut' <- decodeFileStrict marloweOutFile
     -- Fetch the era.
     era <- askEra @era
     let
-      go :: MarloweTransaction era -> m TxId
+      go :: forall lang. IsPlutusScriptLanguage lang => MarloweTransaction lang era -> m TxId
       go marloweOut = do
+        let
+          rolesCurrency = mtRolesCurrency marloweOut
+          marloweParams = MC.marloweParams $ mtRolesCurrency marloweOut
         -- Find the script UTxO to spend and the datum for outputs to the role payout address.
         (spend, datumOutputs) <-
           case marloweInBundle of
@@ -597,16 +596,17 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
             Nothing                     -> pure ([], [])
                                            -- This is a non-creation transaction.
             Just (marloweInFile, spend) -> do
+                                            marloweIn <- readMarloweTransactionFile era (plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
                                             -- Find the results of the previous transaction.
-                                            SomeMarloweTransaction _ marloweIn  <- decodeFileStrict marloweInFile
+                                            -- SomeMarloweTransaction _ _ marloweIn  <- decodeFileStrict marloweInFile
                                             let
                                               -- Fetch the validator.
                                               validatorInfo = mtValidator marloweIn
-                                              PlutusScript _ validator = viScript validatorInfo
+                                              validator = viScript validatorInfo
                                               -- Build the redeemer.
                                               redeemer = riRedeemer $ buildRedeemer (mtInputs marloweOut)
                                               -- Build the datum.
-                                              inputDatum  = diDatum $ buildDatum (mtContract marloweIn) (mtState marloweIn)
+                                              inputDatum  = diDatum $ buildMarloweDatum marloweParams (mtContract marloweIn) (mtState marloweIn)
                                               -- Build the spending witness.
                                               spend' = buildPayFromScript validator inputDatum redeemer spend
                                               -- Handle merkleization.
@@ -635,7 +635,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
           -- Compute the script address.
           scriptAddress = viAddress $ mtValidator marloweOut
           -- Build the datum output to the script.
-          outputDatum = diDatum $ buildDatum (mtContract marloweOut) (mtState marloweOut)
+          outputDatum = diDatum $ buildMarloweDatum marloweParams (mtContract marloweOut) (mtState marloweOut)
         -- Determine how much value the script should receive.
         outputValue <-
           mconcat
@@ -672,7 +672,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
                 Party (Role role) -> do
                                       money' <- liftCli $ toCardanoValue money
                                       let
-                                        datum = Just . diDatum $ buildRoleDatum role
+                                        datum = Just . diDatum $ buildRoleDatum (Token rolesCurrency role)
                                       Just <$> ensureMinUtxo protocol (roleAddress, datum, money')
 
                 Account _         -> pure Nothing
@@ -707,12 +707,14 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
             . S.singleton
             . toAddressAny'
             $ scriptAddress
+
+
         -- Build the outputs for role tokens.
         roleOutputs <-
           sequence
             [
               do
-                value <- liftCli . toCardanoValue $ singleton (mtRoles marloweOut) role 1
+                value <- liftCli . toCardanoValue $ singleton (mtRolesCurrency marloweOut) role 1
                 ensureMinUtxo protocol (changeAddress, Nothing, value)
             |
               role <- roles $ mtInputs marloweOut
@@ -725,11 +727,12 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
                (payments <> roleOutputs <> datumOutputs)
                continue
                changeAddress
+        revisedOutputs' <- traverse (uncurry3 makeTxOut') revisedOutputs
         -- Build the transaction body.
         body <-
           buildBody connection
             spend continue
-            [] extraInputs revisedOutputs
+            [] extraInputs revisedOutputs'
             (Just collateral) changeAddress
             (mtRange marloweOut)
             (hashSigningKey <$> signingKeys)
@@ -738,7 +741,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
             printStats
             invalid
         -- Write the transaction file.
-        doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+        doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (unTxBodyFile bodyFile) Nothing body
         -- Optionally submit the transaction, waiting for a timeout.
         forM_ timeout
           $ if invalid
@@ -755,7 +758,6 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
       (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
 
 
-
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.
 autoWithdrawFunds :: (MonadError CliError m, MonadReader (CliEnv era) m)
                   => MonadIO m
@@ -763,9 +765,9 @@ autoWithdrawFunds :: (MonadError CliError m, MonadReader (CliEnv era) m)
                   -> FilePath                                -- ^ The JSON file with the Marlowe state and contract.
                   -> TokenName                               -- ^ The role name for the redemption.
                   -> AddressInEra era                        -- ^ The change address.
-                  -> [FilePath]                              -- ^ The files for required signing keys.
+                  -> [SigningKeyFile]                        -- ^ The files for required signing keys.
                   -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
-                  -> FilePath                                -- ^ The output file for the transaction body.
+                  -> TxBodyFile                              -- ^ The output file for the transaction body.
                   -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                   -> Bool                                    -- ^ Whether to print statistics about the transaction.
                   -> Bool                                    -- ^ Assertion that the transaction is invalid.
@@ -777,20 +779,22 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
     -- Read any metadata for the transaction.
     metadata <- readMaybeMetadata metadataFile
     -- Read the Marlowe transaction information that was used to populate the role-payout address.
-    SomeMarloweTransaction _ marloweOut <- decodeFileStrict marloweOutFile
+    SomeMarloweTransaction _ _ marloweOut <- decodeFileStrict marloweOutFile
     -- Read the signing keys.
     signingKeys <- mapM readSigningKey signingKeyFiles
+    let
+      roleCurrency = mtRolesCurrency marloweOut
+      -- Build the datum corresponding to the role name.
+      roleDatum = buildRoleDatum (Token roleCurrency roleName)
     -- Compute the hash of the role name.
-    roleHash <- liftCli . toCardanoScriptDataHash . diHash $ buildRoleDatum roleName
+    roleHash <- liftCli . toCardanoScriptDataHash . diHash $ roleDatum
     let
       -- Compute the validator information.
       validatorInfo = mtRoleValidator marloweOut
       -- Fetch the role-payout validator script.
-      PlutusScript _ roleScript = viScript validatorInfo
+      roleScript = viScript validatorInfo
       -- Fetch the role address.
       roleAddress = viAddress validatorInfo
-      -- Build the datum corresponding to the role name.
-      roleDatum = diDatum $ buildRoleDatum roleName
       -- Build the necessary redeemer.
       roleRedeemer = riRedeemer buildRoleRedeemer
       -- Test if a `TxOut` contains the role token datum.
@@ -809,10 +813,10 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
         . toAddressAny'
         $ roleAddress
     -- Set the value of one role token.
-    role <- liftCli $ toCardanoValue $ singleton (mtRoles marloweOut) roleName 1
+    role <- liftCli $ toCardanoValue $ singleton (mtRolesCurrency marloweOut) roleName 1
     let
       -- Build the spending from the script.
-      spend = buildPayFromScript roleScript roleDatum roleRedeemer . fst <$> utxos
+      spend = buildPayFromScript roleScript (diDatum roleDatum) roleRedeemer . fst <$> utxos
       -- Find how much is being spent from the script.
       -- The output value should include the spending from the script and the role token.
       withdrawn = mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos]
@@ -826,11 +830,12 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
         [output]
         Nothing
         changeAddress
+    revisedTxOutputs <- traverse (uncurry3 makeTxOut') revisedOutputs
     -- Build the transaction body.
     body <-
       buildBody connection
         spend Nothing
-        [] extraInputs revisedOutputs
+        [] extraInputs revisedTxOutputs
         (Just collateral) changeAddress
         (mtRange marloweOut)
         (hashSigningKey <$> signingKeys)
@@ -839,7 +844,7 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
         printStats
         invalid
     -- Write the transaction file.
-    doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+    doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (unTxBodyFile bodyFile) Nothing body
     -- Optionally submit the transaction, waiting for a timeout.
     forM_ timeout
       $ if invalid

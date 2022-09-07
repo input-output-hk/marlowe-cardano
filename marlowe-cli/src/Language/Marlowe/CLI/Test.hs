@@ -32,6 +32,7 @@ import Cardano.Api.Shelley (protocolParamProtocolVersion)
 import Control.Lens (Bifunctor (bimap))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ReaderT (runReaderT), runReader)
 import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
 import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, queryInEra, readSigningKey)
@@ -63,7 +64,6 @@ runTests era ScriptTests{..} =
         , localNodeNetworkId       = network
         , localNodeSocketPath      = socketPath
         }
-
     protocol <- runCli $ queryInEra connection C.QueryProtocolParameters
     faucetSigningKey <- readSigningKey (SigningKeyFile faucetSigningKeyFile)
     let
@@ -74,3 +74,4 @@ runTests era ScriptTests{..} =
     slotConfig <- runCli $ querySlotConfig connection
     tests' <- mapM decodeFileStrict tests
     mapM_ (scriptTest era protocolVersion costModel connection faucet slotConfig) tests'
+

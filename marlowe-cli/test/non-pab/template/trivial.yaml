@@ -3,39 +3,31 @@ stTestName: Non-PAB Trivial Contract Test
 stScriptOperations:
 
   - tag: Initialize
-    soOwner:
-      role_token: "bystander"
-    soTransaction: "TestTransaction-1"
-    soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
-    soMinAda: 1000000
-    soContract:
+    soContractNickname: "Trivial"
+    soMinAda: 10000000
+    soContractSource:
       template:
-        tag: "TemplateTrivial"
-        bystander:
-          role_token: "bystander"
-        minAda: 1000000
-        party:
-          role_token: "party"
-        depositLovelace: 15000000
-        withdrawalLovelace: 15000000
-        timeout:
+        tag: "UseTrivial"
+        utDepositLovelace: 15000000
+        utWithdrawalLovelace: 15000000
+        utTimeout:
           relative: 20000
 
   - tag: Prepare
-    soTransaction: "TestTransaction-1"
+    soContractNickname: "Trivial"
     soInputs:
       - input_from_party:
-          role_token: "party"
+          pk_hash: "Faucet"
         that_deposits: 15000000
         of_token:
           currency_symbol: ""
           token_name: ""
         into_account:
-          role_token: "party"
-    soOwner:
-      role_token: "bystander"
+          pk_hash: "Faucet"
+      - "input_notify"
     soMinimumTime: 1645590825000
     soMaximumTime: 1898051625000
 
-  - tag: Fail
-    soFailureMessage: "Failure Invoked"
+  - tag: AutoRun
+    soContractNickname: "Trivial"
+
