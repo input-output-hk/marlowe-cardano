@@ -1,12 +1,13 @@
 {-# LANGUAGE GADTs #-}
 module Language.Marlowe.Runtime.History.Store.Memory where
 
-import Control.Concurrent.STM (STM, TVar, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Semialign (alignWith)
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.These (These (..))
 import Data.Type.Equality ((:~:) (Refl))
@@ -20,10 +21,19 @@ import Language.Marlowe.Runtime.History.Store (FindNextStepsResponse (..), Histo
                                                SomeContractSteps (..))
 import Witherable (catMaybes)
 
+-- | Creates an in-memory store of contract history that uses STM primitives
+-- for storage.
 mkHistoryQueriesInMemory :: STM (HistoryQueries STM)
 mkHistoryQueriesInMemory = do
+  -- A TVar containing a map of TVars containing contact histories. This allows
+  -- individual histories to be updated without having to update the entire map
+  -- structure, decreasing the likelihood of transaction conflicts.
   historyVarsVar :: TVar (Map ContractId (TVar SomeHistory)) <- newTVar Map.empty
+  -- A TVar containing a record of rollbacks, so we know which block to roll
+  -- back to when making a request from a rolled back block.
+  rollbacksVar :: TVar (Map BlockHeader ChainPoint) <- newTVar Map.empty
   let
+    -- Get the history for a contract by its ID.
     getHistory :: ContractId -> MaybeT STM SomeHistory
     getHistory contractId = do
       historyVars <- lift $ readTVar historyVarsVar
@@ -34,25 +44,55 @@ mkHistoryQueriesInMemory = do
       SomeHistory version History{..} <- getHistory contractId
       pure (createBlock, SomeCreateStep version create)
 
+    -- Find the greatest common block between the provided list and the block
+    -- headers in a contract's history.
     findIntersection :: ContractId -> [BlockHeader] -> STM (Maybe Intersection)
     findIntersection contractId headers = runMaybeT do
       SomeHistory version History{..} <- getHistory contractId
-      let allHeadersInHistory = Set.insert createBlock $ Map.keysSet steps
-      let greatestCommonBlock = fst <$> Set.maxView (Set.intersection allHeadersInHistory $ Set.fromList headers)
+      let
+        allHeadersInHistory :: Set BlockHeader
+        allHeadersInHistory = Set.insert createBlock $ Map.keysSet steps
+
+        greatestCommonBlock :: Maybe BlockHeader
+        greatestCommonBlock = fst <$> Set.maxView (Set.intersection allHeadersInHistory $ Set.fromList headers)
       MaybeT $ pure $ Intersection version <$> greatestCommonBlock
 
+    -- Find the block to roll the given point back to recursively until a point
+    -- which has not been rolled back is found.
+    findRollback :: Maybe ChainPoint -> BlockHeader -> Map BlockHeader ChainPoint -> Maybe ChainPoint
+    findRollback candidate fromBlock rollbacks = case Map.lookup fromBlock rollbacks of
+      Nothing                -> candidate
+      Just Genesis           -> Just Genesis
+      Just (At newCandidate) -> findRollback (Just $ At newCandidate) newCandidate rollbacks
+
+    -- Find the next steps in a contract's history after the given point.
     findNextSteps :: ContractId -> ChainPoint -> STM FindNextStepsResponse
     findNextSteps contractId afterPoint = do
       mHistory <- runMaybeT $ getHistory contractId
-      pure case mHistory of
-        Nothing -> FindRollback Genesis
-        Just (SomeHistory version History{..}) ->
+      mRollback <- case afterPoint of
+        -- No way genesis has been rolled back.
+        Genesis       -> pure Nothing
+        At afterBlock -> findRollback Nothing afterBlock <$> readTVar rollbacksVar
+      pure case (mRollback, mHistory) of
+        -- If the history is not found, roll the client back to genesis
+        (_, Nothing) -> FindRollback Genesis
+        -- If the current point has been rolled back, send the rollback through.
+        (Just rollbackPoint, _) -> FindRollback rollbackPoint
+        (_, Just (SomeHistory version History{..})) ->
+          -- Partition the history into entries at or before the given point on
+          -- the left, and entries after it on the right. The left-hand entries
+          -- will be in reverse order (so the head of the list will be the most
+          -- recent entry that has occurred as of the given chain point).
           case break' ((<= afterPoint) . At . fst) $ Map.toAscList steps of
+            -- There is at least one set of steps at a point in the future.
             (_, (blockHeader, steps') : _) -> FindNext blockHeader $ SomeContractSteps version steps'
+            -- There are no steps in the future, and at least one set of steps
+            -- at or before the given point.
             ((blockHeader, _) : _, [])     -> FindWait blockHeader
+            -- There are no steps, so the most recent step was the create step.
             ([], [])                       -> FindWait createBlock
       where
-        -- | List Prelude.break but the left hand list will be in reverse
+        -- | Like Prelude.break but the left hand list will be in reverse
         -- order:
         --
         -- break' (<= 3) [0, 1, 3, 5, 7, 8] == ([3, 1, 0], [5, 7, 8])
@@ -105,7 +145,15 @@ mkHistoryQueriesInMemory = do
               | rollbackToPoint < At createBlock -> pure Nothing
               -- Remove all steps that occurred after the rollback from the
               -- previous history.
-              | otherwise -> updateSteps $ Map.fromDistinctAscList $ takeWhile ((<= rollbackToPoint) . At . fst) $ Map.toAscList prevSteps
+              | otherwise -> do
+                  -- Figure out which steps remain after the rollback, and
+                  -- which ones don't
+                  let (notRolledBack, rolledBack) = break ((> rollbackToPoint) . At . fst) $ Map.toAscList prevSteps
+                  -- Mark the points of the rolled back steps with the point
+                  -- they were rolled back to.
+                  modifyTVar rollbacksVar $ Map.union $ Map.fromSet (const rollbackToPoint) $ Set.fromList $ fst <$> rolledBack
+                  -- Update the stored steps.
+                  updateSteps $ Map.fromDistinctAscList notRolledBack
         -- The request specifies a new contract, programmer error!
         Just _ -> error "Cannot provide a create step for the same contract more than once"
 
