@@ -97,7 +97,6 @@ import qualified Ledger.Tx.CardanoAPI as L
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import Plutus.V1.Ledger.Time (POSIXTime)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V2.Ledger.Api as P
 
@@ -194,8 +193,8 @@ data ScriptOperation =
     {
       soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
     , soInputs           :: [A.Value]
-    , soMinimumTime      :: POSIXTime
-    , soMaximumTime      :: POSIXTime
+    , soMinimumTime      :: AnyTimeout
+    , soMaximumTime      :: AnyTimeout
     }
   | Publish
     { soPublisher        :: Maybe WalletNickname -- ^ By default use faucet wallet.
@@ -497,7 +496,5 @@ data ScriptEnv era = ScriptEnv
   }
 
 
-makeLenses ''ScriptState
-makeLenses ''ScriptEnv
-
-
+makeLenses 'ScriptEnv
+makeLenses 'ScriptState
