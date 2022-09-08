@@ -39,6 +39,8 @@ module Language.Marlowe.CLI.Types (
 , RedeemerInfo(..)
 , SomeMarloweTransaction(..)
 , CliEnv(..)
+, AnyTimeout(..)
+, TruncateMilliseconds(..)
 -- * eUTxOs
 , PayFromScript(..)
 , PayToScript(..)
@@ -86,8 +88,8 @@ module Language.Marlowe.CLI.Types (
 , toAddressAny'
 , toPaymentVerificationKey
 , getVerificationKey
-, AnyTimeout(..)
-, toTimeout
+, toMarloweTimeout
+, toPOSIXTime
 ) where
 
 
@@ -126,7 +128,7 @@ import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort)
 import qualified Data.Map.Strict as M (Map)
 import Data.Proxy (Proxy (Proxy))
-import Data.Time (NominalDiffTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
+import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import GHC.Exts (IsString (fromString))
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
@@ -134,6 +136,7 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage, pl
                                                       withPlutusScriptVersion)
 import Language.Marlowe.Extended.V1 (Timeout (POSIXTime))
 import qualified Language.Marlowe.Extended.V1 as E
+import qualified Plutus.V1.Ledger.Api as P
 
 
 -- | Exception for Marlowe CLI.
@@ -566,12 +569,30 @@ instance FromJSON AnyTimeout where
     _ -> fail "Expected object with a single field of either `absolute` or `relative`"
 
 
-toTimeout :: MonadIO m => AnyTimeout -> m E.Timeout
-toTimeout (AbsoluteTimeout t)       = pure $ POSIXTime t
-toTimeout (RelativeTimeout seconds) = do
-  let
-    toPOSIXMilliseconds = E.POSIXTime . floor . (1e6 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
-  liftIO $ toPOSIXMilliseconds . addUTCTime seconds <$> getCurrentTime
+utcToMilliseconds :: UTCTime -> Integer
+utcToMilliseconds = floor . (1e3 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
+
+utcToSeconds :: UTCTime -> Integer
+utcToSeconds = floor . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
+
+
+newtype TruncateMilliseconds = TruncateMilliseconds Bool
+
+anyTimeoutToMilliseconds :: MonadIO m => AnyTimeout -> TruncateMilliseconds -> m Integer
+anyTimeoutToMilliseconds (AbsoluteTimeout t) (TruncateMilliseconds r) = if r
+  then pure (1000 * (t `quot` 1000))
+  else pure t
+anyTimeoutToMilliseconds (RelativeTimeout seconds) (TruncateMilliseconds r) = do
+  t <- liftIO $ addUTCTime seconds <$> getCurrentTime
+  pure if r
+    then (1000 *) . utcToSeconds $ t
+    else utcToMilliseconds t
+
+toMarloweTimeout :: MonadIO m => AnyTimeout -> TruncateMilliseconds -> m E.Timeout
+toMarloweTimeout t r = POSIXTime <$> anyTimeoutToMilliseconds t r
+
+toPOSIXTime :: MonadIO m => AnyTimeout -> TruncateMilliseconds -> m P.POSIXTime
+toPOSIXTime t r = P.POSIXTime <$> anyTimeoutToMilliseconds t r
 
 
 data PublishingStrategy era =
