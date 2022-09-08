@@ -39,10 +39,11 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCliMaybe)
-import Language.Marlowe.CLI.Types (AnyTimeout, CliError (..), toTimeout)
+import Language.Marlowe.CLI.Types (AnyTimeout, CliError (..), TruncateMilliseconds (TruncateMilliseconds),
+                                   toMarloweTimeout)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
 import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
-import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Token, Value (..), toCore)
+import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
@@ -131,6 +132,10 @@ data OutputFiles = OutputFiles
   , stateFile    :: FilePath  -- ^ The output JSON file representing the Marlowe contract's state.
   }
 
+-- FIXME: It is an workaround for this: https://github.com/input-output-hk/marlowe-cardano/issues/236
+-- Let's be explicite about this.
+toMarloweTimeout' :: MonadIO m => AnyTimeout -> m E.Timeout
+toMarloweTimeout' t = toMarloweTimeout t (TruncateMilliseconds True)
 
 -- | Create a contract from a template.
 runTemplateCommand :: MonadError CliError m
@@ -138,7 +143,7 @@ runTemplateCommand :: MonadError CliError m
                     => TemplateCommand  -- ^ The command.
                     -> OutputFiles      -- ^ FilePath's for contractFile and stateFile
                     -> m ()             -- ^ Action for runninng the command.
-runTemplateCommand TemplateTrivial{..} OutputFiles{..} = do timeout' <- toTimeout timeout
+runTemplateCommand TemplateTrivial{..} OutputFiles{..} = do timeout' <- toMarloweTimeout' timeout
                                                             marloweContract <- makeContract $
                                                                 trivial
                                                                 party
@@ -147,10 +152,10 @@ runTemplateCommand TemplateTrivial{..} OutputFiles{..} = do timeout' <- toTimeou
                                                                 timeout'
                                                             let marloweState = initialMarloweState bystander minAda
                                                             makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateEscrow{..}  OutputFiles{..} = do paymentDeadline' <- toTimeout paymentDeadline
-                                                            complaintDeadline' <- toTimeout complaintDeadline
-                                                            disputeDeadline' <- toTimeout disputeDeadline
-                                                            mediationDeadline' <- toTimeout mediationDeadline
+runTemplateCommand TemplateEscrow{..}  OutputFiles{..} = do paymentDeadline' <- toMarloweTimeout' paymentDeadline
+                                                            complaintDeadline' <- toMarloweTimeout' complaintDeadline
+                                                            disputeDeadline' <- toMarloweTimeout' disputeDeadline
+                                                            mediationDeadline' <- toMarloweTimeout' mediationDeadline
                                                             marloweContract <- makeContract $
                                                                 escrow
                                                                   (Constant price)
@@ -163,8 +168,8 @@ runTemplateCommand TemplateEscrow{..}  OutputFiles{..} = do paymentDeadline' <- 
                                                                   mediationDeadline'
                                                             let marloweState = initialMarloweState mediator minAda
                                                             makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateSwap{..}  OutputFiles{..} = do aTimeout' <- toTimeout aTimeout
-                                                          bTimeout' <- toTimeout bTimeout
+runTemplateCommand TemplateSwap{..}  OutputFiles{..} = do aTimeout' <- toMarloweTimeout' aTimeout
+                                                          bTimeout' <- toMarloweTimeout' bTimeout
                                                           marloweContract <- makeContract $
                                                             swap
                                                               aParty
@@ -178,8 +183,8 @@ runTemplateCommand TemplateSwap{..}  OutputFiles{..} = do aTimeout' <- toTimeout
                                                               Close
                                                           let marloweState = initialMarloweState aParty minAda
                                                           makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do lendingDeadline' <- toTimeout lendingDeadline
-                                                                   paybackDeadline' <- toTimeout paybackDeadline
+runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do lendingDeadline' <- toMarloweTimeout' lendingDeadline
+                                                                   paybackDeadline' <- toMarloweTimeout' paybackDeadline
                                                                    marloweContract <- makeContract $
                                                                     zeroCouponBond
                                                                       lender
@@ -192,9 +197,9 @@ runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do lendingDeadli
                                                                       Close
                                                                    let marloweState = initialMarloweState lender minAda
                                                                    makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do issueDate' <- toTimeout issueDate
-                                                                maturityDate' <- toTimeout maturityDate
-                                                                settlementDate' <- toTimeout settlementDate
+runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do issueDate' <- toMarloweTimeout' issueDate
+                                                                maturityDate' <- toMarloweTimeout' maturityDate
+                                                                settlementDate' <- toMarloweTimeout' settlementDate
                                                                 marloweContract <- makeContract $
                                                                   coveredCall
                                                                     issuer

@@ -73,7 +73,8 @@ module Language.Marlowe.CLI.Test.Types (
 import Cardano.Api (AddressInEra, CardanoMode, Key (VerificationKey), LocalNodeConnectInfo, Lovelace, NetworkId,
                     PaymentKey, PolicyId, ScriptDataSupportedInEra, TxBody)
 import qualified Cardano.Api as C
-import Control.Lens (makeLenses)
+import Control.Lens (Lens')
+import Control.Lens.Lens (lens)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
@@ -93,7 +94,6 @@ import Ledger.Orphans ()
 import qualified Ledger.Tx.CardanoAPI as L
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import Plutus.V1.Ledger.Time (POSIXTime)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V2.Ledger.Api as P
 
@@ -190,8 +190,8 @@ data ScriptOperation =
     {
       soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
     , soInputs           :: [A.Value]
-    , soMinimumTime      :: POSIXTime
-    , soMaximumTime      :: POSIXTime
+    , soMinimumTime      :: AnyTimeout
+    , soMaximumTime      :: AnyTimeout
     }
   | AutoRun
     {
@@ -477,13 +477,38 @@ toUTxO (map unAUTxO -> utxos) = C.UTxO . Map.fromList $ utxos
 
 data ScriptEnv era = ScriptEnv
   { _seConnection      :: LocalNodeConnectInfo CardanoMode
-  , _seSlotConfig      :: SlotConfig
   , _seCostModelParams :: CostModelParams
   , _seEra             :: ScriptDataSupportedInEra era
+  , _seSlotConfig      :: SlotConfig
   }
 
 
-makeLenses ''ScriptState
-makeLenses ''ScriptEnv
+
+ssContracts :: Lens' (ScriptState era) (Map ContractNickname (MarloweContract era))
+ssContracts = lens _ssContracts (\se v -> se { _ssContracts = v })
+
+
+ssCurrencies :: Lens' (ScriptState era) (Map CurrencyNickname CustomCurrency)
+ssCurrencies = lens _ssCurrencies (\se v -> se { _ssCurrencies = v })
+
+
+ssWallets :: Lens' (ScriptState era) (Map WalletNickname (Wallet era))
+ssWallets = lens _ssWallets (\se v -> se { _ssWallets = v })
+
+
+seConnection :: Lens' (ScriptEnv era) (LocalNodeConnectInfo CardanoMode)
+seConnection = lens _seConnection (\se v -> se { _seConnection = v })
+
+
+seSlotConfig :: Lens' (ScriptEnv era) SlotConfig
+seSlotConfig = lens _seSlotConfig (\se v -> se { _seSlotConfig = v })
+
+
+seCostModelParams :: Lens' (ScriptEnv era) CostModelParams
+seCostModelParams = lens _seCostModelParams (\se v -> se { _seCostModelParams = v })
+
+
+seEra :: Lens' (ScriptEnv era) (ScriptDataSupportedInEra era)
+seEra = lens _seEra (\se v -> se { _seEra = v })
 
 
