@@ -75,7 +75,7 @@ tests =
             ]
         , testGroup "Constraint 4. No output to script on close"
             [
-              testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
+-- FIXME:     testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
             ]
         , testGroup "Constraint 5. Input value from script"
             [
