@@ -1,8 +1,9 @@
-{-# LANGUAGE DataKinds    #-}
-{-# LANGUAGE EmptyCase    #-}
-{-# LANGUAGE GADTs        #-}
-{-# LANGUAGE PolyKinds    #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds     #-}
+{-# LANGUAGE EmptyCase     #-}
+{-# LANGUAGE GADTs         #-}
+{-# LANGUAGE PolyKinds     #-}
+{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE TypeOperators #-}
 
 -- | The type of the chain seek protocol.
 
@@ -13,17 +14,15 @@ import Data.Kind (Type)
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as T
+import Data.Type.Equality (type (:~:))
 import Network.TypedProtocol (Protocol (..))
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
 
-data TagEq err err' result result' where
-  Refl :: TagEq err err result result
-
 class Query (q :: * -> * -> *) where
   data Tag q :: * -> * -> *
   tagFromQuery :: q err result -> Tag q err result
-  tagEq :: Tag q err result -> Tag q err' result' -> Maybe (TagEq err err' result result')
+  tagEq :: Tag q err result -> Tag q err' result' -> Maybe (err :~: err', result :~: result')
   putTag :: Tag q err result -> Put
   getTag :: Get (SomeTag q)
   putQuery :: q err result -> Put

@@ -167,7 +167,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           [ O.long "port-number"
           , defaultPort
           , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the chain seek protocol on. Default value: 3715"
+          , O.help "The port number to serve the chain seek protocol on."
+          , O.showDefault
           ]
 
         queryPortOption :: O.Parser PortNumber
@@ -175,7 +176,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           [ O.long "query-port-number"
           , defaultQueryPort
           , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the query protocol on. Default value: 3716"
+          , O.help "The port number to serve the query protocol on."
+          , O.showDefault
           ]
 
         hostOption :: O.Parser HostName
@@ -184,7 +186,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , O.short 'h'
           , defaultHost
           , O.metavar "HOST_NAME"
-          , O.help "The hostname to serve the chain seek protocol on. Default value: 127.0.0.1"
+          , O.help "The hostname to serve the chain seek protocol on."
+          , O.showDefault
           ]
 
         costModelParser :: O.Parser CostModel
@@ -195,7 +198,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           [ O.long "block-cost"
           , O.value 1
           , O.metavar "COST_UNITS"
-          , O.help "The number of cost units to associate with persisting a block when computing the cost model. Default value: 1"
+          , O.help "The number of cost units to associate with persisting a block when computing the cost model."
+          , O.showDefault
           ]
 
         txCostParser :: O.Parser Int
@@ -203,7 +207,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           [ O.long "tx-cost"
           , O.value 10
           , O.metavar "COST_UNITS"
-          , O.help "The number of cost units to associate with persisting a transaction when computing the cost model. Default value: 10"
+          , O.help "The number of cost units to associate with persisting a transaction when computing the cost model."
+          , O.showDefault
           ]
 
         maxCostParser :: O.Parser Int
@@ -211,7 +216,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           [ O.long "max-cost"
           , O.value 100_000
           , O.metavar "COST_UNITS"
-          , O.help "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block. Default value: 100,000"
+          , O.help "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block."
+          , O.showDefault
           ]
 
     infoMod :: O.InfoMod Options

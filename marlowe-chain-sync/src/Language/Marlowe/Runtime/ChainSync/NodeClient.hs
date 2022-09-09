@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
   , CostModel(..)
   , isEmptyChanges
   , mkNodeClient
+  , toEmptyChanges
   ) where
 
 import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), BlockNo, CardanoMode, ChainPoint (..),

@@ -64,6 +64,10 @@ library
   import: lang
   hs-source-dirs:   src
   exposed-modules:
+    Language.Marlowe.Protocol.Sync.Client
+    Language.Marlowe.Protocol.Sync.Codec
+    Language.Marlowe.Protocol.Sync.Server
+    Language.Marlowe.Protocol.Sync.Types
     Language.Marlowe.Runtime.Core.Api
     Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Api
@@ -71,6 +75,9 @@ library
     Language.Marlowe.Runtime.History.FollowerSupervisor
     Language.Marlowe.Runtime.History.JobServer
     Language.Marlowe.Runtime.History.QueryServer
+    Language.Marlowe.Runtime.History.Store
+    Language.Marlowe.Runtime.History.Store.Memory
+    Language.Marlowe.Runtime.History.SyncServer
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -83,6 +90,7 @@ library
     , marlowe-chain-sync
     , marlowe-protocols
     , plutus-ledger-api
+    , semialign
     , split
     , stm
     , text
@@ -144,6 +152,7 @@ executable marlowe-history-cli
     , base16
     , containers
     , marlowe
+    , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , network
@@ -159,6 +168,7 @@ executable marlowe-follower
   main-is: Main.hs
   other-modules:
     Paths_marlowe_runtime
+    Options
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:

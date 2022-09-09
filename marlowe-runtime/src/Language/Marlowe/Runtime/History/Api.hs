@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.History.Api where
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash, TxError, TxId, TxOutRef, UTxOError)
@@ -63,6 +64,8 @@ data ExtractMarloweTransactionError
 data FollowerStatus
   = Pending
   | Following SomeMarloweVersion
+  | Waiting SomeMarloweVersion
+  | Finished SomeMarloweVersion
   | Failed ContractHistoryError
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass Binary
@@ -76,6 +79,15 @@ data CreateStep v = CreateStep
 deriving instance Show (CreateStep 'V1)
 deriving instance Eq (CreateStep 'V1)
 
+data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
+
+instance Binary (CreateStep 'V1) where
+  put CreateStep{..} = do
+    putDatum MarloweV1 datum
+    put scriptAddress
+    put payoutValidatorHash
+  get = CreateStep <$> getDatum MarloweV1 <*> get <*> get
+
 data RedeemStep v = RedeemStep
   { utxo        :: TxOutRef
   , redeemingTx :: TxId
@@ -85,14 +97,22 @@ data RedeemStep v = RedeemStep
 deriving instance Show (RedeemStep 'V1)
 deriving instance Eq (RedeemStep 'V1)
 
+instance Binary (RedeemStep 'V1) where
+  put RedeemStep{..} = do
+    put utxo
+    put redeemingTx
+    putPayoutDatum MarloweV1 datum
+  get = RedeemStep <$> get <*> get <*> getPayoutDatum MarloweV1
+
 data ContractStep v
-  = Create (CreateStep v)
-  | ApplyTransaction (Transaction v)
+  = ApplyTransaction (Transaction v)
   | RedeemPayout (RedeemStep v)
   -- TODO add TimeoutElapsed
+  deriving (Generic)
 
 deriving instance Show (ContractStep 'V1)
 deriving instance Eq (ContractStep 'V1)
+instance Binary (ContractStep 'V1)
 
 data HistoryCommand status err result where
   FollowContract :: ContractId -> HistoryCommand Void ContractHistoryError Bool
@@ -112,9 +132,9 @@ instance Command HistoryCommand where
   tagFromJobId = \case
 
   tagEq = curry \case
-    (TagFollowContract, TagFollowContract)               -> Just Refl
+    (TagFollowContract, TagFollowContract)               -> Just (Refl, Refl, Refl)
     (TagFollowContract, _)                               -> Nothing
-    (TagStopFollowingContract, TagStopFollowingContract) -> Just Refl
+    (TagStopFollowingContract, TagStopFollowingContract) -> Just (Refl, Refl, Refl)
     (TagStopFollowingContract, _)                        -> Nothing
 
   putTag = \case
@@ -174,6 +194,18 @@ type RuntimeHistoryJobCodec m = Codec RuntimeHistoryJob DeserializeError m LBS.B
 historyJobCodec :: Applicative m => RuntimeHistoryJobCodec m
 historyJobCodec = codecJob
 
+data History v = History
+  { create      :: CreateStep v
+  , createBlock :: Chain.BlockHeader
+  , steps       :: Map Chain.BlockHeader [ContractStep v]
+  } deriving Generic
+
+deriving instance Show (History 'V1)
+deriving instance Eq (History 'V1)
+instance Binary (History 'V1)
+
+data SomeHistory = forall v. SomeHistory (MarloweVersion v) (History v)
+
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
 
@@ -184,7 +216,7 @@ instance Query.IsQuery HistoryQuery where
   tagFromQuery = \case
     GetFollowedContracts -> TagGetFollowedContracts
 
-  tagEq TagGetFollowedContracts TagGetFollowedContracts = Just Query.Refl
+  tagEq TagGetFollowedContracts TagGetFollowedContracts = Just (Refl, Refl, Refl)
 
   putTag = \case
     TagGetFollowedContracts -> putWord8 0x01
@@ -196,7 +228,7 @@ instance Query.IsQuery HistoryQuery where
       _    -> fail "invalid tag bytes"
 
   putQuery = \case
-    GetFollowedContracts -> mempty
+    GetFollowedContracts  -> mempty
 
   getQuery = \case
     TagGetFollowedContracts -> pure GetFollowedContracts

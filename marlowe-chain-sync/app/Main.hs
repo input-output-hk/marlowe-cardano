@@ -7,7 +7,7 @@ import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
 import Control.Concurrent.STM (atomically, modifyTVar, newTVarIO, readTVar)
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception (bracket, bracketOnError, finally, throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT, withExceptT)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
@@ -19,11 +19,14 @@ import Hasql.Pool (UsageError (..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSync (..), ChainSyncDependencies (..), mkChainSync)
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis (..), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
 import Language.Marlowe.Runtime.ChainSync.QueryServer (RunQueryServer (..))
+import Language.Marlowe.Runtime.ChainSync.Server (RunChainSeekServer (..))
 import Network.Channel (effectChannel, socketAsChannel)
+import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
@@ -60,15 +63,18 @@ run Options{..} = withSocketsDo do
             (PostgreSQL.databaseQueries genesisBlock)
         , persistRateLimit
         , genesisBlock
-        , acceptChannel = do
-            socketId <- atomically do
-              modifyTVar socketIdVar (+1)
-              readTVar socketIdVar
-            (conn, _ :: SockAddr) <- accept chainSeekSocket
-            pure
-              ( effectChannel (logSend socketId) (logRecv socketId) $ socketAsChannel conn
-              , close conn
-              )
+          , acceptRunChainSeekServer = do
+              socketId <- atomically do
+                modifyTVar socketIdVar (+1)
+                readTVar socketIdVar
+              (conn, _ :: SockAddr) <- accept chainSeekSocket
+              let
+                driver = mkDriver throwIO runtimeChainSeekCodec
+                  $ effectChannel (logSend socketId) (logRecv socketId)
+                  $ socketAsChannel conn
+              pure $ RunChainSeekServer \server -> do
+                let peer = chainSeekServerPeer Genesis server
+                fst <$> (runPeerWithDriver driver peer (startDState driver) `finally` close conn)
         , acceptRunQueryServer = do
             (conn, _ :: SockAddr) <- accept querySocket
             let driver = mkDriver throwIO codecQuery $ socketAsChannel conn

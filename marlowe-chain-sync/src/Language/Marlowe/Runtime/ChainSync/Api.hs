@@ -49,8 +49,10 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , fromDatum
   , fromPlutusData
   , fromRedeemer
+  , getUTCTime
   , isAfter
   , paymentCredential
+  , putUTCTime
   , runtimeChainSeekCodec
   , schemaVersion1_0
   , slotToUTCTime
@@ -73,7 +75,7 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Control.Monad ((>=>))
 import Data.Bifunctor (bimap)
-import Data.Binary (Binary (..), get, getWord8, put, putWord8)
+import Data.Binary (Binary (..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
@@ -87,6 +89,7 @@ import Data.These (These (..))
 import Data.Time (NominalDiffTime, UTCTime (..), addUTCTime, diffTimeToPicoseconds, nominalDiffTimeToSeconds,
                   picosecondsToDiffTime, secondsToNominalDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
@@ -353,6 +356,7 @@ fromCardanoStakeKeyHash = PaymentKeyHash . Cardano.serialiseToRawBytes
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving (IsString, Show) via Base16
+  deriving anyclass (Binary)
 
 fromCardanoScriptHash :: Cardano.ScriptHash -> ScriptHash
 fromCardanoScriptHash = ScriptHash . Cardano.serialiseToRawBytes
@@ -469,23 +473,23 @@ instance Query Move where
   tagEq = curry \case
     (TagFork m1 m2, TagFork m3 m4)           ->
       case (,) <$> tagEq m1 m3 <*> tagEq m2 m4 of
-        Nothing           -> Nothing
-        Just (Refl, Refl) -> Just Refl
+        Nothing                           -> Nothing
+        Just ((Refl, Refl), (Refl, Refl)) -> Just (Refl, Refl)
     -- Please don't refactor this to use a single catch-all wildcard pattern.
     -- The idea of doing it this way is to cause an incomplete pattern match
     -- warning when a new 'Tag' constructor is added.
     (TagFork _ _, _)                         -> Nothing
-    (TagAdvanceSlots, TagAdvanceSlots)       -> Just Refl
+    (TagAdvanceSlots, TagAdvanceSlots)       -> Just (Refl, Refl)
     (TagAdvanceSlots, _)                     -> Nothing
-    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just Refl
+    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just (Refl, Refl)
     (TagAdvanceBlocks, _)                    -> Nothing
-    (TagIntersect, TagIntersect)             -> Just Refl
+    (TagIntersect, TagIntersect)             -> Just (Refl, Refl)
     (TagIntersect, _)                        -> Nothing
-    (TagFindConsumingTx, TagFindConsumingTx) -> Just Refl
+    (TagFindConsumingTx, TagFindConsumingTx) -> Just (Refl, Refl)
     (TagFindConsumingTx, _)                  -> Nothing
-    (TagFindTx, TagFindTx)                   -> Just Refl
+    (TagFindTx, TagFindTx)                   -> Just (Refl, Refl)
     (TagFindTx, _)                           -> Nothing
-    (TagFindConsumingTxs, TagFindConsumingTxs) -> Just Refl
+    (TagFindConsumingTxs, TagFindConsumingTxs) -> Just (Refl, Refl)
     (TagFindConsumingTxs, _)                  -> Nothing
 
   putTag = \case
@@ -612,24 +616,28 @@ data SlotConfig = SlotConfig
   }
   deriving stock (Show, Eq, Ord, Generic)
 
+putUTCTime :: UTCTime -> Put
+putUTCTime UTCTime{..} = do
+  let (year, dayOfYear) = toOrdinalDate utctDay
+  put year
+  put dayOfYear
+  put $ diffTimeToPicoseconds utctDayTime
+
+getUTCTime :: Get UTCTime
+getUTCTime  = do
+  year <- get
+  dayOfYear <- get
+  utctDayTime <- picosecondsToDiffTime <$> get
+  utctDay <- case fromOrdinalDateValid year dayOfYear of
+    Nothing -> fail "Invalid ISO 8601 ordinal date"
+    Just a  -> pure a
+  pure UTCTime{..}
+
 instance Binary SlotConfig where
   put SlotConfig{..} = do
-    let UTCTime{..} = slotZeroTime
-    let (year, dayOfYear) = toOrdinalDate utctDay
-    put year
-    put dayOfYear
-    put $ diffTimeToPicoseconds utctDayTime
+    putUTCTime slotZeroTime
     put $ nominalDiffTimeToSeconds slotLength
-  get = do
-    year <- get
-    dayOfYear <- get
-    utctDayTime <- picosecondsToDiffTime <$> get
-    slotLength <- secondsToNominalDiffTime <$> get
-    utctDay <- case fromOrdinalDateValid year dayOfYear of
-      Nothing -> fail "Invalid ISO 8601 ordinal date"
-      Just a  -> pure a
-    let slotZeroTime = UTCTime{..}
-    pure SlotConfig{..}
+  get = SlotConfig <$> getUTCTime <*> (secondsToNominalDiffTime <$> get)
 
 data ChainSyncQuery delimiter err result where
   GetSlotConfig :: ChainSyncQuery Void () SlotConfig
@@ -639,9 +647,9 @@ instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
-  tagEq TagGetSlotConfig TagGetSlotConfig               = Just Query.Refl
+  tagEq TagGetSlotConfig TagGetSlotConfig               = Just (Refl, Refl, Refl)
   tagEq TagGetSlotConfig _                              = Nothing
-  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Query.Refl
+  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
   tagEq TagGetSecurityParameter _                       = Nothing
   putTag = \case
     TagGetSlotConfig        -> putWord8 0x01

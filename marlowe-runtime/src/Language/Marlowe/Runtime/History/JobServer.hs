@@ -70,10 +70,10 @@ mkWorker WorkerDependencies{..} =
           then atomically do
             statuses <- followerStatuses
             case Map.lookup contractId statuses of
-              Nothing            -> retry
-              Just Pending       -> retry
-              Just (Following _) -> pure $ Right True
-              Just (Failed err)  -> pure $ Left err
+              Nothing           -> retry
+              Just Pending      -> retry
+              Just (Failed err) -> pure $ Left err
+              Just _            -> pure $ Right True
           else pure $ Right False
       Left (StopFollowingContract contractId) -> atomically $ Right <$> stopFollowingContract contractId
       Right jobId -> case jobId of

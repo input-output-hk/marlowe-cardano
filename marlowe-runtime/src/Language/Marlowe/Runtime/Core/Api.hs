@@ -5,28 +5,30 @@
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Language.Marlowe.Runtime.Core.Api where
 
-import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), eitherDecode, encode, object, withText, (.:),
-                   (.=))
+import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), eitherDecode, encode, withText)
 import Data.Aeson.Types (Parser, parse, parseFail)
-import Data.Binary (Binary (..))
+import Data.Binary (Binary (..), Get, Put)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
+import Data.Type.Equality (TestEquality (..), type (:~:) (Refl))
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ScriptHash, TokenName (..), TxId (..), TxIx (..),
-                                               TxOutRef (..))
+                                               TxOutRef (..), getUTCTime, putUTCTime)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
@@ -63,6 +65,14 @@ data MarloweVersionTag
 data MarloweVersion (v :: MarloweVersionTag) where
   MarloweV1 :: MarloweVersion 'V1
 
+instance TestEquality MarloweVersion where
+  testEquality MarloweV1 MarloweV1 = Just Refl
+
+assertVersionsEqual :: MarloweVersion v -> MarloweVersion v' -> v :~: v'
+assertVersionsEqual v1 v2 = fromMaybe
+  (error $ "getNextSteps: Marlowe version mismatch. Expected " <> show v1 <> ", got " <> show v2)
+  (testEquality v1 v2)
+
 deriving instance Show (MarloweVersion v)
 deriving instance Eq (MarloweVersion v)
 deriving instance Ord (MarloweVersion v)
@@ -94,6 +104,24 @@ data Transaction v = Transaction
 deriving instance Show (Transaction 'V1)
 deriving instance Eq (Transaction 'V1)
 
+instance Binary (Transaction 'V1) where
+  put Transaction{..} = do
+    put transactionId
+    put contractId
+    put blockHeader
+    putUTCTime validityLowerBound
+    putUTCTime validityUpperBound
+    putRedeemer MarloweV1 redeemer
+    put output
+  get = Transaction
+    <$> get
+    <*> get
+    <*> get
+    <*> getUTCTime
+    <*> getUTCTime
+    <*> getRedeemer MarloweV1
+    <*> get
+
 data TransactionOutput v = TransactionOutput
   { payouts      :: Map Chain.TxOutRef (Payout v)
   , scriptOutput :: Maybe (TransactionScriptOutput v)
@@ -101,6 +129,14 @@ data TransactionOutput v = TransactionOutput
 
 deriving instance Show (TransactionOutput 'V1)
 deriving instance Eq (TransactionOutput 'V1)
+
+instance Binary (TransactionOutput 'V1) where
+  put TransactionOutput{..} = do
+    put payouts
+    put scriptOutput
+  get = TransactionOutput
+    <$> get
+    <*> get
 
 data Payout v = Payout
   { assets :: Chain.Assets
@@ -110,6 +146,12 @@ data Payout v = Payout
 deriving instance Show (Payout 'V1)
 deriving instance Eq (Payout 'V1)
 
+instance Binary (Payout 'V1) where
+  put Payout{..} = do
+    put assets
+    put datum
+  get = Payout <$> get <*> get
+
 data TransactionScriptOutput v = TransactionScriptOutput
   { utxo  :: TxOutRef
   , datum :: Datum v
@@ -117,6 +159,12 @@ data TransactionScriptOutput v = TransactionScriptOutput
 
 deriving instance Show (TransactionScriptOutput 'V1)
 deriving instance Eq (TransactionScriptOutput 'V1)
+
+instance Binary (TransactionScriptOutput 'V1) where
+  put TransactionScriptOutput{..} = do
+    put utxo
+    putDatum MarloweV1 datum
+  get = TransactionScriptOutput <$> get <*> getDatum MarloweV1
 
 data SomeMarloweVersion = forall v. SomeMarloweVersion (MarloweVersion v)
 
@@ -129,18 +177,6 @@ instance Ord SomeMarloweVersion where
 instance Show SomeMarloweVersion where
   showsPrec p (SomeMarloweVersion version) = showParen (p >= 11)
     $ showString "SomeMarloweVersion " . showsPrec 11 version
-
-data ContractInVersion v = ContractInVersion (MarloweVersion v) (Contract v)
-data SomeContractInVersion = forall v. SomeContractInVersion (ContractInVersion v)
-
-data RedeemerInVersion v = RedeemerInVersion (MarloweVersion v) (Redeemer v)
-data SomeRedeemerInVersion = forall v. SomeRedeemerInVersion (RedeemerInVersion v)
-
-data DatumInVersion v = DatumInVersion (MarloweVersion v) (Datum v)
-data SomeDatumInVersion = forall v. SomeDatumInVersion (DatumInVersion v)
-
-data PayoutDatumInVersion v = PayoutDatumInVersion (MarloweVersion v) (PayoutDatum v)
-data SomePayoutDatumInVersion = forall v. SomePayoutDatumInVersion (PayoutDatumInVersion v)
 
 instance ToJSON (MarloweVersion v) where
   toJSON = String . \case
@@ -160,106 +196,47 @@ instance Binary SomeMarloweVersion where
     0x01 -> pure $ SomeMarloweVersion MarloweV1
     _    -> fail "Invalid marlowe version bytes"
 
-instance ToJSON (ContractInVersion v) where
-  toJSON (ContractInVersion v c) = object
-    [ "version" .= v
-    , "contract" .= contractToJSON v c
-    ]
+putContract :: MarloweVersion v -> Contract v -> Put
+putContract v = put . encode . contractToJSON v
 
-instance FromJSON SomeContractInVersion where
-  parseJSON json = do
-    obj <- parseJSON json
-    SomeMarloweVersion v <- obj .: "version"
-    c <- contractFromJSON v =<< obj .: "contract"
-    pure $ SomeContractInVersion $ ContractInVersion v c
+getContract :: MarloweVersion v -> Get (Contract v)
+getContract v = do
+  bytes <- get
+  case eitherDecode bytes of
+    Left err -> fail err
+    Right json -> case parse (contractFromJSON v) json of
+      Error err -> fail err
+      Success c -> pure c
 
-instance Binary SomeContractInVersion where
-  put (SomeContractInVersion (ContractInVersion v c)) = do
-    put $ SomeMarloweVersion v
-    put $ encode $ contractToJSON v c
-  get = do
-    SomeMarloweVersion v <- get
-    bytes <- get
-    case eitherDecode bytes of
-      Left err -> fail err
-      Right json -> case parse (contractFromJSON v) json of
-        Error err -> fail err
-        Success c -> pure $ SomeContractInVersion $ ContractInVersion v c
+putRedeemer :: MarloweVersion v -> Redeemer v -> Put
+putRedeemer v = put . encode . redeemerToJSON v
 
-instance ToJSON (RedeemerInVersion v) where
-  toJSON (RedeemerInVersion v r) = object
-    [ "version" .= v
-    , "redeemer" .= redeemerToJSON v r
-    ]
+getRedeemer :: MarloweVersion v -> Get (Redeemer v)
+getRedeemer v = do
+  bytes <- get
+  case eitherDecode bytes of
+    Left err -> fail err
+    Right json -> case parse (redeemerFromJSON v) json of
+      Error err -> fail err
+      Success r -> pure r
 
-instance FromJSON SomeRedeemerInVersion where
-  parseJSON json = do
-    obj <- parseJSON json
-    SomeMarloweVersion v <- obj .: "version"
-    r <- redeemerFromJSON v =<< obj .: "redeemer"
-    pure $ SomeRedeemerInVersion $ RedeemerInVersion v r
+putDatum :: MarloweVersion v -> Datum v -> Put
+putDatum v = put . encode . datumToJSON v
 
-instance Binary SomeRedeemerInVersion where
-  put (SomeRedeemerInVersion (RedeemerInVersion v c)) = do
-    put $ SomeMarloweVersion v
-    put $ encode $ redeemerToJSON v c
-  get = do
-    SomeMarloweVersion v <- get
-    bytes <- get
-    case eitherDecode bytes of
-      Left err -> fail err
-      Right json -> case parse (redeemerFromJSON v) json of
-        Error err -> fail err
-        Success c -> pure $ SomeRedeemerInVersion $ RedeemerInVersion v c
+getDatum :: MarloweVersion v -> Get (Datum v)
+getDatum v = do
+  bytes <- get
+  case eitherDecode bytes of
+    Left err -> fail err
+    Right json -> case parse (datumFromJSON v) json of
+      Error err -> fail err
+      Success d -> pure d
 
-instance ToJSON (DatumInVersion v) where
-  toJSON (DatumInVersion v d) = object
-    [ "version" .= v
-    , "datum" .= datumToJSON v d
-    ]
+putPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Put
+putPayoutDatum MarloweV1 = put
 
-instance FromJSON SomeDatumInVersion where
-  parseJSON json = do
-    obj <- parseJSON json
-    SomeMarloweVersion v <- obj .: "version"
-    d <- datumFromJSON v =<< obj .: "datum"
-    pure $ SomeDatumInVersion $ DatumInVersion v d
-
-instance Binary SomeDatumInVersion where
-  put (SomeDatumInVersion (DatumInVersion v c)) = do
-    put $ SomeMarloweVersion v
-    put $ encode $ datumToJSON v c
-  get = do
-    SomeMarloweVersion v <- get
-    bytes <- get
-    case eitherDecode bytes of
-      Left err -> fail err
-      Right json -> case parse (datumFromJSON v) json of
-        Error err -> fail err
-        Success c -> pure $ SomeDatumInVersion $ DatumInVersion v c
-
-instance ToJSON (PayoutDatumInVersion v) where
-  toJSON (PayoutDatumInVersion v d) = object
-    [ "version" .= v
-    , "datum" .= payoutDatumToJSON v d
-    ]
-
-instance FromJSON SomePayoutDatumInVersion where
-  parseJSON json = do
-    obj <- parseJSON json
-    SomeMarloweVersion v <- obj .: "version"
-    d <- payoutDatumFromJSON v =<< obj .: "datum"
-    pure $ SomePayoutDatumInVersion $ PayoutDatumInVersion v d
-
-instance Binary SomePayoutDatumInVersion where
-  put (SomePayoutDatumInVersion (PayoutDatumInVersion v c)) = do
-    put $ SomeMarloweVersion v
-    case v of
-      MarloweV1 -> put c
-  get = do
-    SomeMarloweVersion v <- get
-    SomePayoutDatumInVersion . PayoutDatumInVersion v <$> case v of
-      MarloweV1 -> get
+getPayoutDatum :: MarloweVersion v -> Get (PayoutDatum v)
+getPayoutDatum MarloweV1 = get
 
 contractToJSON :: MarloweVersion v -> Contract v -> Value
 contractToJSON = \case

@@ -1,4 +1,7 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE RankNTypes            #-}
 
 module Language.Marlowe.Runtime.ChainSync
   ( ChainSync (..)
@@ -11,7 +14,6 @@ import qualified Cardano.Api as Cardano
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.STM (STM)
 import Control.Monad (unless)
-import qualified Data.ByteString.Lazy as LBS
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
@@ -20,20 +22,19 @@ import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel, NodeClient (..)
 import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServer (..), ChainSyncQueryServerDependencies (..),
                                                        RunQueryServer, mkChainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServer (..), ChainSyncServerDependencies (..),
-                                                  mkChainSyncServer)
+                                                  RunChainSeekServer (..), mkChainSyncServer)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), mkChainStore)
-import Network.Channel (Channel)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
 data ChainSyncDependencies = ChainSyncDependencies
-  { connectToLocalNode   :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
-  , maxCost              :: !Int
-  , costModel            :: !CostModel
-  , databaseQueries      :: !(DatabaseQueries IO)
-  , persistRateLimit     :: !NominalDiffTime
-  , genesisBlock         :: !GenesisBlock
-  , acceptChannel        :: IO (Channel IO LBS.ByteString, IO ())
-  , acceptRunQueryServer :: IO (RunQueryServer IO)
+  { connectToLocalNode       :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
+  , maxCost                  :: !Int
+  , costModel                :: !CostModel
+  , databaseQueries          :: !(DatabaseQueries IO)
+  , persistRateLimit         :: !NominalDiffTime
+  , genesisBlock             :: !GenesisBlock
+  , acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
+  , acceptRunQueryServer     :: IO (RunQueryServer IO)
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint

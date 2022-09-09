@@ -67,7 +67,7 @@ mkWorker WorkerDependencies{..} =
   where
     server :: RuntimeHistoryQueryServer IO ()
     server = QueryServer $ pure $ ServerStInit \case
-      GetFollowedContracts -> getFollowedContractsServer followerPageSize followerStatuses
+      GetFollowedContracts  -> getFollowedContractsServer followerPageSize followerStatuses
 
 getFollowedContractsServer
   :: Natural
@@ -75,21 +75,23 @@ getFollowedContractsServer
   -> IO (ServerStNext HistoryQuery 'CanReject ContractId Void (Map ContractId FollowerStatus) IO ())
 getFollowedContractsServer followerPageSize followerStatuses = do
   followers <- atomically followerStatuses
-  next followers
+  pure $ next followers
   where
   next
     :: Map ContractId FollowerStatus
-    -> IO (ServerStNext HistoryQuery k ContractId Void (Map ContractId FollowerStatus) IO ())
-  next followers =  do
+    -> ServerStNext HistoryQuery k ContractId Void (Map ContractId FollowerStatus) IO ()
+  next followers =
     let
       (results, remaining) = bimap (Map.fromDistinctAscList . fmap snd) (fmap snd)
         $ break ((== followerPageSize) . fst)
         $ zip [0..]
         $ Map.toAscList followers
       nextPageDelimiter = fst <$> listToMaybe remaining
-    pure $ SendMsgNextPage results nextPageDelimiter ServerStPage
-      { recvMsgDone = pure ()
-      , recvMsgRequestNext = \delimiter -> next
-          $ Map.fromDistinctAscList
-          $ dropWhile ((/= delimiter) . fst) remaining
-      }
+    in
+      SendMsgNextPage results nextPageDelimiter ServerStPage
+        { recvMsgDone = pure ()
+        , recvMsgRequestNext = \delimiter -> pure
+            $ next
+            $ Map.fromDistinctAscList
+            $ dropWhile ((/= delimiter) . fst) remaining
+        }
