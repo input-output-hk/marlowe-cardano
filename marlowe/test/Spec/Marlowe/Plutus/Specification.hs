@@ -78,6 +78,7 @@ tests =
             ]
         , testGroup "Constraint 6. Output value to script"
             [
+              testProperty "Invalid mismatch between state and script input" checkValueOutput
             ]
         , testGroup "Constraint 7. Input state"
             [
@@ -288,7 +289,7 @@ checkCloseOutput =
               _      -> True
 
 
--- | Check that value input to a script matches its state.
+-- | Check that value input to a script matches its input state.
 checkValueInput :: Property
 checkValueInput =
   property
@@ -308,6 +309,37 @@ checkValueInput =
                 ]
             let
               scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
+            pure (marloweParams, marloweData, marloweInput, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True
+
+
+-- | Check that value output to a script matches its output state.
+checkValueOutput :: Property
+checkValueOutput =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
+              arbitrarySemanticsTransaction False
+                `suchThat` ((/= Close) . txOutContract . (^. _5))
+            let
+              ownAddress = semanticsAddress marloweParams
+              txInfoOutputs' =
+                [
+                  if address == ownAddress
+                    then txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
+                    else txOut
+                |
+                  txOut@(TxOut address value _) <- txInfoOutputs (scriptContextTxInfo scriptContext)
+                ]
+            let
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
             pure (marloweParams, marloweData, marloweInput, scriptContext')
       in
         forAll gen
