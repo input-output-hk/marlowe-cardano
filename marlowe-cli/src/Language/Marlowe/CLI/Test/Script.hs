@@ -70,7 +70,7 @@ import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), C
                                         getMarloweThreadTxIn, overAnyMarloweThread, scriptState, seConnection,
                                         seCostModelParams, seEra, seProtocolVersion, seSlotConfig, ssContracts,
                                         ssCurrencies, ssWallets, walletPubKeyHash)
-import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, buildPublishingImpl, selectUtxosImpl)
+import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, publishImpl, selectUtxosImpl)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
@@ -267,21 +267,18 @@ interpret Publish {..} = do
   Wallet { waAddress, waSigningKey } <- maybe getFaucet findWallet soPublisher
 
   connection <- view seConnection
-  txBody <- runCli "[Publish]" $ buildPublishingImpl
+  txBody <- runCli "[Publish]" $ publishImpl
     connection
     waSigningKey
     Nothing
     waAddress
     (PublishPermanently NoStakeAddress)
-    (Just transactionTimeout)
+    transactionTimeout
     (PrintStats True)
-
-
 
   liftIO $ print txBody
 
-interpret FindPublished {..} = do
-
+interpret FindPublished {} = throwError $ CliError "[FindPublished] Not implemented yet."
 
 
 interpret (Fail message) = throwError $ CliError message

@@ -38,8 +38,9 @@ module Language.Marlowe.CLI.Transaction (
 , buildFaucet'
 , buildMinting
 , buildMintingImpl
-, buildPublishingImpl
 , buildPublishing
+, buildPublishingImpl
+, publishImpl
 , querySlotting
 -- * Submitting
 , submit
@@ -142,7 +143,7 @@ import qualified Cardano.Api as C
 import Control.Arrow ((***))
 import Control.Concurrent (threadDelay)
 import Control.Error (note)
-import Control.Monad (forM, forM_, when)
+import Control.Monad (forM, forM_, void, when)
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO, runExcept, throwError)
 import Control.Monad.Reader (MonadReader)
 import qualified Data.Aeson as A (Value (Object))
@@ -151,9 +152,8 @@ import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (unpack)
-import Data.Either (isLeft)
 import Data.Fixed (div')
-import Data.Foldable (Foldable (fold, foldr'))
+import Data.Foldable (Foldable (fold, foldr'), for_)
 import Data.Functor ((<&>))
 import Data.List (partition)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -673,10 +673,9 @@ buildPublishingImpl :: forall era m
                     -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
                     -> AddressInEra era                  -- ^ The change address.
                     -> PublishingStrategy era
-                    -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                     -> PrintStats
                     -> m (TxBody era)
-buildPublishingImpl connection signingKey expires changeAddress publishingStrategy timeout (PrintStats printStats) = do
+buildPublishingImpl connection signingKey expires changeAddress publishingStrategy (PrintStats printStats) = do
   (outputs, minAda) <- do
     let
       buildPublishScriptTxOut  PublishScript { psMinAda, psPublisher, psReferenceScript } =
@@ -697,7 +696,7 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
       (txIn:_) -> pure txIn
       _        -> throwError "Naive coin selection failed to find rich enough UTxO"
 
-  body <- buildBody
+  buildBody
     connection
     ([] :: [PayFromScript PlutusScriptV2])
     Nothing
@@ -708,44 +707,36 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
     TxMetadataNone
     printStats
     False
-  pure (body, Nothing)
 
 
 buildPublishing :: forall era m
-                    . MonadError CliError m
-                    => MonadIO m
-                    => MonadReader (CliEnv era) m
-                    => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-                    -> SigningKeyFile                    -- ^ The file for required signing key.
-                    -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
-                    -> AddressInEra era                  -- ^ The change address.
-                    -> TxBodyFile                        -- ^ The output file for the transaction body.
-                    -> PrintStats
-                    -> m ()
-buildPublishing connection signingKeyFile expires changeAddress (TxBodyFile bodyFile) printStats = do
+        . MonadError CliError m
+        => MonadIO m
+        => MonadReader (CliEnv era) m
+        => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+        -> SigningKeyFile                    -- ^ The file for required signing key.
+        -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
+        -> AddressInEra era                  -- ^ The change address.
+        -> Maybe (PublishingStrategy era)
+        -> TxBodyFile
+        -> Maybe Int
+        -> PrintStats
+        -> m ()
+buildPublishing connection signingKeyFile expires changeAddress strategy (TxBodyFile bodyFile) timeout printStats = do
+  let
+    strategy' = fromMaybe (PublishAtAddress changeAddress) strategy
   signingKey <- readSigningKey signingKeyFile
-  -- FIXME: Accept publishing strategy on the command line.
-  body <- buildPublishingImpl connection signingKey expires changeAddress (PublishPermanently NoStakeAddress) timeout printStats
+  body <- buildPublishingImpl
+      connection
+      signingKey
+      expires
+      changeAddress
+      strategy'
+      printStats
+
   doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-
-
-publish :: forall era m
-                    . MonadError CliError m
-                    => MonadIO m
-                    => MonadReader (CliEnv era) m
-                    => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-                    -> SigningKeyFile                    -- ^ The file for required signing key.
-                    -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
-                    -> AddressInEra era                  -- ^ The change address.
-                    -> Maybe TxBodyFile                  -- ^ The output file for the transaction body.
-                    -> Int
-                    -> PrintStats
-                    -> m ()
-publish connection signingKeyFile expires changeAddress bodyFile timeout printStats = do
-  signingKey <- readSigningKey signingKeyFile
-  body <- publishImpl connection signingKey expires changeAddress (PublishPermanently NoStakeAddress) timeout printStats
-  txId <- submitBody connection body [signingKey] timeout
-  forM_ bodyFile \(TxBodyFile bodyFile') -> doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile' Nothing body
+  for_ timeout \timeout' ->
+    void $ submitBody connection body [signingKey] timeout'
 
 
 publishImpl:: forall era m
@@ -753,16 +744,17 @@ publishImpl:: forall era m
                     => MonadIO m
                     => MonadReader (CliEnv era) m
                     => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-                    -> SigningKey                        -- ^ The file for required signing key.
+                    -> SomePaymentSigningKey             -- ^ The file for required signing key.
                     -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
                     -> AddressInEra era                  -- ^ The change address.
-                    -> Maybe TxBodyFile                        -- ^ The output file for the transaction body.
+                    -> PublishingStrategy era
+                    -> Int
                     -> PrintStats
-                    -> m ()
-publishImpl connection signingKey expires changeAddress bodyFile printStats = do
-  body <- publishImpl connection signingKey expires changeAddress (PublishPermanently NoStakeAddress) timeout printStats
-  submitBody connection body [signingKey]
-  forM_ bodyFile \(TxBodyFile bodyFile') -> doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile' Nothing body
+                    -> m (TxBody era)
+publishImpl connection signingKey expires changeAddress publishingStrategy timeout printStats = do
+  body <- buildPublishingImpl connection signingKey expires changeAddress publishingStrategy printStats
+  void $ submitBody connection body [signingKey] timeout
+  pure body
 
 
 findPublished :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m) => LocalNodeConnectInfo CardanoMode -> m ()
