@@ -505,45 +505,70 @@ interestingChoiceNum bounds = concatMap interestingChoiceNum' bounds
 
 interestingChoiceNum' :: Bool -> Bound -> [ChoiceNum]
 interestingChoiceNum' True (Bound lower upper)
-  | lower > upper = Nothing
-  | lower == upper =
-      [
-        lower
-      ]
-  | otherwise =
-      Data.List.nub
-      [
-        lower
-      , lower + 1
-      , upper - 1
-      , upper
-      , (lower + upper) `div` 2
-      ]
+  | lower > upper = []
+  | lower == upper = [lower]
+  | otherwise = Data.List.nub validValues lower upper
 
 interestingChoiceNum' False (Bound lower upper)
-  | lower > upper = Nothing
-  | lower == upper =
-    Data.List.nub
-    [
-      lower - 1
-    , lower + 1
-    , 0
-    , 1
-    , - 1
-    , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
+  | lower > upper = []
+  | otherwise = Data.List.nub invalidValues lower upper
+
+validValues :: Int -> Int -> [Int]
+validValues lower upper =
+  validLowerValues lower
+  ++ validUpperValues upper
+  ++ valuesWithinRange lower upper
+
+invalidValues :: Int -> Int -> [Int]
+invalidValues lower upper =
+  baseValues
+  ++ invalidLowerValues lower
+  ++ invalidUpperValues upper
+  ++ outlierValues lower upper
+
+baseValues :: [Int]
+baseValues =
+  [
+    0
+  , 1
+  , -1
+  ]
+
+validLowerValues :: Int -> [Int]
+validLowerValues lower =
+  [
+    lower + 1
+  , lower
+  ]
+
+validUpperValues :: Int -> [Int]
+validUpperValues upper =
+  [
+    upper - 1
+  , upper
+  ]
+
+valuesWithinRange :: Int -> Int -> [Int]
+valuesWithinRange lower upper = (lower + upper) `div` 2
+
+invalidLowerValues :: Int -> [Int]
+invalidLowerValues lower =
+  [
+    lower - 1
+  ]
+
+invalidUpperValues :: Int -> [Int]
+invalidUpperValues upper =
+  [
+    upper + 1
+  ]
+
+outlierValues :: Int -> Int -> [Int]
+outlierValues lower upper =
+  [
+      10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
     , - 10 * lower   -- FIXME: ditto
-    ]
-  | otherwise =
-    Data.List.nub
-    [
-      lower - 1
-    , upper + 1
-    , 0
-    , 1
-    , -1
-    , 10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
-    , - 10 * lower   -- FIXME: ditto
-    ]
+  ]
 
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
