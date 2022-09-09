@@ -510,21 +510,26 @@ interestingChoiceNum' True (Bound lower upper)
   | otherwise = Data.List.nub validValues lower upper
 
 interestingChoiceNum' False (Bound lower upper)
-  | lower > upper = []
+  | lower > upper = Data.List.nub allValues lower upper
   | otherwise = Data.List.nub invalidValues lower upper
 
 validValues :: Int -> Int -> [Int]
 validValues lower upper =
   validLowerValues lower
-  ++ validUpperValues upper
-  ++ valuesWithinRange lower upper
+  <> validUpperValues upper
+  <> valuesWithinRange lower upper
 
 invalidValues :: Int -> Int -> [Int]
 invalidValues lower upper =
   baseValues
-  ++ invalidLowerValues lower
-  ++ invalidUpperValues upper
-  ++ outlierValues lower upper
+  <> invalidLowerValues lower
+  <> invalidUpperValues upper
+  <> outlierValues lower upper
+
+allValues :: Int -> Int -> [Int]
+allValues lower upper =
+  invalidValues lower upper
+  <> validValues lower upper
 
 baseValues :: [Int]
 baseValues =
