@@ -70,6 +70,7 @@ tests =
             ]
         , testGroup "Constraint 4. No output to script on close"
             [
+              testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
             ]
         , testGroup "Constraint 5. Input value from script"
             [
@@ -246,6 +247,39 @@ checkMultipleOutput =
                     TxOut address value datum <- filter matchOwnOutput outputs
                   ]
             txInfoOutputs' <- elements . permutations $ filter (not . matchOwnOutput) outputs <> ownOutputs'
+            let
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
+            pure (marloweParams, marloweData, marloweInput, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True
+
+
+-- | Check that validation fails if there is more than one Marlowe output.
+checkCloseOutput :: Property
+checkCloseOutput =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
+              arbitrarySemanticsTransaction False
+                `suchThat` ((== Close) . txOutContract . (^. _5))
+            let
+              ownAddress = semanticsAddress marloweParams
+              matchOwnInput (TxInInfo _ (TxOut address _ _)) = address == ownAddress
+              inputs = txInfoInputs (scriptContextTxInfo scriptContext)
+              outputs = txInfoOutputs (scriptContextTxInfo scriptContext)
+              ownOutputs =
+                [
+                  txOut
+                |
+                  TxInInfo _ txOut <- filter matchOwnInput inputs
+                ]
+            txInfoOutputs' <- elements . permutations $ outputs <> ownOutputs
             let
               scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
             pure (marloweParams, marloweData, marloweInput, scriptContext')
