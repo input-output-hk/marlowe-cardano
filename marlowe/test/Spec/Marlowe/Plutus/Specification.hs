@@ -21,12 +21,17 @@ module Spec.Marlowe.Plutus.Specification (
 ) where
 
 
+import Control.Lens ((^.))
+import Control.Lens.Tuple (_5)
+import Data.Bifunctor (bimap)
 import Data.List (permutations)
 import Data.Proxy
 import Data.These
 import Language.Marlowe.Core.V1.Semantics
+import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Scripts
 import Plutus.V1.Ledger.Api
+import Plutus.V1.Ledger.Value
 import Spec.Marlowe.Plutus.Arbitrary (arbitraryPayoutTransaction, arbitrarySemanticsTransaction)
 import Spec.Marlowe.Plutus.Script
 import Spec.Marlowe.Plutus.Types ()
@@ -61,6 +66,7 @@ tests =
             ]
         , testGroup "Constraint 3. Single Marlowe output"
             [
+              testProperty "Invalid attempt to split Marlowe output" checkMultipleOutput
             ]
         , testGroup "Constraint 4. No output to script on close"
             [
@@ -196,6 +202,52 @@ checkDoubleInput =
             txInfoInputs' <- elements . permutations $ TxInInfo{..} : txInfoInputs (scriptContextTxInfo scriptContext)
             let
               scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
+            pure (marloweParams, marloweData, marloweInput, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True
+
+
+-- | Check that validation fails if there is more than one Marlowe output.
+checkMultipleOutput :: Property
+checkMultipleOutput =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
+              arbitrarySemanticsTransaction False
+                `suchThat` ((/= Close) . txOutContract . (^. _5))
+            let
+              ownAddress = semanticsAddress marloweParams
+              outputs = txInfoOutputs (scriptContextTxInfo scriptContext)
+              matchOwnOutput (TxOut address _ _) = address == ownAddress
+              ownOutputs' =
+                concat
+                  [
+                    let
+                      (half, half') =
+                        bimap mconcat mconcat
+                          $ unzip
+                          [
+                            (singleton c n (i `div` 2), singleton c n (i - (i `div` 2)))
+                          |
+                            (c, n, i) <- flattenValue value
+                          ]
+                    in
+                      [
+                        TxOut address half  datum
+                      , TxOut address half' datum
+                      ]
+                  |
+                    TxOut address value datum <- filter matchOwnOutput outputs
+                  ]
+            txInfoOutputs' <- elements . permutations $ filter (not . matchOwnOutput) outputs <> ownOutputs'
+            let
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
             pure (marloweParams, marloweData, marloweInput, scriptContext')
       in
         forAll gen
