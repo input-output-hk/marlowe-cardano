@@ -185,7 +185,7 @@ arbitraryByteString n = toBuiltin . BS.pack <$> vectorOf n arbitrary
 
 
 -- | Generate an arbitrary, valid Marlowe semantics transaction: datum, redeemer, and script context.
-arbitrarySemanticsTransaction :: Bool -> Gen (MarloweParams, MarloweData, MarloweInput, ScriptContext)
+arbitrarySemanticsTransaction :: Bool -> Gen (MarloweParams, MarloweData, MarloweInput, ScriptContext, TransactionOutput)
 arbitrarySemanticsTransaction noisy =
   do
     (marloweState, marloweContract, TransactionInput{..}, output) <- arbitraryGoldenTransaction
@@ -318,7 +318,7 @@ arbitrarySemanticsTransaction noisy =
     let
       scriptContextTxInfo = TxInfo{..}
       scriptContextPurpose = Spending scriptInputRef
-    pure (marloweParams, marloweData, marloweInput, ScriptContext{..})
+    pure (marloweParams, marloweData, marloweInput, ScriptContext{..}, output)
 
 
 -- | Generate an arbitrary, valid Marlowe payout transaction: datum, redeemer, and script context.

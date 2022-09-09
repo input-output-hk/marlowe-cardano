@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
@@ -20,6 +21,7 @@ module Spec.Marlowe.Plutus.Specification (
 ) where
 
 
+import Data.List (permutations)
 import Data.Proxy
 import Data.These
 import Language.Marlowe.Core.V1.Semantics
@@ -29,7 +31,7 @@ import Spec.Marlowe.Plutus.Arbitrary (arbitraryPayoutTransaction, arbitrarySeman
 import Spec.Marlowe.Plutus.Script
 import Spec.Marlowe.Plutus.Types ()
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, forAll, property, suchThat, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, property, suchThat, testProperty)
 
 
 -- | Run tests.
@@ -55,6 +57,7 @@ tests =
             ]
         , testGroup "Constraint 2. Single Marlowe script input"
             [
+              testProperty "Invalid attempt to run two Marlowe scripts" checkDoubleInput
             ]
         , testGroup "Constraint 3. Single Marlowe output"
             [
@@ -70,12 +73,15 @@ tests =
             ]
         , testGroup "Constraint 7. Input state"
             [
+              -- TODO: This test requires instrumenting the Plutus script.
             ]
         , testGroup "Constraint 8. Input contract"
             [
+              -- TODO: This test requires instrumenting the Plutus script.
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
+              -- TODO: This test requires instrumenting the Plutus script.
             ]
         , testGroup "Constraint 10. Output state"
             [
@@ -85,6 +91,7 @@ tests =
             ]
         , testGroup "Constraint 12. Merkleized continuations"
             [
+              -- TODO: Add merkleization support to contract generation.
             ]
         , testGroup "Constraint 13. Positive balances"
             [
@@ -153,7 +160,7 @@ checkSemanticsTransaction :: Bool -> Property
 checkSemanticsTransaction noisy =
   property
     . forAll (arbitrarySemanticsTransaction noisy)
-    $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+    $ \(marloweParams, marloweData, marloweInput, scriptContext, _) ->
       case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
         This  e   -> error $ show e
         These e l -> error $ show (e, l)
@@ -170,3 +177,29 @@ checkPayoutTransaction noisy =
         This  e   -> error $ show e
         These e l -> error $ show (e, l)
         That    _ -> True
+
+
+-- | Check that validation fails if two Marlowe scripts are run.
+checkDoubleInput :: Property
+checkDoubleInput =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, _) <- arbitrarySemanticsTransaction False
+            txInInfoOutRef <- arbitrary
+            txOutValue <- arbitrary
+            txOutDatumHash <- Just <$> arbitrary
+            let
+              txOutAddress = semanticsAddress marloweParams
+              txInInfoResolved = TxOut{..}
+            txInfoInputs' <- elements . permutations $ TxInInfo{..} : txInfoInputs (scriptContextTxInfo scriptContext)
+            let
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
+            pure (marloweParams, marloweData, marloweInput, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True

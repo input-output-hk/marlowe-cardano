@@ -30,7 +30,6 @@ import Plutus.ApiCommon
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address
 import Plutus.V1.Ledger.Api hiding (evaluateScriptCounting)
-import Plutus.V1.Ledger.EvaluationContext
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Short as SBS
