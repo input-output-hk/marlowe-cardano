@@ -194,21 +194,24 @@ getOptions = O.execParser $ O.info parser infoMod
       [ O.long "command-port"
       , O.value 3717
       , O.metavar "PORT_NUMBER"
-      , O.help "The port number for issuing commands to the history server. Default: 3717"
+      , O.help "The port number for issuing commands to the history server."
+      , O.showDefault
       ]
 
     queryPortParser = O.option O.auto $ mconcat
       [ O.long "query-port"
       , O.value 3718
       , O.metavar "PORT_NUMBER"
-      , O.help "The port number for issuing queries to the history server. Default: 3718"
+      , O.help "The port number for issuing queries to the history server."
+      , O.showDefault
       ]
 
     syncPortParser = O.option O.auto $ mconcat
       [ O.long "sync-port"
       , O.value 3719
       , O.metavar "PORT_NUMBER"
-      , O.help "The port number for synchronizing with the history server. Default: 3719"
+      , O.help "The port number for synchronizing with the history server."
+      , O.showDefault
       ]
 
     hostParser = O.strOption $ mconcat
@@ -216,7 +219,8 @@ getOptions = O.execParser $ O.info parser infoMod
       , O.short 'h'
       , O.value "127.0.0.1"
       , O.metavar "HOST_NAME"
-      , O.help "The hostname of the history server to connect to. Default value: 127.0.0.1"
+      , O.help "The hostname of the history server to connect to."
+      , O.showDefault
       ]
 
     commandParser = asum

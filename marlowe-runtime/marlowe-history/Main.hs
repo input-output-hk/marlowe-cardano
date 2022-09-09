@@ -30,7 +30,7 @@ import Network.Socket (AddrInfo (..), AddrInfoFlag (..), HostName, PortNumber, S
                        setCloseOnExecIfNeeded, setSocketOption, withFdSocket, withSocketsDo)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options.Applicative (auto, execParser, fullDesc, header, help, helper, info, long, metavar, option, progDesc,
-                            short, strOption, value)
+                            short, showDefault, strOption, value)
 
 main :: IO ()
 main = run =<< getOptions
@@ -137,42 +137,48 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       [ long "chain-seek-port-number"
       , value 3715
       , metavar "PORT_NUMBER"
-      , help "The port number of the chain seek server. Default value: 3715"
+      , help "The port number of the chain seek server."
+      , showDefault
       ]
 
     chainSeekQueryPortParser = option auto $ mconcat
       [ long "chain-seek-query-port-number"
       , value 3716
       , metavar "PORT_NUMBER"
-      , help "The port number of the chain sync query server. Default value: 3716"
+      , help "The port number of the chain sync query server."
+      , showDefault
       ]
 
     commandPortParser = option auto $ mconcat
       [ long "command-port"
       , value 3717
       , metavar "PORT_NUMBER"
-      , help "The port number to run the job server on. Default value: 3717"
+      , help "The port number to run the job server on."
+      , showDefault
       ]
 
     queryPortParser = option auto $ mconcat
       [ long "query-port"
       , value 3718
       , metavar "PORT_NUMBER"
-      , help "The port number to run the query server on. Default value: 3718"
+      , help "The port number to run the query server on."
+      , showDefault
       ]
 
     syncPortParser = option auto $ mconcat
       [ long "sync-port"
       , value 3719
       , metavar "PORT_NUMBER"
-      , help "The port number to run the sync server on. Default value: 3719"
+      , help "The port number to run the sync server on."
+      , showDefault
       ]
 
     chainSeekHostParser = strOption $ mconcat
       [ long "chain-seek-host"
       , value "127.0.0.1"
       , metavar "HOST_NAME"
-      , help "The host name of the chain seek server. Default value: 127.0.0.1"
+      , help "The host name of the chain seek server."
+      , showDefault
       ]
 
     hostParser = strOption $ mconcat
@@ -180,7 +186,8 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , short 'h'
       , value "127.0.0.1"
       , metavar "HOST_NAME"
-      , help "The host name to run the history server on. Default value: 127.0.0.1"
+      , help "The host name to run the history server on."
+      , showDefault
       ]
 
     infoMod = mconcat
