@@ -532,7 +532,7 @@ instance FromJSON AnyTimeout where
 
 
 utcToMilliseconds :: UTCTime -> Integer
-utcToMilliseconds = floor . (1e3 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
+utcToMilliseconds = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
 
 utcToSeconds :: UTCTime -> Integer
 utcToSeconds = floor . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
