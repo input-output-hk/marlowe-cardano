@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE BlockArguments     #-}
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -32,16 +33,21 @@ import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), Epoch
                     TxMintValue (TxMintNone), lovelaceToValue)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
-import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseOutputQuery, parseSlotNo, parseTokenName,
-                                           requiredSignerOpt, requiredSignersOpt, txBodyFileOpt)
+import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseOutputQuery, parseSlotNo,
+                                           parseStakeAddressReference, parseTokenName, requiredSignerOpt,
+                                           requiredSignersOpt, txBodyFileOpt)
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
 import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, buildPublishing, findPublished,
                                          querySlotting, selectUtxos)
-import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery, PrintStats (PrintStats), SigningKeyFile, TxBodyFile)
+import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery, PrintStats (PrintStats),
+                                   PublishingStrategy (PublishAtAddress, PublishPermanently), SigningKeyFile,
+                                   TxBodyFile)
 import Plutus.V1.Ledger.Api (TokenName)
 
+import qualified Cardano.Api as C
 import Control.Monad.Reader (MonadReader)
+import GHC.Base (Alternative ((<|>)))
 import qualified Options.Applicative as O
 
 
@@ -136,14 +142,14 @@ data UtilCommand era =
     }
   | Publish
     {
-      network        :: NetworkId                     -- ^ The network ID, if any.
-    , socketPath     :: FilePath                      -- ^ The path to the node socket.
-    , signingKeyFile :: SigningKeyFile                -- ^ The files containing the required signing keys.
-    , change         :: AddressInEra era              -- ^ The change address.
-    , permanently    :: Maybe StakeAddressReference
-    , bodyFile       :: TxBodyFile                    -- ^ The output file for the transaction body.
-    , submitTimeout  :: Maybe Int                     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , expires        :: Maybe SlotNo                  -- ^ The slot number after which minting is no longer possible.
+      network        :: NetworkId                       -- ^ The network ID, if any.
+    , socketPath     :: FilePath                        -- ^ The path to the node socket.
+    , signingKeyFile :: SigningKeyFile                  -- ^ The files containing the required signing keys.
+    , change         :: AddressInEra era                -- ^ The change address.
+    , strategy       :: Maybe (PublishingStrategy era)
+    , bodyFile       :: TxBodyFile                      -- ^ The output file for the transaction body.
+    , submitTimeout  :: Maybe Int                       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , expires        :: Maybe SlotNo                    -- ^ The slot number after which minting is no longer possible.
     }
   | FindPublished
     {
@@ -229,13 +235,15 @@ runUtilCommand command =
                             marloweFile
                             outputFile
       Publish{..}      -> buildPublishing
-                            connection
-                            signingKeyFile
-                            expires
-                            change
-                            bodyFile
-                            submitTimeout
-                            (PrintStats True)
+                              connection
+                              signingKeyFile
+                              expires
+                              change
+                              strategy
+                              bodyFile
+                              submitTimeout
+                              (PrintStats True)
+
       FindPublished{}   -> findPublished
                             connection
 
@@ -350,10 +358,19 @@ publishOptions network socket =
     <*> requiredSignerOpt
 
     <*> O.option parseAddress                (O.long "change-address"                       <> O.metavar "ADDRESS"      <> O.help "Address to receive ADA in excess of fee."                                                                        )
+
+    <*> O.optional publishingStrategyOpt
+
     <*> txBodyFileOpt
 
     <*> (O.optional . O.option O.auto)       (O.long "submit"                               <> O.metavar "SECONDS"      <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                    )
+  where
+    publishingStrategyOpt :: forall era. IsShelleyBasedEra era => O.Parser (PublishingStrategy era)
+    publishingStrategyOpt =
+          PublishAtAddress <$> O.option parseAddress                 (O.long "at-address"                     <> O.metavar "ADDRESS"          <> O.help "Publish script at a given address. This is a default strategy which uses change address as a destination.")
+      <|> PublishPermanently <$> O.option parseStakeAddressReference (O.long "permanently"                    <> O.metavar "STAKING_ADDRESS"  <> O.help "Publish permanently at unspendable script address staking the min. ADA value.")
+      <|> O.flag' (PublishPermanently C.NoStakeAddress)              (O.long "permanently-without-staking"                                    <> O.help "Publish permanently at unspendable script address without min. ADA staking.")
 
 
 -- | Parser for the "find-publish" command.
