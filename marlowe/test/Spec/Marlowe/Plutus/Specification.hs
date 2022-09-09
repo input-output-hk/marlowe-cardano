@@ -94,9 +94,11 @@ tests =
             ]
         , testGroup "Constraint 10. Output state"
             [
+              testProperty "Invalid mismatch between state and script output" checkStateOutput
             ]
         , testGroup "Constraint 11. Output contract"
             [
+              testProperty "Invalid mismatch between contract and script output" checkContractOutput
             ]
         , testGroup "Constraint 12. Merkleized continuations"
             [
@@ -340,6 +342,86 @@ checkValueOutput =
                 ]
             let
               scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
+            pure (marloweParams, marloweData, marloweInput, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True
+
+
+-- | Check that state output to a script matches its output state.
+checkStateOutput :: Property
+checkStateOutput =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
+              arbitrarySemanticsTransaction False
+                `suchThat` ((/= Close) . txOutContract . (^. _5))
+            marloweState' <- arbitrary
+            let
+              marloweData' = marloweData {marloweState = marloweState'}
+              ownAddress = semanticsAddress marloweParams
+              outputHash =
+                [
+                  h
+                |
+                  TxOut address _ h <- txInfoOutputs (scriptContextTxInfo scriptContext)
+                , address == ownAddress
+                ]
+              txInfoData' =
+                [
+                  if Just h `elem` outputHash
+                    then (h, Datum $ toBuiltinData marloweData')
+                    else (h, datum)
+                |
+                  (h, datum) <- txInfoData $ scriptContextTxInfo scriptContext
+                ]
+            let
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoData = txInfoData'}}
+            pure (marloweParams, marloweData, marloweInput, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True
+
+
+-- | Check that state output to a script matches its output state.
+checkContractOutput :: Property
+checkContractOutput =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
+              arbitrarySemanticsTransaction False
+                `suchThat` ((/= Close) . txOutContract . (^. _5))
+            marloweContract' <- arbitrary
+            let
+              marloweData' = marloweData {marloweContract = marloweContract'}
+              ownAddress = semanticsAddress marloweParams
+              outputHash =
+                [
+                  h
+                |
+                  TxOut address _ h <- txInfoOutputs (scriptContextTxInfo scriptContext)
+                , address == ownAddress
+                ]
+              txInfoData' =
+                [
+                  if Just h `elem` outputHash
+                    then (h, Datum $ toBuiltinData marloweData')
+                    else (h, datum)
+                |
+                  (h, datum) <- txInfoData $ scriptContextTxInfo scriptContext
+                ]
+            let
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoData = txInfoData'}}
             pure (marloweParams, marloweData, marloweInput, scriptContext')
       in
         forAll gen
