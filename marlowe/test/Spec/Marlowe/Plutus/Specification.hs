@@ -74,6 +74,7 @@ tests =
             ]
         , testGroup "Constraint 5. Input value from script"
             [
+              testProperty "Invalid mismatch between state and script input" checkValueInput
             ]
         , testGroup "Constraint 6. Output value to script"
             [
@@ -233,11 +234,7 @@ checkMultipleOutput =
                       (half, half') =
                         bimap mconcat mconcat
                           $ unzip
-                          [
-                            (singleton c n (i `div` 2), singleton c n (i - (i `div` 2)))
-                          |
-                            (c, n, i) <- flattenValue value
-                          ]
+                          [(singleton c n (i `div` 2), singleton c n (i - (i `div` 2))) | (c, n, i) <- flattenValue value]
                     in
                       [
                         TxOut address half  datum
@@ -282,6 +279,35 @@ checkCloseOutput =
             txInfoOutputs' <- elements . permutations $ outputs <> ownOutputs
             let
               scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
+            pure (marloweParams, marloweData, marloweInput, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True
+
+
+-- | Check that value input to a script matches its state.
+checkValueInput :: Property
+checkValueInput =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, _) <- arbitrarySemanticsTransaction False
+            let
+              ownAddress = semanticsAddress marloweParams
+              txInfoInputs' =
+                [
+                  if address == ownAddress
+                    then txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
+                    else txInInfo
+                |
+                  txInInfo@(TxInInfo _ txOut@(TxOut address value _)) <- txInfoInputs (scriptContextTxInfo scriptContext)
+                ]
+            let
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
             pure (marloweParams, marloweData, marloweInput, scriptContext')
       in
         forAll gen
