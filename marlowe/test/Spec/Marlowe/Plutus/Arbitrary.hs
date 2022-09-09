@@ -22,6 +22,7 @@ module Spec.Marlowe.Plutus.Arbitrary (
 , SemanticsTest'
 -- * Generation
 , arbitrarySemanticsTransaction
+, arbitrarySemanticsTransactionModifyState
 , arbitraryPayoutTransaction
 ) where
 
@@ -198,9 +199,29 @@ type SemanticsTest' = (MarloweParams, MarloweData, MarloweInput, TxInfo, Transac
 
 -- | Generate an arbitrary, valid Marlowe semantics transaction: datum, redeemer, and script context.
 arbitrarySemanticsTransaction :: Bool -> Gen SemanticsTest
-arbitrarySemanticsTransaction noisy =
+arbitrarySemanticsTransaction noisy = buildSemanticsTransaction noisy =<< arbitraryGoldenTransaction
+
+
+-- | Generate an arbitrary, valid Marlowe semantics transaction: datum, redeemer, and script context.
+arbitrarySemanticsTransactionModifyState :: (State -> Gen State) -> Bool -> Gen SemanticsTest
+arbitrarySemanticsTransactionModifyState modify noisy =
   do
-    (marloweState, marloweContract, TransactionInput{..}, output) <- arbitraryGoldenTransaction
+    (state, contract, input, _) <- arbitraryGoldenTransaction
+    state' <- modify state
+    buildSemanticsTransaction noisy
+      (
+        state'
+      , contract
+      , input
+      , computeTransaction input state' contract
+      )
+
+-- | Build a valid Marlowe transaction.
+buildSemanticsTransaction :: Bool
+                          -> (State, Contract, TransactionInput, TransactionOutput)
+                          -> Gen SemanticsTest
+buildSemanticsTransaction noisy (marloweState, marloweContract, TransactionInput{..}, output) =
+  do
     rolesCurrency <- arbitrary
     let
       marloweData = MarloweData{..}

@@ -33,11 +33,14 @@ import Language.Marlowe.Scripts
 import Plutus.V1.Ledger.Api
 import Plutus.V1.Ledger.Value
 import Spec.Marlowe.Plutus.Arbitrary (SemanticsTest, SemanticsTest', arbitraryPayoutTransaction,
-                                      arbitrarySemanticsTransaction)
+                                      arbitrarySemanticsTransaction, arbitrarySemanticsTransactionModifyState)
 import Spec.Marlowe.Plutus.Script
 import Spec.Marlowe.Plutus.Types ()
+import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, property, suchThat, testProperty)
+
+import qualified PlutusTx.AssocMap as AM
 
 
 -- | Run tests.
@@ -106,6 +109,7 @@ tests =
             ]
         , testGroup "Constraint 13. Positive balances"
             [
+              testProperty "Invalid non-positive balance" checkPositiveAccounts
             ]
         , testGroup "Constraint 14. Inputs authorized"
             [
@@ -209,6 +213,19 @@ checkInvalidSemantics condition modify =
             case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
               That{} -> False
               _      -> True
+
+
+-- | Check that an invalid semantics transaction fails.
+checkInvalidSemanticsModifyState :: (SemanticsTest -> Bool)
+                                 -> (State -> Gen State)
+                                 -> Property
+checkInvalidSemanticsModifyState condition modify =
+  property
+    . forAll (arbitrarySemanticsTransactionModifyState modify False `suchThat` condition)
+      $ \(marloweParams, marloweData, marloweInput, scriptContext, _) ->
+        case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+          That{} -> False
+          _      -> True
 
 
 -- | Check that validation fails if two Marlowe scripts are run.
@@ -358,3 +375,15 @@ checkContractOutput =
       do
         marloweContract' <- arbitrary
         pure $ marloweData {marloweContract = marloweContract'}
+
+
+-- | Check that non-positive accounts are rejected.
+checkPositiveAccounts :: Property
+checkPositiveAccounts =
+  checkInvalidSemanticsModifyState (const True)
+    $ \state ->
+      do
+        account <- arbitrary
+        token <- arbitrary
+        amount <- (1 -) <$> arbitraryPositiveInteger
+        pure $ state {accounts = AM.insert (account, token) amount $ accounts state}
