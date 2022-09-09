@@ -32,7 +32,8 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Scripts
 import Plutus.V1.Ledger.Api
 import Plutus.V1.Ledger.Value
-import Spec.Marlowe.Plutus.Arbitrary (arbitraryPayoutTransaction, arbitrarySemanticsTransaction)
+import Spec.Marlowe.Plutus.Arbitrary (SemanticsTest, SemanticsTest', arbitraryPayoutTransaction,
+                                      arbitrarySemanticsTransaction)
 import Spec.Marlowe.Plutus.Script
 import Spec.Marlowe.Plutus.Types ()
 import Test.Tasty (TestTree, testGroup)
@@ -102,7 +103,6 @@ tests =
             ]
         , testGroup "Constraint 12. Merkleized continuations"
             [
-              -- TODO: Add merkleization support to contract generation.
             ]
         , testGroup "Constraint 13. Positive balances"
             [
@@ -186,246 +186,175 @@ checkPayoutTransaction noisy =
     $ \(marloweParams, role, scriptContext) ->
       case evaluatePayout marloweParams (toData role) (toData ()) (toData scriptContext) of
         This  e   -> error $ show e
-        These e l -> error $ show (e, l)
+        These e l -> error $ show e <> ": " <> show l
         That    _ -> True
+
+
+-- | Check that an invalid semantics transaction fails.
+checkInvalidSemantics :: (SemanticsTest -> Bool)
+                      -> (SemanticsTest' -> Gen TxInfo)
+                      -> Property
+checkInvalidSemantics condition modify =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, marloweData, marloweInput, scriptContext, output)
+              <- arbitrarySemanticsTransaction False `suchThat` condition
+            txInfo' <- modify (marloweParams, marloweData, marloweInput, scriptContextTxInfo scriptContext, output)
+            pure (marloweParams, marloweData, marloweInput, scriptContext {scriptContextTxInfo = txInfo'})
+      in
+        forAll gen
+          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+              That{} -> False
+              _      -> True
 
 
 -- | Check that validation fails if two Marlowe scripts are run.
 checkDoubleInput :: Property
 checkDoubleInput =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, _) <- arbitrarySemanticsTransaction False
-            txInInfoOutRef <- arbitrary
-            txOutValue <- arbitrary
-            txOutDatumHash <- Just <$> arbitrary
-            let
-              txOutAddress = semanticsAddress marloweParams
-              txInInfoResolved = TxOut{..}
-            txInfoInputs' <- elements . permutations $ TxInInfo{..} : txInfoInputs (scriptContextTxInfo scriptContext)
-            let
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
-            pure (marloweParams, marloweData, marloweInput, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkInvalidSemantics (const True)
+    $ \(marloweParams, _, _, txInfo, _) ->
+      do
+        txInInfoOutRef <- arbitrary
+        txOutValue <- arbitrary
+        txOutDatumHash <- Just <$> arbitrary
+        let
+          txOutAddress = semanticsAddress marloweParams
+          txInInfoResolved = TxOut{..}
+        txInfoInputs' <- elements . permutations $ TxInInfo{..} : txInfoInputs txInfo
+        pure $ txInfo {txInfoInputs = txInfoInputs'}
 
 
 -- | Check that validation fails if there is more than one Marlowe output.
 checkMultipleOutput :: Property
 checkMultipleOutput =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
-              arbitrarySemanticsTransaction False
-                `suchThat` ((/= Close) . txOutContract . (^. _5))
-            let
-              ownAddress = semanticsAddress marloweParams
-              outputs = txInfoOutputs (scriptContextTxInfo scriptContext)
-              matchOwnOutput (TxOut address _ _) = address == ownAddress
-              ownOutputs' =
-                concat
-                  [
-                    let
-                      (half, half') =
-                        bimap mconcat mconcat
-                          $ unzip
-                          [(singleton c n (i `div` 2), singleton c n (i - (i `div` 2))) | (c, n, i) <- flattenValue value]
-                    in
-                      [
-                        TxOut address half  datum
-                      , TxOut address half' datum
-                      ]
-                  |
-                    TxOut address value datum <- filter matchOwnOutput outputs
-                  ]
-            txInfoOutputs' <- elements . permutations $ filter (not . matchOwnOutput) outputs <> ownOutputs'
-            let
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
-            pure (marloweParams, marloweData, marloweInput, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkInvalidSemantics ((/= Close) . txOutContract . (^. _5))
+    $ \(marloweParams, _, _, txInfo, _) ->
+      do
+        let
+          ownAddress = semanticsAddress marloweParams
+          outputs = txInfoOutputs txInfo
+          matchOwnOutput (TxOut address _ _) = address == ownAddress
+          ownOutputs' =
+            concat
+              [
+                let
+                  (half, half') =
+                    bimap mconcat mconcat
+                      $ unzip
+                      [(singleton c n (i `div` 2), singleton c n (i - (i `div` 2))) | (c, n, i) <- flattenValue value]
+                in
+                  [TxOut address half datum, TxOut address half' datum]
+              |
+                TxOut address value datum <- filter matchOwnOutput outputs
+              ]
+        txInfoOutputs' <- elements . permutations $ filter (not . matchOwnOutput) outputs <> ownOutputs'
+        pure $ txInfo {txInfoOutputs = txInfoOutputs'}
 
 
 -- | Check that validation fails if there is more than one Marlowe output.
 checkCloseOutput :: Property
 checkCloseOutput =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
-              arbitrarySemanticsTransaction False
-                `suchThat` ((== Close) . txOutContract . (^. _5))
-            let
-              ownAddress = semanticsAddress marloweParams
-              matchOwnInput (TxInInfo _ (TxOut address _ _)) = address == ownAddress
-              inputs = txInfoInputs (scriptContextTxInfo scriptContext)
-              outputs = txInfoOutputs (scriptContextTxInfo scriptContext)
-              ownOutputs =
-                [
-                  txOut
-                |
-                  TxInInfo _ txOut <- filter matchOwnInput inputs
-                ]
-            txInfoOutputs' <- elements . permutations $ outputs <> ownOutputs
-            let
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
-            pure (marloweParams, marloweData, marloweInput, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkInvalidSemantics ((== Close) . txOutContract . (^. _5))
+    $ \(marloweParams, _, _, txInfo, _) ->
+      do
+        let
+          ownAddress = semanticsAddress marloweParams
+          matchOwnInput (TxInInfo _ (TxOut address _ _)) = address == ownAddress
+          inputs = txInfoInputs txInfo
+          outputs = txInfoOutputs txInfo
+          ownOutputs =
+            [
+              txOut
+            |
+              TxInInfo _ txOut <- filter matchOwnInput inputs
+            ]
+        txInfoOutputs' <- elements . permutations $ outputs <> ownOutputs
+        pure $ txInfo {txInfoOutputs = txInfoOutputs'}
 
 
 -- | Check that value input to a script matches its input state.
 checkValueInput :: Property
 checkValueInput =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, _) <- arbitrarySemanticsTransaction False
-            let
-              ownAddress = semanticsAddress marloweParams
-              txInfoInputs' =
-                [
-                  if address == ownAddress
-                    then txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
-                    else txInInfo
-                |
-                  txInInfo@(TxInInfo _ txOut@(TxOut address value _)) <- txInfoInputs (scriptContextTxInfo scriptContext)
-                ]
-            let
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
-            pure (marloweParams, marloweData, marloweInput, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkInvalidSemantics (const True)
+    $ \(marloweParams, _, _, txInfo, _) ->
+      do
+        let
+          ownAddress = semanticsAddress marloweParams
+          txInfoInputs' =
+            [
+              if address == ownAddress
+                then txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
+                else txInInfo
+            |
+              txInInfo@(TxInInfo _ txOut@(TxOut address value _)) <- txInfoInputs txInfo
+            ]
+        pure $ txInfo {txInfoInputs = txInfoInputs'}
 
 
 -- | Check that value output to a script matches its output state.
 checkValueOutput :: Property
 checkValueOutput =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
-              arbitrarySemanticsTransaction False
-                `suchThat` ((/= Close) . txOutContract . (^. _5))
-            let
-              ownAddress = semanticsAddress marloweParams
-              txInfoOutputs' =
-                [
-                  if address == ownAddress
-                    then txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
-                    else txOut
-                |
-                  txOut@(TxOut address value _) <- txInfoOutputs (scriptContextTxInfo scriptContext)
-                ]
-            let
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoOutputs = txInfoOutputs'}}
-            pure (marloweParams, marloweData, marloweInput, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkInvalidSemantics ((/= Close) . txOutContract . (^. _5))
+    $ \(marloweParams, _, _, txInfo, _) ->
+      do
+        let
+          ownAddress = semanticsAddress marloweParams
+          txInfoOutputs' =
+            [
+              if address == ownAddress
+                then txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
+                else txOut
+            |
+              txOut@(TxOut address value _) <- txInfoOutputs txInfo
+            ]
+        pure $ txInfo {txInfoOutputs = txInfoOutputs'}
+
+
+-- | Check that output datum to a script matches its semantic output.
+checkDatumOutput :: (MarloweData -> Gen MarloweData) -> Property
+checkDatumOutput modify =
+  checkInvalidSemantics ((/= Close) . txOutContract . (^. _5))
+    $ \(marloweParams, marloweData, _, txInfo, _) ->
+      do
+        marloweData' <- modify marloweData
+        let
+          ownAddress = semanticsAddress marloweParams
+          outputHash =
+            [
+              h
+            |
+              TxOut address _ h <- txInfoOutputs txInfo
+            , address == ownAddress
+            ]
+          txInfoData' =
+            [
+              if Just h `elem` outputHash
+                then (h, Datum $ toBuiltinData marloweData')
+                else pair
+            |
+              pair@(h, _) <- txInfoData txInfo
+            ]
+        pure $ txInfo {txInfoData = txInfoData'}
 
 
 -- | Check that state output to a script matches its output state.
 checkStateOutput :: Property
 checkStateOutput =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
-              arbitrarySemanticsTransaction False
-                `suchThat` ((/= Close) . txOutContract . (^. _5))
-            marloweState' <- arbitrary
-            let
-              marloweData' = marloweData {marloweState = marloweState'}
-              ownAddress = semanticsAddress marloweParams
-              outputHash =
-                [
-                  h
-                |
-                  TxOut address _ h <- txInfoOutputs (scriptContextTxInfo scriptContext)
-                , address == ownAddress
-                ]
-              txInfoData' =
-                [
-                  if Just h `elem` outputHash
-                    then (h, Datum $ toBuiltinData marloweData')
-                    else (h, datum)
-                |
-                  (h, datum) <- txInfoData $ scriptContextTxInfo scriptContext
-                ]
-            let
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoData = txInfoData'}}
-            pure (marloweParams, marloweData, marloweInput, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkDatumOutput
+    $ \marloweData ->
+      do
+        marloweState' <- arbitrary
+        pure $ marloweData {marloweState = marloweState'}
 
 
 -- | Check that state output to a script matches its output state.
 checkContractOutput :: Property
 checkContractOutput =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, _) <-
-              arbitrarySemanticsTransaction False
-                `suchThat` ((/= Close) . txOutContract . (^. _5))
-            marloweContract' <- arbitrary
-            let
-              marloweData' = marloweData {marloweContract = marloweContract'}
-              ownAddress = semanticsAddress marloweParams
-              outputHash =
-                [
-                  h
-                |
-                  TxOut address _ h <- txInfoOutputs (scriptContextTxInfo scriptContext)
-                , address == ownAddress
-                ]
-              txInfoData' =
-                [
-                  if Just h `elem` outputHash
-                    then (h, Datum $ toBuiltinData marloweData')
-                    else (h, datum)
-                |
-                  (h, datum) <- txInfoData $ scriptContextTxInfo scriptContext
-                ]
-            let
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoData = txInfoData'}}
-            pure (marloweParams, marloweData, marloweInput, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkDatumOutput
+    $ \marloweData ->
+      do
+        marloweContract' <- arbitrary
+        pure $ marloweData {marloweContract = marloweContract'}

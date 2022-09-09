@@ -12,7 +12,6 @@
 
 
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
 
 
 module Spec.Marlowe.Plutus.Script

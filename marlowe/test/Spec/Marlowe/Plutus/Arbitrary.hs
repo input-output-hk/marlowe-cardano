@@ -17,7 +17,11 @@
 
 
 module Spec.Marlowe.Plutus.Arbitrary (
-  arbitrarySemanticsTransaction
+-- * Types
+  SemanticsTest
+, SemanticsTest'
+-- * Generation
+, arbitrarySemanticsTransaction
 , arbitraryPayoutTransaction
 ) where
 
@@ -184,8 +188,16 @@ arbitraryByteString :: Int -> Gen BuiltinByteString
 arbitraryByteString n = toBuiltin . BS.pack <$> vectorOf n arbitrary
 
 
+-- | Type for semantics tests.
+type SemanticsTest = (MarloweParams, MarloweData, MarloweInput, ScriptContext, TransactionOutput)
+
+
+-- | Type for semantics tests.
+type SemanticsTest' = (MarloweParams, MarloweData, MarloweInput, TxInfo, TransactionOutput)
+
+
 -- | Generate an arbitrary, valid Marlowe semantics transaction: datum, redeemer, and script context.
-arbitrarySemanticsTransaction :: Bool -> Gen (MarloweParams, MarloweData, MarloweInput, ScriptContext, TransactionOutput)
+arbitrarySemanticsTransaction :: Bool -> Gen SemanticsTest
 arbitrarySemanticsTransaction noisy =
   do
     (marloweState, marloweContract, TransactionInput{..}, output) <- arbitraryGoldenTransaction
