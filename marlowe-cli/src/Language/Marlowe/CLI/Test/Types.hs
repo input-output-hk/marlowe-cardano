@@ -173,6 +173,8 @@ data TokenAssignment = TokenAssignment
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
+    -- |  We use "private" currency minting policy which
+    -- | checks for a signature for a particular issuer address.
     Mint
     {
       soCurrencyNickname  :: CurrencyNickname
@@ -291,8 +293,8 @@ instance ToJSON PartyRef where
 data UseTemplate =
     UseTrivial
     {
-      utBystander          :: Maybe WalletNickname        -- ^ The party providing the min-ADA. Falls back to the faucet wallet.
-    , utParty              :: Maybe PartyRef              -- ^ The party. Falls back to the faucet wallet pkh.
+      -- utBystander          :: Maybe WalletNickname        -- ^ The party providing the min-ADA. Falls back to the faucet wallet.
+      utParty              :: Maybe PartyRef              -- ^ The party. Falls back to the faucet wallet pkh.
     , utDepositLovelace    :: Integer                     -- ^ Lovelace in the deposit.
     , utWithdrawalLovelace :: Integer                     -- ^ Lovelace in the withdrawal.
     , utTimeout            :: AnyTimeout                  -- ^ The timeout.
