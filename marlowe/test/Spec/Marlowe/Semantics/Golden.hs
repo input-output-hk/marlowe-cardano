@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -22,6 +23,7 @@ module Spec.Marlowe.Semantics.Golden (
   tests
 -- * Reference contracts
 , goldenContracts
+, goldenTransactions
 ) where
 
 
@@ -33,6 +35,7 @@ import Plutus.V1.Ledger.Api (POSIXTime)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, testCase)
 
+import qualified PlutusTx.AssocMap as AM (empty)
 import qualified Spec.Marlowe.Semantics.Golden.Escrow as Escrow (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Pangram as Pangram (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Swap as Swap (contract, invalids, valids)
@@ -134,3 +137,39 @@ testValidity shouldSucceed contract invalids =
       (t, i, o) <- invalids
     ]
 
+
+-- | List all golden transactions.
+goldenTransactions :: [(State, Contract, TransactionInput, TransactionOutput)]
+goldenTransactions =
+  concatMap (uncurry validTransactions)
+    [
+      (Escrow.contract , Escrow.valids  )
+    , (Pangram.contract, Pangram.valids )
+    , (Swap.contract   , Swap.valids    )
+    , (Trivial.contract, Trivial.valids )
+    , (ZCB.contract    , ZCB.valids     )
+    ]
+
+
+-- | Extract all of the valid transactions from a golden test case.
+validTransactions :: Contract
+                  -> [(POSIXTime, [TransactionInput], TransactionOutput)]
+                  -> [(State, Contract, TransactionInput, TransactionOutput)]
+validTransactions contract =
+  let
+    progress (time, inputs, _) = progression (State AM.empty AM.empty AM.empty time) contract inputs
+
+  in
+    concatMap progress
+
+
+progression :: State
+            -> Contract
+            -> [TransactionInput]
+            -> [(State, Contract, TransactionInput, TransactionOutput)]
+progression _ _ [] = []
+progression state contract (input : inputs) =
+  case computeTransaction input state contract of
+    output@TransactionOutput{..} -> (state, contract, input, output)
+                                      : progression txOutState txOutContract inputs
+    _                            -> []

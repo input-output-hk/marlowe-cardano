@@ -155,3 +155,4 @@ test-suite marlowe-test
         tasty-hunit,
         tasty-quickcheck,
         text,
+        these,

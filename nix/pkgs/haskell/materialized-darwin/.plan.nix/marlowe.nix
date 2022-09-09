@@ -96,6 +96,7 @@
             (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."these" or (errorHandler.buildDepError "these"))
             ];
           buildable = true;
           modules = [

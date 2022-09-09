@@ -21,10 +21,12 @@ module Spec.Marlowe.Plutus.Specification (
 
 
 import Data.Proxy
+import Data.These
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Scripts
 import Plutus.V1.Ledger.Api
-import Spec.Marlowe.Plutus.Arbitrary ()
+import Spec.Marlowe.Plutus.Arbitrary (arbitrarySemanticsTransaction)
+import Spec.Marlowe.Plutus.Script
 import Spec.Marlowe.Plutus.Types ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, forAll, property, suchThat, testProperty)
@@ -37,7 +39,12 @@ tests =
     [
       testGroup "Semantics Validator"
         [
-          testGroup "Constraint 1. Typed validation"
+          testGroup "Valid transaction succeeds"
+            [
+              testProperty "Noiseless" $ checkSemanticsTransaction False
+            , testProperty "Noisy"     $ checkSemanticsTransaction True
+            ]
+        , testGroup "Constraint 1. Typed validation"
             [
               testProperty "Valid datum deserializes"                    $ check1Valid   (arbitrary :: Gen MarloweData  )
             , testProperty "Valid redeemer deserializes"                 $ check1Valid   (arbitrary :: Gen MarloweInput )
@@ -91,7 +98,10 @@ tests =
         ]
     , testGroup "Payout Validator"
         [
-          testGroup "Constraint 16. Typed validation"
+          testGroup "Valid transaction succeeds"
+            [
+            ]
+        , testGroup "Constraint 16. Typed validation"
             [
               testProperty "Valid datum deserializes"                    $ check1Valid   (arbitrary :: Gen TokenName    )
             , testProperty "Valid redeemer deserializes"                 $ check1Valid   (arbitrary :: Gen ()           )
@@ -134,3 +144,15 @@ check1Invalid _ allowEmptyList allowByteString allowUnit =
       in
         forAll gen
           $ \x -> fromBuiltinData x == (Nothing :: Maybe a)
+
+
+-- | Check that a semantically valid transaction succeeds.
+checkSemanticsTransaction :: Bool -> Property
+checkSemanticsTransaction noisy =
+  property
+    . forAll (arbitrarySemanticsTransaction noisy)
+    $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
+      case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+        This  e   -> error $ show e
+        These e l -> error $ show (e, l)
+        That    _ -> True
