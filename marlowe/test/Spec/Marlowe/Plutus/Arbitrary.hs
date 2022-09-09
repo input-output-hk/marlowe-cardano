@@ -18,6 +18,7 @@
 
 module Spec.Marlowe.Plutus.Arbitrary (
   arbitrarySemanticsTransaction
+, arbitraryPayoutTransaction
 ) where
 
 
@@ -29,10 +30,10 @@ import Language.Marlowe.Core.V1.Semantics.Types hiding (Value)
 import Language.Marlowe.Scripts
 import Plutus.V1.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
                              Extended (..), Interval (..), LowerBound (..), PubKeyHash (..), ScriptContext (..),
-                             ScriptPurpose (..), StakingCredential (..), TxId (..), TxInInfo (..), TxInfo (..),
-                             TxOut (..), TxOutRef (..), UpperBound (..), ValidatorHash (..), Value (..), toBuiltin,
-                             toBuiltinData)
-import Plutus.V1.Ledger.Value (geq)
+                             ScriptPurpose (..), StakingCredential (..), TokenName, TxId (..), TxInInfo (..),
+                             TxInfo (..), TxOut (..), TxOutRef (..), UpperBound (..), ValidatorHash (..), Value (..),
+                             toBuiltin, toBuiltinData)
+import Plutus.V1.Ledger.Value (gt)
 import PlutusTx.Builtins (BuiltinByteString)
 import Spec.Marlowe.Plutus.Script
 import Spec.Marlowe.Semantics.Arbitrary
@@ -151,7 +152,7 @@ instance Arbitrary TxInInfo where
 
 
 instance Arbitrary TxOut where
-  arbitrary = TxOut <$> arbitrary <*> arbitrary `suchThat` (`geq` mempty) <*> arbitrary
+  arbitrary = TxOut <$> arbitrary <*> arbitrary `suchThat` (`gt` mempty) <*> arbitrary
 
 
 instance Arbitrary TxOutRef where
@@ -318,3 +319,62 @@ arbitrarySemanticsTransaction noisy =
       scriptContextTxInfo = TxInfo{..}
       scriptContextPurpose = Spending scriptInputRef
     pure (marloweParams, marloweData, marloweInput, ScriptContext{..})
+
+
+-- | Generate an arbitrary, valid Marlowe payout transaction: datum, redeemer, and script context.
+arbitraryPayoutTransaction :: Bool -> Gen (MarloweParams, TokenName, ScriptContext)
+arbitraryPayoutTransaction noisy =
+  do
+    rolesCurrency <- arbitrary
+    role <- arbitrary
+    value <- arbitrary `suchThat` (`gt` mempty)
+    let
+      rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency
+      marloweParams = MarloweParams{..}
+      ownAddress = payoutAddress marloweParams
+    (scriptInput@TxInInfo{txInInfoOutRef=scriptInputRef}, inDatumPair) <-
+      do
+        txInInfoOutRef <- arbitrary
+        let
+          inDatum = Datum $ toBuiltinData role
+          inDatumHash = hashRole role
+          txInInfoResolved = TxOut ownAddress value (Just inDatumHash)
+        pure (TxInInfo{..}, (inDatumHash, inDatum))
+    rolesIn <-
+      do
+        ref <- arbitrary
+        address  <- arbitrary
+        pure [TxInInfo ref $ TxOut address (V.singleton rolesCurrency role 1) Nothing]
+    noisyInputs <- if noisy then arbitrary `suchThat` ((< 5) . length) else pure []
+    txInfoInputs <- elements . permutations $ [scriptInput] <> rolesIn <> noisyInputs
+    noisyOutputs <- if noisy then arbitrary `suchThat` ((< 5) . length) else pure []
+    txInfoOutputs <- elements . permutations $ noisyOutputs
+    let
+      txInfoValidRange =
+        Interval
+          (LowerBound NegInf False)
+          (UpperBound PosInf False)
+    txInfoSignatories <-
+      elements . permutations . nub . concat
+        $  [
+             case credential of
+               PubKeyCredential pkh -> [pkh]
+               _                    -> []
+           |
+             TxInInfo _ (TxOut (Address credential _) _ _ ) <- txInfoInputs
+           ]
+    noisyData <- if noisy then arbitrary `suchThat` ((< 5) . length) else pure []
+    txInfoData <-
+      elements . permutations
+        $  [inDatumPair]
+        <> noisyData
+    let
+      txInfoWdrl = mempty
+      txInfoMint = mempty
+      txInfoDCert = mempty
+    txInfoId <- arbitrary
+    txInfoFee <- V.singleton V.adaSymbol V.adaToken <$> arbitraryPositiveInteger
+    let
+      scriptContextTxInfo = TxInfo{..}
+      scriptContextPurpose = Spending scriptInputRef
+    pure (marloweParams, role, ScriptContext{..})

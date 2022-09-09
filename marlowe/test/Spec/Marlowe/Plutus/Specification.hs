@@ -25,7 +25,7 @@ import Data.These
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Scripts
 import Plutus.V1.Ledger.Api
-import Spec.Marlowe.Plutus.Arbitrary (arbitrarySemanticsTransaction)
+import Spec.Marlowe.Plutus.Arbitrary (arbitraryPayoutTransaction, arbitrarySemanticsTransaction)
 import Spec.Marlowe.Plutus.Script
 import Spec.Marlowe.Plutus.Types ()
 import Test.Tasty (TestTree, testGroup)
@@ -100,6 +100,8 @@ tests =
         [
           testGroup "Valid transaction succeeds"
             [
+              testProperty "Noiseless" $ checkPayoutTransaction False
+            , testProperty "Noisy"     $ checkPayoutTransaction True
             ]
         , testGroup "Constraint 16. Typed validation"
             [
@@ -153,6 +155,18 @@ checkSemanticsTransaction noisy =
     . forAll (arbitrarySemanticsTransaction noisy)
     $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
       case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
+        This  e   -> error $ show e
+        These e l -> error $ show (e, l)
+        That    _ -> True
+
+
+-- | Check that a valid payout transaction succeeds.
+checkPayoutTransaction :: Bool -> Property
+checkPayoutTransaction noisy =
+  property
+    . forAll (arbitraryPayoutTransaction noisy)
+    $ \(marloweParams, role, scriptContext) ->
+      case evaluatePayout marloweParams (toData role) (toData ()) (toData scriptContext) of
         This  e   -> error $ show e
         These e l -> error $ show (e, l)
         That    _ -> True

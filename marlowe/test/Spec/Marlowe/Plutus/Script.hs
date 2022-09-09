@@ -45,14 +45,27 @@ evaluateSemantics :: MarloweParams
 evaluateSemantics marloweParams datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec (serialiseValidator marloweParams) [datum, redeemer, context] of
+    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec (serialiseSemanticsValidator marloweParams) [datum, redeemer, context] of
                       (logOutput, Right _     ) -> That logOutput
                       (logOutput, Left message) -> These (show message) logOutput
 
 
-serialiseValidator :: MarloweParams
-                   -> SBS.ShortByteString
-serialiseValidator =
+evaluatePayout :: MarloweParams
+               -> Data
+               -> Data
+               -> Data
+               -> These String LogOutput
+evaluatePayout marloweParams datum redeemer context =
+  case evaluationContext of
+    Left message -> This message
+    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec (serialisePayoutValidator marloweParams) [datum, redeemer, context] of
+                      (logOutput, Right _     ) -> That logOutput
+                      (logOutput, Left message) -> These (show message) logOutput
+
+
+serialiseSemanticsValidator :: MarloweParams
+                            -> SBS.ShortByteString
+serialiseSemanticsValidator =
     SBS.toShort
   . LBS.toStrict
   . serialise
@@ -69,8 +82,20 @@ semanticsAddress =
   . smallUntypedValidator
 
 
+serialisePayoutValidator :: MarloweParams
+                         -> SBS.ShortByteString
+serialisePayoutValidator =
+    SBS.toShort
+  . LBS.toStrict
+  . serialise
+  . getValidator
+  . validatorScript
+  . rolePayoutScript
+  . rolesCurrency
+
+
 payoutAddress :: MarloweParams
-                 -> Address
+              -> Address
 payoutAddress =
     scriptHashAddress
   . mkRolePayoutValidatorHash
