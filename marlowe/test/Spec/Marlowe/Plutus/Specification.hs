@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -22,7 +23,7 @@ module Spec.Marlowe.Plutus.Specification (
 
 
 import Control.Lens ((^.))
-import Control.Lens.Tuple (_5)
+import Control.Lens.Tuple (_3, _5)
 import Data.Bifunctor (bimap)
 import Data.List (permutations)
 import Data.Proxy
@@ -106,6 +107,7 @@ tests =
             ]
         , testGroup "Constraint 12. Merkleized continuations"
             [
+              -- FIXME: Add generator for merkleized contracts.
             ]
         , testGroup "Constraint 13. Positive balances"
             [
@@ -113,6 +115,7 @@ tests =
             ]
         , testGroup "Constraint 14. Inputs authorized"
             [
+              testProperty "Invalid missing authorization" checkAuthorization
             ]
         , testGroup "Constraint 15. Sufficient payment"
             [
@@ -387,3 +390,42 @@ checkPositiveAccounts =
         token <- arbitrary
         amount <- (1 -) <$> arbitraryPositiveInteger
         pure $ state {accounts = AM.insert (account, token) amount $ accounts state}
+
+
+-- | Check that a missing authorization causes failure.
+checkAuthorization :: Property
+checkAuthorization =
+  let
+    authorizations inputs =
+      bimap concat concat
+        $ unzip
+        [
+          case input of
+            Input             (IDeposit _ (PK   pkh ) _ _        )   -> ([pkh], [    ])
+            Input             (IDeposit _ (Role role) _ _        )   -> ([   ], [role])
+            Input             (IChoice (ChoiceId _ (PK pkh   )) _)   -> ([pkh], [    ])
+            Input             (IChoice (ChoiceId _ (Role role)) _)   -> ([   ], [role])
+            MerkleizedTxInput (IDeposit _ (PK   pkh ) _ _        ) _ -> ([pkh], [    ])
+            MerkleizedTxInput (IDeposit _ (Role role) _ _        ) _ -> ([   ], [role])
+            MerkleizedTxInput (IChoice (ChoiceId _ (PK pkh   )) _) _ -> ([pkh], [    ])
+            MerkleizedTxInput (IChoice (ChoiceId _ (Role role)) _) _ -> ([   ], [role])
+            _                                                        -> ([   ], [    ])
+        |
+          input <- inputs
+        ]
+    filterOne f z =
+      case break f z of
+        (x, []) -> x
+        (x, y ) -> x <> tail y
+  in
+    checkInvalidSemantics ((/= ([], [])) . authorizations . (^. _3))
+      $ \(MarloweParams{..}, _, input, txInfo, _) ->
+        pure
+          $ let
+              (pkhs, roles) = authorizations input
+              txInfoInputs' =
+                filterOne (\TxInInfo{txInInfoResolved=TxOut{txOutValue}} -> any (\role -> valueOf txOutValue rolesCurrency role > 0) roles)
+                  $ txInfoInputs txInfo
+              txInfoSignatories' = filterOne (`elem` pkhs) $ txInfoSignatories txInfo
+            in
+              txInfo {txInfoInputs = txInfoInputs', txInfoSignatories = txInfoSignatories'}
