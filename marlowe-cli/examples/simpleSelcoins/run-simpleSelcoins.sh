@@ -233,16 +233,29 @@ echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
 echo "The bystander $BYSTANDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
+# TX_1=$(
+# marlowe-cli run execute --testnet-magic "$MAGIC"                    \
+#                         --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
+#                         --tx-in "$TX_0_BYSTANDER"                   \
+#                         --required-signer "$BYSTANDER_PAYMENT_SKEY" \
+#                         --marlowe-out-file tx-1.marlowe             \
+#                         --change-address "$BYSTANDER_ADDRESS"       \
+#                         --out-file tx-1.raw                         \
+#                         --print-stats                               \
+#                         --submit=600                                \
+# | sed -e 's/^TxId "\(.*\)"$/\1/'                                    \
+# )
+
 TX_1=$(
-marlowe-cli run execute --testnet-magic "$MAGIC"                    \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
-                        --tx-in "$TX_0_BYSTANDER"                   \
-                        --required-signer "$BYSTANDER_PAYMENT_SKEY" \
-                        --marlowe-out-file tx-1.marlowe             \
-                        --change-address "$BYSTANDER_ADDRESS"       \
-                        --out-file tx-1.raw                         \
-                        --print-stats                               \
-                        --submit=600                                \
+marlowe-cli run auto-execute \
+  --testnet-magic "$MAGIC" \
+  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+  --required-signer "$BYSTANDER_PAYMENT_SKEY" \
+  --marlowe-out-file tx-1.marlowe \
+  --change-address "$BYSTANDER_ADDRESS" \
+  --out-file tx-1.raw \
+  --print-stats \
+  --submit=600 \
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                    \
 )
 
@@ -269,20 +282,35 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe              \
 
 echo "Now the party $PARTY_NAME submits the transaction along with their deposit:"
 
+# TX_2=$(
+# marlowe-cli run execute --testnet-magic "$MAGIC"                  \
+#                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+#                         --marlowe-in-file tx-1.marlowe            \
+#                         --tx-in-marlowe "$TX_1"#1                 \
+#                         --tx-in-collateral "$TX_0_PARTY"          \
+#                         --tx-in "$TX_0_PARTY"                     \
+#                         --required-signer "$PARTY_PAYMENT_SKEY"   \
+#                         --marlowe-out-file tx-2.marlowe           \
+#                         --change-address "$PARTY_ADDRESS"         \
+#                         --out-file tx-2.raw                       \
+#                         --print-stats                             \
+#                         --submit=600                              \
+# | sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+# )
+
 TX_2=$(
-marlowe-cli run execute --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --marlowe-in-file tx-1.marlowe            \
-                        --tx-in-marlowe "$TX_1"#1                 \
-                        --tx-in-collateral "$TX_0_PARTY"          \
-                        --tx-in "$TX_0_PARTY"                     \
-                        --required-signer "$PARTY_PAYMENT_SKEY"   \
-                        --marlowe-out-file tx-2.marlowe           \
-                        --change-address "$PARTY_ADDRESS"         \
-                        --out-file tx-2.raw                       \
-                        --print-stats                             \
-                        --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+marlowe-cli run auto-execute \
+  --testnet-magic "$MAGIC" \
+  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+  --marlowe-in-file tx-1.marlowe \
+  --tx-in-marlowe "$TX_1"#1 \
+  --required-signer "$PARTY_PAYMENT_SKEY" \
+  --marlowe-out-file tx-2.marlowe \
+  --change-address "$PARTY_ADDRESS" \
+  --out-file tx-2.raw \
+  --print-stats \
+  --submit=600 \
+| sed -e 's/^TxId "\(.*\)"$/\1/' \
 )
 
 echo "The contract received the deposit of $DEPOSIT_LOVELACE lovelace from the party $PARTY_NAME in the transaction "'`'"$TX_2"'`'". Here is the UTxO at the contract address:"
@@ -306,20 +334,35 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
 
 echo "Now the party $PARTY_NAME can submit a transaction to withdraw funds:"
 
+# TX_3=$(
+# marlowe-cli run execute --testnet-magic "$MAGIC"                  \
+#                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+#                         --marlowe-in-file tx-2.marlowe            \
+#                         --tx-in-marlowe "$TX_2"#1                 \
+#                         --tx-in-collateral "$TX_2"#0              \
+#                         --tx-in "$TX_2"#0                         \
+#                         --required-signer "$PARTY_PAYMENT_SKEY"   \
+#                         --marlowe-out-file tx-3.marlowe           \
+#                         --change-address "$PARTY_ADDRESS"         \
+#                         --out-file tx-3.raw                       \
+#                         --print-stats                             \
+#                         --submit=600                              \
+# | sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+# )
+
 TX_3=$(
-marlowe-cli run execute --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --marlowe-in-file tx-2.marlowe            \
-                        --tx-in-marlowe "$TX_2"#1                 \
-                        --tx-in-collateral "$TX_2"#0              \
-                        --tx-in "$TX_2"#0                         \
-                        --required-signer "$PARTY_PAYMENT_SKEY"   \
-                        --marlowe-out-file tx-3.marlowe           \
-                        --change-address "$PARTY_ADDRESS"         \
-                        --out-file tx-3.raw                       \
-                        --print-stats                             \
-                        --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+marlowe-cli run auto-execute \
+  --testnet-magic "$MAGIC" \
+  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+  --marlowe-in-file tx-2.marlowe \
+  --tx-in-marlowe "$TX_2"#1 \
+  --required-signer "$PARTY_PAYMENT_SKEY" \
+  --marlowe-out-file tx-3.marlowe \
+  --change-address "$PARTY_ADDRESS" \
+  --out-file tx-3.raw \
+  --print-stats \
+  --submit=600 \
+| sed -e 's/^TxId "\(.*\)"$/\1/' \
 )
 
 echo "The contract made a payment of $WITHDRAWAL_LOVELACE lovelace to the party $PARTY_NAME in the transaction "'`'"$TX_3"'`'". Here is the UTxO at the contract address:"
@@ -343,21 +386,36 @@ marlowe-cli run prepare --marlowe-file tx-3.marlowe           \
 
 echo "Now the party $PARTY_NAME can submit a transaction to close the contract and disperse the remaining funds:"
 
+# TX_4=$(
+# marlowe-cli run execute --testnet-magic "$MAGIC"                  \
+#                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+#                         --marlowe-in-file tx-3.marlowe            \
+#                         --tx-in-marlowe "$TX_3"#1                 \
+#                         --tx-in-collateral "$TX_3"#0              \
+#                         --tx-in "$TX_3"#0                         \
+#                         --tx-in "$TX_3"#2                         \
+#                         --required-signer "$PARTY_PAYMENT_SKEY"   \
+#                         --marlowe-out-file tx-4.marlowe           \
+#                         --change-address "$PARTY_ADDRESS"         \
+#                         --out-file tx-4.raw                       \
+#                         --print-stats                             \
+#                         --submit=600                              \
+# | sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+# )
+
 TX_4=$(
-marlowe-cli run execute --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --marlowe-in-file tx-3.marlowe            \
-                        --tx-in-marlowe "$TX_3"#1                 \
-                        --tx-in-collateral "$TX_3"#0              \
-                        --tx-in "$TX_3"#0                         \
-                        --tx-in "$TX_3"#2                         \
-                        --required-signer "$PARTY_PAYMENT_SKEY"   \
-                        --marlowe-out-file tx-4.marlowe           \
-                        --change-address "$PARTY_ADDRESS"         \
-                        --out-file tx-4.raw                       \
-                        --print-stats                             \
-                        --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+marlowe-cli run auto-execute \
+  --testnet-magic "$MAGIC" \
+  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+  --marlowe-in-file tx-3.marlowe \
+  --tx-in-marlowe "$TX_3"#1 \
+  --required-signer "$PARTY_PAYMENT_SKEY" \
+  --marlowe-out-file tx-4.marlowe \
+  --change-address "$PARTY_ADDRESS" \
+  --out-file tx-4.raw \
+  --print-stats \
+  --submit=600 \
+| sed -e 's/^TxId "\(.*\)"$/\1/' \
 )
 
 echo "The closing of the contract paid $CLOSE_LOVELACE lovelace to the the party $PARTY_NAME and $MINIMUM_ADA lovelace to the bystander $BYSTANDER_NAME in the transaction "'`'"$TX_4"'`'". There is no UTxO at the contract address:"

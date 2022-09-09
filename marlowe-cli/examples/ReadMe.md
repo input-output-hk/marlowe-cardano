@@ -26,3 +26,19 @@ Also see the [Marlowe Contract Cookbook](../cookbook/ReadMe.md) for further exam
 *   [zero-coupon bond](zcb/run-zcb.sh)
 *   [contract for differences](cfd/run-cfd.sh)
 *   [covered call](coveredCall/run-coveredCall.sh)
+
+
+## Generating docs
+
+Doc generation runs the test scripts to produce logs and then processes the
+logs. Make sure these variables have been set
+
+    $ export FAUCET_ADDRESS=...
+    $ export FAUCET_SKEY_FILE=...
+
+To generate docs for `examples/simple`
+
+    $ cd examples/simple
+    $ ./Makefile docs
+
+Repeat this for each test dir in `examples` as needed.
