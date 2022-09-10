@@ -58,7 +58,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (.
                                                  getAction)
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Spec.Marlowe.Semantics.Golden (goldenContracts, goldenTransactions)
+import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
                               vectorOf)
 
@@ -996,5 +996,10 @@ arbitraryValidInputs state contract =
 
 
 -- | Generate an arbitrary golden transaction.
-arbitraryGoldenTransaction :: Gen (State, Contract, TransactionInput, TransactionOutput)
-arbitraryGoldenTransaction = elements goldenTransactions
+arbitraryGoldenTransaction :: Gen GoldenTransaction
+arbitraryGoldenTransaction =
+  do
+    equalContractWeights <- frequency [(1, pure True), (5, pure False)]
+    if equalContractWeights
+      then elements =<< elements goldenTransactions
+      else elements $ concat goldenTransactions

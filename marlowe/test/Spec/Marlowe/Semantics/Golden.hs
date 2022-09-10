@@ -146,16 +146,16 @@ type GoldenTransaction = (State, Contract, TransactionInput, TransactionOutput)
 
 
 -- | List all golden transactions.
-goldenTransactions :: [GoldenTransaction]
+goldenTransactions :: [[GoldenTransaction]]
 goldenTransactions =
-  concatMap (uncurry validTransactions)
-    [
-      (Escrow.contract , Escrow.valids )
-    , (Pangram.contract, Pangram.valids)
-    , (Swap.contract   , Swap.valids   )
-    , (Trivial.contract, Trivial.valids)
-    , (ZCB.contract    , ZCB.valids    )
-    ]
+  uncurry validTransactions
+    <$> [
+          (Escrow.contract , Escrow.valids )
+        , (Pangram.contract, Pangram.valids)
+        , (Swap.contract   , Swap.valids   )
+        , (Trivial.contract, Trivial.valids)
+        , (ZCB.contract    , ZCB.valids    )
+        ]
 
 
 -- | Extract all of the valid transactions from a golden test case.
