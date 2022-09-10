@@ -26,16 +26,25 @@ import Control.Lens ((^.))
 import Control.Lens.Tuple (_3, _5)
 import Data.Bifunctor (bimap)
 import Data.List (permutations)
-import Data.Proxy
-import Data.These
-import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.Scripts
-import Plutus.V1.Ledger.Api
-import Plutus.V1.Ledger.Value
+import Data.Proxy (Proxy (..))
+import Data.These (These (That, These, This))
+import Language.Marlowe.Core.V1.Semantics (MarloweData (marloweContract, marloweState),
+                                           MarloweParams (MarloweParams, rolePayoutValidatorHash, rolesCurrency),
+                                           Payment (Payment), TransactionOutput (txOutContract, txOutPayments))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close),
+                                                 InputContent (IChoice, IDeposit), Party (PK, Role), Payee (Party),
+                                                 State (accounts))
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (Input, MerkleizedTxInput))
+import Plutus.V1.Ledger.Api (Address (Address), BuiltinData (BuiltinData), Credential (PubKeyCredential),
+                             Data (B, Constr, List), Datum (Datum), FromData (..), ScriptContext (scriptContextTxInfo),
+                             ToData (..), TokenName, TxInInfo (TxInInfo, txInInfoOutRef, txInInfoResolved),
+                             TxInfo (txInfoData, txInfoInputs, txInfoOutputs, txInfoSignatories),
+                             TxOut (TxOut, txOutAddress, txOutDatumHash, txOutValue), adaSymbol, adaToken, singleton,
+                             toData)
+import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
 import Spec.Marlowe.Plutus.Arbitrary (SemanticsTest, SemanticsTest', arbitraryPayoutTransaction,
                                       arbitrarySemanticsTransaction, arbitrarySemanticsTransactionModifyState)
-import Spec.Marlowe.Plutus.Script
+import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
 import Spec.Marlowe.Plutus.Types ()
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)

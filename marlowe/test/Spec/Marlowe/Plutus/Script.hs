@@ -14,32 +14,45 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Spec.Marlowe.Plutus.Script
-where
+module Spec.Marlowe.Plutus.Script (
+-- * Evaluation
+  evaluateSemantics
+, evaluatePayout
+-- * Addresses
+, semanticsAddress
+, payoutAddress
+-- * Hashes
+, hashMarloweData
+, hashRole
+) where
 
 
 import Codec.Serialise (serialise)
-import Control.Monad.Except
-import Data.Bifunctor
+import Control.Monad.Except (runExcept)
+import Data.Bifunctor (Bifunctor (first))
 import Data.These (These (..))
-import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Scripts
+import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (rolesCurrency))
+import Language.Marlowe.Scripts (mkRolePayoutValidatorHash, rolePayoutScript, smallUntypedValidator)
 import Ledger.Typed.Scripts (validatorHash, validatorScript)
-import Plutus.ApiCommon
+import Plutus.ApiCommon (EvaluationContext, LedgerPlutusVersion (PlutusV1), LogOutput,
+                         ProtocolVersion (ProtocolVersion), VerboseMode (Verbose), evaluateScriptCounting,
+                         mkEvaluationContext)
 import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V1.Ledger.Address
-import Plutus.V1.Ledger.Api hiding (evaluateScriptCounting)
+import Plutus.V1.Ledger.Address (Address, scriptHashAddress)
+import Plutus.V1.Ledger.Api (CostModelParams, Data, Datum (Datum), DatumHash, ToData (toBuiltinData), TokenName,
+                             Validator (getValidator))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as M
 
 
-evaluateSemantics :: MarloweParams
-                  -> Data
-                  -> Data
-                  -> Data
-                  -> These String LogOutput
+-- | Run the Plutus evaluator on the Marlowe semantics validator.
+evaluateSemantics :: MarloweParams           -- ^ The parameters.
+                  -> Data                    -- ^ The datum.
+                  -> Data                    -- ^ The redeemer.
+                  -> Data                    -- ^ The script context.
+                  -> These String LogOutput  -- ^ The result.
 evaluateSemantics marloweParams datum redeemer context =
   case evaluationContext of
     Left message -> This message
@@ -48,11 +61,12 @@ evaluateSemantics marloweParams datum redeemer context =
                       (logOutput, Left message) -> These (show message) logOutput
 
 
-evaluatePayout :: MarloweParams
-               -> Data
-               -> Data
-               -> Data
-               -> These String LogOutput
+-- | Run the Plutus evaluator on the Marlowe payout validator.
+evaluatePayout :: MarloweParams           -- ^ The parameters.
+               -> Data                    -- ^ The datum.
+               -> Data                    -- ^ The redeemer.
+               -> Data                    -- ^ The script context.
+               -> These String LogOutput  -- ^ The result.
 evaluatePayout marloweParams datum redeemer context =
   case evaluationContext of
     Left message -> This message
@@ -61,6 +75,7 @@ evaluatePayout marloweParams datum redeemer context =
                       (logOutput, Left message) -> These (show message) logOutput
 
 
+-- | Serialize the Marlowe semantics validator.
 serialiseSemanticsValidator :: MarloweParams
                             -> SBS.ShortByteString
 serialiseSemanticsValidator =
@@ -72,6 +87,7 @@ serialiseSemanticsValidator =
   . smallUntypedValidator
 
 
+-- | Compute the address of the Marlowe semantics validator.
 semanticsAddress :: MarloweParams
                  -> Address
 semanticsAddress =
@@ -80,6 +96,7 @@ semanticsAddress =
   . smallUntypedValidator
 
 
+-- | Serialize the Marlowe payout validator.
 serialisePayoutValidator :: MarloweParams
                          -> SBS.ShortByteString
 serialisePayoutValidator =
@@ -92,6 +109,7 @@ serialisePayoutValidator =
   . rolesCurrency
 
 
+-- | Compute the address of the Marlowe payout validator.
 payoutAddress :: MarloweParams
               -> Address
 payoutAddress =
@@ -100,20 +118,24 @@ payoutAddress =
   . rolesCurrency
 
 
+-- | Compute the hash of Marlowe datum.
 hashMarloweData :: MarloweData
                 -> DatumHash
 hashMarloweData = datumHash . Datum . toBuiltinData
 
 
+-- | Compute the hash of a role token.
 hashRole :: TokenName
          -> DatumHash
 hashRole = datumHash . Datum . toBuiltinData
 
 
+-- | Build an evaluation context.
 evaluationContext :: Either String EvaluationContext
 evaluationContext = first show . runExcept $ mkEvaluationContext costModel
 
 
+-- | A default cost model for Plutus.
 costModel :: CostModelParams
 costModel =
   M.fromList

@@ -30,9 +30,15 @@ module Spec.Marlowe.Plutus.Arbitrary (
 import Data.Bifunctor (bimap, second)
 import Data.List (nub, permutations)
 import Data.Maybe (catMaybes)
-import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Types hiding (Value)
-import Language.Marlowe.Scripts
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..), Payment (Payment),
+                                           TransactionInput (..),
+                                           TransactionOutput (TransactionOutput, txOutContract, txOutPayments, txOutState, txOutWarnings),
+                                           computeTransaction)
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close),
+                                                 Input (MerkleizedInput, NormalInput), InputContent (IChoice, IDeposit),
+                                                 Party (PK, Role), Payee (Party), State (accounts), Token (Token),
+                                                 getInputContent)
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), mkRolePayoutValidatorHash)
 import Plutus.V1.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
                              Extended (..), Interval (..), LowerBound (..), PubKeyHash (..), ScriptContext (..),
                              ScriptPurpose (..), StakingCredential (..), TokenName, TxId (..), TxInInfo (..),
@@ -40,8 +46,8 @@ import Plutus.V1.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Da
                              toBuiltin, toBuiltinData)
 import Plutus.V1.Ledger.Value (gt)
 import PlutusTx.Builtins (BuiltinByteString)
-import Spec.Marlowe.Plutus.Script
-import Spec.Marlowe.Semantics.Arbitrary
+import Spec.Marlowe.Plutus.Script (hashMarloweData, hashRole, payoutAddress, semanticsAddress)
+import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap, arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, frequency, listOf, suchThat, vectorOf)
 
 import qualified Data.ByteString as BS (ByteString, pack)

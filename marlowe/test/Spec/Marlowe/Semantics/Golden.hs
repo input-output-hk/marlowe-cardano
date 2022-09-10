@@ -19,8 +19,11 @@
 
 
 module Spec.Marlowe.Semantics.Golden (
+-- * Types
+  GoldenTransaction
+, GoldenCase
 -- * Testing
-  tests
+, tests
 -- * Reference contracts
 , goldenContracts
 , goldenTransactions
@@ -138,8 +141,12 @@ testValidity shouldSucceed contract invalids =
     ]
 
 
+-- | A golden transaction.
+type GoldenTransaction = (State, Contract, TransactionInput, TransactionOutput)
+
+
 -- | List all golden transactions.
-goldenTransactions :: [(State, Contract, TransactionInput, TransactionOutput)]
+goldenTransactions :: [GoldenTransaction]
 goldenTransactions =
   concatMap (uncurry validTransactions)
     [
@@ -154,7 +161,7 @@ goldenTransactions =
 -- | Extract all of the valid transactions from a golden test case.
 validTransactions :: Contract
                   -> [(POSIXTime, [TransactionInput], TransactionOutput)]
-                  -> [(State, Contract, TransactionInput, TransactionOutput)]
+                  -> [GoldenTransaction]
 validTransactions contract =
   let
     progress (time, inputs, _) = progression (State AM.empty AM.empty AM.empty time) contract inputs
@@ -163,10 +170,11 @@ validTransactions contract =
     concatMap progress
 
 
+-- | Apply input to a contract state.
 progression :: State
             -> Contract
             -> [TransactionInput]
-            -> [(State, Contract, TransactionInput, TransactionOutput)]
+            -> [GoldenTransaction]
 progression _ _ [] = []
 progression state contract (input : inputs) =
   case computeTransaction input state contract of
