@@ -143,11 +143,11 @@ goldenTransactions :: [(State, Contract, TransactionInput, TransactionOutput)]
 goldenTransactions =
   concatMap (uncurry validTransactions)
     [
-      (Escrow.contract , Escrow.valids  )
-    , (Pangram.contract, Pangram.valids )
-    , (Swap.contract   , Swap.valids    )
-    , (Trivial.contract, Trivial.valids )
-    , (ZCB.contract    , ZCB.valids     )
+      (Escrow.contract , Escrow.valids )
+    , (Pangram.contract, Pangram.valids)
+    , (Swap.contract   , Swap.valids   )
+    , (Trivial.contract, Trivial.valids)
+    , (ZCB.contract    , ZCB.valids    )
     ]
 
 

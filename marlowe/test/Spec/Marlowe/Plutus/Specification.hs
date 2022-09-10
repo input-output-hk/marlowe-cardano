@@ -75,7 +75,9 @@ tests =
             ]
         , testGroup "Constraint 4. No output to script on close"
             [
--- FIXME:     testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
+              testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
+            |
+              False  -- FIXME: Settle whether to include this failing test in the specification.
             ]
         , testGroup "Constraint 5. Input value from script"
             [
@@ -119,6 +121,7 @@ tests =
             ]
         , testGroup "Constraint 15. Sufficient payment"
             [
+              testProperty "Invalid insufficient payment" checkPayment
             ]
         ]
     , testGroup "Payout Validator"
@@ -413,19 +416,44 @@ checkAuthorization =
         |
           input <- inputs
         ]
-    filterOne f z =
-      case break f z of
-        (x, []) -> x
-        (x, y ) -> x <> tail y
   in
     checkInvalidSemantics ((/= ([], [])) . authorizations . (^. _3))
       $ \(MarloweParams{..}, _, input, txInfo, _) ->
         pure
           $ let
               (pkhs, roles) = authorizations input
+              filterOne f z =
+                case break f z of
+                  (x, []) -> x
+                  (x, y ) -> x <> tail y
               txInfoInputs' =
                 filterOne (\TxInInfo{txInInfoResolved=TxOut{txOutValue}} -> any (\role -> valueOf txOutValue rolesCurrency role > 0) roles)
                   $ txInfoInputs txInfo
               txInfoSignatories' = filterOne (`elem` pkhs) $ txInfoSignatories txInfo
             in
               txInfo {txInfoInputs = txInfoInputs', txInfoSignatories = txInfoSignatories'}
+
+
+-- | Check that an insufficient payment causes failure.
+checkPayment :: Property
+checkPayment =
+  let
+    externalPayment (Payment _ (Party _) value) = value `gt` mempty
+    externalPayment _                           = False
+  in
+    checkInvalidSemantics (any externalPayment . txOutPayments . (^. _5))
+      $ \(marloweParams, _, _, txInfo, _) ->
+        pure
+          $ let
+              reduce value = foldMap (\(c, n, i) -> singleton c n (i - 1)) $ flattenValue value
+              txInfoOutputs' =
+                [
+                  case (txOutAddress txOut == payoutAddress marloweParams, txOut) of
+                    (False, TxOut (Address (PubKeyCredential _) _) value Nothing) -> txOut {txOutValue = reduce value}
+                    (True , TxOut _                                value _      ) -> txOut {txOutValue = reduce value}
+                    _                                                             -> txOut
+                |
+                  txOut <- txInfoOutputs txInfo
+                ]
+            in
+              txInfo {txInfoOutputs = txInfoOutputs'}
