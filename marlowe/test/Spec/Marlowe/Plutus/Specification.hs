@@ -142,6 +142,8 @@ tests =
             ]
         , testGroup "Constraint 17. Payment authorized"
             [
+              testProperty "Invalid authorization for withdrawal" $ checkWithdrawal True
+            , testProperty "Missing authorized withdrawal"        $ checkWithdrawal False
             ]
         ]
     ]
@@ -449,11 +451,41 @@ checkPayment =
               txInfoOutputs' =
                 [
                   case (txOutAddress txOut == payoutAddress marloweParams, txOut) of
-                    (False, TxOut (Address (PubKeyCredential _) _) value Nothing) -> txOut {txOutValue = reduce value}
-                    (True , TxOut _                                value _      ) -> txOut {txOutValue = reduce value}
-                    _                                                             -> txOut
+                    (False, TxOut (Address (PubKeyCredential _) _) value Nothing ) -> txOut {txOutValue = reduce value}
+                    (True , TxOut _                                value (Just _)) -> txOut {txOutValue = reduce value}
+                    _                                                              -> txOut
                 |
                   txOut <- txInfoOutputs txInfo
                 ]
             in
               txInfo {txInfoOutputs = txInfoOutputs'}
+
+
+-- | Check that an invalid semantics transaction fails.
+checkWithdrawal :: Bool -> Property
+checkWithdrawal mutate =
+  property
+    $ let
+        gen =
+          do
+            (marloweParams, role, scriptContext) <- arbitraryPayoutTransaction False
+            role' <- arbitrary
+            let
+              txInfoInputs' =
+                [
+                  if mutate && isRole
+                    then txInInfo {txInInfoResolved = (txInInfoResolved txInInfo) {txOutValue = singleton (rolesCurrency marloweParams) role' 1}}
+                    else txInInfo
+                |
+                  txInInfo <- txInfoInputs $ scriptContextTxInfo scriptContext
+                , let isRole = valueOf (txOutValue (txInInfoResolved txInInfo)) (rolesCurrency marloweParams) role == 0
+                , not mutate && isRole
+                ]
+              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
+            pure (marloweParams, role, scriptContext')
+      in
+        forAll gen
+          $ \(marloweParams, role, scriptContext) ->
+            case evaluatePayout marloweParams (toData role) (toData ()) (toData scriptContext) of
+              That{} -> False
+              _      -> True
