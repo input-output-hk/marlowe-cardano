@@ -22,35 +22,35 @@ module Spec.Marlowe.Plutus.Specification (
 ) where
 
 
-import Control.Lens ((^.))
-import Control.Lens.Tuple (_3, _5)
+import Control.Lens (use, uses, (%=), (<>=), (^.))
+import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
-import Data.List (permutations)
 import Data.Proxy (Proxy (..))
 import Data.These (These (That, These, This))
-import Language.Marlowe.Core.V1.Semantics (MarloweData (marloweContract, marloweState),
-                                           MarloweParams (MarloweParams, rolePayoutValidatorHash, rolesCurrency),
-                                           Payment (Payment), TransactionOutput (txOutContract, txOutPayments))
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close),
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (rolesCurrency), Payment (Payment),
+                                           TransactionInput (..),
+                                           TransactionOutput (txOutContract, txOutPayments, txOutState))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close), Input (..),
                                                  InputContent (IChoice, IDeposit), Party (PK, Role), Payee (Party),
                                                  State (accounts))
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (Input, MerkleizedTxInput))
+import Language.Marlowe.Scripts (MarloweInput)
+import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Api (Address (Address), BuiltinData (BuiltinData), Credential (PubKeyCredential),
-                             Data (B, Constr, List), Datum (Datum), FromData (..), ScriptContext (scriptContextTxInfo),
-                             ToData (..), TokenName, TxInInfo (TxInInfo, txInInfoOutRef, txInInfoResolved),
-                             TxInfo (txInfoData, txInfoInputs, txInfoOutputs, txInfoSignatories),
-                             TxOut (TxOut, txOutAddress, txOutDatumHash, txOutValue), adaSymbol, adaToken, singleton,
-                             toData)
+                             Data (B, Constr, List), Datum (Datum), FromData (..), PubKeyHash, ScriptContext,
+                             ToData (..), TokenName, TxInInfo (TxInInfo, txInInfoResolved), TxOut (TxOut, txOutValue),
+                             Value, adaSymbol, adaToken, singleton, toData)
 import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
-import Spec.Marlowe.Plutus.Arbitrary (SemanticsTest, SemanticsTest', arbitraryPayoutTransaction,
-                                      arbitrarySemanticsTransaction, arbitrarySemanticsTransactionModifyState)
 import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
-import Spec.Marlowe.Plutus.Types ()
+import Spec.Marlowe.Plutus.Transaction (ArbitraryTransaction, arbitraryPayoutTransaction, arbitrarySemanticsTransaction,
+                                        noModify, noVeto, shuffle)
+import Spec.Marlowe.Plutus.Types (PayoutTransaction (_params'), PlutusTransaction (..), SemanticsTransaction (_params),
+                                  infoData, infoInputs, infoOutputs, infoSignatories, input, inputState, marloweParams,
+                                  marloweParamsPayout, output, role)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, property, suchThat, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, forAll, property, suchThat, testProperty)
 
-import qualified PlutusTx.AssocMap as AM
+import qualified PlutusTx.AssocMap as AM (insert)
 
 
 -- | Run tests.
@@ -62,8 +62,8 @@ tests =
         [
           testGroup "Valid transaction succeeds"
             [
-              testProperty "Noiseless" $ checkSemanticsTransaction False
-            , testProperty "Noisy"     $ checkSemanticsTransaction True
+              testProperty "Noiseless" $ checkSemanticsTransaction noModify noModify noVeto True False
+            , testProperty "Noisy"     $ checkSemanticsTransaction noModify noModify noVeto True True
             ]
         , testGroup "Constraint 1. Typed validation"
             [
@@ -82,11 +82,9 @@ tests =
             [
               testProperty "Invalid attempt to split Marlowe output" checkMultipleOutput
             ]
-        , testGroup "Constraint 4. No output to script on close"
+        , testGroup "FAILURE OF Constraint 4. No output to script on close"
             [
               testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
-            |
-              False  -- FIXME: Settle whether to include this failing test in the specification.
             ]
         , testGroup "Constraint 5. Input value from script"
             [
@@ -137,8 +135,8 @@ tests =
         [
           testGroup "Valid transaction succeeds"
             [
-              testProperty "Noiseless" $ checkPayoutTransaction False
-            , testProperty "Noisy"     $ checkPayoutTransaction True
+              testProperty "Noiseless" $ checkPayoutTransaction noModify noModify noVeto True False
+            , testProperty "Noisy"     $ checkPayoutTransaction noModify noModify noVeto True True
             ]
         , testGroup "Constraint 16. Typed validation"
             [
@@ -159,7 +157,9 @@ tests =
 
 
 -- | Check round-trip serialization of `Data`.
-check1Valid :: (FromData a, ToData a, Eq a, Show a) => Gen a -> Property
+check1Valid :: (FromData a, ToData a, Eq a, Show a)
+            => Gen a
+            -> Property
 check1Valid gen =
   property
     . forAll gen
@@ -167,7 +167,13 @@ check1Valid gen =
 
 
 -- | Check that invalid `BuiltinData` fails to deserialize to `Data`.
-check1Invalid :: forall a . (FromData a, Eq a) => Proxy a -> Bool -> Bool -> Bool -> Property
+check1Invalid :: forall a
+              . (FromData a, Eq a)
+              => Proxy a   -- ^ The type for conversion to `BuiltinData`.
+              -> Bool      -- ^ Whether to allow an empty list in the `Data`.
+              -> Bool      -- ^ Whether to all byte strings in the `Data`.
+              -> Bool      -- ^ Whether to allow `()` in the `Data`.
+              -> Property  -- ^ The test property.
 check1Invalid _ allowEmptyList allowByteString allowUnit =
   property
     $ let
@@ -187,191 +193,187 @@ check1Invalid _ allowEmptyList allowByteString allowUnit =
           $ \x -> fromBuiltinData x == (Nothing :: Maybe a)
 
 
--- | Check that a semantically valid transaction succeeds.
-checkSemanticsTransaction :: Bool -> Property
-checkSemanticsTransaction noisy =
+-- | Check that a semantics transaction succeeds.
+checkSemanticsTransaction :: ArbitraryTransaction SemanticsTransaction ()      -- ^ Modifications to make before building the valid transaction.
+                          -> ArbitraryTransaction SemanticsTransaction ()      -- ^ Modifications to make after building the valid transaction.
+                          -> (PlutusTransaction SemanticsTransaction -> Bool)  -- ^ Whether to discard the transaction from the testing.
+                          -> Bool                                              -- ^ Whether the transaction should test as valid.
+                          -> Bool                                              -- ^ Whether to add noise to the script context.
+                          -> Property                                          -- ^ The test property.
+checkSemanticsTransaction modifyBefore modifyAfter condition valid noisy =
   property
-    . forAll (arbitrarySemanticsTransaction noisy)
-    $ \(marloweParams, marloweData, marloweInput, scriptContext, _) ->
-      case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-        This  e   -> error $ show e
-        These e l -> error $ show (e, l)
-        That    _ -> True
+    . forAll (arbitrarySemanticsTransaction modifyBefore modifyAfter noisy `suchThat` condition)
+    $ \PlutusTransaction{..} ->
+      case evaluateSemantics (_params _parameters) (toData _datum) (toData _redeemer) (toData _scriptContext) of
+        This  e   -> not valid || (error $ show e)
+        These e l -> not valid || (error $ show e <> ": " <> show l)
+        That    _ -> valid
 
 
--- | Check that a valid payout transaction succeeds.
-checkPayoutTransaction :: Bool -> Property
-checkPayoutTransaction noisy =
+-- | Check that a payout transaction succeeds.
+checkPayoutTransaction :: ArbitraryTransaction PayoutTransaction ()      -- ^ Modifications to make before building the valid transaction.
+                       -> ArbitraryTransaction PayoutTransaction ()      -- ^ Modifications to make after building the valid transaction.
+                       -> (PlutusTransaction PayoutTransaction -> Bool)  -- ^ Whether to discard the transaction from the testing.
+                       -> Bool                                           -- ^ Whether the transaction should test as valid.
+                       -> Bool                                           -- ^ Whether to add noise to the script context.
+                       -> Property                                       -- ^ The test property.
+checkPayoutTransaction modifyBefore modifyAfter condition valid noisy =
   property
-    . forAll (arbitraryPayoutTransaction noisy)
-    $ \(marloweParams, role, scriptContext) ->
-      case evaluatePayout marloweParams (toData role) (toData ()) (toData scriptContext) of
-        This  e   -> error $ show e
-        These e l -> error $ show e <> ": " <> show l
-        That    _ -> True
-
-
--- | Check that an invalid semantics transaction fails.
-checkInvalidSemantics :: (SemanticsTest -> Bool)
-                      -> (SemanticsTest' -> Gen TxInfo)
-                      -> Property
-checkInvalidSemantics condition modify =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, marloweData, marloweInput, scriptContext, output)
-              <- arbitrarySemanticsTransaction False `suchThat` condition
-            txInfo' <- modify (marloweParams, marloweData, marloweInput, scriptContextTxInfo scriptContext, output)
-            pure (marloweParams, marloweData, marloweInput, scriptContext {scriptContextTxInfo = txInfo'})
-      in
-        forAll gen
-          $ \(marloweParams, marloweData, marloweInput, scriptContext) ->
-            case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-              That{} -> False
-              _      -> True
-
-
--- | Check that an invalid semantics transaction fails.
-checkInvalidSemanticsModifyState :: (SemanticsTest -> Bool)
-                                 -> (State -> Gen State)
-                                 -> Property
-checkInvalidSemanticsModifyState condition modify =
-  property
-    . forAll (arbitrarySemanticsTransactionModifyState modify False `suchThat` condition)
-      $ \(marloweParams, marloweData, marloweInput, scriptContext, _) ->
-        case evaluateSemantics marloweParams (toData marloweData) (toData marloweInput) (toData scriptContext) of
-          That{} -> False
-          _      -> True
+    . forAll (arbitraryPayoutTransaction modifyBefore modifyAfter noisy `suchThat` condition)
+    $ \PlutusTransaction{..} ->
+      case evaluatePayout (_params' _parameters) (toData _datum) (toData _redeemer) (toData _scriptContext) of
+        This  e   -> not valid || (error $ show e)
+        These e l -> not valid || (error $ show e <> ": " <> show l)
+        That    _ -> valid
 
 
 -- | Check that validation fails if two Marlowe scripts are run.
 checkDoubleInput :: Property
 checkDoubleInput =
-  checkInvalidSemantics (const True)
-    $ \(marloweParams, _, _, txInfo, _) ->
+  let
+    modifyAfter =
       do
-        txInInfoOutRef <- arbitrary
-        txOutValue <- arbitrary
-        txOutDatumHash <- Just <$> arbitrary
-        let
-          txOutAddress = semanticsAddress marloweParams
-          txInInfoResolved = TxOut{..}
-        txInfoInputs' <- elements . permutations $ TxInInfo{..} : txInfoInputs txInfo
-        pure $ txInfo {txInfoInputs = txInfoInputs'}
+        ownAddress <- marloweParams `uses` semanticsAddress
+        -- Create a random datum.
+        inDatum <- lift arbitrary
+        let inDatumHash = datumHash inDatum
+        -- Create a random input to the script.
+        inScript <-
+          TxInInfo
+            <$> lift arbitrary
+            <*> (TxOut ownAddress <$> lift arbitrary <*> pure (Just inDatumHash))
+        -- Add a second script input.
+        infoInputs <>= [inScript]
+        -- Add the new datum and its hash.
+        infoData <>= [(inDatumHash, inDatum)]
+        shuffle
+  in
+    checkSemanticsTransaction noModify modifyAfter noVeto False False
+
+
+-- | Split a value in half.
+splitValue :: Value -> [Value]
+splitValue value =
+  concat
+    [
+      [
+        singleton c n half
+      , singleton c n (i - half)
+      ]
+    |
+      (c, n, i) <- flattenValue value
+    , let half = i `div` 2
+    ]
+
+
+-- | Ensure that the contract closes the contract.
+doesClose :: PlutusTransaction SemanticsTransaction -> Bool
+doesClose = (== Close) . txOutContract . (^. output)
+
+
+-- | Ensure that the transaction does not close the contract.
+notCloses :: PlutusTransaction SemanticsTransaction -> Bool
+notCloses = not . doesClose
 
 
 -- | Check that validation fails if there is more than one Marlowe output.
 checkMultipleOutput :: Property
 checkMultipleOutput =
-  checkInvalidSemantics ((/= Close) . txOutContract . (^. _5))
-    $ \(marloweParams, _, _, txInfo, _) ->
+  let
+    modifyAfter =
       do
+        ownAddress <- marloweParams `uses` semanticsAddress
         let
-          ownAddress = semanticsAddress marloweParams
-          outputs = txInfoOutputs txInfo
-          matchOwnOutput (TxOut address _ _) = address == ownAddress
-          ownOutputs' =
-            concat
-              [
-                let
-                  (half, half') =
-                    bimap mconcat mconcat
-                      $ unzip
-                      [(singleton c n (i `div` 2), singleton c n (i - (i `div` 2))) | (c, n, i) <- flattenValue value]
-                in
-                  [TxOut address half datum, TxOut address half' datum]
-              |
-                TxOut address value datum <- filter matchOwnOutput outputs
-              ]
-        txInfoOutputs' <- elements . permutations $ filter (not . matchOwnOutput) outputs <> ownOutputs'
-        pure $ txInfo {txInfoOutputs = txInfoOutputs'}
+          -- Split a script output into two equal ones.
+          splitOwnOutput txOut@(TxOut address value datum')
+            | address == ownAddress = flip (TxOut address) datum' <$> splitValue value
+            | otherwise             = pure txOut
+        -- Update the outputs with the split script output.
+        infoOutputs %= concatMap splitOwnOutput
+        shuffle
+  in
+    checkSemanticsTransaction noModify modifyAfter notCloses False False
 
 
--- | Check that validation fails if there is more than one Marlowe output.
+-- | Check that validation fails if there is one Marlowe output upon close.
 checkCloseOutput :: Property
 checkCloseOutput =
-  checkInvalidSemantics ((== Close) . txOutContract . (^. _5))
-    $ \(marloweParams, _, _, txInfo, _) ->
+  let
+    modifyAfter =
       do
+        ownAddress <- marloweParams `uses` semanticsAddress
         let
-          ownAddress = semanticsAddress marloweParams
+          -- Match the script input.
           matchOwnInput (TxInInfo _ (TxOut address _ _)) = address == ownAddress
-          inputs = txInfoInputs txInfo
-          outputs = txInfoOutputs txInfo
-          ownOutputs =
-            [
-              txOut
-            |
-              TxInInfo _ txOut <- filter matchOwnInput inputs
-            ]
-        txInfoOutputs' <- elements . permutations $ outputs <> ownOutputs
-        pure $ txInfo {txInfoOutputs = txInfoOutputs'}
+        -- Find the script input.
+        inScript <- infoInputs `uses` filter matchOwnInput
+        -- Add a clone of the script input as output.
+        infoOutputs <>= (txInInfoResolved <$> inScript)
+        shuffle
+  in
+    checkSemanticsTransaction noModify modifyAfter doesClose
+      True  -- FIXME: According to the specification, this test should fail.
+      False
 
 
 -- | Check that value input to a script matches its input state.
 checkValueInput :: Property
 checkValueInput =
-  checkInvalidSemantics (const True)
-    $ \(marloweParams, _, _, txInfo, _) ->
+  let
+    modifyAfter =
       do
+        ownAddress <- marloweParams `uses` semanticsAddress
         let
-          ownAddress = semanticsAddress marloweParams
-          txInfoInputs' =
-            [
-              if address == ownAddress
-                then txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
-                else txInInfo
-            |
-              txInInfo@(TxInInfo _ txOut@(TxOut address value _)) <- txInfoInputs txInfo
-            ]
-        pure $ txInfo {txInfoInputs = txInfoInputs'}
+          -- Add one lovelace to the input to the script.
+          incrementOwnInput txInInfo@(TxInInfo _ txOut@(TxOut address value _))
+            | address == ownAddress = txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
+            | otherwise             = txInInfo
+        -- Update the inputs with the incremented script input.
+        infoInputs %= fmap incrementOwnInput
+    in
+      checkSemanticsTransaction noModify modifyAfter noVeto False False
 
 
 -- | Check that value output to a script matches its output state.
 checkValueOutput :: Property
 checkValueOutput =
-  checkInvalidSemantics ((/= Close) . txOutContract . (^. _5))
-    $ \(marloweParams, _, _, txInfo, _) ->
+  let
+    modifyAfter =
       do
+        ownAddress <- marloweParams `uses` semanticsAddress
         let
-          ownAddress = semanticsAddress marloweParams
-          txInfoOutputs' =
-            [
-              if address == ownAddress
-                then txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
-                else txOut
-            |
-              txOut@(TxOut address value _) <- txInfoOutputs txInfo
-            ]
-        pure $ txInfo {txInfoOutputs = txInfoOutputs'}
+          -- Add one lovelace to the output to the script.
+          incrementOwnOutput txOut@(TxOut address value _)
+            | address == ownAddress = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
+            | otherwise             = txOut
+        -- Update the outputs with the incremented script output.
+        infoOutputs %= fmap incrementOwnOutput
+  in
+    checkSemanticsTransaction noModify modifyAfter notCloses False False
 
 
 -- | Check that output datum to a script matches its semantic output.
 checkDatumOutput :: (MarloweData -> Gen MarloweData) -> Property
-checkDatumOutput modify =
-  checkInvalidSemantics ((/= Close) . txOutContract . (^. _5))
-    $ \(marloweParams, marloweData, _, txInfo, _) ->
+checkDatumOutput perturb =
+  let
+    modifyAfter =
       do
-        marloweData' <- modify marloweData
+        -- Find the existing Marlowe data output.
+        marloweData <- MarloweData <$> output `uses` txOutState <*> output `uses` txOutContract
+        -- Compute its hash.
+        let outDatumHash = datumHash . Datum $ toBuiltinData marloweData
+        -- Modify the original datum.
+        outDatum' <- fmap (Datum . toBuiltinData) . lift $ perturb marloweData
+        -- Let
         let
-          ownAddress = semanticsAddress marloweParams
-          outputHash =
-            [
-              h
-            |
-              TxOut address _ h <- txInfoOutputs txInfo
-            , address == ownAddress
-            ]
-          txInfoData' =
-            [
-              if Just h `elem` outputHash
-                then (h, Datum $ toBuiltinData marloweData')
-                else pair
-            |
-              pair@(h, _) <- txInfoData txInfo
-            ]
-        pure $ txInfo {txInfoData = txInfoData'}
+          -- Replace an output datum with the modification.
+          perturbOwnOutputDatum pair@(h, _)
+            | h == outDatumHash = (h, outDatum')
+            | otherwise         = pair
+        -- Update the data with the modification.
+        infoData %= fmap perturbOwnOutputDatum
+  in
+    checkSemanticsTransaction noModify modifyAfter notCloses False False
 
 
 -- | Check that state output to a script matches its output state.
@@ -380,6 +382,7 @@ checkStateOutput =
   checkDatumOutput
     $ \marloweData ->
       do
+        -- Replace the output state with a random one.
         marloweState' <- arbitrary
         pure $ marloweData {marloweState = marloweState'}
 
@@ -390,6 +393,7 @@ checkContractOutput =
   checkDatumOutput
     $ \marloweData ->
       do
+        -- Replace the output ccontact with a random one.
         marloweContract' <- arbitrary
         pure $ marloweData {marloweContract = marloweContract'}
 
@@ -397,104 +401,143 @@ checkContractOutput =
 -- | Check that non-positive accounts are rejected.
 checkPositiveAccounts :: Property
 checkPositiveAccounts =
-  checkInvalidSemanticsModifyState (const True)
-    $ \state ->
+  let
+    modifyBefore =
       do
-        account <- arbitrary
-        token <- arbitrary
-        amount <- (1 -) <$> arbitraryPositiveInteger
-        pure $ state {accounts = AM.insert (account, token) amount $ accounts state}
+        -- Create a random non-positive entry for the accounts.
+        account <- lift arbitrary
+        token <- lift arbitrary
+        amount' <- (1 -) <$> lift arbitraryPositiveInteger
+        -- Add the non-positive entry to the accounts.
+        inputState %= (\state -> state {accounts = AM.insert (account, token) amount' $ accounts state})
+  in
+    checkSemanticsTransaction modifyBefore noModify noVeto False False
+
+
+-- | Compute the authorization for an input.
+authorizer :: Input -> ([PubKeyHash], [TokenName])
+authorizer (NormalInput     (IDeposit _ (PK   pkh  ) _ _        )    ) = (pure pkh, mempty    )
+authorizer (NormalInput     (IDeposit _ (Role role') _ _        )    ) = (mempty  , pure role')
+authorizer (NormalInput     (IChoice (ChoiceId _ (PK pkh    )) _)    ) = (pure pkh, mempty    )
+authorizer (NormalInput     (IChoice (ChoiceId _ (Role role')) _)    ) = (mempty  , pure role')
+authorizer (MerkleizedInput (IDeposit _ (PK   pkh  ) _ _        ) _ _) = (pure pkh, mempty    )
+authorizer (MerkleizedInput (IDeposit _ (Role role') _ _        ) _ _) = (mempty  , pure role')
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (PK pkh    )) _) _ _) = (pure pkh, mempty    )
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (Role role')) _) _ _) = (mempty  , pure role')
+authorizer _                                                           = (mempty  , mempty    )
+
+
+-- | Determine whether there are any authorizations in the transaction.
+hasAuthorizations :: PlutusTransaction SemanticsTransaction -> Bool
+hasAuthorizations = (/= ([], [])) . bimap concat concat . unzip . fmap authorizer . txInputs . (^. input)
+
+
+-- | Delete only the first matching value in a list.
+deleteFirst :: (a -> Bool)  -- ^ The condition for deleting an element.
+            -> [a]          -- ^ The list.
+            -> [a]          -- ^ The list with the first matching element removed.
+deleteFirst f z =
+  case break f z of
+    (x, []) -> x
+    (x, y ) -> x <> tail y
 
 
 -- | Check that a missing authorization causes failure.
 checkAuthorization :: Property
 checkAuthorization =
   let
-    authorizations inputs =
-      bimap concat concat
-        $ unzip
-        [
-          case input of
-            Input             (IDeposit _ (PK   pkh ) _ _        )   -> ([pkh], [    ])
-            Input             (IDeposit _ (Role role) _ _        )   -> ([   ], [role])
-            Input             (IChoice (ChoiceId _ (PK pkh   )) _)   -> ([pkh], [    ])
-            Input             (IChoice (ChoiceId _ (Role role)) _)   -> ([   ], [role])
-            MerkleizedTxInput (IDeposit _ (PK   pkh ) _ _        ) _ -> ([pkh], [    ])
-            MerkleizedTxInput (IDeposit _ (Role role) _ _        ) _ -> ([   ], [role])
-            MerkleizedTxInput (IChoice (ChoiceId _ (PK pkh   )) _) _ -> ([pkh], [    ])
-            MerkleizedTxInput (IChoice (ChoiceId _ (Role role)) _) _ -> ([   ], [role])
-            _                                                        -> ([   ], [    ])
-        |
-          input <- inputs
-        ]
+    modifyAfter =
+      do
+        currency <- marloweParams `uses` rolesCurrency
+        -- Determine the authorizations.
+        (pkhs, roles) <- input `uses` (bimap concat concat . unzip . fmap authorizer . txInputs)
+        let
+          -- Determine whether a role token is present.
+          matchRole TxInInfo{txInInfoResolved=TxOut{txOutValue}} = any (\role' -> valueOf txOutValue currency role' > 0) roles
+          -- Determine whether a PKH authorization is present.
+          matchPkh = (`elem` pkhs)
+        -- Remove the first role token from the input.
+        infoInputs %= deleteFirst matchRole
+        -- Remove the first PKH signatory.
+        infoSignatories %= deleteFirst matchPkh
   in
-    checkInvalidSemantics ((/= ([], [])) . authorizations . (^. _3))
-      $ \(MarloweParams{..}, _, input, txInfo, _) ->
-        pure
-          $ let
-              (pkhs, roles) = authorizations input
-              filterOne f z =
-                case break f z of
-                  (x, []) -> x
-                  (x, y ) -> x <> tail y
-              txInfoInputs' =
-                filterOne (\TxInInfo{txInInfoResolved=TxOut{txOutValue}} -> any (\role -> valueOf txOutValue rolesCurrency role > 0) roles)
-                  $ txInfoInputs txInfo
-              txInfoSignatories' = filterOne (`elem` pkhs) $ txInfoSignatories txInfo
-            in
-              txInfo {txInfoInputs = txInfoInputs', txInfoSignatories = txInfoSignatories'}
+    checkSemanticsTransaction noModify modifyAfter hasAuthorizations False False
+
+
+-- | Determine whether there are any external payments in a transaction.
+hasExternalPayments :: PlutusTransaction SemanticsTransaction -> Bool
+hasExternalPayments = any externalPayment . txOutPayments . ( ^. output)
+
+
+-- | Determine whether a payment is external.
+externalPayment :: Payment -> Bool
+externalPayment (Payment _ (Party _) value) = value `gt` mempty
+externalPayment _                           = False
+
+
+-- | Decrement the value of each token by one.
+decrementValue :: Value -> Value
+decrementValue = foldMap (\(c, n, i) -> singleton c n (i - 1)) . flattenValue
 
 
 -- | Check that an insufficient payment causes failure.
 checkPayment :: Property
 checkPayment =
   let
-    externalPayment (Payment _ (Party _) value) = value `gt` mempty
-    externalPayment _                           = False
+    modifyAfter =
+      do
+        -- Determine the payout address.
+        payoutAddress' <- marloweParams `uses` payoutAddress
+        let
+          -- Decrement a payment by one unit.
+          decrementPayment txOut@(TxOut address                          value (Just _))
+            | address == payoutAddress'                                                  = txOut {txOutValue = decrementValue value}
+            | otherwise                                                                  = txOut
+          decrementPayment txOut@(TxOut (Address (PubKeyCredential _) _) value Nothing ) = txOut {txOutValue = decrementValue value}
+          decrementPayment txOut                                                         = txOut
+        -- Update the outputs.
+        infoOutputs %= fmap decrementPayment
   in
-    checkInvalidSemantics (any externalPayment . txOutPayments . (^. _5))
-      $ \(marloweParams, _, _, txInfo, _) ->
-        pure
-          $ let
-              reduce value = foldMap (\(c, n, i) -> singleton c n (i - 1)) $ flattenValue value
-              txInfoOutputs' =
-                [
-                  case (txOutAddress txOut == payoutAddress marloweParams, txOut) of
-                    (False, TxOut (Address (PubKeyCredential _) _) value Nothing ) -> txOut {txOutValue = reduce value}
-                    (True , TxOut _                                value (Just _)) -> txOut {txOutValue = reduce value}
-                    _                                                              -> txOut
-                |
-                  txOut <- txInfoOutputs txInfo
-                ]
-            in
-              txInfo {txInfoOutputs = txInfoOutputs'}
+    checkSemanticsTransaction noModify modifyAfter hasExternalPayments False False
 
 
--- | Check that an invalid semantics transaction fails.
-checkWithdrawal :: Bool -> Property
+-- | Remove a role input UTxOs from the transaction.
+removeRoleIn :: ArbitraryTransaction PayoutTransaction ()
+removeRoleIn =
+  do
+    -- Determine the roles currency and name.
+    currency <- marloweParamsPayout `uses` rolesCurrency
+    name <- use role
+    let
+      -- Determine if the input has the role token.
+      notMatch (TxInInfo _ (TxOut _ value _)) = valueOf value currency name == 0
+    -- Update the transaction inputs
+    infoInputs %= filter notMatch
+
+
+-- | Change the role name in an input UTxO from the transaction.
+mutateRoleIn :: ArbitraryTransaction PayoutTransaction ()
+mutateRoleIn =
+  do
+    -- Determine the roles currency and name.
+    currency <- marloweParamsPayout `uses` rolesCurrency
+    name <- use role
+    -- Randomly choose a different name.
+    name' <- lift $ arbitrary `suchThat` (/= name)
+    let
+      -- Mutate the roles currency.
+      mutate txIn@(TxInInfo _ (TxOut _ value _)) =
+        if valueOf value currency name /= 0
+          then txIn {txInInfoResolved = (txInInfoResolved txIn) {txOutValue = singleton currency name' 1}}
+          else txIn
+    -- Update the transaction inputs
+    infoInputs %= fmap mutate
+
+
+-- | Check that an invalid withdrawal transaction fails.
+checkWithdrawal :: Bool
+                -> Property
 checkWithdrawal mutate =
-  property
-    $ let
-        gen =
-          do
-            (marloweParams, role, scriptContext) <- arbitraryPayoutTransaction False
-            role' <- arbitrary
-            let
-              txInfoInputs' =
-                [
-                  if mutate && isRole
-                    then txInInfo {txInInfoResolved = (txInInfoResolved txInInfo) {txOutValue = singleton (rolesCurrency marloweParams) role' 1}}
-                    else txInInfo
-                |
-                  txInInfo <- txInfoInputs $ scriptContextTxInfo scriptContext
-                , let isRole = valueOf (txOutValue (txInInfoResolved txInInfo)) (rolesCurrency marloweParams) role == 0
-                , not mutate && isRole
-                ]
-              scriptContext' = scriptContext {scriptContextTxInfo = (scriptContextTxInfo scriptContext) {txInfoInputs = txInfoInputs'}}
-            pure (marloweParams, role, scriptContext')
-      in
-        forAll gen
-          $ \(marloweParams, role, scriptContext) ->
-            case evaluatePayout marloweParams (toData role) (toData ()) (toData scriptContext) of
-              That{} -> False
-              _      -> True
+  checkPayoutTransaction noModify
+    (if mutate then mutateRoleIn else removeRoleIn)
+    noVeto False False

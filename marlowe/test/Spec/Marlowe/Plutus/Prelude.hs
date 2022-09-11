@@ -24,7 +24,7 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, frequency, listOf, property,
                               testProperty)
 
-import qualified PlutusTx.Prelude as P
+import qualified PlutusTx.Prelude as P (all, any, filter, find, fmap, foldMap, snd, (&&), (==))
 
 
 -- | Run tests.

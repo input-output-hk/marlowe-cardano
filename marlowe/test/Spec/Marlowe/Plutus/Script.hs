@@ -42,9 +42,9 @@ import Plutus.V1.Ledger.Address (Address, scriptHashAddress)
 import Plutus.V1.Ledger.Api (CostModelParams, Data, Datum (Datum), DatumHash, ToData (toBuiltinData), TokenName,
                              Validator (getValidator))
 
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Short as SBS
-import qualified Data.Map.Strict as M
+import qualified Data.ByteString.Lazy as LBS (toStrict)
+import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
+import qualified Data.Map.Strict as M (fromList)
 
 
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
