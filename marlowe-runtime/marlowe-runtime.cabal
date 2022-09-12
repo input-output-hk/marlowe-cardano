@@ -198,6 +198,7 @@ test-suite marlowe-runtime-test
   other-modules:
     Language.Marlowe.Runtime.History.FollowerSpec
     Language.Marlowe.Runtime.History.Script
+    Language.Marlowe.Runtime.HistorySpec
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.Golden
     Spec.Marlowe.Semantics.Golden.Escrow
@@ -222,6 +223,9 @@ test-suite marlowe-runtime-test
     , QuickCheck
     , some
     , stm
+    , tasty
+    , tasty-hunit
+    , tasty-quickcheck
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover

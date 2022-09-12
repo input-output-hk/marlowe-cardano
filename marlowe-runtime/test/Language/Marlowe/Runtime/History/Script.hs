@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.History.Script where
 
 import Control.Monad (foldM, replicateM, (<=<))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State (StateT (..), get, put)
+import Control.Monad.Trans.State (StateT (..), evalStateT, get, put)
 import Data.Bifunctor (Bifunctor (bimap))
 import qualified Data.ByteString as BS
 import Data.Data (type (:~:) (Refl))
@@ -29,7 +29,7 @@ import Numeric.Natural (Natural)
 import qualified Plutus.V1.Ledger.Api as P
 import qualified PlutusTx.AssocMap as AM
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryValidStep)
-import Test.QuickCheck (Gen, arbitrary, frequency, getSize, resize)
+import Test.QuickCheck (Arbitrary, Gen, arbitrary, frequency, getSize, resize)
 import Test.QuickCheck.Gen (chooseWord64)
 
 -- An event in a history test script
@@ -59,6 +59,9 @@ instance GShow HistoryScriptEvent where
 newtype HistoryScript = HistoryScript { unHistoryScript :: [Some HistoryScriptEvent] }
   deriving (Show)
 
+instance Arbitrary HistoryScript where
+  arbitrary = HistoryScript <$> evalStateT genHistoryScript []
+
 -- A list of state snapshots in descending block order
 type HistoryScriptState = [HistoryScriptBlockState]
 
@@ -81,11 +84,12 @@ data ReductionError
   | ContractNotFound ContractId
   | ContractClosed ContractId
   | PayoutNotFound ContractId TxOutRef
-  | forall v1 v2. VersionMismatch ContractId (MarloweVersion v1) (MarloweVersion v2)
+  | VersionMismatch ContractId SomeMarloweVersion SomeMarloweVersion
   | V1TransactionError V1.TransactionError
+  deriving (Eq, Show)
 
-foldScript :: HistoryScript -> Either ReductionError HistoryScriptState
-foldScript = foldM (\state (Some event) -> reduceScriptEvent event state) [] . unHistoryScript
+foldHistoryScript :: HistoryScript -> Either ReductionError HistoryScriptState
+foldHistoryScript = foldM (\state (Some event) -> reduceScriptEvent event state) [] . unHistoryScript
 
 reduceScriptEvent :: HistoryScriptEvent v -> HistoryScriptState -> Either ReductionError HistoryScriptState
 reduceScriptEvent = \case
@@ -129,7 +133,7 @@ reduceScriptEvent = \case
       state@HistoryScriptBlockState{..} : states -> case Map.lookup contractId contractStates of
         Nothing -> Left $ ContractNotFound contractId
         Just HistoryScriptContractState{..} -> case testEquality version contractVersion of
-          Nothing   -> Left $ VersionMismatch contractId version contractVersion
+          Nothing   -> Left $ VersionMismatch contractId (SomeMarloweVersion version) (SomeMarloweVersion contractVersion)
           Just Refl -> do
             datum <- case stateScriptOutput of
               Nothing                          -> Left $ ContractClosed contractId
@@ -153,7 +157,7 @@ reduceScriptEvent = \case
       state@HistoryScriptBlockState{..} : states -> case Map.lookup contractId contractStates of
         Nothing -> Left $ ContractNotFound contractId
         Just HistoryScriptContractState{..} -> case testEquality version contractVersion of
-          Nothing   -> Left $ VersionMismatch contractId version contractVersion
+          Nothing   -> Left $ VersionMismatch contractId (SomeMarloweVersion version) (SomeMarloweVersion contractVersion)
           Just Refl -> do
             case Map.lookup utxo statePayouts of
               Nothing -> Left $ PayoutNotFound contractId utxo
@@ -225,12 +229,15 @@ genHistoryScript = do
   event <- lift case states of
     []        -> genRollForward
     state : _ -> genHistoryScriptEvent state
-  put case withSome event $ flip reduceScriptEvent states of
-    Left _        -> error "Failed to reduce script event while generating script"
-    Right states' -> states'
-  (event :) <$> StateT \state -> do
-    size <- getSize
-    resize (size - 1) $ runStateT genHistoryScript state
+  case withSome event $ flip reduceScriptEvent states of
+    Left _        -> pure []
+    Right states' -> do
+      put states'
+      (event :) <$> StateT \state -> do
+        size <- getSize
+        case size of
+          0 -> pure ([], state)
+          _ -> resize (max 0 $ size - 1) $ runStateT genHistoryScript state
 
 genHistoryScriptEvent :: HistoryScriptBlockState -> Gen (Some HistoryScriptEvent)
 genHistoryScriptEvent HistoryScriptBlockState{..} = frequency $ fold
