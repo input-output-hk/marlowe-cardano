@@ -81,6 +81,12 @@ deriving instance Eq (CreateStep 'V1)
 
 data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
 
+instance Eq SomeCreateStep where
+  SomeCreateStep MarloweV1 a == SomeCreateStep MarloweV1 b = a == b
+
+instance Show SomeCreateStep where
+  show (SomeCreateStep MarloweV1 a) = show a
+
 instance Binary (CreateStep 'V1) where
   put CreateStep{..} = do
     putDatum MarloweV1 datum

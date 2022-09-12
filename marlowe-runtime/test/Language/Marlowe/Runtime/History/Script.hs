@@ -12,6 +12,7 @@ import Data.Bifunctor (Bifunctor (bimap))
 import qualified Data.ByteString as BS
 import Data.Data (type (:~:) (Refl))
 import Data.Foldable (fold)
+import Data.GADT.Compare (GEq, geq)
 import Data.GADT.Show (GShow (..))
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -67,16 +68,30 @@ type HistoryScriptState = [HistoryScriptBlockState]
 
 -- An aggregate state snapshot at a particular block
 data HistoryScriptBlockState = HistoryScriptBlockState
-  { contractStates :: Map ContractId HistoryScriptContractState
+  { contractStates :: Map ContractId (Some HistoryScriptContractState)
   , block          :: BlockHeader
   }
+  deriving (Eq, Show)
 
 -- A state snapshot for a particular contract
-data HistoryScriptContractState = forall v. HistoryScriptContractState
+data HistoryScriptContractState v = HistoryScriptContractState
   { contractVersion   :: MarloweVersion v
   , statePayouts      :: Map TxOutRef (Payout v)
   , stateScriptOutput :: Maybe (TransactionScriptOutput v)
   }
+
+deriving instance Eq (HistoryScriptContractState 'V1)
+deriving instance Show (HistoryScriptContractState 'V1)
+
+instance GEq HistoryScriptContractState where
+  geq
+    s1@HistoryScriptContractState{contractVersion=MarloweV1}
+    s2@HistoryScriptContractState{contractVersion=MarloweV1}
+      | s1 == s2 = Just Refl
+      | otherwise = Nothing
+
+instance GShow HistoryScriptContractState where
+  gshowsPrec p s@HistoryScriptContractState{contractVersion=MarloweV1} = showsPrec p s
 
 data ReductionError
   = EmptyChain
@@ -124,7 +139,7 @@ reduceScriptEvent = \case
                     , datum
                     }
                 }
-              state' = state { contractStates = Map.insert contractId contractState contractStates }
+              state' = state { contractStates = Map.insert contractId (Some contractState) contractStates }
             in
               Right $ state' : states
   ApplyInputs contractId txId version vLow vHigh redeemer ->
@@ -132,7 +147,7 @@ reduceScriptEvent = \case
       []                              -> Left EmptyChain
       state@HistoryScriptBlockState{..} : states -> case Map.lookup contractId contractStates of
         Nothing -> Left $ ContractNotFound contractId
-        Just HistoryScriptContractState{..} -> case testEquality version contractVersion of
+        Just (Some HistoryScriptContractState{..}) -> case testEquality version contractVersion of
           Nothing   -> Left $ VersionMismatch contractId (SomeMarloweVersion version) (SomeMarloweVersion contractVersion)
           Just Refl -> do
             datum <- case stateScriptOutput of
@@ -143,11 +158,12 @@ reduceScriptEvent = \case
               state' = state
                 { contractStates = Map.insert
                     contractId
-                    HistoryScriptContractState
+                    (Some HistoryScriptContractState
                       { contractVersion
                       , statePayouts = Map.union statePayouts payouts
                       , stateScriptOutput = scriptOutput
                       }
+                    )
                     contractStates
                 }
             pure $ state' : states
@@ -156,7 +172,7 @@ reduceScriptEvent = \case
       []                              -> Left EmptyChain
       state@HistoryScriptBlockState{..} : states -> case Map.lookup contractId contractStates of
         Nothing -> Left $ ContractNotFound contractId
-        Just HistoryScriptContractState{..} -> case testEquality version contractVersion of
+        Just (Some HistoryScriptContractState{..}) -> case testEquality version contractVersion of
           Nothing   -> Left $ VersionMismatch contractId (SomeMarloweVersion version) (SomeMarloweVersion contractVersion)
           Just Refl -> do
             case Map.lookup utxo statePayouts of
@@ -168,7 +184,7 @@ reduceScriptEvent = \case
                     , stateScriptOutput
                     , statePayouts = Map.delete utxo statePayouts
                     }
-                  state' = state { contractStates = Map.insert contractId contractState' contractStates }
+                  state' = state { contractStates = Map.insert contractId (Some contractState') contractStates }
                 in
                   Right $ state' : states
 
@@ -228,7 +244,7 @@ genHistoryScript = do
   states <- get
   event <- lift case states of
     []        -> genRollForward
-    state : _ -> genHistoryScriptEvent state
+    state : _ -> genHistoryScriptEvent state $ length states
   case withSome event $ flip reduceScriptEvent states of
     Left _        -> pure []
     Right states' -> do
@@ -239,16 +255,16 @@ genHistoryScript = do
           0 -> pure ([], state)
           _ -> resize (max 0 $ size - 1) $ runStateT genHistoryScript state
 
-genHistoryScriptEvent :: HistoryScriptBlockState -> Gen (Some HistoryScriptEvent)
-genHistoryScriptEvent HistoryScriptBlockState{..} = frequency $ fold
+genHistoryScriptEvent :: HistoryScriptBlockState -> Int -> Gen (Some HistoryScriptEvent)
+genHistoryScriptEvent HistoryScriptBlockState{..} n = frequency $ fold
   [ blockEvents
   , (fmap (2,) . uncurry contractEvents) =<< Map.toList contractStates
   , [(5, genCreateContract slotNo)]
   ]
   where
     BlockHeader{..} = block
-    blockEvents = [(5, genRollForward), (1, genRollBackward)]
-    contractEvents contractId HistoryScriptContractState{..} = (fmap . fmap) Some $ fold
+    blockEvents = (5, genRollForward) : ((1,) <$> genRollBackward n)
+    contractEvents contractId (Some HistoryScriptContractState{..}) = (fmap . fmap) Some $ fold
       [ maybeToList $ genApplyInputs contractVersion slotNo contractId <$> stateScriptOutput
       , uncurry (genWithdraw contractVersion contractId) <$> Map.toList statePayouts
       ]
@@ -259,16 +275,21 @@ genRollForward = do
   header <- BlockHeaderHash . BS.pack <$> replicateM 64 arbitrary
   pure $ Some $ RollForward slots header
 
-genRollBackward :: Gen (Some HistoryScriptEvent)
-genRollBackward = Some . RollBackward <$> frequency
-  [ (1, pure 7)
-  , (1, pure 6)
-  , (2, pure 5)
-  , (3, pure 4)
-  , (5, pure 3)
-  , (8, pure 2)
-  , (13, pure 1)
-  ]
+genRollBackward :: Int -> [Gen (Some HistoryScriptEvent)]
+genRollBackward n
+  | n <= 1 = []
+  | otherwise = pure $ Some . RollBackward <$> frequency
+  ( fmap pure <$> filter
+      ((< n) . fromIntegral . snd)
+      [ (1, 7)
+      , (1, 6)
+      , (2, 5)
+      , (3, 4)
+      , (5, 3)
+      , (8, 2)
+      , (13, 1)
+      ]
+  )
 
 genCreateContract :: SlotNo -> Gen (Some HistoryScriptEvent)
 genCreateContract slot = do
