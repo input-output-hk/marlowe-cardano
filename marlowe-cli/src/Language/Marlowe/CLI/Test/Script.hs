@@ -36,9 +36,10 @@ import Control.Monad (foldM, forM, forM_, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState, makeContract)
-import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), MarlowePlutusVersion, MarloweTransaction (mtState),
-                                   PrintStats (PrintStats), PublishingStrategy (PublishPermanently),
-                                   TruncateMilliseconds (TruncateMilliseconds), toMarloweTimeout, toPOSIXTime)
+import Language.Marlowe.CLI.Types (AnUTxO, CliEnv (..), CliError (..), MarlowePlutusVersion,
+                                   MarloweTransaction (mtState), OutputQueryResult, PrintStats (PrintStats),
+                                   PublishingStrategy (PublishPermanently), TruncateMilliseconds (TruncateMilliseconds),
+                                   fromUTxO, toMarloweTimeout, toPOSIXTime)
 
 import Language.Marlowe.Extended.V1 as E (ChoiceId (ChoiceId), Party)
 import Marlowe.Contracts (trivial)
@@ -52,9 +53,8 @@ import Control.Monad.Reader (ReaderT (runReaderT))
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.OneLine as A
-import Data.Foldable (Foldable (fold), find, foldl')
+import Data.Foldable (foldl')
 import Data.Foldable.Extra (for_)
-import Data.List (inits)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
@@ -65,36 +65,33 @@ import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Data.Aeson.Traversals as A
 import Language.Marlowe.CLI.IO (liftCliMaybe, queryInEra)
-import Language.Marlowe.CLI.Run (initializeTransactionImpl, prepareTransactionImpl, runTransactionImpl)
+import Language.Marlowe.CLI.Run (autoRunTransactionImpl, initializeTransactionImpl, prepareTransactionImpl)
 import Language.Marlowe.CLI.Sync (classifyOutputs, isMarloweOut)
 import Language.Marlowe.CLI.Sync.Types (MarloweOut (ApplicationOut, moTxIn))
 import Language.Marlowe.CLI.Test.Script.Debug (SoFormat (SoName), logSoMsg, logTraceMsg)
-import Language.Marlowe.CLI.Test.Types (AUTxO (AUTxO, unAUTxO), ContractNickname, ContractSource (..), CurrencyNickname,
+import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), CurrencyNickname,
                                         CustomCurrency (CustomCurrency, ccCurrencySymbol), MarloweContract (..),
                                         PartyRef (RoleRef, WalletRef), ScriptEnv (..), ScriptOperation (..),
                                         ScriptState, ScriptTest (ScriptTest, stScriptOperations, stTestName),
                                         TokenAssignment (TokenAssignment), UseTemplate (..), Wallet (..),
                                         WalletNickname (WalletNickname),
                                         WalletTransaction (WalletTransaction, wtFees, wtTxBody), anyMarloweThread,
-                                        faucetNickname, foldrMarloweThread, fromUTxO, getMarloweThreadTransaction,
+                                        faucetNickname, foldrMarloweThread, getMarloweThreadTransaction,
                                         getMarloweThreadTxIn, overAnyMarloweThread, scriptState, seConnection,
                                         seCostModelParams, seEra, seProtocolVersion, seSlotConfig, ssContracts,
                                         ssCurrencies, ssWallets, walletPubKeyHash)
 import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, publishImpl, selectUtxosImpl)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
-import Language.Marlowe.Core.V1.Semantics.Types (State (accounts), Token (Token))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import Language.Marlowe.Pretty (pretty)
 import Ledger.Tx.CardanoAPI (fromCardanoPaymentKeyHash, fromCardanoPolicyId)
-import qualified Ledger.Tx.CardanoAPI as L
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import Plutus.V1.Ledger.Value (mpsSymbol, valueOf)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
 import qualified Plutus.V2.Ledger.Api as P
-import qualified PlutusTx.AssocMap as PA
 
 
 -- FIXME: ARBITRARY amount which covers
@@ -313,6 +310,7 @@ interpret Publish {..} = do
 
   liftIO $ print txBody
 
+-- You can use already prepublished scripts to speed up testing.
 interpret FindPublished {} = throwError $ CliError "[FindPublished] Not implemented yet."
 
 
@@ -349,62 +347,23 @@ autoRunTransaction currency prev curr@T.MarloweTransaction {..} = do
     getInputParty _ M.MerkleizedInput {} =
       throwError "[autoRunTransaction] merkleized input handling is not implemented yet."
 
-    getInputDepositAmount = \case
-      M.NormalInput (M.IDeposit _ _ (M.Token symbol name) amount) -> pure $ P.singleton symbol name amount
-      M.NormalInput M.IChoice {} -> pure mempty
-      M.NormalInput M.INotify -> pure mempty
-      M.MerkleizedInput {} ->
-        throwError "[autoRunTransaction] merkleized input handling is not implemented yet."
 
   log' $ "Applying marlowe inputs: " <> show mtInputs
   log' $ "Output contract: " <> show (pretty mtContract)
   log' $ "Output state: " <> show mtState
 
-  (_, wallet@(Wallet address skey _ _ _)) <- foldM getInputParty Nothing mtInputs >>= \case
-    Nothing          -> (faucetNickname,) <$> getFaucet
-    Just (M.PK pkh)  -> findWalletByPkh pkh
+  Wallet address skey _ _ _ <- foldM getInputParty Nothing mtInputs >>= \case
+    Nothing          -> getFaucet
+    Just (M.PK pkh)  -> snd <$> findWalletByPkh pkh
     Just (M.Role rn) -> case currency of
-      Just cn -> findWalletByUniqueToken cn rn
+      Just cn -> snd <$> findWalletByUniqueToken cn rn
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
-  (marloweInBundle, utxos, minAda) <- case prev of
-      Just (mt, mTxIn) -> do
-        (AUTxO (cTxIn, _) :| cs, rest) <- ensureWalletCollaterals (Right wallet)
-        pure (Just (mt, mTxIn, cTxIn), rest <> cs, mempty)
-      Nothing -> do
-        inputs <- getWalletUTxO (Right wallet)
-        let
-          outputValue = fold
-            [
-              P.assetClassValue (P.AssetClass (symbol, name)) amount
-            |
-              ((_, Token symbol name), amount) <- PA.toList . accounts $ mtState
-            ]
-        pure (Nothing, fromUTxO inputs, outputValue)
-
-
-  requiredDeposit <- fold <$> for mtInputs getInputDepositAmount
-
-  logTraceMsg "autoRunTransaction" $ "Required deposit: " <> show requiredDeposit
-
-  inputs <- do
-    let
-      txOutValue (unAUTxO -> (_, C.TxOut _ value _ _)) = L.fromCardanoValue (C.txOutValueToValue value)
-      feeMargin' = L.fromCardanoValue (C.lovelaceToValue feeMargin)
-      check candidates = P.geq (foldMap txOutValue candidates) (requiredDeposit <> minAda <> feeMargin')
-    case find check (inits utxos) of
-      Nothing  -> throwError "Unable to cover the deposit"
-      Just txs -> pure $ map (fst . unAUTxO) txs
-
-  log' $ "TxInputs: " <> show inputs
-
   connection <- view seConnection
-  txBody <- runCli "[AutoRun] " $ runTransactionImpl
+  txBody <- runCli "[AutoRun] " $ autoRunTransactionImpl
       connection
-      marloweInBundle
+      prev
       curr
-      inputs
-      []
       address
       [skey]
       C.TxMetadataNone
@@ -637,7 +596,7 @@ findCurrency nickname = do
   liftCliMaybe ("[findWallet] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
 
 
-selectWalletUTxOs :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState lang era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> T.OutputQuery -> m (T.OutputQueryResult era)
+selectWalletUTxOs :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState lang era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> T.OutputQuery era (OutputQueryResult era) -> m (T.OutputQueryResult era)
 selectWalletUTxOs w q = do
   Wallet address _ _ _ _ <- either findWallet pure w
   connection <- view seConnection
@@ -716,7 +675,7 @@ decodeInputJSON json = do
     A.Success input -> pure input
 
 
-createCollaterals :: MonadReader (ScriptEnv era) m => MonadIO m => MonadState (ScriptState lang era) m => MonadError CliError m => Int -> Either WalletNickname (Wallet era) -> m (NonEmpty (AUTxO era), [AUTxO era])
+createCollaterals :: MonadReader (ScriptEnv era) m => MonadIO m => MonadState (ScriptState lang era) m => MonadError CliError m => Int -> Either WalletNickname (Wallet era) -> m (NonEmpty (AnUTxO era), [AnUTxO era])
 createCollaterals number wallet = do
   Wallet address skey _ _ _ <- either findWallet pure wallet
   connection <- view seConnection
@@ -740,10 +699,10 @@ createCollaterals number wallet = do
       throwError "[createCollaterals] Unable to find collaterals which were just created..."
 
 
-ensureWalletCollaterals :: MonadIO m => MonadReader (ScriptEnv era) m => MonadState (ScriptState lang era) m => MonadError CliError m => Either WalletNickname (Wallet era) -> m (NonEmpty (AUTxO era), [AUTxO era])
+ensureWalletCollaterals :: MonadIO m => MonadReader (ScriptEnv era) m => MonadState (ScriptState lang era) m => MonadError CliError m => Either WalletNickname (Wallet era) -> m (NonEmpty (AnUTxO era), [AnUTxO era])
 ensureWalletCollaterals wallet = do
   possibleCollaterals <- selectWalletUTxOs wallet (T.LovelaceOnly ((==) maxCollateral))
   case possibleCollaterals of
     T.OutputQueryResult (fromUTxO -> c:cs) (fromUTxO -> rest) ->
       pure (c:|cs, rest)
-    _ -> createCollaterals 2 wallet
+    _ -> createCollaterals 10 wallet
