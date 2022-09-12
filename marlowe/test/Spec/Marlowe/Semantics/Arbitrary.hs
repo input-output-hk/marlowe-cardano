@@ -37,6 +37,7 @@ module Spec.Marlowe.Semantics.Arbitrary
   , choiceInBoundsIfNonempty
   , choiceNotInBounds
   , goldenContract
+  , interestingChoiceNum'
     -- * Weighting factors for arbitrary contracts
   , assertContractWeights
   , closeContractWeights
@@ -488,92 +489,33 @@ choiceNotInBounds bounds =
 
 
 -- | Generate relevant Input content for a given input action
-interestingInput :: Bool -> Action -> [InputContent]
-interestingInput validity (Choice choiceId) bounds =
-  map (IChoice choiceId) (interestingChoiceNum bounds)
-  ++ map (\choiceId -> IChoice choiceId bounds) (interestingChoiceId choiceId)
-interestingInput validity (Choice choiceId) bounds = IChoice choiceId <$> interestingChoiceNum' validity bounds
+-- interestingInput :: Bool -> Action -> [InputContent]
+-- interestingInput validity (Choice choiceId bounds) =
+--   map (IChoice choiceId) (interestingChoiceNum bounds)
+--   ++ map (\choiceId -> IChoice choiceId bounds) (interestingChoiceId choiceId)
+-- interestingInput validity (Choice choiceId bounds) = IChoice choiceId <$> interestingChoiceNum' validity bounds
 
-interestingChoiceId :: ChoiceId -> [ChoiceId]
-interestingChoiceId _ = error "not implemented yet"
+-- interestingChoiceId :: ChoiceId -> [ChoiceId]
+-- interestingChoiceId _ = error "not implemented yet"
 
-interestingParties :: Party -> [Party]
-interestingParties (Role "Alice") = [Role "Alice", Role "Alic", Role "Alices"]
+-- interestingParties :: Party -> [Party]
+-- interestingParties (Role "Alice") = [Role "Alice", Role "Alic", Role "Alices"]
 
-interestingChoiceNum :: [Bound] -> [ChoiceNum]
-interestingChoiceNum bounds = concatMap interestingChoiceNum' bounds
+-- interestingChoiceNum :: [Bound] -> [ChosenNum]
+-- interestingChoiceNum bounds = concatMap interestingChoiceNum' True bounds
 
-interestingChoiceNum' :: Bool -> Bound -> [ChoiceNum]
-interestingChoiceNum' True (Bound lower upper)
-  | lower > upper = []
-  | lower == upper = [lower]
-  | otherwise = Data.List.nub validValues lower upper
+interestingChoiceNum' :: Bool -> Bound -> [ChosenNum]
+interestingChoiceNum' True (Bound lower upper)  = validValues lower upper
+interestingChoiceNum' False (Bound lower upper) = invalidValues lower upper
 
-interestingChoiceNum' False (Bound lower upper)
-  | lower > upper = Data.List.nub allValues lower upper
-  | otherwise = Data.List.nub invalidValues lower upper
+validValues :: Integer -> Integer -> [Integer]
+validValues lower upper = [x | x <- testValueRange, x >= lower  && x <= upper]
 
-validValues :: Int -> Int -> [Int]
-validValues lower upper =
-  validLowerValues lower
-  <> validUpperValues upper
-  <> valuesWithinRange lower upper
+invalidValues :: Integer -> Integer -> [Integer]
+invalidValues lower upper = [x | x <- testValueRange, x < lower  || x > upper]
 
-invalidValues :: Int -> Int -> [Int]
-invalidValues lower upper =
-  baseValues
-  <> invalidLowerValues lower
-  <> invalidUpperValues upper
-  <> outlierValues lower upper
-
-allValues :: Int -> Int -> [Int]
-allValues lower upper =
-  invalidValues lower upper
-  <> validValues lower upper
-
-baseValues :: [Int]
-baseValues =
-  [
-    0
-  , 1
-  , -1
-  ]
-
-validLowerValues :: Int -> [Int]
-validLowerValues lower =
-  [
-    lower + 1
-  , lower
-  ]
-
-validUpperValues :: Int -> [Int]
-validUpperValues upper =
-  [
-    upper - 1
-  , upper
-  ]
-
-valuesWithinRange :: Int -> Int -> [Int]
-valuesWithinRange lower upper = (lower + upper) `div` 2
-
-invalidLowerValues :: Int -> [Int]
-invalidLowerValues lower =
-  [
-    lower - 1
-  ]
-
-invalidUpperValues :: Int -> [Int]
-invalidUpperValues upper =
-  [
-    upper + 1
-  ]
-
-outlierValues :: Int -> Int -> [Int]
-outlierValues lower upper =
-  [
-      10 * upper     -- FIXME: This won't work if `lower` or `upper` are negative.
-    , - 10 * lower   -- FIXME: ditto
-  ]
+testValueRange :: [Integer]
+testValueRange = [(-10000)..10000]
 
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval

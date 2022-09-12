@@ -21,8 +21,10 @@ module Main
   ) where
 
 
+import Language.Marlowe.Core.V1.Semantics.Types (Bound (..))
+import Spec.Marlowe.Semantics.Arbitrary
 import Test.Tasty (TestTree, defaultMain, testGroup)
-import Test.Tasty.QuickCheck (testProperty)
+import Test.Tasty.QuickCheck
 
 import qualified Spec.Marlowe.Marlowe (prop_noFalsePositives, tests)
 import qualified Spec.Marlowe.Plutus (tests)
@@ -61,3 +63,10 @@ tests =
     , Spec.Marlowe.Plutus.tests
     , Spec.Marlowe.Semantics.Oracle.tests
     ]
+
+
+example :: Bool -> Property
+example validity = property $ forAll arbitrary
+            $ \bound@(Bound lower upper) -> let xs = interestingChoiceNum' validity bound
+                                                check x = (x >= lower && x <= upper) == validity
+                                              in all check xs
