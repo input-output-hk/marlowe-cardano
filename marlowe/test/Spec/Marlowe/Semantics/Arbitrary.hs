@@ -515,7 +515,10 @@ invalidValues :: Integer -> Integer -> [Integer]
 invalidValues lower upper = [x | x <- testValueRange, x < lower  || x > upper]
 
 testValueRange :: [Integer]
-testValueRange = [(-10000)..10000]
+testValueRange = [(-rangeLimit)..rangeLimit]
+
+rangeLimit :: Integer
+rangeLimit = 10000
 
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
