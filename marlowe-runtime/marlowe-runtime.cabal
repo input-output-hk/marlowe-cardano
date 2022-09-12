@@ -198,6 +198,7 @@ test-suite marlowe-runtime-test
   other-modules:
     Language.Marlowe.Runtime.History.FollowerSpec
     Language.Marlowe.Runtime.History.Script
+    Language.Marlowe.Runtime.History.StoreSpec
     Language.Marlowe.Runtime.HistorySpec
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.Golden
