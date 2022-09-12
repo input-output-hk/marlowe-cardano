@@ -67,12 +67,6 @@ instance Scripts.ValidatorTypes TypedRolePayoutValidator where
   type instance RedeemerType TypedRolePayoutValidator = ()
   type instance DatumType TypedRolePayoutValidator = (CurrencySymbol, TokenName)
 
-data TypedReferenceUnspendableValidator
-
-instance Scripts.ValidatorTypes TypedReferenceUnspendableValidator where
-  type instance RedeemerType TypedReferenceUnspendableValidator = ()
-  type instance DatumType TypedReferenceUnspendableValidator = ()
-
 
 data MarloweTxInput = Input InputContent
                     | MerkleizedTxInput InputContent BuiltinByteString
@@ -95,31 +89,6 @@ mkRolePayoutValidator (currency, role) _ ctx =
 
 rolePayoutValidatorHash :: ValidatorHash
 rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
-
--- | To simplify discovery process of the reference script UTxO we
--- | use a unique unspendable validator at its output.
--- TODO: Compute "proof of burn" address: https://gist.github.com/bwbush/fe3f8f5d2ea2ea585a8f09a57e33c1bb
-referenceUnspendableValidator :: ValidatorHash -> Scripts.TypedValidator TypedReferenceUnspendableValidator
-referenceUnspendableValidator referenceValidator = mkTypedValidator @TypedReferenceUnspendableValidator
-  $$(PlutusTx.compile [|| mkReferenceUnspendableValidator referenceValidator ||])
-  $$(PlutusTx.compile [|| wrap ||])
-  where
-    wrap = Scripts.mkUntypedValidator @() @()
-
-    mkReferenceUnspendableValidator :: ValidatorHash -> () -> () -> ScriptContext -> Bool
-    mkReferenceUnspendableValidator _ _ _ _ = False
-
-marloweReferenceUnspendableValidator :: Scripts.TypedValidator TypedReferenceUnspendableValidator
-marloweReferenceUnspendableValidator = referenceUnspendableValidator marloweValidatorHash
-
-marloweReferenceUnspendableValidatorHash :: ValidatorHash
-marloweReferenceUnspendableValidatorHash = Scripts.validatorHash (referenceUnspendableValidator marloweValidatorHash)
-
-rolePayoutReferenceUnspendableValidator :: Scripts.TypedValidator TypedReferenceUnspendableValidator
-rolePayoutReferenceUnspendableValidator = referenceUnspendableValidator rolePayoutValidatorHash
-
-rolePayoutReferenceUnspendableValidatorHash :: ValidatorHash
-rolePayoutReferenceUnspendableValidatorHash = Scripts.validatorHash (referenceUnspendableValidator rolePayoutValidatorHash)
 
 
 {-# INLINABLE mkMarloweValidator #-}

@@ -1,10 +1,12 @@
 -- | Additional conersion functions for `PlutusScript` plus a copy of not exposed `IsPlutusScriptLanguage` class.
-{-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE ExplicitNamespaces    #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Language.Marlowe.CLI.Cardano.Api.PlutusScript (
   fromV1TypedValidator
@@ -12,11 +14,13 @@ module Language.Marlowe.CLI.Cardano.Api.PlutusScript (
 , fromTypedValidator
 , IsPlutusScriptLanguage(..)
 , toScript
+, toScriptLanguageInEra
 , withPlutusScriptVersion
 ) where
 
 import Cardano.Api (IsScriptLanguage, PlutusScriptV1, PlutusScriptV2,
                     PlutusScriptVersion (PlutusScriptV1, PlutusScriptV2), Script (PlutusScript))
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised))
 import Codec.Serialise (serialise)
 import qualified Data.ByteString.Lazy as BSL
@@ -69,4 +73,20 @@ fromV2TypedValidator =
 
 toScript :: forall lang. IsPlutusScriptLanguage lang => PlutusScript lang -> Script lang
 toScript = PlutusScript (plutusScriptVersion :: PlutusScriptVersion lang)
+
+
+toScriptLanguageInEra :: forall era lang. IsPlutusScriptLanguage lang => C.ScriptDataSupportedInEra era -> Maybe (C.ScriptLanguageInEra lang era)
+toScriptLanguageInEra = case plutusScriptVersion @lang of
+  PlutusScriptV1 -> Just . toPlutusScriptV1LanguageInEra
+  PlutusScriptV2 -> toPlutusScriptV2LanguageInEra
+  where
+    toPlutusScriptV1LanguageInEra :: C.ScriptDataSupportedInEra era -> C.ScriptLanguageInEra PlutusScriptV1 era
+    toPlutusScriptV1LanguageInEra = \case
+      C.ScriptDataInAlonzoEra  -> C.PlutusScriptV1InAlonzo
+      C.ScriptDataInBabbageEra -> C.PlutusScriptV1InBabbage
+
+    toPlutusScriptV2LanguageInEra :: C.ScriptDataSupportedInEra era -> Maybe (C.ScriptLanguageInEra PlutusScriptV2 era)
+    toPlutusScriptV2LanguageInEra = \case
+      C.ScriptDataInAlonzoEra  -> Nothing
+      C.ScriptDataInBabbageEra -> Just C.PlutusScriptV2InBabbage
 

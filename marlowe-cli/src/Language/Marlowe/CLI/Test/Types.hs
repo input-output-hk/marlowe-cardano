@@ -43,7 +43,6 @@ module Language.Marlowe.CLI.Test.Types (
 , ScriptOperation(..)
 , ScriptState
 , ScriptEnv(..)
-, AUTxO(..)
 , TokenAssignment(..)
 , TokenName(..)
 , UseTemplate(..)
@@ -54,7 +53,6 @@ module Language.Marlowe.CLI.Test.Types (
 , faucetNickname
 , foldlMarloweThread
 , foldrMarloweThread
-, fromUTxO
 , getMarloweThreadTransaction
 , getMarloweThreadTxIn
 , overAnyMarloweThread
@@ -69,7 +67,6 @@ module Language.Marlowe.CLI.Test.Types (
 , ssCurrencies
 , ssReferenceScripts
 , ssWallets
-, toUTxO
 ) where
 
 
@@ -173,7 +170,7 @@ data TokenAssignment = TokenAssignment
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
-    -- |  We use "private" currency minting policy which
+    -- | "Private" currency minting policy which
     -- | checks for a signature for a particular issuer address.
     Mint
     {
@@ -467,26 +464,14 @@ data ScriptState lang era = ScriptState
   , _ssWallets          :: Map WalletNickname (Wallet era)               -- ^ Faucet wallet should be included here.
   }
 
-
 faucetNickname :: WalletNickname
 faucetNickname = "Faucet"
-
 
 scriptState :: Wallet era -> ScriptState lang era
 scriptState faucet = do
   let
     wallets = Map.singleton faucetNickname faucet
   ScriptState mempty mempty Nothing wallets
-
-
-newtype AUTxO era = AUTxO { unAUTxO :: (C.TxIn, C.TxOut C.CtxUTxO era) }
-
-fromUTxO :: C.UTxO era -> [AUTxO era]
-fromUTxO (Map.toList . C.unUTxO -> items) = map AUTxO items
-
-
-toUTxO :: [AUTxO era] -> C.UTxO era
-toUTxO (map unAUTxO -> utxos) = C.UTxO . Map.fromList $ utxos
 
 
 data ScriptEnv era = ScriptEnv

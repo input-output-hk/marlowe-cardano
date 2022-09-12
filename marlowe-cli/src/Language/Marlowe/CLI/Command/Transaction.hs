@@ -19,7 +19,9 @@
 module Language.Marlowe.CLI.Command.Transaction (
 -- * Marlowe CLI Commands
   TransactionCommand(..)
+, findPublishedCommand
 , parseTransactionCommand
+, publishCommand
 , runTransactionCommand
 ) where
 
@@ -30,9 +32,11 @@ import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseSlotNo, parseTxIn, parseTxOut, parseValue,
-                                           requiredSignersOpt, txBodyFileOpt)
-import Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
-import Language.Marlowe.CLI.Types (CliEnv, CliError, SigningKeyFile, TxBodyFile (TxBodyFile))
+                                           publishingStrategyOpt, requiredSignerOpt, requiredSignersOpt, txBodyFileOpt)
+import Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildPublishing, buildSimple,
+                                         findPublished, submit)
+import Language.Marlowe.CLI.Types (CliEnv, CliError, PrintStats (PrintStats), PublishingStrategy, SigningKeyFile,
+                                   TxBodyFile (TxBodyFile))
 
 import qualified Cardano.Api as Api (Value)
 import Control.Monad.Reader.Class (MonadReader)
@@ -130,11 +134,29 @@ data TransactionCommand era =
     , signingKeyFiles :: [SigningKeyFile]  -- ^ The signing key files.
     , submitTimeout   :: Maybe Int   -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
+  | Publish
+    {
+      network        :: NetworkId                       -- ^ The network ID, if any.
+    , socketPath     :: FilePath                        -- ^ The path to the node socket.
+    , signingKeyFile :: SigningKeyFile                  -- ^ The files containing the required signing keys.
+    , change         :: AddressInEra era                -- ^ The change address.
+    , strategy       :: Maybe (PublishingStrategy era)
+    , bodyFile       :: TxBodyFile                      -- ^ The output file for the transaction body.
+    , submitTimeout  :: Maybe Int                       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , expires        :: Maybe SlotNo                    -- ^ The slot number after which minting is no longer possible.
+    }
+  | FindPublished
+    {
+      network    :: NetworkId                           -- ^ The network ID, if any.
+    , socketPath :: FilePath                            -- ^ The path to the node socket.
+    , strategy   :: Maybe (PublishingStrategy era)
+    }
 
 
 -- | Run a transaction-related command.
 runTransactionCommand :: MonadError CliError m
                       => MonadIO m
+                      => IsShelleyBasedEra era
                       => MonadReader (CliEnv era) m
                       => TransactionCommand era  -- ^ The command.
                       -> m ()                -- ^ Action for running the command.
@@ -219,6 +241,19 @@ runTransactionCommand command =
                                       signingKeyFiles
                                       (fromMaybe 0 submitTimeout)
                                       >>= printTxId
+      Publish{..}                -> buildPublishing
+                                        connection
+                                        signingKeyFile
+                                        expires
+                                        change
+                                        strategy
+                                        bodyFile
+                                        submitTimeout
+                                        (PrintStats True)
+
+      FindPublished{..}          -> findPublished
+                                      connection
+                                      strategy
 
 
 -- | Parser for transaction-related commands.
@@ -233,6 +268,8 @@ parseTransactionCommand network socket =
     <> buildOutgoingCommand   network socket
     <> buildIncomingCommand   network socket
     <> buildSimpleCommand     network socket
+    <> findPublishedCommand   network socket
+    <> publishCommand         network socket
     <> submitCommand          network socket
 
 
@@ -404,3 +441,47 @@ submitOptions network socket =
     <*> requiredSignersOpt
 
     <*> (O.optional . O.option O.auto) (O.long "timeout"         <> O.metavar "SECONDS"                 <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+
+-- | Parser for the "publish" command.
+publishCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (TransactionCommand era)
+publishCommand network socket =
+  O.command "publish"
+    $ O.info (publishOptions network socket)
+    $ O.progDesc "Publish Marlowe validator and role validator on the chain."
+
+
+-- | Parser for the "publish" options.
+publishOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (TransactionCommand era)
+publishOptions network socket =
+  Publish
+    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                          (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> requiredSignerOpt
+
+    <*> O.option parseAddress                (O.long "change-address"                       <> O.metavar "ADDRESS"      <> O.help "Address to receive ADA in excess of fee."                                                                        )
+
+    <*> O.optional publishingStrategyOpt
+
+    <*> txBodyFileOpt
+
+    <*> (O.optional . O.option O.auto)       (O.long "submit"                               <> O.metavar "SECONDS"      <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                    )
+
+
+-- | Parser for the "find-publish" command.
+findPublishedCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (TransactionCommand era)
+findPublishedCommand network socket =
+  O.command "find-published"
+    $ O.info (findPublishedOptions network socket)
+    $ O.progDesc "Publish Marlowe validator and role validator on the chain."
+
+
+-- | Parser for the "find-publish" options.
+findPublishedOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (TransactionCommand era)
+findPublishedOptions network socket =
+  FindPublished
+    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                          (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.optional publishingStrategyOpt
+
+

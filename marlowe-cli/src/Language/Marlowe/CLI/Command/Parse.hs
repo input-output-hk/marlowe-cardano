@@ -43,6 +43,7 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseValue
 , protocolVersionOpt
 , protocolVersionOpt'
+, publishingStrategyOpt
 , requiredSignerOpt
 , requiredSignersOpt
 , readTokenName
@@ -58,7 +59,9 @@ import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsS
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
-import Language.Marlowe.CLI.Types (AnyTimeout(..), OutputQuery (..), SigningKeyFile (SigningKeyFile), TxBodyFile (TxBodyFile))
+import Language.Marlowe.CLI.Types (AnyTimeout (..), OutputQuery (..), OutputQueryResult,
+                                   PublishingStrategy (PublishAtAddress, PublishPermanently),
+                                   SigningKeyFile (SigningKeyFile), TxBodyFile (TxBodyFile))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -68,6 +71,7 @@ import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
 
+import qualified Cardano.Api as C
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 import Data.Maybe (fromMaybe)
@@ -386,12 +390,12 @@ parseRole =
 
 
 -- | Parse an address query.
-parseOutputQuery :: O.Parser OutputQuery
+parseOutputQuery :: O.Parser (Maybe (OutputQuery era (OutputQueryResult era)))
 parseOutputQuery =
-  parseAllOutput <|> parseLovelaceOnly <|> parseAssetOnly <|> pure AllOutput
+  Just <$> parseLovelaceOnly <|> Just <$> parseAssetOnly <|> parseAllOutput
     where
       parseAllOutput =
-        AllOutput
+        Nothing
           <$ O.flag' () (O.long "all" <> O.help "Report all output.")
       parseLovelaceOnly =
         LovelaceOnly . (>=) . Lovelace
@@ -423,3 +427,8 @@ requiredSignersOpt =  map SigningKeyFile <$> (O.some . O.strOption) (O.long "req
 txBodyFileOpt :: O.Parser TxBodyFile
 txBodyFileOpt = TxBodyFile <$> O.strOption (O.long "out-file" <> O.metavar "FILE"         <> O.help "Output file for transaction body.")
 
+publishingStrategyOpt :: forall era. C.IsShelleyBasedEra era => O.Parser (PublishingStrategy era)
+publishingStrategyOpt =
+      PublishAtAddress <$> O.option parseAddress                 (O.long "at-address"                     <> O.metavar "ADDRESS"          <> O.help "Publish script at a given address. This is a default strategy which uses change address as a destination.")
+  <|> PublishPermanently <$> O.option parseStakeAddressReference (O.long "permanently"                    <> O.metavar "STAKING_ADDRESS"  <> O.help "Publish permanently at unspendable script address staking the min. ADA value.")
+  <|> O.flag' (PublishPermanently C.NoStakeAddress)              (O.long "permanently-without-staking"                                    <> O.help "Publish permanently at unspendable script address without min. ADA staking.")
