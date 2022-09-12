@@ -1,0 +1,175 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Generate random data for Plutus tests.
+--
+-----------------------------------------------------------------------------
+
+
+{-# LANGUAGE RecordWildCards #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
+
+module Spec.Marlowe.Plutus.Arbitrary (
+) where
+
+
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
+import Language.Marlowe.Scripts (MarloweTxInput (..))
+import Plutus.V1.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
+                             Extended (..), Interval (..), LowerBound (..), PubKeyHash (..), ScriptContext (..),
+                             ScriptPurpose (..), StakingCredential (..), TxId (..), TxInInfo (..), TxInfo (..),
+                             TxOut (..), TxOutRef (..), UpperBound (..), ValidatorHash (..), Value (..), toBuiltin)
+import Plutus.V1.Ledger.Value (gt)
+import PlutusTx.Builtins (BuiltinByteString)
+import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap, arbitraryPositiveInteger)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, frequency, listOf, suchThat, vectorOf)
+
+import qualified Data.ByteString as BS (ByteString, pack)
+import qualified Data.ByteString.Char8 as BS8 (pack)
+import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
+
+
+instance Arbitrary Address where
+  arbitrary = Address <$> arbitrary <*> arbitrary
+
+
+instance Arbitrary BS.ByteString where
+  arbitrary = BS8.pack <$> arbitrary
+
+
+instance Arbitrary BuiltinByteString where
+  arbitrary = toBuiltin . BS.pack <$> arbitrary
+
+
+instance Arbitrary BuiltinData where
+  arbitrary = BuiltinData <$> arbitrary
+
+
+instance Arbitrary Credential where
+  arbitrary =
+    do
+      isPubKey <- frequency [(9, pure True), (1, pure False)]
+      if isPubKey
+        then PubKeyCredential . PubKeyHash    <$> arbitraryByteString 28
+        else ScriptCredential . ValidatorHash <$> arbitraryByteString 28
+
+
+instance Arbitrary Data where
+  arbitrary =
+    let
+      arbitraryDepth 0 =
+        frequency
+          [
+            (1, I <$> arbitrary)
+          , (2, B <$> arbitrary)
+          ]
+      arbitraryDepth n =
+        frequency
+          [
+            ( 1, Constr <$> arbitrary <*> listOf (arbitraryDepth (n-1)) `suchThat` ((< 5) . length))
+          , ( 2, Map    <$> listOf ((,) <$> arbitraryDepth (n-1) <*> arbitraryDepth (n-1)) `suchThat` ((< 5) . length))
+          , ( 5, List   <$> listOf (arbitraryDepth (n-1)) `suchThat` ((< 5) . length))
+          , (10, I      <$> arbitrary)
+          , (20, B      <$> arbitrary)
+          ]
+    in
+      arbitraryDepth (4 :: Int)
+
+
+instance Arbitrary Datum where
+  arbitrary = Datum <$> arbitrary
+
+
+instance Arbitrary DatumHash where
+  arbitrary = DatumHash <$> arbitrary
+
+
+instance Arbitrary a => Arbitrary (Extended a) where
+  arbitrary =
+    frequency
+      [
+        (1, pure NegInf         )
+      , (9, Finite <$> arbitrary)
+      , (1, pure PosInf         )
+      ]
+
+
+instance Arbitrary a => Arbitrary (Interval a) where
+  arbitrary = Interval <$> arbitrary <*> arbitrary
+
+
+instance Arbitrary a => Arbitrary (LowerBound a) where
+  arbitrary = LowerBound <$> arbitrary <*> arbitrary
+
+
+instance Arbitrary ScriptContext where
+  arbitrary = ScriptContext <$> arbitrary <*> (Spending <$> arbitrary)
+
+
+instance Arbitrary StakingCredential where
+  arbitrary = StakingHash <$> arbitrary
+
+
+instance Arbitrary TxId where
+  arbitrary = TxId <$> arbitraryByteString 32
+
+
+instance Arbitrary TxInfo where
+  arbitrary =
+    do
+      txInfoInputs <- arbitrary
+      txInfoOutputs <- arbitrary
+      txInfoFee <- V.singleton V.adaSymbol V.adaToken <$> arbitraryPositiveInteger
+      txInfoValidRange <- arbitrary
+      txInfoSignatories <- arbitrary
+      txInfoData <- arbitrary
+      let
+        txInfoMint = mempty
+        txInfoDCert = mempty
+        txInfoWdrl = mempty
+      txInfoId <- arbitrary
+      pure TxInfo{..}
+
+
+instance Arbitrary TxInInfo where
+  arbitrary = TxInInfo <$> arbitrary <*> arbitrary
+
+
+instance Arbitrary TxOut where
+  arbitrary = TxOut <$> arbitrary <*> arbitrary `suchThat` (`gt` mempty) <*> arbitrary
+
+
+instance Arbitrary TxOutRef where
+  arbitrary = TxOutRef <$> arbitrary <*> arbitrary `suchThat` (> 0)
+
+
+instance Arbitrary a => Arbitrary (UpperBound a) where
+  arbitrary = UpperBound <$> arbitrary <*> arbitrary
+
+
+instance Arbitrary ValidatorHash where
+  arbitrary = ValidatorHash <$> arbitrary
+
+
+instance Arbitrary Value where
+  arbitrary = Value <$> arbitraryAssocMap arbitrary (arbitraryAssocMap arbitrary arbitrary)
+
+
+instance Arbitrary MarloweData where
+  arbitrary = MarloweData <$> arbitrary <*> arbitrary
+
+
+instance Arbitrary MarloweTxInput where
+  arbitrary = Input <$> arbitrary  -- FIXME: Add merkleized case.
+
+
+-- | Generate an arbitrary bytestring of specified length.
+arbitraryByteString :: Int -> Gen BuiltinByteString
+arbitraryByteString n = toBuiltin . BS.pack <$> vectorOf n arbitrary

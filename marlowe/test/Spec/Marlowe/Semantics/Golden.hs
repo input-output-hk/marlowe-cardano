@@ -12,16 +12,21 @@
 
 
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
 module Spec.Marlowe.Semantics.Golden (
+-- * Types
+  GoldenTransaction
+, GoldenCase
 -- * Testing
-  tests
+, tests
 -- * Reference contracts
 , goldenContracts
+, goldenTransactions
 ) where
 
 
@@ -33,6 +38,7 @@ import Plutus.V1.Ledger.Api (POSIXTime)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, testCase)
 
+import qualified PlutusTx.AssocMap as AM (empty)
 import qualified Spec.Marlowe.Semantics.Golden.Escrow as Escrow (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Pangram as Pangram (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Swap as Swap (contract, invalids, valids)
@@ -134,3 +140,44 @@ testValidity shouldSucceed contract invalids =
       (t, i, o) <- invalids
     ]
 
+
+-- | A golden transaction.
+type GoldenTransaction = (State, Contract, TransactionInput, TransactionOutput)
+
+
+-- | List all golden transactions.
+goldenTransactions :: [[GoldenTransaction]]
+goldenTransactions =
+  uncurry validTransactions
+    <$> [
+          (Escrow.contract , Escrow.valids )
+        , (Pangram.contract, Pangram.valids)
+        , (Swap.contract   , Swap.valids   )
+        , (Trivial.contract, Trivial.valids)
+        , (ZCB.contract    , ZCB.valids    )
+        ]
+
+
+-- | Extract all of the valid transactions from a golden test case.
+validTransactions :: Contract
+                  -> [(POSIXTime, [TransactionInput], TransactionOutput)]
+                  -> [GoldenTransaction]
+validTransactions contract =
+  let
+    progress (time, inputs, _) = progression (State AM.empty AM.empty AM.empty time) contract inputs
+
+  in
+    concatMap progress
+
+
+-- | Apply input to a contract state.
+progression :: State
+            -> Contract
+            -> [TransactionInput]
+            -> [GoldenTransaction]
+progression _ _ [] = []
+progression state contract (input : inputs) =
+  case computeTransaction input state contract of
+    output@TransactionOutput{..} -> (state, contract, input, output)
+                                      : progression txOutState txOutContract inputs
+    _                            -> []

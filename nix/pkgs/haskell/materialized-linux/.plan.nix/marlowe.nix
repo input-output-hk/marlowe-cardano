@@ -96,12 +96,24 @@
             (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."these" or (errorHandler.buildDepError "these"))
             ];
           buildable = true;
           modules = [
             "Spec/Marlowe/Common"
             "Spec/Marlowe/Marlowe"
             "Spec/Marlowe/Semantics"
+            "Spec/Marlowe/Plutus"
+            "Spec/Marlowe/Plutus/Arbitrary"
+            "Spec/Marlowe/Plutus/AssocMap"
+            "Spec/Marlowe/Plutus/Lens"
+            "Spec/Marlowe/Plutus/Prelude"
+            "Spec/Marlowe/Plutus/Script"
+            "Spec/Marlowe/Plutus/ScriptContext"
+            "Spec/Marlowe/Plutus/Specification"
+            "Spec/Marlowe/Plutus/Transaction"
+            "Spec/Marlowe/Plutus/Types"
+            "Spec/Marlowe/Plutus/Value"
             "Spec/Marlowe/Semantics/Arbitrary"
             "Spec/Marlowe/Semantics/AssocMap"
             "Spec/Marlowe/Semantics/Compute"

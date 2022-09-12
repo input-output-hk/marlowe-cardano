@@ -24,13 +24,15 @@ module Spec.Marlowe.Semantics.Arbitrary (
   SemiArbitrary(..)
 , IsValid(..)
 -- * Generators
-, arbitraryChoiceName
-, arbitraryFibonacci
 , arbitraryAssocMap
+, arbitraryChoiceName
 , arbitraryContractWeighted
-, arbitraryValidStep
+, arbitraryFibonacci
+, arbitraryGoldenTransaction
+, arbitraryPositiveInteger
 , arbitraryValidInput
 , arbitraryValidInputs
+, arbitraryValidStep
 , choiceInBoundsIfNonempty
 , choiceNotInBounds
 , goldenContract
@@ -56,7 +58,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (.
                                                  getAction)
 import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
-import Spec.Marlowe.Semantics.Golden (goldenContracts)
+import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
                               vectorOf)
 
@@ -991,3 +993,13 @@ arbitraryValidInputs state contract =
     case computeTransaction input state contract of  -- FIXME: It is tautological to use `computeTransaction` to filter test cases.
       Error{}               -> pure []
       TransactionOutput{..} -> (input :) <$> arbitraryValidInputs txOutState txOutContract
+
+
+-- | Generate an arbitrary golden transaction.
+arbitraryGoldenTransaction :: Gen GoldenTransaction
+arbitraryGoldenTransaction =
+  do
+    equalContractWeights <- frequency [(1, pure True), (5, pure False)]
+    if equalContractWeights
+      then elements =<< elements goldenTransactions
+      else elements $ concat goldenTransactions
