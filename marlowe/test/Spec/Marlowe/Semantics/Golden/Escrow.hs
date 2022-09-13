@@ -35,7 +35,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Action (Choice, Depo
                                                  Payee (Account, Party),
                                                  State (State, accounts, boundValues, choices, minTime), Token (Token),
                                                  Value (Constant))
-import Plutus.V1.Ledger.Api (POSIXTime (..), Value (..))
+import Plutus.V2.Ledger.Api (POSIXTime (..), Value (..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 

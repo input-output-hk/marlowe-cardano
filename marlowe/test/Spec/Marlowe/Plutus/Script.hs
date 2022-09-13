@@ -34,13 +34,13 @@ import Data.These (These (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
 import Language.Marlowe.Scripts (rolePayoutValidator, rolePayoutValidatorHash, smallMarloweValidator)
 import Ledger.Typed.Scripts (validatorHash, validatorScript)
-import Plutus.ApiCommon (EvaluationContext, LedgerPlutusVersion (PlutusV1), LogOutput,
+import Plutus.ApiCommon (EvaluationContext, LedgerPlutusVersion (PlutusV2), LogOutput,
                          ProtocolVersion (ProtocolVersion), VerboseMode (Verbose), evaluateScriptCounting,
                          mkEvaluationContext)
 import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V1.Ledger.Address (Address, scriptHashAddress)
-import Plutus.V1.Ledger.Api (CostModelParams, Data, Datum (Datum), DatumHash, ToData (toBuiltinData), TokenName,
-                             Validator (getValidator))
+import Plutus.V1.Ledger.Address (scriptHashAddress)
+import Plutus.V2.Ledger.Api (Address, CostModelParams, Data, Datum (Datum), DatumHash, ToData (toBuiltinData),
+                             TokenName, Validator (getValidator))
 
 import qualified Data.ByteString.Lazy as LBS (toStrict)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
@@ -55,7 +55,7 @@ evaluateSemantics :: Data                    -- ^ The datum.
 evaluateSemantics datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
+    Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 7 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
                       (logOutput, Right _     ) -> That logOutput
                       (logOutput, Left message) -> These (show message) logOutput
 
@@ -68,7 +68,7 @@ evaluatePayout :: Data                    -- ^ The datum.
 evaluatePayout datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
+    Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 7 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
                       (logOutput, Right _     ) -> That logOutput
                       (logOutput, Left message) -> These (show message) logOutput
 
@@ -263,6 +263,10 @@ costModel =
     , ("remainderInteger-memory-arguments-intercept", 0)
     , ("remainderInteger-memory-arguments-minimum", 1)
     , ("remainderInteger-memory-arguments-slope", 1)
+    , ("serialiseData-cpu-arguments-intercept", 1159724)
+    , ("serialiseData-cpu-arguments-slope", 392670)
+    , ("serialiseData-memory-arguments-intercept", 0)
+    , ("serialiseData-memory-arguments-slope", 2)
     , ("sha2_256-cpu-arguments-intercept", 806990)
     , ("sha2_256-cpu-arguments-slope", 30482)
     , ("sha2_256-memory-arguments", 4)
@@ -293,7 +297,12 @@ costModel =
     , ("unListData-memory-arguments", 32)
     , ("unMapData-cpu-arguments", 38314)
     , ("unMapData-memory-arguments", 32)
+    , ("verifyEcdsaSecp256k1Signature-cpu-arguments", 20000000000)
+    , ("verifyEcdsaSecp256k1Signature-memory-arguments", 20000000000)
     , ("verifyEd25519Signature-cpu-arguments-intercept", 9462713)
     , ("verifyEd25519Signature-cpu-arguments-slope", 1021)
     , ("verifyEd25519Signature-memory-arguments", 10)
+    , ("verifySchnorrSecp256k1Signature-cpu-arguments-intercept", 20000000000)
+    , ("verifySchnorrSecp256k1Signature-cpu-arguments-slope", 0)
+    , ("verifySchnorrSecp256k1Signature-memory-arguments", 20000000000)
     ]

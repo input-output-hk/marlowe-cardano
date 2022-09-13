@@ -28,6 +28,8 @@ module Spec.Marlowe.Plutus.Lens (
 , txInfoInputsLens
 , txInfoMintLens
 , txInfoOutputsLens
+, txInfoRedeemersLens
+, txInfoReferenceInputsLens
 , txInfoSignatoriesLens
 , txInfoValidRangeLens
 , txInfoWdrlLens
@@ -36,8 +38,11 @@ module Spec.Marlowe.Plutus.Lens (
 
 import Control.Lens (Lens', lens, use, (<>=))
 import Control.Monad.State (MonadState)
-import Plutus.V1.Ledger.Api (DCert, Datum, DatumHash, POSIXTimeRange, PubKeyHash, ScriptContext (..), ScriptPurpose,
-                             StakingCredential, TxId, TxInInfo, TxInfo (..), TxOut, Value)
+import Plutus.V2.Ledger.Api (DCert, Datum, DatumHash, Map, POSIXTimeRange, PubKeyHash, Redeemer,
+                             ScriptContext (scriptContextPurpose, scriptContextTxInfo), ScriptPurpose,
+                             StakingCredential, TxId, TxInInfo,
+                             TxInfo (txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl),
+                             TxOut, Value)
 
 
 -- | Append a monadic value to a field.
@@ -66,6 +71,10 @@ txInfoInputsLens :: Lens' TxInfo [TxInInfo]
 txInfoInputsLens = lens txInfoInputs $ \s x -> s {txInfoInputs = x}
 
 
+txInfoReferenceInputsLens :: Lens' TxInfo [TxInInfo]
+txInfoReferenceInputsLens = lens txInfoReferenceInputs $ \s x -> s {txInfoReferenceInputs = x}
+
+
 txInfoOutputsLens :: Lens' TxInfo [TxOut]
 txInfoOutputsLens = lens txInfoOutputs $ \s x -> s {txInfoOutputs = x}
 
@@ -82,7 +91,7 @@ txInfoDCertLens :: Lens' TxInfo [DCert]
 txInfoDCertLens = lens txInfoDCert $ \s x -> s {txInfoDCert = x}
 
 
-txInfoWdrlLens :: Lens' TxInfo [(StakingCredential, Integer)]
+txInfoWdrlLens :: Lens' TxInfo (Map StakingCredential Integer)
 txInfoWdrlLens = lens txInfoWdrl $ \s x -> s {txInfoWdrl = x}
 
 
@@ -94,7 +103,11 @@ txInfoSignatoriesLens :: Lens' TxInfo [PubKeyHash]
 txInfoSignatoriesLens = lens txInfoSignatories $ \s x -> s {txInfoSignatories = x}
 
 
-txInfoDataLens :: Lens' TxInfo [(DatumHash, Datum)]
+txInfoRedeemersLens :: Lens' TxInfo (Map ScriptPurpose Redeemer)
+txInfoRedeemersLens = lens txInfoRedeemers $ \s x -> s {txInfoRedeemers = x}
+
+
+txInfoDataLens :: Lens' TxInfo (Map DatumHash Datum)
 txInfoDataLens = lens txInfoData $ \s x -> s {txInfoData = x}
 
 

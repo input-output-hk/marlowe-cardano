@@ -22,13 +22,15 @@ module Spec.Marlowe.Plutus.ScriptContext (
 
 import Data.List (find)
 import Data.Maybe (catMaybes)
-import Plutus.V1.Ledger.Api (Address (Address), Credential (PubKeyCredential), TxInInfo (txInInfoResolved),
+import Plutus.V2.Ledger.Api (Address (Address), Credential (PubKeyCredential), TxInInfo (txInInfoResolved),
                              TxInfo (TxInfo, txInfoData, txInfoInputs, txInfoOutputs, txInfoSignatories),
                              TxOut (TxOut, txOutAddress, txOutValue))
-import Plutus.V1.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
+import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Property, elements, forAll, property, suchThat, testProperty)
+
+import qualified PlutusTx.AssocMap as AM (toList)
 
 
 -- | Run tests.
@@ -53,13 +55,13 @@ checkFindDatum =
           do
             txInfo@TxInfo{txInfoData} <- arbitrary
             isPresent <- arbitrary
-            if isPresent && not (null txInfoData)
-              then (txInfo, ) <$> elements (fst <$> txInfoData)
-              else (txInfo, ) <$> arbitrary `suchThat` (flip notElem $ fst <$> txInfoData)
+            if isPresent && not (null $ AM.toList txInfoData)
+              then (txInfo, ) <$> elements (fst <$> AM.toList txInfoData)
+              else (txInfo, ) <$> arbitrary `suchThat` (flip notElem $ fst <$> AM.toList txInfoData)
       in
         forAll gen
           $ \(txInfo@TxInfo{txInfoData}, h) ->
-            findDatum h txInfo == fmap snd (find ((== h) . fst) txInfoData)
+            findDatum h txInfo == fmap snd (find ((== h) . fst) $ AM.toList txInfoData)
 
 
 -- | Test `findDatumHash`.
@@ -71,13 +73,13 @@ checkFindDatumHash =
           do
             txInfo@TxInfo{txInfoData} <- arbitrary
             isPresent <- arbitrary
-            if isPresent && not (null txInfoData)
-              then (txInfo, ) <$> elements (snd <$> txInfoData)
-              else (txInfo, ) <$> arbitrary `suchThat` (flip notElem $ snd <$> txInfoData)
+            if isPresent && not (null $ AM.toList txInfoData)
+              then (txInfo, ) <$> elements (snd <$> AM.toList txInfoData)
+              else (txInfo, ) <$> arbitrary `suchThat` (flip notElem $ snd <$> AM.toList txInfoData)
       in
         forAll gen
           $ \(txInfo@TxInfo{txInfoData}, d) ->
-            findDatumHash d txInfo == fmap fst (find ((== d) . snd) txInfoData)
+            findDatumHash d txInfo == fmap fst (find ((== d) . snd) $ AM.toList txInfoData)
 
 
 -- | Test `txSignedBy`.
@@ -118,8 +120,8 @@ checkValuePaid =
         forAll gen
           $ \(txInfo@TxInfo{txInfoOutputs}, pkh) ->
             let
-              matchPkh (TxOut (Address (PubKeyCredential pkh') _) _ _) = pkh == pkh'
-              matchPkh _                                               = False
+              matchPkh (TxOut (Address (PubKeyCredential pkh') _) _ _ _) = pkh == pkh'
+              matchPkh _                                                 = False
             in
               valuePaidTo txInfo pkh == foldMap txOutValue (filter matchPkh txInfoOutputs)
 

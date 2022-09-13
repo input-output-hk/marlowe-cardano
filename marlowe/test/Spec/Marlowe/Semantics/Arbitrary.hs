@@ -56,7 +56,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (.
                                                  InputContent (..), Observation (..), Party (..), Payee (..),
                                                  State (..), TimeInterval, Token (..), Value (..), ValueId (..),
                                                  getAction)
-import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
+import Plutus.V2.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
