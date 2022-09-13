@@ -86,7 +86,8 @@ import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (AnyTimeout, MarloweTransaction (MarloweTransaction, mtInputs), SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (AnyTimeout, MarloweScriptsRefs, MarloweTransaction (MarloweTransaction, mtInputs),
+                                   SomePaymentSigningKey)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
@@ -160,11 +161,6 @@ data TokenAssignment = TokenAssignment
   , taWalletNickname :: Maybe WalletNickname  -- ^ Default to the same wallet nickname as a token name.
   }
   deriving stock (Eq, Generic, Show)
-  -- TODO: provide more concise encoding:
-  -- - "Alice" or
-  -- - roleName: "Alice"
-  --   walletNickname: "TestWallet"
-  --      -- ^ Amount defaults to 1 during role minting.
   deriving anyclass (FromJSON, ToJSON)
 
 
@@ -182,27 +178,25 @@ data ScriptOperation =
   | Initialize
     {
       soMinAda           :: Integer
-    , soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
-    , soRoleCurrency     :: Maybe CurrencyNickname
-    , soContractSource   :: ContractSource     -- ^ The Marlowe contract to be created.
-    -- | FIXME: No *JSON instances for this
-    -- , soStake :: Maybe StakeAddressReference
+    , soContractNickname :: ContractNickname        -- ^ The name of the wallet's owner.
+    , soRoleCurrency     :: Maybe CurrencyNickname  -- ^ If contract requires uses roles currency has to provided here.
+    , soContractSource   :: ContractSource          -- ^ The Marlowe contract to be created.
+    , soSubmitter        :: Maybe WalletNickname    -- ^ A wallet which gonna create the initial transaction.
     }
   | Prepare
     {
-      soContractNickname :: ContractNickname   -- ^ The name of the wallet's owner.
-    , soInputs           :: [A.Value]
+      soContractNickname :: ContractNickname  -- ^ The name of the contract.
+    , soInputs           :: [A.Value]         -- ^ Inputs to the contract.
     , soMinimumTime      :: AnyTimeout
     , soMaximumTime      :: AnyTimeout
     }
   | Publish
-    { soPublisher        :: Maybe WalletNickname -- ^ By default use faucet wallet.
+    { soPublisher          :: Maybe WalletNickname   -- ^ By default use faucet wallet. Wallet used to cover fees.
+    , soPublishPermanently :: Maybe Bool             -- ^ Whether to publish script permanently.
     }
-  | FindPublished
   | AutoRun
     {
       soContractNickname :: ContractNickname
-    , soSubmitter        :: Maybe WalletNickname   -- ^ By default we use role token owner or faucet to perform notification.
     }
   | CreateWallet
     {
@@ -211,8 +205,13 @@ data ScriptOperation =
   | FundWallet
     {
       soWalletNickname   :: WalletNickname
-    , soValue            :: Lovelace
+    , soValues           :: [Lovelace]
     , soCreateCollateral :: Maybe Bool
+    }
+  | SplitWallet
+    {
+      soWalletNickname :: WalletNickname
+    , soValues         :: [Lovelace]
     }
   | Fail
     {
@@ -236,7 +235,7 @@ data Wallet era =
     waAddress         :: AddressInEra era
   , waSigningKey      :: SomePaymentSigningKey
   , waTokens          :: P.Value                      -- ^ Custom tokens cache which simplifies
-                                                      -- ^ autoexecution and swap transfers asserts.
+
   , waTransactions    :: [WalletTransaction era]
   , waVerificationKey :: VerificationKey PaymentKey
   }
@@ -437,13 +436,13 @@ overAnyMarloweThread f (AnyMarloweThread th) = f th
 
 data MarloweContract lang era = MarloweContract
   {
-    mcContract :: M.Contract
-  , mcCurrency :: Maybe CurrencyNickname
-  -- , mcCurr     :: PossiblyOnChainMarloweTransaction era
-  -- , mcPrev       :: Maybe (PossiblyOnChainMarloweTransaction era)
-  , mcPlan     :: List.NonEmpty (MarloweTransaction lang era)
-  , mcThread   :: Maybe (AnyMarloweThread lang era)
+    mcContract  :: M.Contract
+  , mcCurrency  :: Maybe CurrencyNickname
+  , mcPlan      :: List.NonEmpty (MarloweTransaction lang era)
+  , mcThread    :: Maybe (AnyMarloweThread lang era)
+  , mcSubmitter :: WalletNickname
   }
+
 
 data CustomCurrency = CustomCurrency
   {
@@ -451,21 +450,25 @@ data CustomCurrency = CustomCurrency
   , ccCurrencySymbol :: CurrencySymbol
   }
 
+
 data MarloweReferenceScripts = MarloweReferenceScripts
   { mrsMarloweValidator :: C.TxIn
   , mrsPayoutValidator  :: C.TxIn
   }
 
+
 data ScriptState lang era = ScriptState
   {
     _ssContracts        :: Map ContractNickname (MarloweContract lang era)
   , _ssCurrencies       :: Map CurrencyNickname CustomCurrency
-  , _ssReferenceScripts :: Maybe MarloweReferenceScripts
+  , _ssReferenceScripts :: Maybe (MarloweScriptsRefs lang era)
   , _ssWallets          :: Map WalletNickname (Wallet era)               -- ^ Faucet wallet should be included here.
   }
 
+
 faucetNickname :: WalletNickname
 faucetNickname = "Faucet"
+
 
 scriptState :: Wallet era -> ScriptState lang era
 scriptState faucet = do
@@ -485,3 +488,4 @@ data ScriptEnv era = ScriptEnv
 
 makeLenses 'ScriptEnv
 makeLenses 'ScriptState
+

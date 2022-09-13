@@ -261,7 +261,7 @@ exportMarloweAddress = exportAddress (TypedValidatorV2 smallMarloweValidator)
 
 
 buildValidatorInfo :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, IsPlutusScriptLanguage lang)
-  => CS.LocalNodeConnectInfo CS.CardanoMode -> CS.PlutusScript lang -> Maybe C.TxIn -> StakeAddressReference -> m (ValidatorInfo lang era)
+                   => CS.LocalNodeConnectInfo CS.CardanoMode -> CS.PlutusScript lang -> Maybe C.TxIn -> StakeAddressReference -> m (ValidatorInfo lang era)
 buildValidatorInfo connection plutusScript txIn stake = do
   era <- askEra
   protocol <- queryInEra connection C.QueryProtocolParameters
@@ -269,7 +269,6 @@ buildValidatorInfo connection plutusScript txIn stake = do
   let
     networkId = C.localNodeNetworkId connection
     protocolVersion = C.toPlutusProtocolVersion $ CS.protocolParamProtocolVersion protocol
-    -- unspendableValidator = TypedValidatorV2 . referenceUnspendableValidator . PSU.validatorHash $ referenceValidator
   validatorInfo' plutusScript txIn era protocolVersion costModel networkId stake
 
 

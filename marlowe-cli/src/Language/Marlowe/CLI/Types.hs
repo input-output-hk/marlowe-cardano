@@ -41,6 +41,7 @@ module Language.Marlowe.CLI.Types (
 , RedeemerInfo(..)
 , SomeMarloweTransaction(..)
 , CliEnv(..)
+, CoinSelectionStrategy(..)
 , AnyTimeout(..)
 , TruncateMilliseconds(..)
 -- * eUTxOs
@@ -66,6 +67,8 @@ module Language.Marlowe.CLI.Types (
 , PrintStats(..)
 , TxBodyFile(..)
 , SigningKeyFile(..)
+-- * constants
+, marlowePlutusVersion
 -- * pattern matching boilerplate
 , withCardanoEra
 , withShelleyBasedEra
@@ -87,18 +90,20 @@ module Language.Marlowe.CLI.Types (
 , asksEra
 , doWithCardanoEra
 , doWithShelleyBasedEra
--- * accessors, converters and constructors
-, anUTxOValue
-, fromUTxO
-, getVerificationKey
-, marlowePlutusVersion
 , toAddressAny'
+, toShelleyAddress
+-- * accessors and converters
+, anUTxOValue
+, getVerificationKey
 , toPaymentVerificationKey
 , toMarloweTimeout
 , toPOSIXTime
 , toUTxO
-, validatorInfo
 , validatorInfoScriptOrReference
+-- * constructors and defaults
+, defaultCoinSelectionStrategy
+, fromUTxO
+, validatorInfo
 , validatorInfo'
 ) where
 
@@ -130,7 +135,9 @@ import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
+import qualified Cardano.Api.Byron as CB
 import qualified Cardano.Api.Shelley as C
+import qualified Cardano.Api.Shelley as CS
 import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader.Class (MonadReader (..), asks)
@@ -272,6 +279,11 @@ toExtraKeyWitnessesSupportedInEra = \case
 toAddressAny' :: AddressInEra era -> AddressAny
 toAddressAny' (AddressInEra _ addr) = toAddressAny addr
 
+toShelleyAddress :: AddressInEra era -> Maybe (C.Address C.ShelleyAddr)
+toShelleyAddress (AddressInEra _ addr) = case addr of
+  CB.ByronAddress _      -> Nothing
+  s@CS.ShelleyAddress {} -> Just s
+
 newtype CliEnv era = CliEnv { era :: ScriptDataSupportedInEra era }
 
 askEra :: MonadReader (CliEnv era) m => m (ScriptDataSupportedInEra era)
@@ -391,6 +403,9 @@ instance (IsScriptLanguage lang, IsShelleyBasedEra era) => FromJSON (MarloweInfo
 
 
 -- | Information about Marlowe validator.
+
+-- TODO: Turn this into GADT and introduce two cases - ref and non ref.
+-- Non ref should skip `txIn` and ref should change Address into enterprise one.
 data ValidatorInfo lang era =
   ValidatorInfo
   {
@@ -433,9 +448,10 @@ validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
 validatorInfo' :: (MonadError CliError m, IsPlutusScriptLanguage lang) => C.PlutusScript lang -> Maybe C.TxIn -> ScriptDataSupportedInEra era -> P.ProtocolVersion -> P.CostModelParams -> C.NetworkId -> C.StakeAddressReference -> m (ValidatorInfo lang era)
 validatorInfo' sc t e p c n st = liftEither . Bifunctor.first CliError $ validatorInfo sc t e p c n st
 
+
 validatorInfoScriptOrReference :: ValidatorInfo lang era -> C.PlutusScriptOrReferenceInput lang
 validatorInfoScriptOrReference ValidatorInfo {..} = case viTxIn of
-  Just txIn -> C.PReferenceScript txIn (Just viHash)
+  Just txIn -> C.PReferenceScript txIn Nothing
   Nothing   -> C.PScript viScript
 
 
@@ -658,6 +674,7 @@ newtype TxBodyFile = TxBodyFile { unTxBodyFile :: FilePath }
 newtype SigningKeyFile = SigningKeyFile { unSigningKeyFile :: FilePath }
 
 
+-- | A single UTxO. We preserve the `Tuple` structure for consistency with `UTxO`.
 newtype AnUTxO era = AnUTxO { unAnUTxO :: (C.TxIn, C.TxOut C.CtxUTxO era) }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
@@ -666,11 +683,14 @@ newtype AnUTxO era = AnUTxO { unAnUTxO :: (C.TxIn, C.TxOut C.CtxUTxO era) }
 fromUTxO :: C.UTxO era -> [AnUTxO era]
 fromUTxO (Map.toList . C.unUTxO -> items) = map AnUTxO items
 
+
 toUTxO :: [AnUTxO era] -> C.UTxO era
 toUTxO (map unAnUTxO -> utxos) = C.UTxO . Map.fromList $ utxos
 
+
 anUTxOValue :: AnUTxO era -> C.Value
 anUTxOValue (AnUTxO (_, C.TxOut _ v _ _)) = C.txOutValueToValue v
+
 
 data MarloweScriptsRefs lang era = MarloweScriptsRefs
   {
@@ -678,4 +698,12 @@ data MarloweScriptsRefs lang era = MarloweScriptsRefs
   , mrRolePayoutValidator :: (AnUTxO era, ValidatorInfo lang era)
   }
 
+data CoinSelectionStrategy = CoinSelectionStrategy
+  {
+    csPreserveReferenceScripts :: Bool
+  , csPreserveInlineDatums     :: Bool
+  , csPreserveTxIns            :: [TxIn]
+  }
 
+defaultCoinSelectionStrategy :: CoinSelectionStrategy
+defaultCoinSelectionStrategy = CoinSelectionStrategy True True []

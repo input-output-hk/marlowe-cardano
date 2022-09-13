@@ -36,17 +36,20 @@ import Control.Monad (foldM, forM, forM_, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState, makeContract)
-import Language.Marlowe.CLI.Types (AnUTxO, CliEnv (..), CliError (..), MarlowePlutusVersion,
-                                   MarloweTransaction (mtState), OutputQueryResult, PrintStats (PrintStats),
-                                   PublishingStrategy (PublishPermanently), TruncateMilliseconds (TruncateMilliseconds),
-                                   fromUTxO, toMarloweTimeout, toPOSIXTime)
+import Language.Marlowe.CLI.Types (AnUTxO (AnUTxO), CliEnv (..), CliError (..),
+                                   CoinSelectionStrategy (CoinSelectionStrategy), MarlowePlutusVersion,
+                                   MarloweScriptsRefs (MarloweScriptsRefs), MarloweTransaction (mtState),
+                                   OutputQueryResult, PrintStats (PrintStats),
+                                   PublishingStrategy (PublishAtAddress, PublishPermanently),
+                                   TruncateMilliseconds (TruncateMilliseconds), ValidatorInfo (ValidatorInfo),
+                                   defaultCoinSelectionStrategy, toMarloweTimeout, toPOSIXTime)
 
 import Language.Marlowe.Extended.V1 as E (ChoiceId (ChoiceId), Party)
 import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
 
 import qualified Cardano.Api as C
-import Control.Lens (modifying, use, view)
+import Control.Lens (assign, modifying, use, view)
 import Control.Monad.Extra (whenM)
 import Control.Monad.RWS.Class (MonadReader)
 import Control.Monad.Reader (ReaderT (runReaderT))
@@ -65,10 +68,12 @@ import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Data.Aeson.Traversals as A
 import Language.Marlowe.CLI.IO (liftCliMaybe, queryInEra)
-import Language.Marlowe.CLI.Run (autoRunTransactionImpl, initializeTransactionImpl, prepareTransactionImpl)
+import Language.Marlowe.CLI.Run (autoRunTransactionImpl, initializeTransactionImpl,
+                                 initializeTransactionUsingScriptRefsImpl, prepareTransactionImpl)
 import Language.Marlowe.CLI.Sync (classifyOutputs, isMarloweOut)
 import Language.Marlowe.CLI.Sync.Types (MarloweOut (ApplicationOut, moTxIn))
-import Language.Marlowe.CLI.Test.Script.Debug (SoFormat (SoName), logSoMsg, logTraceMsg)
+import Language.Marlowe.CLI.Test.Script.Debug (SoFormat (SoName), logSoMsg, logSoMsg', logTraceMsg, runSoCli,
+                                               throwSoError, withCliErrorMsg)
 import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), CurrencyNickname,
                                         CustomCurrency (CustomCurrency, ccCurrencySymbol), MarloweContract (..),
                                         PartyRef (RoleRef, WalletRef), ScriptEnv (..), ScriptOperation (..),
@@ -79,8 +84,9 @@ import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), C
                                         faucetNickname, foldrMarloweThread, getMarloweThreadTransaction,
                                         getMarloweThreadTxIn, overAnyMarloweThread, scriptState, seConnection,
                                         seCostModelParams, seEra, seProtocolVersion, seSlotConfig, ssContracts,
-                                        ssCurrencies, ssWallets, walletPubKeyHash)
-import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, publishImpl, selectUtxosImpl)
+                                        ssCurrencies, ssReferenceScripts, ssWallets, walletPubKeyHash)
+import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl,
+                                         selectUtxosImpl)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
@@ -93,19 +99,6 @@ import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
 import qualified Plutus.V2.Ledger.Api as P
 
-
--- FIXME: ARBITRARY amount which covers
--- collateralls in our scenarios but also
--- fees.
--- Drop this when proper coin selection is in place.
-maxCollateral :: C.Lovelace
-maxCollateral = C.Lovelace 30_000_000
-
-
--- FIXME: Hacky way to adjust some fee requirements.
--- Drop this when proper coin selection is in place.
-feeMargin :: C.Lovelace
-feeMargin = C.Lovelace 30_000_000
 
 transactionTimeout :: Int
 transactionTimeout = 120
@@ -132,13 +125,10 @@ interpret CreateWallet {..} = do
 interpret FundWallet {..} = do
   let
     -- Let's create a separate UTxO with pretty large collateral by default
-    value = C.lovelaceToValue soValue
-    values = case soCreateCollateral of
-      Just True ->
-        [ value <> C.negateValue (C.lovelaceToValue maxCollateral)
-        , C.lovelaceToValue maxCollateral
-        ]
-      _ -> [ value ]
+    values =
+      [ C.lovelaceToValue v
+      | v <- soValues
+      ]
 
   (Wallet faucetAddress faucetSigningKey _ _ _) <- getFaucet
   (Wallet address _ _ _ _) <- findWallet soWalletNickname
@@ -149,6 +139,7 @@ interpret FundWallet {..} = do
     [address]
     faucetAddress
     faucetSigningKey
+    defaultCoinSelectionStrategy
     (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
 
   let
@@ -157,7 +148,27 @@ interpret FundWallet {..} = do
   updateFaucet \faucet@(Wallet _ _ _ faucetTransactions _) ->
     faucet { waTransactions = transaction : faucetTransactions }
 
-interpret Mint {..} = do
+interpret SplitWallet {..} = do
+  Wallet address skey _ _ _ <- findWallet soWalletNickname
+  connection <- view seConnection
+  let
+    -- Let's create a separate UTxO with pretty large collateral by default
+    values =
+      [ C.lovelaceToValue v
+      | v <- soValues
+      ]
+
+  void $ runCli "[createCollaterals] " $ buildFaucetImpl
+    connection
+    values
+    [address]
+    address
+    skey
+    defaultCoinSelectionStrategy
+    (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
+
+
+interpret so@Mint {..} = do
   currencies <- use ssCurrencies
   when (isJust $ Map.lookup soCurrencyNickname currencies) do
     throwError "Currency with a given nickname already exist"
@@ -169,6 +180,7 @@ interpret Mint {..} = do
         Nothing -> WalletNickname $ show tokenName
     wallet@(Wallet destAddress _ _ _ _) <- findWallet nickname
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
+  logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
@@ -201,11 +213,14 @@ interpret so@Initialize {..} = do
 
   log' $ "Contract: " <> show (pretty marloweContract)
 
-  faucetParty <- do
-    Wallet _ _ _ _ faucetVerificationKey <- getFaucet
-    let
-      pubKeyHash = fromCardanoPaymentKeyHash . verificationKeyHash $ faucetVerificationKey
-    pure $ M.PK pubKeyHash
+  let
+    submitterNickname = fromMaybe faucetNickname soSubmitter
+  Wallet _ _ _ _ submitterVerificationKey <- findWallet submitterNickname
+  let
+    submitterParty = do
+      let
+        pubKeyHash = fromCardanoPaymentKeyHash . verificationKeyHash $ submitterVerificationKey
+      M.PK pubKeyHash
 
   currencySymbol <- case soRoleCurrency of
     Nothing -> pure P.adaSymbol
@@ -214,24 +229,38 @@ interpret so@Initialize {..} = do
       pure ccCurrencySymbol
 
   let
-    marloweState = initialMarloweState faucetParty soMinAda
+    marloweState = initialMarloweState submitterParty soMinAda
     marloweParams = Client.marloweParams currencySymbol
 
   slotConfig <- view seSlotConfig
   costModelParams <- view seCostModelParams
   protocolVersion <- view seProtocolVersion
   LocalNodeConnectInfo { localNodeNetworkId } <- view seConnection
-  marloweTransaction <- runCli "[Initialize] " $ initializeTransactionImpl
-    marloweParams
-    slotConfig
-    protocolVersion
-    costModelParams
-    localNodeNetworkId
-    NoStakeAddress
-    marloweContract
-    marloweState
-    False
-    True
+  marloweTransaction <- use ssReferenceScripts >>= \case
+    Just refs -> do
+      logSoMsg' so "Using reference scripts to initialize Marlowe contract."
+      runSoCli so $ initializeTransactionUsingScriptRefsImpl
+        marloweParams
+        slotConfig
+        refs
+        NoStakeAddress
+        marloweContract
+        marloweState
+        False
+        True
+    Nothing -> do
+      logSoMsg' so "Using in Tx scripts strategy to initialize Marlowe contract."
+      runSoCli so $ initializeTransactionImpl
+        marloweParams
+        slotConfig
+        protocolVersion
+        costModelParams
+        localNodeNetworkId
+        NoStakeAddress
+        marloweContract
+        marloweState
+        False
+        True
 
   whenM (isJust . Map.lookup soContractNickname <$> use ssContracts) do
     throwError "[Initialize] Contract with a given nickname already exist."
@@ -242,6 +271,7 @@ interpret so@Initialize {..} = do
     , mcPlan = marloweTransaction :| []
     , mcThread = Nothing
     , mcCurrency = soRoleCurrency
+    , mcSubmitter = submitterNickname
     }
 
 interpret Prepare {..} = do
@@ -285,7 +315,7 @@ interpret AutoRun {..} = do
           txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< th
           pure (pmt, txIn)
 
-      (txBody, mTxIn) <- autoRunTransaction mcCurrency prev mt
+      (txBody, mTxIn) <- autoRunTransaction mcCurrency mcSubmitter prev mt
       case anyMarloweThread mt txBody mTxIn th of
         Just th' -> pure $ Just th'
         Nothing  -> throwError "[AutoRun] Extending of the marlowe thread failed."
@@ -295,24 +325,45 @@ interpret AutoRun {..} = do
     marloweContract' = marloweContract { mcThread = thread' }
   ssContracts `modifying`  Map.insert soContractNickname marloweContract'
 
-interpret Publish {..} = do
+interpret so@Publish {..} = do
+  whenM (isJust <$> use ssReferenceScripts) do
+    throwSoError so "Scripts already published in this test script."
+
   Wallet { waAddress, waSigningKey } <- maybe getFaucet findWallet soPublisher
+  let
+    publishingStrategy = case soPublishPermanently of
+      Just True -> PublishPermanently NoStakeAddress
+      _         -> PublishAtAddress waAddress
 
   connection <- view seConnection
-  txBody <- runCli "[Publish]" $ publishImpl
-    connection
-    waSigningKey
-    Nothing
-    waAddress
-    (PublishPermanently NoStakeAddress)
-    transactionTimeout
-    (PrintStats True)
+  marloweScriptRefs <- runSoCli so (findMarloweScriptsRefs connection publishingStrategy (PrintStats True)) >>= \case
+    Just marloweScriptRefs@(MarloweScriptsRefs (AnUTxO (mTxIn, _), mv) (AnUTxO (pTxIn, _), pv)) -> do
+      let
+        logValidatorInfo ValidatorInfo {..} = do
+          logSoMsg' so $ Text.unpack (C.serialiseAddress viAddress)
 
-  liftIO $ print txBody
+      logSoMsg' so "Found already published scripts so using them."
 
--- You can use already prepublished scripts to speed up testing.
-interpret FindPublished {} = throwError $ CliError "[FindPublished] Not implemented yet."
+      logSoMsg' so $ "Marlowe reference: " <> show mTxIn
+      logValidatorInfo mv
 
+      logSoMsg' so $ "Payout reference: " <> show pTxIn
+      logValidatorInfo pv
+
+      pure marloweScriptRefs
+    Nothing -> do
+      logSoMsg' so "Scripts not found so publishing them."
+      runSoCli so $ publishImpl
+        connection
+        waSigningKey
+        Nothing
+        waAddress
+        publishingStrategy
+        (CoinSelectionStrategy False False [])
+        transactionTimeout
+        (PrintStats True)
+
+  assign ssReferenceScripts (Just marloweScriptRefs)
 
 interpret (Fail message) = throwError $ CliError message
 
@@ -324,10 +375,11 @@ autoRunTransaction :: forall era lang m
                    => MonadState (ScriptState lang era) m
                    => MonadIO m
                    => Maybe CurrencyNickname
+                   -> WalletNickname
                    -> Maybe (MarloweTransaction lang era, C.TxIn)
                    -> MarloweTransaction lang era
                    -> m (C.TxBody era, Maybe C.TxIn)
-autoRunTransaction currency prev curr@T.MarloweTransaction {..} = do
+autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..} = do
   let
     log' = logTraceMsg "autoRunTransaction"
 
@@ -347,13 +399,12 @@ autoRunTransaction currency prev curr@T.MarloweTransaction {..} = do
     getInputParty _ M.MerkleizedInput {} =
       throwError "[autoRunTransaction] merkleized input handling is not implemented yet."
 
-
   log' $ "Applying marlowe inputs: " <> show mtInputs
   log' $ "Output contract: " <> show (pretty mtContract)
   log' $ "Output state: " <> show mtState
 
   Wallet address skey _ _ _ <- foldM getInputParty Nothing mtInputs >>= \case
-    Nothing          -> getFaucet
+    Nothing          -> findWallet defaultSubmitter
     Just (M.PK pkh)  -> snd <$> findWalletByPkh pkh
     Just (M.Role rn) -> case currency of
       Just cn -> snd <$> findWalletByUniqueToken cn rn
@@ -367,7 +418,7 @@ autoRunTransaction currency prev curr@T.MarloweTransaction {..} = do
       address
       [skey]
       C.TxMetadataNone
-      (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
+      (Just transactionTimeout)
       True
       False
 
@@ -388,19 +439,10 @@ autoRunTransaction currency prev curr@T.MarloweTransaction {..} = do
     Left e -> throwError . CliError $ "[AutoRun] Marlowe output anomaly: " <> show e
 
 
--- This helper is present in the newer version of mtl
-withError :: MonadError e m => (e -> e) -> m a -> m a
-withError modifyError action = catchError action \e -> do
-                                throwError $ modifyError e
-
-withCliErrorMsg :: MonadError CliError m => (String -> String) -> m a -> m a
-withCliErrorMsg f = withError (\(CliError msg) -> CliError (f msg))
-
-
 findMarloweContract :: MonadError CliError m
-                => MonadState (ScriptState lang era) m
-                => ContractNickname   -- ^ The nickname.
-                -> m (MarloweContract lang era)
+                    => MonadState (ScriptState lang era) m
+                    => ContractNickname   -- ^ The nickname.
+                    -> m (MarloweContract lang era)
 findMarloweContract nickname = do
   contracts <- use ssContracts
   liftCliMaybe
@@ -675,34 +717,3 @@ decodeInputJSON json = do
     A.Success input -> pure input
 
 
-createCollaterals :: MonadReader (ScriptEnv era) m => MonadIO m => MonadState (ScriptState lang era) m => MonadError CliError m => Int -> Either WalletNickname (Wallet era) -> m (NonEmpty (AnUTxO era), [AnUTxO era])
-createCollaterals number wallet = do
-  Wallet address skey _ _ _ <- either findWallet pure wallet
-  connection <- view seConnection
-  let
-    outputs = replicate number (C.lovelaceToValue maxCollateral)
-
-  void $ runCli "[createCollaterals] " $ buildFaucetImpl
-    connection
-    outputs
-    [address]
-    address
-    skey
-    (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
-
-  possibleCollaterals <- selectWalletUTxOs wallet (T.LovelaceOnly ((==) maxCollateral))
-
-  case possibleCollaterals of
-    (T.OutputQueryResult (fromUTxO -> c:cs) (fromUTxO -> rest)) ->
-      pure (c:|cs, rest)
-    _ ->
-      throwError "[createCollaterals] Unable to find collaterals which were just created..."
-
-
-ensureWalletCollaterals :: MonadIO m => MonadReader (ScriptEnv era) m => MonadState (ScriptState lang era) m => MonadError CliError m => Either WalletNickname (Wallet era) -> m (NonEmpty (AnUTxO era), [AnUTxO era])
-ensureWalletCollaterals wallet = do
-  possibleCollaterals <- selectWalletUTxOs wallet (T.LovelaceOnly ((==) maxCollateral))
-  case possibleCollaterals of
-    T.OutputQueryResult (fromUTxO -> c:cs) (fromUTxO -> rest) ->
-      pure (c:|cs, rest)
-    _ -> createCollaterals 10 wallet

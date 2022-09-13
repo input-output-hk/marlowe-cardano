@@ -41,7 +41,9 @@
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+          (hsPkgs."cardano-crypto-class" or (errorHandler.buildDepError "cardano-crypto-class"))
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+          (hsPkgs."cardano-ledger-shelley" or (errorHandler.buildDepError "cardano-ledger-shelley"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
           (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
@@ -49,6 +51,7 @@
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
           (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
+          (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
           (hsPkgs."extra" or (errorHandler.buildDepError "extra"))
           (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
@@ -89,6 +92,11 @@
           ];
         buildable = true;
         modules = [
+          "Language/Marlowe/CLI/Cardano/Api"
+          "Language/Marlowe/CLI/Cardano/Api/Address"
+          "Language/Marlowe/CLI/Cardano/Api/Address/ProofOfBurn"
+          "Language/Marlowe/CLI/Cardano/Api/PlutusScript"
+          "Language/Marlowe/CLI/Plutus/Script/Utils"
           "Language/Marlowe/CLI/Codec"
           "Language/Marlowe/CLI/Command"
           "Language/Marlowe/CLI/Command/Contract"
@@ -100,6 +108,8 @@
           "Language/Marlowe/CLI/Command/Test"
           "Language/Marlowe/CLI/Command/Transaction"
           "Language/Marlowe/CLI/Command/Util"
+          "Language/Marlowe/CLI/Data/Aeson/Traversals"
+          "Language/Marlowe/CLI/Data/Foldable"
           "Language/Marlowe/CLI/Examples"
           "Language/Marlowe/CLI/Export"
           "Language/Marlowe/CLI/Merkle"
@@ -111,6 +121,7 @@
           "Language/Marlowe/CLI/Transaction"
           "Language/Marlowe/CLI/Test"
           "Language/Marlowe/CLI/Test/Script"
+          "Language/Marlowe/CLI/Test/Script/Debug"
           "Language/Marlowe/CLI/Test/Types"
           "Language/Marlowe/CLI/Types"
           "Paths_marlowe_cli"

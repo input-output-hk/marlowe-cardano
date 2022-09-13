@@ -1,0 +1,54 @@
+stTestName: Trivial contract without roles with script tx embedding
+
+stScriptOperations:
+
+  - tag: Initialize
+    soContractNickname: "Trivial"
+    soMinAda: 10000000
+    soContractSource:
+      template:
+        tag: "UseTrivial"
+        utDepositLovelace: 15000000
+        utWithdrawalLovelace: 15000000
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        utTimeout:
+          relative: 1000000
+
+  - tag: Prepare
+    soContractNickname: Trivial
+    soInputs:
+      - input_from_party:
+          pk_hash: Faucet
+        that_deposits: 15000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          pk_hash: Faucet
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: Prepare
+    soContractNickname: "Trivial"
+    soInputs:
+      - "input_notify"
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: Prepare
+    soContractNickname: "Trivial"
+    soInputs:
+      - "input_notify"
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: AutoRun
+    soContractNickname: "Trivial"
+
