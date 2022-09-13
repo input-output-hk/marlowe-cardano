@@ -73,12 +73,12 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Bound (..), Case (
                                                  ValueId (..))
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Util (merkleizedCase)
-import Plutus.V1.Ledger.Api (PubKeyHash (PubKeyHash))
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
+import Plutus.V2.Ledger.Api (PubKeyHash (PubKeyHash))
 import Test.QuickCheck (Gen, choose, frequency, oneof, shrinkList, sized, vectorOf)
 
 import qualified Language.Marlowe.Extended.V1 as Extended
-import qualified Plutus.V1.Ledger.Api as Ledger
+import qualified Plutus.V2.Ledger.Api as Ledger
 
 
 -- | A public key represented as a string.

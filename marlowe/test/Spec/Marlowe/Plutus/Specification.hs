@@ -35,11 +35,11 @@ import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (
                                                  State (accounts))
 import Language.Marlowe.Scripts (MarloweInput)
 import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V1.Ledger.Api (Address (Address), BuiltinData (BuiltinData), Credential (PubKeyCredential),
-                             Data (B, Constr, List), Datum (Datum), FromData (..), PubKeyHash, ScriptContext,
-                             ToData (..), TokenName, TxInInfo (TxInInfo, txInInfoResolved), TxOut (TxOut, txOutValue),
-                             Value, adaSymbol, adaToken, singleton, toData)
 import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
+import Plutus.V2.Ledger.Api (Address (Address), BuiltinData (BuiltinData), Credential (PubKeyCredential),
+                             Data (B, Constr, List), Datum (Datum), FromData (..), OutputDatum (..), PubKeyHash,
+                             ScriptContext, ToData (..), TokenName, TxInInfo (TxInInfo, txInInfoResolved),
+                             TxOut (TxOut, txOutValue), Value, adaSymbol, adaToken, singleton, toData)
 import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
 import Spec.Marlowe.Plutus.Transaction (ArbitraryTransaction, arbitraryPayoutTransaction, arbitrarySemanticsTransaction,
                                         noModify, noVeto, shuffle)
@@ -50,7 +50,7 @@ import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, forAll, property, suchThat, testProperty)
 
-import qualified PlutusTx.AssocMap as AM (insert)
+import qualified PlutusTx.AssocMap as AM (fromList, insert, toList)
 
 
 -- | Run tests.
@@ -240,11 +240,11 @@ checkDoubleInput =
         inScript <-
           TxInInfo
             <$> lift arbitrary
-            <*> (TxOut semanticsAddress <$> lift arbitrary <*> pure (Just inDatumHash))
+            <*> (TxOut semanticsAddress <$> lift arbitrary <*> pure (OutputDatumHash inDatumHash) <*> pure Nothing)
         -- Add a second script input.
         infoInputs <>= [inScript]
         -- Add the new datum and its hash.
-        infoData <>= [(inDatumHash, inDatum)]
+        infoData <>= AM.fromList [(inDatumHash, inDatum)]
         shuffle
   in
     checkSemanticsTransaction noModify modifyAfter noVeto False False
@@ -283,8 +283,8 @@ checkMultipleOutput =
       do
         let
           -- Split a script output into two equal ones.
-          splitOwnOutput txOut@(TxOut address value datum')
-            | address == semanticsAddress = flip (TxOut address) datum' <$> splitValue value
+          splitOwnOutput txOut@(TxOut address value datum' _)
+            | address == semanticsAddress = flip (TxOut address) datum' <$> splitValue value <*> pure Nothing
             | otherwise                   = pure txOut
         -- Update the outputs with the split script output.
         infoOutputs %= concatMap splitOwnOutput
@@ -301,7 +301,7 @@ checkCloseOutput =
       do
         let
           -- Match the script input.
-          matchOwnInput (TxInInfo _ (TxOut address _ _)) = address == semanticsAddress
+          matchOwnInput (TxInInfo _ (TxOut address _ _ _)) = address == semanticsAddress
         -- Find the script input.
         inScript <- infoInputs `uses` filter matchOwnInput
         -- Add a clone of the script input as output.
@@ -321,7 +321,7 @@ checkValueInput =
       do
         let
           -- Add one lovelace to the input to the script.
-          incrementOwnInput txInInfo@(TxInInfo _ txOut@(TxOut address value _))
+          incrementOwnInput txInInfo@(TxInInfo _ txOut@(TxOut address value _ _))
             | address == semanticsAddress = txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
             | otherwise                   = txInInfo
         -- Update the inputs with the incremented script input.
@@ -338,7 +338,7 @@ checkValueOutput =
       do
         let
           -- Add one lovelace to the output to the script.
-          incrementOwnOutput txOut@(TxOut address value _)
+          incrementOwnOutput txOut@(TxOut address value _ _)
             | address == semanticsAddress = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
             | otherwise                  = txOut
         -- Update the outputs with the incremented script output.
@@ -366,7 +366,7 @@ checkDatumOutput perturb =
             | h == outDatumHash = (h, outDatum')
             | otherwise         = pair
         -- Update the data with the modification.
-        infoData %= fmap perturbOwnOutputDatum
+        infoData %= AM.fromList . fmap perturbOwnOutputDatum . AM.toList
   in
     checkSemanticsTransaction noModify modifyAfter notCloses False False
 
@@ -483,11 +483,11 @@ checkPayment =
       do
         let
           -- Decrement a payment by one unit.
-          decrementPayment txOut@(TxOut address                          value (Just _))
-            | address == payoutAddress                                                   = txOut {txOutValue = decrementValue value}
-            | otherwise                                                                  = txOut
-          decrementPayment txOut@(TxOut (Address (PubKeyCredential _) _) value Nothing ) = txOut {txOutValue = decrementValue value}
-          decrementPayment txOut                                                         = txOut
+          decrementPayment txOut@(TxOut address                          value (OutputDatumHash _) _)
+            | address == payoutAddress                                                                = txOut {txOutValue = decrementValue value}
+            | otherwise                                                                               = txOut
+          decrementPayment txOut@(TxOut (Address (PubKeyCredential _) _) value NoOutputDatum       _) = txOut {txOutValue = decrementValue value}
+          decrementPayment txOut                                                                      = txOut
         -- Update the outputs.
         infoOutputs %= fmap decrementPayment
   in
@@ -503,7 +503,7 @@ removeRoleIn =
     name <- use role
     let
       -- Determine if the input has the role token.
-      notMatch (TxInInfo _ (TxOut _ value _)) = valueOf value currency name == 0
+      notMatch (TxInInfo _ (TxOut _ value _ _ )) = valueOf value currency name == 0
     -- Update the transaction inputs
     infoInputs %= filter notMatch
 
@@ -519,7 +519,7 @@ mutateRoleIn =
     name' <- lift $ arbitrary `suchThat` (/= name)
     let
       -- Mutate the roles currency.
-      mutate txIn@(TxInInfo _ (TxOut _ value _)) =
+      mutate txIn@(TxInInfo _ (TxOut _ value _ _ )) =
         if valueOf value currency name /= 0
           then txIn {txInInfoResolved = (txInInfoResolved txIn) {txOutValue = singleton currency name' 1}}
           else txIn

@@ -48,8 +48,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (Ch
                                                  Payee (Party), State (..), TimeInterval, Token (..), Value, ValueId,
                                                  getAction, getInputContent)
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
 import Plutus.V1.Ledger.Value (flattenValue)
+import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
 import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary (semiArbitrary), arbitraryContractWeighted,
                                          assertContractWeights, closeContractWeights, defaultContractWeights,
                                          ifContractWeights, letContractWeights, whenContractWeights)

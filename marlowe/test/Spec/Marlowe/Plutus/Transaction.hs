@@ -37,19 +37,18 @@ import Data.Bifunctor (bimap, second)
 import Data.List (nub, permutations)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (MarloweData), MarloweParams (..), Payment (Payment),
                                            TransactionInput (..), TransactionOutput (..))
-import qualified Language.Marlowe.Core.V1.Semantics as S
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close),
                                                  Input (MerkleizedInput, NormalInput), InputContent (IChoice, IDeposit),
                                                  Party (PK, Role), Payee (Party), State (accounts), Token (Token),
                                                  getInputContent)
 import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..))
 import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V1.Ledger.Api (Address (Address), Credential (PubKeyCredential), CurrencySymbol, Datum (..),
+import Plutus.V1.Ledger.Value (gt)
+import Plutus.V2.Ledger.Api (Address (Address), Credential (PubKeyCredential), CurrencySymbol, Datum (..),
                              DatumHash (..), Extended (Finite, NegInf, PosInf), Interval (Interval),
-                             LowerBound (LowerBound), PubKeyHash, Redeemer (..), ScriptContext (..),
+                             LowerBound (LowerBound), OutputDatum (..), PubKeyHash, Redeemer (..), ScriptContext (..),
                              ScriptPurpose (Spending), ToData (toBuiltinData), TxInInfo (..), TxInfo (..),
                              TxOut (TxOut), UpperBound (UpperBound), Value)
-import Plutus.V1.Ledger.Value (gt)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Spec.Marlowe.Plutus.Lens ((<><~))
 import Spec.Marlowe.Plutus.Script (payoutAddress, semanticsAddress)
@@ -62,7 +61,7 @@ import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, suchThat)
 
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
-import qualified PlutusTx.AssocMap as AM (toList)
+import qualified PlutusTx.AssocMap as AM (fromList, toList)
 
 
 -- | An arbitrary Plutus transaction.
@@ -75,7 +74,7 @@ bareSpending p =
   PlutusTransaction p (Datum $ toBuiltinData ()) (Redeemer $ toBuiltinData ())
     <$> (
           ScriptContext
-            <$> (TxInfo mempty mempty mempty mempty mempty mempty (Interval (LowerBound NegInf False) (UpperBound PosInf True)) mempty mempty <$> arbitrary)
+            <$> (TxInfo mempty mempty mempty mempty mempty mempty mempty (Interval (LowerBound NegInf False) (UpperBound PosInf True)) mempty mempty mempty <$> arbitrary)
             <*> (Spending <$> arbitrary)
         )
 
@@ -87,7 +86,7 @@ bareSemanticsTransaction (_state, _contract, _input, _output) =
   do
     rolesCurrency <- arbitrary
     let
-      _params = S.MarloweParams{..}
+      _params = MarloweParams{..}
     bareSpending SemanticsTransaction{..}
 
 
@@ -120,7 +119,7 @@ makeScriptInput =
     inDatum <- use datum
     let inDatumHash = datumHash inDatum
     (, pure (inDatumHash, inDatum))
-      . flip TxInInfo (TxOut semanticsAddress inValue (Just inDatumHash))
+      . flip TxInInfo (TxOut semanticsAddress inValue (OutputDatumHash inDatumHash) Nothing)
       <$> lift arbitrary
 
 
@@ -138,8 +137,8 @@ makeDeposit input' =
     address  <- lift arbitrary
     pure
       $ case getInputContent input' of
-          IDeposit _ (PK   pkh) (Token c n) i -> pure . TxInInfo ref $ TxOut (Address (PubKeyCredential pkh) Nothing) (V.singleton c n i) Nothing
-          IDeposit _ (Role _  ) (Token c n) i -> pure . TxInInfo ref $ TxOut address                                  (V.singleton c n i) Nothing
+          IDeposit _ (PK   pkh) (Token c n) i -> pure . TxInInfo ref $ TxOut (Address (PubKeyCredential pkh) Nothing) (V.singleton c n i) NoOutputDatum  Nothing
+          IDeposit _ (Role _  ) (Token c n) i -> pure . TxInInfo ref $ TxOut address                                  (V.singleton c n i) NoOutputDatum  Nothing
           _                                   -> mempty
 
 -- | Create role input for a Marlowe semantics transaction.
@@ -152,8 +151,8 @@ makeRoleIn input' =
     address  <- lift arbitrary
     pure
       $ case getInputContent input' of
-          IDeposit _ (Role role') _ _         -> pure . TxInInfo ref $ TxOut address (V.singleton currencySymbol role' 1) Nothing
-          IChoice (ChoiceId _ (Role role')) _ -> pure . TxInInfo ref $ TxOut address (V.singleton currencySymbol role' 1) Nothing
+          IDeposit _ (Role role') _ _         -> pure . TxInInfo ref $ TxOut address (V.singleton currencySymbol role' 1) NoOutputDatum Nothing
+          IChoice (ChoiceId _ (Role role')) _ -> pure . TxInInfo ref $ TxOut address (V.singleton currencySymbol role' 1) NoOutputDatum Nothing
           _                                   -> mempty
 
 
@@ -171,7 +170,7 @@ makeScriptOutput =
       $ unzip
       [
         (
-          TxOut semanticsAddress (totalValue outState) (Just outDatumHash)
+          TxOut semanticsAddress (totalValue outState) (OutputDatumHash outDatumHash) Nothing
         , (outDatumHash, outDatum)
         )
       |
@@ -182,8 +181,8 @@ makeScriptOutput =
 -- | Create role output for a Marlowe semantics transaction.
 makeRoleOut :: TxInInfo
             -> ArbitraryTransaction SemanticsTransaction TxOut
-makeRoleOut (TxInInfo _ (TxOut _ token _)) =
-  TxOut <$> lift arbitrary <*> pure token <*> pure Nothing
+makeRoleOut (TxInInfo _ (TxOut _ token _ _)) =
+  TxOut <$> lift arbitrary <*> pure token <*> pure NoOutputDatum <*> pure Nothing
 
 
 -- | Create a payment for a Marlowe semantics transaction.
@@ -193,7 +192,7 @@ makePayment :: CurrencySymbol
 makePayment _ (Payment _ (Party (PK pkh)) value) =
   pure
     (
-      pure $ TxOut (Address (PubKeyCredential pkh) Nothing) value Nothing
+      pure $ TxOut (Address (PubKeyCredential pkh) Nothing) value NoOutputDatum Nothing
     , mempty
     )
 makePayment currencySymbol (Payment _ (Party (Role role')) value) =
@@ -203,7 +202,7 @@ makePayment currencySymbol (Payment _ (Party (Role role')) value) =
       roleDatumHash = datumHash roleDatum
     pure
       (
-        pure $ TxOut payoutAddress value (Just roleDatumHash)
+        pure $ TxOut payoutAddress value (OutputDatumHash roleDatumHash) Nothing
       , pure (roleDatumHash, roleDatum)
       )
 makePayment _ _ = pure (mempty, mempty)
@@ -222,8 +221,8 @@ makeActionSignatory input' =
 -- | Create a spending signatory for a Marlowe semantics transaction.
 makeSpendSignatory :: TxInInfo
                    -> [PubKeyHash]
-makeSpendSignatory (TxInInfo _ (TxOut (Address (PubKeyCredential pkh) _) _ _ )) = pure pkh
-makeSpendSignatory _                                                            = mempty
+makeSpendSignatory (TxInInfo _ (TxOut (Address (PubKeyCredential pkh) _) _ _ _)) = pure pkh
+makeSpendSignatory _                                                             = mempty
 
 
 -- | Generate a valid Marlowe semantics transaction.
@@ -237,12 +236,12 @@ validSemanticsTransaction noisy =
     -- The redeemer is `MarloweInput`, but we also track the merkleizations.
     (marloweInput, merkleizations) <- input `uses` (second mconcat . unzip . fmap inputToMarloweTxInput . txInputs)
     redeemer .= makeSemanticsRedeemer marloweInput
-    infoData <>= merkleizations
+    infoData <>= AM.fromList merkleizations
 
     -- Add the spending from the script.
     (inScript, inData) <- makeScriptInput
     infoInputs <>= [inScript]
-    infoData <>= inData
+    infoData <>= AM.fromList inData
     scriptPurpose .= Spending (txInInfoOutRef inScript)
 
     -- Add the role inputs.
@@ -255,7 +254,7 @@ validSemanticsTransaction noisy =
     -- Add the script output.
     (outScript, outData) <- makeScriptOutput
     infoOutputs <>= outScript
-    infoData <>= outData
+    infoData <>= AM.fromList outData
 
     -- Add the role outputs.
     infoOutputs <><~ mapM makeRoleOut roleInputs
@@ -264,7 +263,7 @@ validSemanticsTransaction noisy =
     -- Add the payments.
     (payments, paymentData) <- fmap (bimap mconcat mconcat . unzip) . mapM (makePayment currencySymbol) =<< (output `uses` txOutPayments)
     infoOutputs <>= payments
-    infoData <>= paymentData
+    infoData <>= AM.fromList paymentData
 
     -- Add the signatories.
     actionSignatories <- concatMap makeActionSignatory <$> input `uses` txInputs
@@ -315,10 +314,10 @@ makePayoutIn :: ArbitraryTransaction PayoutTransaction (TxInInfo, (DatumHash, Da
 makePayoutIn =
   do
     txInInfoOutRef <- lift arbitrary
-    inDatum <- Datum <$> role `uses` toBuiltinData
+    inDatum <- ((Datum . toBuiltinData) .) . (,) <$> marloweParamsPayout `uses` rolesCurrency <*> use role
     let
       inDatumHash = datumHash inDatum
-    txInInfoResolved <- TxOut payoutAddress <$> use amount <*> pure (Just inDatumHash)
+    txInInfoResolved <- TxOut payoutAddress <$> use amount <*> pure (OutputDatumHash inDatumHash) <*> pure Nothing
     pure (TxInInfo{..}, (inDatumHash, inDatum))
 
 
@@ -331,7 +330,7 @@ makePayoutRoleIn =
     value <- V.singleton <$> marloweParamsPayout `uses` rolesCurrency <*> use role <*> pure 1
     pure
       . TxInInfo ref
-      $ TxOut address value Nothing
+      $ TxOut address value NoOutputDatum Nothing
 
 
 -- | Create a payment output for a Marlowe payout transaction.
@@ -340,6 +339,7 @@ makePayoutOut =
   TxOut
     <$> lift arbitrary
     <*> use amount
+    <*> pure NoOutputDatum
     <*> pure Nothing
 
 
@@ -350,14 +350,14 @@ makePayoutRoleOut =
     address <- lift arbitrary
     value <- V.singleton <$> marloweParamsPayout `uses` rolesCurrency <*> use role <*> pure 1
     pure
-      $ TxOut address value Nothing
+      $ TxOut address value NoOutputDatum Nothing
 
 
 -- | Create a spending signatory for a Marlowe payout transaction.
 makePayoutSignatory :: TxInInfo
                     -> [PubKeyHash]
-makePayoutSignatory (TxInInfo _ (TxOut (Address (PubKeyCredential pkh) _ ) _ _)) = pure pkh
-makePayoutSignatory _                                                            = mempty
+makePayoutSignatory (TxInInfo _ (TxOut (Address (PubKeyCredential pkh) _ ) _ _ _)) = pure pkh
+makePayoutSignatory _                                                              = mempty
 
 
 -- | Generate a valid Marlowe payout transaction.
@@ -369,10 +369,10 @@ validPayoutTransaction noisy =
     -- Add the script input.
     (inScript, inData@(_, inDatum)) <- makePayoutIn
     infoInputs <>= [inScript]
-    infoData <>= [inData]
+    infoData <>= AM.fromList [inData]
     scriptPurpose .= Spending (txInInfoOutRef inScript)
 
-    -- The datum is the role name.
+    -- The datum is the currency symbole and role name.
     datum .= inDatum
 
     -- The redeemer is unit.
@@ -406,7 +406,7 @@ addNoise =
   do
     infoInputs  <><~ lift (arbitrary `suchThat` ((< 5) . length))
     infoOutputs <><~ lift (arbitrary `suchThat` ((< 5) . length))
-    infoData    <><~ lift (arbitrary `suchThat` ((< 5) . length))
+    infoData    <><~ lift (fmap AM.fromList $ arbitrary `suchThat` ((< 5) . length))
 
 
 -- | Shuffle the order of inputs, outputs, data, and signatories in a Plutus transaction.
@@ -418,7 +418,7 @@ shuffle =
       go field = field <~ (lift . elements . permutations =<< use field)
     go infoInputs
     go infoOutputs
-    go infoData
+--  go infoData  -- FIXME
     go infoSignatories
 
 

@@ -43,7 +43,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit, Notify
                                                  Payee (Account, Party), State (..), Value (..))
 import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.V1.Ledger.Api (POSIXTime (..), toBuiltinData)
+import Plutus.V2.Ledger.Api (POSIXTime (..), toBuiltinData)
 import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary (semiArbitrary), arbitraryAssocMap, arbitraryContractWeighted,
                                          arbitraryValidInputs, arbitraryValidStep, choiceInBoundsIfNonempty,
                                          choiceNotInBounds, whenContractWeights)

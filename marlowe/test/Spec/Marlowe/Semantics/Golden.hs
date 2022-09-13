@@ -34,7 +34,7 @@ import Data.List (intercalate)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.V1.Ledger.Api (POSIXTime)
+import Plutus.V2.Ledger.Api (POSIXTime)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, testCase)
 

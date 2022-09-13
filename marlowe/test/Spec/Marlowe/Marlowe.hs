@@ -60,7 +60,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound
                                                  ValueId (ValueId), emptyState)
 import Language.Marlowe.Scripts (marloweValidator, smallMarloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
-import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), toBuiltin)
+import Plutus.V2.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), toBuiltin)
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
 import System.Timeout (timeout)
 import Test.QuickCheck (Gen, arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate,

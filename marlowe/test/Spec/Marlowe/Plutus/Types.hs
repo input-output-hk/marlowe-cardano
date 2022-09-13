@@ -24,6 +24,7 @@ module Spec.Marlowe.Plutus.Types (
 , scriptPurpose
 , txInfo
 , infoInputs
+, infoReferenceInputs
 , infoOutputs
 , infoFee
 , infoMint
@@ -31,6 +32,7 @@ module Spec.Marlowe.Plutus.Types (
 , infoWdrl
 , infoValidRange
 , infoSignatories
+, infoRedeemers
 , infoData
 , infoId
 , paramsLens
@@ -55,11 +57,12 @@ module Spec.Marlowe.Plutus.Types (
 import Control.Lens (Lens', lens)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams, TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
-import Plutus.V1.Ledger.Api (DCert, Datum, DatumHash, POSIXTimeRange, PubKeyHash, Redeemer, ScriptContext,
+import Plutus.V2.Ledger.Api (DCert, Datum, DatumHash, Map, POSIXTimeRange, PubKeyHash, Redeemer, ScriptContext,
                              ScriptPurpose, StakingCredential, TokenName, TxId, TxInInfo, TxInfo, TxOut, Value)
 import Spec.Marlowe.Plutus.Lens (scriptContextPurposeLens, scriptContextTxInfoLens, txInfoDCertLens, txInfoDataLens,
                                  txInfoFeeLens, txInfoIdLens, txInfoInputsLens, txInfoMintLens, txInfoOutputsLens,
-                                 txInfoSignatoriesLens, txInfoValidRangeLens, txInfoWdrlLens)
+                                 txInfoRedeemersLens, txInfoReferenceInputsLens, txInfoSignatoriesLens,
+                                 txInfoValidRangeLens, txInfoWdrlLens)
 
 
 -- | A Plutus transaction.
@@ -102,6 +105,10 @@ infoInputs :: Lens' (PlutusTransaction a) [TxInInfo]
 infoInputs = scriptContext . scriptContextTxInfoLens . txInfoInputsLens
 
 
+infoReferenceInputs :: Lens' (PlutusTransaction a) [TxInInfo]
+infoReferenceInputs = scriptContext . scriptContextTxInfoLens . txInfoReferenceInputsLens
+
+
 infoOutputs :: Lens' (PlutusTransaction a) [TxOut]
 infoOutputs = scriptContext . scriptContextTxInfoLens . txInfoOutputsLens
 
@@ -118,7 +125,7 @@ infoDCert :: Lens' (PlutusTransaction a) [DCert]
 infoDCert = scriptContext . scriptContextTxInfoLens . txInfoDCertLens
 
 
-infoWdrl :: Lens' (PlutusTransaction a) [(StakingCredential, Integer)]
+infoWdrl :: Lens' (PlutusTransaction a) (Map StakingCredential Integer)
 infoWdrl = scriptContext . scriptContextTxInfoLens . txInfoWdrlLens
 
 
@@ -130,7 +137,11 @@ infoSignatories :: Lens' (PlutusTransaction a) [PubKeyHash]
 infoSignatories = scriptContext . scriptContextTxInfoLens . txInfoSignatoriesLens
 
 
-infoData :: Lens' (PlutusTransaction a) [(DatumHash, Datum)]
+infoRedeemers :: Lens' (PlutusTransaction a) (Map ScriptPurpose Redeemer)
+infoRedeemers = scriptContext . scriptContextTxInfoLens . txInfoRedeemersLens
+
+
+infoData :: Lens' (PlutusTransaction a) (Map DatumHash Datum)
 infoData = scriptContext . scriptContextTxInfoLens . txInfoDataLens
 
 

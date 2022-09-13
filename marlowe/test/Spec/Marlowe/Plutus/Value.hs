@@ -20,7 +20,8 @@ module Spec.Marlowe.Plutus.Value (
 
 
 import Data.List (permutations, union)
-import Plutus.V1.Ledger.Value (CurrencySymbol, TokenName, Value (..), geq, leq, singleton, valueOf)
+import Plutus.V1.Ledger.Value (geq, leq, valueOf)
+import Plutus.V2.Ledger.Api (CurrencySymbol, TokenName, Value (..), singleton)
 import PlutusTx.Numeric (zero)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
