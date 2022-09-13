@@ -20,11 +20,7 @@ module Spec.Marlowe.Semantics.Orphans (
 ) where
 
 
-import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ApplyWarning (..), Payment (..), ReduceResult (..),
-                                           ReduceWarning (..))
-
-
-deriving instance Eq Payment
+import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ApplyWarning (..), ReduceResult (..), ReduceWarning (..))
 
 
 deriving instance Eq ApplyWarning

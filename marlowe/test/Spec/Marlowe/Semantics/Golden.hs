@@ -97,8 +97,6 @@ testGolden name printIt contract valids invalids =
 type GoldenCase = (POSIXTime, [TransactionInput], TransactionOutput)
 
 
-deriving instance Eq Payment
-
 deriving instance Eq TransactionOutput
 
 
