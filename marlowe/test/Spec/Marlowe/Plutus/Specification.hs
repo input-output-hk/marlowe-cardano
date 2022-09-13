@@ -82,7 +82,7 @@ tests =
             [
               testProperty "Invalid attempt to split Marlowe output" checkMultipleOutput
             ]
-        , testGroup "FAILURE OF Constraint 4. No output to script on close"
+        , testGroup "Constraint 4. No output to script on close"
             [
               testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
             ]
@@ -308,9 +308,7 @@ checkCloseOutput =
         infoOutputs <>= (txInInfoResolved <$> inScript)
         shuffle
   in
-    checkSemanticsTransaction noModify modifyAfter doesClose
-      True  -- FIXME: According to the specification, this test should fail.
-      False
+    checkSemanticsTransaction noModify modifyAfter doesClose False False
 
 
 -- | Check that value input to a script matches its input state.
