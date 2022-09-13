@@ -113,19 +113,22 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (unpack)
 import Data.Fixed (div')
-import Data.Foldable (Foldable (fold), for_)
+import Data.Foldable (for_)
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, minimumBy, partition)
+import Data.List.Extra (notNull)
 import qualified Data.Map.Strict as M (elems, fromList, keysSet, singleton, toList)
 import Data.Maybe (fromMaybe, isNothing, maybeToList)
 import Data.Ratio ((%))
 import qualified Data.Set as S (empty, fromList, singleton)
+import qualified Data.Text as T
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
-import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO, toPlutusProtocolVersion)
+import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO, toPlutusProtocolVersion,
+                                         toReferenceTxInsScriptsInlineDatumsSupportedInEra)
 import qualified Language.Marlowe.CLI.Cardano.Api as MCA
 import Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn (permanentPublisher)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript as PS
@@ -133,19 +136,20 @@ import Language.Marlowe.CLI.Data.Foldable (tillFirstMatch)
 import Language.Marlowe.CLI.Export (buildValidatorInfo)
 import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, getDefaultCostModel, liftCli, liftCliIO,
                                 liftCliMaybe, maybeWriteJson, queryInEra, readMaybeMetadata, readSigningKey)
-import Language.Marlowe.CLI.Types (AnUTxO (AnUTxO), CliEnv, CliError (..), MarlowePlutusVersion,
-                                   MarloweScriptsRefs (MarloweScriptsRefs), OutputQuery (..), OutputQueryResult (..),
-                                   PayFromScript (..), PayToScript (..), PrintStats (PrintStats),
-                                   PublishMarloweScripts (PublishMarloweScripts), PublishScript (..),
-                                   PublishingStrategy (..), SigningKeyFile, SomePaymentSigningKey,
+import Language.Marlowe.CLI.Types (AnUTxO (AnUTxO), CliEnv, CliError (..),
+                                   CoinSelectionStrategy (CoinSelectionStrategy, csPreserveInlineDatums, csPreserveReferenceScripts, csPreserveTxIns),
+                                   MarlowePlutusVersion, MarloweScriptsRefs (MarloweScriptsRefs), OutputQuery (..),
+                                   OutputQueryResult (..), PayFromScript (..), PayToScript (..),
+                                   PrintStats (PrintStats), PublishMarloweScripts (PublishMarloweScripts),
+                                   PublishScript (..), PublishingStrategy (..), SigningKeyFile, SomePaymentSigningKey,
                                    TxBodyFile (TxBodyFile), ValidatorInfo (ValidatorInfo, viHash, viScript), askEra,
-                                   asksEra, doWithCardanoEra, marlowePlutusVersion, toAddressAny', toAsType,
-                                   toCollateralSupportedInEra, toEraInMode, toExtraKeyWitnessesSupportedInEra,
-                                   toMultiAssetSupportedInEra, toSimpleScriptV2LanguageInEra, toTxFeesExplicitInEra,
-                                   toTxMetadataSupportedInEra, toTxScriptValiditySupportedInEra,
-                                   toValidityLowerBoundSupportedInEra, toValidityNoUpperBoundSupportedInEra,
-                                   toValidityUpperBoundSupportedInEra, validatorInfo', withCardanoEra,
-                                   withShelleyBasedEra)
+                                   asksEra, defaultCoinSelectionStrategy, doWithCardanoEra, marlowePlutusVersion,
+                                   toAddressAny', toAsType, toCollateralSupportedInEra, toEraInMode,
+                                   toExtraKeyWitnessesSupportedInEra, toMultiAssetSupportedInEra,
+                                   toSimpleScriptV2LanguageInEra, toTxFeesExplicitInEra, toTxMetadataSupportedInEra,
+                                   toTxScriptValiditySupportedInEra, toValidityLowerBoundSupportedInEra,
+                                   toValidityNoUpperBoundSupportedInEra, toValidityUpperBoundSupportedInEra,
+                                   validatorInfo', withCardanoEra, withShelleyBasedEra)
 import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript (value))
 import Language.Marlowe.Scripts (rolePayoutValidator, smallMarloweValidator)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
@@ -277,6 +281,7 @@ buildFaucet connection value destAddresses fundAddress fundSigningKeyFile timeou
         destAddresses
         fundAddress
         fundSigningKey
+        defaultCoinSelectionStrategy
         timeout
     pure
       $ getTxId body
@@ -290,33 +295,27 @@ buildFaucetImpl :: MonadError CliError m
             -> [AddressInEra era]                 -- ^ The addresses to receive funds.
             -> AddressInEra era                   -- ^ The faucet address.
             -> SomePaymentSigningKey              -- ^ The required signing key.
+            -> CoinSelectionStrategy
             -> Maybe Int                          -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> m (TxBody era)                                -- ^ Action to build the transaction body.
-buildFaucetImpl connection values destAddresses fundAddress fundSigningKey timeout =
+buildFaucetImpl connection values destAddresses fundAddress fundSigningKey coinSelectionStrategy timeout =
   do
-    utxos <-
-      fmap (M.toList . unUTxO)
-        . queryInEra connection
-        . QueryUTxO
-        . QueryUTxOByAddress
-        . S.singleton
-        $ toAddressAny' fundAddress
-    let
-      inputs = fst <$> utxos
-      extractValue (TxOut _ v _ _) = txOutValueToValue v
-      total = mconcat $ extractValue . snd <$> utxos
-      lovelace = lovelaceToValue . toEnum . (`div` 2) . fromEnum $ selectLovelace total
-      value' = mconcat $ replicate (length destAddresses) (fold values)
     outputs <- sequence $
-        makeTxOut fundAddress Nothing (total <> negateValue value' <> negateValue lovelace) ReferenceScriptNone
-          : [makeTxOut destAddress Nothing value ReferenceScriptNone | value <- values, destAddress <- destAddresses]
+      [makeTxOut destAddress Nothing value ReferenceScriptNone | value <- values, destAddress <- destAddresses]
 
+    (_, inputs, outputs') <- selectCoins
+                               connection
+                               mempty
+                               outputs
+                               Nothing
+                               fundAddress
+                               coinSelectionStrategy
     body <-
       buildBody
         connection
         ([] :: [PayFromScript C.PlutusScriptV1])
         Nothing
-        [] inputs outputs
+        [] inputs outputs'
         Nothing fundAddress
         Nothing
         []
@@ -463,6 +462,7 @@ buildMintingImpl connection signingKey tokenDistribution metadataProps expires l
                               $ A.Object metadataProps'
         _               -> pure TxMetadataNone
 
+
     -- TODO: use sensible coin selection here.
     utxos <-
       fmap (M.toList . unUTxO)
@@ -474,6 +474,7 @@ buildMintingImpl connection signingKey tokenDistribution metadataProps expires l
 
     let
       inputs = fst <$> utxos
+
     outputs <- for minting \(address, mintedValue) ->
         makeTxOut address Nothing (mintedValue <> lovelaceToValue lovelace) ReferenceScriptNone
 
@@ -627,11 +628,12 @@ buildPublishingImpl :: forall era m
                     -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
                     -> AddressInEra era                  -- ^ The change address.
                     -> PublishingStrategy era
+                    -> CoinSelectionStrategy
                     -> PrintStats
                     -> m (TxBody era, PublishMarloweScripts MarlowePlutusVersion era)
-buildPublishingImpl connection signingKey expires changeAddress publishingStrategy (PrintStats printStats) = do
-  ms <- buildPublishScript connection (fromV2TypedValidator smallMarloweValidator) publishingStrategy
-  rs <- buildPublishScript connection (fromV2TypedValidator rolePayoutValidator) publishingStrategy
+buildPublishingImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = do
+  pm <- buildPublishScript connection (fromV2TypedValidator smallMarloweValidator) publishingStrategy
+  pp <- buildPublishScript connection (fromV2TypedValidator rolePayoutValidator) publishingStrategy
 
   let
     buildPublishScriptTxOut PublishScript { psMinAda, psPublisher, psReferenceValidator } = do
@@ -639,18 +641,18 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
       makeTxOut psPublisher Nothing (lovelaceToValue psMinAda) referenceScript
 
   outputs <- sequence
-    [ buildPublishScriptTxOut ms
-    , buildPublishScriptTxOut rs
+    [ buildPublishScriptTxOut pm
+    , buildPublishScriptTxOut pp
     ]
 
 
-  (_, inputs, outputs')
-          <- selectCoins
-               connection
-               mempty
-               outputs
-               Nothing
-               changeAddress
+  (_, inputs, outputs') <- selectCoins
+                             connection
+                             mempty
+                             outputs
+                             Nothing
+                             changeAddress
+                             coinSelectionStrategy
 
   txBody <- buildBody
     connection
@@ -663,9 +665,36 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
     TxMetadataNone
     printStats
     False
-  pure (txBody, PublishMarloweScripts ms rs)
+
+  let
+    serialiseAddress = T.unpack . C.serialiseAddress
+
+  when printStats $ liftIO do
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Marlowe script published at address: " <> serialiseAddress (psPublisher pm)
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Marlowe script hash: "
+      <> show (viHash (psReferenceValidator pm))
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Marlowe ref script UTxO min ADA: " <> show (psMinAda pp)
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Payout script published at address: " <> serialiseAddress (psPublisher pp)
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Payout script hash: "
+      <> show (viHash (psReferenceValidator pp))
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Payout ref script UTxO min ADA: " <> show (psMinAda pp)
+
+  pure (txBody, PublishMarloweScripts pm pp)
 
 
+-- CLI command handler.
 buildPublishing :: forall era m
         . MonadError CliError m
         => MonadIO m
@@ -680,56 +709,52 @@ buildPublishing :: forall era m
         -> Maybe Int
         -> PrintStats
         -> m ()
-buildPublishing connection signingKeyFile expires changeAddress strategy (TxBodyFile bodyFile) timeout printStats@(PrintStats ps) = do
+buildPublishing connection signingKeyFile expires changeAddress strategy (TxBodyFile bodyFile) timeout printStats = do
   let
     strategy' = fromMaybe (PublishAtAddress changeAddress) strategy
   signingKey <- readSigningKey signingKeyFile
-  (body, PublishMarloweScripts mv pv) <- buildPublishingImpl
-      connection
-      signingKey
-      expires
-      changeAddress
-      strategy'
-      printStats
+  (txBody, _) <- buildPublishingImpl
+    connection
+    signingKey
+    expires
+    changeAddress
+    strategy'
+    defaultCoinSelectionStrategy
+    printStats
 
-  when ps $ liftIO do
-    hPutStrLn stderr ""
-    hPutStrLn stderr $
-      "Marlowe script published at address: " <> show (psPublisher mv)
-    hPutStrLn stderr ""
-    hPutStrLn stderr $
-      "Marlowe script hash: "
-      <> show (viHash (psReferenceValidator mv))
-    hPutStrLn stderr ""
-    hPutStrLn stderr $
-      "Payout script published at address: " <> show (psPublisher mv)
-    hPutStrLn stderr ""
-    hPutStrLn stderr $
-      "Payout script hash: "
-      <> show (viHash (psReferenceValidator pv))
-
-  doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+  doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing txBody
   for_ timeout \timeout' ->
-    void $ submitBody connection body [signingKey] timeout'
+    void $ submitBody connection txBody [signingKey] timeout'
 
 
-publishImpl:: forall era m
-                    . MonadError CliError m
-                    => MonadIO m
-                    => MonadReader (CliEnv era) m
-                    => C.IsShelleyBasedEra era
-                    => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-                    -> SomePaymentSigningKey             -- ^ The file for required signing key.
-                    -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
-                    -> AddressInEra era                  -- ^ The change address.
-                    -> PublishingStrategy era
-                    -> Int
-                    -> PrintStats
-                    -> m (TxBody era)
-publishImpl connection signingKey expires changeAddress publishingStrategy timeout printStats = do
-  (body, _) <- buildPublishingImpl connection signingKey expires changeAddress publishingStrategy printStats
-  void $ submitBody connection body [signingKey] timeout
-  pure body
+publishImpl :: forall era m
+             . MonadError CliError m
+            => MonadIO m
+            => MonadReader (CliEnv era) m
+            => C.IsShelleyBasedEra era
+            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+            -> SomePaymentSigningKey             -- ^ The file for required signing key.
+            -> Maybe SlotNo                      -- ^ The slot number after which publishing is no longer possible.
+            -> AddressInEra era                  -- ^ The change address.
+            -> PublishingStrategy era
+            -> CoinSelectionStrategy
+            -> Int
+            -> PrintStats
+            -> m (MarloweScriptsRefs MarlowePlutusVersion era)
+publishImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy timeout printStats = do
+  (txBody, _)  <- buildPublishingImpl
+    connection
+    signingKey
+    expires
+    changeAddress
+    publishingStrategy
+    coinSelectionStrategy
+    printStats
+
+  void $ submitBody connection txBody [signingKey] timeout
+  findMarloweScriptsRefs connection publishingStrategy printStats >>= \case
+    Nothing -> throwError . CliError $ "Unable to find just published scripts by tx:" <> show (getTxId txBody)
+    Just m  -> pure m
 
 
 findScriptRef
@@ -742,16 +767,26 @@ findScriptRef
   -> ScriptHash
   -> PublishingStrategy era
   -> PlutusScriptVersion lang
+  -> PrintStats
   -> m (Maybe (AnUTxO era, ValidatorInfo lang era))
-findScriptRef connection scriptHash publishingStrategy plutusVersion = do
+findScriptRef connection scriptHash publishingStrategy plutusVersion (PrintStats printStats) = do
   era <- askEra
   let
     network = localNodeNetworkId connection
     publisher = publisherAddress scriptHash publishingStrategy era network
 
+  when printStats $ liftIO do
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Searching for reference script at address: " <> (T.unpack . C.serialiseAddress $ publisher)
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Expected reference script hash: "
+      <> show scriptHash
+
   runMaybeT do
-    (u@(AnUTxO (txIn, _)), s) <- MaybeT $ selectUtxosImpl connection publisher (FindReferenceScript plutusVersion scriptHash)
-    i <- lift $ buildValidatorInfo connection s (Just txIn) NoStakeAddress
+    (u@(AnUTxO (txIn, _)), script) <- MaybeT $ selectUtxosImpl connection publisher (FindReferenceScript plutusVersion scriptHash)
+    i <- lift $ buildValidatorInfo connection script (Just txIn) NoStakeAddress
     pure (u, i)
 
 
@@ -762,15 +797,16 @@ findMarloweScriptsRefs
   => C.IsShelleyBasedEra era
   => LocalNodeConnectInfo CardanoMode
   -> PublishingStrategy era
+  -> PrintStats
   -> m (Maybe (MarloweScriptsRefs MarlowePlutusVersion era))
-findMarloweScriptsRefs connection publishingStrategy = do
+findMarloweScriptsRefs connection publishingStrategy printStats = do
   let
     marloweHash = hashScript (PS.toScript $ fromV2TypedValidator smallMarloweValidator)
     payoutHash = hashScript (PS.toScript $ fromV2TypedValidator rolePayoutValidator)
 
   runMaybeT do
-    m <- MaybeT $ findScriptRef connection marloweHash publishingStrategy marlowePlutusVersion
-    p <- MaybeT $ findScriptRef connection payoutHash publishingStrategy marlowePlutusVersion
+    m <- MaybeT $ findScriptRef connection marloweHash publishingStrategy marlowePlutusVersion printStats
+    p <- MaybeT $ findScriptRef connection payoutHash publishingStrategy marlowePlutusVersion printStats
     pure $ MarloweScriptsRefs m p
 
 
@@ -779,7 +815,8 @@ findPublished :: (C.IsShelleyBasedEra era, MonadReader (CliEnv era) m, MonadIO m
 findPublished connection publishingStrategy = do
   let
     publishingStrategy' = fromMaybe (PublishPermanently NoStakeAddress) publishingStrategy
-  findMarloweScriptsRefs connection publishingStrategy' >>= \case
+
+  findMarloweScriptsRefs connection publishingStrategy' (PrintStats True) >>= \case
     Just (MarloweScriptsRefs (mu, mi) (ru, ri)) -> do
       let
         refJSON (AnUTxO (i, _)) ValidatorInfo { viHash } = A.object
@@ -959,7 +996,16 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
     history <- queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
     protocol <- queryInEra connection QueryProtocolParameters
     era <- askEra
-    scriptTxIn <- sequence $ liftCli . redeemScript era <$> payFromScript
+    (scriptTxIn, txInsReferences) <- unzip <$> for payFromScript \s -> liftCli do
+      redeemScript era s
+    let
+      txInsReference = do
+        let
+          step (C.TxInsReference _ refs) (C.TxInsReference w refs') = C.TxInsReference w (refs <> refs')
+          step C.TxInsReferenceNone acc                             = acc
+          step ref _                                                = ref
+        foldr step C.TxInsReferenceNone txInsReferences
+
     let
       protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
       txInsCollateral    = TxInsCollateral (toCollateralSupportedInEra era) $ maybeToList collateral
@@ -983,7 +1029,6 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
       txWithdrawals      = TxWithdrawalsNone
       txCertificates     = TxCertificatesNone
       txUpdateProposal   = TxUpdateProposalNone
-      txInsReference     = TxInsReferenceNone
       txMintValue        = mintValue
       txScriptValidity   = if invalid
                              then TxScriptValidity (toTxScriptValiditySupportedInEra era) ScriptInvalid
@@ -991,14 +1036,28 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
       txIns = extraInputs <> scriptTxIn <> fmap makeTxIn inputs
       scriptTxOut = maybe [] (payScript era) payToScript
       txOuts = scriptTxOut <> outputs
+
+    let
+      txInsReferencesToTxIns C.TxInsReferenceNone      = []
+      txInsReferencesToTxIns (C.TxInsReference _ refs) = refs
+
+      refTxIns = txInsReferencesToTxIns txInsReference
+
     utxo <-
       queryInEra connection
         . QueryUTxO
         . QueryUTxOByTxIn
         . S.fromList
-        $ fst
-        <$> txIns
+        $ (fst <$> txIns) <> refTxIns
     let eraInMode = toEraInMode era
+
+    let
+      allTxIns = map fst . M.toList . unUTxO $ utxo
+      missingRefs = [ txIn | txIn <- refTxIns, txIn `notElem` allTxIns ]
+
+    when (notNull missingRefs) do
+      throwError . CliError $ "Reference inputs are missing from the chain: " <> show missingRefs
+
     -- Compute the change.
     BalancedTxBody _ change _ <-
       liftCli
@@ -1013,6 +1072,7 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
             TxBodyContent{..}
             changeAddress
             Nothing
+
     let
       -- Recompute execution units with full set of UTxOs, including change.
       trial =
@@ -1047,7 +1107,7 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
             protocol'
             S.empty
             utxo
-            (TxBodyContent{..} {txOuts = change' : txOuts, txInsReference = TxInsReferenceNone })
+            (TxBodyContent{..} {txOuts = change' : txOuts })
             changeAddress
             Nothing
     when printStats
@@ -1068,6 +1128,7 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
         hPutStrLn stderr "Execution units:"
         hPutStrLn stderr $ "  Memory: " <> show memory <> " / " <> show (maybe 0 executionMemory maxExecutionUnits) <> " = " <> show fractionMemory <> "%"
         hPutStrLn stderr $ "  Steps: "  <> show steps  <> " / " <> show (maybe 0 executionSteps  maxExecutionUnits) <> " = " <> show fractionSteps  <> "%"
+
     return txBody
 
 
@@ -1166,16 +1227,17 @@ scriptWitness :: forall era lang m
               => IsPlutusScriptLanguage lang
               => ScriptDataSupportedInEra era
               -> PayFromScript lang                            -- ^ The payment information.
-              -> m (ScriptWitness C.WitCtxTxIn era)
+              -> m (C.BuildTxWith  C.BuildTx (Witness WitCtxTxIn era))
 scriptWitness era PayFromScript{..} = do
   scriptInEra <- liftCliMaybe "Script language not supported in era" $ toScriptLanguageInEra era
-  pure $ C.PlutusScriptWitness
+  pure $ BuildTxWith . ScriptWitness ScriptWitnessForSpending $ C.PlutusScriptWitness
     scriptInEra
     (plutusScriptVersion @lang)
     script
     (ScriptDatumForTxIn . fromPlutusData $ toData datum)
     (fromPlutusData $ toData redeemer)
     (ExecutionUnits 0 0)
+  -- pure $ BuildTxWith $ KeyWitness KeyWitnessForSpending
 
 
 -- | Compute the transaction input for paying from a script.
@@ -1184,10 +1246,15 @@ redeemScript :: forall era lang m
              => IsPlutusScriptLanguage lang
              => ScriptDataSupportedInEra era
              -> PayFromScript lang                            -- ^ The payment information.
-             -> m (TxInEra era)                   -- ^ The transaction input.
+             -> m (TxInEra era, TxInsReference BuildTx era)   -- ^ The transaction input.
 redeemScript era p@PayFromScript{..} = do
   witness <- scriptWitness era p
-  pure (txIn, BuildTxWith . ScriptWitness ScriptWitnessForSpending $ witness)
+  w <- liftCliMaybe "Reference scripts not supported in era" $ toReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  let
+    refTxIn = case script of
+      C.PScript {}           -> TxInsReferenceNone
+      C.PReferenceScript r _ -> C.TxInsReference w [r]
+  pure ((txIn,  witness), refTxIn)
 
 
 -- | Compute the transaction output for paying to a script.
@@ -1282,6 +1349,7 @@ filterUtxos = do
           t@(_, TxOut _ _ _ (ReferenceScript _ script)) -> if hashScriptInAnyLang script == scriptHash
             then case (pv, script) of
               (PlutusScriptV2, C.ScriptInAnyLang _ (C.PlutusScript PlutusScriptV2 script')) -> Just (AnUTxO t, script')
+              -- FIXME: Improve error reporting
               _                                                                             -> Nothing
             else Nothing
           _ -> Nothing
@@ -1442,18 +1510,29 @@ selectCoins :: forall m era
             -> [TxOut CtxTx era]                                            -- ^ The transaction outputs.
             -> Maybe (PayToScript era)                                      -- ^ Otherwise unlisted outputs to the script address.
             -> AddressInEra era                                             -- ^ The change address.
+            -> CoinSelectionStrategy                                        -- ^ Indicate which `UTxO`'s to ignore.
             -> m (TxIn, [TxIn], [TxOut CtxTx era])                          -- ^ Action select the collateral, inputs, and outputs.
-selectCoins connection inputs outputs pay changeAddress =
+selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy {..} =
   do
+    let
+      isInlineDatum C.TxOutDatumInline {} = True
+      isInlineDatum _                     = False
+
+      include (txIn, TxOut _ _ datum ref) =
+           (not csPreserveReferenceScripts || ref == ReferenceScriptNone)
+        && (not csPreserveInlineDatums || not (isInlineDatum datum))
+        && notElem txIn csPreserveTxIns
+
     -- Find the UTxOs that we have to work with.
     utxos <-
-      fmap (M.toList . unUTxO)
+          fmap (filter include . M.toList . unUTxO)
         . queryInEra connection
         . QueryUTxO
         . QueryUTxOByAddress
         . S.singleton
         $ toAddressAny' changeAddress
         :: m [(TxIn, TxOut CtxUTxO era)]
+
     -- Fetch the protocol parameters
     protocol <- queryInEra connection QueryProtocolParameters
              :: m ProtocolParameters

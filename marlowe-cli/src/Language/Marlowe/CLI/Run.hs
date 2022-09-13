@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -25,6 +26,7 @@ module Language.Marlowe.CLI.Run (
   adjustMinimumUTxO
 ,  initializeTransaction
 , initializeTransactionImpl
+, initializeTransactionUsingScriptRefsImpl
 , prepareTransaction
 , prepareTransactionImpl
 , makeMarlowe
@@ -65,11 +67,13 @@ import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey,
                                          makeTxOut', selectCoins, submitBody)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarlowePlutusVersion, MarloweTransaction (..),
-                                   RedeemerInfo (..), SigningKeyFile (..), SomeMarloweTransaction (..),
-                                   SomePaymentSigningKey, TxBodyFile (TxBodyFile, unTxBodyFile), ValidatorInfo (..),
-                                   askEra, doWithCardanoEra, toAddressAny', txIn, validatorInfoScriptOrReference,
-                                   withShelleyBasedEra)
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarlowePlutusVersion,
+                                   MarloweScriptsRefs (MarloweScriptsRefs, mrMarloweValidator, mrRolePayoutValidator),
+                                   MarloweTransaction (..), RedeemerInfo (..), SigningKeyFile (..),
+                                   SomeMarloweTransaction (..), SomePaymentSigningKey,
+                                   TxBodyFile (TxBodyFile, unTxBodyFile), ValidatorInfo (..), askEra,
+                                   defaultCoinSelectionStrategy, doWithCardanoEra, toAddressAny', toShelleyAddress,
+                                   txIn, validatorInfoScriptOrReference, withShelleyBasedEra)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
                                            TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
@@ -78,10 +82,13 @@ import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), Choic
 import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash))
 import Ledger.Tx.CardanoAPI (toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoValue)
 -- import Plutus.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceScript (ReferenceScriptNone))
+import qualified Cardano.Api.Shelley as CS
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO)
+import Language.Marlowe.CLI.Cardano.Api.Address (toShelleyStakeReference)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion))
 import qualified Language.Marlowe.Client as MC
 import Plutus.ApiCommon (ProtocolVersion)
@@ -92,6 +99,8 @@ import Plutus.V2.Ledger.Api (CostModelParams, Datum (..), POSIXTime, TokenName, 
 import qualified PlutusTx.AssocMap as AM (toList)
 import Prettyprinter.Extras (Pretty (..))
 import System.IO (hPutStrLn, stderr)
+-- import qualified Cardano.Api as C
+-- import Language.Marlowe.CLI.Cardano.Api.Address (toShelleyStakeReference)
 
 
 -- | Serialise a deposit input to a file.
@@ -192,6 +201,56 @@ initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelPa
       mtRolesCurrency = rolesCurrency marloweParams
     mtValidator <- liftCli $ marloweValidatorInfo era protocolVersion costModelParams network stake
     mtRoleValidator <- liftCli $ roleValidatorInfo era protocolVersion costModelParams network stake
+    let
+      ValidatorInfo{..} = mtValidator
+      mtContinuations = mempty
+      mtRange         = Nothing
+      mtInputs        = []
+      mtPayments      = []
+    liftIO
+      $ when printStats
+        $ do
+          hPutStrLn stderr ""
+          hPutStrLn stderr $ "Validator size: " <> show viSize
+          hPutStrLn stderr $ "Base-validator cost: " <> show viCost
+    let marloweTransaction = MarloweTransaction{..}
+    pure $ if merkleize then merkleizeMarlowe marloweTransaction else marloweTransaction
+
+
+-- | Create an initial Marlowe transaction using reference scripts.
+initializeTransactionUsingScriptRefsImpl :: forall era lang m
+                                          . MonadError CliError m
+                                         => MonadIO m
+                                         => C.IsShelleyBasedEra era
+                                         => MarloweParams                      -- ^ The Marlowe contract parameters.
+                                         -> SlotConfig                         -- ^ The POSIXTime-to-slot configuration.
+                                         -> MarloweScriptsRefs lang era
+                                         -> StakeAddressReference              -- ^ The stake address.
+                                         -> Contract                           -- ^ The initial Marlowe contract.
+                                         -> State                              -- ^ The initial Marlowe state.
+                                         -> Bool                               -- ^ Whether to deeply merkleize the contract.
+                                         -> Bool                               -- ^ Whether to print statistics about the validator.
+                                         -> m (MarloweTransaction lang era)    -- ^ Action to return a MarloweTransaction
+initializeTransactionUsingScriptRefsImpl marloweParams mtSlotConfig scriptRefs stake mtContract mtState merkleize printStats =
+  do
+    let
+      mtRolesCurrency = rolesCurrency marloweParams
+      setupStaking vi@ValidatorInfo { viAddress } = do
+        case toShelleyAddress viAddress of
+          Nothing -> throwError "Expecting shelley address in reference validator info"
+          Just (CS.ShelleyAddress n p _) -> do
+            let
+              viAddress' = C.shelleyAddressInEra $ CS.ShelleyAddress
+                n
+                p
+                (toShelleyStakeReference stake)
+            pure $ vi { viAddress = viAddress' }
+
+      MarloweScriptsRefs { mrMarloweValidator = (_, mv), mrRolePayoutValidator = (_, pv) } = scriptRefs
+
+    mtValidator <- setupStaking mv
+    mtRoleValidator <- setupStaking pv
+
     let
       ValidatorInfo{..} = mtValidator
       mtContinuations = mempty
@@ -771,6 +830,7 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
                txOuts
                continue
                changeAddress
+               defaultCoinSelectionStrategy
         -- Build the transaction body.
         body <-
           buildBody connection
@@ -865,6 +925,7 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
         [output]
         Nothing
         changeAddress
+        defaultCoinSelectionStrategy
     -- Build the transaction body.
     body <-
       buildBody connection
