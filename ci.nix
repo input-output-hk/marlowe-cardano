@@ -6,9 +6,10 @@
 , pkgs
 , internal
 , evalSystem
+, ci-lib
 }:
 let
-  inherit (import (inputs.plutus-core + "/nix/lib/ci.nix")) dimension platformFilterGeneric filterAttrsOnlyRecursive filterSystems;
+  inherit (ci-lib) dimension platformFilterGeneric filterAttrsOnlyRecursive filterSystems;
   # limit supportedSystems to what the CI can actually build
   # currently that is linux and darwin.
   systems = filterSystems supportedSystems;

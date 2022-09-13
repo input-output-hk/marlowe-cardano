@@ -46,9 +46,11 @@ let
     then __trace ("found job " + prefix + n) v
     else __trace ("looking in " + prefix + n) traceNames (prefix + n + ".") v
     else v);
-  inherit (import (inputs.plutus-core + "/nix/lib/ci.nix")) stripAttrsForHydra filterDerivations derivationAggregate;
+  ci-lib = pkgs.callPackage ./nix/lib/ci.nix { };
+  inherit (ci-lib) stripAttrsForHydra filterDerivations derivationAggregate;
 
-  ci = import ./ci.nix { inherit supportedSystems rootsOnly checkMaterialization inputs source-repo-override pkgs internal evalSystem; };
+  ci = import ./ci.nix { inherit supportedSystems rootsOnly checkMaterialization inputs source-repo-override pkgs internal evalSystem ci-lib; };
+
   # ci.nix is a set of attributes that work fine as jobs (albeit in a slightly different structure, the platform comes
   # first), but we mainly just need to get rid of some extra attributes.
   ciJobsets = stripAttrsForHydra (filterDerivations ci);
