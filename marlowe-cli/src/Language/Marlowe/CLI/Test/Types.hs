@@ -43,6 +43,7 @@ module Language.Marlowe.CLI.Test.Types (
 , ScriptOperation(..)
 , ScriptState
 , ScriptEnv(..)
+, Seconds(..)
 , TokenAssignment(..)
 , TokenName(..)
 , UseTemplate(..)
@@ -63,6 +64,7 @@ module Language.Marlowe.CLI.Test.Types (
 , seCostModelParams
 , seEra
 , seProtocolVersion
+, seTransactionTimeout
 , ssContracts
 , ssCurrencies
 , ssReferenceScripts
@@ -476,13 +478,16 @@ scriptState faucet = do
     wallets = Map.singleton faucetNickname faucet
   ScriptState mempty mempty Nothing wallets
 
+newtype Seconds = Seconds Int
+
 
 data ScriptEnv era = ScriptEnv
-  { _seConnection      :: LocalNodeConnectInfo CardanoMode
-  , _seCostModelParams :: CostModelParams
-  , _seEra             :: ScriptDataSupportedInEra era
-  , _seProtocolVersion :: ProtocolVersion
-  , _seSlotConfig      :: SlotConfig
+  { _seConnection         :: LocalNodeConnectInfo CardanoMode
+  , _seCostModelParams    :: CostModelParams
+  , _seEra                :: ScriptDataSupportedInEra era
+  , _seProtocolVersion    :: ProtocolVersion
+  , _seSlotConfig         :: SlotConfig
+  , _seTransactionTimeout :: Seconds
   }
 
 

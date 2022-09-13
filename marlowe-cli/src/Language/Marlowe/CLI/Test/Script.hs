@@ -1,4 +1,4 @@
-----------------------------------------------------------------------------
+-----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
 -- License     :  Apache 2.0
@@ -78,13 +78,13 @@ import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), C
                                         CustomCurrency (CustomCurrency, ccCurrencySymbol), MarloweContract (..),
                                         PartyRef (RoleRef, WalletRef), ScriptEnv (..), ScriptOperation (..),
                                         ScriptState, ScriptTest (ScriptTest, stScriptOperations, stTestName),
-                                        TokenAssignment (TokenAssignment), UseTemplate (..), Wallet (..),
-                                        WalletNickname (WalletNickname),
+                                        Seconds (Seconds), TokenAssignment (TokenAssignment), UseTemplate (..),
+                                        Wallet (..), WalletNickname (WalletNickname),
                                         WalletTransaction (WalletTransaction, wtFees, wtTxBody), anyMarloweThread,
                                         faucetNickname, foldrMarloweThread, getMarloweThreadTransaction,
                                         getMarloweThreadTxIn, overAnyMarloweThread, scriptState, seConnection,
-                                        seCostModelParams, seEra, seProtocolVersion, seSlotConfig, ssContracts,
-                                        ssCurrencies, ssReferenceScripts, ssWallets, walletPubKeyHash)
+                                        seCostModelParams, seEra, seProtocolVersion, seSlotConfig, seTransactionTimeout,
+                                        ssContracts, ssCurrencies, ssReferenceScripts, ssWallets, walletPubKeyHash)
 import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl,
                                          selectUtxosImpl)
 import qualified Language.Marlowe.CLI.Types as T
@@ -100,12 +100,8 @@ import qualified Plutus.V1.Ledger.Value as Value
 import qualified Plutus.V2.Ledger.Api as P
 
 
-transactionTimeout :: Int
-transactionTimeout = 120
-
-
 interpret :: forall era m
-          .  IsShelleyBasedEra era
+           . IsShelleyBasedEra era
           => MonadError CliError m
           => MonadState (ScriptState MarlowePlutusVersion era) m
           => MonadReader (ScriptEnv era) m
@@ -124,15 +120,12 @@ interpret CreateWallet {..} = do
 
 interpret FundWallet {..} = do
   let
-    -- Let's create a separate UTxO with pretty large collateral by default
-    values =
-      [ C.lovelaceToValue v
-      | v <- soValues
-      ]
+    values = [ C.lovelaceToValue v | v <- soValues ]
 
   (Wallet faucetAddress faucetSigningKey _ _ _) <- getFaucet
   (Wallet address _ _ _ _) <- findWallet soWalletNickname
   connection <- view seConnection
+  Seconds timeout <- view seTransactionTimeout
   txBody <- runCli "[FundWallet] " $ buildFaucetImpl
     connection
     values
@@ -140,7 +133,7 @@ interpret FundWallet {..} = do
     faucetAddress
     faucetSigningKey
     defaultCoinSelectionStrategy
-    (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
+    (Just timeout)
 
   let
     transaction = WalletTransaction { wtFees = 0, wtTxBody=txBody  }
@@ -152,12 +145,9 @@ interpret SplitWallet {..} = do
   Wallet address skey _ _ _ <- findWallet soWalletNickname
   connection <- view seConnection
   let
-    -- Let's create a separate UTxO with pretty large collateral by default
-    values =
-      [ C.lovelaceToValue v
-      | v <- soValues
-      ]
+    values = [ C.lovelaceToValue v | v <- soValues ]
 
+  Seconds timeout <- view seTransactionTimeout
   void $ runCli "[createCollaterals] " $ buildFaucetImpl
     connection
     values
@@ -165,8 +155,7 @@ interpret SplitWallet {..} = do
     address
     skey
     defaultCoinSelectionStrategy
-    (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
-
+    (Just timeout)
 
 interpret so@Mint {..} = do
   currencies <- use ssCurrencies
@@ -182,6 +171,7 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
+  Seconds timeout <- view seTransactionTimeout
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
     faucetSigningKey
@@ -190,7 +180,7 @@ interpret so@Mint {..} = do
     Nothing
     2_000_000       -- FIXME: should we compute minAda here?
     faucetAddress
-    (Just transactionTimeout)       -- FIXME: make this part of test env setup (--minting-timeout or --transaction-timeout)
+    (Just timeout)
 
   let
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
@@ -353,6 +343,7 @@ interpret so@Publish {..} = do
       pure marloweScriptRefs
     Nothing -> do
       logSoMsg' so "Scripts not found so publishing them."
+      Seconds timeout <- view seTransactionTimeout
       runSoCli so $ publishImpl
         connection
         waSigningKey
@@ -360,7 +351,7 @@ interpret so@Publish {..} = do
         waAddress
         publishingStrategy
         (CoinSelectionStrategy False False [])
-        transactionTimeout
+        timeout
         (PrintStats True)
 
   assign ssReferenceScripts (Just marloweScriptRefs)
@@ -411,6 +402,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
   connection <- view seConnection
+  Seconds timeout <- view seTransactionTimeout
   txBody <- runCli "[AutoRun] " $ autoRunTransactionImpl
       connection
       prev
@@ -418,7 +410,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       address
       [skey]
       C.TxMetadataNone
-      (Just transactionTimeout)
+      (Just timeout)
       True
       False
 
@@ -522,7 +514,11 @@ useTemplate currency = do
     template -> throwError $ CliError $ "Template not implemented: " <> show template
 
 
-buildParty :: (MonadState (ScriptState lang era) m, MonadError CliError m) => Maybe CurrencyNickname -> PartyRef -> m Party
+buildParty :: MonadState (ScriptState lang era) m
+           => MonadError CliError m
+           => Maybe CurrencyNickname
+           -> PartyRef
+           -> m Party
 buildParty currencyNickname = \case
   WalletRef nickname -> do
       wallet <- findWallet nickname
@@ -538,9 +534,9 @@ buildParty currencyNickname = \case
 
 
 findWallet :: MonadError CliError m
-              => MonadState (ScriptState lang era) m
-              => WalletNickname
-              -> m (Wallet era)
+           => MonadState (ScriptState lang era) m
+           => WalletNickname
+           -> m (Wallet era)
 findWallet nickname = do
   wallets <- use ssWallets
   liftCliMaybe ("[findWallet] Unable to find wallet:" <> show nickname) $ Map.lookup nickname wallets
@@ -624,13 +620,14 @@ runCli msg action = do
 
 
 getCurrency :: MonadError CliError m
-                => MonadState (ScriptState lang era) m
-                => m (CurrencyNickname, CustomCurrency)
+            => MonadState (ScriptState lang era) m
+            => m (CurrencyNickname, CustomCurrency)
 getCurrency = do
   currencies <- use ssCurrencies
   case Map.toList currencies of
     [c] -> pure c
     _   -> throwError "Ambigious currency lookup."
+
 
 findCurrency :: (MonadState (ScriptState lang era) m, MonadError CliError m) => CurrencyNickname -> m CustomCurrency
 findCurrency nickname = do
@@ -638,11 +635,18 @@ findCurrency nickname = do
   liftCliMaybe ("[findWallet] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
 
 
-selectWalletUTxOs :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState lang era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> T.OutputQuery era (OutputQueryResult era) -> m (T.OutputQueryResult era)
+selectWalletUTxOs :: MonadIO m
+                  => MonadReader (ScriptEnv era) m
+                  => MonadState (ScriptState lang era) m
+                  => MonadError CliError m
+                  => Either WalletNickname (Wallet era)
+                  -> T.OutputQuery era (OutputQueryResult era)
+                  -> m (T.OutputQueryResult era)
 selectWalletUTxOs w q = do
   Wallet address _ _ _ _ <- either findWallet pure w
   connection <- view seConnection
   runCli "[selectUtxosImpl]" $ selectUtxosImpl connection address q
+
 
 getWalletUTxO :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState lang era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> m (C.UTxO era)
 getWalletUTxO w = do
@@ -654,6 +658,7 @@ getWalletUTxO w = do
     . S.singleton
     . T.toAddressAny'
     $ address
+
 
 -- | Test a Marlowe contract.
 scriptTest  :: forall era m
@@ -679,7 +684,7 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
         interpret operation
 
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig (Seconds 120)))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
@@ -688,7 +693,11 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
     liftIO $ putStrLn "***** PASSED *****"
 
 
-rewritePartyRefs :: (MonadIO m, MonadState (ScriptState lang era) m, MonadError CliError m) => A.Value -> m A.Value
+rewritePartyRefs :: MonadIO m
+                 => MonadState (ScriptState lang era) m
+                 => MonadError CliError m
+                 => A.Value
+                 -> m A.Value
 rewritePartyRefs = A.rewriteBottomUp rewrite
   where
     rewrite = \case
@@ -701,7 +710,11 @@ rewritePartyRefs = A.rewriteBottomUp rewrite
         pure v
 
 
-decodeContractJSON :: MonadIO m => MonadState (ScriptState lang era) m => MonadError CliError m => A.Value -> m M.Contract
+decodeContractJSON :: MonadIO m
+                   => MonadState (ScriptState lang era) m
+                   => MonadError CliError m
+                   => A.Value
+                   -> m M.Contract
 decodeContractJSON json = do
   contractJSON <- rewritePartyRefs json
   case A.fromJSON contractJSON of
@@ -709,7 +722,11 @@ decodeContractJSON json = do
     A.Success contract -> pure contract
 
 
-decodeInputJSON :: MonadIO m => MonadState (ScriptState lang era) m => MonadError CliError m => A.Value -> m M.Input
+decodeInputJSON :: MonadIO m
+                => MonadState (ScriptState lang era) m
+                => MonadError CliError m
+                => A.Value
+                -> m M.Input
 decodeInputJSON json = do
   contractJSON <- rewritePartyRefs json
   case A.fromJSON contractJSON of

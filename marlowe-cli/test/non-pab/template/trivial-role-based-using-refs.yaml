@@ -9,7 +9,8 @@ stScriptOperations:
     soWalletNickname: Party
 
   - tag: FundWallet
-    soValues: [ 20000000, 20000000, 20000000, 20000000, 20000000, 20000000 ]
+    soValues:
+      [ 20000000, 20000000, 20000000, 20000000, 20000000, 20000000 ]
     soWalletNickname: Party
 
   - tag: Mint

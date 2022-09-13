@@ -358,7 +358,13 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
                                    where
                                      convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot mtSlotConfig
 
-readMarloweTransactionFile :: forall era lang m. MonadError CliError m => MonadIO m => ScriptDataSupportedInEra era -> PlutusScriptVersion lang -> FilePath -> m (MarloweTransaction lang era)
+readMarloweTransactionFile :: forall era lang m
+                            . MonadError CliError m
+                           => MonadIO m
+                           => ScriptDataSupportedInEra era
+                           -> PlutusScriptVersion lang
+                           -> FilePath
+                           -> m (MarloweTransaction lang era)
 readMarloweTransactionFile era lang marloweInFile = do
   SomeMarloweTransaction lang' era' marloweIn  <- decodeFileStrict marloweInFile
   case (era, era', lang, lang') of
@@ -659,7 +665,6 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
       (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
       (ScriptDataInAlonzoEra, ScriptDataInBabbageEra)  -> throwError "Running in Alonzo era, read file in Babbage era"
       (ScriptDataInBabbageEra, ScriptDataInAlonzoEra)  -> throwError "Running in Babbage era, read file in Alonzo era"
-
 
 
 -- | Run a Marlowe transaction, without selecting inputs or outputs.
