@@ -27,8 +27,8 @@ import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
 import Data.Proxy (Proxy (..))
 import Data.These (These (That, These, This))
-import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (rolesCurrency), Payment (Payment),
-                                           TransactionInput (..),
+import Language.Marlowe.Core.V1.Semantics (MarloweData (MarloweData, marloweContract, marloweState),
+                                           MarloweParams (rolesCurrency), Payment (Payment), TransactionInput (..),
                                            TransactionOutput (txOutContract, txOutPayments, txOutState))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close), Input (..),
                                                  InputContent (IChoice, IDeposit), Party (PK, Role), Payee (Party),
@@ -43,9 +43,9 @@ import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
 import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
 import Spec.Marlowe.Plutus.Transaction (ArbitraryTransaction, arbitraryPayoutTransaction, arbitrarySemanticsTransaction,
                                         noModify, noVeto, shuffle)
-import Spec.Marlowe.Plutus.Types (PayoutTransaction (_params'), PlutusTransaction (..), SemanticsTransaction (_params),
-                                  infoData, infoInputs, infoOutputs, infoSignatories, input, inputState, marloweParams,
-                                  marloweParamsPayout, output, role)
+import Spec.Marlowe.Plutus.Types (PayoutTransaction, PlutusTransaction (..), SemanticsTransaction, infoData, infoInputs,
+                                  infoOutputs, infoSignatories, input, inputState, marloweParams, marloweParamsPayout,
+                                  output, role)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, forAll, property, suchThat, testProperty)
@@ -204,7 +204,7 @@ checkSemanticsTransaction modifyBefore modifyAfter condition valid noisy =
   property
     . forAll (arbitrarySemanticsTransaction modifyBefore modifyAfter noisy `suchThat` condition)
     $ \PlutusTransaction{..} ->
-      case evaluateSemantics (_params _parameters) (toData _datum) (toData _redeemer) (toData _scriptContext) of
+      case evaluateSemantics (toData _datum) (toData _redeemer) (toData _scriptContext) of
         This  e   -> not valid || (error $ show e)
         These e l -> not valid || (error $ show e <> ": " <> show l)
         That    _ -> valid
@@ -221,7 +221,7 @@ checkPayoutTransaction modifyBefore modifyAfter condition valid noisy =
   property
     . forAll (arbitraryPayoutTransaction modifyBefore modifyAfter noisy `suchThat` condition)
     $ \PlutusTransaction{..} ->
-      case evaluatePayout (_params' _parameters) (toData _datum) (toData _redeemer) (toData _scriptContext) of
+      case evaluatePayout (toData _datum) (toData _redeemer) (toData _scriptContext) of
         This  e   -> not valid || (error $ show e)
         These e l -> not valid || (error $ show e <> ": " <> show l)
         That    _ -> valid
@@ -233,7 +233,6 @@ checkDoubleInput =
   let
     modifyAfter =
       do
-        ownAddress <- marloweParams `uses` semanticsAddress
         -- Create a random datum.
         inDatum <- lift arbitrary
         let inDatumHash = datumHash inDatum
@@ -241,7 +240,7 @@ checkDoubleInput =
         inScript <-
           TxInInfo
             <$> lift arbitrary
-            <*> (TxOut ownAddress <$> lift arbitrary <*> pure (Just inDatumHash))
+            <*> (TxOut semanticsAddress <$> lift arbitrary <*> pure (Just inDatumHash))
         -- Add a second script input.
         infoInputs <>= [inScript]
         -- Add the new datum and its hash.
@@ -282,12 +281,11 @@ checkMultipleOutput =
   let
     modifyAfter =
       do
-        ownAddress <- marloweParams `uses` semanticsAddress
         let
           -- Split a script output into two equal ones.
           splitOwnOutput txOut@(TxOut address value datum')
-            | address == ownAddress = flip (TxOut address) datum' <$> splitValue value
-            | otherwise             = pure txOut
+            | address == semanticsAddress = flip (TxOut address) datum' <$> splitValue value
+            | otherwise                   = pure txOut
         -- Update the outputs with the split script output.
         infoOutputs %= concatMap splitOwnOutput
         shuffle
@@ -301,10 +299,9 @@ checkCloseOutput =
   let
     modifyAfter =
       do
-        ownAddress <- marloweParams `uses` semanticsAddress
         let
           -- Match the script input.
-          matchOwnInput (TxInInfo _ (TxOut address _ _)) = address == ownAddress
+          matchOwnInput (TxInInfo _ (TxOut address _ _)) = address == semanticsAddress
         -- Find the script input.
         inScript <- infoInputs `uses` filter matchOwnInput
         -- Add a clone of the script input as output.
@@ -322,12 +319,11 @@ checkValueInput =
   let
     modifyAfter =
       do
-        ownAddress <- marloweParams `uses` semanticsAddress
         let
           -- Add one lovelace to the input to the script.
           incrementOwnInput txInInfo@(TxInInfo _ txOut@(TxOut address value _))
-            | address == ownAddress = txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
-            | otherwise             = txInInfo
+            | address == semanticsAddress = txInInfo {txInInfoResolved = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}}
+            | otherwise                   = txInInfo
         -- Update the inputs with the incremented script input.
         infoInputs %= fmap incrementOwnInput
     in
@@ -340,12 +336,11 @@ checkValueOutput =
   let
     modifyAfter =
       do
-        ownAddress <- marloweParams `uses` semanticsAddress
         let
           -- Add one lovelace to the output to the script.
           incrementOwnOutput txOut@(TxOut address value _)
-            | address == ownAddress = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
-            | otherwise             = txOut
+            | address == semanticsAddress = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
+            | otherwise                  = txOut
         -- Update the outputs with the incremented script output.
         infoOutputs %= fmap incrementOwnOutput
   in
@@ -359,7 +354,7 @@ checkDatumOutput perturb =
     modifyAfter =
       do
         -- Find the existing Marlowe data output.
-        marloweData <- MarloweData <$> output `uses` txOutState <*> output `uses` txOutContract
+        marloweData <- MarloweData <$> use marloweParams <*> output `uses` txOutState <*> output `uses` txOutContract
         -- Compute its hash.
         let outDatumHash = datumHash . Datum $ toBuiltinData marloweData
         -- Modify the original datum.
@@ -486,12 +481,10 @@ checkPayment =
   let
     modifyAfter =
       do
-        -- Determine the payout address.
-        payoutAddress' <- marloweParams `uses` payoutAddress
         let
           -- Decrement a payment by one unit.
           decrementPayment txOut@(TxOut address                          value (Just _))
-            | address == payoutAddress'                                                  = txOut {txOutValue = decrementValue value}
+            | address == payoutAddress                                                   = txOut {txOutValue = decrementValue value}
             | otherwise                                                                  = txOut
           decrementPayment txOut@(TxOut (Address (PubKeyCredential _) _) value Nothing ) = txOut {txOutValue = decrementValue value}
           decrementPayment txOut                                                         = txOut

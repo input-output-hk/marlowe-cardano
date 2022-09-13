@@ -20,7 +20,7 @@ module Spec.Marlowe.Plutus.Arbitrary (
 ) where
 
 
-import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
 import Language.Marlowe.Scripts (MarloweTxInput (..))
 import Plutus.V1.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
                              Extended (..), Interval (..), LowerBound (..), PubKeyHash (..), ScriptContext (..),
@@ -161,9 +161,11 @@ instance Arbitrary ValidatorHash where
 instance Arbitrary Value where
   arbitrary = Value <$> arbitraryAssocMap arbitrary (arbitraryAssocMap arbitrary arbitrary)
 
+instance Arbitrary MarloweParams where
+  arbitrary = MarloweParams <$> arbitrary
 
 instance Arbitrary MarloweData where
-  arbitrary = MarloweData <$> arbitrary <*> arbitrary
+  arbitrary = MarloweData <$> arbitrary <*> arbitrary <*> arbitrary
 
 
 instance Arbitrary MarloweTxInput where

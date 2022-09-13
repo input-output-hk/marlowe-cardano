@@ -31,8 +31,8 @@ import Codec.Serialise (serialise)
 import Control.Monad.Except (runExcept)
 import Data.Bifunctor (Bifunctor (first))
 import Data.These (These (..))
-import Language.Marlowe.Core.V1.Semantics (MarloweData, MarloweParams (rolesCurrency))
-import Language.Marlowe.Scripts (mkRolePayoutValidatorHash, rolePayoutScript, smallUntypedValidator)
+import Language.Marlowe.Core.V1.Semantics (MarloweData)
+import Language.Marlowe.Scripts (rolePayoutValidator, rolePayoutValidatorHash, smallMarloweValidator)
 import Ledger.Typed.Scripts (validatorHash, validatorScript)
 import Plutus.ApiCommon (EvaluationContext, LedgerPlutusVersion (PlutusV1), LogOutput,
                          ProtocolVersion (ProtocolVersion), VerboseMode (Verbose), evaluateScriptCounting,
@@ -48,74 +48,64 @@ import qualified Data.Map.Strict as M (fromList)
 
 
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
-evaluateSemantics :: MarloweParams           -- ^ The parameters.
-                  -> Data                    -- ^ The datum.
+evaluateSemantics :: Data                    -- ^ The datum.
                   -> Data                    -- ^ The redeemer.
                   -> Data                    -- ^ The script context.
                   -> These String LogOutput  -- ^ The result.
-evaluateSemantics marloweParams datum redeemer context =
+evaluateSemantics datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec (serialiseSemanticsValidator marloweParams) [datum, redeemer, context] of
+    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
                       (logOutput, Right _     ) -> That logOutput
                       (logOutput, Left message) -> These (show message) logOutput
 
 
 -- | Run the Plutus evaluator on the Marlowe payout validator.
-evaluatePayout :: MarloweParams           -- ^ The parameters.
-               -> Data                    -- ^ The datum.
+evaluatePayout :: Data                    -- ^ The datum.
                -> Data                    -- ^ The redeemer.
                -> Data                    -- ^ The script context.
                -> These String LogOutput  -- ^ The result.
-evaluatePayout marloweParams datum redeemer context =
+evaluatePayout datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec (serialisePayoutValidator marloweParams) [datum, redeemer, context] of
+    Right ec     -> case evaluateScriptCounting PlutusV1 (ProtocolVersion 7 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
                       (logOutput, Right _     ) -> That logOutput
                       (logOutput, Left message) -> These (show message) logOutput
 
 
 -- | Serialize the Marlowe semantics validator.
-serialiseSemanticsValidator :: MarloweParams
-                            -> SBS.ShortByteString
+serialiseSemanticsValidator :: SBS.ShortByteString
 serialiseSemanticsValidator =
     SBS.toShort
   . LBS.toStrict
   . serialise
   . getValidator
   . validatorScript
-  . smallUntypedValidator
+  $ smallMarloweValidator
 
 
 -- | Compute the address of the Marlowe semantics validator.
-semanticsAddress :: MarloweParams
-                 -> Address
+semanticsAddress :: Address
 semanticsAddress =
     scriptHashAddress
   . validatorHash
-  . smallUntypedValidator
+  $ smallMarloweValidator
 
 
 -- | Serialize the Marlowe payout validator.
-serialisePayoutValidator :: MarloweParams
-                         -> SBS.ShortByteString
+serialisePayoutValidator :: SBS.ShortByteString
 serialisePayoutValidator =
     SBS.toShort
   . LBS.toStrict
   . serialise
   . getValidator
   . validatorScript
-  . rolePayoutScript
-  . rolesCurrency
+  $ rolePayoutValidator
 
 
 -- | Compute the address of the Marlowe payout validator.
-payoutAddress :: MarloweParams
-              -> Address
-payoutAddress =
-    scriptHashAddress
-  . mkRolePayoutValidatorHash
-  . rolesCurrency
+payoutAddress :: Address
+payoutAddress = scriptHashAddress rolePayoutValidatorHash
 
 
 -- | Compute the hash of Marlowe datum.
