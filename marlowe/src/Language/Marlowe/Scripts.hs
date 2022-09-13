@@ -31,7 +31,7 @@ import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Pretty (Pretty (..))
 import qualified Plutus.Script.Utils.Typed as Scripts
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as Scripts
-import qualified Plutus.V1.Ledger.Address as Address
+import qualified Plutus.V1.Ledger.Address as Address (scriptHashAddress)
 import qualified Plutus.V1.Ledger.Value as Val
 import Plutus.V2.Ledger.Api (Address (Address), Credential (..), CurrencySymbol, Datum (Datum), DatumHash (DatumHash),
                              POSIXTime, ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
