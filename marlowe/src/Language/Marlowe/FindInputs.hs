@@ -1,3 +1,6 @@
+
+{-# LANGUAGE TupleSections #-}
+
 module Language.Marlowe.FindInputs(getAllInputs) where
 
 import Data.Bifunctor (Bifunctor (second), bimap)
@@ -6,7 +9,7 @@ import Data.SBV (ThmResult)
 import Language.Marlowe.Analysis.FSSemantics (onlyAssertionsWithState)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput)
 import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Observation (..))
-import Plutus.V1.Ledger.Api (POSIXTime)
+import Plutus.V2.Ledger.Api (POSIXTime)
 
 -- | Removes all the assertions from a contract
 removeAsserts :: Contract -> Contract
@@ -44,7 +47,7 @@ expandContract (Let vi va con) = [Let vi va c | c <- expandContract con]
 expandContract (Assert _ con) = expandContract con
 
 getInputs :: Contract -> IO (Either (ThmResult, Contract) (Maybe (POSIXTime, [TransactionInput])))
-getInputs c = bimap (\tr -> (tr, c)) (fmap (\(s, t, _) -> (s, t))) <$> onlyAssertionsWithState c Nothing
+getInputs c = bimap (, c) (fmap (\(s, t, _) -> (s, t))) <$> onlyAssertionsWithState c Nothing
 
 -- | Uses static analysis to obtain a list of "unit tests" (lists of transactions) that
 -- | cover the different branches of the given contract. If static analysis fails
