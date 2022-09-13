@@ -56,7 +56,6 @@ runTests era ScriptTests{..} =
     costModel <- getDefaultCostModel
     let
       runCli action = runReaderT action (CliEnv era)
-
       connection =
         LocalNodeConnectInfo
         {

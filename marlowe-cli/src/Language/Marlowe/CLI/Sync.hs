@@ -564,12 +564,7 @@ makeParameters meBlock meTxId meMetadata policy =
         MintingPolicyHash currencyHash = fromCardanoPolicyId policy
         meParams = marloweParams $ CurrencySymbol currencyHash
         marloweValidatorHash = Scripts.validatorHash marloweValidator
-      -- FIXME (paluh):
-      --  * Previous version of this code also computed hashes on the fly so I changed this to constants.
-      --  * This is method is used by `watchMarloweWithPrinter` so we should really extract validators using
-      --    known version hashes + policy to follow them or probably abort the action with anomaly?
-      -- meApplicationAddress <- anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidator
-      -- mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
+
       meApplicationAddress <-  anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidatorHash
       mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
       pure Parameters{..}
