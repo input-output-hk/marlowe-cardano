@@ -100,8 +100,15 @@ createTxId = txId createUTxO
 
 createDatum :: V1.MarloweData
 createDatum = V1.MarloweData
-  { marloweState = createDatumState
+  { marloweParams = createMarloweParams
+  , marloweState = createDatumState
   , marloweContract = createContract
+  }
+
+createMarloweParams :: V1.MarloweParams
+createMarloweParams = V1.MarloweParams
+  {
+    rolesCurrency = "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741"
   }
 
 createContract :: V1.Contract
