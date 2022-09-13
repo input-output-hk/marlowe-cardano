@@ -52,6 +52,9 @@ codecJob = binaryCodec putMsg getMsg
       ClientAgency (TokAwait _) -> \case
         MsgPoll   -> putWord8 0x06
         MsgDetach -> putWord8 0x07
+      ServerAgency (TokAttach _) -> \case
+        MsgAttached     -> putWord8 0x08
+        MsgAttachFailed -> putWord8 0x09
 
     getMsg :: GetMessage (Job cmd)
     getMsg tok = do
@@ -94,6 +97,12 @@ codecJob = binaryCodec putMsg getMsg
         0x07 -> case tok of
           ClientAgency (TokAwait _) -> pure $ SomeMessage MsgDetach
           _                         -> fail "Invalid protocol state for MsgDetach"
+        0x08 -> case tok of
+          ServerAgency (TokAttach _) -> pure $ SomeMessage MsgAttached
+          _                          -> fail "Invalid protocol state for MsgAttached"
+        0x09 -> case tok of
+          ServerAgency (TokAttach _) -> pure $ SomeMessage MsgAttachFailed
+          _                          -> fail "Invalid protocol state for MsgAttachFailed"
         _ -> fail $ "Invalid msg tag " <> show tag
 
     -- Unfortunately, the poly-kinded cmd parameter doesn't play nicely with

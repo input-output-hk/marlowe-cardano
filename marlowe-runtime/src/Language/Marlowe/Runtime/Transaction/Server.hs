@@ -25,7 +25,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , WalletAddresses(..)
   , WithdrawError
   )
-import Network.Protocol.Job.Server (JobServer(..), ServerStCmd, ServerStInit(..))
+import Network.Protocol.Job.Server (JobServer(..), ServerStAttach, ServerStCmd, ServerStInit(..))
 import System.IO (hPutStrLn, stderr)
 
 newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
@@ -89,7 +89,7 @@ mkWorker WorkerDependencies{..} =
 attachSubmit
   :: ScriptDataSupportedInEra era
   -> TxId
-  -> IO (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
+  -> IO (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
 attachSubmit = error "not implemented"
 
 execCreate

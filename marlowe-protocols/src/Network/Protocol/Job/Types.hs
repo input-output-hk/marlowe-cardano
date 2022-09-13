@@ -62,9 +62,13 @@ data Job (cmd :: * -> * -> * -> *) where
   -- | The initial state of the protocol.
   StInit :: Job cmd
 
-  -- | In the 'StCmd' state, the server has agency. It is preparing to send the
-  -- status of the job associated with a command.
+  -- | In the 'StCmd' state, the server has agency. It is running a command
+  -- sent by the client and starting the job.
   StCmd :: status -> err -> result -> Job cmd
+
+  -- | In the 'StAttach' state, the server has agency. It is looking up the job
+  -- associated with the given job ID.
+  StAttach :: status -> err -> result -> Job cmd
 
   -- | In the 'StAwait state, the client has agency. It has been previously
   -- told to await a job execution and can either poll the status or detach.
@@ -87,7 +91,17 @@ instance Protocol (Job cmd) where
     -- | Attach to the job of previously executed command.
     MsgAttach :: JobId cmd status err result -> Message (Job cmd)
       'StInit
+      ('StAttach status err result)
+
+    -- | Attaching to the job succeeded.
+    MsgAttached :: Message (Job cmd)
+      ('StAttach status err result)
       ('StCmd status err result)
+
+    -- | Attaching to the job failed.
+    MsgAttachFailed :: Message (Job cmd)
+      ('StAttach status err result)
+      'StDone
 
     -- | Tell the client the job failed.
     MsgFail :: err -> Message (Job cmd)
@@ -120,6 +134,7 @@ instance Protocol (Job cmd) where
 
   data ServerHasAgency st where
     TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result)
+    TokAttach :: Tag cmd status err result -> ServerHasAgency ('StAttach status err result)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
