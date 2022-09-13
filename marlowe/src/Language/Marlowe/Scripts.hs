@@ -150,7 +150,7 @@ mkMarloweValidator
                 payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
                 payoutsOk = payoutConstraints payoutsByParty
                 checkContinuation = case txOutContract of
-                    Close -> True
+                    Close -> traceIfFalse "L2" checkScriptOutputAny
                     _ -> let
                         totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
@@ -209,6 +209,8 @@ mkMarloweValidator
     checkScriptOutputRelaxed addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
                     txOutValue `Val.geq` value && hsh == Just svh && txOutAddress == addr
     checkScriptOutputRelaxed _ _ _ _ = False
+
+    checkScriptOutputAny = all ((/= ownAddress) . txOutAddress) allOutputs
 
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
