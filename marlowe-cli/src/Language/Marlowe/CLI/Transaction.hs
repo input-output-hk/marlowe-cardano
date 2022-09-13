@@ -410,8 +410,9 @@ buildMinting connection signingKeyFile tokenDistribution metadataFile expires lo
   metadata <- forM metadataJson \case
     A.Object metadataProps -> pure metadataProps
     _                      -> throwError "Metadata should file should contain a json object"
-  (body, _) <- buildMintingImpl connection signingKey tokenDistribution metadata expires lovelace changeAddress timeout
+  (body, policy) <- buildMintingImpl connection signingKey tokenDistribution metadata expires lovelace changeAddress timeout
   doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+  liftIO . putStrLn $ "PolicyID " <> show policy
 
 
 -- | Build and submit a non-Marlowe transaction that mints tokens.
