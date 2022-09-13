@@ -80,6 +80,7 @@
       hydraJobs = import ./hydra-jobs.nix {
         inherit inputs;
         inherit (self) internal;
+        marlowe-cardano = self;
       };
 
       internal.packagesFun =

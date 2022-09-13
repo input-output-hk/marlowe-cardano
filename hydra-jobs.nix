@@ -1,12 +1,12 @@
 { inputs
 , internal
+, marlowe-cardano
 }:
 { supportedSystems ? [ "x86_64-linux" ]
 , rootsOnly ? false
   # We explicitly pass true here in the GitHub action but don't want to slow down hydra
 , checkMaterialization ? false
 , plutus-apps ? null
-, marlowe-cardano ? null
 , evalSystem ? "x86_64-linux" # Assuming hydra doesn't run elsewhere...
 }:
 let
