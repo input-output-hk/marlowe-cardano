@@ -69,6 +69,7 @@
           "Language/Marlowe/Runtime/History/QueryServer"
           "Language/Marlowe/Runtime/History/Store"
           "Language/Marlowe/Runtime/History/Store/Memory"
+          "Language/Marlowe/Runtime/History/Store/Model"
           "Language/Marlowe/Runtime/History/SyncServer"
           ];
         hsSourceDirs = [ "src" ];
@@ -177,7 +178,12 @@
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            (hsPkgs."some" or (errorHandler.buildDepError "some"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+            (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
+            (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
+            (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             ];
@@ -187,9 +193,20 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/History/FollowerSpec"
+            "Language/Marlowe/Runtime/History/Script"
+            "Language/Marlowe/Runtime/History/StoreSpec"
+            "Language/Marlowe/Runtime/History/Store/ModelSpec"
+            "Language/Marlowe/Runtime/HistorySpec"
+            "Spec/Marlowe/Semantics/Arbitrary"
+            "Spec/Marlowe/Semantics/Golden"
+            "Spec/Marlowe/Semantics/Golden/Escrow"
+            "Spec/Marlowe/Semantics/Golden/Pangram"
+            "Spec/Marlowe/Semantics/Golden/Swap"
+            "Spec/Marlowe/Semantics/Golden/Trivial"
+            "Spec/Marlowe/Semantics/Golden/ZeroCouponBond"
             "Paths_marlowe_runtime"
             ];
-          hsSourceDirs = [ "test" ];
+          hsSourceDirs = [ "test" "../marlowe/test" ];
           mainPath = [ "Spec.hs" ];
           };
         };

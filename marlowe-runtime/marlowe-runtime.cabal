@@ -77,6 +77,7 @@ library
     Language.Marlowe.Runtime.History.QueryServer
     Language.Marlowe.Runtime.History.Store
     Language.Marlowe.Runtime.History.Store.Memory
+    Language.Marlowe.Runtime.History.Store.Model
     Language.Marlowe.Runtime.History.SyncServer
   build-depends:
       base >= 4.9 && < 5
@@ -190,11 +191,24 @@ executable marlowe-follower
 
 test-suite marlowe-runtime-test
   import: lang
-  hs-source-dirs: test
+  hs-source-dirs:
+    test
+    ../marlowe/test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
     Language.Marlowe.Runtime.History.FollowerSpec
+    Language.Marlowe.Runtime.History.Script
+    Language.Marlowe.Runtime.History.StoreSpec
+    Language.Marlowe.Runtime.History.Store.ModelSpec
+    Language.Marlowe.Runtime.HistorySpec
+    Spec.Marlowe.Semantics.Arbitrary
+    Spec.Marlowe.Semantics.Golden
+    Spec.Marlowe.Semantics.Golden.Escrow
+    Spec.Marlowe.Semantics.Golden.Pangram
+    Spec.Marlowe.Semantics.Golden.Swap
+    Spec.Marlowe.Semantics.Golden.Trivial
+    Spec.Marlowe.Semantics.Golden.ZeroCouponBond
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
@@ -209,7 +223,12 @@ test-suite marlowe-runtime-test
     , marlowe-runtime
     , plutus-tx
     , plutus-ledger-api
+    , QuickCheck
+    , some
     , stm
+    , tasty
+    , tasty-hunit
+    , tasty-quickcheck
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover

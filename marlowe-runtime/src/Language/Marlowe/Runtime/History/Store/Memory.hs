@@ -4,6 +4,7 @@ module Language.Marlowe.Runtime.History.Store.Memory where
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
+import Data.Foldable (fold)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Semialign (alignWith)
@@ -119,7 +120,11 @@ mkHistoryQueriesInMemory = do
       -- The history for this contract doesn't exist and there is a request to
       -- update it.
       That (UpdateContract (SomeContractChanges version ContractChanges{create = changesCreate, steps})) -> case changesCreate of
-        Nothing                    -> error "The first UpdateContract request must provide a create step"
+        Nothing                    -> case fold steps of
+          -- Nothing to create and no steps to add = no-op
+          [] -> pure Nothing
+          -- adding steps without the contract existing is an error
+          _  -> error "The first UpdateContract request must provide a create step"
         Just (createBlock, create) -> Just <$> newTVar (SomeHistory version History{..})
       -- The history for this contract exists and there is a request to remove it.
       These _ RemoveContract -> pure Nothing
