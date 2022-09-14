@@ -143,6 +143,7 @@ import Language.Marlowe.CLI.Test.Types
   , ssCurrencies
   , ssReferenceScripts
   , ssWallets
+  , walletPubKeyHash
   )
 import Language.Marlowe.CLI.Transaction
   (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl, selectUtxosImpl)
@@ -150,6 +151,7 @@ import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics as M
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
+import qualified Language.Marlowe.Extended.V1 as EM
 import Language.Marlowe.Pretty (pretty)
 import Ledger.Tx.CardanoAPI (fromCardanoPolicyId)
 import Plutus.ApiCommon (ProtocolVersion)
@@ -722,22 +724,27 @@ useTemplate currency = do
     UseSwap{..} -> do utATimeout' <- toMarloweTimeout utATimeout (TruncateMilliseconds True)
                       utBTimeout' <- toMarloweTimeout utBTimeout (TruncateMilliseconds True)
                       let
-                        aPartyRef = fromMaybe (WalletRef faucetNickname) utAParty
+                        aPartyRef = fromMaybe (WalletRef faucetNickname) (Just utAParty)
+                        bPartyRef = fromMaybe (WalletRef faucetNickname) (Just utBParty)
                       aParty <- buildParty currency aPartyRef
-                      let
-                        bPartyRef = fromMaybe (WalletRef faucetNickname) utBParty
                       bParty <- buildParty currency bPartyRef
+                      CustomCurrency {ccCurrencySymbol=aCurrencySymbol} <- findCurrency utACurrencyNickname
+                      CustomCurrency {ccCurrencySymbol=bCurrencySymbol} <- findCurrency utBCurrencyNickname
+
+                      let
+                        aToken = M.Token aCurrencySymbol utATokenName
+                        bToken = M.Token bCurrencySymbol utBTokenName
 
                       makeContract $ swap
                           aParty
-                          utAToken
-                          (M.Constant utAAmount)
+                          aToken
+                          (EM.Constant utAAmount)
                           utATimeout'
                           bParty
-                          utBToken
-                          (M.Constant utBAmount)
+                          bToken
+                          (EM.Constant utBAmount)
                           utBTimeout'
-                          M.Close
+                          EM.Close
     --UseEscrow{..} -> do paymentDeadline' <- toMarloweTimeout paymentDeadline
     --                    complaintDeadline' <- toMarloweTimeout complaintDeadline
     --                    disputeDeadline' <- toMarloweTimeout disputeDeadline
@@ -899,7 +906,7 @@ getCurrency = do
 findCurrency :: (MonadState (ScriptState lang era) m, MonadError CliError m) => CurrencyNickname -> m Currency
 findCurrency nickname = do
   currencies <- use ssCurrencies
-  liftCliMaybe ("[findWallet] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
+  liftCliMaybe ("[findCurrency] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
 
 
 selectWalletUTxOs :: MonadIO m
@@ -978,6 +985,28 @@ rewritePartyRefs = A.rewriteBottomUp rewrite
       v -> do
         pure v
 
+rewriteCurrencyRefs :: MonadIO m
+                 => MonadState (ScriptState lang era) m
+                 => MonadError CliError m
+                 => A.Value
+                 -> m A.Value
+rewriteCurrencyRefs = A.rewriteBottomUp rewrite
+  where
+    rewrite = \case
+      obj@(A.Object (KeyMap.toAscList -> props)) -> do
+        case props of
+          [ ("currency_symbol", A.String currencyNickname) , ("token_name", tokenName)] -> do
+              let
+                nickname = CurrencyNickname $ Text.unpack currencyNickname
+              CustomCurrency { ccCurrencySymbol=P.CurrencySymbol cs } <- findCurrency nickname
+              pure $ A.object
+                [
+                  ("currency_symbol", A.toJSON cs)
+                , ("token_name", tokenName)
+                ]
+          _ -> pure obj
+      v -> do
+        pure v
 
 decodeContractJSON :: MonadIO m
                    => MonadState (ScriptState lang era) m
@@ -997,9 +1026,10 @@ decodeInputJSON :: MonadIO m
                 => A.Value
                 -> m M.Input
 decodeInputJSON json = do
-  contractJSON <- rewritePartyRefs json
-  case A.fromJSON contractJSON of
-    A.Error err -> throwError . CliError $ "[decodeInputJSON] contract input json (" <> Text.unpack (A.renderValue json) <> ") parsing error: " <> show err
+  json' <- rewritePartyRefs json
+  json'' <- rewriteCurrencyRefs json'
+  case A.fromJSON json'' of
+    A.Error err -> throwError . CliError $ "[decodeInputJSON] contract input json (" <> Text.unpack (A.renderValue json'') <> ") parsing error: " <> show err
     A.Success input -> pure input
 
 

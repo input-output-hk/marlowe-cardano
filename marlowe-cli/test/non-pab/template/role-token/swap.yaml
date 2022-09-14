@@ -1,0 +1,102 @@
+stTestName: Non-PAB Swap Contract Test
+
+stScriptOperations:
+  - tag: Publish
+    soPublishPermanently: true
+
+  - tag: CreateWallet
+    soWalletNickname: aParty
+
+  - tag: FundWallet
+    soValues:
+      - 100000000
+    soWalletNickname: aParty
+
+  - tag: Mint
+    soCurrencyNickname: aPartyCurrency
+    soIssuer: "aParty"
+    soTokenDistribution:
+      - taAmount: 100
+        taTokenName:
+          unTokenName: aPartyTokenName
+        taWalletNickname: aParty
+
+  - tag: CreateWallet
+    soWalletNickname: bParty
+
+  - tag: FundWallet
+    soValues:
+      - 100000000
+    soWalletNickname: bParty
+
+  - tag: Mint
+    soCurrencyNickname: bPartyCurrency
+    soIssuer: "bParty"
+    soTokenDistribution:
+      - taAmount: 100
+        taTokenName:
+          unTokenName: bPartyTokenName
+        taWalletNickname: bParty
+
+  - tag: Initialize
+    soContractNickname: "Swap"
+    soMinAda: 1000000
+    soContractSource:
+      template:
+        tag: "UseSwap"
+        utAParty:
+          pk_hash: "aParty"
+        utACurrencyNickname: aPartyCurrency
+        utATokenName:
+          unTokenName: aPartyTokenName
+        utAAmount: 50
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        utATimeout:
+          relative: 1000000
+        utBParty:
+          pk_hash: "bParty"
+        utBCurrencyNickname: bPartyCurrency
+        utBTokenName:
+          unTokenName: bPartyTokenName
+        utBAmount: 40
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        utBTimeout:
+          relative: 1000000
+
+  - tag: Prepare
+    soContractNickname: "Swap"
+    soInputs:
+      - input_from_party:
+          pk_hash: "aParty"
+        that_deposits: 50
+        of_token:
+          currency_symbol: "aPartyCurrency"
+          token_name: "aPartyTokenName"
+        into_account:
+          pk_hash: "aParty"
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: Prepare
+    soContractNickname: "Swap"
+    soInputs:
+      - input_from_party:
+          pk_hash: "bParty"
+        that_deposits: 40
+        of_token:
+          currency_symbol: "bPartyCurrency"
+          token_name: "bPartyTokenName"
+        into_account:
+          pk_hash: "bParty"
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: AutoRun
+    soContractNickname: "Swap"
+
