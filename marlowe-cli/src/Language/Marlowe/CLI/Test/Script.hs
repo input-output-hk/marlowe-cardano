@@ -62,7 +62,7 @@ import Language.Marlowe.CLI.Types
   , unAnUTxO
   )
 import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Party)
-import Marlowe.Contracts (trivial)
+import Marlowe.Contracts (trivial, swap)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
 
 import qualified Cardano.Api as C
@@ -719,6 +719,25 @@ useTemplate currency = do
         utDepositLovelace
         utWithdrawalLovelace
         timeout'
+    UseSwap{..} -> do utATimeout' <- toMarloweTimeout utATimeout (TruncateMilliseconds True)
+                      utBTimeout' <- toMarloweTimeout utBTimeout (TruncateMilliseconds True)
+                      let
+                        aPartyRef = fromMaybe (WalletRef faucetNickname) utAParty
+                      aParty <- buildParty currency aPartyRef
+                      let
+                        bPartyRef = fromMaybe (WalletRef faucetNickname) utBParty
+                      bParty <- buildParty currency bPartyRef
+
+                      makeContract $ swap
+                          aParty
+                          utAToken
+                          (M.Constant utAAmount)
+                          utATimeout'
+                          bParty
+                          utBToken
+                          (M.Constant utBAmount)
+                          utBTimeout'
+                          M.Close
     --UseEscrow{..} -> do paymentDeadline' <- toMarloweTimeout paymentDeadline
     --                    complaintDeadline' <- toMarloweTimeout complaintDeadline
     --                    disputeDeadline' <- toMarloweTimeout disputeDeadline
@@ -732,18 +751,7 @@ useTemplate currency = do
     --                       complaintDeadline'
     --                       disputeDeadline'
     --                       mediationDeadline'
-    --UseSwap{..} -> do  aTimeout' <- toMarloweTimeout aTimeout
-    --                   bTimeout' <- toMarloweTimeout bTimeout
-    --                   makeContract $ swap
-    --                       aParty
-    --                       aToken
-    --                       (Constant aAmount)
-    --                       aTimeout'
-    --                       bParty
-    --                       bToken
-    --                       (Constant bAmount)
-    --                       bTimeout'
-    --                       Close
+
     --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
     --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
     --                             makeContract $
