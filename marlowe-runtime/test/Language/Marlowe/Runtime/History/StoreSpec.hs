@@ -15,20 +15,17 @@ import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Some (Some (..), withSome)
-import Data.Time.Clock (secondsToNominalDiffTime)
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Type.Equality (type (:~:) (Refl))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), TxOutRef (TxOutRef), WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId (ContractId), Transaction (..), TransactionScriptOutput (..),
-                                          assertVersionsEqual)
+import Language.Marlowe.Runtime.Core.Api (ContractId (ContractId), Transaction (..), assertVersionsEqual)
 import Language.Marlowe.Runtime.History.Api (ContractStep (..), SomeCreateStep (..))
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..), applyRollback,
                                                   isEmptyChanges)
 import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract (..))
 import Language.Marlowe.Runtime.History.Script (HistoryScript (..), HistoryScriptBlockState (..),
                                                 HistoryScriptContractState (..), HistoryScriptEvent (..),
-                                                HistoryScriptState, applyInputs, genCreateContract, genRollForward,
-                                                genTxId, reduceScriptEvent)
+                                                HistoryScriptState, genCreateContract, genRollForward, genTxId,
+                                                reduceScriptEvent)
 import Language.Marlowe.Runtime.History.Store
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
 import Test.Hspec (Spec)
@@ -154,38 +151,26 @@ runScriptEvent stateVar changesVar event = do
           , create = Just (block, create)
           , rollbackTo = Nothing
           }
-    ApplyInputs contractId transactionId version vLow vHigh redeemer -> case state of
+    ApplyInputs version transaction@Transaction{..} -> case state of
       [] -> error "create at genesis"
       HistoryScriptBlockState{..} : _ ->
         case Map.lookup contractId contractStates of
           Nothing -> error "contract not found"
-          Just (Some HistoryScriptContractState{..}) -> case stateScriptOutput of
-            Nothing -> error "no script output"
-            Just TransactionScriptOutput{..} ->
-              flip Map.update contractId $ Just . \case
-                RemoveContract -> error "applied inputs after remove"
-                UpdateContract (SomeContractChanges version' changes) -> case assertVersionsEqual version version' of
-                  Refl -> case assertVersionsEqual contractVersion version of
-                    Refl ->
-                      let
-                        step = ApplyTransaction Transaction
-                          { contractId
-                          , transactionId
-                          , blockHeader = block
-                          , validityLowerBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow
-                          , validityUpperBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow
-                          , redeemer
-                          , output = case applyInputs contractVersion vLow vHigh transactionId redeemer datum of
-                              Left err     -> error $ "error applying inputs " <> show err
-                              Right output -> output
-                          }
-                        newChanges = ContractChanges
-                          { steps = Map.singleton block [step]
-                          , create = Nothing
-                          , rollbackTo = Nothing
-                          }
-                      in
-                        UpdateContract $ SomeContractChanges version' $ changes <> newChanges
+          Just (Some HistoryScriptContractState{..}) ->
+            flip Map.update contractId $ Just . \case
+              RemoveContract -> error "applied inputs after remove"
+              UpdateContract (SomeContractChanges version' changes) -> case assertVersionsEqual version version' of
+                Refl -> case assertVersionsEqual contractVersion version of
+                  Refl ->
+                    let
+                      step = ApplyTransaction transaction
+                      newChanges = ContractChanges
+                        { steps = Map.singleton block [step]
+                        , create = Nothing
+                        , rollbackTo = Nothing
+                        }
+                    in
+                      UpdateContract $ SomeContractChanges version' $ changes <> newChanges
     Withdraw contractId version step -> case state of
       [] -> error "create at genesis"
       HistoryScriptBlockState{..} : _ ->

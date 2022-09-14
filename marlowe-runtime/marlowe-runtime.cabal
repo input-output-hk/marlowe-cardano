@@ -77,6 +77,7 @@ library
     Language.Marlowe.Runtime.History.QueryServer
     Language.Marlowe.Runtime.History.Store
     Language.Marlowe.Runtime.History.Store.Memory
+    Language.Marlowe.Runtime.History.Store.Model
     Language.Marlowe.Runtime.History.SyncServer
   build-depends:
       base >= 4.9 && < 5
@@ -199,6 +200,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.History.FollowerSpec
     Language.Marlowe.Runtime.History.Script
     Language.Marlowe.Runtime.History.StoreSpec
+    Language.Marlowe.Runtime.History.Store.ModelSpec
     Language.Marlowe.Runtime.HistorySpec
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.Golden

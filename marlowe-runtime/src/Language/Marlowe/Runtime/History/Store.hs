@@ -15,6 +15,7 @@ import Data.Maybe (listToMaybe)
 import Data.Semialign (Semialign (alignWith))
 import Data.These (These (..))
 import Data.Type.Equality (testEquality, type (:~:) (..))
+import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), assertVersionsEqual)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
@@ -82,12 +83,40 @@ data FindNextStepsResponse
   | FindWait BlockHeader
   -- | The next steps were found in the provided block.
   | FindNext BlockHeader SomeContractSteps
+  deriving (Show, Eq)
 
 -- | A block header with an existentially quantified marlowe version.
 data Intersection = forall v. Intersection (MarloweVersion v) BlockHeader
 
+instance Eq Intersection where
+  Intersection v1 h1 == Intersection v2 h2 = case testEquality v1 v2 of
+    Just Refl -> h1 == h2
+    Nothing   -> False
+
+instance Show Intersection where
+  showsPrec p (Intersection v h) = showParen (p >= 11)
+    ( showString "Intersection"
+    . showSpace
+    . showsPrec 11 v
+    . showSpace
+    . showsPrec 11 h
+    )
+
 -- | A list of contract steps with an existentially quantified marlowe version.
 data SomeContractSteps = forall v. SomeContractSteps (MarloweVersion v) [ContractStep v]
+
+instance Eq SomeContractSteps where
+  SomeContractSteps MarloweV1 h1 == SomeContractSteps MarloweV1 h2 = h1 == h2
+
+instance Show SomeContractSteps where
+  showsPrec p (SomeContractSteps v h) = showParen (p >= 11)
+    ( showString "SomeContractSteps"
+    . showSpace
+    . showsPrec 11 v
+    . showSpace
+    . case v of
+        MarloweV1 -> showsPrec 11 h
+    )
 
 -- | Create a new history store from a set of dependencies.
 mkHistoryStore :: HistoryStoreDependencies -> STM HistoryStore
