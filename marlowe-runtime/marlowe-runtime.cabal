@@ -198,6 +198,31 @@ executable marlowe-follower
     , text
     , wl-pprint
 
+executable marlowe-tx
+  import: lang
+  hs-source-dirs:   marlowe-tx
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , containers
+    , marlowe
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
+    , network
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , text
+    , wl-pprint
+
 test-suite marlowe-runtime-test
   import: lang
   hs-source-dirs:

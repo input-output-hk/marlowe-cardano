@@ -49,8 +49,8 @@ newtype TransactionServer = TransactionServer
   { runTransactionServer :: IO ()
   }
 
-mkHistoryTransactionServer :: TransactionServerDependencies -> STM TransactionServer
-mkHistoryTransactionServer TransactionServerDependencies{..} = do
+mkTransactionServer :: TransactionServerDependencies -> STM TransactionServer
+mkTransactionServer TransactionServerDependencies{..} = do
   submitJobsVar <- newTVar mempty
   let
     getSubmitJob txId = do
