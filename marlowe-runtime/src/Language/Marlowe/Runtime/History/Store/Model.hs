@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.History.Store.Model where
 import Control.Monad (guard, (<=<))
 import Data.Bifunctor (first)
 import Data.Foldable (fold)
-import Data.List (intersperse, sort)
+import Data.List (intersperse)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Semigroup (Min (..))
@@ -286,20 +286,11 @@ findIntersection
   -> HistoryStoreModel
   -> Maybe Intersection
 findIntersection contractId blocks (HistoryStoreModel store) = do
-  HistoryRoot version block _ _ _ next <- Map.lookup contractId store
-  case sort blocks of
-    [] -> Nothing
-    block' : blocks'
-      | block == block -> intersect version block' blocks' next
-      | otherwise -> Nothing
-  where
-    intersect version candidate blocks' = \case
-      Nothing -> Just $ Intersection version candidate
-      Just (HistoryTree block _ _ next') -> case blocks' of
-        [] -> Just $ Intersection version candidate
-        candidate' : blocks''
-          | block == candidate' -> intersect version candidate' blocks'' next'
-          | otherwise -> Just $ Intersection version candidate
+  root@(HistoryRoot version _ _ _ _ _) <- Map.lookup contractId store
+  fmap (Intersection version . fst)
+    $ Set.maxView
+    $ Set.intersection (Set.fromList blocks)
+    $ getRootBlocks root
 
 findNextSteps
   :: ContractId

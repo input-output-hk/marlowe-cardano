@@ -16,116 +16,100 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Some (Some (..), withSome)
 import Data.Type.Equality (type (:~:) (Refl))
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), TxOutRef (TxOutRef), WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId (ContractId), Transaction (..), assertVersionsEqual)
-import Language.Marlowe.Runtime.History.Api (ContractStep (..), SomeCreateStep (..))
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis (..))
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion (..), Transaction (..),
+                                          assertVersionsEqual)
+import Language.Marlowe.Runtime.History.Api (ContractStep (..))
 import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..), applyRollback,
                                                   isEmptyChanges)
 import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract (..))
 import Language.Marlowe.Runtime.History.Script (HistoryScript (..), HistoryScriptBlockState (..),
                                                 HistoryScriptContractState (..), HistoryScriptEvent (..),
-                                                HistoryScriptState, genCreateContract, genRollForward, genTxId,
-                                                reduceScriptEvent)
+                                                HistoryScriptState, reduceScriptEvent)
 import Language.Marlowe.Runtime.History.Store
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
+import Language.Marlowe.Runtime.History.Store.Model (getRoots)
+import qualified Language.Marlowe.Runtime.History.Store.Model as Model
+import Language.Marlowe.Runtime.History.Store.ModelSpec (genFindCreateStepArgs, genFindIntersectionArgs,
+                                                         genFindNextStepArgs, modelFromScript)
 import Test.Hspec (Spec)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Property, (===))
+import Test.QuickCheck (Property, Testable, discard, (===))
 import Test.QuickCheck.Monadic (PropertyM, monadicIO, pick, run)
 
 spec :: Spec
 spec = do
-  prop "Created contracts are found" $ runHistoryProp propCreatedContractsAreFound
-  prop "Non created contracts are not found" $ runHistoryProp propNonCreatedContractsAreNotFound
-  prop "Rolled back contracts are not found" $ runHistoryProp propRolledBackContractsAreNotFound
-  prop "RollForward, RollBackward is a no-op" $ runHistoryProp propRollForwardRollBackward
+  prop "findContract matches model" $ runStoreProp \HistoryStore{..} model -> case getRoots model of
+    [] -> pure discard
+    _ -> do
+      contractId <- pick $ genFindCreateStepArgs model
+      actual <- run $ findContract contractId
+      pure $ actual === Model.findCreateStep contractId model
+  prop "findNextSteps matches model" $ runStoreProp \HistoryStore{..} model -> case getRoots model of
+    [] -> pure discard
+    _ -> do
+      (contractId, SomeMarloweVersion version, point) <- pick $ genFindNextStepArgs model
+      actual <- run $ toFindNextStepsResponse version <$> getNextSteps contractId version point
+      pure $ actual === Model.findNextSteps contractId point model
+  prop "getIntersectionPoints matches model" $ runStoreProp \HistoryStore{..} model -> case getRoots model of
+    [] -> pure discard
+    _ -> do
+      (contractId, SomeMarloweVersion version, blocks) <- pick $ genFindIntersectionArgs model
+      actual <- run $ fmap (Intersection version) <$> intersectContract contractId version blocks
+      pure $ actual === Model.findIntersection contractId blocks model
 
-propCreatedContractsAreFound :: HistoryProp
-propCreatedContractsAreFound HistoryScriptBlockState{..} _ HistoryStore{..} runEvent = do
-  Some event <- pick $ genCreateContract $ slotNo block
-  run $ runEvent event
-  let (contractId, create) = assertCreate event
-  found <- run $ findContract contractId
-  pure $ found === Just (block, create)
+toFindNextStepsResponse :: MarloweVersion v -> GetNextStepsResponse v -> FindNextStepsResponse
+toFindNextStepsResponse version = \case
+  Rollback p -> FindRollback p
+  Wait b _   -> FindWait b
+  Next b s   -> FindNext b $ SomeContractSteps version s
 
-propNonCreatedContractsAreNotFound :: HistoryProp
-propNonCreatedContractsAreNotFound _ _ HistoryStore{..} _ = do
-  contractId <- ContractId . flip TxOutRef 0 <$> pick genTxId
-  found <- run $ findContract contractId
-  pure $ found === Nothing
+runStoreProp
+  :: Testable a
+  => (HistoryStore -> Model.HistoryStoreModel -> PropertyM IO a)
+  -> HistoryScript
+  -> Property
+runStoreProp storeProp script = monadicIO do
+  (store@HistoryStore{..}, seedStore) <- run $ atomically setupStore
+  exVar <- run newEmptyTMVarIO
+  threadId <- run $ forkFinally runHistoryStore \case
+    Left ex -> atomically $ putTMVar exVar ex
+    _       -> pure ()
+  run $ seedStore script
+  let model = modelFromScript script
+  result <- storeProp store model
+  mEx <- run $ atomically $ tryTakeTMVar exVar
+  run $ killThread threadId
+  case mEx of
+    Nothing -> pure result
+    Just ex -> run $ throwIO ex
 
-propRolledBackContractsAreNotFound :: HistoryProp
-propRolledBackContractsAreNotFound HistoryScriptBlockState{..} _ HistoryStore{..} runEvent = do
-  Some event <- pick $ genCreateContract $ slotNo block
-  let (contractId, _) = assertCreate event
-  expected <- run $ findContract contractId
-  run do
-    runEvent event
-    runEvent $ RollBackward 1
-  found <- run $ findContract contractId
-  pure $ found === expected
+setupStore :: STM (HistoryStore, HistoryScript -> IO ())
+setupStore = do
+  changesVar <- newTVar mempty
+  stateVar <- newTVar []
+  historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
+  let
+    changes = do
+      newChanges <- readTVar changesVar
+      writeTVar changesVar $ flip Map.mapMaybe newChanges \case
+        RemoveContract                                 -> Nothing
+        UpdateContract (SomeContractChanges version _) -> Just $ UpdateContract $ SomeContractChanges version mempty
+      pure $ Map.filter notEmptyUpdate newChanges
+    notEmptyUpdate = \case
+      RemoveContract    -> False
+      UpdateContract ch -> not $ isEmptyChanges ch
+  store <- mkHistoryStore HistoryStoreDependencies{..}
+  let
+    seedStore (HistoryScript script) = do
+      atomically $ traverse_ (\event -> withSome event $ runScriptEvent stateVar changesVar) script
+      atomically $ void $ mfilter (all isEmptyUpdate) $ readTVar changesVar
+  pure (store, seedStore)
 
-propRollForwardRollBackward :: HistoryProp
-propRollForwardRollBackward HistoryScriptBlockState{..} _ HistoryStore{..} runEvent = do
-  Some event <- pick $ genCreateContract $ slotNo block
-  Some rollForward <- pick genRollForward
-  run $ runEvent event
-  let (contractId, _) = assertCreate event
-  expected <- run $ findContract contractId
-  run do
-    runEvent rollForward
-    runEvent $ RollBackward 1
-  actual <- run $ findContract contractId
-  pure $ actual === expected
-
-assertCreate :: HistoryScriptEvent v -> (ContractId, SomeCreateStep)
-assertCreate = \case
-    CreateContract contractId version create -> (contractId, SomeCreateStep version create)
-    _                                        -> error "failed to match irrefutable pattern"
-
-type RunScriptEvent = forall v. HistoryScriptEvent v -> IO ()
-
-type HistoryProp = HistoryScriptBlockState -> HistoryScriptState -> HistoryStore -> RunScriptEvent -> PropertyM IO Property
-
-runHistoryProp :: HistoryProp -> HistoryScript -> Property
-runHistoryProp test (HistoryScript script) = monadicIO do
-  (store@HistoryStore{..}, changesVar, stateVar, state) <- run $ atomically do
-    changesVar <- newTVar mempty
-    stateVar <- newTVar []
-    historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
-    let
-      changes = do
-        newChanges <- readTVar changesVar
-        writeTVar changesVar $ flip Map.mapMaybe newChanges \case
-          RemoveContract                                 -> Nothing
-          UpdateContract (SomeContractChanges version _) -> Just $ UpdateContract $ SomeContractChanges version mempty
-        pure $ Map.filter notEmptyUpdate newChanges
-      notEmptyUpdate = \case
-        RemoveContract    -> False
-        UpdateContract ch -> not $ isEmptyChanges ch
-    traverse_ (\event -> withSome event $ runScriptEvent stateVar changesVar) script
-    (, changesVar, stateVar,) <$> mkHistoryStore HistoryStoreDependencies{..} <*> readTVar stateVar
-  case state of
-    []                  -> error "Generated empty script"
-    blockState : state' -> do
-      exVar <- run newEmptyTMVarIO
-      threadId <- run $ forkFinally runHistoryStore \case
-        Left ex -> atomically $ putTMVar exVar ex
-        _       -> pure ()
-      result <- test blockState state' store \event -> do
-        -- write the changes
-        atomically $ runScriptEvent stateVar changesVar event
-        -- wait until they are picked up.
-        let
-          isEmptyUpdate = \case
-            RemoveContract    -> False
-            UpdateContract ch -> isEmptyChanges ch
-        void $ atomically $ mfilter (all isEmptyUpdate) $ readTVar changesVar
-      run $ killThread threadId
-      mEx <- run $ atomically $ tryTakeTMVar exVar
-      case mEx of
-        Nothing -> pure result
-        Just ex -> run $ throwIO ex
+isEmptyUpdate :: UpdateContract -> Bool
+isEmptyUpdate = \case
+  RemoveContract         -> False
+  UpdateContract changes -> isEmptyChanges changes
 
 runScriptEvent :: TVar HistoryScriptState -> TVar (Map ContractId UpdateContract) -> HistoryScriptEvent v -> STM ()
 runScriptEvent stateVar changesVar event = do
@@ -153,24 +137,20 @@ runScriptEvent stateVar changesVar event = do
           }
     ApplyInputs version transaction@Transaction{..} -> case state of
       [] -> error "create at genesis"
-      HistoryScriptBlockState{..} : _ ->
+      HistoryScriptBlockState{block, contractStates} : _ ->
         case Map.lookup contractId contractStates of
           Nothing -> error "contract not found"
-          Just (Some HistoryScriptContractState{..}) ->
+          Just (Some HistoryScriptContractState{contractVersion}) ->
             flip Map.update contractId $ Just . \case
               RemoveContract -> error "applied inputs after remove"
               UpdateContract (SomeContractChanges version' changes) -> case assertVersionsEqual version version' of
                 Refl -> case assertVersionsEqual contractVersion version of
-                  Refl ->
-                    let
-                      step = ApplyTransaction transaction
-                      newChanges = ContractChanges
-                        { steps = Map.singleton block [step]
-                        , create = Nothing
-                        , rollbackTo = Nothing
-                        }
-                    in
-                      UpdateContract $ SomeContractChanges version' $ changes <> newChanges
+                  Refl -> UpdateContract $ SomeContractChanges version' $ changes <> ContractChanges
+                    { steps = Map.singleton block [ApplyTransaction transaction]
+                    , create = Nothing
+                    , rollbackTo = Nothing
+                    }
+
     Withdraw contractId version step -> case state of
       [] -> error "create at genesis"
       HistoryScriptBlockState{..} : _ ->
