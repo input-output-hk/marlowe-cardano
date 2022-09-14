@@ -31,6 +31,7 @@ import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, 
                                            parseTokenName, protocolVersionOpt)
 import Language.Marlowe.CLI.Export (exportRoleAddress, exportRoleDatum, exportRoleRedeemer, exportRoleValidator)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
+import Language.Marlowe.Core.V1.Semantics.Types (Token (Token))
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 
 import Control.Monad.Reader.Class (MonadReader)
@@ -62,9 +63,10 @@ data RoleCommand =
     -- | Export the role datum for a Marlowe contract transaction.
   | ExportDatum
     {
-      roleName   :: TokenName       -- ^ The role name.
-    , outputFile :: Maybe FilePath  -- ^ The output JSON file for the datum.
-    , printStats :: Bool            -- ^ Whether to print statistics about the datum.
+      rolesCurrency' :: CurrencySymbol               -- ^ The role currency symbols, if any.
+    , roleName       :: TokenName       -- ^ The role name.
+    , outputFile     :: Maybe FilePath  -- ^ The output JSON file for the datum.
+    , printStats     :: Bool            -- ^ Whether to print statistics about the datum.
     }
     -- | Export the role redeemer for a Marlowe contract transaction.
   | ExportRedeemer
@@ -89,7 +91,7 @@ runRoleCommand command =
       ExportAddress{}     -> exportRoleAddress network' stake'
       ExportValidator{..} -> do exportRoleValidator protocolVersion costModel network' stake' outputFile printHash printStats
       ExportDatum{..}     -> exportRoleDatum
-                               roleName
+                               (Token rolesCurrency' roleName)
                                outputFile
                                printStats
       ExportRedeemer{..}  -> exportRoleRedeemer
@@ -164,7 +166,8 @@ exportDatumCommand =
 exportDatumOptions :: O.Parser RoleCommand
 exportDatumOptions =
   ExportDatum
-    <$> O.option parseTokenName    (O.long "role-name"   <> O.metavar "TOKEN_NAME" <> O.help "The role name for the datum.")
+    <$> O.option parseCurrencySymbol                       (O.long "roles-currency"   <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles."                                                    )
+    <*> O.option parseTokenName    (O.long "role-name"   <> O.metavar "TOKEN_NAME" <> O.help "The role name for the datum.")
     <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "DATUM_FILE" <> O.help "JSON output file for datum." )
     <*> O.switch                   (O.long "print-stats"                           <> O.help "Print statistics."           )
 
