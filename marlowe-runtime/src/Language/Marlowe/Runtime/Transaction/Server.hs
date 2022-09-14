@@ -1,37 +1,48 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module Language.Marlowe.Runtime.Transaction.Server
   where
 
-import Cardano.Api (ScriptDataSupportedInEra, Tx, TxBody)
+import Cardano.Api (ScriptDataSupportedInEra, SerialiseAsRawBytes(serialiseToRawBytes), Tx, TxBody, getTxBody, getTxId)
+import Control.Applicative ((<|>))
+import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
-import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM
+  (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTVar, retry, tryTakeTMVar, writeTVar)
 import Control.Exception (SomeException, catch)
 import qualified Data.Aeson as Aeson
+import Data.Either (fromRight)
+import Data.Functor (void)
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Time (UTCTime)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, TokenName, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, TokenName, TxId(TxId))
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, MarloweVersion, PayoutDatum, Redeemer)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError
   , CreateError
   , JobId(..)
   , MarloweTxCommand(..)
-  , SubmitError
-  , SubmitStatus
+  , SubmitError(..)
+  , SubmitStatus(..)
   , WalletAddresses(..)
   , WithdrawError
   )
-import Network.Protocol.Job.Server (JobServer(..), ServerStAttach, ServerStCmd, ServerStInit(..))
+import Network.Protocol.Job.Server
+  (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import System.IO (hPutStrLn, stderr)
 
 newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
 
-newtype TransactionServerDependencies = TransactionServerDependencies
+type RunSubmitJob era = ScriptDataSupportedInEra era -> Tx era -> (SubmitStatus -> IO ()) -> IO (Either SubmitError BlockHeader)
+
+data TransactionServerDependencies = TransactionServerDependencies
   { acceptRunTransactionServer :: IO (RunTransactionServer IO)
+  , runSubmitJob               :: forall era. RunSubmitJob era
   }
 
 newtype TransactionServer = TransactionServer
@@ -40,7 +51,14 @@ newtype TransactionServer = TransactionServer
 
 mkHistoryTransactionServer :: TransactionServerDependencies -> STM TransactionServer
 mkHistoryTransactionServer TransactionServerDependencies{..} = do
+  submitJobsVar <- newTVar mempty
   let
+    getSubmitJob txId = do
+      submitJobs <- readTVar submitJobsVar
+      case Map.lookup txId submitJobs of
+        Nothing     -> pure $ SendMsgAttachFailed ()
+        Just server -> SendMsgAttached <$> server
+    trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
     runTransactionServer = do
       runServer <- acceptRunTransactionServer
       Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
@@ -51,8 +69,11 @@ mkHistoryTransactionServer TransactionServerDependencies{..} = do
 catchWorker :: SomeException -> IO ()
 catchWorker = hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show
 
-newtype WorkerDependencies = WorkerDependencies
-  { runServer  :: RunTransactionServer IO
+data WorkerDependencies = WorkerDependencies
+  { runServer      :: RunTransactionServer IO
+  , getSubmitJob   :: TxId -> STM (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader STM ())
+  , trackSubmitJob :: TxId -> STM (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader STM ()) -> STM ()
+  , runSubmitJob   :: forall era. RunSubmitJob era
   }
 
 newtype Worker = Worker
@@ -80,17 +101,17 @@ mkWorker WorkerDependencies{..} =
           Withdraw era version addresses contractId payoutDatum ->
             execWithdraw era version addresses contractId payoutDatum
           Submit era tx ->
-            execSubmit era tx
+            execSubmit runSubmitJob trackSubmitJob era tx
       , recvMsgAttach = \case
-          JobIdSubmit era txId ->
-            attachSubmit era txId
+          JobIdSubmit _ txId ->
+            attachSubmit getSubmitJob txId
       }
 
 attachSubmit
-  :: ScriptDataSupportedInEra era
+  :: (TxId -> STM (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader STM ()))
   -> TxId
   -> IO (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
-attachSubmit = error "not implemented"
+attachSubmit getSubmitJob = atomically . fmap (hoistAttach atomically) . getSubmitJob
 
 execCreate
   :: ScriptDataSupportedInEra era
@@ -123,7 +144,47 @@ execWithdraw
 execWithdraw = error "not implemented"
 
 execSubmit
-  :: ScriptDataSupportedInEra era
+  :: RunSubmitJob era
+  -> (TxId -> STM (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader STM ()) -> STM ())
+  -> ScriptDataSupportedInEra era
   -> Tx era
   -> IO (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
-execSubmit = error "not implemented"
+execSubmit runSubmitJob trackSubmitJob era tx = do
+  let txId = TxId $ serialiseToRawBytes $ getTxId $ getTxBody tx
+  (mkServer, runJob) <- atomically do
+    -- A TVar that holds the current status of the job
+    statusVar <- newTVar Submitting
+    -- A TMVar that holds the result of the job when it is completed
+    resultVar <- newEmptyTMVar
+    -- An STM action to create a ServerStCmd that reads from the TVars above
+    let mkServer = mkSubmitServer (JobIdSubmit era txId) (readTVar statusVar) (tryTakeTMVar resultVar)
+    -- An IO action to run the actual submit job in a new thread.
+    let
+      runJob = void
+        $ forkFinally (runSubmitJob era tx (atomically . writeTVar statusVar))
+        $ atomically . putTMVar resultVar . fromRight (Left SubmitException)
+    -- Save the server creator so that it can be attached to later.
+    trackSubmitJob txId mkServer
+    pure (mkServer, runJob)
+  -- Run the job in a new thread
+  runJob
+  -- Make a new server and run it in IO.
+  hoistCmd atomically <$> atomically mkServer
+
+mkSubmitServer
+  :: JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
+  -> STM SubmitStatus
+  -> STM (Maybe (Either SubmitError BlockHeader))
+  -> STM (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader STM ())
+mkSubmitServer jobId getSubmitStatus getResult = go
+  where
+    go = sendResultServer <|> sendStatusServer
+    sendResultServer = do
+      result <- maybe retry pure =<< getResult
+      pure $ either (flip SendMsgFail ()) (flip SendMsgSucceed ()) result
+    sendStatusServer = do
+      status <- getSubmitStatus
+      pure $ SendMsgAwait status jobId ServerStAwait
+        { recvMsgDetach = pure ()
+        , recvMsgPoll = go
+        }

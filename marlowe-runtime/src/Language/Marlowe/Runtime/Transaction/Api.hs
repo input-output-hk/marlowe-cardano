@@ -309,10 +309,11 @@ data WithdrawError
   deriving (Eq, Show, Generic, Binary)
 
 data SubmitError
+  = SubmitException
+  | SubmitFailed String -- should be from show TxValidationErrorInMode
   deriving (Eq, Show, Generic, Binary)
 
 data SubmitStatus
   = Submitting
-  | Submitted
   | Accepted
   deriving (Eq, Show, Generic, Binary)

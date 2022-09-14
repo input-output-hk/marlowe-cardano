@@ -92,35 +92,50 @@ hoistJobServer
   => (forall x. m x -> n x)
   -> JobServer cmd m a
   -> JobServer cmd n a
-hoistJobServer phi = JobServer . phi . fmap hoistInit . runJobServer
-  where
-  hoistInit ServerStInit{..} = ServerStInit
-    { recvMsgExec = phi . fmap hoistCmd . recvMsgExec
-    , recvMsgAttach = phi . fmap hoistAttach . recvMsgAttach
-    }
+hoistJobServer phi = JobServer . phi . fmap (hoistInit phi) . runJobServer
 
-  hoistAttach
-    :: ServerStAttach cmd status err result m a
-    -> ServerStAttach cmd status err result n a
-  hoistAttach = \case
-    SendMsgAttachFailed a -> SendMsgAttachFailed a
-    SendMsgAttached cmd   -> SendMsgAttached $ hoistCmd cmd
+hoistInit
+  :: forall cmd m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStInit cmd m a
+  -> ServerStInit cmd n a
+hoistInit phi ServerStInit{..} = ServerStInit
+  { recvMsgExec = phi . fmap (hoistCmd phi) . recvMsgExec
+  , recvMsgAttach = phi . fmap (hoistAttach phi) . recvMsgAttach
+  }
 
-  hoistCmd
-    :: ServerStCmd cmd status err result m a
-    -> ServerStCmd cmd status err result n a
-  hoistCmd = \case
-    SendMsgFail err a               -> SendMsgFail err a
-    SendMsgSucceed result a         -> SendMsgSucceed result a
-    SendMsgAwait status cmdId await -> SendMsgAwait status cmdId $ hoistAwait await
+hoistAttach
+  :: forall cmd status err result m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStAttach cmd status err result m a
+  -> ServerStAttach cmd status err result n a
+hoistAttach phi = \case
+  SendMsgAttachFailed a -> SendMsgAttachFailed a
+  SendMsgAttached cmd   -> SendMsgAttached $ hoistCmd phi cmd
 
-  hoistAwait
-    :: ServerStAwait cmd status err result m a
-    -> ServerStAwait cmd status err result n a
-  hoistAwait ServerStAwait{..} = ServerStAwait
-    { recvMsgPoll = phi $ hoistCmd <$> recvMsgPoll
-    , recvMsgDetach = phi recvMsgDetach
-    }
+hoistCmd
+  :: forall cmd status err result m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStCmd cmd status err result m a
+  -> ServerStCmd cmd status err result n a
+hoistCmd phi = \case
+  SendMsgFail err a               -> SendMsgFail err a
+  SendMsgSucceed result a         -> SendMsgSucceed result a
+  SendMsgAwait status cmdId await -> SendMsgAwait status cmdId $ hoistAwait phi await
+
+hoistAwait
+  :: forall cmd status err result m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStAwait cmd status err result m a
+  -> ServerStAwait cmd status err result n a
+hoistAwait phi ServerStAwait{..} = ServerStAwait
+  { recvMsgPoll = phi $ hoistCmd phi <$> recvMsgPoll
+  , recvMsgDetach = phi recvMsgDetach
+  }
 
 -- | Interpret a server as a typed-protocols peer.
 jobServerPeer
