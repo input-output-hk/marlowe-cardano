@@ -39,7 +39,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCliMaybe)
-import Language.Marlowe.CLI.Types (AnyTimeout, CliError (..), TruncateMilliseconds (TruncateMilliseconds),
+import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, TruncateMilliseconds (TruncateMilliseconds),
                                    toMarloweTimeout)
 import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
 import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
@@ -55,63 +55,63 @@ data TemplateCommand =
     -- | Template for trivial contract.
     TemplateTrivial
     {
-      bystander          :: Party       -- ^ The party providing the min-ADA.
-    , minAda             :: Integer     -- ^ Lovelace in the initial state.
-    , party              :: Party       -- ^ The party.
-    , depositLovelace    :: Integer     -- ^ Lovelace in the deposit.
-    , withdrawalLovelace :: Integer     -- ^ Lovelace in the withdrawal.
-    , timeout            :: AnyTimeout  -- ^ The timeout.
+      bystander          :: Party         -- ^ The party providing the min-ADA.
+    , minAda             :: Integer       -- ^ Lovelace in the initial state.
+    , party              :: Party         -- ^ The party.
+    , depositLovelace    :: Integer       -- ^ Lovelace in the deposit.
+    , withdrawalLovelace :: Integer       -- ^ Lovelace in the withdrawal.
+    , timeout            :: SomeTimeout   -- ^ The timeout.
     }
     -- | Template for escrow contract.
   | TemplateEscrow
     {
-      minAda            :: Integer    -- ^ Lovelace in the initial state.
-    , price             :: Integer    -- ^ Price of the item for sale, in lovelace.
-    , seller            :: Party      -- ^ The seller.
-    , buyer             :: Party      -- ^ The buyer.
-    , mediator          :: Party      -- ^ The mediator.
-    , paymentDeadline   :: AnyTimeout -- ^ The deadline for the buyer to pay.
-    , complaintDeadline :: AnyTimeout -- ^ The deadline for the buyer to complain.
-    , disputeDeadline   :: AnyTimeout -- ^ The deadline for the seller to dispute a complaint.
-    , mediationDeadline :: AnyTimeout -- ^ The deadline for the mediator to decide.
+      minAda            :: Integer      -- ^ Lovelace in the initial state.
+    , price             :: Integer      -- ^ Price of the item for sale, in lovelace.
+    , seller            :: Party        -- ^ The seller.
+    , buyer             :: Party        -- ^ The buyer.
+    , mediator          :: Party        -- ^ The mediator.
+    , paymentDeadline   :: SomeTimeout  -- ^ The deadline for the buyer to pay.
+    , complaintDeadline :: SomeTimeout  -- ^ The deadline for the buyer to complain.
+    , disputeDeadline   :: SomeTimeout  -- ^ The deadline for the seller to dispute a complaint.
+    , mediationDeadline :: SomeTimeout  -- ^ The deadline for the mediator to decide.
     }
     -- | Template for swap contract.
   | TemplateSwap
     {
-      minAda   :: Integer    -- ^ Lovelace that the first party contributes to the initial state.
-    , aParty   :: Party      -- ^ First party.
-    , aToken   :: Token      -- ^ First party's token.
-    , aAmount  :: Integer    -- ^ Amount of first party's token.
-    , aTimeout :: AnyTimeout -- ^ Timeout for first party's deposit.
-    , bParty   :: Party      -- ^ Second party.
-    , bToken   :: Token      -- ^ Second party's token.
-    , bAmount  :: Integer    -- ^ Amount of second party's token.
-    , bTimeout :: AnyTimeout -- ^ Timeout for second party's deposit.
+      minAda   :: Integer     -- ^ Lovelace that the first party contributes to the initial state.
+    , aParty   :: Party       -- ^ First party.
+    , aToken   :: Token       -- ^ First party's token.
+    , aAmount  :: Integer     -- ^ Amount of first party's token.
+    , aTimeout :: SomeTimeout -- ^ Timeout for first party's deposit.
+    , bParty   :: Party       -- ^ Second party.
+    , bToken   :: Token       -- ^ Second party's token.
+    , bAmount  :: Integer     -- ^ Amount of second party's token.
+    , bTimeout :: SomeTimeout -- ^ Timeout for second party's deposit.
     }
     -- | Template for zero-coupon bond.
   | TemplateZeroCouponBond
     {
-      minAda          :: Integer    -- ^ Lovelace that the lender contributes to the initial state.
-    , lender          :: Party      -- ^ The lender.
-    , borrower        :: Party      -- ^ The borrower.
-    , principal       :: Integer    -- ^ The principal.
-    , interest        :: Integer    -- ^ The interest.
-    , lendingDeadline :: AnyTimeout -- ^ The lending deadline.
-    , paybackDeadline :: AnyTimeout -- ^ The payback deadline.
+      minAda          :: Integer      -- ^ Lovelace that the lender contributes to the initial state.
+    , lender          :: Party        -- ^ The lender.
+    , borrower        :: Party        -- ^ The borrower.
+    , principal       :: Integer      -- ^ The principal.
+    , interest        :: Integer      -- ^ The interest.
+    , lendingDeadline :: SomeTimeout  -- ^ The lending deadline.
+    , paybackDeadline :: SomeTimeout  -- ^ The payback deadline.
     }
     -- | Template for covered call.
   | TemplateCoveredCall
     {
-      minAda         :: Integer    -- ^ Lovelace that the lender contributes to the initial state.
-    , issuer         :: Party      -- ^ The issuer.
-    , counterparty   :: Party      -- ^ The counter-party.
-    , currency       :: Token      -- ^ The currency token.
-    , underlying     :: Token      -- ^ The underlying token.
-    , strike         :: Integer    -- ^ The strike in currency.
-    , amount         :: Integer    -- ^ The amount of underlying.
-    , issueDate      :: AnyTimeout -- ^ The issue date.
-    , maturityDate   :: AnyTimeout -- ^ The maturity date.
-    , settlementDate :: AnyTimeout -- ^ The settlement date.
+      minAda         :: Integer     -- ^ Lovelace that the lender contributes to the initial state.
+    , issuer         :: Party       -- ^ The issuer.
+    , counterparty   :: Party       -- ^ The counter-party.
+    , currency       :: Token       -- ^ The currency token.
+    , underlying     :: Token       -- ^ The underlying token.
+    , strike         :: Integer     -- ^ The strike in currency.
+    , amount         :: Integer     -- ^ The amount of underlying.
+    , issueDate      :: SomeTimeout -- ^ The issue date.
+    , maturityDate   :: SomeTimeout -- ^ The maturity date.
+    , settlementDate :: SomeTimeout -- ^ The settlement date.
     }
     -- | Template for actus contracts.
   | TemplateActus
@@ -133,7 +133,7 @@ data OutputFiles = OutputFiles
 
 -- FIXME: It is an workaround for this: https://github.com/input-output-hk/marlowe-cardano/issues/236
 -- Let's be explicite about this.
-toMarloweTimeout' :: MonadIO m => AnyTimeout -> m E.Timeout
+toMarloweTimeout' :: MonadIO m => SomeTimeout -> m E.Timeout
 toMarloweTimeout' t = toMarloweTimeout t (TruncateMilliseconds True)
 
 -- | Create a contract from a template.

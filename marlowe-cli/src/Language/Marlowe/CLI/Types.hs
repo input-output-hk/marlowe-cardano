@@ -42,7 +42,7 @@ module Language.Marlowe.CLI.Types (
 , SomeMarloweTransaction(..)
 , CliEnv(..)
 , CoinSelectionStrategy(..)
-, AnyTimeout(..)
+, SomeTimeout(..)
 , TruncateMilliseconds(..)
 -- * eUTxOs
 , AnUTxO(..)
@@ -445,7 +445,16 @@ validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
     (_, Left err)     -> Left $ show err
 
 
-validatorInfo' :: (MonadError CliError m, IsPlutusScriptLanguage lang) => C.PlutusScript lang -> Maybe C.TxIn -> ScriptDataSupportedInEra era -> P.ProtocolVersion -> P.CostModelParams -> C.NetworkId -> C.StakeAddressReference -> m (ValidatorInfo lang era)
+validatorInfo' :: MonadError CliError m
+               => IsPlutusScriptLanguage lang
+               => C.PlutusScript lang
+               -> Maybe C.TxIn
+               -> ScriptDataSupportedInEra era
+               -> P.ProtocolVersion
+               -> P.CostModelParams
+               -> C.NetworkId
+               -> C.StakeAddressReference
+               -> m (ValidatorInfo lang era)
 validatorInfo' sc t e p c n st = liftEither . Bifunctor.first CliError $ validatorInfo sc t e p c n st
 
 
@@ -600,16 +609,16 @@ data OutputQuery era result where
   FindReferenceScript :: PlutusScriptVersion lang -> C.ScriptHash -> OutputQuery era (Maybe (AnUTxO era, PlutusScript lang))
 
 
-data AnyTimeout = AbsoluteTimeout Integer | RelativeTimeout NominalDiffTime
+data SomeTimeout = AbsoluteTimeout Integer | RelativeTimeout NominalDiffTime
     deriving stock (Eq, Generic, Show)
 
 
-instance ToJSON AnyTimeout where
+instance ToJSON SomeTimeout where
   toJSON (AbsoluteTimeout timeout)  = Aeson.object [("absolute", toJSON timeout)]
   toJSON (RelativeTimeout duration) = Aeson.object [("relative", toJSON duration)]
 
 
-instance FromJSON AnyTimeout where
+instance FromJSON SomeTimeout where
   parseJSON json = case json of
     Aeson.Object (KeyMap.toList -> [("absolute", absoluteTimeout)]) -> do
       parsedTimeout <- parseJSON absoluteTimeout
@@ -620,30 +629,37 @@ instance FromJSON AnyTimeout where
     _ -> fail "Expected object with a single field of either `absolute` or `relative`"
 
 
+-- | We provide a special truncating versions of timeout conversions so we initialize
+-- | Marlowe timeouts values. It seems that cardano-node truncates truncates the
+-- | milliseconds from time range.
+-- | https://github.com/input-output-hk/marlowe-cardano/issues/236
+newtype TruncateMilliseconds = TruncateMilliseconds Bool
+
 utcToMilliseconds :: UTCTime -> Integer
 utcToMilliseconds = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
+
 
 utcToSeconds :: UTCTime -> Integer
 utcToSeconds = floor . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
 
 
-newtype TruncateMilliseconds = TruncateMilliseconds Bool
-
-anyTimeoutToMilliseconds :: MonadIO m => AnyTimeout -> TruncateMilliseconds -> m Integer
-anyTimeoutToMilliseconds (AbsoluteTimeout t) (TruncateMilliseconds r) = if r
+someTimeoutToMilliseconds :: MonadIO m => SomeTimeout -> TruncateMilliseconds -> m Integer
+someTimeoutToMilliseconds (AbsoluteTimeout t) (TruncateMilliseconds r) = if r
   then pure (1000 * (t `quot` 1000))
   else pure t
-anyTimeoutToMilliseconds (RelativeTimeout seconds) (TruncateMilliseconds r) = do
+someTimeoutToMilliseconds (RelativeTimeout seconds) (TruncateMilliseconds r) = do
   t <- liftIO $ addUTCTime seconds <$> getCurrentTime
   pure if r
     then (1000 *) . utcToSeconds $ t
     else utcToMilliseconds t
 
-toMarloweTimeout :: MonadIO m => AnyTimeout -> TruncateMilliseconds -> m E.Timeout
-toMarloweTimeout t r = POSIXTime <$> anyTimeoutToMilliseconds t r
 
-toPOSIXTime :: MonadIO m => AnyTimeout -> TruncateMilliseconds -> m P.POSIXTime
-toPOSIXTime t r = P.POSIXTime <$> anyTimeoutToMilliseconds t r
+toMarloweTimeout :: MonadIO m => SomeTimeout -> TruncateMilliseconds -> m E.Timeout
+toMarloweTimeout t r = POSIXTime <$> someTimeoutToMilliseconds t r
+
+
+toPOSIXTime :: MonadIO m => SomeTimeout -> TruncateMilliseconds -> m P.POSIXTime
+toPOSIXTime t r = P.POSIXTime <$> someTimeoutToMilliseconds t r
 
 
 data PublishingStrategy era =

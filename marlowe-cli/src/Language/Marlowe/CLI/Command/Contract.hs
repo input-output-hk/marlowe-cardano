@@ -161,7 +161,6 @@ exportMarloweOptions network =
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
     <*> protocolVersionOpt
-
     <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"              <> O.help "JSON input file for the contract."                                                 )
     <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"                 <> O.help "JSON input file for the contract state."                                           )
     <*> (O.many . O.strOption)                             (O.long "input-file"     <> O.metavar "INPUT_FILE"                 <> O.help "JSON input file for redeemer inputs."                                              )
@@ -206,7 +205,6 @@ exportValidatorOptions network =
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
     <*> protocolVersionOpt
-
     <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for validator."                                                   )
     <*> O.switch                                           (O.long "print-hash"                                               <> O.help "Print validator hash."                                                             )
     <*> O.switch                                           (O.long "print-stats"                                              <> O.help "Print statistics."                                                                 )

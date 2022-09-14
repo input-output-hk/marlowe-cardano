@@ -207,7 +207,7 @@ queryInEra :: MonadError CliError m
             => MonadIO m
             => MonadReader (CliEnv era) m
             => LocalNodeConnectInfo CardanoMode     -- ^ The connection info for the local node.
-            -> QueryInShelleyBasedEra era a  -- ^ The query.
+            -> QueryInShelleyBasedEra era a         -- ^ The query.
             -> m a                                  -- ^ Action for running the query.
 queryInEra connection q = do
   era <- askEra
@@ -217,7 +217,9 @@ queryInEra connection q = do
     $ QueryInShelleyBasedEra (toShelleyBasedEra era) q
   liftCli res
 
-getProtocolVersion :: (MonadError CliError m, MonadIO m, MonadReader (CliEnv era) m)
+getProtocolVersion :: MonadError CliError m
+                   => MonadIO m
+                   => MonadReader (CliEnv era) m
                    => LocalNodeConnectInfo CardanoMode
                    -> m ProtocolVersion
 getProtocolVersion connection = do

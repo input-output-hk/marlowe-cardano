@@ -294,13 +294,11 @@ buildSimpleOptions network socket =
     <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                    (O.long "socket-path"     <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> requiredSignersOpt
-
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"           <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
     <*> (O.many . O.option parseTxOut) (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
     <*> O.option parseAddress       (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"   <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
     <*> txBodyFileOpt
-
     <*> (O.optional . O.option O.auto) (O.long "submit"          <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                       (O.long "print-stats"                                             <> O.help "Print statistics."                                                                                               )
     <*> O.switch                       (O.long "script-invalid"                                          <> O.help "Assert that the transaction is invalid."                                                                         )
@@ -326,7 +324,6 @@ buildIncomingOptions network socket =
     <*> O.strOption                    (O.long "socket-path"       <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.option parseAddress       (O.long "script-address"    <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
     <*> requiredSignersOpt
-
     <*> O.strOption                    (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"               <> O.help "Datum JSON file datum paid to Marlowe contract."                                                                 )
     <*> O.option parseValue            (O.long "tx-out-marlowe"    <> O.metavar "VALUE"                    <> O.help "Value paid to Marlowe contract."                                                                                 )
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"             <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
@@ -334,7 +331,6 @@ buildIncomingOptions network socket =
     <*> O.option parseAddress       (O.long "change-address"    <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> (O.optional . O.strOption)     (O.long "metadata-file"     <> O.metavar "METADATA_FILE"            <> O.help "JSON file containing metadata."                                                                                  )
     <*> txBodyFileOpt
-
     <*> (O.optional . O.option O.auto) (O.long "submit"            <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                       (O.long "print-stats"                                               <> O.help "Print statistics."                                                                                               )
     <*> O.switch                       (O.long "script-invalid"                                            <> O.help "Assert that the transaction is invalid."                                                                         )

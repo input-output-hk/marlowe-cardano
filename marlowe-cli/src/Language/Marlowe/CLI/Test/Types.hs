@@ -88,8 +88,8 @@ import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (AnyTimeout, MarloweScriptsRefs, MarloweTransaction (MarloweTransaction, mtInputs),
-                                   SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (MarloweScriptsRefs, MarloweTransaction (MarloweTransaction, mtInputs),
+                                   SomePaymentSigningKey, SomeTimeout)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
@@ -121,10 +121,6 @@ data ScriptTest =
   ScriptTest
   {
     stTestName         :: String             -- ^ The name of the test.
-  -- , stSlotLength       :: Integer            -- ^ The slot length, in milliseconds.
-  -- , stSlotZeroOffset   :: Integer            -- ^ The effective POSIX time of slot zero, in milliseconds.
-  -- , stInitialContract  :: Contract           -- ^ The contract.
-  -- , stInitialState     :: State              -- ^ The the contract's initial state.
   , stScriptOperations :: [ScriptOperation]  -- ^ The sequence of test operations.
   }
     deriving stock (Eq, Generic, Show)
@@ -168,8 +164,8 @@ data TokenAssignment = TokenAssignment
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data ScriptOperation =
-    -- | "Private" currency minting policy which
-    -- | checks for a signature for a particular issuer address.
+    -- | We use "private" currency minting policy which
+    -- | checks for a signature of a particular issuer.
     Mint
     {
       soCurrencyNickname  :: CurrencyNickname
@@ -181,24 +177,26 @@ data ScriptOperation =
     {
       soMinAda           :: Integer
     , soContractNickname :: ContractNickname        -- ^ The name of the wallet's owner.
-    , soRoleCurrency     :: Maybe CurrencyNickname  -- ^ If contract requires uses roles currency has to provided here.
+    , soRoleCurrency     :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
     , soContractSource   :: ContractSource          -- ^ The Marlowe contract to be created.
-    , soSubmitter        :: Maybe WalletNickname    -- ^ A wallet which gonna create the initial transaction.
+    , soSubmitter        :: Maybe WalletNickname    -- ^ A wallet which gonna submit the initial transaction.
     }
   | Prepare
     {
-      soContractNickname :: ContractNickname  -- ^ The name of the contract.
-    , soInputs           :: [A.Value]         -- ^ Inputs to the contract.
-    , soMinimumTime      :: AnyTimeout
-    , soMaximumTime      :: AnyTimeout
+      soContractNickname     :: ContractNickname  -- ^ The name of the contract.
+    , soInputs               :: [A.Value]         -- ^ Inputs to the contract.
+    , soMinimumTime          :: SomeTimeout
+    , soMaximumTime          :: SomeTimeout
+    , soOverrideMarloweState :: Maybe M.State
     }
   | Publish
-    { soPublisher          :: Maybe WalletNickname   -- ^ By default use faucet wallet. Wallet used to cover fees.
+    { soPublisher          :: Maybe WalletNickname   -- ^ Wallet used to cover fees. Falls back to faucet wallet.
     , soPublishPermanently :: Maybe Bool             -- ^ Whether to publish script permanently.
     }
   | AutoRun
     {
       soContractNickname :: ContractNickname
+    , soInvalid          :: Maybe Bool
     }
   | CreateWallet
     {
@@ -295,7 +293,7 @@ data UseTemplate =
       utParty              :: Maybe PartyRef              -- ^ The party. Falls back to the faucet wallet pkh.
     , utDepositLovelace    :: Integer                     -- ^ Lovelace in the deposit.
     , utWithdrawalLovelace :: Integer                     -- ^ Lovelace in the withdrawal.
-    , utTimeout            :: AnyTimeout                  -- ^ The timeout.
+    , utTimeout            :: SomeTimeout                  -- ^ The timeout.
     }
     -- | Use for escrow contract.
   | UseEscrow
@@ -304,10 +302,10 @@ data UseTemplate =
     , utSeller            :: PartyRef   -- ^ Defaults to a wallet with the "Buyer" nickname.
     , utBuyer             :: PartyRef    -- ^ Defaults to a wallet with the "Seller" ncikname.
     , utMediator          :: PartyRef   -- ^ The mediator.
-    , utPaymentDeadline   :: AnyTimeout -- ^ The deadline for the buyer to pay.
-    , utComplaintDeadline :: AnyTimeout -- ^ The deadline for the buyer to complain.
-    , utDisputeDeadline   :: AnyTimeout -- ^ The deadline for the seller to dispute a complaint.
-    , utMediationDeadline :: AnyTimeout -- ^ The deadline for the mediator to decide.
+    , utPaymentDeadline   :: SomeTimeout -- ^ The deadline for the buyer to pay.
+    , utComplaintDeadline :: SomeTimeout -- ^ The deadline for the buyer to complain.
+    , utDisputeDeadline   :: SomeTimeout -- ^ The deadline for the seller to dispute a complaint.
+    , utMediationDeadline :: SomeTimeout -- ^ The deadline for the mediator to decide.
     }
     -- | Use for swap contract.
   | UseSwap
@@ -315,11 +313,11 @@ data UseTemplate =
       utAParty   :: PartyRef    -- ^ First party.
     , utAToken   :: E.Token      -- ^ First party's token.
     , utAAmount  :: Integer    -- ^ Amount of first party's token.
-    , utATimeout :: AnyTimeout -- ^ Timeout for first party's deposit.
+    , utATimeout :: SomeTimeout -- ^ Timeout for first party's deposit.
     , utBParty   :: PartyRef    -- ^ Second party.
     , utBToken   :: E.Token      -- ^ Second party's token.
     , utBAmount  :: Integer    -- ^ Amount of second party's token.
-    , utBTimeout :: AnyTimeout -- ^ Timeout for second party's deposit.
+    , utBTimeout :: SomeTimeout -- ^ Timeout for second party's deposit.
     }
     -- | Use for zero-coupon bond.
   | UseZeroCouponBond
@@ -328,8 +326,8 @@ data UseTemplate =
     , utBorrower        :: PartyRef    -- ^ The borrower.
     , utPrincipal       :: Integer    -- ^ The principal.
     , utInterest        :: Integer    -- ^ The interest.
-    , utLendingDeadline :: AnyTimeout -- ^ The lending deadline.
-    , utPaybackDeadline :: AnyTimeout -- ^ The payback deadline.
+    , utLendingDeadline :: SomeTimeout -- ^ The lending deadline.
+    , utPaybackDeadline :: SomeTimeout -- ^ The payback deadline.
     }
     -- | Use for covered call.
   | UseCoveredCall
@@ -340,9 +338,9 @@ data UseTemplate =
     , utUnderlying     :: E.Token    -- ^ The underlying token.
     , utStrike         :: Integer    -- ^ The strike in currency.
     , utAmount         :: Integer    -- ^ The amount of underlying.
-    , utIssueDate      :: AnyTimeout -- ^ The issue date.
-    , utMaturityDate   :: AnyTimeout -- ^ The maturity date.
-    , utSettlementDate :: AnyTimeout -- ^ The settlement date.
+    , utIssueDate      :: SomeTimeout -- ^ The issue date.
+    , utMaturityDate   :: SomeTimeout -- ^ The maturity date.
+    , utSettlementDate :: SomeTimeout -- ^ The settlement date.
     }
     -- | Use for actus contracts.
   | UseActus
@@ -410,7 +408,11 @@ data AnyMarloweThread lang era where
   AnyMarloweThread :: MarloweThread lang era status -> AnyMarloweThread lang era
 
 
-anyMarloweThread :: MarloweTransaction lang era -> C.TxBody era -> Maybe C.TxIn -> Maybe (AnyMarloweThread lang era) -> Maybe (AnyMarloweThread lang era)
+anyMarloweThread :: MarloweTransaction lang era
+                 -> C.TxBody era
+                 -> Maybe C.TxIn
+                 -> Maybe (AnyMarloweThread lang era)
+                 -> Maybe (AnyMarloweThread lang era)
 anyMarloweThread mt@MarloweTransaction{..} txBody mTxIn mth = case (mTxIn, mtInputs, mth) of
   (Just txIn, [], Nothing) -> Just (AnyMarloweThread (Created mt txBody txIn))
 
@@ -426,13 +428,18 @@ anyMarloweThread mt@MarloweTransaction{..} txBody mTxIn mth = case (mTxIn, mtInp
 
   -- Inputs are not allowed in the initial transaction.
   (Just _, _:_, Nothing) -> Nothing
-  -- Auto application should not be possible becaue contract on chain is quiescent.
+  -- We disallow empty intermediate input application in here.
+  -- Is there a non closing contract reduction which can be
+  -- triggered like that?
   (Just _, [], Just _) -> Nothing
   -- It is impossible to deploy anything without marlowe output.
   (Nothing, _, Nothing) -> Nothing
 
 
-overAnyMarloweThread :: forall a era lang. (forall status'. MarloweThread lang era status' -> a) -> AnyMarloweThread lang era -> a
+overAnyMarloweThread :: forall a era lang
+                      . (forall status'. MarloweThread lang era status' -> a)
+                      -> AnyMarloweThread lang era
+                      -> a
 overAnyMarloweThread f (AnyMarloweThread th) = f th
 
 
@@ -464,7 +471,7 @@ data ScriptState lang era = ScriptState
     _ssContracts        :: Map ContractNickname (MarloweContract lang era)
   , _ssCurrencies       :: Map CurrencyNickname CustomCurrency
   , _ssReferenceScripts :: Maybe (MarloweScriptsRefs lang era)
-  , _ssWallets          :: Map WalletNickname (Wallet era)               -- ^ Faucet wallet should be included here.
+  , _ssWallets          :: Map WalletNickname (Wallet era)                    -- ^ Faucet wallet should be included here.
   }
 
 

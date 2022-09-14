@@ -42,7 +42,6 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseUrl
 , parseValue
 , protocolVersionOpt
-, protocolVersionOpt'
 , publishingStrategyOpt
 , requiredSignerOpt
 , requiredSignersOpt
@@ -59,9 +58,9 @@ import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsS
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
-import Language.Marlowe.CLI.Types (AnyTimeout (..), OutputQuery (..), OutputQueryResult,
+import Language.Marlowe.CLI.Types (OutputQuery (..), OutputQueryResult,
                                    PublishingStrategy (PublishAtAddress, PublishPermanently),
-                                   SigningKeyFile (SigningKeyFile), TxBodyFile (TxBodyFile))
+                                   SigningKeyFile (SigningKeyFile), SomeTimeout (..), TxBodyFile (TxBodyFile))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -112,7 +111,7 @@ parsePOSIXTime = POSIXTime <$> O.auto
 
 
 -- | Parser for Timeout.
-parseTimeout :: O.ReadM AnyTimeout
+parseTimeout :: O.ReadM SomeTimeout
 parseTimeout = O.eitherReader $ \s -> case s =~ "^([1-9][[:digit:]]*|0)([s|m|h|d|w]?)$" of
     [[_, instant, ""]] -> do
       timeout <- readEither instant
@@ -413,19 +412,20 @@ parseProtocolVersion = O.eitherReader \case
 
 
 protocolVersionOpt :: O.Parser ProtocolVersion
-protocolVersionOpt = fromMaybe vasilPV <$> protocolVersionOpt'
+protocolVersionOpt = fromMaybe vasilPV <$> (O.optional $ O.option parseProtocolVersion (O.long "protocol-version" <> O.metavar "PROTOCOL_VERSION" <> O.help "Protocol version: [alonzo|vasil]"))
 
-protocolVersionOpt' :: O.Parser (Maybe ProtocolVersion)
-protocolVersionOpt' = (O.optional . O.option parseProtocolVersion)  (O.long "protocol-version" <> O.metavar "PROTOCOL_VERSION" <> O.help "Protocol version: [alonzo|vasil]")
 
 requiredSignerOpt :: O.Parser SigningKeyFile
 requiredSignerOpt = SigningKeyFile <$> O.strOption (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
 
+
 requiredSignersOpt :: O.Parser [SigningKeyFile]
 requiredSignersOpt =  map SigningKeyFile <$> (O.some . O.strOption) (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
 
+
 txBodyFileOpt :: O.Parser TxBodyFile
 txBodyFileOpt = TxBodyFile <$> O.strOption (O.long "out-file" <> O.metavar "FILE"         <> O.help "Output file for transaction body.")
+
 
 publishingStrategyOpt :: forall era. C.IsShelleyBasedEra era => O.Parser (PublishingStrategy era)
 publishingStrategyOpt =

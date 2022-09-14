@@ -108,7 +108,7 @@ interpret :: forall era m
           => MonadIO m
           => ScriptOperation
           -> m ()
-interpret CreateWallet {..} = do
+interpret so@CreateWallet {..} = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
   let vkey = getVerificationKey skey
   connection <- view seConnection
@@ -116,6 +116,7 @@ interpret CreateWallet {..} = do
   let
     address = makeShelleyAddressInEra localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
   let wallet = Wallet address (Left skey) mempty mempty vkey
+  logSoMsg' so $ "Wallet created with an address: " <> Text.unpack (C.serialiseAddress address)
   ssWallets `modifying` Map.insert soWalletNickname wallet
 
 interpret FundWallet {..} = do
@@ -280,7 +281,10 @@ interpret Prepare {..} = do
     True
 
   let
-    plan = new <| mcPlan
+    new' = case soOverrideMarloweState of
+      Just customState -> new { mtState = customState }
+      Nothing          -> new
+    plan = new' <| mcPlan
     marloweContract' = marloweContract{ mcPlan = plan }
 
   modifying ssContracts $ Map.insert soContractNickname marloweContract'
@@ -304,8 +308,9 @@ interpret AutoRun {..} = do
           pmt <- overAnyMarloweThread getMarloweThreadTransaction <$> th
           txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< th
           pure (pmt, txIn)
+        invalid = fromMaybe False soInvalid
 
-      (txBody, mTxIn) <- autoRunTransaction mcCurrency mcSubmitter prev mt
+      (txBody, mTxIn) <- autoRunTransaction mcCurrency mcSubmitter prev mt invalid
       case anyMarloweThread mt txBody mTxIn th of
         Just th' -> pure $ Just th'
         Nothing  -> throwError "[AutoRun] Extending of the marlowe thread failed."
@@ -369,8 +374,9 @@ autoRunTransaction :: forall era lang m
                    -> WalletNickname
                    -> Maybe (MarloweTransaction lang era, C.TxIn)
                    -> MarloweTransaction lang era
+                   -> Bool
                    -> m (C.TxBody era, Maybe C.TxIn)
-autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..} = do
+autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..} invalid = do
   let
     log' = logTraceMsg "autoRunTransaction"
 
@@ -412,7 +418,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       C.TxMetadataNone
       (Just timeout)
       True
-      False
+      invalid
 
   log' $ "TxBody:" <> show txBody
   let
@@ -682,9 +688,10 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
       interpretLoop = for_ stScriptOperations \operation -> do
         logSoMsg SoName operation "..."
         interpret operation
+      transactionTimeout = Seconds 120
 
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig (Seconds 120)))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig transactionTimeout))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
