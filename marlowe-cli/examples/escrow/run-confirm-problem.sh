@@ -575,7 +575,7 @@ marlowe-cli transaction simple --testnet-magic "$MAGIC"                   \
                                --tx-in "$TX#1"                              \
                                --required-signer "$MEDIATOR_PAYMENT_SKEY" \
                                --change-address "$FAUCET_ADDRESS"         \
-                               --tx-out "$FAUCET_ADDRESS+1400000+1 $MEDIATOR_TOKEN" \
+                               --tx-out "$BURN_ADDRESS+1400000+1 $MEDIATOR_TOKEN" \
                                --out-file /dev/null                       \
                                --submit 600
 
@@ -597,7 +597,7 @@ marlowe-cli transaction simple --testnet-magic "$MAGIC"                   \
                                --tx-in "$TX#1"                              \
                                --required-signer "$SELLER_PAYMENT_SKEY" \
                                --change-address "$FAUCET_ADDRESS"         \
-                               --tx-out "$FAUCET_ADDRESS+1400000+1 $SELLER_TOKEN" \
+                               --tx-out "$BURN_ADDRESS+1400000+1 $SELLER_TOKEN" \
                                --out-file /dev/null                       \
                                --submit 600
 
@@ -619,7 +619,7 @@ marlowe-cli transaction simple --testnet-magic "$MAGIC"                   \
                                --tx-in "$TX#1"                              \
                                --required-signer "$BUYER_PAYMENT_SKEY" \
                                --change-address "$FAUCET_ADDRESS"         \
-                               --tx-out "$FAUCET_ADDRESS+1400000+1 $BUYER_TOKEN" \
+                               --tx-out "$BURN_ADDRESS+1400000+1 $BUYER_TOKEN" \
                                --out-file /dev/null                       \
                                --submit 600
 
