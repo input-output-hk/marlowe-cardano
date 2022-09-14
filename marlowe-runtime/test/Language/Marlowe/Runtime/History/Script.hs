@@ -18,6 +18,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe, maybeToList)
 import Data.Some (Some (Some), withSome)
+import Data.Time (secondsToNominalDiffTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Type.Equality (testEquality)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -42,7 +44,7 @@ data HistoryScriptEvent v
   -- Create a new contract in the current block
   | CreateContract ContractId (MarloweVersion v) (CreateStep v)
   -- Apply Inputs to a contract in the current block
-  | ApplyInputs ContractId TxId (MarloweVersion v) P.POSIXTime P.POSIXTime (Redeemer v)
+  | ApplyInputs (MarloweVersion v) (Transaction v)
   -- Withdraw funds from a contract in the current block
   | Withdraw ContractId (MarloweVersion v) (RedeemStep v)
 
@@ -51,11 +53,11 @@ deriving instance Eq (HistoryScriptEvent 'V1)
 
 instance GShow HistoryScriptEvent where
   gshowsPrec p = \case
-    RollForward s b                             -> showsPrec p (RollForward s b :: HistoryScriptEvent 'V1)
-    RollBackward n                              -> showsPrec p (RollBackward n :: HistoryScriptEvent 'V1)
-    CreateContract cid MarloweV1 cs             -> showsPrec p $ CreateContract cid MarloweV1 cs
-    ApplyInputs cid txId MarloweV1 vLow vHigh r -> showsPrec p $ ApplyInputs cid txId MarloweV1 vLow vHigh r
-    Withdraw cid MarloweV1 rs                   -> showsPrec p $ Withdraw cid MarloweV1 rs
+    RollForward s b                 -> showsPrec p (RollForward s b :: HistoryScriptEvent 'V1)
+    RollBackward n                  -> showsPrec p (RollBackward n :: HistoryScriptEvent 'V1)
+    CreateContract cid MarloweV1 cs -> showsPrec p $ CreateContract cid MarloweV1 cs
+    ApplyInputs MarloweV1 tx        -> showsPrec p $ ApplyInputs MarloweV1 tx
+    Withdraw cid MarloweV1 rs       -> showsPrec p $ Withdraw cid MarloweV1 rs
 
 newtype HistoryScript = HistoryScript { unHistoryScript :: [Some HistoryScriptEvent] }
   deriving (Show)
@@ -142,7 +144,7 @@ reduceScriptEvent = \case
               state' = state { contractStates = Map.insert contractId (Some contractState) contractStates }
             in
               Right $ state' : states
-  ApplyInputs contractId txId version vLow vHigh redeemer ->
+  ApplyInputs version Transaction{..} ->
     \case
       []                              -> Left EmptyChain
       state@HistoryScriptBlockState{..} : states -> case Map.lookup contractId contractStates of
@@ -150,11 +152,8 @@ reduceScriptEvent = \case
         Just (Some HistoryScriptContractState{..}) -> case testEquality version contractVersion of
           Nothing   -> Left $ VersionMismatch contractId (SomeMarloweVersion version) (SomeMarloweVersion contractVersion)
           Just Refl -> do
-            datum <- case stateScriptOutput of
-              Nothing                          -> Left $ ContractClosed contractId
-              Just TransactionScriptOutput{..} -> Right datum
-            TransactionOutput{..} <- applyInputs version vLow vHigh txId redeemer datum
             let
+              TransactionOutput{..} = output
               state' = state
                 { contractStates = Map.insert
                     contractId
@@ -188,15 +187,11 @@ reduceScriptEvent = \case
                 in
                   Right $ state' : states
 
-applyInputs :: MarloweVersion v -> P.POSIXTime -> P.POSIXTime -> TxId -> Redeemer v -> Datum v -> Either ReductionError (TransactionOutput v)
-applyInputs = \case
-  MarloweV1 -> applyInputsV1
-
-applyInputsV1 :: P.POSIXTime -> P.POSIXTime -> TxId -> [V1.Input] -> V1.MarloweData -> Either ReductionError (TransactionOutput 'V1)
+applyInputsV1 :: P.POSIXTime -> P.POSIXTime -> TxId -> [V1.Input] -> V1.MarloweData -> Maybe (TransactionOutput 'V1)
 applyInputsV1 vLow vHigh txId txInputs V1.MarloweData{..} =
   case V1.computeTransaction V1.TransactionInput{..} marloweState marloweContract of
-    V1.Error err -> Left $V1TransactionError err
-    V1.TransactionOutput{..} -> Right $ TransactionOutput
+    V1.Error _ -> Nothing
+    V1.TransactionOutput{..} -> Just $ TransactionOutput
       { payouts = Map.fromList $ zip (TxOutRef txId <$> [1..]) $ mapMaybe paymentToPayout txOutPayments
       , scriptOutput = case txOutContract of
           V1.Close -> Nothing
@@ -244,7 +239,11 @@ genHistoryScript = do
   states <- get
   event <- lift case states of
     []        -> genRollForward
-    state : _ -> genHistoryScriptEvent state $ length states
+    state : _ ->
+      let
+        go = maybe go pure =<< genHistoryScriptEvent state (length states)
+      in
+        go
   case withSome event $ flip reduceScriptEvent states of
     Left _        -> pure []
     Right states' -> do
@@ -255,24 +254,28 @@ genHistoryScript = do
           0 -> pure ([], state)
           _ -> resize (max 0 $ size - 1) $ runStateT genHistoryScript state
 
-genHistoryScriptEvent :: HistoryScriptBlockState -> Int -> Gen (Some HistoryScriptEvent)
+genHistoryScriptEvent :: HistoryScriptBlockState -> Int -> Gen (Maybe (Some HistoryScriptEvent))
 genHistoryScriptEvent HistoryScriptBlockState{..} n = frequency $ fold
-  [ blockEvents
-  , (fmap (2,) . uncurry contractEvents) =<< Map.toList contractStates
-  , [(5, genCreateContract slotNo)]
+  [ (fmap . fmap) Just <$> blockEvents
+  , do
+     (contractId, Some contractState) <- Map.toList contractStates
+     genEvent <- contractEvents contractId contractState
+     pure (2, fmap Some <$> genEvent)
+  , [(5, Just <$> genCreateContract slotNo)]
   ]
   where
     BlockHeader{..} = block
     blockEvents = (5, genRollForward) : ((1,) <$> genRollBackward n)
-    contractEvents contractId (Some HistoryScriptContractState{..}) = (fmap . fmap) Some $ fold
-      [ maybeToList $ genApplyInputs contractVersion slotNo contractId <$> stateScriptOutput
-      , uncurry (genWithdraw contractVersion contractId) <$> Map.toList statePayouts
+    contractEvents :: ContractId -> HistoryScriptContractState v -> [Gen (Maybe (HistoryScriptEvent v))]
+    contractEvents contractId HistoryScriptContractState{..} = fold
+      [ maybeToList $ genApplyInputs contractVersion block contractId <$> stateScriptOutput
+      , fmap Just . uncurry (genWithdraw contractVersion contractId) <$> Map.toList statePayouts
       ]
 
 genRollForward :: Gen (Some HistoryScriptEvent)
 genRollForward = do
   slots <- SlotNo <$> chooseWord64 (1, 120)
-  header <- BlockHeaderHash . BS.pack <$> replicateM 64 arbitrary
+  header <- BlockHeaderHash . BS.pack <$> replicateM 8 arbitrary
   pure $ Some $ RollForward slots header
 
 genRollBackward :: Int -> [Gen (Some HistoryScriptEvent)]
@@ -300,19 +303,29 @@ genCreateContract slot = do
   pure $ Some $ CreateContract contractId MarloweV1 CreateStep{..}
 
 genTxId :: Gen TxId
-genTxId = TxId . BS.pack <$> replicateM 64 arbitrary
+genTxId = TxId . BS.pack <$> replicateM 8 arbitrary
 
-genApplyInputs :: MarloweVersion v -> SlotNo -> ContractId -> TransactionScriptOutput v -> Gen (HistoryScriptEvent v)
+genApplyInputs :: MarloweVersion v -> BlockHeader -> ContractId -> TransactionScriptOutput v -> Gen (Maybe (HistoryScriptEvent v))
 genApplyInputs = \case
   MarloweV1 -> genApplyInputsV1
 
-genApplyInputsV1 :: SlotNo -> ContractId -> TransactionScriptOutput 'V1 -> Gen (HistoryScriptEvent 'V1)
-genApplyInputsV1 slot contractId TransactionScriptOutput{..} = do
+genApplyInputsV1 :: BlockHeader -> ContractId -> TransactionScriptOutput 'V1 -> Gen (Maybe (HistoryScriptEvent 'V1))
+genApplyInputsV1 blockHeader contractId TransactionScriptOutput{..} = do
   let V1.MarloweData{..} = datum
-  let minTime = fromIntegral slot
+  let minTime = fromIntegral $ slotNo blockHeader
   V1.TransactionInput (vLow, vHigh) inputs <- arbitraryValidStep marloweState {V1.minTime=minTime} marloweContract
-  txId <- genTxId
-  pure $ ApplyInputs contractId txId MarloweV1 vLow vHigh inputs
+  transactionId <- genTxId
+  pure do
+    output <- applyInputsV1 vLow vHigh transactionId inputs datum
+    pure $ ApplyInputs MarloweV1 $ Transaction
+      { contractId
+      , transactionId
+      , blockHeader
+      , validityLowerBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow / 1000
+      , validityUpperBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow / 1000
+      , redeemer = inputs
+      , output
+      }
 
 genWithdraw :: MarloweVersion v -> ContractId -> TxOutRef -> Payout v -> Gen (HistoryScriptEvent v)
 genWithdraw = \case
