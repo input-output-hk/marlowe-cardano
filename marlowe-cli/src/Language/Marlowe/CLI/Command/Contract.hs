@@ -76,10 +76,11 @@ data ContractCommand =
     -- | Export the datum for a Marlowe contract transaction.
   | ExportDatum
     {
-      contractFile :: FilePath        -- ^ The JSON file containing the contract.
-    , stateFile    :: FilePath        -- ^ The JSON file containing the contract's state.
-    , outputFile   :: Maybe FilePath  -- ^ The output JSON file for the datum.
-    , printStats   :: Bool            -- ^ Whether to print statistics about the datum.
+      rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+    , contractFile  :: FilePath        -- ^ The JSON file containing the contract.
+    , stateFile     :: FilePath        -- ^ The JSON file containing the contract's state.
+    , outputFile    :: Maybe FilePath  -- ^ The output JSON file for the datum.
+    , printStats    :: Bool            -- ^ Whether to print statistics about the datum.
     }
     -- | Export the redeemer for a Marlowe contract transaction.
   | ExportRedeemer
@@ -223,7 +224,8 @@ exportDatumCommand =
 exportDatumOptions :: O.Parser ContractCommand
 exportDatumOptions =
   ExportDatum
-    <$> O.strOption                (O.long "contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract."      )
+    <$> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
+    <*> O.strOption                (O.long "contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract."      )
     <*> O.strOption                (O.long "state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON input file for the contract state.")
     <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "DATUM_FILE"    <> O.help "JSON output file for datum."            )
     <*> O.switch                   (O.long "print-stats"                                <> O.help "Print statistics."                      )

@@ -73,7 +73,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..
 import Language.Marlowe.Scripts (marloweTxInputsFromInputs, rolePayoutValidator, smallMarloweValidator)
 import Ledger.Typed.Scripts ()
 import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum (..), Redeemer (..), TokenName)
+import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum (..), Redeemer (..))
 import PlutusTx (builtinDataToData, toBuiltinData)
 import System.IO (hPutStrLn, stderr)
 
@@ -507,7 +507,7 @@ buildRoleDatum (Token currencySymbol tokenName) = buildDatumImpl $ PlutusTx.toBu
 -- | Export to a file the role datum information about a Marlowe transaction.
 exportRoleDatum :: MonadError CliError m
                 => MonadIO m
-                => TokenName       -- ^ The role name.
+                => Token           -- ^ The role token.
                 -> Maybe FilePath  -- ^ The output JSON file for the datum information.
                 -> Bool            -- ^ Whether to print statistics about the datum.
                 -> m ()            -- ^ Action to export the datum information to a file.
