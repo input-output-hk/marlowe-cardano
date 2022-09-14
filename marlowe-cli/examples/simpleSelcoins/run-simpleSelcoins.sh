@@ -450,6 +450,7 @@ cleanup() {
   # --tx-in argument
   TX_CLEANUP=$(
   marlowe-cli util select \
+    --testnet-magic "$MAGIC" \
     --all "$SRC_ADDR" \
   | sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/' \
   )
@@ -463,6 +464,8 @@ cleanup() {
     --change-address "$DEST_ADDR" \
     --out-file /dev/null \
     --submit 600
+
+  cardano-cli query utxo --testnet-magic "$MAGIC" --address "$SRC_ADDR"
 }
 
 cleanup "$BYSTANDER_PAYMENT_SKEY" "$BYSTANDER_ADDRESS" "$FAUCET_ADDRESS"
