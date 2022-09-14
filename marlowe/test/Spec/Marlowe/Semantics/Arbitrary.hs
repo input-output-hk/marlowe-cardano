@@ -495,14 +495,19 @@ choiceNotInBounds bounds =
 --   ++ map (\choiceId -> IChoice choiceId bounds) (interestingChoiceId choiceId)
 -- interestingInput validity (Choice choiceId bounds) = IChoice choiceId <$> interestingChoiceNum' validity bounds
 
+-- ChoiceId is a choice name and a party making the choice. Then we want to generate a list of choiceIds that are either invalid or valid
 -- interestingChoiceId :: ChoiceId -> [ChoiceId]
 -- interestingChoiceId _ = error "not implemented yet"
 
--- interestingParties :: Party -> [Party]
--- interestingParties (Role "Alice") = [Role "Alice", Role "Alic", Role "Alices"]
+-- Write interestingChoiceName function that takes the name of the valid choice and returns a list of interesting choices that are either valid or invalid
 
--- interestingChoiceNum :: [Bound] -> [ChosenNum]
--- interestingChoiceNum bounds = concatMap interestingChoiceNum' True bounds
+-- rewrite interestingParties to return a list of valid or invalid
+-- rewrite to make it work with public key hashes
+interestingParties :: Party -> [Party]
+interestingParties (Role "Alice") = [Role "Alice", Role "Alic", Role "Alices"]
+
+interestingChoiceNum :: [Bound] -> [ChosenNum]
+interestingChoiceNum bounds = concatMap (interestingChoiceNum' True bounds)
 
 interestingChoiceNum' :: Bool -> Bound -> [ChosenNum]
 interestingChoiceNum' True (Bound lower upper)  = validValues lower upper
