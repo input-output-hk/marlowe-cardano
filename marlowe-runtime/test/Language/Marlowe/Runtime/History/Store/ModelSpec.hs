@@ -1,7 +1,13 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Language.Marlowe.Runtime.History.Store.ModelSpec (spec, genFindCreateStepArgs, genFindNextStepArgs, modelFromScript) where
+module Language.Marlowe.Runtime.History.Store.ModelSpec
+  (spec
+  , genFindCreateStepArgs
+  , genFindNextStepArgs
+  , modelFromScript
+  , genFindIntersectionArgs
+  ) where
 
 import Data.Bifunctor (Bifunctor (first))
 import Data.List (foldl')
@@ -98,6 +104,14 @@ spec = do
       FindNext block _ -> At block > point
       _                -> discard
 
+  -- This property specifies that findIntersection can only return blocks that
+  -- are in the store and are not rolled back.
+  prop "findIntersection exists" \store -> not (null $ getRoots store) ==> do
+    (contractId, _, blocks) <- genFindIntersectionArgs store
+    pure case findIntersection contractId blocks store of
+      Just (Intersection _ block) -> Set.member block $ Set.fromDistinctAscList $ getBlocks store
+      _                           -> discard
+
 mkStep :: HistoryScriptEvent a -> ([BlockHeader], HistoryStoreModel) -> ([BlockHeader], HistoryStoreModel)
 mkStep = \case
   RollForward slotOffset hash -> first \case
@@ -136,3 +150,9 @@ genFindNextStepArgs store = do
   (contractId, HistoryRoot version _ _ _ _ _) <- pickRoot store
   point <- elements $ Genesis : (At <$> getAllBlocks store)
   pure (contractId, SomeMarloweVersion version, point)
+
+genFindIntersectionArgs :: HistoryStoreModel -> Gen (ContractId, SomeMarloweVersion, [BlockHeader])
+genFindIntersectionArgs store = do
+  (contractId, root@(HistoryRoot version _ _ _ _ _)) <- pickRoot store
+  blocks <- genIntersectionBlocks store root
+  pure (contractId, SomeMarloweVersion version, blocks)
