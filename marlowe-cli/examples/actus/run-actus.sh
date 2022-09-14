@@ -494,45 +494,29 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | 
 
 echo "## Clean Up"
 
-TX_7=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --lovelace-only 1                         \
-                        "$BORROWER_ADDRESS"                       \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1/;p}'            \
-)
+BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
+
 marlowe-cli transaction simple --testnet-magic "$MAGIC"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
-                               --tx-in "$TX_7"#0                                    \
-                               --tx-in "$TX_7"#2                                    \
-                               --tx-out "$LENDER_ADDRESS+1400000+1 $BORROWER_TOKEN" \
+                               --tx-in "$TX_5"#0                                    \
+                               --tx-in "$TX_5"#2                                    \
+                               --tx-out "$BURN_ADDRESS+1400000+1 $BORROWER_TOKEN" \
                                --required-signer "$BORROWER_PAYMENT_SKEY"           \
                                --change-address "$FAUCET_ADDRESS"                   \
                                --out-file /dev/null                                 \
                                --submit 600
 
-marlowe-cli util mint --testnet-magic "$MAGIC" \
-                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --required-signer "$LENDER_PAYMENT_SKEY"  \
-                      --change-address  "$LENDER_ADDRESS"       \
-                      --count -1                                \
-                      --expires "$MINT_EXPIRES"                 \
-                      --out-file /dev/null                      \
-                      --submit=600                              \
-                      "$LENDER_ROLE" "$BORROWER_ROLE"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS"
 
-TX=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --lovelace-only 1                         \
-                        "$LENDER_ADDRESS"                         \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
-)
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                  \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                               --tx-in "$TX"                             \
-                               --required-signer "$LENDER_PAYMENT_SKEY"  \
-                               --change-address "$FAUCET_ADDRESS"        \
-                               --out-file /dev/null                      \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
+                               --tx-in "$TX_6"#0                                    \
+                               --tx-in "$TX_6"#1                                    \
+                               --tx-in "$TX_6"#2                                    \
+                               --tx-out "$BURN_ADDRESS+1400000+1 $LENDER_TOKEN" \
+                               --required-signer "$LENDER_PAYMENT_SKEY"           \
+                               --change-address "$FAUCET_ADDRESS"                   \
+                               --out-file /dev/null                                 \
                                --submit 600
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS"
