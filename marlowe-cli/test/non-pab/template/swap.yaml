@@ -3,65 +3,44 @@ stTestName: Non-PAB Swap Contract Test
 stScriptOperations:
 
   - tag: Initialize
-    soOwner:
-      role_token: "aParty"
-    soTransaction: "TestTransaction-swap"
-    soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
+    soContractNickname: "Swap"
     soMinAda: 1000000
-    soContract:
+    soContractSource:
       template:
-        tag: "TemplateSwap"
-        aParty:
-          role_token: "aParty"
-        aToken:
+        tag: "UseSwap"
+        utAParty:
+          pk_hash: "aParty"
+        utAToken:
           currency_symbol: ""
           token_name: ""
-        aAmount: 30000000
-        bParty:
-          role_token: "bParty"
-        bToken:
+        utAAmount: 30000000
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        utATimeout:
+          relative: 1000000
+        utBParty:
+          pk_hash: "bParty"
+        utBToken:
           currency_symbol: ""
           token_name: ""
-        bAmount: 30000000
-        minAda: 30000000
-        price: 30000000
-        aTimeout:
-          relative: 20000
-        bTimeout:
-          relative: 30000
+        utBAmount: 10000000
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        utBTimeout:
+          relative: 1000000
 
   - tag: Prepare
-    soTransaction: "TestTransaction-swap"
-    soOwner:
-      role_token: "aParty"
+    soContractNickname: "Swap"
     soInputs:
       - input_from_party:
-          role_token: "aParty"
+          pk_hash: "aParty"
         that_deposits: 30000000
         of_token:
           currency_symbol: ""
           token_name: ""
         into_account:
-          role_token: "aParty"
-    soMinimumTime: 1645590825000
-    soMaximumTime: 1898051625000
-
-
-  - tag: Prepare
-    soTransaction: "TestTransaction-swap"
-    soOwner:
-      role_token: "aParty"
-    soInputs:
-      - input_from_party:
-          role_token: "bParty"
-        that_deposits: 30000000
-        of_token:
-          currency_symbol: ""
-          token_name: ""
-        into_account:
-          role_token: "bParty"
-    soMinimumTime: 1645590825000
-    soMaximumTime: 1898051625000
-
-  - tag: Fail
-    soFailureMessage: "Failure Invoked"
+          pk_hash: "aParty"
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
