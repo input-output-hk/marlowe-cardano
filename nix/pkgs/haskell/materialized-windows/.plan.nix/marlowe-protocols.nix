@@ -37,7 +37,9 @@
           (hsPkgs."async" or (errorHandler.buildDepError "async"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+          (hsPkgs."hashable" or (errorHandler.buildDepError "hashable"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
+          (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
           ];
@@ -49,6 +51,7 @@
           "Network/Protocol/ChainSeek/Codec"
           "Network/Protocol/ChainSeek/Server"
           "Network/Protocol/ChainSeek/Types"
+          "Network/Protocol/ChainSeek/TH"
           "Network/Protocol/Job/Client"
           "Network/Protocol/Job/Codec"
           "Network/Protocol/Job/Server"
