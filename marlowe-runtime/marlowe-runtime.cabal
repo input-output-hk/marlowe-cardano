@@ -197,6 +197,7 @@ test-suite marlowe-runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    Language.Marlowe.Runtime.Core.ApiSpec
     Language.Marlowe.Runtime.History.FollowerSpec
     Language.Marlowe.Runtime.History.Script
     Language.Marlowe.Runtime.History.StoreSpec
@@ -214,6 +215,7 @@ test-suite marlowe-runtime-test
       base >= 4.9 && < 5
     , async
     , bytestring
+    , cardano-api
     , containers
     , hspec
     , marlowe

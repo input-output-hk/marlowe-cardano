@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -16,10 +17,14 @@ import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.Foldable (asum, fold)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.String (IsString(fromString))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
@@ -29,7 +34,17 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, ScriptHash, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, putUTCTime, unPolicyId)
+  ( Address
+  , BlockHeader
+  , ScriptHash
+  , TokenName(..)
+  , TxId(..)
+  , TxIx(..)
+  , TxOutRef(..)
+  , getUTCTime
+  , putUTCTime
+  , unPolicyId
+  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
@@ -66,6 +81,7 @@ data MarloweVersionTag
 
 data MarloweVersion (v :: MarloweVersionTag) where
   MarloweV1 :: MarloweVersion 'V1
+
 
 instance TestEquality MarloweVersion where
   testEquality MarloweV1 MarloweV1 = Just Refl
@@ -176,9 +192,23 @@ instance Eq SomeMarloweVersion where
 instance Ord SomeMarloweVersion where
   compare (SomeMarloweVersion MarloweV1) (SomeMarloweVersion MarloweV1) = EQ
 
+instance Bounded SomeMarloweVersion where
+  minBound = SomeMarloweVersion MarloweV1
+  maxBound = SomeMarloweVersion MarloweV1
+
+instance Enum SomeMarloweVersion where
+  toEnum = \case
+    0 -> SomeMarloweVersion MarloweV1
+    _ -> error "toEnum: value out of range of Marlowe versions"
+  fromEnum (SomeMarloweVersion version) = case version of
+    MarloweV1 -> 0
+
 instance Show SomeMarloweVersion where
   showsPrec p (SomeMarloweVersion version) = showParen (p >= 11)
     $ showString "SomeMarloweVersion " . showsPrec 11 version
+
+withSomeMarloweVersion :: (forall v. MarloweVersion v -> r) -> SomeMarloweVersion -> r
+withSomeMarloweVersion f (SomeMarloweVersion v) = f v
 
 instance ToJSON (MarloweVersion v) where
   toJSON = String . \case
@@ -314,11 +344,100 @@ fromChainRedeemer :: MarloweVersion v -> Chain.Redeemer -> Maybe (Redeemer v)
 fromChainRedeemer = \case
   MarloweV1 -> Chain.fromRedeemer
 
-getMarloweVersion :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
-getMarloweVersion hash
-  | hash == "62c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307" =
-      Just (SomeMarloweVersion MarloweV1, "") --TODO
-  | otherwise = Nothing
+-- Static script address registry
 
-getScriptHashes :: MarloweVersion v -> Set ScriptHash
-getScriptHashes = mempty
+data NetworkType
+  = Mainnet
+  | Testnet
+  deriving (Show, Eq, Ord, Enum, Bounded)
+
+newtype AddressInNetwork = AddressInNetwork { runAddressInNetwork :: NetworkType -> Address }
+
+instance Show AddressInNetwork where
+  showsPrec p (AddressInNetwork run) = showParen (p >= 11)
+    ( showString "AddressInNetwork "
+    . showString "\\case { "
+    . showsPrec 11 Mainnet
+    . showString " -> "
+    . showsPrec 11 (run Mainnet)
+    . showString "; "
+    . showsPrec 11 Testnet
+    . showString " -> "
+    . showsPrec 11 (run Testnet)
+    . showString " }"
+    )
+
+instance Eq AddressInNetwork where
+  a == b = runAddressInNetwork a Mainnet == runAddressInNetwork b Mainnet
+    && runAddressInNetwork a Testnet == runAddressInNetwork b Testnet
+
+instance Ord AddressInNetwork where
+  compare a b = fold
+    [ compare (runAddressInNetwork a Mainnet) (runAddressInNetwork b Mainnet)
+    , compare (runAddressInNetwork b Testnet) (runAddressInNetwork b Testnet)
+    ]
+
+-- | The hash and address for a script.
+data ScriptAddressInfo = ScriptAddressInfo
+  { scriptAddress :: AddressInNetwork
+  , scriptHash :: ScriptHash
+  } deriving (Show, Eq, Ord)
+
+-- | The script addresses for a marlowe version.
+data MarloweScriptAddresses = MarloweScriptAddresses
+  { marloweScriptAddress :: ScriptAddressInfo
+  , payoutScriptAddress :: ScriptAddressInfo
+  } deriving (Show, Eq, Ord)
+
+unsafeMarloweAddressesFromScriptHashStrings :: String -> String -> MarloweScriptAddresses
+unsafeMarloweAddressesFromScriptHashStrings marloweScriptHash payoutScriptHash = MarloweScriptAddresses
+  { marloweScriptAddress = unsafeScriptAddressInfoFromScriptHashString marloweScriptHash
+  , payoutScriptAddress = unsafeScriptAddressInfoFromScriptHashString payoutScriptHash
+  }
+
+unsafeScriptAddressInfoFromScriptHashString :: String -> ScriptAddressInfo
+unsafeScriptAddressInfoFromScriptHashString scriptHash = ScriptAddressInfo
+  { scriptAddress = AddressInNetwork \case
+      Mainnet -> fromString $ "71" <> scriptHash
+      Testnet -> fromString $ "70" <> scriptHash
+  , scriptHash = fromString scriptHash
+  }
+
+-- | The current static script addresses for Marlowe V1 as of the current git
+-- commit. Enforced in the test suite for the Marlowe Runtime.
+currentMarloweV1Addresses :: MarloweScriptAddresses
+currentMarloweV1Addresses = unsafeMarloweAddressesFromScriptHashStrings
+  "ffa55849af9690a9c22dae28cfd52c44b12e8294e7496a52472c9405"
+  "6db99855e93e8fda9e917692bc746c9f6db73e9e9234a3abeeea971c"
+
+-- | The set of script addresses for Marlowe V1
+v1ScriptAddressSet :: Set MarloweScriptAddresses
+v1ScriptAddressSet = Set.fromList [currentMarloweV1Addresses]
+
+-- | Key a set of Marlowe script address by its Marlowe script hash.
+toScriptAddressMap :: Set MarloweScriptAddresses -> Map ScriptHash MarloweScriptAddresses
+toScriptAddressMap  = Map.mapKeys (scriptHash . marloweScriptAddress) . Map.fromSet id
+
+-- | The map of script addresses for Marlowe V1 keyed by their Marlowe script
+-- hash.
+v1ScriptAddressMap :: Map ScriptHash MarloweScriptAddresses
+v1ScriptAddressMap = toScriptAddressMap v1ScriptAddressSet
+
+-- | Lookup the Marlowe version and script addresses associated with the given
+-- Marlowe script hash.
+getMarloweVersion :: ScriptHash -> Maybe (SomeMarloweVersion, MarloweScriptAddresses)
+getMarloweVersion hash = asum
+  [ (SomeMarloweVersion MarloweV1,) <$> Map.lookup hash v1ScriptAddressMap
+  ]
+
+-- | Get the script address set associated with the given Marlowe version.
+-- Membership of the current script addresses is enforced in the test suite.
+getScriptAddressSet :: MarloweVersion v -> Set MarloweScriptAddresses
+getScriptAddressSet = \case
+  MarloweV1 -> v1ScriptAddressSet
+
+-- | Get the current script addresses for the given Marlowe version as of the
+-- current git commit. Enforced in the test suite.
+getCurrentScriptAddresses :: MarloweVersion v -> MarloweScriptAddresses
+getCurrentScriptAddresses = \case
+  MarloweV1 -> currentMarloweV1Addresses
