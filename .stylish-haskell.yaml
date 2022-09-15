@@ -16,6 +16,8 @@ steps:
   - module_header:
       indent: 2
       separate_lists: false
+  - tabs:
+      spaces: 2
   - trailing_whitespace: {}
 columns: 120
 newline: native
