@@ -9,7 +9,7 @@
 
 module Language.Marlowe.Runtime.Core.Api where
 
-import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), eitherDecode, encode, withText)
+import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), eitherDecode, encode)
 import Data.Aeson.Types (Parser, parse, parseFail)
 import Data.Binary (Binary (..), Get, Put)
 import Data.Binary.Get (getWord32be)
@@ -28,10 +28,11 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ScriptHash, TokenName (..), TxId (..), TxIx (..),
-                                               TxOutRef (..), getUTCTime, putUTCTime)
+                                               TxOutRef (..), getUTCTime, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
+import qualified Plutus.V1.Ledger.Value as Plutus
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
 -- the contract.
@@ -88,7 +89,7 @@ instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
   type Datum 'V1 = V1.MarloweData
   type Redeemer 'V1 = [V1.Input]
-  type PayoutDatum 'V1 = TokenName
+  type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 
 data Transaction v = Transaction
@@ -256,12 +257,19 @@ redeemerFromJSON = \case
 
 payoutDatumToJSON :: MarloweVersion v -> PayoutDatum v -> Value
 payoutDatumToJSON = \case
-  MarloweV1 -> String . encodeBase16 . unTokenName
+  MarloweV1 -> \case
+    Chain.AssetId policyId tokenName -> toJSON
+      ( String . encodeBase16 . unPolicyId $ policyId
+      , String . encodeBase16 . unTokenName $ tokenName
+      )
 
 payoutDatumFromJSON :: MarloweVersion v -> Value -> Parser (PayoutDatum v)
 payoutDatumFromJSON = \case
-  MarloweV1 -> withText "TokenName"
-    $ either (parseFail . T.unpack) (pure . TokenName) . decodeBase16 . encodeUtf8
+  MarloweV1 -> \json -> do
+    (p, t) <- parseJSON json
+    p' <- either (parseFail . T.unpack) (pure . Chain.PolicyId) . decodeBase16 . encodeUtf8 $ t
+    t' <- either (parseFail . T.unpack) (pure . Chain.TokenName) . decodeBase16 . encodeUtf8 $ p
+    pure $ Chain.AssetId p' t'
 
 datumToJSON :: MarloweVersion v -> Datum v -> Value
 datumToJSON = \case
@@ -273,11 +281,21 @@ datumFromJSON = \case
 
 toChainPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Chain.Datum
 toChainPayoutDatum = \case
-  MarloweV1 -> Chain.toDatum . Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName
+  MarloweV1 -> \case
+    Chain.AssetId policyId tokenName -> do
+      let
+        currencySymbol = Plutus.currencySymbol . unPolicyId $ policyId
+        tokenName' = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName $ tokenName
+      Chain.toDatum (currencySymbol, tokenName')
 
 fromChainPayoutDatum :: MarloweVersion v -> Chain.Datum -> Maybe (PayoutDatum v)
 fromChainPayoutDatum = \case
-  MarloweV1 -> fmap (Chain.TokenName . Plutus.fromBuiltin . Plutus.unTokenName) . Chain.fromDatum
+  MarloweV1 -> \datum -> do
+    (p, t) <- Chain.fromDatum datum
+    let
+      p' = Chain.PolicyId . Plutus.fromBuiltin . Plutus.unCurrencySymbol $ p
+      t' = Chain.TokenName . Plutus.fromBuiltin . Plutus.unTokenName $ t
+    pure $ Chain.AssetId p' t'
 
 toChainDatum :: MarloweVersion v -> Datum v -> Chain.Datum
 toChainDatum = \case
