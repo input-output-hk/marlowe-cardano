@@ -42,7 +42,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Contract(Close)
   , Input(MerkleizedInput, NormalInput)
   , InputContent(IChoice, IDeposit)
-  , Party(PK, Role)
+  , Party(Role)
   , Payee(Party)
   , State(accounts)
   , Token(Token)
@@ -101,6 +101,7 @@ import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPo
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, suchThat)
 
+import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
 import qualified PlutusTx.AssocMap as AM (fromList, toList)
 
@@ -175,11 +176,11 @@ makeDeposit :: Input
 makeDeposit input' =
   do
     ref <- lift arbitrary
-    address  <- lift arbitrary
+    address' <- lift arbitrary
     pure
       $ case getInputContent input' of
-          IDeposit _ (PK   pkh) (Token c n) i -> pure . TxInInfo ref $ TxOut (Address (PubKeyCredential pkh) Nothing) (V.singleton c n i) NoOutputDatum  Nothing
-          IDeposit _ (Role _  ) (Token c n) i -> pure . TxInInfo ref $ TxOut address                                  (V.singleton c n i) NoOutputDatum  Nothing
+          IDeposit _ (M.Address address) (Token c n) i -> pure . TxInInfo ref $ TxOut address  (V.singleton c n i) NoOutputDatum  Nothing
+          IDeposit _ (Role _           ) (Token c n) i -> pure . TxInInfo ref $ TxOut address' (V.singleton c n i) NoOutputDatum  Nothing
           _                                   -> mempty
 
 -- | Create role input for a Marlowe semantics transaction.
@@ -230,10 +231,10 @@ makeRoleOut (TxInInfo _ (TxOut _ token _ _)) =
 makePayment :: CurrencySymbol
             -> Payment
             -> ArbitraryTransaction SemanticsTransaction([TxOut], [(DatumHash, Datum)])
-makePayment _ (Payment _ (Party (PK pkh)) value) =
+makePayment _ (Payment _ (Party (M.Address address)) value) =
   pure
     (
-      pure $ TxOut (Address (PubKeyCredential pkh) Nothing) value NoOutputDatum Nothing
+      pure $ TxOut address value NoOutputDatum Nothing
     , mempty
     )
 makePayment currencySymbol (Payment _ (Party (Role role')) value) =
@@ -254,9 +255,9 @@ makeActionSignatory :: Input
                     -> [PubKeyHash]
 makeActionSignatory input' =
   case getInputContent input' of
-    IDeposit _ (PK    pkh) _ _      -> pure pkh
-    IChoice (ChoiceId _ (PK pkh)) _ -> pure pkh
-    _                               -> mempty
+    IDeposit _          (M.Address (Address (PubKeyCredential pkh) _))  _ _  -> pure pkh
+    IChoice (ChoiceId _ (M.Address (Address (PubKeyCredential pkh) _))) _    -> pure pkh
+    _                                                                        -> mempty
 
 
 -- | Create a spending signatory for a Marlowe semantics transaction.

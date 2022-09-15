@@ -15,7 +15,7 @@ import GHC.Generics (C, Constructor, D, Generic, K1(K1), M1(M1), Rep, S, U1, con
 -- import Ledger.Value
 import Plutus.V1.Ledger.Ada (Ada, getLovelace)
 import Plutus.V1.Ledger.Slot (Slot(Slot))
-import Plutus.V2.Ledger.Api (CurrencySymbol(..), POSIXTime(POSIXTime), PubKeyHash(PubKeyHash), TokenName(..))
+import Plutus.V2.Ledger.Api (Address, CurrencySymbol(..), POSIXTime(POSIXTime), PubKeyHash(PubKeyHash), TokenName(..))
 import qualified PlutusTx.Prelude as P
 import Text.PrettyPrint.Leijen
   (Doc, comma, encloseSep, hang, lbracket, line, lparen, parens, rbracket, rparen, space, text)
@@ -132,3 +132,6 @@ instance Pretty CurrencySymbol where
     prettyFragment (CurrencySymbol bs) = text ("\"" ++ show (CurrencySymbol bs) ++ "\"")
 
 deriving instance Pretty TokenName
+
+instance Pretty Address where
+  prettyFragment = text . show

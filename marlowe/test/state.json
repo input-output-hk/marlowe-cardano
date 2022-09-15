@@ -3,7 +3,7 @@
     [
       {
         "choice_owner": {
-          "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
+          "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
         },
         "choice_name": "choice"
       },
@@ -14,7 +14,7 @@
     [
       [
         {
-          "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
+          "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
         },
         {
           "currency_symbol": "10",

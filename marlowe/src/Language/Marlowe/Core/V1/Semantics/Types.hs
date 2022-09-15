@@ -47,7 +47,14 @@ import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.V1.Ledger.Value as Val
 import Plutus.V2.Ledger.Api
-  (CurrencySymbol(unCurrencySymbol), POSIXTime(..), PubKeyHash(PubKeyHash, getPubKeyHash), TokenName(unTokenName))
+  ( Address
+  , Credential(..)
+  , CurrencySymbol(unCurrencySymbol)
+  , POSIXTime(..)
+  , StakingCredential(..)
+  , TokenName(unTokenName)
+  )
+import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
@@ -71,13 +78,13 @@ import qualified Prelude as Haskell
 {-| = Type definitions for Marlowe's seamntics
 -}
 
-data Party = PK PubKeyHash | Role TokenName
+data Party = Address Address | Role TokenName
   deriving stock (Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
 instance Haskell.Show Party where
-  showsPrec p (PK pk) = Haskell.showParen (p Haskell.>= 11) $ Haskell.showString "PK \""
-                                              . Haskell.showsPrec 11 pk
+  showsPrec p (Address address) = Haskell.showParen (p Haskell.>= 11) $ Haskell.showString "Address \""
+                                              . Haskell.showsPrec 11 address
                                               . Haskell.showString "\""
   showsPrec _ (Role role) = Haskell.showsPrec 11 $ unTokenName role
 
@@ -393,16 +400,36 @@ instance ToJSON State where
         , "minTime" .= ms ]
 
 instance FromJSON Party where
-  parseJSON = withObject "Party" (\v -> do
-        EncodeBase16 bs <- parseJSON =<< (v .: "pk_hash")
-        return $ PK . PubKeyHash . toBuiltin $ bs
+  parseJSON = withObject "Party" $ \v ->
+        (
+          do
+            address <- v .: "address"
+            (Address .) . Ledger.Address <$> (address .: "payment") <*> (address .:? "staking")
+        )
     <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
-                                 )
+
+instance FromJSON Credential where
+  parseJSON = withObject "Credential" $ \v ->
+        (PubKeyCredential . fromString <$> (v .: "publickey_hash"))
+    <|> (ScriptCredential . fromString <$> (v .: "validator_hash"))
+
+instance FromJSON StakingCredential where
+  parseJSON = withObject "StakingCredential" $ \v ->
+        (StakingHash <$> (v .: "credential"))
+    <|> ((\(i, j, k) -> StakingPtr i j k) <$> (v .: "pointer"))
+
 instance ToJSON Party where
-    toJSON (PK pkh) = object
-        [ "pk_hash" .= (toJSON $ EncodeBase16 $ fromBuiltin $ getPubKeyHash pkh) ]
-    toJSON (Role (Val.TokenName name)) = object
-        [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
+  toJSON (Address (Ledger.Address payment staking)) = object ["address" .= object ["payment" .= toJSON payment, "staking" .= toJSON staking]]
+  toJSON (Role (Val.TokenName name)) =
+    object [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
+
+instance ToJSON Credential where
+  toJSON (PubKeyCredential pkh) = object ["publickey_hash" .= Haskell.show pkh]
+  toJSON (ScriptCredential vkh) = object ["validator_hash" .= Haskell.show vkh]
+
+instance ToJSON StakingCredential where
+  toJSON (StakingHash credential) = object ["credential" .= toJSON credential]
+  toJSON (StakingPtr i j k      ) = object ["pointer"    .= toJSON (i, j, k) ]
 
 instance ToJSONKey ChoiceId where
   toJSONKey = JSON.ToJSONKeyValue toJSON JSON.toEncoding
@@ -685,7 +712,7 @@ instance ToJSON Contract where
 
 instance Eq Party where
     {-# INLINABLE (==) #-}
-    (PK p1) == (PK p2)     = p1 == p2
+    (Address a1) == (Address a2) = a1 == a2
     (Role r1) == (Role r2) = r1 == r2
     _ == _                 = False
 
@@ -787,7 +814,7 @@ instance Eq State where
 
 -- Lifting data types to Plutus Core
 makeLift ''Party
-makeIsDataIndexed ''Party [('PK,0),('Role,1)]
+makeIsDataIndexed ''Party [('Address,0),('Role,1)]
 makeLift ''ChoiceId
 makeIsDataIndexed ''ChoiceId [('ChoiceId,0)]
 makeLift ''Token

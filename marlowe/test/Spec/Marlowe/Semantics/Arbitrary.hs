@@ -73,12 +73,23 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ValueId(..)
   , getAction
   )
-import Plutus.V2.Ledger.Api (CurrencySymbol(..), POSIXTime(..), PubKeyHash(..), TokenName(..), adaSymbol, adaToken)
+import Plutus.V2.Ledger.Api
+  ( Credential(..)
+  , CurrencySymbol(..)
+  , POSIXTime(..)
+  , PubKeyHash(..)
+  , StakingCredential(StakingHash)
+  , TokenName(..)
+  , ValidatorHash(..)
+  , adaSymbol
+  , adaToken
+  )
 import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck
   (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat, vectorOf)
 
+import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
@@ -371,13 +382,56 @@ instance Arbitrary Party where
     do
        isPubKeyHash <- frequency [(2, pure True), (8, pure False)]
        if isPubKeyHash
-         then PK <$> arbitrary
+         then Address <$> arbitrary
          else Role <$> arbitraryFibonacci randomRoleNames
-  shrink (PK x)   = (Role <$> randomRoleNames) <> (PK <$> filter (< x) randomPubKeyHashes)
-  shrink (Role x) = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
+  shrink (Address (Ledger.Address (PubKeyCredential x) _)) = (Role <$> randomRoleNames) <> (Address . flip Ledger.Address Nothing . PubKeyCredential <$> filter (< x) randomPubKeyHashes)
+  shrink (Address _)                                       = Role <$> randomRoleNames
+  shrink (Role x)                                          = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
 
 instance SemiArbitrary Party where
   fromContext = parties
+
+
+instance Arbitrary Ledger.Address where
+  arbitrary = Ledger.Address <$> arbitrary <*> arbitrary
+
+instance Arbitrary Credential where
+  arbitrary =
+    frequency
+      [
+        (39, PubKeyCredential <$> arbitrary)
+      , ( 1, ScriptCredential <$> arbitrary)
+      ]
+
+instance Arbitrary StakingCredential where
+  arbitrary = StakingHash <$> arbitrary
+
+
+instance Arbitrary ValidatorHash where
+  arbitrary = arbitraryFibonacci randomValidatorHashes
+
+
+-- | Some validator hashes.
+randomValidatorHashes :: [ValidatorHash]
+randomValidatorHashes =
+  [
+    "03e718204caac168d55e891f87b2b01da688e4501ce560ae613fa7e7"
+  , "1b4a1ddee561fdce46d70d07976d3ef2f4c03985195906c08f547249"
+  , "2f7bbc97515f6313cd667ac7345b5530241f2b0300c46b12f083ef46"
+  , "40db3573f94cda9b7cc80de24517df78a0031d1e4a42cea9127cc730"
+  , "592790cff4ffd7ad91de59e6af421faed0a703a03445beb8efb17fbf"
+  , "6487e8994d0e4a9b509c2309a827dc18fb405749d7d4f3fce3ea03f7"
+  , "657e1b61c43d544f1d628b758226addaadf4eb4b6b411fbbc547ba7c"
+  , "7b6fcf537493391fd4536a5528d3eea46f9aa63d41bdae6506ecf58d"
+  , "8169906d393fdd404a60b694a3558b0ddb51a5e6c018698054f92f0a"
+  , "85f2490b7284c0440882b3d9a4f7a91b9e0946ec51ee8cce40ad423b"
+  , "98454636923133bf58517ec1285b4fe4d90d1b1a71263f882ea6911d"
+  , "a2bd7ddd1d11c7f4994fa7f41c2781c750525705f9c259f97cb27d0e"
+  , "c5b4c54ec387ad8250b183a0d0d181617bb18bcf2eccc0f27fe7aa23"
+  , "d877b83fee4a52bd72269ece77d78549fa64e111aa0e20cd4a1c471b"
+  , "e14025ab9bb3c48601d1893f86785145bcbe9e2e1856c16cfc0522"      -- NB: Too short for ledger.
+  , "e3351d2e500f17b91a74e89f3eaa66492193f4485c32e5ad606da83542"  -- NB: Too long for ledger.
+  ]
 
 
 instance Arbitrary POSIXTime where

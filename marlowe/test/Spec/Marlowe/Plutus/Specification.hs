@@ -25,6 +25,7 @@ module Spec.Marlowe.Plutus.Specification
 import Control.Lens (use, uses, (%=), (<>=), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
+import Data.Maybe (maybeToList)
 import Data.Proxy (Proxy(..))
 import Data.These (These(That, These, This))
 import Language.Marlowe.Core.V1.Semantics
@@ -39,12 +40,13 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Contract(Close)
   , Input(..)
   , InputContent(IChoice, IDeposit)
-  , Party(PK, Role)
+  , Party(Role)
   , Payee(Party)
   , State(accounts)
   )
 import Language.Marlowe.Scripts (MarloweInput)
 import Plutus.Script.Utils.Scripts (datumHash)
+import Plutus.V1.Ledger.Address (toPubKeyHash)
 import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
 import Plutus.V2.Ledger.Api
   ( Address(Address)
@@ -88,6 +90,7 @@ import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty)
 
+import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified PlutusTx.AssocMap as AM (fromList, insert, toList)
 
 
@@ -447,15 +450,15 @@ checkPositiveAccounts =
 
 -- | Compute the authorization for an input.
 authorizer :: Input -> ([PubKeyHash], [TokenName])
-authorizer (NormalInput     (IDeposit _ (PK   pkh  ) _ _        )    ) = (pure pkh, mempty    )
-authorizer (NormalInput     (IDeposit _ (Role role') _ _        )    ) = (mempty  , pure role')
-authorizer (NormalInput     (IChoice (ChoiceId _ (PK pkh    )) _)    ) = (pure pkh, mempty    )
-authorizer (NormalInput     (IChoice (ChoiceId _ (Role role')) _)    ) = (mempty  , pure role')
-authorizer (MerkleizedInput (IDeposit _ (PK   pkh  ) _ _        ) _ _) = (pure pkh, mempty    )
-authorizer (MerkleizedInput (IDeposit _ (Role role') _ _        ) _ _) = (mempty  , pure role')
-authorizer (MerkleizedInput (IChoice (ChoiceId _ (PK pkh    )) _) _ _) = (pure pkh, mempty    )
-authorizer (MerkleizedInput (IChoice (ChoiceId _ (Role role')) _) _ _) = (mempty  , pure role')
-authorizer _                                                           = (mempty  , mempty    )
+authorizer (NormalInput     (IDeposit _ (M.Address address) _ _        )    ) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (NormalInput     (IDeposit _ (Role role'       ) _ _        )    ) = (mempty                            , pure role')
+authorizer (NormalInput     (IChoice (ChoiceId _ (M.Address address)) _)    ) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (NormalInput     (IChoice (ChoiceId _ (Role role'       )) _)    ) = (mempty                            , pure role')
+authorizer (MerkleizedInput (IDeposit _ (M.Address address) _ _        ) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (MerkleizedInput (IDeposit _ (Role role'       ) _ _        ) _ _) = (mempty                            , pure role')
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (M.Address address)) _) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (Role role'       )) _) _ _) = (mempty                            , pure role')
+authorizer _                                                                  = (mempty                            , mempty    )
 
 
 -- | Determine whether there are any authorizations in the transaction.

@@ -28,7 +28,8 @@ module Language.Marlowe.Scripts
   where
 import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics as Semantics
-import Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics hiding (Address)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Party(Address))
 import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.Script.Utils.Typed as Scripts
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as Scripts
@@ -54,7 +55,7 @@ import Plutus.V2.Ledger.Api
   , ValidatorHash
   , mkValidatorScript
   )
-import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
+import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valueSpent)
 import Plutus.V2.Ledger.Tx (OutputDatum(OutputDatumHash), TxOut(TxOut, txOutAddress, txOutDatum, txOutValue))
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
@@ -259,9 +260,9 @@ mkMarloweValidator
                 IChoice (ChoiceId _ party) _ -> validatePartyWitness party
                 INotify                      -> True
           where
-            validatePartyWitness (PK pk)     = traceIfFalse "S" $ scriptContextTxInfo `txSignedBy` pk
-            validatePartyWitness (Role role) = traceIfFalse "T" -- "Spent value not OK"
-                                               $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
+            validatePartyWitness (Semantics.Address address) = traceIfFalse "S" $ txSignedByAddress address
+            validatePartyWitness (Role role)                 = traceIfFalse "T" -- "Spent value not OK"
+                                                               $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
     collectDeposits :: InputContent -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
@@ -275,11 +276,16 @@ mkMarloweValidator
     payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
-            PK pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
+            Semantics.Address pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidToAddress pk
             Role role -> let
                 hsh = findDatumHash' (rolesCurrency, role)
                 addr = Address.scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "R" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
+
+    txSignedByAddress (Address (PubKeyCredential pkh) _) = scriptContextTxInfo `txSignedBy` pkh
+    txSignedByAddress _                                  = False
+
+    valuePaidToAddress address = foldMap txOutValue $ filter ((== address) . txOutAddress) allOutputs
 
 -- This is pretty standard way to minimize size of the typed validator:
 --  * Wrap validator function so it accepts raw `BuiltinData`.
