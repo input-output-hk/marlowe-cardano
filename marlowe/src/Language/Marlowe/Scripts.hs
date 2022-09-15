@@ -34,11 +34,10 @@ import qualified Plutus.Script.Utils.V2.Typed.Scripts as Scripts
 import qualified Plutus.V1.Ledger.Address as Address (scriptHashAddress)
 import qualified Plutus.V1.Ledger.Value as Val
 import Plutus.V2.Ledger.Api (Address (Address), Credential (..), CurrencySymbol, Datum (Datum), DatumHash (DatumHash),
-                             POSIXTime, ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
+                             POSIXTime(..), ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
                              ScriptPurpose (Spending), TokenName, TxInInfo (TxInInfo, txInInfoOutRef, txInInfoResolved),
                              TxInfo (TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange), ValidatorHash,
-                             mkValidatorScript)
-import qualified Plutus.V2.Ledger.Api as Interval
+                             mkValidatorScript, Interval(..), LowerBound(..), UpperBound(..), Extended(..), POSIXTimeRange)
 import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
 import Plutus.V2.Ledger.Tx (OutputDatum (OutputDatumHash), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue))
 import PlutusTx (makeIsDataIndexed, makeLift)
@@ -91,6 +90,17 @@ rolePayoutValidatorHash :: ValidatorHash
 rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
 
 
+{-# INLINABLE closeInterval #-}
+closeInterval :: POSIXTimeRange -> Maybe (POSIXTime, POSIXTime)
+closeInterval (Interval (LowerBound (Finite (POSIXTime l)) lc) (UpperBound (Finite (POSIXTime h)) hc)) =
+  Just
+    (
+      POSIXTime $ l + 1 - fromEnum lc  -- Add one millisecond if the interval was open.
+    , POSIXTime $ h - 1 + fromEnum hc  -- Subtract one millisecond if the interval was open.
+    )
+closeInterval _ = Nothing
+
+
 {-# INLINABLE mkMarloweValidator #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 mkMarloweValidator
@@ -107,11 +117,10 @@ mkMarloweValidator
 
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
     let interval =
-            case txInfoValidRange scriptContextTxInfo of
-                -- FIXME: Recheck this, but it appears that any inclusiveness can appear at either bound when milliseconds
-                --        of POSIX time is converted from slot number.
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) _) (Interval.UpperBound (Interval.Finite h) _) -> (l, h)
-                _ -> traceError "R0"
+            -- Marlowe semantics require a closed interval, so we might adjust by one millisecond.
+            case closeInterval $ txInfoValidRange scriptContextTxInfo of
+                Just interval' -> interval'
+                Nothing        -> traceError "R0"
     let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
 
     {- Find Contract continuation in TxInfo datums by hash or fail with error -}

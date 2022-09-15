@@ -23,7 +23,7 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, frequency, listOf, property,
                               testProperty)
 
-import qualified PlutusTx.Prelude as P (all, any, filter, find, fmap, foldMap, snd, (&&), (==))
+import qualified PlutusTx.Prelude as P (all, any, filter, find, fmap, foldMap, snd, (&&), (==), fromEnum)
 
 
 -- | Run tests.
@@ -39,6 +39,7 @@ tests =
     , testProperty "`foldMap` matches standard prelude"               checkFoldMap
     , testProperty "`filter` matches standard prelude"                checkFilter
     , testProperty "`find` matches standard prelude"                  checkFind
+    , testProperty "`fromEnum` on `Bool`"                             checkBoolEnum
     , testProperty "`instance Eq (Maybe a)` matches standard prelude" checkEqMaybe
     , testProperty "`instance Eq DatumHash`"                          checkEqDatumHash
     , testProperty "`instance Eq ValidatorHash`"                      checkEqValidatorHash
@@ -149,6 +150,18 @@ checkFind =
         f = (< y)
       in
         P.find f xs == find f xs
+
+
+-- | Check that `fromEnum True == 1` and `fromEnum False == 0`
+checkBoolEnum :: Property
+checkBoolEnum =
+  property
+    . forAll arbitrary
+    $ \x ->
+      fromInteger (P.fromEnum x) == fromEnum x
+        && if x
+             then P.fromEnum x == 1
+             else P.fromEnum x == 0
 
 
 -- | Compare `instance Eq (Maybe a)` to standard prelude.
