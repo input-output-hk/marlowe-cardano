@@ -16,8 +16,7 @@ import Plutus.V1.Ledger.Api (ValidatorHash(..), fromBuiltin)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 
 spec :: Spec
-spec = do
-  describe "Address Sets" $ traverse_ (uncurry $ withSomeMarloweVersion addressSetSpec) $ (,) <$> [minBound..maxBound] <*> [C.Mainnet, C.Testnet $ C.NetworkMagic 0]
+spec = traverse_ (uncurry $ withSomeMarloweVersion addressSetSpec) $ (,) <$> [minBound..maxBound] <*> [C.Mainnet, C.Testnet $ C.NetworkMagic 0]
 
 addressSetSpec :: MarloweVersion v -> C.NetworkId -> Spec
 addressSetSpec marloweVersion networkId = do
