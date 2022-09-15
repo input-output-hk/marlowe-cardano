@@ -45,7 +45,7 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
                                                ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
                                                RuntimeChainSeekClient, ScriptHash (..), SlotConfig, TxOutRef (..),
-                                               UTxOError, WithGenesis (..), isAfter, schemaVersion1_0, slotToUTCTime)
+                                               UTxOError, WithGenesis (..), isAfter, moveSchema, slotToUTCTime)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, IsMarloweVersion (Redeemer), MarloweVersion (..),
                                           MarloweVersionTag (..), Payout (..), SomeMarloweVersion (..),
@@ -131,7 +131,7 @@ mkFollower deps@FollowerDependencies{..} = do
   statusVar <- newTVar Pending
   cancelled <- newEmptyTMVar
   let
-    stInit = SendMsgRequestHandshake schemaVersion1_0 handshake
+    stInit = SendMsgRequestHandshake moveSchema handshake
     handshake = ClientStHandshake
       { recvMsgHandshakeRejected = \_ -> pure $ Left HansdshakeFailed
       , recvMsgHandshakeConfirmed = findContract

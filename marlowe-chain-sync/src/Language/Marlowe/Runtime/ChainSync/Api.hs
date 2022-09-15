@@ -1,6 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDeriving     #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api
@@ -54,7 +55,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , paymentCredential
   , putUTCTime
   , runtimeChainSeekCodec
-  , schemaVersion1_0
+  , moveSchema
   , slotToUTCTime
   , stakeReference
   , toBech32
@@ -97,6 +98,7 @@ import GHC.Natural (Natural)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
+import Network.Protocol.ChainSeek.TH (mkSchemaVersion)
 import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
@@ -264,9 +266,6 @@ newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
 
-slotToUTCTime :: SlotConfig -> SlotNo -> UTCTime
-slotToUTCTime SlotConfig{..} slot = addUTCTime (slotLength * fromIntegral slot) slotZeroTime
-
 newtype BlockNo = BlockNo { unBlockNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
@@ -383,6 +382,25 @@ fromCardanoStakeCredential = \case
   Cardano.StakeCredentialByKey pkh           -> PaymentKeyCredential $ fromCardanoStakeKeyHash pkh
   Cardano.StakeCredentialByScript scriptHash -> ScriptCredential $ fromCardanoScriptHash scriptHash
 
+-- | Reasons a 'FindTx' request can be rejected.
+data TxError
+  = TxNotFound
+  | TxInPast BlockHeader
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
+
+-- | Reasons a 'FindConsumingTx' request can be rejected.
+data UTxOError
+  = UTxONotFound
+  | UTxOSpent TxId
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
+
+-- | Reasons an 'Intersect' request can be rejected.
+data IntersectError = IntersectionNotFound
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
+
 -- | The 'query' type for the Marlowe Chain Sync.
 data Move err result where
 
@@ -414,28 +432,11 @@ data Move err result where
   -- | Advance to the block containing a transaction.
   FindTx :: TxId -> Move TxError Transaction
 
+mkSchemaVersion "moveSchema" ''Move
+
 deriving instance Show (Move err result)
 deriving instance Eq (Move err result)
 deriving instance Ord (Move err result)
-
--- | Reasons a 'FindConsumingTx' request can be rejected.
-data UTxOError
-  = UTxONotFound
-  | UTxOSpent TxId
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
-
--- | Reasons a 'FindTx' request can be rejected.
-data TxError
-  = TxNotFound
-  | TxInPast BlockHeader
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
-
--- | Reasons an 'Intersect' request can be rejected.
-data IntersectError = IntersectionNotFound
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
 
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
@@ -607,8 +608,8 @@ instance Query Move where
     TagIntersect -> get
     TagFindConsumingTxs -> get
 
-schemaVersion1_0 :: SchemaVersion
-schemaVersion1_0 = SchemaVersion "marlowe-chain-sync-1.0"
+slotToUTCTime :: SlotConfig -> SlotNo -> UTCTime
+slotToUTCTime SlotConfig{..} slot = addUTCTime (slotLength * fromIntegral slot) slotZeroTime
 
 data SlotConfig = SlotConfig
   { slotZeroTime :: UTCTime

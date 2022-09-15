@@ -7,7 +7,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 client :: RuntimeChainSeekClient IO ()
 client = ChainSeekClient stInit
   where
-    stInit = pure $ SendMsgRequestHandshake schemaVersion1_0 stHandshake
+    stInit = pure $ SendMsgRequestHandshake moveSchema stHandshake
 
     stHandshake = ClientStHandshake
       { recvMsgHandshakeRejected = \supportedVersions -> do
