@@ -24,14 +24,14 @@ module Language.Marlowe.CLI.Command.Role (
 ) where
 
 
-import Cardano.Api (NetworkId (..), StakeAddressReference (..))
+import Cardano.Api (NetworkId(..), StakeAddressReference(..))
 import Control.Monad.Except (MonadError, MonadIO)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference,
-                                           parseTokenName, protocolVersionOpt)
+import Language.Marlowe.CLI.Command.Parse
+  (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference, parseTokenName, protocolVersionOpt)
 import Language.Marlowe.CLI.Export (exportRoleAddress, exportRoleDatum, exportRoleRedeemer, exportRoleValidator)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
-import Language.Marlowe.Core.V1.Semantics.Types (Token (Token))
+import Language.Marlowe.Core.V1.Semantics.Types (Token(Token))
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 
 import Control.Monad.Reader.Class (MonadReader)

@@ -18,10 +18,10 @@ module Actus.Marlowe.Instance
   )
 where
 
-import Actus.Domain (ActusFrac (..), ActusOps (..), CashFlow, ContractState, ContractTerms, RiskFactors)
+import Actus.Domain (ActusFrac(..), ActusOps(..), CashFlow, ContractState, ContractTerms, RiskFactors)
 import Data.Functor ((<&>))
 import Data.Maybe (fromMaybe)
-import GHC.Real (Ratio (..))
+import GHC.Real (Ratio(..))
 import qualified Language.Marlowe.Core.V1.Semantics as Core
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Extended.V1

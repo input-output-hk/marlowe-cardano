@@ -10,7 +10,7 @@ module Network.Protocol.ChainSeek.Codec (DeserializeError, codecChainSeek) where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
-import Data.Type.Equality (type (:~:) (Refl))
+import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.TypedProtocol.Codec

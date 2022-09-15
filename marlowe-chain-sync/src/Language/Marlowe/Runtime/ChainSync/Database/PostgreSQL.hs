@@ -7,21 +7,57 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (databaseQueries) where
 
-import Cardano.Api (AddressAny, AsType (..), AssetId (..), AssetName (..), Block (..), BlockHeader (..),
-                    BlockInMode (..), BlockNo (..), CardanoMode, ChainPoint (..), CtxTx, EraInMode, IsCardanoEra,
-                    Lovelace (..), PolicyId, Quantity (Quantity), ScriptValidity (..),
-                    SerialiseAsCBOR (serialiseToCBOR), SerialiseAsRawBytes (..),
-                    ShelleyBasedEra (ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage), SlotNo (..), Tx, TxBody (..),
-                    TxBodyContent (..), TxId, TxIn (..), TxInsCollateral (..), TxIx (..), TxMetadata (..),
-                    TxMetadataInEra (..), TxMintValue (..), TxOut (..), TxOutDatum (..), TxOutValue (..),
-                    TxReturnCollateral (..), TxScriptValidity (..), TxValidityLowerBound (..),
-                    TxValidityUpperBound (..), getTxBody, getTxId, hashScriptData, selectLovelace, valueToList)
-import Cardano.Api.Shelley (Hash (..), Tx (..), toPlutusData, toShelleyTxIn)
-import Cardano.Binary (ToCBOR (toCBOR), toStrictByteString, unsafeDeserialize')
+import Cardano.Api
+  ( AddressAny
+  , AsType(..)
+  , AssetId(..)
+  , AssetName(..)
+  , Block(..)
+  , BlockHeader(..)
+  , BlockInMode(..)
+  , BlockNo(..)
+  , CardanoMode
+  , ChainPoint(..)
+  , CtxTx
+  , EraInMode
+  , IsCardanoEra
+  , Lovelace(..)
+  , PolicyId
+  , Quantity(Quantity)
+  , ScriptValidity(..)
+  , SerialiseAsCBOR(serialiseToCBOR)
+  , SerialiseAsRawBytes(..)
+  , ShelleyBasedEra(ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage)
+  , SlotNo(..)
+  , Tx
+  , TxBody(..)
+  , TxBodyContent(..)
+  , TxId
+  , TxIn(..)
+  , TxInsCollateral(..)
+  , TxIx(..)
+  , TxMetadata(..)
+  , TxMetadataInEra(..)
+  , TxMintValue(..)
+  , TxOut(..)
+  , TxOutDatum(..)
+  , TxOutValue(..)
+  , TxReturnCollateral(..)
+  , TxScriptValidity(..)
+  , TxValidityLowerBound(..)
+  , TxValidityUpperBound(..)
+  , getTxBody
+  , getTxId
+  , hashScriptData
+  , selectLovelace
+  , valueToList
+  )
+import Cardano.Api.Shelley (Hash(..), Tx(..), toPlutusData, toShelleyTxIn)
+import Cardano.Binary (ToCBOR(toCBOR), toStrictByteString, unsafeDeserialize')
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
-import Control.Foldl (Fold (Fold))
+import Control.Foldl (Fold(Fold))
 import qualified Control.Foldl as Fold
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -32,13 +68,13 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Monoid (Sum (..))
+import Data.Monoid (Sum(..))
 import Data.Profunctor (rmap)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.These (These (..))
+import Data.These (These(..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Void (Void)
@@ -49,16 +85,28 @@ import Hasql.Transaction (Transaction)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
-import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, CommitBlocks (..), CommitGenesisBlock (..),
-                                                    CommitRollback (..), DatabaseQueries (DatabaseQueries),
-                                                    GetGenesisBlock (..), GetHeaderAtPoint (..),
-                                                    GetIntersectionPoints (..), MoveClient (..), MoveResult (..),
-                                                    hoistCommitBlocks, hoistCommitGenesisBlock, hoistCommitRollback,
-                                                    hoistGetGenesisBlock, hoistGetHeaderAtPoint,
-                                                    hoistGetIntersectionPoints, hoistMoveClient)
-import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..), GenesisTx (..))
+import Language.Marlowe.Runtime.ChainSync.Database
+  ( CardanoBlock
+  , CommitBlocks(..)
+  , CommitGenesisBlock(..)
+  , CommitRollback(..)
+  , DatabaseQueries(DatabaseQueries)
+  , GetGenesisBlock(..)
+  , GetHeaderAtPoint(..)
+  , GetIntersectionPoints(..)
+  , MoveClient(..)
+  , MoveResult(..)
+  , hoistCommitBlocks
+  , hoistCommitGenesisBlock
+  , hoistCommitRollback
+  , hoistGetGenesisBlock
+  , hoistGetHeaderAtPoint
+  , hoistGetIntersectionPoints
+  , hoistMoveClient
+  )
+import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock(..), GenesisTx(..))
 import Numeric.Natural (Natural)
-import Ouroboros.Network.Point (WithOrigin (..))
+import Ouroboros.Network.Point (WithOrigin(..))
 import Prelude hiding (init)
 
 -- | PostgreSQL implementation for the chain sync database queries.

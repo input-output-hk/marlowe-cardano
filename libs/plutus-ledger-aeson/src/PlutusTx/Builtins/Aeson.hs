@@ -10,16 +10,16 @@ module PlutusTx.Builtins.Aeson where
 import PlutusCore.Data.Aeson ()
 import qualified PlutusTx.Prelude as PlutusTx
 
-import Data.ByteString.Base16.Aeson (EncodeBase16 (..))
+import Data.ByteString.Base16.Aeson (EncodeBase16(..))
 import Data.ByteString.Base16.Aeson as Base16.Aeson
 
-import Codec.Serialise (Serialise (decode, encode))
-import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
+import Codec.Serialise (Serialise(decode, encode))
+import Data.Aeson (FromJSON(parseJSON), ToJSON(toJSON))
 import qualified Data.Aeson as JSON
 import qualified Data.Functor
 import PlutusCore.Data
 import qualified PlutusTx
-import PlutusTx.Builtins.Internal (BuiltinData (..))
+import PlutusTx.Builtins.Internal (BuiltinData(..))
 
 instance ToJSON PlutusTx.BuiltinByteString where
     toJSON = Base16.Aeson.byteStringToJSON . PlutusTx.fromBuiltin

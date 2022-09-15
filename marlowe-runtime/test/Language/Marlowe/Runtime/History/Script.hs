@@ -7,25 +7,35 @@ module Language.Marlowe.Runtime.History.Script where
 
 import Control.Monad (foldM, replicateM, (<=<))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State (StateT (..), evalStateT, get, put)
-import Data.Bifunctor (Bifunctor (bimap))
+import Control.Monad.Trans.State (StateT(..), evalStateT, get, put)
+import Data.Bifunctor (Bifunctor(bimap))
 import qualified Data.ByteString as BS
-import Data.Data (type (:~:) (Refl))
+import Data.Data (type (:~:)(Refl))
 import Data.Foldable (fold)
 import Data.GADT.Compare (GEq, geq)
-import Data.GADT.Show (GShow (..))
+import Data.GADT.Show (GShow(..))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe, maybeToList)
-import Data.Some (Some (Some), withSome)
+import Data.Some (Some(Some), withSome)
 import Data.Time (secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Type.Equality (testEquality)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), Assets (..), BlockHeader (..), BlockHeaderHash (..),
-                                               Lovelace (..), PolicyId (..), SlotNo (..), TokenName (..), Tokens (..),
-                                               TxId (..), TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( AssetId(..)
+  , Assets(..)
+  , BlockHeader(..)
+  , BlockHeaderHash(..)
+  , Lovelace(..)
+  , PolicyId(..)
+  , SlotNo(..)
+  , TokenName(..)
+  , Tokens(..)
+  , TxId(..)
+  , TxOutRef(..)
+  )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
 import Numeric.Natural (Natural)

@@ -12,20 +12,40 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
   , toEmptyChanges
   ) where
 
-import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), BlockNo, CardanoMode, ChainPoint (..),
-                    ChainSyncClientPipelined (..), ChainTip (..), LocalChainSyncClient (..),
-                    LocalNodeClientProtocols (..), LocalNodeClientProtocolsInMode, SlotNo, chainPointToSlotNo)
-import Cardano.Api.ChainSync.ClientPipelined (ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..),
-                                              ClientStNext (..), MkPipelineDecision, N (..), Nat (..),
-                                              PipelineDecision (..), mapChainSyncClientPipelined,
-                                              pipelineDecisionLowHighMark, runPipelineDecision)
+import Cardano.Api
+  ( Block(..)
+  , BlockHeader(..)
+  , BlockInMode(..)
+  , BlockNo
+  , CardanoMode
+  , ChainPoint(..)
+  , ChainSyncClientPipelined(..)
+  , ChainTip(..)
+  , LocalChainSyncClient(..)
+  , LocalNodeClientProtocols(..)
+  , LocalNodeClientProtocolsInMode
+  , SlotNo
+  , chainPointToSlotNo
+  )
+import Cardano.Api.ChainSync.ClientPipelined
+  ( ClientPipelinedStIdle(..)
+  , ClientPipelinedStIntersect(..)
+  , ClientStNext(..)
+  , MkPipelineDecision
+  , N(..)
+  , Nat(..)
+  , PipelineDecision(..)
+  , mapChainSyncClientPipelined
+  , pipelineDecisionLowHighMark
+  , runPipelineDecision
+  )
 import Control.Arrow ((&&&))
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
 import Data.List (sortOn)
-import Data.Ord (Down (..))
-import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, GetHeaderAtPoint (..), GetIntersectionPoints (..))
-import Ouroboros.Network.Point (WithOrigin (..))
+import Data.Ord (Down(..))
+import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, GetHeaderAtPoint(..), GetIntersectionPoints(..))
+import Ouroboros.Network.Point (WithOrigin(..))
 
 type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)

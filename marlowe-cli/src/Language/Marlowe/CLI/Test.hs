@@ -25,21 +25,27 @@ module Language.Marlowe.CLI.Test (
 ) where
 
 
-import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
-                    Key (getVerificationKey, verificationKeyHash), LocalNodeConnectInfo (..), ScriptDataSupportedInEra)
+import Cardano.Api
+  ( ConsensusModeParams(CardanoModeParams)
+  , EpochSlots(..)
+  , IsShelleyBasedEra
+  , Key(getVerificationKey, verificationKeyHash)
+  , LocalNodeConnectInfo(..)
+  , ScriptDataSupportedInEra
+  )
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
-import Control.Lens (Bifunctor (bimap))
+import Control.Lens (Bifunctor(bimap))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (ReaderT (runReaderT), runReader)
+import Control.Monad.Reader (ReaderT(runReaderT), runReader)
 import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
 import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, queryInEra, readSigningKey)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (..), Wallet (Wallet))
+import Language.Marlowe.CLI.Test.Types (MarloweTests(..), Wallet(Wallet))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (..), SigningKeyFile (SigningKeyFile))
+import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(..), SigningKeyFile(SigningKeyFile))
 import qualified Language.Marlowe.CLI.Types as T
 import PlutusCore (defaultCostModelParams)
 

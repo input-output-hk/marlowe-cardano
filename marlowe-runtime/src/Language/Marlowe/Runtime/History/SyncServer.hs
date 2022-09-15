@@ -7,16 +7,16 @@
 
 module Language.Marlowe.Runtime.History.SyncServer where
 
-import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
+import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (SomeException, catch)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Language.Marlowe.Protocol.Sync.Server
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
-import Language.Marlowe.Runtime.History.Store (GetNextStepsResponse (..))
+import Language.Marlowe.Runtime.History.Store (GetNextStepsResponse(..))
 import System.IO (hPutStrLn, stderr)
 
 newtype RunSyncServer m = RunSyncServer (forall a. MarloweSyncServer m a -> IO a)

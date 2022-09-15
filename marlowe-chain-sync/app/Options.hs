@@ -3,10 +3,10 @@ module Options
   , getOptions
   ) where
 
-import Cardano.Api (NetworkId (..), NetworkMagic (..))
+import Cardano.Api (NetworkId(..), NetworkMagic(..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel (..))
+import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel(..))
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)

@@ -15,9 +15,22 @@ module Actus.Model.StateInitialization
   )
 where
 
-import Actus.Domain (ActusFrac, CEGE (..), CT (..), ContractState (..), ContractStructure (..), ContractTerms (..),
-                     Cycle (..), FEB (..), IPCB (..), PRF (..), Reference (..), SCEF (..), sign)
-import Actus.Model.StateTransition (CtxSTF (..))
+import Actus.Domain
+  ( ActusFrac
+  , CEGE(..)
+  , CT(..)
+  , ContractState(..)
+  , ContractStructure(..)
+  , ContractTerms(..)
+  , Cycle(..)
+  , FEB(..)
+  , IPCB(..)
+  , PRF(..)
+  , Reference(..)
+  , SCEF(..)
+  , sign
+  )
+import Actus.Model.StateTransition (CtxSTF(..))
 import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup, yearFraction)
 import Control.Applicative ((<|>))
 import Control.Monad.Reader (Reader, reader)

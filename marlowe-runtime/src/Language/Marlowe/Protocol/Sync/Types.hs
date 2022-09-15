@@ -7,7 +7,7 @@ module Language.Marlowe.Protocol.Sync.Types where
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, MarloweVersionTag)
 import Language.Marlowe.Runtime.History.Api
-import Network.TypedProtocol (Protocol (..))
+import Network.TypedProtocol (Protocol(..))
 
 data MarloweSync where
   StInit :: MarloweSync

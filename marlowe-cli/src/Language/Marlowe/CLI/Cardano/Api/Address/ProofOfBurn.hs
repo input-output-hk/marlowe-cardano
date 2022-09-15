@@ -38,9 +38,9 @@ import Cardano.Api (PaymentCredential, ScriptHash)
 import Cardano.Api.Shelley (fromShelleyPaymentCredential, toShelleyScriptHash)
 import qualified Cardano.Crypto.Hash as C
 import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes, hashWith)
-import Cardano.Ledger.Credential (Credential (KeyHashObj))
+import Cardano.Ledger.Credential (Credential(KeyHashObj))
 import Cardano.Ledger.Crypto (StandardCrypto)
-import Cardano.Ledger.Keys (KeyHash (KeyHash), KeyRole (Payment))
+import Cardano.Ledger.Keys (KeyHash(KeyHash), KeyRole(Payment))
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
 import Data.Bits (xor)
 import Data.ByteString (ByteString, pack, unpack)

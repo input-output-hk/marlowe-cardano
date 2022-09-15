@@ -14,10 +14,22 @@ module Actus.Core
   )
 where
 
-import Actus.Domain (ActusFrac, CR (..), CT (..), CashFlow (..), ContractState (..), ContractStructure (..),
-                     ContractTerms (..), DS (..), EventType (..), Reference (..), ReferenceRole (..), RiskFactors (..),
-                     ShiftedDay (..))
-import Actus.Model (CtxPOF (CtxPOF), CtxSTF (..), initializeState, maturity, payoff, schedule, stateTransition)
+import Actus.Domain
+  ( ActusFrac
+  , CR(..)
+  , CT(..)
+  , CashFlow(..)
+  , ContractState(..)
+  , ContractStructure(..)
+  , ContractTerms(..)
+  , DS(..)
+  , EventType(..)
+  , Reference(..)
+  , ReferenceRole(..)
+  , RiskFactors(..)
+  , ShiftedDay(..)
+  )
+import Actus.Model (CtxPOF(CtxPOF), CtxSTF(..), initializeState, maturity, payoff, schedule, stateTransition)
 import Control.Applicative ((<|>))
 import Control.Monad (filterM)
 import Control.Monad.Reader (Reader, ask, runReader, withReader)

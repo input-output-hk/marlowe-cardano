@@ -29,18 +29,24 @@ module Spec.Marlowe.Plutus.Script (
 
 import Codec.Serialise (serialise)
 import Control.Monad.Except (runExcept)
-import Data.Bifunctor (Bifunctor (first))
-import Data.These (These (..))
+import Data.Bifunctor (Bifunctor(first))
+import Data.These (These(..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
 import Language.Marlowe.Scripts (rolePayoutValidator, rolePayoutValidatorHash, smallMarloweValidator)
 import Ledger.Typed.Scripts (validatorHash, validatorScript)
-import Plutus.ApiCommon (EvaluationContext, LedgerPlutusVersion (PlutusV2), LogOutput,
-                         ProtocolVersion (ProtocolVersion), VerboseMode (Verbose), evaluateScriptCounting,
-                         mkEvaluationContext)
+import Plutus.ApiCommon
+  ( EvaluationContext
+  , LedgerPlutusVersion(PlutusV2)
+  , LogOutput
+  , ProtocolVersion(ProtocolVersion)
+  , VerboseMode(Verbose)
+  , evaluateScriptCounting
+  , mkEvaluationContext
+  )
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V2.Ledger.Api (Address, CostModelParams, Data, Datum (Datum), DatumHash, ToData (toBuiltinData),
-                             TokenName, Validator (getValidator))
+import Plutus.V2.Ledger.Api
+  (Address, CostModelParams, Data, Datum(Datum), DatumHash, ToData(toBuiltinData), TokenName, Validator(getValidator))
 
 import qualified Data.ByteString.Lazy as LBS (toStrict)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)

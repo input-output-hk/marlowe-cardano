@@ -28,23 +28,41 @@
 
 module Language.Marlowe.CLI.Test.Script where
 
-import Cardano.Api (AsType (AsPaymentKey), CardanoMode, IsShelleyBasedEra,
-                    Key (getVerificationKey, verificationKeyHash), LocalNodeConnectInfo (..),
-                    PaymentCredential (PaymentCredentialByKey), ScriptDataSupportedInEra,
-                    StakeAddressReference (NoStakeAddress), generateSigningKey, makeShelleyAddressInEra)
+import Cardano.Api
+  ( AsType(AsPaymentKey)
+  , CardanoMode
+  , IsShelleyBasedEra
+  , Key(getVerificationKey, verificationKeyHash)
+  , LocalNodeConnectInfo(..)
+  , PaymentCredential(PaymentCredentialByKey)
+  , ScriptDataSupportedInEra
+  , StakeAddressReference(NoStakeAddress)
+  , generateSigningKey
+  , makeShelleyAddressInEra
+  )
 import Control.Monad (foldM, forM, forM_, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.State.Strict (MonadState, execStateT)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState, makeContract)
-import Language.Marlowe.CLI.Types (AnUTxO (AnUTxO), CliEnv (..), CliError (..),
-                                   CoinSelectionStrategy (CoinSelectionStrategy), MarlowePlutusVersion,
-                                   MarloweScriptsRefs (MarloweScriptsRefs), MarloweTransaction (mtState),
-                                   OutputQueryResult, PrintStats (PrintStats),
-                                   PublishingStrategy (PublishAtAddress, PublishPermanently),
-                                   TruncateMilliseconds (TruncateMilliseconds), ValidatorInfo (ValidatorInfo),
-                                   defaultCoinSelectionStrategy, toMarloweTimeout, toPOSIXTime)
+import Language.Marlowe.CLI.Types
+  ( AnUTxO(AnUTxO)
+  , CliEnv(..)
+  , CliError(..)
+  , CoinSelectionStrategy(CoinSelectionStrategy)
+  , MarlowePlutusVersion
+  , MarloweScriptsRefs(MarloweScriptsRefs)
+  , MarloweTransaction(mtState)
+  , OutputQueryResult
+  , PrintStats(PrintStats)
+  , PublishingStrategy(PublishAtAddress, PublishPermanently)
+  , TruncateMilliseconds(TruncateMilliseconds)
+  , ValidatorInfo(ValidatorInfo)
+  , defaultCoinSelectionStrategy
+  , toMarloweTimeout
+  , toPOSIXTime
+  )
 
-import Language.Marlowe.Extended.V1 as E (ChoiceId (ChoiceId), Party)
+import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Party)
 import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
 
@@ -52,13 +70,13 @@ import qualified Cardano.Api as C
 import Control.Lens (assign, modifying, use, view)
 import Control.Monad.Extra (whenM)
 import Control.Monad.RWS.Class (MonadReader)
-import Control.Monad.Reader (ReaderT (runReaderT))
+import Control.Monad.Reader (ReaderT(runReaderT))
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.OneLine as A
 import Data.Foldable (foldl')
 import Data.Foldable.Extra (for_)
-import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
+import Data.List.NonEmpty (NonEmpty((:|)), (<|))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust)
@@ -68,32 +86,57 @@ import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Data.Aeson.Traversals as A
 import Language.Marlowe.CLI.IO (liftCliMaybe, queryInEra)
-import Language.Marlowe.CLI.Run (autoRunTransactionImpl, initializeTransactionImpl,
-                                 initializeTransactionUsingScriptRefsImpl, prepareTransactionImpl)
+import Language.Marlowe.CLI.Run
+  (autoRunTransactionImpl, initializeTransactionImpl, initializeTransactionUsingScriptRefsImpl, prepareTransactionImpl)
 import Language.Marlowe.CLI.Sync (classifyOutputs, isMarloweOut)
-import Language.Marlowe.CLI.Sync.Types (MarloweOut (ApplicationOut, moTxIn))
-import Language.Marlowe.CLI.Test.Script.Debug (SoFormat (SoName), logSoMsg, logSoMsg', logTraceMsg, runSoCli,
-                                               throwSoError, withCliErrorMsg)
-import Language.Marlowe.CLI.Test.Types (ContractNickname, ContractSource (..), CurrencyNickname,
-                                        CustomCurrency (CustomCurrency, ccCurrencySymbol), MarloweContract (..),
-                                        PartyRef (RoleRef, WalletRef), ScriptEnv (..), ScriptOperation (..),
-                                        ScriptState, ScriptTest (ScriptTest, stScriptOperations, stTestName),
-                                        Seconds (Seconds), TokenAssignment (TokenAssignment), UseTemplate (..),
-                                        Wallet (..), WalletNickname (WalletNickname),
-                                        WalletTransaction (WalletTransaction, wtFees, wtTxBody), anyMarloweThread,
-                                        faucetNickname, foldrMarloweThread, getMarloweThreadTransaction,
-                                        getMarloweThreadTxIn, overAnyMarloweThread, scriptState, seConnection,
-                                        seCostModelParams, seEra, seProtocolVersion, seSlotConfig, seTransactionTimeout,
-                                        ssContracts, ssCurrencies, ssReferenceScripts, ssWallets, walletPubKeyHash)
-import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl,
-                                         selectUtxosImpl)
+import Language.Marlowe.CLI.Sync.Types (MarloweOut(ApplicationOut, moTxIn))
+import Language.Marlowe.CLI.Test.Script.Debug
+  (SoFormat(SoName), logSoMsg, logSoMsg', logTraceMsg, runSoCli, throwSoError, withCliErrorMsg)
+import Language.Marlowe.CLI.Test.Types
+  ( ContractNickname
+  , ContractSource(..)
+  , CurrencyNickname
+  , CustomCurrency(CustomCurrency, ccCurrencySymbol)
+  , MarloweContract(..)
+  , PartyRef(RoleRef, WalletRef)
+  , ScriptEnv(..)
+  , ScriptOperation(..)
+  , ScriptState
+  , ScriptTest(ScriptTest, stScriptOperations, stTestName)
+  , Seconds(Seconds)
+  , TokenAssignment(TokenAssignment)
+  , UseTemplate(..)
+  , Wallet(..)
+  , WalletNickname(WalletNickname)
+  , WalletTransaction(WalletTransaction, wtFees, wtTxBody)
+  , anyMarloweThread
+  , faucetNickname
+  , foldrMarloweThread
+  , getMarloweThreadTransaction
+  , getMarloweThreadTxIn
+  , overAnyMarloweThread
+  , scriptState
+  , seConnection
+  , seCostModelParams
+  , seEra
+  , seProtocolVersion
+  , seSlotConfig
+  , seTransactionTimeout
+  , ssContracts
+  , ssCurrencies
+  , ssReferenceScripts
+  , ssWallets
+  , walletPubKeyHash
+  )
+import Language.Marlowe.CLI.Transaction
+  (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl, selectUtxosImpl)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import Language.Marlowe.Pretty (pretty)
 import Ledger.Tx.CardanoAPI (fromCardanoPaymentKeyHash, fromCardanoPolicyId)
 import Plutus.ApiCommon (ProtocolVersion)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
 import Plutus.V1.Ledger.Value (mpsSymbol, valueOf)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value

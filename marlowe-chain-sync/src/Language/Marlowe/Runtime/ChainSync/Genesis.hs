@@ -4,14 +4,14 @@ module Language.Marlowe.Runtime.ChainSync.Genesis
   , computeByronGenesisBlock
   ) where
 
-import Cardano.Api (AddressAny (..), AsType (..), BlockHeader, Hash, Lovelace, TxId, deserialiseFromRawBytes)
-import Cardano.Api.Byron (Address (..))
-import Cardano.Api.Shelley (Hash (..))
+import Cardano.Api (AddressAny(..), AsType(..), BlockHeader, Hash, Lovelace, TxId, deserialiseFromRawBytes)
+import Cardano.Api.Byron (Address(..))
+import Cardano.Api.Shelley (Hash(..))
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, serializeCborHash)
 import qualified Cardano.Crypto as Crypto
-import Data.Bifunctor (Bifunctor (..))
+import Data.Bifunctor (Bifunctor(..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (toShort)
 import qualified Data.Map as Map

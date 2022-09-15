@@ -19,7 +19,7 @@ module Spec.Marlowe.Plutus.AssocMap (
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap)
 import Spec.Marlowe.Semantics.AssocMap (assocMapDelete, assocMapEq, assocMapInsert, assocMapLookup, assocMapMember)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, property, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, elements, forAll, property, testProperty)
 
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, insert, lookup, member, null, singleton, toList)
 

@@ -44,14 +44,35 @@ module Language.Marlowe.CLI.Run (
 ) where
 
 
-import Cardano.Api (AddressInEra (..), CardanoMode, LocalNodeConnectInfo (..), NetworkId, PaymentCredential (..),
-                    PlutusScriptVersion (PlutusScriptV1, PlutusScriptV2), QueryInShelleyBasedEra (..),
-                    QueryUTxOFilter (..), ScriptDataSupportedInEra (..), SlotNo (..), StakeAddressReference (..),
-                    TxBody, TxId, TxIn, TxMetadataInEra, TxMintValue (..), TxOut (..), TxOutDatum (..), UTxO (..),
-                    getTxId, lovelaceToValue, makeShelleyAddressInEra, txOutValueToValue, writeFileTextEnvelope)
+import Cardano.Api
+  ( AddressInEra(..)
+  , CardanoMode
+  , LocalNodeConnectInfo(..)
+  , NetworkId
+  , PaymentCredential(..)
+  , PlutusScriptVersion(PlutusScriptV1, PlutusScriptV2)
+  , QueryInShelleyBasedEra(..)
+  , QueryUTxOFilter(..)
+  , ScriptDataSupportedInEra(..)
+  , SlotNo(..)
+  , StakeAddressReference(..)
+  , TxBody
+  , TxId
+  , TxIn
+  , TxMetadataInEra
+  , TxMintValue(..)
+  , TxOut(..)
+  , TxOutDatum(..)
+  , UTxO(..)
+  , getTxId
+  , lovelaceToValue
+  , makeShelleyAddressInEra
+  , txOutValueToValue
+  , writeFileTextEnvelope
+  )
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceScript (ReferenceScriptNone))
+import Cardano.Api.Shelley (ReferenceScript(ReferenceScriptNone))
 import qualified Cardano.Api.Shelley as CS
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
@@ -66,37 +87,70 @@ import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO)
 import Language.Marlowe.CLI.Cardano.Api.Address (toShelleyStakeReference)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion))
-import Language.Marlowe.CLI.Export (buildMarloweDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer,
-                                    marloweValidatorInfo, roleValidatorInfo)
-import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, queryInEra, readMaybeMetadata,
-                                readSigningKey)
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage(plutusScriptVersion))
+import Language.Marlowe.CLI.Export
+  (buildMarloweDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer, marloweValidatorInfo, roleValidatorInfo)
+import Language.Marlowe.CLI.IO
+  (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, queryInEra, readMaybeMetadata, readSigningKey)
 import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey,
-                                         makeTxOut', selectCoins, submitBody)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarlowePlutusVersion,
-                                   MarloweScriptsRefs (MarloweScriptsRefs, mrMarloweValidator, mrRolePayoutValidator),
-                                   MarloweTransaction (..), PrintStats (PrintStats), RedeemerInfo (..),
-                                   SigningKeyFile (..), SomeMarloweTransaction (..), SomePaymentSigningKey,
-                                   TxBodyFile (TxBodyFile, unTxBodyFile), ValidatorInfo (..), askEra,
-                                   defaultCoinSelectionStrategy, doWithCardanoEra, toAddressAny', toShelleyAddress,
-                                   txIn, validatorInfoScriptOrReference, withShelleyBasedEra)
+import Language.Marlowe.CLI.Transaction
+  (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey, makeTxOut', selectCoins, submitBody)
+import Language.Marlowe.CLI.Types
+  ( CliEnv
+  , CliError(..)
+  , DatumInfo(..)
+  , MarlowePlutusVersion
+  , MarloweScriptsRefs(MarloweScriptsRefs, mrMarloweValidator, mrRolePayoutValidator)
+  , MarloweTransaction(..)
+  , PrintStats(PrintStats)
+  , RedeemerInfo(..)
+  , SigningKeyFile(..)
+  , SomeMarloweTransaction(..)
+  , SomePaymentSigningKey
+  , TxBodyFile(TxBodyFile, unTxBodyFile)
+  , ValidatorInfo(..)
+  , askEra
+  , defaultCoinSelectionStrategy
+  , doWithCardanoEra
+  , toAddressAny'
+  , toShelleyAddress
+  , txIn
+  , validatorInfoScriptOrReference
+  , withShelleyBasedEra
+  )
 import qualified Language.Marlowe.Client as MC
-import Language.Marlowe.Core.V1.Semantics (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
-                                           TransactionOutput (..), TransactionWarning, computeTransaction)
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
-                                                 InputContent (..), Party (..), Payee (..), State (accounts),
-                                                 Token (..), getInputContent)
-import Ledger.Address (PaymentPubKeyHash (PaymentPubKeyHash))
+import Language.Marlowe.Core.V1.Semantics
+  ( MarloweParams(rolesCurrency)
+  , Payment(..)
+  , TransactionInput(..)
+  , TransactionOutput(..)
+  , TransactionWarning
+  , computeTransaction
+  )
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( AccountId
+  , ChoiceId(..)
+  , ChoiceName
+  , ChosenNum
+  , Contract
+  , Input(..)
+  , InputContent(..)
+  , Party(..)
+  , Payee(..)
+  , State(accounts)
+  , Token(..)
+  , getInputContent
+  )
+import Ledger.Address (PaymentPubKeyHash(PaymentPubKeyHash))
 import Ledger.Tx.CardanoAPI (toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot)
-import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue, singleton)
-import Plutus.V2.Ledger.Api (CostModelParams, Datum (..), POSIXTime, TokenName, adaSymbol, adaToken, toBuiltinData)
+import Plutus.V1.Ledger.Value (AssetClass(..), Value(..), assetClassValue, singleton)
+import Plutus.V2.Ledger.Api (CostModelParams, Datum(..), POSIXTime, TokenName, adaSymbol, adaToken, toBuiltinData)
 import qualified PlutusTx.AssocMap as AM (toList)
-import Prettyprinter.Extras (Pretty (..))
+import Prettyprinter.Extras (Pretty(..))
 import System.IO (hPutStrLn, stderr)
 
 

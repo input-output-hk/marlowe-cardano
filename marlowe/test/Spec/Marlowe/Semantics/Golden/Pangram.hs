@@ -26,18 +26,27 @@ module Spec.Marlowe.Semantics.Golden.Pangram (
 ) where
 
 
-import Data.String (IsString (..))
-import Language.Marlowe.Core.V1.Semantics (Payment (Payment), TransactionInput (..), TransactionOutput (..),
-                                           TransactionWarning (..))
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Action (Choice, Deposit, Notify), Bound (Bound),
-                                                 Case (Case), ChoiceId (ChoiceId), Contract (..), Input (NormalInput),
-                                                 InputContent (IChoice, IDeposit, INotify),
-                                                 Observation (AndObs, ChoseSomething, FalseObs, NotObs, OrObs, ValueEQ, ValueGE, ValueGT, ValueLE, ValueLT),
-                                                 Party (PK, Role), Payee (Account, Party),
-                                                 State (State, accounts, boundValues, choices, minTime), Token (Token),
-                                                 Value (AddValue, AvailableMoney, ChoiceValue, Cond, Constant, DivValue, MulValue, NegValue, SubValue, TimeIntervalEnd, TimeIntervalStart, UseValue),
-                                                 ValueId (ValueId))
-import Plutus.V2.Ledger.Api (POSIXTime (..), Value (..))
+import Data.String (IsString(..))
+import Language.Marlowe.Core.V1.Semantics
+  (Payment(Payment), TransactionInput(..), TransactionOutput(..), TransactionWarning(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( AccountId
+  , Action(Choice, Deposit, Notify)
+  , Bound(Bound)
+  , Case(Case)
+  , ChoiceId(ChoiceId)
+  , Contract(..)
+  , Input(NormalInput)
+  , InputContent(IChoice, IDeposit, INotify)
+  , Observation(AndObs, ChoseSomething, FalseObs, NotObs, OrObs, ValueEQ, ValueGE, ValueGT, ValueLE, ValueLT)
+  , Party(PK, Role)
+  , Payee(Account, Party)
+  , State(State, accounts, boundValues, choices, minTime)
+  , Token(Token)
+  , Value(AddValue, AvailableMoney, ChoiceValue, Cond, Constant, DivValue, MulValue, NegValue, SubValue, TimeIntervalEnd, TimeIntervalStart, UseValue)
+  , ValueId(ValueId)
+  )
+import Plutus.V2.Ledger.Api (POSIXTime(..), Value(..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 

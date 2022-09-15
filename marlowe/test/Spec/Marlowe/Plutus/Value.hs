@@ -21,11 +21,11 @@ module Spec.Marlowe.Plutus.Value (
 
 import Data.List (permutations, union)
 import Plutus.V1.Ledger.Value (geq, leq, valueOf)
-import Plutus.V2.Ledger.Api (CurrencySymbol, TokenName, Value (..), singleton)
+import Plutus.V2.Ledger.Api (CurrencySymbol, TokenName, Value(..), singleton)
 import PlutusTx.Numeric (zero)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Property, elements, forAll, property, testProperty, (===))
+import Test.Tasty.QuickCheck (Arbitrary(..), Property, elements, forAll, property, testProperty, (===))
 
 import qualified PlutusTx.AssocMap as AM (empty, fromList, toList)
 import qualified PlutusTx.Eq as P ((==))

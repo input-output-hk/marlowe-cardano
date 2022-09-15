@@ -108,19 +108,52 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra (AddressInEra), AsType (..), AssetId, CardanoEra (AlonzoEra, BabbageEra),
-                    CardanoMode, CollateralSupportedInEra (..), EraInMode (..), HasTypeProxy (proxyToAsType), Hash,
-                    IsCardanoEra, IsScriptLanguage, IsShelleyBasedEra, Lovelace, PaymentExtendedKey, PaymentKey,
-                    PlutusScript, PlutusScriptVersion, Script (PlutusScript), ScriptData, ScriptDataSupportedInEra (..),
-                    ScriptLanguageInEra (..), ShelleyBasedEra (..), SigningKey, SimpleScriptV2, SlotNo,
-                    TxExtraKeyWitnessesSupportedInEra (..), TxFeesExplicitInEra (..), TxIn,
-                    TxMetadataSupportedInEra (..), TxScriptValiditySupportedInEra (..),
-                    ValidityLowerBoundSupportedInEra (..), ValidityNoUpperBoundSupportedInEra (..),
-                    ValidityUpperBoundSupportedInEra (..), VerificationKey, castVerificationKey, deserialiseAddress,
-                    deserialiseFromTextEnvelope, serialiseAddress, serialiseToTextEnvelope, toAddressAny)
-import Cardano.Api.Shelley (PlutusScript (..))
+import Cardano.Api
+  ( AddressAny
+  , AddressInEra(AddressInEra)
+  , AsType(..)
+  , AssetId
+  , CardanoEra(AlonzoEra, BabbageEra)
+  , CardanoMode
+  , CollateralSupportedInEra(..)
+  , EraInMode(..)
+  , HasTypeProxy(proxyToAsType)
+  , Hash
+  , IsCardanoEra
+  , IsScriptLanguage
+  , IsShelleyBasedEra
+  , Lovelace
+  , PaymentExtendedKey
+  , PaymentKey
+  , PlutusScript
+  , PlutusScriptVersion
+  , Script(PlutusScript)
+  , ScriptData
+  , ScriptDataSupportedInEra(..)
+  , ScriptLanguageInEra(..)
+  , ShelleyBasedEra(..)
+  , SigningKey
+  , SimpleScriptV2
+  , SlotNo
+  , TxExtraKeyWitnessesSupportedInEra(..)
+  , TxFeesExplicitInEra(..)
+  , TxIn
+  , TxMetadataSupportedInEra(..)
+  , TxScriptValiditySupportedInEra(..)
+  , ValidityLowerBoundSupportedInEra(..)
+  , ValidityNoUpperBoundSupportedInEra(..)
+  , ValidityUpperBoundSupportedInEra(..)
+  , VerificationKey
+  , castVerificationKey
+  , deserialiseAddress
+  , deserialiseFromTextEnvelope
+  , serialiseAddress
+  , serialiseToTextEnvelope
+  , toAddressAny
+  )
+import Cardano.Api.Shelley (PlutusScript(..))
 import Codec.Serialise (deserialise)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
+import Data.Aeson (FromJSON(..), ToJSON(..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.ByteString.Short (ShortByteString)
 import Data.Maybe (fromMaybe)
 import Data.String (IsString)
@@ -139,8 +172,8 @@ import qualified Cardano.Api.Byron as CB
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Api.Shelley as CS
 import Control.Monad.Except (MonadError, liftEither)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Reader.Class (MonadReader (..), asks)
+import Control.Monad.IO.Class (MonadIO(liftIO))
+import Control.Monad.Reader.Class (MonadReader(..), asks)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Bifunctor as Bifunctor
@@ -148,14 +181,14 @@ import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort, length)
 import qualified Data.Map.Strict as M (Map)
 import qualified Data.Map.Strict as Map
-import Data.Proxy (Proxy (Proxy))
+import Data.Proxy (Proxy(Proxy))
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import GHC.Exts (IsString (fromString))
+import GHC.Exts (IsString(fromString))
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage, plutusScriptVersion,
-                                                      withPlutusScriptVersion)
-import Language.Marlowe.Extended.V1 (Timeout (POSIXTime))
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript
+  (IsPlutusScriptLanguage, plutusScriptVersion, withPlutusScriptVersion)
+import Language.Marlowe.Extended.V1 (Timeout(POSIXTime))
 import qualified Language.Marlowe.Extended.V1 as E
 
 

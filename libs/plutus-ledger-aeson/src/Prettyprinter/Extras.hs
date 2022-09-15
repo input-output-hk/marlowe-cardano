@@ -9,9 +9,9 @@ module Prettyprinter.Extras(
     , Tagged(Tagged)
     ) where
 
-import Data.Foldable (Foldable (toList))
-import Data.Proxy (Proxy (..))
-import Data.String (IsString (..))
+import Data.Foldable (Foldable(toList))
+import Data.Proxy (Proxy(..))
+import Data.String (IsString(..))
 import Data.Tagged
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Prettyprinter

@@ -11,8 +11,8 @@
 module Network.Protocol.ChainSeek.Server where
 
 import Network.Protocol.ChainSeek.Types
-import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
-import Network.TypedProtocol.Core (PeerRole (..))
+import Network.TypedProtocol (Peer(..), PeerHasAgency(..))
+import Network.TypedProtocol.Core (PeerRole(..))
 
 -- | A chain seek protocol server that runs in some monad 'm'.
 newtype ChainSeekServer query point tip m a = ChainSeekServer

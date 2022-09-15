@@ -19,20 +19,34 @@ module Language.Marlowe.CLI.Cardano.Api (
 ) where
 
 
-import Cardano.Api (AddressInEra (..), IsShelleyBasedEra, Lovelace, MinimumUTxOError,
-                    MultiAssetSupportedInEra (MultiAssetInAlonzoEra, MultiAssetInBabbageEra),
-                    ScriptDataSupportedInEra (..), TxOut (..), TxOutDatum (..), TxOutValue (..), calculateMinimumUTxO,
-                    lovelaceToValue, selectLovelace, shelleyBasedEra)
+import Cardano.Api
+  ( AddressInEra(..)
+  , IsShelleyBasedEra
+  , Lovelace
+  , MinimumUTxOError
+  , MultiAssetSupportedInEra(MultiAssetInAlonzoEra, MultiAssetInBabbageEra)
+  , ScriptDataSupportedInEra(..)
+  , TxOut(..)
+  , TxOutDatum(..)
+  , TxOutValue(..)
+  , calculateMinimumUTxO
+  , lovelaceToValue
+  , selectLovelace
+  , shelleyBasedEra
+  )
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ProtocolParameters, ReferenceScript,
-                            ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
-                            fromPlutusData)
+import Cardano.Api.Shelley
+  ( ProtocolParameters
+  , ReferenceScript
+  , ReferenceTxInsScriptsInlineDatumsSupportedInEra(ReferenceTxInsScriptsInlineDatumsInBabbageEra)
+  , fromPlutusData
+  )
 import Control.Monad.Except (liftEither)
 import GHC.Natural (Natural, naturalToInteger)
 import Language.Marlowe.CLI.Orphans ()
-import Plutus.V1.Ledger.Api (ProtocolVersion (ProtocolVersion))
-import Plutus.V2.Ledger.Api (Datum (..), toData)
+import Plutus.V1.Ledger.Api (ProtocolVersion(ProtocolVersion))
+import Plutus.V2.Ledger.Api (Datum(..), toData)
 
 
 withShelleyBasedEra :: forall era a. ScriptDataSupportedInEra era -> (IsShelleyBasedEra era => a) -> a

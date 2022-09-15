@@ -67,46 +67,132 @@ module Language.Marlowe.CLI.Transaction (
 ) where
 
 
-import Cardano.Api (AddressInEra (..), AsType (..), AssetId (..), AssetName (..), BalancedTxBody (..), BuildTx,
-                    BuildTxWith (..), CardanoMode, ConsensusModeIsMultiEra (..), CtxTx, CtxUTxO, EraHistory (..),
-                    ExecutionUnits (..), Hash, KeyWitnessInCtx (..), LocalNodeConnectInfo (..), Lovelace,
-                    PaymentCredential (PaymentCredentialByScript), PaymentKey, PlutusScript, PlutusScriptVersion (..),
-                    PolicyId (..), Quantity (..), QueryInMode (..), QueryInShelleyBasedEra (..), QueryUTxOFilter (..),
-                    Script (..), ScriptDataSupportedInEra, ScriptDatum (..), ScriptHash, ScriptValidity (ScriptInvalid),
-                    ScriptWitness (..), ScriptWitnessInCtx (..), ShelleyBasedEra (..), ShelleyWitnessSigningKey (..),
-                    SimpleScript (..), SimpleScriptV2, SimpleScriptVersion (..), SlotNo (..),
-                    StakeAddressReference (NoStakeAddress), TimeLocksSupported (..), TxAuxScripts (..), TxBody (..),
-                    TxBodyContent (..), TxBodyErrorAutoBalance (..), TxBodyScriptData (..), TxCertificates (..),
-                    TxExtraKeyWitnesses (..), TxFee (..), TxId, TxIn (..), TxInMode (..), TxInsCollateral (..),
-                    TxInsReference (TxInsReferenceNone), TxIx (..), TxMetadataInEra (..),
-                    TxMetadataJsonSchema (TxMetadataJsonNoSchema), TxMintValue (..), TxOut (..), TxOutDatum (..),
-                    TxOutValue (..), TxReturnCollateral (TxReturnCollateralNone), TxScriptValidity (..),
-                    TxTotalCollateral (TxTotalCollateralNone), TxUpdateProposal (..), TxValidityLowerBound (..),
-                    TxValidityUpperBound (..), TxWithdrawals (..), UTxO (..), Value, WitCtxTxIn, Witness (..),
-                    calculateMinimumUTxO, castVerificationKey, getTxId, getVerificationKey, hashScript, hashScriptData,
-                    lovelaceToValue, makeShelleyAddressInEra, makeTransactionBodyAutoBalance, metadataFromJson,
-                    negateValue, queryNodeLocalState, readFileTextEnvelope, selectAsset, selectLovelace,
-                    serialiseToCBOR, serialiseToRawBytesHex, shelleyBasedEra, signShelleyTransaction,
-                    submitTxToNodeLocal, toScriptInAnyLang, txOutValueToValue, valueFromList, valueToList,
-                    valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
+import Cardano.Api
+  ( AddressInEra(..)
+  , AsType(..)
+  , AssetId(..)
+  , AssetName(..)
+  , BalancedTxBody(..)
+  , BuildTx
+  , BuildTxWith(..)
+  , CardanoMode
+  , ConsensusModeIsMultiEra(..)
+  , CtxTx
+  , CtxUTxO
+  , EraHistory(..)
+  , ExecutionUnits(..)
+  , Hash
+  , KeyWitnessInCtx(..)
+  , LocalNodeConnectInfo(..)
+  , Lovelace
+  , PaymentCredential(PaymentCredentialByScript)
+  , PaymentKey
+  , PlutusScript
+  , PlutusScriptVersion(..)
+  , PolicyId(..)
+  , Quantity(..)
+  , QueryInMode(..)
+  , QueryInShelleyBasedEra(..)
+  , QueryUTxOFilter(..)
+  , Script(..)
+  , ScriptDataSupportedInEra
+  , ScriptDatum(..)
+  , ScriptHash
+  , ScriptValidity(ScriptInvalid)
+  , ScriptWitness(..)
+  , ScriptWitnessInCtx(..)
+  , ShelleyBasedEra(..)
+  , ShelleyWitnessSigningKey(..)
+  , SimpleScript(..)
+  , SimpleScriptV2
+  , SimpleScriptVersion(..)
+  , SlotNo(..)
+  , StakeAddressReference(NoStakeAddress)
+  , TimeLocksSupported(..)
+  , TxAuxScripts(..)
+  , TxBody(..)
+  , TxBodyContent(..)
+  , TxBodyErrorAutoBalance(..)
+  , TxBodyScriptData(..)
+  , TxCertificates(..)
+  , TxExtraKeyWitnesses(..)
+  , TxFee(..)
+  , TxId
+  , TxIn(..)
+  , TxInMode(..)
+  , TxInsCollateral(..)
+  , TxInsReference(TxInsReferenceNone)
+  , TxIx(..)
+  , TxMetadataInEra(..)
+  , TxMetadataJsonSchema(TxMetadataJsonNoSchema)
+  , TxMintValue(..)
+  , TxOut(..)
+  , TxOutDatum(..)
+  , TxOutValue(..)
+  , TxReturnCollateral(TxReturnCollateralNone)
+  , TxScriptValidity(..)
+  , TxTotalCollateral(TxTotalCollateralNone)
+  , TxUpdateProposal(..)
+  , TxValidityLowerBound(..)
+  , TxValidityUpperBound(..)
+  , TxWithdrawals(..)
+  , UTxO(..)
+  , Value
+  , WitCtxTxIn
+  , Witness(..)
+  , calculateMinimumUTxO
+  , castVerificationKey
+  , getTxId
+  , getVerificationKey
+  , hashScript
+  , hashScriptData
+  , lovelaceToValue
+  , makeShelleyAddressInEra
+  , makeTransactionBodyAutoBalance
+  , metadataFromJson
+  , negateValue
+  , queryNodeLocalState
+  , readFileTextEnvelope
+  , selectAsset
+  , selectLovelace
+  , serialiseToCBOR
+  , serialiseToRawBytesHex
+  , shelleyBasedEra
+  , signShelleyTransaction
+  , submitTxToNodeLocal
+  , toScriptInAnyLang
+  , txOutValueToValue
+  , valueFromList
+  , valueToList
+  , valueToLovelace
+  , verificationKeyHash
+  , writeFileTextEnvelope
+  )
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ExecutionUnitPrices (..), ProtocolParameters (..),
-                            ReferenceScript (ReferenceScript, ReferenceScriptNone),
-                            SimpleScriptOrReferenceInput (SScript), TxBody (ShelleyTxBody), fromPlutusData,
-                            protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits, protocolParamMaxTxSize)
+import Cardano.Api.Shelley
+  ( ExecutionUnitPrices(..)
+  , ProtocolParameters(..)
+  , ReferenceScript(ReferenceScript, ReferenceScriptNone)
+  , SimpleScriptOrReferenceInput(SScript)
+  , TxBody(ShelleyTxBody)
+  , fromPlutusData
+  , protocolParamMaxBlockExUnits
+  , protocolParamMaxTxExUnits
+  , protocolParamMaxTxSize
+  )
 import qualified Cardano.Api.Shelley as C
-import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
-import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
+import Cardano.Ledger.Alonzo.Scripts (ExUnits(..))
+import Cardano.Ledger.Alonzo.TxWitness (Redeemers(..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
 import Control.Arrow ((***))
 import Control.Concurrent (threadDelay)
-import Control.Error (MaybeT (MaybeT, runMaybeT), note)
+import Control.Error (MaybeT(MaybeT, runMaybeT), note)
 import Control.Monad (forM, forM_, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO, runExcept, throwError)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.Trans (lift)
-import Data.Aeson (ToJSON (toJSON))
-import qualified Data.Aeson as A (Value (Null, Object), object)
+import Data.Aeson (ToJSON(toJSON))
+import qualified Data.Aeson as A (Value(Null, Object), object)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -127,35 +213,72 @@ import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
-import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO, toPlutusProtocolVersion,
-                                         toReferenceTxInsScriptsInlineDatumsSupportedInEra)
+import Language.Marlowe.CLI.Cardano.Api
+  (adjustMinimumUTxO, toPlutusProtocolVersion, toReferenceTxInsScriptsInlineDatumsSupportedInEra)
 import qualified Language.Marlowe.CLI.Cardano.Api as MCA
 import Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn (permanentPublisher)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript as PS
 import Language.Marlowe.CLI.Data.Foldable (tillFirstMatch)
 import Language.Marlowe.CLI.Export (buildValidatorInfo)
-import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, getDefaultCostModel, liftCli, liftCliIO,
-                                liftCliMaybe, maybeWriteJson, queryInEra, readMaybeMetadata, readSigningKey)
-import Language.Marlowe.CLI.Types (AnUTxO (AnUTxO), CliEnv, CliError (..),
-                                   CoinSelectionStrategy (CoinSelectionStrategy, csPreserveInlineDatums, csPreserveReferenceScripts, csPreserveTxIns),
-                                   MarlowePlutusVersion, MarloweScriptsRefs (MarloweScriptsRefs), OutputQuery (..),
-                                   OutputQueryResult (..), PayFromScript (..), PayToScript (..),
-                                   PrintStats (PrintStats), PublishMarloweScripts (PublishMarloweScripts),
-                                   PublishScript (..), PublishingStrategy (..), SigningKeyFile, SomePaymentSigningKey,
-                                   TxBodyFile (TxBodyFile), ValidatorInfo (ValidatorInfo, viHash, viScript), askEra,
-                                   asksEra, defaultCoinSelectionStrategy, doWithCardanoEra, marlowePlutusVersion,
-                                   toAddressAny', toAsType, toCollateralSupportedInEra, toEraInMode,
-                                   toExtraKeyWitnessesSupportedInEra, toMultiAssetSupportedInEra,
-                                   toSimpleScriptV2LanguageInEra, toTxFeesExplicitInEra, toTxMetadataSupportedInEra,
-                                   toTxScriptValiditySupportedInEra, toValidityLowerBoundSupportedInEra,
-                                   toValidityNoUpperBoundSupportedInEra, toValidityUpperBoundSupportedInEra,
-                                   validatorInfo', withCardanoEra, withShelleyBasedEra)
-import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript (value))
+import Language.Marlowe.CLI.IO
+  ( decodeFileBuiltinData
+  , decodeFileStrict
+  , getDefaultCostModel
+  , liftCli
+  , liftCliIO
+  , liftCliMaybe
+  , maybeWriteJson
+  , queryInEra
+  , readMaybeMetadata
+  , readSigningKey
+  )
+import Language.Marlowe.CLI.Types
+  ( AnUTxO(AnUTxO)
+  , CliEnv
+  , CliError(..)
+  , CoinSelectionStrategy(CoinSelectionStrategy, csPreserveInlineDatums, csPreserveReferenceScripts, csPreserveTxIns)
+  , MarlowePlutusVersion
+  , MarloweScriptsRefs(MarloweScriptsRefs)
+  , OutputQuery(..)
+  , OutputQueryResult(..)
+  , PayFromScript(..)
+  , PayToScript(..)
+  , PrintStats(PrintStats)
+  , PublishMarloweScripts(PublishMarloweScripts)
+  , PublishScript(..)
+  , PublishingStrategy(..)
+  , SigningKeyFile
+  , SomePaymentSigningKey
+  , TxBodyFile(TxBodyFile)
+  , ValidatorInfo(ValidatorInfo, viHash, viScript)
+  , askEra
+  , asksEra
+  , defaultCoinSelectionStrategy
+  , doWithCardanoEra
+  , marlowePlutusVersion
+  , toAddressAny'
+  , toAsType
+  , toCollateralSupportedInEra
+  , toEraInMode
+  , toExtraKeyWitnessesSupportedInEra
+  , toMultiAssetSupportedInEra
+  , toSimpleScriptV2LanguageInEra
+  , toTxFeesExplicitInEra
+  , toTxMetadataSupportedInEra
+  , toTxScriptValiditySupportedInEra
+  , toValidityLowerBoundSupportedInEra
+  , toValidityNoUpperBoundSupportedInEra
+  , toValidityUpperBoundSupportedInEra
+  , validatorInfo'
+  , withCardanoEra
+  , withShelleyBasedEra
+  )
+import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript(value))
 import Language.Marlowe.Scripts (rolePayoutValidator, smallMarloweValidator)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
-import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
-import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
+import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult(..))
+import Plutus.V1.Ledger.Api (Datum(..), POSIXTime(..), Redeemer(..), TokenName(..), fromBuiltin, toData)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
 import System.IO (hPutStrLn, stderr)
 
 

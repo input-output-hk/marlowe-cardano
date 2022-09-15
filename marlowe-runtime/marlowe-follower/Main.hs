@@ -15,11 +15,27 @@ import qualified Data.Text as T
 import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Pretty (pretty)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..),
-                                               ChainSyncQuery (..), RuntimeChainSeekClient, SlotNo (..), TxId (..),
-                                               TxOutRef (..), WithGenesis (..), runtimeChainSeekCodec, toBech32)
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
-                                          TransactionOutput (..), TransactionScriptOutput (..), renderContractId)
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( BlockHeader(..)
+  , BlockHeaderHash(..)
+  , BlockNo(..)
+  , ChainSyncQuery(..)
+  , RuntimeChainSeekClient
+  , SlotNo(..)
+  , TxId(..)
+  , TxOutRef(..)
+  , WithGenesis(..)
+  , runtimeChainSeekCodec
+  , toBech32
+  )
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  , renderContractId
+  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
@@ -28,11 +44,11 @@ import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
-import Network.Socket (AddrInfo (..), SocketType (..), close, connect, defaultHints, getAddrInfo, openSocket,
-                       withSocketsDo)
+import Network.Socket
+  (AddrInfo(..), SocketType(..), close, connect, defaultHints, getAddrInfo, openSocket, withSocketsDo)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
-import Options (Options (..), getOptions)
-import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), setSGR)
+import Options (Options(..), getOptions)
+import System.Console.ANSI (Color(..), ColorIntensity(..), ConsoleLayer(..), SGR(..), setSGR)
 import System.IO (hPrint, stderr)
 import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
 

@@ -23,7 +23,7 @@ module Spec.Marlowe.Semantics.Util (
 
 
 import Data.Function (on)
-import Language.Marlowe.Core.V1.Semantics.Types (Money, State (..), Token (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Money, State(..), Token(..))
 import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Semantics.AssocMap (assocMapSort)
 

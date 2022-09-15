@@ -20,18 +20,42 @@ module Spec.Marlowe.Plutus.Arbitrary (
 ) where
 
 
-import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
-import Language.Marlowe.Scripts (MarloweTxInput (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
+import Language.Marlowe.Scripts (MarloweTxInput(..))
 import Plutus.V1.Ledger.Value (gt)
-import Plutus.V2.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
-                             Extended (..), Interval (..), LowerBound (..), OutputDatum (..), PubKeyHash (..),
-                             Redeemer (..), ScriptContext (..), ScriptPurpose (..), StakingCredential (..), TxId (..),
-                             TxInInfo (..), TxInfo (..), TxOut (..), TxOutRef (..), UpperBound (..), ValidatorHash (..),
-                             Value (..), adaSymbol, adaToken, singleton, toBuiltin)
+import Plutus.V2.Ledger.Api
+  ( Address(..)
+  , BuiltinData(..)
+  , Credential(..)
+  , Data(..)
+  , Datum(..)
+  , DatumHash(..)
+  , Extended(..)
+  , Interval(..)
+  , LowerBound(..)
+  , OutputDatum(..)
+  , PubKeyHash(..)
+  , Redeemer(..)
+  , ScriptContext(..)
+  , ScriptPurpose(..)
+  , StakingCredential(..)
+  , TxId(..)
+  , TxInInfo(..)
+  , TxInfo(..)
+  , TxOut(..)
+  , TxOutRef(..)
+  , UpperBound(..)
+  , ValidatorHash(..)
+  , Value(..)
+  , adaSymbol
+  , adaToken
+  , singleton
+  , toBuiltin
+  )
 import PlutusTx.Builtins (BuiltinByteString)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Orphans ()
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, frequency, listOf, suchThat, vectorOf)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, frequency, listOf, suchThat, vectorOf)
 
 import qualified Data.ByteString as BS (ByteString, pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)

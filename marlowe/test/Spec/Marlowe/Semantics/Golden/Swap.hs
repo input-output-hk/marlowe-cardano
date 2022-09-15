@@ -27,13 +27,22 @@ module Spec.Marlowe.Semantics.Golden.Swap (
 ) where
 
 
-import Data.String (IsString (..))
-import Language.Marlowe.Core.V1.Semantics (Payment (Payment), TransactionInput (..), TransactionOutput (..))
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Action (Deposit), Case (Case), Contract (Close, Pay, When),
-                                                 Input (NormalInput), InputContent (IDeposit), Party (PK, Role),
-                                                 Payee (Party), State (State, accounts, boundValues, choices, minTime),
-                                                 Token (Token), Value (Constant))
-import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime (..), Value (..))
+import Data.String (IsString(..))
+import Language.Marlowe.Core.V1.Semantics (Payment(Payment), TransactionInput(..), TransactionOutput(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( AccountId
+  , Action(Deposit)
+  , Case(Case)
+  , Contract(Close, Pay, When)
+  , Input(NormalInput)
+  , InputContent(IDeposit)
+  , Party(PK, Role)
+  , Payee(Party)
+  , State(State, accounts, boundValues, choices, minTime)
+  , Token(Token)
+  , Value(Constant)
+  )
+import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), Value(..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 

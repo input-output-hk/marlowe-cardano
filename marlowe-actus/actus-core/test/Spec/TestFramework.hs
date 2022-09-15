@@ -26,7 +26,7 @@ import Data.Char (toUpper)
 import Data.List as L (find)
 import Data.Map as Map (Map, elems, lookup)
 import Data.Maybe (isJust)
-import Data.Time (LocalTime (..))
+import Data.Time (LocalTime(..))
 import GHC.Generics (Generic)
 import GHC.Records (getField)
 import Test.Tasty

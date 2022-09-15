@@ -8,8 +8,19 @@ module Actus.Model.Payoff
   )
 where
 
-import Actus.Domain (ActusFrac, ActusOps (..), CT (..), ContractState (..), ContractTerms (..), EventType (..),
-                     FEB (..), PYTP (..), RiskFactors (..), ShiftedDay (..), sign)
+import Actus.Domain
+  ( ActusFrac
+  , ActusOps(..)
+  , CT(..)
+  , ContractState(..)
+  , ContractTerms(..)
+  , EventType(..)
+  , FEB(..)
+  , PYTP(..)
+  , RiskFactors(..)
+  , ShiftedDay(..)
+  , sign
+  )
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Monad (join)
 import Control.Monad.Reader (Reader, reader)

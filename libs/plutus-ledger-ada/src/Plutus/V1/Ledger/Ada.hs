@@ -34,7 +34,7 @@ import Codec.Serialise.Class (Serialise)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Tagged
 import GHC.Generics (Generic)
-import Plutus.V1.Ledger.Value (CurrencySymbol (..), TokenName (..), Value)
+import Plutus.V1.Ledger.Value (CurrencySymbol(..), TokenName(..), Value)
 import qualified Plutus.V1.Ledger.Value as TH
 import qualified PlutusTx as PlutusTx
 import PlutusTx.Lift (makeLift)

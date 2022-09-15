@@ -14,7 +14,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData, TransactionInput)
 import Language.Marlowe.Scripts (TypedMarloweValidator, TypedRolePayoutValidator)
 import Plutus.Script.Utils.V1.Typed.Scripts (TypedScriptTxOut, TypedScriptTxOutRef)
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (TxId (..), TxOutRef (..))
+import Plutus.V2.Ledger.Api (TxId(..), TxOutRef(..))
 
 
 -- | A transaction-output reference specific to Marlowe.

@@ -15,15 +15,15 @@ import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.STM (STM)
 import Control.Monad (unless)
 import Data.Time (NominalDiffTime)
-import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock (..), DatabaseQueries (..), GetGenesisBlock (..))
+import Language.Marlowe.Runtime.ChainSync.Database (CommitGenesisBlock(..), DatabaseQueries(..), GetGenesisBlock(..))
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel, NodeClient (..), NodeClientDependencies (..),
-                                                      mkNodeClient)
-import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServer (..), ChainSyncQueryServerDependencies (..),
-                                                       RunQueryServer, mkChainSyncQueryServer)
-import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServer (..), ChainSyncServerDependencies (..),
-                                                  RunChainSeekServer (..), mkChainSyncServer)
-import Language.Marlowe.Runtime.ChainSync.Store (ChainStore (..), ChainStoreDependencies (..), mkChainStore)
+import Language.Marlowe.Runtime.ChainSync.NodeClient
+  (CostModel, NodeClient(..), NodeClientDependencies(..), mkNodeClient)
+import Language.Marlowe.Runtime.ChainSync.QueryServer
+  (ChainSyncQueryServer(..), ChainSyncQueryServerDependencies(..), RunQueryServer, mkChainSyncQueryServer)
+import Language.Marlowe.Runtime.ChainSync.Server
+  (ChainSyncServer(..), ChainSyncServerDependencies(..), RunChainSeekServer(..), mkChainSyncServer)
+import Language.Marlowe.Runtime.ChainSync.Store (ChainStore(..), ChainStoreDependencies(..), mkChainStore)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
 data ChainSyncDependencies = ChainSyncDependencies

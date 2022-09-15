@@ -8,20 +8,36 @@ module Actus.Model.ContractSchedule
   )
 where
 
-import Actus.Domain (ActusFrac (..), CR (..), CT (..), ContractStructure (..), ContractTerms (..), Cycle (..), DS (..),
-                     EventType (..), IPCB (..), PPEF (..), PYTP (..), Reference (..), ReferenceRole (..), SCEF (..),
-                     ScheduleConfig (..), ShiftedDay (..), mkShiftedDay)
+import Actus.Domain
+  ( ActusFrac(..)
+  , CR(..)
+  , CT(..)
+  , ContractStructure(..)
+  , ContractTerms(..)
+  , Cycle(..)
+  , DS(..)
+  , EventType(..)
+  , IPCB(..)
+  , PPEF(..)
+  , PYTP(..)
+  , Reference(..)
+  , ReferenceRole(..)
+  , SCEF(..)
+  , ScheduleConfig(..)
+  , ShiftedDay(..)
+  , mkShiftedDay
+  )
 import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, yearFraction, (<+>), (<->))
 import Control.Applicative ((<|>))
 import Control.Monad (liftM2, liftM4)
 import Data.Functor ((<&>))
 import Data.List as L (delete, find, nub)
 import Data.Maybe (fromMaybe, isJust, isNothing, mapMaybe, maybeToList)
-import Data.Ord (Down (..))
+import Data.Ord (Down(..))
 import Data.Sort (sortOn)
 import Data.Time (LocalTime)
 import Data.Time.Calendar (addDays)
-import Data.Time.LocalTime (LocalTime (..), addLocalTime)
+import Data.Time.LocalTime (LocalTime(..), addLocalTime)
 
 -- |Generate the schedule for a given event type
 schedule ::

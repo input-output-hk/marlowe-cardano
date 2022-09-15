@@ -35,30 +35,71 @@ import Control.Monad (when)
 import Control.Monad.State (StateT, execStateT, lift)
 import Data.Bifunctor (bimap, second)
 import Data.List (nub, permutations)
-import Language.Marlowe.Core.V1.Semantics (MarloweData (MarloweData), MarloweParams (..), Payment (Payment),
-                                           TransactionInput (..), TransactionOutput (..))
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close),
-                                                 Input (MerkleizedInput, NormalInput), InputContent (IChoice, IDeposit),
-                                                 Party (PK, Role), Payee (Party), State (accounts), Token (Token),
-                                                 getInputContent)
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..))
+import Language.Marlowe.Core.V1.Semantics
+  (MarloweData(MarloweData), MarloweParams(..), Payment(Payment), TransactionInput(..), TransactionOutput(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ChoiceId(ChoiceId)
+  , Contract(Close)
+  , Input(MerkleizedInput, NormalInput)
+  , InputContent(IChoice, IDeposit)
+  , Party(PK, Role)
+  , Payee(Party)
+  , State(accounts)
+  , Token(Token)
+  , getInputContent
+  )
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput(..))
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Value (gt)
-import Plutus.V2.Ledger.Api (Address (Address), Credential (PubKeyCredential), CurrencySymbol, Datum (..),
-                             DatumHash (..), Extended (Finite, NegInf, PosInf), Interval (Interval),
-                             LowerBound (LowerBound), OutputDatum (..), PubKeyHash, Redeemer (..), ScriptContext (..),
-                             ScriptPurpose (Spending), ToData (toBuiltinData), TxInInfo (..), TxInfo (..),
-                             TxOut (TxOut), UpperBound (UpperBound), Value)
+import Plutus.V2.Ledger.Api
+  ( Address(Address)
+  , Credential(PubKeyCredential)
+  , CurrencySymbol
+  , Datum(..)
+  , DatumHash(..)
+  , Extended(Finite, NegInf, PosInf)
+  , Interval(Interval)
+  , LowerBound(LowerBound)
+  , OutputDatum(..)
+  , PubKeyHash
+  , Redeemer(..)
+  , ScriptContext(..)
+  , ScriptPurpose(Spending)
+  , ToData(toBuiltinData)
+  , TxInInfo(..)
+  , TxInfo(..)
+  , TxOut(TxOut)
+  , UpperBound(UpperBound)
+  , Value
+  )
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Spec.Marlowe.Plutus.Lens ((<><~))
 import Spec.Marlowe.Plutus.Script (payoutAddress, semanticsAddress)
-import Spec.Marlowe.Plutus.Types (PayoutTransaction (..), PlutusTransaction (PlutusTransaction),
-                                  SemanticsTransaction (..), amount, datum, infoData, infoFee, infoInputs, infoOutputs,
-                                  infoSignatories, infoValidRange, input, inputContract, inputState, marloweParams,
-                                  marloweParamsPayout, output, redeemer, role, scriptPurpose)
+import Spec.Marlowe.Plutus.Types
+  ( PayoutTransaction(..)
+  , PlutusTransaction(PlutusTransaction)
+  , SemanticsTransaction(..)
+  , amount
+  , datum
+  , infoData
+  , infoFee
+  , infoInputs
+  , infoOutputs
+  , infoSignatories
+  , infoValidRange
+  , input
+  , inputContract
+  , inputState
+  , marloweParams
+  , marloweParamsPayout
+  , output
+  , redeemer
+  , role
+  , scriptPurpose
+  )
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, elements, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, suchThat)
 
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
 import qualified PlutusTx.AssocMap as AM (fromList, toList)

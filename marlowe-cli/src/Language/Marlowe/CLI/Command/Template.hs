@@ -34,15 +34,15 @@ module Language.Marlowe.CLI.Command.Template (
 
 import Actus.Marlowe (defaultRiskFactors, genContract', toMarlowe)
 import Control.Monad.Except (MonadError, MonadIO)
-import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Aeson (FromJSON(..), ToJSON(..))
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCliMaybe)
-import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, TruncateMilliseconds (TruncateMilliseconds),
-                                   toMarloweTimeout)
-import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
-import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
+import Language.Marlowe.CLI.Types
+  (CliError(..), SomeTimeout, TruncateMilliseconds(TruncateMilliseconds), toMarloweTimeout)
+import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State(..))
+import Language.Marlowe.Extended.V1 as E (AccountId, Contract(..), Party, Timeout, Token, Value(..), toCore)
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 

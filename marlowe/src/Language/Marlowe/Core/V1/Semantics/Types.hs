@@ -34,19 +34,19 @@ import qualified Data.Aeson as JSON
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types hiding (Error, Value)
 import qualified Data.Aeson.Types as JSON
-import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
+import Data.ByteString.Base16.Aeson (EncodeBase16(EncodeBase16))
 import qualified Data.ByteString.Base16.Aeson as Base16.Aeson
 import qualified Data.Foldable as F
 import Data.Scientific (floatingOrInteger, scientific)
-import Data.String (IsString (..))
+import Data.String (IsString(..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
-import Language.Marlowe.Pretty (Pretty (..))
+import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (CurrencySymbol (unCurrencySymbol), POSIXTime (..), PubKeyHash (PubKeyHash, getPubKeyHash),
-                             TokenName (unTokenName))
+import Plutus.V2.Ledger.Api
+  (CurrencySymbol(unCurrencySymbol), POSIXTime(..), PubKeyHash(PubKeyHash, getPubKeyHash), TokenName(unTokenName))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map

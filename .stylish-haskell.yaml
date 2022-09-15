@@ -1,5 +1,14 @@
 ---
 steps:
+  - imports:
+      align: none
+      list_align: with_module_name
+      pad_module_names: false
+      long_list_align: new_line_multiline
+      empty_list_align: inherit
+      list_padding: 2
+      separate_lists: false
+      space_around: false
   - trailing_whitespace: {}
 columns: 120
 newline: native

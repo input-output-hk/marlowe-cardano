@@ -17,13 +17,12 @@ module Spec.Marlowe.Plutus.Prelude (
 
 
 import Data.List (find)
-import Plutus.V2.Ledger.Api (DatumHash (..), TxId (..), TxOutRef (..), ValidatorHash (..))
+import Plutus.V2.Ledger.Api (DatumHash(..), TxId(..), TxOutRef(..), ValidatorHash(..))
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, frequency, listOf, property,
-                              testProperty)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, elements, forAll, frequency, listOf, property, testProperty)
 
-import qualified PlutusTx.Prelude as P (all, any, filter, find, fmap, foldMap, snd, (&&), (==), fromEnum)
+import qualified PlutusTx.Prelude as P (all, any, filter, find, fmap, foldMap, fromEnum, snd, (&&), (==))
 
 
 -- | Run tests.

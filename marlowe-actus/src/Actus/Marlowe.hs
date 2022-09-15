@@ -28,13 +28,19 @@ where
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain
-import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, fromMarloweFixedPoint,
-                               reduceContract, toMarloweFixedPoint)
+import Actus.Marlowe.Instance
+  ( CashFlowMarlowe
+  , ContractTermsMarlowe
+  , RiskFactorsMarlowe
+  , fromMarloweFixedPoint
+  , reduceContract
+  , toMarloweFixedPoint
+  )
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
-import Data.Time (LocalTime (..), UTCTime (UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
+import Data.Time (LocalTime(..), UTCTime(UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
 import Data.Time.Clock.POSIX
-import Data.Validation (Validation (..))
+import Data.Validation (Validation(..))
 import Language.Marlowe.Extended.V1
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 

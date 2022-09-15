@@ -10,8 +10,8 @@
 module Network.Protocol.ChainSeek.Client where
 
 import Network.Protocol.ChainSeek.Types
-import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
-import Network.TypedProtocol.Core (PeerRole (..))
+import Network.TypedProtocol (Peer(..), PeerHasAgency(..))
+import Network.TypedProtocol.Core (PeerRole(..))
 
 -- | A filtered chain sync protocol client that runs in some monad 'm'.
 newtype ChainSeekClient query point tip m a = ChainSeekClient

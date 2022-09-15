@@ -9,7 +9,7 @@ module Network.Protocol.Job.Codec where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
-import Data.Type.Equality (type (:~:) (Refl))
+import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Job.Types
 import Network.TypedProtocol.Codec

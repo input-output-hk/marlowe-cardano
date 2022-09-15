@@ -7,7 +7,7 @@
 
 module Language.Marlowe.Runtime.History.JobServer where
 
-import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
+import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (SomeException, catch)
 import Data.Map (Map)

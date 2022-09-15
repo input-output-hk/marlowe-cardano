@@ -4,7 +4,7 @@ module Marlowe.Contracts.Futures
   ( future )
 where
 
-import Data.String (IsString (..))
+import Data.String (IsString(..))
 import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 

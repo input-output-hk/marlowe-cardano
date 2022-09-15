@@ -8,7 +8,7 @@ module Data.ByteString.Base16.Aeson
   )
   where
 
-import Data.Aeson (FromJSON, ToJSON (toJSON))
+import Data.Aeson (FromJSON, ToJSON(toJSON))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as A

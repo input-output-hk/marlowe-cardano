@@ -26,7 +26,7 @@ import Spec.Marlowe.Semantics.Arbitrary (arbitraryChoiceName)
 import Spec.Marlowe.Semantics.Orphans ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
-import Test.Tasty.QuickCheck (Arbitrary (arbitrary), Gen, generate)
+import Test.Tasty.QuickCheck (Arbitrary(arbitrary), Gen, generate)
 
 import qualified PlutusTx.AssocMap as AM (Map, keys)
 

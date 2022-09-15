@@ -68,13 +68,23 @@ module Spec.Marlowe.Common (
 
 import Data.Map.Strict (Map)
 import Data.Ratio (Ratio)
-import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
-                                                 Observation (..), Party (..), Payee (..), Token (..), Value (..),
-                                                 ValueId (..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Action(..)
+  , Bound(..)
+  , Case(..)
+  , ChoiceId(..)
+  , Contract(..)
+  , Observation(..)
+  , Party(..)
+  , Payee(..)
+  , Token(..)
+  , Value(..)
+  , ValueId(..)
+  )
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Util (merkleizedCase)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-import Plutus.V2.Ledger.Api (PubKeyHash (PubKeyHash))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
+import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash))
 import Test.QuickCheck (Gen, choose, frequency, oneof, shrinkList, sized, vectorOf)
 
 import qualified Language.Marlowe.Extended.V1 as Extended

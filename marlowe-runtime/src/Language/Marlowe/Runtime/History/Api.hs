@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.History.Api where
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
-import Data.Type.Equality (type (:~:) (Refl))
+import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash, TxError, TxId, TxOutRef, UTxOError)

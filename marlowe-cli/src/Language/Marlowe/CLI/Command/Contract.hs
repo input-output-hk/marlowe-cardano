@@ -24,13 +24,13 @@ module Language.Marlowe.CLI.Command.Contract (
 ) where
 
 
-import Cardano.Api (NetworkId (..), StakeAddressReference (..))
+import Cardano.Api (NetworkId(..), StakeAddressReference(..))
 import Control.Monad.Except (MonadError, MonadIO)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference,
-                                           protocolVersionOpt)
-import Language.Marlowe.CLI.Export (exportDatum, exportMarlowe, exportMarloweAddress, exportMarloweValidator,
-                                    exportRedeemer)
+import Language.Marlowe.CLI.Command.Parse
+  (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference, protocolVersionOpt)
+import Language.Marlowe.CLI.Export
+  (exportDatum, exportMarlowe, exportMarloweAddress, exportMarloweValidator, exportRedeemer)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Plutus.V1.Ledger.Api (CurrencySymbol, ProtocolVersion)

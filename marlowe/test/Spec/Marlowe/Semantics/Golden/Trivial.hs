@@ -27,15 +27,23 @@ module Spec.Marlowe.Semantics.Golden.Trivial (
 ) where
 
 
-import Data.String (IsString (..))
-import Language.Marlowe.Core.V1.Semantics (Payment (Payment), TransactionInput (..), TransactionOutput (..))
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Action (Deposit, Notify), Case (Case),
-                                                 Contract (Close, Pay, When), Input (NormalInput),
-                                                 InputContent (IDeposit, INotify), Observation (TrueObs),
-                                                 Party (PK, Role), Payee (Party),
-                                                 State (State, accounts, boundValues, choices, minTime), Token (Token),
-                                                 Value (Constant))
-import Plutus.V2.Ledger.Api (POSIXTime (..), Value (..))
+import Data.String (IsString(..))
+import Language.Marlowe.Core.V1.Semantics (Payment(Payment), TransactionInput(..), TransactionOutput(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( AccountId
+  , Action(Deposit, Notify)
+  , Case(Case)
+  , Contract(Close, Pay, When)
+  , Input(NormalInput)
+  , InputContent(IDeposit, INotify)
+  , Observation(TrueObs)
+  , Party(PK, Role)
+  , Payee(Party)
+  , State(State, accounts, boundValues, choices, minTime)
+  , Token(Token)
+  , Value(Constant)
+  )
+import Plutus.V2.Ledger.Api (POSIXTime(..), Value(..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 

@@ -22,11 +22,19 @@ module Language.Marlowe.CLI.Orphans (
 ) where
 
 
-import Cardano.Api (AddressAny (..), AsType (AsAddressAny), BlockHeader (..), BlockNo (..), ChainPoint (..),
-                    SlotNo (..), deserialiseAddress, serialiseAddress)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value (Null, String), object, withObject, withText, (.:), (.=))
+import Cardano.Api
+  ( AddressAny(..)
+  , AsType(AsAddressAny)
+  , BlockHeader(..)
+  , BlockNo(..)
+  , ChainPoint(..)
+  , SlotNo(..)
+  , deserialiseAddress
+  , serialiseAddress
+  )
+import Data.Aeson (FromJSON(..), ToJSON(..), Value(Null, String), object, withObject, withText, (.:), (.=))
 import Data.ByteString.Short (ShortByteString, fromShort, toShort)
-import Language.Marlowe.Core.V1.Semantics (Payment (..), TransactionOutput (..))
+import Language.Marlowe.Core.V1.Semantics (Payment(..), TransactionOutput(..))
 import Ledger.Orphans ()
 
 import qualified Data.ByteString.Base16 as Base16 (decode, encode)

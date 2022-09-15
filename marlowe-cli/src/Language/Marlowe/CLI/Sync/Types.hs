@@ -30,11 +30,11 @@ module Language.Marlowe.CLI.Sync.Types (
 ) where
 
 
-import Cardano.Api (BlockHeader (..), ChainPoint (..), ChainTip, Hash, ScriptHash, SlotNo (..), TxId, TxIn, Value)
+import Cardano.Api (BlockHeader(..), ChainPoint(..), ChainTip, Hash, ScriptHash, SlotNo(..), TxId, TxIn, Value)
 import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Core.V1.Semantics.Types (Input, TimeInterval)
 import Plutus.V1.Ledger.Api (Address, TokenName)
 

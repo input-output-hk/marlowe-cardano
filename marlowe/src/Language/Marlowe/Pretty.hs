@@ -10,15 +10,14 @@ module Language.Marlowe.Pretty where
 import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as Text
-import GHC.Generics (C, Constructor, D, Generic, K1 (K1), M1 (M1), Rep, S, U1, conName, from, (:*:) ((:*:)),
-                     (:+:) (L1, R1))
+import GHC.Generics (C, Constructor, D, Generic, K1(K1), M1(M1), Rep, S, U1, conName, from, (:*:)((:*:)), (:+:)(L1, R1))
 -- import Ledger.Value
 import Plutus.V1.Ledger.Ada (Ada, getLovelace)
-import Plutus.V1.Ledger.Slot (Slot (Slot))
-import Plutus.V2.Ledger.Api (CurrencySymbol (..), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), TokenName (..))
+import Plutus.V1.Ledger.Slot (Slot(Slot))
+import Plutus.V2.Ledger.Api (CurrencySymbol(..), POSIXTime(POSIXTime), PubKeyHash(PubKeyHash), TokenName(..))
 import qualified PlutusTx.Prelude as P
-import Text.PrettyPrint.Leijen (Doc, comma, encloseSep, hang, lbracket, line, lparen, parens, rbracket, rparen, space,
-                                text)
+import Text.PrettyPrint.Leijen
+  (Doc, comma, encloseSep, hang, lbracket, line, lparen, parens, rbracket, rparen, space, text)
 
 -- | This function will pretty print an a but will not wrap the whole
 -- expression in parentheses or add an initial newline, where as for

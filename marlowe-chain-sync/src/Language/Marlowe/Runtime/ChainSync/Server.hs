@@ -16,11 +16,18 @@ import Data.Functor (void)
 import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (BlockHeader), BlockHeaderHash (unBlockHeaderHash),
-                                               ChainPoint, Move, RuntimeChainSeekServer, WithGenesis (..), moveSchema)
-import Language.Marlowe.Runtime.ChainSync.Database (MoveClient (..), MoveResult (..))
-import Network.Protocol.ChainSeek.Server (ChainSeekServer (..), ServerStHandshake (..), ServerStIdle (..),
-                                          ServerStInit (..), ServerStNext (..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( BlockHeader(BlockHeader)
+  , BlockHeaderHash(unBlockHeaderHash)
+  , ChainPoint
+  , Move
+  , RuntimeChainSeekServer
+  , WithGenesis(..)
+  , moveSchema
+  )
+import Language.Marlowe.Runtime.ChainSync.Database (MoveClient(..), MoveResult(..))
+import Network.Protocol.ChainSeek.Server
+  (ChainSeekServer(..), ServerStHandshake(..), ServerStIdle(..), ServerStInit(..), ServerStNext(..))
 import System.IO (stderr)
 
 newtype RunChainSeekServer m = RunChainSeekServer (forall a. RuntimeChainSeekServer m a -> IO a)

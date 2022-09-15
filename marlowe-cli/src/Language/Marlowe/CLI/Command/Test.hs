@@ -27,7 +27,7 @@ import Cardano.Api (IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests))
+import Language.Marlowe.CLI.Test.Types (MarloweTests(ScriptTests))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)

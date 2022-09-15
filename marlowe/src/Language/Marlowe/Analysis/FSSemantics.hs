@@ -11,7 +11,7 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (isNothing)
 import Data.SBV
 import qualified Data.SBV.Either as SE
-import Data.SBV.Internals (SMTModel (..))
+import Data.SBV.Internals (SMTModel(..))
 import qualified Data.SBV.List as SL
 import qualified Data.SBV.Maybe as SM
 import qualified Data.SBV.Tuple as ST
@@ -19,7 +19,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime, getPOSIXTime))
+import Plutus.V2.Ledger.Api (POSIXTime(POSIXTime, getPOSIXTime))
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P

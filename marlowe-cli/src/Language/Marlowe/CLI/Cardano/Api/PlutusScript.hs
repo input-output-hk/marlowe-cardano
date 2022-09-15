@@ -18,15 +18,20 @@ module Language.Marlowe.CLI.Cardano.Api.PlutusScript (
 , withPlutusScriptVersion
 ) where
 
-import Cardano.Api (IsScriptLanguage, PlutusScriptV1, PlutusScriptV2,
-                    PlutusScriptVersion (PlutusScriptV1, PlutusScriptV2), Script (PlutusScript))
+import Cardano.Api
+  ( IsScriptLanguage
+  , PlutusScriptV1
+  , PlutusScriptV2
+  , PlutusScriptVersion(PlutusScriptV1, PlutusScriptV2)
+  , Script(PlutusScript)
+  )
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised))
+import Cardano.Api.Shelley (PlutusScript(PlutusScriptSerialised))
 import Codec.Serialise (serialise)
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Short as BSS
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV1, TypedValidatorV2))
+import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator'(TypedValidatorV1, TypedValidatorV2))
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as V1.Scripts
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as V2.Scripts
 import qualified Plutus.V2.Ledger.Api as Plutus

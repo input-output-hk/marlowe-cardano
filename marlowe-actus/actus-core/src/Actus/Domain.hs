@@ -19,7 +19,7 @@ module Actus.Domain
   where
 
 import Actus.Domain.BusinessEvents
-import Actus.Domain.ContractState (ContractState (..))
+import Actus.Domain.ContractState (ContractState(..))
 import Actus.Domain.ContractTerms
 import Actus.Domain.Schedule
 import Control.Applicative ((<|>))

@@ -28,18 +28,33 @@ module Language.Marlowe.Scripts where
 import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
-import Language.Marlowe.Pretty (Pretty (..))
+import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.Script.Utils.Typed as Scripts
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as Scripts
 import qualified Plutus.V1.Ledger.Address as Address (scriptHashAddress)
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (Address (Address), Credential (..), CurrencySymbol, Datum (Datum), DatumHash (DatumHash),
-                             POSIXTime(..), ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
-                             ScriptPurpose (Spending), TokenName, TxInInfo (TxInInfo, txInInfoOutRef, txInInfoResolved),
-                             TxInfo (TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange), ValidatorHash,
-                             mkValidatorScript, Interval(..), LowerBound(..), UpperBound(..), Extended(..), POSIXTimeRange)
+import Plutus.V2.Ledger.Api
+  ( Address(Address)
+  , Credential(..)
+  , CurrencySymbol
+  , Datum(Datum)
+  , DatumHash(DatumHash)
+  , Extended(..)
+  , Interval(..)
+  , LowerBound(..)
+  , POSIXTime(..)
+  , POSIXTimeRange
+  , ScriptContext(ScriptContext, scriptContextPurpose, scriptContextTxInfo)
+  , ScriptPurpose(Spending)
+  , TokenName
+  , TxInInfo(TxInInfo, txInInfoOutRef, txInInfoResolved)
+  , TxInfo(TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange)
+  , UpperBound(..)
+  , ValidatorHash
+  , mkValidatorScript
+  )
 import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
-import Plutus.V2.Ledger.Tx (OutputDatum (OutputDatumHash), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue))
+import Plutus.V2.Ledger.Tx (OutputDatum(OutputDatumHash), TxOut(TxOut, txOutAddress, txOutDatum, txOutValue))
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap

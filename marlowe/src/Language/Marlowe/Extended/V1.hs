@@ -35,7 +35,7 @@ import Data.Text (pack)
 import GHC.Generics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as S
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
-import Language.Marlowe.Pretty (Pretty (..), pretty)
+import Language.Marlowe.Pretty (Pretty(..), pretty)
 import Language.Marlowe.Util (ada)
 import Plutus.V2.Ledger.Api (adaSymbol, adaToken)
 import qualified Plutus.V2.Ledger.Api as L

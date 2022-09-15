@@ -25,30 +25,68 @@ module Spec.Marlowe.Plutus.Specification (
 import Control.Lens (use, uses, (%=), (<>=), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
-import Data.Proxy (Proxy (..))
-import Data.These (These (That, These, This))
-import Language.Marlowe.Core.V1.Semantics (MarloweData (MarloweData, marloweContract, marloweState),
-                                           MarloweParams (rolesCurrency), Payment (Payment), TransactionInput (..),
-                                           TransactionOutput (txOutContract, txOutPayments, txOutState))
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (ChoiceId), Contract (Close), Input (..),
-                                                 InputContent (IChoice, IDeposit), Party (PK, Role), Payee (Party),
-                                                 State (accounts))
+import Data.Proxy (Proxy(..))
+import Data.These (These(That, These, This))
+import Language.Marlowe.Core.V1.Semantics
+  ( MarloweData(MarloweData, marloweContract, marloweState)
+  , MarloweParams(rolesCurrency)
+  , Payment(Payment)
+  , TransactionInput(..)
+  , TransactionOutput(txOutContract, txOutPayments, txOutState)
+  )
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( ChoiceId(ChoiceId)
+  , Contract(Close)
+  , Input(..)
+  , InputContent(IChoice, IDeposit)
+  , Party(PK, Role)
+  , Payee(Party)
+  , State(accounts)
+  )
 import Language.Marlowe.Scripts (MarloweInput)
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
-import Plutus.V2.Ledger.Api (Address (Address), BuiltinData (BuiltinData), Credential (PubKeyCredential),
-                             Data (B, Constr, List), Datum (Datum), FromData (..), OutputDatum (..), PubKeyHash,
-                             ScriptContext, ToData (..), TokenName, TxInInfo (TxInInfo, txInInfoResolved),
-                             TxOut (TxOut, txOutValue), Value, adaSymbol, adaToken, singleton, toData)
+import Plutus.V2.Ledger.Api
+  ( Address(Address)
+  , BuiltinData(BuiltinData)
+  , Credential(PubKeyCredential)
+  , Data(B, Constr, List)
+  , Datum(Datum)
+  , FromData(..)
+  , OutputDatum(..)
+  , PubKeyHash
+  , ScriptContext
+  , ToData(..)
+  , TokenName
+  , TxInInfo(TxInInfo, txInInfoResolved)
+  , TxOut(TxOut, txOutValue)
+  , Value
+  , adaSymbol
+  , adaToken
+  , singleton
+  , toData
+  )
 import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
-import Spec.Marlowe.Plutus.Transaction (ArbitraryTransaction, arbitraryPayoutTransaction, arbitrarySemanticsTransaction,
-                                        noModify, noVeto, shuffle)
-import Spec.Marlowe.Plutus.Types (PayoutTransaction, PlutusTransaction (..), SemanticsTransaction, infoData, infoInputs,
-                                  infoOutputs, infoSignatories, input, inputState, marloweParams, marloweParamsPayout,
-                                  output, role)
+import Spec.Marlowe.Plutus.Transaction
+  (ArbitraryTransaction, arbitraryPayoutTransaction, arbitrarySemanticsTransaction, noModify, noVeto, shuffle)
+import Spec.Marlowe.Plutus.Types
+  ( PayoutTransaction
+  , PlutusTransaction(..)
+  , SemanticsTransaction
+  , infoData
+  , infoInputs
+  , infoOutputs
+  , infoSignatories
+  , input
+  , inputState
+  , marloweParams
+  , marloweParamsPayout
+  , output
+  , role
+  )
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, forAll, property, suchThat, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty)
 
 import qualified PlutusTx.AssocMap as AM (fromList, insert, toList)
 

@@ -28,7 +28,7 @@ import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
 import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
 import qualified Prelude as Haskell
-import Prettyprinter (Pretty (pretty), (<+>))
+import Prettyprinter (Pretty(pretty), (<+>))
 
 
 import qualified PlutusTx

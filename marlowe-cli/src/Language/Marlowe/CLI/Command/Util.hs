@@ -26,13 +26,31 @@ module Language.Marlowe.CLI.Command.Util (
 ) where
 
 
-import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
-                    LocalNodeConnectInfo (..), Lovelace (..), NetworkId (..), SlotNo, TxMetadataInEra (TxMetadataNone),
-                    TxMintValue (TxMintNone), lovelaceToValue)
+import Cardano.Api
+  ( AddressInEra
+  , ConsensusModeParams(CardanoModeParams)
+  , EpochSlots(..)
+  , IsShelleyBasedEra
+  , LocalNodeConnectInfo(..)
+  , Lovelace(..)
+  , NetworkId(..)
+  , SlotNo
+  , TxMetadataInEra(TxMetadataNone)
+  , TxMintValue(TxMintNone)
+  , lovelaceToValue
+  )
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
-import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseOutputQuery, parseSlotNo, parseTokenName,
-                                           requiredSignerOpt, requiredSignersOpt, txBodyFileOpt)
+import Language.Marlowe.CLI.Command.Parse
+  ( parseAddress
+  , parseNetworkId
+  , parseOutputQuery
+  , parseSlotNo
+  , parseTokenName
+  , requiredSignerOpt
+  , requiredSignersOpt
+  , txBodyFileOpt
+  )
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
 import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, querySlotting, selectUtxos)

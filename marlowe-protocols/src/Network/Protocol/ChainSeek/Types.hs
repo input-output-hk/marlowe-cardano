@@ -9,13 +9,13 @@
 
 module Network.Protocol.ChainSeek.Types where
 
-import Data.Binary (Binary (..), Get, Put)
+import Data.Binary (Binary(..), Get, Put)
 import Data.Kind (Type)
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import Data.Type.Equality (type (:~:))
-import Network.TypedProtocol (Protocol (..))
+import Network.TypedProtocol (Protocol(..))
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
 

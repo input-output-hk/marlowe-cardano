@@ -9,9 +9,9 @@
 
 module Language.Marlowe.Runtime.Core.Api where
 
-import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), eitherDecode, encode)
+import Data.Aeson (FromJSON(..), Result(..), ToJSON(..), Value(..), eitherDecode, encode)
 import Data.Aeson.Types (Parser, parse, parseFail)
-import Data.Binary (Binary (..), Get, Put)
+import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
@@ -23,16 +23,16 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
-import Data.Type.Equality (TestEquality (..), type (:~:) (Refl))
+import Data.Type.Equality (TestEquality(..), type (:~:)(Refl))
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ScriptHash, TokenName (..), TxId (..), TxIx (..),
-                                               TxOutRef (..), getUTCTime, putUTCTime, unPolicyId)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (BlockHeader, ScriptHash, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Plutus.V1.Ledger.Api as Plutus
-import Text.Read (readMaybe)
 import qualified Plutus.V1.Ledger.Value as Plutus
+import Text.Read (readMaybe)
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
 -- the contract.

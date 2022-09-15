@@ -69,28 +69,35 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , module Network.Protocol.ChainSeek.Codec
   ) where
 
-import Cardano.Api (AsType (..), SerialiseAsRawBytes (serialiseToRawBytes), deserialiseFromBech32, serialiseToBech32)
+import Cardano.Api (AsType(..), SerialiseAsRawBytes(serialiseToRawBytes), deserialiseFromBech32, serialiseToBech32)
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Control.Monad ((>=>))
 import Data.Bifunctor (bimap)
-import Data.Binary (Binary (..), Get, Put, get, getWord8, put, putWord8)
+import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.String (IsString (..))
+import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.These (These (..))
-import Data.Time (NominalDiffTime, UTCTime (..), addUTCTime, diffTimeToPicoseconds, nominalDiffTimeToSeconds,
-                  picosecondsToDiffTime, secondsToNominalDiffTime)
+import Data.These (These(..))
+import Data.Time
+  ( NominalDiffTime
+  , UTCTime(..)
+  , addUTCTime
+  , diffTimeToPicoseconds
+  , nominalDiffTimeToSeconds
+  , picosecondsToDiffTime
+  , secondsToNominalDiffTime
+  )
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
-import Data.Type.Equality (type (:~:) (Refl))
+import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)

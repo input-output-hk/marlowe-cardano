@@ -51,21 +51,46 @@ module Language.Marlowe.CLI.Command.Parse (
 ) where
 
 
-import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsShelleyBasedEra, Lovelace (..),
-                    NetworkId (..), NetworkMagic (..), Quantity (..), ShelleyBasedEra (..), SlotNo (..),
-                    StakeAddressReference (..), TxId (..), TxIn (..), TxIx (..), Value, deserialiseAddress,
-                    deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace, shelleyBasedEra, valueFromList)
-import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
+import Cardano.Api
+  ( AddressInEra
+  , AsType(..)
+  , AssetId(..)
+  , AssetName(..)
+  , IsShelleyBasedEra
+  , Lovelace(..)
+  , NetworkId(..)
+  , NetworkMagic(..)
+  , Quantity(..)
+  , ShelleyBasedEra(..)
+  , SlotNo(..)
+  , StakeAddressReference(..)
+  , TxId(..)
+  , TxIn(..)
+  , TxIx(..)
+  , Value
+  , deserialiseAddress
+  , deserialiseFromRawBytesHex
+  , lovelaceToValue
+  , quantityToLovelace
+  , shelleyBasedEra
+  , valueFromList
+  )
+import Cardano.Api.Shelley (StakeAddress(..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
-import Language.Marlowe.CLI.Types (OutputQuery (..), OutputQueryResult,
-                                   PublishingStrategy (PublishAtAddress, PublishPermanently),
-                                   SigningKeyFile (SigningKeyFile), SomeTimeout (..), TxBodyFile (TxBodyFile))
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
-import Ledger (POSIXTime (..))
+import Language.Marlowe.CLI.Types
+  ( OutputQuery(..)
+  , OutputQueryResult
+  , PublishingStrategy(PublishAtAddress, PublishPermanently)
+  , SigningKeyFile(SigningKeyFile)
+  , SomeTimeout(..)
+  , TxBodyFile(TxBodyFile)
+  )
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Input(..), InputContent(..), Party(..), Token(..))
+import Ledger (POSIXTime(..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..), TokenName (..), toBuiltin)
-import Plutus.V1.Ledger.Slot (Slot (..))
+import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol(..), PubKeyHash(..), TokenName(..), toBuiltin)
+import Plutus.V1.Ledger.Slot (Slot(..))
 import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))

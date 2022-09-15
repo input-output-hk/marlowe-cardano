@@ -46,47 +46,86 @@ module Language.Marlowe.CLI.Sync (
 ) where
 
 
-import Cardano.Api (Block (..), BlockHeader (..), BlockInMode (..), CardanoMode, ChainPoint (..), ChainTip, CtxTx,
-                    EraInMode (..), IsCardanoEra, LocalChainSyncClient (..), LocalNodeClientProtocols (..),
-                    LocalNodeConnectInfo (..), PolicyId, ShelleyBasedEra (..), SlotNo (..), Tx, TxBody (..),
-                    TxBodyContent (..), TxId, TxIn (..), TxIx (..), TxMetadataInEra (..),
-                    TxMetadataJsonSchema (TxMetadataJsonNoSchema), TxMintValue (..), TxOut (..), TxOutDatum (..),
-                    TxValidityLowerBound (..), TxValidityUpperBound (..), ValueNestedBundle (..), ValueNestedRep (..),
-                    connectToLocalNode, getTxBody, getTxId, metadataToJson, txOutValueToValue, valueToNestedRep)
-import Cardano.Api.ChainSync.Client (ChainSyncClient (..), ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
-import Cardano.Api.Shelley (ShelleyLedgerEra, TxBody (ShelleyTxBody), TxBodyScriptData (..), fromAlonzoData,
-                            toPlutusData)
-import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr (..), Redeemers (..), TxDats (..))
+import Cardano.Api
+  ( Block(..)
+  , BlockHeader(..)
+  , BlockInMode(..)
+  , CardanoMode
+  , ChainPoint(..)
+  , ChainTip
+  , CtxTx
+  , EraInMode(..)
+  , IsCardanoEra
+  , LocalChainSyncClient(..)
+  , LocalNodeClientProtocols(..)
+  , LocalNodeConnectInfo(..)
+  , PolicyId
+  , ShelleyBasedEra(..)
+  , SlotNo(..)
+  , Tx
+  , TxBody(..)
+  , TxBodyContent(..)
+  , TxId
+  , TxIn(..)
+  , TxIx(..)
+  , TxMetadataInEra(..)
+  , TxMetadataJsonSchema(TxMetadataJsonNoSchema)
+  , TxMintValue(..)
+  , TxOut(..)
+  , TxOutDatum(..)
+  , TxValidityLowerBound(..)
+  , TxValidityUpperBound(..)
+  , ValueNestedBundle(..)
+  , ValueNestedRep(..)
+  , connectToLocalNode
+  , getTxBody
+  , getTxId
+  , metadataToJson
+  , txOutValueToValue
+  , valueToNestedRep
+  )
+import Cardano.Api.ChainSync.Client (ChainSyncClient(..), ClientStIdle(..), ClientStIntersect(..), ClientStNext(..))
+import Cardano.Api.Shelley (ShelleyLedgerEra, TxBody(ShelleyTxBody), TxBodyScriptData(..), fromAlonzoData, toPlutusData)
+import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr(..), Redeemers(..), TxDats(..))
 import Codec.CBOR.Encoding (encodeBreak, encodeListLenIndef)
 import Codec.CBOR.JSON (encodeValue)
 import Codec.CBOR.Write (toStrictByteString)
 import Control.Monad (guard, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Control.Monad.Extra (whenJust)
-import Data.Aeson (FromJSON, ToJSON (..), decodeFileStrict, encode, encodeFile)
+import Data.Aeson (FromJSON, ToJSON(..), decodeFileStrict, encode, encodeFile)
 import Data.Bifunctor (first)
-import Data.Default (Default (..))
+import Data.Default (Default(..))
 import Data.IORef (IORef, newIORef, readIORef)
 import Data.List (nub)
 import Data.List.Extra (mconcatMap)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
-import Language.Marlowe.CLI.Sync.Types (MarloweAddress (..), MarloweEvent (..), MarloweIn (..), MarloweOut (..),
-                                        SavedPoint (..))
+import Language.Marlowe.CLI.Sync.Types
+  (MarloweAddress(..), MarloweEvent(..), MarloweIn(..), MarloweOut(..), SavedPoint(..))
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
+import Language.Marlowe.CLI.Types (CliEnv, CliError(..))
 import Language.Marlowe.Client (marloweParams)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), marloweValidator, rolePayoutValidatorHash)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract(..), Input(..), TimeInterval)
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput(..), marloweValidator, rolePayoutValidatorHash)
 import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), Extended (..), FromData, Interval (..),
-                             LowerBound (..), MintingPolicyHash (..), TokenName (..), UpperBound (..),
-                             dataToBuiltinData, fromData)
-import Plutus.V1.Ledger.Slot (Slot (..))
+import Plutus.V1.Ledger.Api
+  ( BuiltinByteString
+  , CurrencySymbol(..)
+  , Extended(..)
+  , FromData
+  , Interval(..)
+  , LowerBound(..)
+  , MintingPolicyHash(..)
+  , TokenName(..)
+  , UpperBound(..)
+  , dataToBuiltinData
+  , fromData
+  )
+import Plutus.V1.Ledger.Slot (Slot(..))
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
 import System.Directory (doesFileExist, renameFile)
-import System.IO (BufferMode (LineBuffering), Handle, IOMode (WriteMode), hClose, hSetBuffering, openFile, stderr,
-                  stdout)
+import System.IO (BufferMode(LineBuffering), Handle, IOMode(WriteMode), hClose, hSetBuffering, openFile, stderr, stdout)
 
 import Cardano.Ledger.Era (Era)
 import Control.Monad.Reader (MonadReader)
