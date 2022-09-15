@@ -17,8 +17,7 @@ import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (BlockHeader), BlockHeaderHash (unBlockHeaderHash),
-                                               ChainPoint, Move, RuntimeChainSeekServer, WithGenesis (..),
-                                               schemaVersion1_0)
+                                               ChainPoint, Move, RuntimeChainSeekServer, WithGenesis (..), moveSchema)
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient (..), MoveResult (..))
 import Network.Protocol.ChainSeek.Server (ChainSeekServer (..), ServerStHandshake (..), ServerStIdle (..),
                                           ServerStInit (..), ServerStNext (..))
@@ -74,9 +73,9 @@ mkWorker WorkerDependencies{..} = do
 
     server = ChainSeekServer $ pure stInit
 
-    stInit = ServerStInit \version -> pure if version == schemaVersion1_0
+    stInit = ServerStInit \version -> pure if version == moveSchema
       then SendMsgHandshakeConfirmed $ stIdle Genesis
-      else SendMsgHandshakeRejected [ schemaVersion1_0 ] ()
+      else SendMsgHandshakeRejected [ moveSchema ] ()
 
     stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainPoint IO ())
     stIdle pos = pure ServerStIdle
