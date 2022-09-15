@@ -41,6 +41,8 @@ module Language.Marlowe.CLI.Sync (
 , isMarloweTransaction
 , isMarloweIn
 , isMarloweOut
+-- * Utils
+, classifyOutputs
 ) where
 
 
@@ -73,12 +75,10 @@ import Language.Marlowe.CLI.Sync.Types (MarloweAddress (..), MarloweEvent (..), 
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
-import Language.Marlowe.Core.V1.Semantics (MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), smallUntypedValidator)
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), marloweValidator, rolePayoutValidatorHash)
 import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.Script.Utils.V1.Typed.Scripts (validatorHash)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), Extended (..), FromData, Interval (..),
                              LowerBound (..), MintingPolicyHash (..), TokenName (..), UpperBound (..),
                              dataToBuiltinData, fromData)
@@ -96,6 +96,7 @@ import qualified Data.ByteString as BS (hPutStr)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (hPutStrLn)
 import qualified Data.Map.Strict as M (elems, filter, null, toList)
 import qualified Data.Set as S (singleton, toList)
+import qualified Plutus.Script.Utils.V1.Typed.Scripts as Scripts
 
 
 -- | Record the point on the chain.
@@ -378,18 +379,18 @@ extractMarlowe :: IORef ()                 -- ^ State information (unused).
                -> IO ()                    -- ^ Action to output potential Marlowe transactions.
 extractMarlowe _ printer slotConfig includeAll meBlock tx =
   mapM_ printer
-    $ classifyMarlowe slotConfig includeAll meBlock tx
+    $ classifyMarlowe slotConfig includeAll meBlock (getTxBody tx)
 
 
 -- | Classify a transaction's Marlowe content.
 classifyMarlowe :: SlotConfig      -- ^ The slot configuration.
                 -> Bool            -- ^ Include non-Marlowe transactions.
                 -> BlockHeader     -- ^ The block's header.
-                -> Tx era          -- ^ The transaction.
+                -> TxBody era          -- ^ The transaction.
                 -> [MarloweEvent]  -- ^ Any Marlowe events in the transaction.
-classifyMarlowe slotConfig includeAll meBlock tx =
+classifyMarlowe slotConfig includeAll meBlock txBody =
   let
-    txBody@(TxBody TxBodyContent{..}) = getTxBody tx
+    TxBody TxBodyContent{..} = txBody
     meTxId = getTxId txBody
     meMetadata = extractMetadata txMetadata
     parameters = makeParameters meBlock meTxId meMetadata <$> extractMints txMintValue
@@ -561,8 +562,10 @@ makeParameters meBlock meTxId meMetadata policy =
       let
         anomaly = liftAnomaly meBlock meTxId
         MintingPolicyHash currencyHash = fromCardanoPolicyId policy
-        meParams@MarloweParams{..} = marloweParams $ CurrencySymbol currencyHash
-      meApplicationAddress <- anomaly $ ApplicationCredential <$> toCardanoScriptHash (validatorHash $ smallUntypedValidator meParams)
+        meParams = marloweParams $ CurrencySymbol currencyHash
+        marloweValidatorHash = Scripts.validatorHash marloweValidator
+
+      meApplicationAddress <-  anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidatorHash
       mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
       pure Parameters{..}
 

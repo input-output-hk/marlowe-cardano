@@ -1,4 +1,6 @@
+{-# LANGUAGE BlockArguments      #-}
 {-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
@@ -26,6 +28,7 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseRole
 , parseParty
 , parsePOSIXTime
+, parseProtocolVersion
 , parseSlot
 , parseSlotNo
 , parseStakeAddressReference
@@ -38,7 +41,13 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseTxOut
 , parseUrl
 , parseValue
+, protocolVersionOpt
+, publishingStrategyOpt
+, requiredSignerOpt
+, requiredSignersOpt
 , readTokenName
+, timeoutHelpMsg
+, txBodyFileOpt
 ) where
 
 
@@ -49,7 +58,9 @@ import Cardano.Api (AddressInEra, AsType (..), AssetId (..), AssetName (..), IsS
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
-import Language.Marlowe.CLI.Types (OutputQuery (..))
+import Language.Marlowe.CLI.Types (OutputQuery (..), OutputQueryResult,
+                                   PublishingStrategy (PublishAtAddress, PublishPermanently),
+                                   SigningKeyFile (SigningKeyFile), SomeTimeout (..), TxBodyFile (TxBodyFile))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -59,11 +70,14 @@ import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
 
+import qualified Cardano.Api as C
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T (pack)
-import qualified Language.Marlowe.Extended.V1 as E (Timeout (..))
 import qualified Options.Applicative as O
+import Plutus.ApiCommon (ProtocolVersion)
+import Plutus.V1.Ledger.ProtocolVersions (alonzoPV, vasilPV)
 
 
 -- | Parser for network ID.
@@ -97,9 +111,25 @@ parsePOSIXTime = POSIXTime <$> O.auto
 
 
 -- | Parser for Timeout.
-parseTimeout :: O.ReadM E.Timeout
-parseTimeout = E.POSIXTime <$> O.auto
+parseTimeout :: O.ReadM SomeTimeout
+parseTimeout = O.eitherReader $ \s -> case s =~ "^([1-9][[:digit:]]*|0)([s|m|h|d|w]?)$" of
+    [[_, instant, ""]] -> do
+      timeout <- readEither instant
+      pure $ AbsoluteTimeout (fromInteger timeout)
+    [[_, instant, unit]] -> do
+      duration <- readEither instant
+      pure $ RelativeTimeout $ unitMultiplier unit * fromInteger duration
+    result -> Left $ "Invalid timeout value. " <> show result <> timeoutHelpMsg
+  where
+    unitMultiplier "m" = 60
+    unitMultiplier "h" = 60 * 60
+    unitMultiplier "d" = 60 * 60 * 24
+    unitMultiplier "w" = 60 * 60 * 24 * 7
+    unitMultiplier _   = 1
 
+
+timeoutHelpMsg :: String
+timeoutHelpMsg = "POSIX milliseconds or duration: `INTEGER[s|m|d|w|h]`."
 
 -- | Parser for currency symbol.
 parseCurrencySymbol :: O.ReadM CurrencySymbol
@@ -359,16 +389,46 @@ parseRole =
 
 
 -- | Parse an address query.
-parseOutputQuery :: O.Parser OutputQuery
+parseOutputQuery :: O.Parser (Maybe (OutputQuery era (OutputQueryResult era)))
 parseOutputQuery =
-  parseAllOutput <|> parseLovelaceOnly <|> parseAssetOnly <|> pure AllOutput
+  Just <$> parseLovelaceOnly <|> Just <$> parseAssetOnly <|> parseAllOutput
     where
       parseAllOutput =
-        AllOutput
+        Nothing
           <$ O.flag' () (O.long "all" <> O.help "Report all output.")
       parseLovelaceOnly =
-        LovelaceOnly . Lovelace
+        LovelaceOnly . (<=) . Lovelace
           <$> O.option O.auto (O.long "lovelace-only" <> O.metavar "LOVELACE" <> O.help "The minimum Lovelace that must be the sole asset in the output value.")
       parseAssetOnly =
         AssetOnly
           <$> O.option parseAssetId (O.long "asset-only" <> O.metavar "CURRENCY_SYMBOL.TOKEN_NAME" <> O.help "The current symbol and token name for the sole native asset in the value.")
+
+
+parseProtocolVersion :: O.ReadM ProtocolVersion
+parseProtocolVersion = O.eitherReader \case
+  "alonzo" -> pure alonzoPV
+  "vasil"  -> pure vasilPV
+  s        -> Left $ "Invalid protocol version: " <> s <> ". Expecting [alonzo|vasil]."
+
+
+protocolVersionOpt :: O.Parser ProtocolVersion
+protocolVersionOpt = fromMaybe vasilPV <$> (O.optional $ O.option parseProtocolVersion (O.long "protocol-version" <> O.metavar "PROTOCOL_VERSION" <> O.help "Protocol version: [alonzo|vasil]"))
+
+
+requiredSignerOpt :: O.Parser SigningKeyFile
+requiredSignerOpt = SigningKeyFile <$> O.strOption (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
+
+
+requiredSignersOpt :: O.Parser [SigningKeyFile]
+requiredSignersOpt =  map SigningKeyFile <$> (O.some . O.strOption) (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
+
+
+txBodyFileOpt :: O.Parser TxBodyFile
+txBodyFileOpt = TxBodyFile <$> O.strOption (O.long "out-file" <> O.metavar "FILE"         <> O.help "Output file for transaction body.")
+
+
+publishingStrategyOpt :: forall era. C.IsShelleyBasedEra era => O.Parser (PublishingStrategy era)
+publishingStrategyOpt =
+      PublishAtAddress <$> O.option parseAddress                 (O.long "at-address"                     <> O.metavar "ADDRESS"          <> O.help "Publish script at a given address. This is a default strategy which uses change address as a destination.")
+  <|> PublishPermanently <$> O.option parseStakeAddressReference (O.long "permanently"                    <> O.metavar "STAKING_ADDRESS"  <> O.help "Publish permanently at unspendable script address staking the min. ADA value.")
+  <|> O.flag' (PublishPermanently C.NoStakeAddress)              (O.long "permanently-without-staking"                                    <> O.help "Publish permanently at unspendable script address without min. ADA staking.")

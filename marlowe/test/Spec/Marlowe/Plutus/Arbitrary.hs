@@ -20,20 +20,21 @@ module Spec.Marlowe.Plutus.Arbitrary (
 ) where
 
 
-import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
 import Language.Marlowe.Scripts (MarloweTxInput (..))
-import Plutus.V1.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
-                             Extended (..), Interval (..), LowerBound (..), PubKeyHash (..), ScriptContext (..),
-                             ScriptPurpose (..), StakingCredential (..), TxId (..), TxInInfo (..), TxInfo (..),
-                             TxOut (..), TxOutRef (..), UpperBound (..), ValidatorHash (..), Value (..), toBuiltin)
 import Plutus.V1.Ledger.Value (gt)
+import Plutus.V2.Ledger.Api (Address (..), BuiltinData (..), Credential (..), Data (..), Datum (..), DatumHash (..),
+                             Extended (..), Interval (..), LowerBound (..), OutputDatum (..), PubKeyHash (..),
+                             Redeemer (..), ScriptContext (..), ScriptPurpose (..), StakingCredential (..), TxId (..),
+                             TxInInfo (..), TxInfo (..), TxOut (..), TxOutRef (..), UpperBound (..), ValidatorHash (..),
+                             Value (..), adaSymbol, adaToken, singleton, toBuiltin)
 import PlutusTx.Builtins (BuiltinByteString)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap, arbitraryPositiveInteger)
+import Spec.Marlowe.Semantics.Orphans ()
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, frequency, listOf, suchThat, vectorOf)
 
 import qualified Data.ByteString as BS (ByteString, pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
-import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
 
 
 instance Arbitrary Address where
@@ -109,8 +110,21 @@ instance Arbitrary a => Arbitrary (LowerBound a) where
   arbitrary = LowerBound <$> arbitrary <*> arbitrary
 
 
+instance Arbitrary Redeemer where
+  arbitrary = Redeemer <$> arbitrary
+
+
 instance Arbitrary ScriptContext where
   arbitrary = ScriptContext <$> arbitrary <*> (Spending <$> arbitrary)
+
+
+instance Arbitrary ScriptPurpose where
+  arbitrary =
+    frequency
+     [
+       (2, Minting <$> arbitrary)
+     , (8, Spending <$> arbitrary)
+     ]
 
 
 instance Arbitrary StakingCredential where
@@ -125,11 +139,13 @@ instance Arbitrary TxInfo where
   arbitrary =
     do
       txInfoInputs <- arbitrary
+      txInfoReferenceInputs <- arbitrary
       txInfoOutputs <- arbitrary
-      txInfoFee <- V.singleton V.adaSymbol V.adaToken <$> arbitraryPositiveInteger
+      txInfoFee <- singleton adaSymbol adaToken <$> arbitraryPositiveInteger
       txInfoValidRange <- arbitrary
       txInfoSignatories <- arbitrary
-      txInfoData <- arbitrary
+      txInfoRedeemers <- arbitraryAssocMap arbitrary arbitrary
+      txInfoData <- arbitraryAssocMap arbitrary arbitrary
       let
         txInfoMint = mempty
         txInfoDCert = mempty
@@ -143,7 +159,7 @@ instance Arbitrary TxInInfo where
 
 
 instance Arbitrary TxOut where
-  arbitrary = TxOut <$> arbitrary <*> arbitrary `suchThat` (`gt` mempty) <*> arbitrary
+  arbitrary = TxOut <$> arbitrary <*> arbitrary `suchThat` (`gt` mempty) <*> (OutputDatumHash <$> arbitrary) <*> pure Nothing
 
 
 instance Arbitrary TxOutRef where
@@ -161,9 +177,11 @@ instance Arbitrary ValidatorHash where
 instance Arbitrary Value where
   arbitrary = Value <$> arbitraryAssocMap arbitrary (arbitraryAssocMap arbitrary arbitrary)
 
+instance Arbitrary MarloweParams where
+  arbitrary = MarloweParams <$> arbitrary
 
 instance Arbitrary MarloweData where
-  arbitrary = MarloweData <$> arbitrary <*> arbitrary
+  arbitrary = MarloweData <$> arbitrary <*> arbitrary <*> arbitrary
 
 
 instance Arbitrary MarloweTxInput where

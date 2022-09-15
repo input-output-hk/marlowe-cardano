@@ -37,15 +37,15 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as S
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..), pretty)
 import Language.Marlowe.Util (ada)
-import Plutus.V1.Ledger.Api (adaSymbol)
-import Plutus.V2.Ledger.Api (adaToken)
+import Plutus.V2.Ledger.Api (adaSymbol, adaToken)
 import qualified Plutus.V2.Ledger.Api as L
 import Text.PrettyPrint.Leijen (parens, text)
 
 
 data Timeout = TimeParam String
              | POSIXTime Integer
-  deriving stock (Show,Generic)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance Pretty Timeout where
     prettyFragment (POSIXTime n)    = prettyFragment n

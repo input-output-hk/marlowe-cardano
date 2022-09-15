@@ -30,7 +30,7 @@ module Spec.Marlowe.Semantics.Golden.ZeroCouponBond (
 import Data.String (IsString (..))
 import Language.Marlowe.Core.V1.Semantics (Payment (Payment), TransactionInput (..), TransactionOutput (..))
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Api (POSIXTime (..), Value (..))
+import Plutus.V2.Ledger.Api (POSIXTime (..), Value (..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 

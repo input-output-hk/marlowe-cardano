@@ -18,12 +18,15 @@ module Language.Marlowe.CLI.IO (
 -- * IO
   decodeFileStrict
 , decodeFileBuiltinData
+, getProtocolVersion
 , readVerificationKey
 , readSigningKey
 , maybeWriteTextEnvelope
 , maybeWriteJson
+, queryInEra
 , readMaybeMetadata
 -- * Environment
+, getDefaultCostModel
 , getNetworkMagic
 , getNodeSocketPath
 -- * Lifting
@@ -33,17 +36,20 @@ module Language.Marlowe.CLI.IO (
 ) where
 
 
-import Cardano.Api (AsType (..), FromSomeType (..), HasTextEnvelope, NetworkId (..), NetworkMagic (..),
-                    ScriptDataJsonSchema (..), TxMetadataInEra (..), TxMetadataJsonSchema (..), metadataFromJson,
-                    readFileTextEnvelopeAnyOf, scriptDataFromJson, serialiseToTextEnvelope, writeFileTextEnvelope)
-import Cardano.Api.Shelley (toPlutusData)
+import Cardano.Api (AsType (..), CardanoMode, FromSomeType (..), HasTextEnvelope, LocalNodeConnectInfo, NetworkId (..),
+                    NetworkMagic (..), QueryInEra (QueryInShelleyBasedEra), QueryInMode (QueryInEra),
+                    QueryInShelleyBasedEra (QueryProtocolParameters), ScriptDataJsonSchema (..), TxMetadataInEra (..),
+                    TxMetadataJsonSchema (..), metadataFromJson, queryNodeLocalState, readFileTextEnvelopeAnyOf,
+                    scriptDataFromJson, serialiseToTextEnvelope, writeFileTextEnvelope)
+import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
 import Data.Yaml (decodeFileEither)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey, asksEra,
+import Language.Marlowe.CLI.Types (CliEnv, CliError (..), SigningKeyFile (unSigningKeyFile), SomePaymentSigningKey,
+                                   SomePaymentVerificationKey, askEra, asksEra, toEraInMode, toShelleyBasedEra,
                                    toTxMetadataSupportedInEra)
 import Plutus.V1.Ledger.Api (BuiltinData)
 import PlutusTx (dataToBuiltinData)
@@ -53,6 +59,10 @@ import Text.Read (readMaybe)
 import Control.Monad.Reader (MonadReader)
 import qualified Data.ByteString.Lazy as LBS (writeFile)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (putStrLn)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
+import Plutus.ApiCommon (ProtocolVersion)
+import Plutus.V2.Ledger.Api (CostModelParams)
+import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
 
 
 -- | Lift an 'Either' result into the CLI.
@@ -122,7 +132,7 @@ readVerificationKey =
 -- | Read a signing key.
 readSigningKey :: MonadError CliError m
                => MonadIO m
-               => FilePath                 -- ^ The file.
+               => SigningKeyFile                 -- ^ The file.
                -> m SomePaymentSigningKey  -- ^ Action to read the key.
 readSigningKey =
   liftCliIO
@@ -131,6 +141,7 @@ readSigningKey =
         FromSomeType (AsSigningKey AsPaymentKey        ) Left
       , FromSomeType (AsSigningKey AsPaymentExtendedKey) Right
       ]
+    . unSigningKeyFile
 
 
 -- | Optionally write a text envelope file, otherwise write to standard output.
@@ -187,3 +198,30 @@ getNodeSocketPath =
       $ if path == Just ""
           then Nothing
           else path
+
+getDefaultCostModel :: MonadError CliError m => m CostModelParams
+getDefaultCostModel = liftCliMaybe "Missing default cost model." defaultCostModelParams
+
+-- | Query a node in an era.
+queryInEra :: MonadError CliError m
+            => MonadIO m
+            => MonadReader (CliEnv era) m
+            => LocalNodeConnectInfo CardanoMode     -- ^ The connection info for the local node.
+            -> QueryInShelleyBasedEra era a         -- ^ The query.
+            -> m a                                  -- ^ Action for running the query.
+queryInEra connection q = do
+  era <- askEra
+  res <- liftCliIO
+    $ queryNodeLocalState connection Nothing
+    $ QueryInEra (toEraInMode era)
+    $ QueryInShelleyBasedEra (toShelleyBasedEra era) q
+  liftCli res
+
+getProtocolVersion :: MonadError CliError m
+                   => MonadIO m
+                   => MonadReader (CliEnv era) m
+                   => LocalNodeConnectInfo CardanoMode
+                   -> m ProtocolVersion
+getProtocolVersion connection = do
+  protocol <- queryInEra connection QueryProtocolParameters
+  pure $ toPlutusProtocolVersion $ protocolParamProtocolVersion protocol

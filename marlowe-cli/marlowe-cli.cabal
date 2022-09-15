@@ -49,6 +49,11 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
+    Language.Marlowe.CLI.Cardano.Api
+    Language.Marlowe.CLI.Cardano.Api.Address
+    Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn
+    Language.Marlowe.CLI.Cardano.Api.PlutusScript
+    Language.Marlowe.CLI.Plutus.Script.Utils
     Language.Marlowe.CLI.Codec
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
@@ -60,6 +65,8 @@ library
     Language.Marlowe.CLI.Command.Test
     Language.Marlowe.CLI.Command.Transaction
     Language.Marlowe.CLI.Command.Util
+    Language.Marlowe.CLI.Data.Aeson.Traversals
+    Language.Marlowe.CLI.Data.Foldable
     Language.Marlowe.CLI.Examples
     Language.Marlowe.CLI.Export
     Language.Marlowe.CLI.Merkle
@@ -71,6 +78,7 @@ library
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Test
     Language.Marlowe.CLI.Test.Script
+    Language.Marlowe.CLI.Test.Script.Debug
     Language.Marlowe.CLI.Test.Types
     Language.Marlowe.CLI.Types
     Paths_marlowe_cli
@@ -83,7 +91,9 @@ library
     bytestring,
     cardano-addresses,
     cardano-api,
+    cardano-crypto-class,
     cardano-ledger-alonzo,
+    cardano-ledger-shelley,
     cardano-ledger-core,
     cardano-slotting,
     cborg,
@@ -91,6 +101,7 @@ library
     containers,
     data-default,
     directory,
+    errors,
     extra -any,
     freer-simple,
     http-client,

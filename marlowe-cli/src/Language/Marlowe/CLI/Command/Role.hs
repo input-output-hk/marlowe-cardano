@@ -25,17 +25,19 @@ module Language.Marlowe.CLI.Command.Role (
 
 
 import Cardano.Api (NetworkId (..), StakeAddressReference (..))
-import Control.Monad.Except (MonadError, MonadIO, throwError)
+import Control.Monad.Except (MonadError, MonadIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference,
-                                           parseTokenName)
+                                           parseTokenName, protocolVersionOpt)
 import Language.Marlowe.CLI.Export (exportRoleAddress, exportRoleDatum, exportRoleRedeemer, exportRoleValidator)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
+import Language.Marlowe.Core.V1.Semantics.Types (Token (Token))
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
-import PlutusCore (defaultCostModelParams)
 
 import Control.Monad.Reader.Class (MonadReader)
+import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import qualified Options.Applicative as O
+import Plutus.ApiCommon (ProtocolVersion)
 
 
 -- | Marlowe CLI commands and options for exporting role information.
@@ -50,19 +52,21 @@ data RoleCommand =
     -- | Export the role validator for a Marlowe contract.
   | ExportValidator
     {
-      network        :: NetworkId                    -- ^ The network ID, if any.
-    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency' :: CurrencySymbol               -- ^ The role currency symbols, if any.
-    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for the validator information.
-    , printHash      :: Bool                         -- ^ Whether to print the validator hash.
-    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract.
+      network         :: NetworkId                    -- ^ The network ID, if any.
+    , stake           :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency'  :: CurrencySymbol               -- ^ The role currency symbols, if any.
+    , protocolVersion :: ProtocolVersion              -- ^ Protocol version
+    , outputFile      :: Maybe FilePath               -- ^ The output JSON file for the validator information.
+    , printHash       :: Bool                         -- ^ Whether to print the validator hash.
+    , printStats      :: Bool                         -- ^ Whether to print statistics about the contract.
     }
     -- | Export the role datum for a Marlowe contract transaction.
   | ExportDatum
     {
-      roleName   :: TokenName       -- ^ The role name.
-    , outputFile :: Maybe FilePath  -- ^ The output JSON file for the datum.
-    , printStats :: Bool            -- ^ Whether to print statistics about the datum.
+      rolesCurrency' :: CurrencySymbol  -- ^ The role currency symbols, if any.
+    , roleName       :: TokenName       -- ^ The role name.
+    , outputFile     :: Maybe FilePath  -- ^ The output JSON file for the datum.
+    , printStats     :: Bool            -- ^ Whether to print statistics about the datum.
     }
     -- | Export the role redeemer for a Marlowe contract transaction.
   | ExportRedeemer
@@ -73,25 +77,22 @@ data RoleCommand =
 
 
 -- | Run a related command.
-runRoleCommand :: (MonadError CliError m, MonadReader (CliEnv era) m)
+runRoleCommand :: MonadError CliError m
+               => MonadReader (CliEnv era) m
                => MonadIO m
                => RoleCommand  -- ^ The command.
                -> m ()         -- ^ Action for running the command.
 runRoleCommand command =
   do
-    costModel <-
-      maybe
-        (throwError "Missing default cost model.")
-        pure
-        defaultCostModelParams
+    costModel <- getDefaultCostModel
     let
       network' = network command
       stake'         = fromMaybe NoStakeAddress $ stake command
     case command of
-      ExportAddress{..}   -> exportRoleAddress rolesCurrency' network' stake'
-      ExportValidator{..} -> exportRoleValidator rolesCurrency' costModel network' stake' outputFile printHash printStats
+      ExportAddress{}     -> exportRoleAddress network' stake'
+      ExportValidator{..} -> do exportRoleValidator protocolVersion costModel network' stake' outputFile printHash printStats
       ExportDatum{..}     -> exportRoleDatum
-                               roleName
+                               (Token rolesCurrency' roleName)
                                outputFile
                                printStats
       ExportRedeemer{..}  -> exportRoleRedeemer
@@ -144,12 +145,13 @@ exportValidatorOptions :: O.Mod O.OptionFields NetworkId
                        -> O.Parser RoleCommand
 exportValidatorOptions network =
   ExportValidator
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
-    <*> O.option parseCurrencySymbol                       (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles."                                                    )
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for validator."                                                   )
-    <*> O.switch                                           (O.long "print-hash"                                               <> O.help "Print validator hash."                                                             )
-    <*> O.switch                                           (O.long "print-stats"                                              <> O.help "Print statistics."                                                                 )
+    <$> O.option parseNetworkId                            (O.long "testnet-magic"    <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"    <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
+    <*> O.option parseCurrencySymbol                       (O.long "roles-currency"   <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles."                                                    )
+    <*> protocolVersionOpt
+    <*> (O.optional . O.strOption)                         (O.long "out-file"         <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for validator."                                                   )
+    <*> O.switch                                           (O.long "print-hash"                                                 <> O.help "Print validator hash."                                                             )
+    <*> O.switch                                           (O.long "print-stats"                                                <> O.help "Print statistics."                                                                 )
 
 
 -- | Parser for the "datum" command.
@@ -164,7 +166,8 @@ exportDatumCommand =
 exportDatumOptions :: O.Parser RoleCommand
 exportDatumOptions =
   ExportDatum
-    <$> O.option parseTokenName    (O.long "role-name"   <> O.metavar "TOKEN_NAME" <> O.help "The role name for the datum.")
+    <$> O.option parseCurrencySymbol                       (O.long "roles-currency"   <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles."                                                    )
+    <*> O.option parseTokenName    (O.long "role-name"   <> O.metavar "TOKEN_NAME" <> O.help "The role name for the datum.")
     <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "DATUM_FILE" <> O.help "JSON output file for datum." )
     <*> O.switch                   (O.long "print-stats"                           <> O.help "Print statistics."           )
 

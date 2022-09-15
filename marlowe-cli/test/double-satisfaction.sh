@@ -319,7 +319,7 @@ marlowe-cli transaction close --testnet-magic "$MAGIC"           \
 # error. (It doesn't matter which party submits this transaction, but the second
 # party submits it because they are the thief.)
 
-if cardano-cli transaction build --testnet-magic "$MAGIC" --alonzo-era        \
+if cardano-cli transaction build --testnet-magic "$MAGIC" --babbage-era       \
                                  --protocol-params-file private.protocol      \
                                  --tx-in "$TX_1"#1                            \
                                    --tx-in-script-file marlowe.plutus         \

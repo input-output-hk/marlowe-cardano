@@ -197,7 +197,7 @@ applyInputsV1 vLow vHigh txId txInputs V1.MarloweData{..} =
           V1.Close -> Nothing
           _ -> Just TransactionScriptOutput
             { utxo = TxOutRef txId 0
-            , datum = V1.MarloweData txOutState txOutContract
+            , datum = V1.MarloweData marloweParams txOutState txOutContract
             }
       }
   where
@@ -205,9 +205,11 @@ applyInputsV1 vLow vHigh txId txInputs V1.MarloweData{..} =
     paymentToPayout :: V1.Payment -> Maybe (Payout 'V1)
     paymentToPayout (V1.Payment _ (V1.Party (V1.Role role)) money) = Just $ Payout
       { assets = moneyToAssets money
-      , datum = fromPlutusTokenName role
+      , datum = AssetId (fromPlutusCurrencySymbol rolesCurrency) (fromPlutusTokenName role)
       }
     paymentToPayout _                                              = Nothing
+
+    V1.MarloweParams { rolesCurrency } = marloweParams
 
     moneyToAssets :: V1.Money -> Assets
     moneyToAssets = Assets <$> moneyToLovelace <*> moneyToTokens
@@ -297,7 +299,8 @@ genRollBackward n
 genCreateContract :: SlotNo -> Gen (Some HistoryScriptEvent)
 genCreateContract slot = do
   contractId <- ContractId . flip TxOutRef 0 <$> genTxId
-  datum <- V1.MarloweData (V1.emptyState $ fromIntegral slot) <$> arbitrary
+  marloweParams <- V1.MarloweParams <$> arbitrary
+  datum <- V1.MarloweData marloweParams (V1.emptyState $ fromIntegral slot) <$> arbitrary
   let scriptAddress = "7062c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307"
   let payoutValidatorHash = "a2c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307"
   pure $ Some $ CreateContract contractId MarloweV1 CreateStep{..}

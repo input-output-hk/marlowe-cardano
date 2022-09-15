@@ -35,12 +35,13 @@ import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractComm
 import Language.Marlowe.CLI.Command.Input (InputCommand, parseInputCommand, runInputCommand)
 import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRoleCommand)
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
-import Language.Marlowe.CLI.Command.Template (TemplateCommand, parseTemplateCommand, runTemplateCommand)
+import Language.Marlowe.CLI.Command.Template (OutputFiles (..), TemplateCommand, parseTemplateCommand,
+                                              parseTemplateCommandOutputFiles, runTemplateCommand)
 import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTestCommand)
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
-import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..))
+import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), withShelleyBasedEra)
 import System.Exit (exitFailure)
 import System.IO (BufferMode (LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 
@@ -60,7 +61,7 @@ data Command era =
     -- | Role-related commands.
   | RoleCommand RoleCommand
     -- | Template-related commands.
-  | TemplateCommand TemplateCommand
+  | TemplateCommand TemplateCommand OutputFiles
     -- | Transaction-related commands.
   | TransactionCommand (TransactionCommand era)
     -- | Miscellaneous commands.
@@ -80,7 +81,7 @@ runCLI version =
     networkId <- maybe mempty O.value <$> liftIO getNetworkMagic
     socketPath <- maybe mempty O.value <$> liftIO getNodeSocketPath
     SomeCommand era command <- O.execParser $ parseCommand networkId socketPath version
-    result <- runExceptT $ runCommand era command
+    result <- runExceptT $ withShelleyBasedEra era $ runCommand era command
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -89,20 +90,21 @@ runCLI version =
 
 
 -- | Run a CLI command.
-runCommand :: MonadError CliError m
+runCommand :: IsShelleyBasedEra era
+           => MonadError CliError m
            => MonadIO m
            => ScriptDataSupportedInEra era
            -> Command era  -- ^ The command.
            -> m ()     -- ^ Action to run the command.
 runCommand era cmd = flip runReaderT CliEnv{..} case cmd of
-  RunCommand command         -> runRunCommand command
-  ContractCommand command    -> runContractCommand command
-  TestCommand command        -> runTestCommand command
-  InputCommand command       -> runInputCommand command
-  RoleCommand command        -> runRoleCommand command
-  TemplateCommand command    -> runTemplateCommand command
-  TransactionCommand command -> runTransactionCommand command
-  UtilCommand command        -> runUtilCommand command
+  RunCommand command                  -> runRunCommand command
+  ContractCommand command             -> runContractCommand command
+  TestCommand command                 -> runTestCommand command
+  InputCommand command                -> runInputCommand command
+  RoleCommand command                 -> runRoleCommand command
+  TemplateCommand command outputFiles -> runTemplateCommand command outputFiles
+  TransactionCommand command          -> runTransactionCommand command
+  UtilCommand command                 -> runUtilCommand command
 
 -- | Command parseCommand for the tool version.
 parseCommand :: O.Mod O.OptionFields NetworkId  -- ^ The default network ID.
@@ -138,9 +140,9 @@ parseCommand networkId socketPath version =
       [
         O.hsubparser $ fold
           [ O.commandGroup "High-level commands:"
-          , O.command "run"         $ O.info (RunCommand      <$> parseRunCommand networkId socketPath ) $ O.progDesc "Run a contract."
-          , O.command "template"    $ O.info (TemplateCommand <$> parseTemplateCommand                 ) $ O.progDesc "Create a contract from a template."
-          , O.command "test"        $ O.info (TestCommand     <$> parseTestCommand networkId socketPath) $ O.progDesc "Test contracts."
+          , O.command "run"         $ O.info (RunCommand      <$> parseRunCommand networkId socketPath )                     $ O.progDesc "Run a contract."
+          , O.command "template"    $ O.info (TemplateCommand <$> parseTemplateCommand <*> parseTemplateCommandOutputFiles)  $ O.progDesc "Create a contract from a template."
+          , O.command "test"        $ O.info (TestCommand     <$> parseTestCommand networkId socketPath)                     $ O.progDesc "Test contracts."
           ]
       , O.hsubparser $ fold
           [ O.commandGroup "Low-level commands:"

@@ -29,23 +29,23 @@ import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Pretty (Pretty (..))
--- Added to silence cabal about unused plutus-tx-plugin
 import qualified Plutus.Script.Utils.Typed as Scripts
-import Plutus.Script.Utils.V1.Typed.Scripts as Scripts
-import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V1.Ledger.Api (Address (Address), CurrencySymbol, Datum (Datum), DatumHash (DatumHash), POSIXTime,
-                             ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
-                             ScriptPurpose (Spending), TokenName, TxInInfo (TxInInfo, txInInfoOutRef, txInInfoResolved),
-                             TxInfo (TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange),
-                             TxOut (TxOut, txOutAddress, txOutDatumHash, txOutValue), ValidatorHash, adaSymbol,
-                             mkValidatorScript)
-import Plutus.V1.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
-import Plutus.V1.Ledger.Credential (Credential (..))
-import qualified Plutus.V1.Ledger.Interval as Interval
+import qualified Plutus.Script.Utils.V2.Typed.Scripts as Scripts
+import qualified Plutus.V1.Ledger.Address as Address (scriptHashAddress)
 import qualified Plutus.V1.Ledger.Value as Val
+import Plutus.V2.Ledger.Api (Address (Address), Credential (..), CurrencySymbol, Datum (Datum), DatumHash (DatumHash),
+                             POSIXTime, ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
+                             ScriptPurpose (Spending), TokenName, TxInInfo (TxInInfo, txInInfoOutRef, txInInfoResolved),
+                             TxInfo (TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange), ValidatorHash,
+                             mkValidatorScript)
+import qualified Plutus.V2.Ledger.Api as Interval
+import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
+import Plutus.V2.Ledger.Tx (OutputDatum (OutputDatumHash), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue))
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
+-- Added to silence cabal "unused plutus-tx-plugin" warning
+import Plutus.Script.Utils.V2.Typed.Scripts (mkTypedValidator, mkUntypedValidator)
 import PlutusTx.Plugin ()
 import PlutusTx.Prelude as PlutusTxPrelude
 import qualified Prelude as Haskell
@@ -53,10 +53,6 @@ import Unsafe.Coerce (unsafeCoerce)
 
 type MarloweTimeRange = (POSIXTime, POSIXTime)
 type MarloweInput = [MarloweTxInput]
-
--- Yeah, I know
-type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
-type SmallTypedValidator = Scripts.TypedValidator TypedMarloweValidator
 
 data TypedMarloweValidator
 
@@ -69,7 +65,7 @@ data TypedRolePayoutValidator
 
 instance Scripts.ValidatorTypes TypedRolePayoutValidator where
   type instance RedeemerType TypedRolePayoutValidator = ()
-  type instance DatumType TypedRolePayoutValidator = TokenName
+  type instance DatumType TypedRolePayoutValidator = (CurrencySymbol, TokenName)
 
 
 data MarloweTxInput = Input InputContent
@@ -78,37 +74,33 @@ data MarloweTxInput = Input InputContent
   deriving anyclass (Pretty)
 
 
-rolePayoutScript :: CurrencySymbol -> Scripts.TypedValidator TypedRolePayoutValidator
-rolePayoutScript = mkTypedValidatorParam @TypedRolePayoutValidator
-  $$(PlutusTx.compile [|| rolePayoutValidator ||])
+rolePayoutValidator :: Scripts.TypedValidator TypedRolePayoutValidator
+rolePayoutValidator = mkTypedValidator @TypedRolePayoutValidator
+  $$(PlutusTx.compile [|| mkRolePayoutValidator ||])
   $$(PlutusTx.compile [|| wrap ||])
   where
-    wrap = Scripts.mkUntypedValidator
+    wrap = Scripts.mkUntypedValidator @(CurrencySymbol, TokenName) @()
 
 
 {-# INLINABLE rolePayoutValidator #-}
-rolePayoutValidator :: CurrencySymbol -> TokenName -> () -> ScriptContext -> Bool
-rolePayoutValidator currency role _ ctx =
+mkRolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Bool
+mkRolePayoutValidator (currency, role) _ ctx =
     Val.valueOf (valueSpent (scriptContextTxInfo ctx)) currency role > 0
 
-
-mkRolePayoutValidatorHash :: CurrencySymbol -> ValidatorHash
-mkRolePayoutValidatorHash symbol = Scripts.validatorHash (rolePayoutScript symbol)
-
-
-defaultRolePayoutValidatorHash :: ValidatorHash
-defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
+rolePayoutValidatorHash :: ValidatorHash
+rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
 
 
-{-# INLINABLE smallMarloweValidator #-}
+{-# INLINABLE mkMarloweValidator #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
-smallMarloweValidator
-    :: MarloweParams
+mkMarloweValidator
+    :: ValidatorHash
     -> MarloweData
     -> MarloweInput
     -> ScriptContext
     -> Bool
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
+mkMarloweValidator
+    rolePayoutValidatorHash
     MarloweData{..}
     marloweTxInputs
     ctx@ScriptContext{scriptContextTxInfo} = do
@@ -151,13 +143,14 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     case computedResult of
         TransactionOutput {txOutPayments, txOutState, txOutContract} -> do
             let marloweData = MarloweData {
+                    marloweParams = marloweParams,
                     marloweContract = txOutContract,
                     marloweState = txOutState }
 
                 payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
                 payoutsOk = payoutConstraints payoutsByParty
                 checkContinuation = case txOutContract of
-                    Close -> True
+                    Close -> traceIfFalse "L2" checkScriptOutputAny
                     _ -> let
                         totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
@@ -172,6 +165,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
         Error TEHashMismatch -> traceError "E6"
 
   where
+    MarloweParams{ rolesCurrency } = marloweParams
+
     findOwnInput :: ScriptContext -> Maybe TxInInfo
     findOwnInput ScriptContext{scriptContextTxInfo=TxInfo{txInfoInputs}, scriptContextPurpose=Spending txOutRef} =
         find (\TxInInfo{txInInfoOutRef} -> txInInfoOutRef == txOutRef) txInfoInputs
@@ -207,13 +202,15 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
         [out] -> out
         _     -> traceError "O0" -- no continuation or multiple Marlowe contract outputs, it's forbidden
 
-    checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
+    checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
                     txOutValue == value && hsh == Just svh && txOutAddress == addr
     checkScriptOutput _ _ _ _ = False
 
-    checkScriptOutputRelaxed addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
+    checkScriptOutputRelaxed addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
                     txOutValue `Val.geq` value && hsh == Just svh && txOutAddress == addr
     checkScriptOutputRelaxed _ _ _ _ = False
+
+    checkScriptOutputAny = all ((/= ownAddress) . txOutAddress) allOutputs
 
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
@@ -255,27 +252,47 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
         payoutToTxOut (party, value) = case party of
             PK pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
             Role role -> let
-                hsh = findDatumHash' role
-                addr = scriptHashAddress rolePayoutValidatorHash
+                hsh = findDatumHash' (rolesCurrency, role)
+                addr = Address.scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "R" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
 
+-- This is pretty standard way to minimize size of the typed validator:
+--  * Wrap validator function so it accepts raw `BuiltinData`.
+--  * Create a validator which is simply typed.
+--  * Create "typed by `Any` validator".
+--  * Coerce it if you like. This step is not required - we only need `TypedValidator`.
+smallMarloweValidator :: Scripts.TypedValidator TypedMarloweValidator
+smallMarloweValidator =
+  let
+    mkUntypedMarloweValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+    mkUntypedMarloweValidator rp = mkUntypedValidator (mkMarloweValidator rp)
 
-smallTypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
-smallTypedValidator = Scripts.mkTypedValidatorParam @TypedMarloweValidator
-    $$(PlutusTx.compile [|| smallMarloweValidator ||])
-    $$(PlutusTx.compile [|| wrap ||])
+    untypedValidator :: Scripts.Validator
+    untypedValidator = mkValidatorScript $
+      $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
+        `PlutusTx.applyCode` PlutusTx.liftCode rolePayoutValidatorHash
+
+    typedValidator :: Scripts.TypedValidator Scripts.Any
+    typedValidator = Scripts.unsafeMkTypedValidator untypedValidator
+  in
+    unsafeCoerce typedValidator
+
+marloweValidator :: Scripts.TypedValidator TypedMarloweValidator
+marloweValidator = Scripts.mkTypedValidator
+    @TypedMarloweValidator
+    compiledMarloweValidator
+    compiledArgsValidator
     where
-        wrap = mkUntypedValidator
+        compiledMarloweValidator =
+          $$(PlutusTx.compile [|| mkMarloweValidator ||])
+            `PlutusTx.applyCode`
+              PlutusTx.liftCode rolePayoutValidatorHash
+        mkArgsValidator = mkUntypedValidator @MarloweData @MarloweInput
+        compiledArgsValidator =
+          $$(PlutusTx.compile [|| mkArgsValidator ||])
 
-
-smallUntypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
-smallUntypedValidator params = let
-    wrapped s = mkUntypedValidator (smallMarloweValidator s)
-    typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
-    -- Yeah, I know. It works, though.
-    -- Remove this when Typed Validator has the same size as untyped.
-    in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
-
+marloweValidatorHash :: ValidatorHash
+marloweValidatorHash = Scripts.validatorHash marloweValidator
 
 defaultTxValidationRange :: POSIXTime
 defaultTxValidationRange = 10000

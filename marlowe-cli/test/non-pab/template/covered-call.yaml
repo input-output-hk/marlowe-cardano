@@ -1,0 +1,58 @@
+stTestName: Non-PAB Covered Call Contract Test
+
+stScriptOperations:
+
+  - tag: Initialize
+    soOwner:
+      role_token: "aParty"
+    soTransaction: "TestTransaction-covered call"
+    soRoleCurrency: "1c964b2b89b6c9d2a8e2d564a3541b3b355d0451825ad0481a63f86c"
+    soMinAda: 0
+    soContract:
+      template:
+        tag: "TemplateCoveredCall"
+        minAda: 1000000
+        issuer:
+          role_token: "issuer"
+        counterparty:
+          role_token: "counterparty"
+        currency:
+          currency_symbol: ""
+          token_name: ""
+        underlying:
+          currency_symbol: ""
+          token_name: ""
+        strike: 5
+        amount: 100
+        issueDate:
+          relative: 20000
+        maturityDate:
+          relative: 40000
+        settlementDate:
+          relative: 50000
+  - tag: Prepare
+    soTransaction: "TestTransaction-covered call"
+    soOwner:
+      role_token: "aParty"
+    soInputs:
+      - input_from_party:
+          role_token: "aParty"
+        that_deposits: 30000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: "aParty"
+      - input_from_party:
+          role_token: "bParty"
+        that_deposits: 25000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: "bParty"
+    soMinimumTime: 1645590825000
+    soMaximumTime: 1898051625000
+
+  - tag: Fail
+    soFailureMessage: "Failure Invoked"

@@ -23,18 +23,18 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSeekClient, Move (..), ScriptHash, SlotConfig (..),
                                                TransactionOutput (address), TxError (..), TxId, TxOutRef (..),
-                                               UTxOError (..), WithGenesis (..), hoistChainSeekClient, toDatum)
+                                               UTxOError (..), WithGenesis (..), hoistChainSeekClient, toDatum, AssetId (AssetId))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), MarloweVersionTag (..), Payout (..),
                                           SomeMarloweVersion (..), Transaction (..), TransactionOutput (..),
-                                          TransactionScriptOutput (..), parseContractId)
+                                          TransactionScriptOutput (..), parseContractId, toChainPayoutDatum)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
-import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)
 import Test.Network.Protocol.ChainSeek (ChainSeekServerScript (..), ServerStIdleScript (..), ServerStNextScript (..),
                                         runClientWithScript)
+import qualified Plutus.V1.Ledger.Value as Plutus
 
 spec :: Spec
 spec = do
@@ -100,8 +100,18 @@ createTxId = txId createUTxO
 
 createDatum :: V1.MarloweData
 createDatum = V1.MarloweData
-  { marloweState = createDatumState
+  { marloweParams = createMarloweParams
+  , marloweState = createDatumState
   , marloweContract = createContract
+  }
+
+policyId :: Chain.PolicyId
+policyId = Chain.PolicyId "790b1353eb2e863c74c70c29bc74b0020f4ff3223798a77ae0393e4a"
+
+createMarloweParams :: V1.MarloweParams
+createMarloweParams = V1.MarloweParams
+  {
+    rolesCurrency = Plutus.currencySymbol . Chain.unPolicyId $ policyId
   }
 
 createContract :: V1.Contract
@@ -220,7 +230,7 @@ payout =
       { ada = 100
       , tokens = Chain.Tokens mempty
       }
-    datum = Chain.TokenName "test_role"
+    datum = Chain.AssetId policyId (Chain.TokenName "test_role")
   in
     Payout{..}
 
@@ -233,7 +243,7 @@ payoutOutput =
     address = testPayoutValidatorAddress
     Payout{assets} = payout
     datumHash = Nothing
-    datum = Just $ toDatum $ Plutus.TokenName "test_role"
+    datum = Just $ toChainPayoutDatum MarloweV1 $ AssetId policyId (Chain.TokenName "test_role")
   in
     Chain.TransactionOutput{..}
 
@@ -887,7 +897,7 @@ checkPayoutOpenRedeemedBefore = do
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId
-                    , datum = Chain.TokenName "test_role"
+                    , datum = Chain.AssetId policyId (Chain.TokenName "test_role")
                     }
                 ]
             , create = Nothing
@@ -923,7 +933,7 @@ checkPayoutOpenRedeemedBefore = do
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId
-                    , datum = Chain.TokenName "test_role"
+                    , datum = Chain.AssetId policyId (Chain.TokenName "test_role")
                     }
                 ]
             , create = Nothing
@@ -986,7 +996,7 @@ checkPayoutOpenRedeemedAfter = do
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId
-                    , datum = Chain.TokenName "test_role"
+                    , datum = Chain.AssetId policyId (Chain.TokenName "test_role")
                     }
                 ]
             , create = Nothing
@@ -1030,7 +1040,7 @@ checkPayoutOpenRedeemedTogether = do
                 [ RedeemPayout RedeemStep
                     { utxo = payoutUTxO
                     , redeemingTx = redeemPayoutTxId
-                    , datum = Chain.TokenName "test_role"
+                    , datum = Chain.AssetId policyId (Chain.TokenName "test_role")
                     }
                 , ApplyTransaction Transaction
                     { transactionId = close2TxId

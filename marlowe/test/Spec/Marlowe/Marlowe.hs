@@ -46,7 +46,6 @@ import GHC.IO (unsafePerformIO)
 import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
                                      languageExtensions, runInterpreter, set, setImports)
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
-import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams (MarloweParams),
                                            TransactionInput (TransactionInput, txInputs, txInterval),
                                            TransactionOutput (TransactionOutput, txOutState), computeTransaction,
@@ -59,10 +58,9 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound
                                                  State (State, accounts, boundValues, choices, minTime), Token (Token),
                                                  Value (AddValue, Constant, DivValue, MulValue, NegValue, SubValue, UseValue),
                                                  ValueId (ValueId), emptyState)
-import Language.Marlowe.Scripts (smallTypedValidator, smallUntypedValidator)
+import Language.Marlowe.Scripts (marloweValidator, smallMarloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
-import Plutus.V1.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), ValidatorHash (ValidatorHash),
-                             toBuiltin)
+import Plutus.V2.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), toBuiltin)
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
 import System.Timeout (timeout)
 import Test.QuickCheck (Gen, arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate,
@@ -80,7 +78,6 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Language.Marlowe as M
 import qualified Ledger.Typed.Scripts as Scripts
-import qualified Plutus.Script.Utils.V1.Typed.Scripts as TS
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P
@@ -94,14 +91,13 @@ _PRINT_PANGRAM_JSON_ = False
 -- | Run the tests.
 tests :: TestTree
 tests = testGroup "Contracts"
-  [ testCase "Contracts with different creators have different hashes" uniqueContractHash
-  , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
+  [ testCase "Token Show instance respects HEX and Unicode" tokenShowTest
   , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
   , testCase "State serializes into valid JSON" stateSerialization
   , testCase "Input serializes into valid JSON" inputSerialization
   , testGroup "Validator size is reasonable"
-      [ testCase "Typed validator size" typedValidatorSize
-      , testCase "Untyped validator size" untypedValidatorSize
+      [ testCase "Typed validator size" marloweValidatorSize
+      , testCase "Untyped validator size" smallMarloweValidatorSize
       ]
   , testCase "Mul analysis" mulAnalysisTest
   , testCase "Div analysis" divAnalysisTest
@@ -118,30 +114,19 @@ tests = testGroup "Contracts"
   ]
 
 
--- | Test that different contract hash to different values.
-uniqueContractHash :: IO ()
-uniqueContractHash = do
-    let hash1 = TS.validatorHash $ smallTypedValidator (marloweParams "11")
-    let hash2 = TS.validatorHash $ smallTypedValidator (marloweParams "22")
-    let hash3 = TS.validatorHash $ smallTypedValidator (marloweParams "22")
-    assertBool "Hashes must be different" (hash1 /= hash2)
-    assertBool "Hashes must be same" (hash2 == hash3)
-
-
 -- | Test that the typed validator is not too large.
-typedValidatorSize :: IO ()
-typedValidatorSize = do
-    let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
+marloweValidatorSize :: IO ()
+marloweValidatorSize = do
+    let validator = Scripts.validatorScript marloweValidator
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 17200)
-
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15200)
 
 -- | Test that the untyped validator is not too large.
-untypedValidatorSize :: IO ()
-untypedValidatorSize = do
-    let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
+smallMarloweValidatorSize :: IO ()
+smallMarloweValidatorSize = do
+    let validator = Scripts.validatorScript smallMarloweValidator
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 12700)
 
 
 -- | Test `extractNonMerkleizedContractRoles`.
@@ -428,9 +413,8 @@ prop_marloweParamsJsonLoops :: Property
 prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJsonLoops
   where
     gen = do
-      b <- toBuiltin <$> (arbitrary :: Gen ByteString)
       c <- toBuiltin <$> (arbitrary :: Gen ByteString)
-      return $ MarloweParams (ValidatorHash b) (CurrencySymbol c)
+      return $ MarloweParams (CurrencySymbol c)
 
 
 -- | Test that JSON decoding inverts encoding for an interval error.
@@ -452,3 +436,4 @@ prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJson
         s <- POSIXTime <$> arbitrary
         t <- (POSIXTime *** POSIXTime) <$> arbitrary
         return $ IntervalInPastError s t
+
