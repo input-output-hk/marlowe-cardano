@@ -1,4 +1,5 @@
-module Main where
+module Main
+  where
 
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)

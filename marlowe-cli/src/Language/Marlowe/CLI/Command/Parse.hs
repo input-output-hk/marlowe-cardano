@@ -14,41 +14,41 @@
 --
 -----------------------------------------------------------------------------
 
-module Language.Marlowe.CLI.Command.Parse (
--- * Parsers
-  parseAddress
-, parseAssetId
-, parseOutputQuery
-, parseByteString
-, parseCurrencySymbol
-, parseInput
-, parseInputContent
-, parseLovelaceValue
-, parseNetworkId
-, parseRole
-, parseParty
-, parsePOSIXTime
-, parseProtocolVersion
-, parseSlot
-, parseSlotNo
-, parseStakeAddressReference
-, parseTimeout
-, parseToken
-, parseTokenName
-, parseTxId
-, parseTxIn
-, parseTxIx
-, parseTxOut
-, parseUrl
-, parseValue
-, protocolVersionOpt
-, publishingStrategyOpt
-, requiredSignerOpt
-, requiredSignersOpt
-, readTokenName
-, timeoutHelpMsg
-, txBodyFileOpt
-) where
+module Language.Marlowe.CLI.Command.Parse
+  ( -- * Parsers
+    parseAddress
+  , parseAssetId
+  , parseByteString
+  , parseCurrencySymbol
+  , parseInput
+  , parseInputContent
+  , parseLovelaceValue
+  , parseNetworkId
+  , parseOutputQuery
+  , parsePOSIXTime
+  , parseParty
+  , parseProtocolVersion
+  , parseRole
+  , parseSlot
+  , parseSlotNo
+  , parseStakeAddressReference
+  , parseTimeout
+  , parseToken
+  , parseTokenName
+  , parseTxId
+  , parseTxIn
+  , parseTxIx
+  , parseTxOut
+  , parseUrl
+  , parseValue
+  , protocolVersionOpt
+  , publishingStrategyOpt
+  , readTokenName
+  , requiredSignerOpt
+  , requiredSignersOpt
+  , timeoutHelpMsg
+  , txBodyFileOpt
+  ) where
 
 
 import Cardano.Api

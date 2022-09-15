@@ -3,7 +3,12 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Codec (DeserializeError(..), binaryCodec, PutMessage, GetMessage) where
+module Network.Protocol.Codec
+  ( DeserializeError(..)
+  , GetMessage
+  , PutMessage
+  , binaryCodec
+  ) where
 
 import Control.Exception (Exception)
 import Control.Monad (mfilter)

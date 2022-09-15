@@ -1,4 +1,5 @@
-module Options where
+module Options
+  where
 
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), parseContractId)
 import Network.Socket (HostName, PortNumber)

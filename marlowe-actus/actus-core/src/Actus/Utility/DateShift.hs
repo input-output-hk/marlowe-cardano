@@ -2,14 +2,13 @@
 
 module Actus.Utility.DateShift
   ( applyBDC
-  , applyEOMC
   , applyBDCWithCfg
-  , getPreceedingBusinessDay
+  , applyEOMC
   , getFollowingBusinessDay
+  , getPreceedingBusinessDay
   , moveToEndOfMonth
   , shiftDate
-  )
-where
+  ) where
 
 import Actus.Domain (BDC(..), Calendar(..), Cycle(..), EOMC(..), Period(..), ScheduleConfig(..), ShiftedDay(..))
 import Data.Time (LocalTime(..), addDays, toGregorian)

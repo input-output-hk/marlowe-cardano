@@ -14,9 +14,9 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Spec.Marlowe.Plutus.Value (
-  tests
-) where
+module Spec.Marlowe.Plutus.Value
+  ( tests
+  ) where
 
 
 import Data.List (permutations, union)

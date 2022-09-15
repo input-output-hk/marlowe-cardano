@@ -11,11 +11,11 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Semantics.Entropy (
--- * Testing
-  tests
-, checkEntropy
-) where
+module Spec.Marlowe.Semantics.Entropy
+  ( -- * Testing
+    checkEntropy
+  , tests
+  ) where
 
 
 import Control.Monad (replicateM)

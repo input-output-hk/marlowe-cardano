@@ -31,81 +31,81 @@
 {-# LANGUAGE ViewPatterns #-}
 
 
-module Language.Marlowe.CLI.Types (
--- * Marlowe Transactions
-  MarloweTransaction(..)
-, MarlowePlutusVersion
-, MarloweInfo(..)
-, ValidatorInfo(..)
-, DatumInfo(..)
-, RedeemerInfo(..)
-, SomeMarloweTransaction(..)
-, CliEnv(..)
-, CoinSelectionStrategy(..)
-, SomeTimeout(..)
-, TruncateMilliseconds(..)
--- * eUTxOs
-, AnUTxO(..)
-, PayFromScript(..)
-, PayToScript(..)
--- * Keys
-, SomePaymentVerificationKey
-, SomePaymentSigningKey
--- * Exceptions
-, CliError(..)
--- * Queries
-, OutputQuery(..)
-, OutputQueryResult(..)
--- * Merklization
-, Continuations
--- * Publishing
-, PublishScript(..)
-, PublishingStrategy(..)
-, PublishMarloweScripts(..)
-, MarloweScriptsRefs(..)
--- * Newtype wrappers
-, PrintStats(..)
-, TxBodyFile(..)
-, SigningKeyFile(..)
--- * constants
-, marlowePlutusVersion
--- * pattern matching boilerplate
-, withCardanoEra
-, withShelleyBasedEra
-, toAsType
-, toCardanoEra
-, toEraInMode
-, toShelleyBasedEra
-, toSimpleScriptV2LanguageInEra
-, toTxMetadataSupportedInEra
-, toMultiAssetSupportedInEra
-, toTxScriptValiditySupportedInEra
-, toCollateralSupportedInEra
-, toTxFeesExplicitInEra
-, toValidityLowerBoundSupportedInEra
-, toValidityUpperBoundSupportedInEra
-, toValidityNoUpperBoundSupportedInEra
-, toExtraKeyWitnessesSupportedInEra
-, askEra
-, asksEra
-, doWithCardanoEra
-, doWithShelleyBasedEra
-, toAddressAny'
-, toShelleyAddress
--- * accessors and converters
-, anUTxOValue
-, getVerificationKey
-, toPaymentVerificationKey
-, toMarloweTimeout
-, toPOSIXTime
-, toUTxO
-, validatorInfoScriptOrReference
--- * constructors and defaults
-, defaultCoinSelectionStrategy
-, fromUTxO
-, validatorInfo
-, validatorInfo'
-) where
+module Language.Marlowe.CLI.Types
+  ( -- * Marlowe Transactions
+    CliEnv(..)
+  , CoinSelectionStrategy(..)
+  , DatumInfo(..)
+  , MarloweInfo(..)
+  , MarlowePlutusVersion
+  , MarloweTransaction(..)
+  , RedeemerInfo(..)
+  , SomeMarloweTransaction(..)
+  , SomeTimeout(..)
+  , TruncateMilliseconds(..)
+  , ValidatorInfo(..)
+    -- * eUTxOs
+  , AnUTxO(..)
+  , PayFromScript(..)
+  , PayToScript(..)
+    -- * Keys
+  , SomePaymentSigningKey
+  , SomePaymentVerificationKey
+    -- * Exceptions
+  , CliError(..)
+    -- * Queries
+  , OutputQuery(..)
+  , OutputQueryResult(..)
+    -- * Merklization
+  , Continuations
+    -- * Publishing
+  , MarloweScriptsRefs(..)
+  , PublishMarloweScripts(..)
+  , PublishScript(..)
+  , PublishingStrategy(..)
+    -- * Newtype wrappers
+  , PrintStats(..)
+  , SigningKeyFile(..)
+  , TxBodyFile(..)
+    -- * constants
+  , marlowePlutusVersion
+    -- * pattern matching boilerplate
+  , askEra
+  , asksEra
+  , doWithCardanoEra
+  , doWithShelleyBasedEra
+  , toAddressAny'
+  , toAsType
+  , toCardanoEra
+  , toCollateralSupportedInEra
+  , toEraInMode
+  , toExtraKeyWitnessesSupportedInEra
+  , toMultiAssetSupportedInEra
+  , toShelleyAddress
+  , toShelleyBasedEra
+  , toSimpleScriptV2LanguageInEra
+  , toTxFeesExplicitInEra
+  , toTxMetadataSupportedInEra
+  , toTxScriptValiditySupportedInEra
+  , toValidityLowerBoundSupportedInEra
+  , toValidityNoUpperBoundSupportedInEra
+  , toValidityUpperBoundSupportedInEra
+  , withCardanoEra
+  , withShelleyBasedEra
+    -- * accessors and converters
+  , anUTxOValue
+  , getVerificationKey
+  , toMarloweTimeout
+  , toPOSIXTime
+  , toPaymentVerificationKey
+  , toUTxO
+  , validatorInfoScriptOrReference
+    -- * constructors and defaults
+  , defaultCoinSelectionStrategy
+  , fromUTxO
+  , validatorInfo
+  , validatorInfo'
+  ) where
 
 
 import Cardano.Api

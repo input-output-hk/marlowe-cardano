@@ -3,10 +3,9 @@
 
 {-| = ACTUS state transformation functions -}
 module Actus.Model.StateTransition
-  ( stateTransition
-  , CtxSTF (..)
-  )
-where
+  ( CtxSTF(..)
+  , stateTransition
+  ) where
 
 import Actus.Domain
   ( ActusFrac(..)

@@ -15,9 +15,9 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Spec.Marlowe.Plutus.ScriptContext (
-  tests
-) where
+module Spec.Marlowe.Plutus.ScriptContext
+  ( tests
+  ) where
 
 
 import Data.List (find)

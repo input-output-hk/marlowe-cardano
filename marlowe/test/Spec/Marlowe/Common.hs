@@ -19,51 +19,51 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 
-module Spec.Marlowe.Common (
--- * Types
-  PubKey(..)
-, MarloweScenario(..)
--- * Generating
-, actionGen
-, actionGenSized
-, amount
-, boundListGen
-, caseRelGenSized
-, choiceIdGen
-, contractGen
-, contractGenSized
-, contractRelGenSized
-, listLengthGen
-, observationGen
-, observationGenSized
-, partyGen
-, payeeGen
-, positiveAmount
-, rationalGen
-, simpleIntegerGen
-, tokenGen
-, valueGen
-, valueGenSized
-, valueIdGen
--- * Shrinking
-, shrinkAction
-, shrinkCase
-, shrinkChoiceId
-, shrinkContract
-, shrinkObservation
-, shrinkPOSIXTime
-, shrinkParty
-, shrinkPayee
-, shrinkSimpleInteger
-, shrinkToken
-, shrinkValue
-, shrinkValueId
--- * Instances
-, alicePk
-, pangramContract
--- * Functions
-, secondsSinceShelley
-) where
+module Spec.Marlowe.Common
+  ( -- * Types
+    MarloweScenario(..)
+  , PubKey(..)
+    -- * Generating
+  , actionGen
+  , actionGenSized
+  , amount
+  , boundListGen
+  , caseRelGenSized
+  , choiceIdGen
+  , contractGen
+  , contractGenSized
+  , contractRelGenSized
+  , listLengthGen
+  , observationGen
+  , observationGenSized
+  , partyGen
+  , payeeGen
+  , positiveAmount
+  , rationalGen
+  , simpleIntegerGen
+  , tokenGen
+  , valueGen
+  , valueGenSized
+  , valueIdGen
+    -- * Shrinking
+  , shrinkAction
+  , shrinkCase
+  , shrinkChoiceId
+  , shrinkContract
+  , shrinkObservation
+  , shrinkPOSIXTime
+  , shrinkParty
+  , shrinkPayee
+  , shrinkSimpleInteger
+  , shrinkToken
+  , shrinkValue
+  , shrinkValueId
+    -- * Instances
+  , alicePk
+  , pangramContract
+    -- * Functions
+  , secondsSinceShelley
+  ) where
 
 
 import Data.Map.Strict (Map)

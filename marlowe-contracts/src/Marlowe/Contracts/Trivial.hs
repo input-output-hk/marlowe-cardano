@@ -3,7 +3,7 @@
 
 
 module Marlowe.Contracts.Trivial
-where
+  where
 
 
 import Language.Marlowe.Extended.V1

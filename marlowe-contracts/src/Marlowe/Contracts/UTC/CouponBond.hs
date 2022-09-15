@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-module Marlowe.Contracts.UTC.CouponBond where
+module Marlowe.Contracts.UTC.CouponBond
+  where
 
 import Data.Time (Day, addDays)
 import Data.Time.Calendar (addGregorianMonthsClip, addGregorianYearsClip)

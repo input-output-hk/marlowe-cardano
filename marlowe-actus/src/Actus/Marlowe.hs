@@ -7,24 +7,21 @@
 -- | = Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.
 module Actus.Marlowe
-  ( genContract,
-    genContract',
-    defaultRiskFactors,
-    CashFlowMarlowe,
-    ContractTermsMarlowe,
-    RiskFactorsMarlowe,
-
+  ( CashFlowMarlowe
+  , ContractTermsMarlowe
+  , RiskFactorsMarlowe
+  , defaultRiskFactors
+  , genContract
+  , genContract'
     -- == Conversion from Double to Marlowe representation
     -- re-export
-    module Actus.Domain,
-    genProjectedCashflows,
-
+  , module Actus.Domain
+  , genProjectedCashflows
     -- utility
-    toMarlowe,
-    toMarloweFixedPoint,
-    fromMarloweFixedPoint
-  )
-where
+  , fromMarloweFixedPoint
+  , toMarlowe
+  , toMarloweFixedPoint
+  ) where
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain

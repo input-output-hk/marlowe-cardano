@@ -9,14 +9,13 @@ module Actus.Domain
   , module Actus.Domain.ContractState
   , module Actus.Domain.ContractTerms
   , module Actus.Domain.Schedule
-  , RiskFactors (..)
-  , CashFlow (..)
-  , sign
+  , ActusFrac(..)
+  , ActusOps(..)
+  , CashFlow(..)
+  , RiskFactors(..)
   , setDefaultContractTermValues
-  , ActusFrac (..)
-  , ActusOps (..)
-  )
-  where
+  , sign
+  ) where
 
 import Actus.Domain.BusinessEvents
 import Actus.Domain.ContractState (ContractState(..))

@@ -16,8 +16,9 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Plutus.Arbitrary (
-) where
+module Spec.Marlowe.Plutus.Arbitrary
+  (
+  ) where
 
 
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))

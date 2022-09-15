@@ -16,12 +16,12 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command.Role (
--- * Marlowe CLI Commands
-  RoleCommand(..)
-, parseRoleCommand
-, runRoleCommand
-) where
+module Language.Marlowe.CLI.Command.Role
+  ( -- * Marlowe CLI Commands
+    RoleCommand(..)
+  , parseRoleCommand
+  , runRoleCommand
+  ) where
 
 
 import Cardano.Api (NetworkId(..), StakeAddressReference(..))

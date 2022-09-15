@@ -26,7 +26,8 @@
 {-# LANGUAGE ViewPatterns #-}
 
 
-module Language.Marlowe.CLI.Test.Script where
+module Language.Marlowe.CLI.Test.Script
+  where
 
 import Cardano.Api
   ( AsType(AsPaymentKey)

@@ -2,11 +2,11 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
 module Language.Marlowe.Runtime.History.Store.ModelSpec
-  (spec
-  , genFindCreateStepArgs
+  ( genFindCreateStepArgs
+  , genFindIntersectionArgs
   , genFindNextStepArgs
   , modelFromScript
-  , genFindIntersectionArgs
+  , spec
   ) where
 
 import Data.Bifunctor (Bifunctor(first))

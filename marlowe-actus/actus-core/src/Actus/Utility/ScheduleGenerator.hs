@@ -3,12 +3,11 @@
 
 module Actus.Utility.ScheduleGenerator
   ( generateRecurrentSchedule
+  , inf
+  , sup
   , (<+>)
   , (<->)
-  , sup
-  , inf
-  )
-where
+  ) where
 
 import Actus.Domain (Cycle(..), ScheduleConfig(..), ShiftedSchedule, Stub(..), mkShiftedDay)
 import Actus.Utility.DateShift (applyBDC, applyEOMC, shiftDate)

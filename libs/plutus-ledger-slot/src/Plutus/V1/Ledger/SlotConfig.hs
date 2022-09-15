@@ -8,21 +8,21 @@
 
 {-# OPTIONS_GHC -Wno-orphans        #-}
 
-module Plutus.V1.Ledger.SlotConfig(
-  SlotConfig(..)
-, SlotConversionError(..)
-, slotRangeToPOSIXTimeRange
-, slotToPOSIXTimeRange
-, slotToBeginPOSIXTime
-, slotToEndPOSIXTime
-, posixTimeRangeToContainedSlotRange
-, posixTimeToEnclosingSlot
-, currentSlot
-, utcTimeToPOSIXTime
-, posixTimeToUTCTime
-, nominalDiffTimeToPOSIXTime
-, posixTimeToNominalDiffTime
-) where
+module Plutus.V1.Ledger.SlotConfig
+  ( SlotConfig(..)
+  , SlotConversionError(..)
+  , currentSlot
+  , nominalDiffTimeToPOSIXTime
+  , posixTimeRangeToContainedSlotRange
+  , posixTimeToEnclosingSlot
+  , posixTimeToNominalDiffTime
+  , posixTimeToUTCTime
+  , slotRangeToPOSIXTimeRange
+  , slotToBeginPOSIXTime
+  , slotToEndPOSIXTime
+  , slotToPOSIXTimeRange
+  , utcTimeToPOSIXTime
+  ) where
 
 import Codec.Serialise (Serialise)
 import Control.DeepSeq (NFData)

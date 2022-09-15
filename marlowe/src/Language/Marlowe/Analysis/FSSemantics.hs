@@ -3,7 +3,8 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-module Language.Marlowe.Analysis.FSSemantics where
+module Language.Marlowe.Analysis.FSSemantics
+  where
 
 import Data.List (foldl', genericIndex)
 import Data.Map.Strict (Map)

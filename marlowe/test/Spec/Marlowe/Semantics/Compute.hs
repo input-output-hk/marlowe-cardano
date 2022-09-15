@@ -21,10 +21,10 @@
 {-# OPTIONS_GHC -fno-warn-unused-top-binds      #-}
 
 
-module Spec.Marlowe.Semantics.Compute (
--- * Testing
-  tests
-) where
+module Spec.Marlowe.Semantics.Compute
+  ( -- * Testing
+    tests
+  ) where
 
 
 import Control.Applicative (liftA2)

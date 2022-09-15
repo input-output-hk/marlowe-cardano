@@ -13,7 +13,8 @@
 -- running job and poll its status. When a job completes, it must either report
 -- a success or failure.
 
-module Network.Protocol.Job.Types where
+module Network.Protocol.Job.Types
+  where
 
 import Data.Binary (Put)
 import Data.Binary.Get (Get)

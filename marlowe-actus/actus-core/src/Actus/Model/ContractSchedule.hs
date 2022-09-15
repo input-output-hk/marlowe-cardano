@@ -3,10 +3,9 @@
 
 {-| = ACTUS contract schedules -}
 module Actus.Model.ContractSchedule
-  ( schedule
-  , maturity
-  )
-where
+  ( maturity
+  , schedule
+  ) where
 
 import Actus.Domain
   ( ActusFrac(..)

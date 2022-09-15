@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 
-module Main where
+module Main
+  where
 
 import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (STM, atomically, retry)

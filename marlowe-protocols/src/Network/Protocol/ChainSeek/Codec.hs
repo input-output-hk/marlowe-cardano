@@ -6,7 +6,10 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.ChainSeek.Codec (DeserializeError, codecChainSeek) where
+module Network.Protocol.ChainSeek.Codec
+  ( DeserializeError
+  , codecChainSeek
+  ) where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS

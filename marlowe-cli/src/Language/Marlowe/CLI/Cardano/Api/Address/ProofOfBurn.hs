@@ -28,10 +28,9 @@
 
 
 module Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn
-(
-  paymentCredential
-, permanentPublisher
-) where
+  ( paymentCredential
+  , permanentPublisher
+  ) where
 
 
 import Cardano.Api (PaymentCredential, ScriptHash)

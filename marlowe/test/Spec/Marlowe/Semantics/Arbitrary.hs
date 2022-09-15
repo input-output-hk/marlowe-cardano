@@ -19,32 +19,32 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Semantics.Arbitrary (
--- * Types
-  SemiArbitrary(..)
-, IsValid(..)
--- * Generators
-, arbitraryAssocMap
-, arbitraryChoiceName
-, arbitraryContractWeighted
-, arbitraryFibonacci
-, arbitraryGoldenTransaction
-, arbitraryPositiveInteger
-, arbitraryValidInput
-, arbitraryValidInputs
-, arbitraryValidStep
-, choiceInBoundsIfNonempty
-, choiceNotInBounds
-, goldenContract
--- * Weighting factors for arbitrary contracts
-, defaultContractWeights
-, closeContractWeights
-, payContractWeights
-, ifContractWeights
-, whenContractWeights
-, letContractWeights
-, assertContractWeights
-) where
+module Spec.Marlowe.Semantics.Arbitrary
+  ( -- * Types
+    IsValid(..)
+  , SemiArbitrary(..)
+    -- * Generators
+  , arbitraryAssocMap
+  , arbitraryChoiceName
+  , arbitraryContractWeighted
+  , arbitraryFibonacci
+  , arbitraryGoldenTransaction
+  , arbitraryPositiveInteger
+  , arbitraryValidInput
+  , arbitraryValidInputs
+  , arbitraryValidStep
+  , choiceInBoundsIfNonempty
+  , choiceNotInBounds
+  , goldenContract
+    -- * Weighting factors for arbitrary contracts
+  , assertContractWeights
+  , closeContractWeights
+  , defaultContractWeights
+  , ifContractWeights
+  , letContractWeights
+  , payContractWeights
+  , whenContractWeights
+  ) where
 
 
 import Control.Monad (replicateM)

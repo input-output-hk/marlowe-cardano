@@ -16,10 +16,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 
-module Main (
--- * Entry Point
-  main
-) where
+module Main
+  ( -- * Entry Point
+    main
+  ) where
 
 
 import Cardano.Config.Git.RevFromGit (gitRevFromGit)

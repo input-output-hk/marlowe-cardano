@@ -21,39 +21,39 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Language.Marlowe.CLI.Export (
-  exportAddress
-, buildValidatorInfo
-, buildAddress
--- * Contract and Transaction
-, exportMarlowe
-, printMarlowe
-, buildMarlowe
--- * Address
-, buildMarloweAddress
-, exportMarloweAddress
--- * Validator
-, exportMarloweValidator
-, marloweValidatorInfo
--- * Datum
-, exportDatum
-, buildMarloweDatum
--- * Redeemer
-, exportRedeemer
-, buildRedeemer
--- * Roles Address
-, exportRoleAddress
-, buildRoleAddress
--- * Role Validator
-, exportRoleValidator
-, roleValidatorInfo
--- * Role Datum
-, exportRoleDatum
-, buildRoleDatum
--- * Role Redeemer
-, exportRoleRedeemer
-, buildRoleRedeemer
-) where
+module Language.Marlowe.CLI.Export
+  ( buildAddress
+  , buildValidatorInfo
+  , exportAddress
+    -- * Contract and Transaction
+  , buildMarlowe
+  , exportMarlowe
+  , printMarlowe
+    -- * Address
+  , buildMarloweAddress
+  , exportMarloweAddress
+    -- * Validator
+  , exportMarloweValidator
+  , marloweValidatorInfo
+    -- * Datum
+  , buildMarloweDatum
+  , exportDatum
+    -- * Redeemer
+  , buildRedeemer
+  , exportRedeemer
+    -- * Roles Address
+  , buildRoleAddress
+  , exportRoleAddress
+    -- * Role Validator
+  , exportRoleValidator
+  , roleValidatorInfo
+    -- * Role Datum
+  , buildRoleDatum
+  , exportRoleDatum
+    -- * Role Redeemer
+  , buildRoleRedeemer
+  , exportRoleRedeemer
+  ) where
 
 
 import Cardano.Api

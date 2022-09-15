@@ -14,26 +14,26 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 
-module Language.Marlowe.CLI.IO (
--- * IO
-  decodeFileStrict
-, decodeFileBuiltinData
-, getProtocolVersion
-, readVerificationKey
-, readSigningKey
-, maybeWriteTextEnvelope
-, maybeWriteJson
-, queryInEra
-, readMaybeMetadata
--- * Environment
-, getDefaultCostModel
-, getNetworkMagic
-, getNodeSocketPath
--- * Lifting
-, liftCli
-, liftCliMaybe
-, liftCliIO
-) where
+module Language.Marlowe.CLI.IO
+  ( -- * IO
+    decodeFileBuiltinData
+  , decodeFileStrict
+  , getProtocolVersion
+  , maybeWriteJson
+  , maybeWriteTextEnvelope
+  , queryInEra
+  , readMaybeMetadata
+  , readSigningKey
+  , readVerificationKey
+    -- * Environment
+  , getDefaultCostModel
+  , getNetworkMagic
+  , getNodeSocketPath
+    -- * Lifting
+  , liftCli
+  , liftCliIO
+  , liftCliMaybe
+  ) where
 
 
 import Cardano.Api

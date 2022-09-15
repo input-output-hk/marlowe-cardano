@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.UTC.Forward
   ( forward
-  )
-where
+  ) where
 
 import Data.Time.Clock (UTCTime)
 import Language.Marlowe.Extended.V1
@@ -24,4 +23,3 @@ forward ::
   -> Contract -- ^ Forward contract
 forward partyA tokenA valueA timeoutA partyB tokenB valueB timeoutB deliveryDate =
   C.forward partyA tokenA valueA (toTimeout timeoutA) partyB tokenB valueB (toTimeout timeoutB) (toTimeout deliveryDate)
-

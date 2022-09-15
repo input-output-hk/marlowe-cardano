@@ -15,8 +15,7 @@ There are different types of rules, like
 -}
 module Actus.Model.Applicability
   ( validateTerms
-  )
-where
+  ) where
 
 import Actus.Domain (CT(..), ContractTerms(..), IPCB(..), ScheduleConfig(..), TermValidationError(..))
 import Data.Maybe (isJust)
@@ -196,4 +195,3 @@ _NN_I_1 _cts ct@ContractTerms{..} ns
 _NN_I_3 :: Maybe b -> ContractTerms a -> [Char] -> Validation [TermValidationError] (ContractTerms a)
 _NN_I_3 Nothing ContractTerms {interestCalculationBase = Just IPCB_NTIED} n = Failure [Required $ "Contract term " ++ n ++ " must be defined when interest calculation base is NTIED"]
 _NN_I_3 _ ct _ = Success ct
-

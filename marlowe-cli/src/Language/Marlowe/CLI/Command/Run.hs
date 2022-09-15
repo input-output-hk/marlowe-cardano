@@ -16,12 +16,12 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command.Run (
--- * Marlowe CLI Commands
-  RunCommand(..)
-, parseRunCommand
-, runRunCommand
-) where
+module Language.Marlowe.CLI.Command.Run
+  ( -- * Marlowe CLI Commands
+    RunCommand(..)
+  , parseRunCommand
+  , runRunCommand
+  ) where
 
 
 import Cardano.Api

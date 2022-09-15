@@ -5,7 +5,8 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Query.Codec where
+module Network.Protocol.Query.Codec
+  where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS

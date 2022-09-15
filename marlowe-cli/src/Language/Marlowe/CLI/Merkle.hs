@@ -15,20 +15,20 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Merkle (
--- * Merkleization
-  merkleize
-, merkleizeMarlowe
-, deepMerkleize
-, shallowMerkleize
--- * Demerkleization
-, demerkleize
-, deepDemerkleize
-, shallowDemerkleize
--- * Inputs
-, merkleizeInputs
-, merkleizeInput
-) where
+module Language.Marlowe.CLI.Merkle
+  ( -- * Merkleization
+    deepMerkleize
+  , merkleize
+  , merkleizeMarlowe
+  , shallowMerkleize
+    -- * Demerkleization
+  , deepDemerkleize
+  , demerkleize
+  , shallowDemerkleize
+    -- * Inputs
+  , merkleizeInput
+  , merkleizeInputs
+  ) where
 
 
 import Cardano.Api (AlonzoEra, PlutusScriptV2)

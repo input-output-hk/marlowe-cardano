@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Marlowe.Contracts.Escrow (
-  escrow
-) where
+module Marlowe.Contracts.Escrow
+  ( escrow
+  ) where
 
 import Language.Marlowe.Extended.V1
 

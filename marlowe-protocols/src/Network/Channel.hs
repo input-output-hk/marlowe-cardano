@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
-module Network.Channel where
+module Network.Channel
+  where
 
 import Control.Monad (mfilter, (>=>))
 import qualified Data.ByteString as BS

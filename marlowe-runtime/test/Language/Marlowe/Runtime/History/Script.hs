@@ -3,7 +3,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.History.Script where
+module Language.Marlowe.Runtime.History.Script
+  where
 
 import Control.Monad (foldM, replicateM, (<=<))
 import Control.Monad.Trans.Class (lift)

@@ -5,7 +5,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.History.QueryServer where
+module Language.Marlowe.Runtime.History.QueryServer
+  where
 
 import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically)

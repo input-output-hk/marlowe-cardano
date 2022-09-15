@@ -7,8 +7,8 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 
 module Spec.Actus.Examples
-    (tests)
-where
+  ( tests
+  ) where
 
 import Actus.Domain
 import Actus.Marlowe

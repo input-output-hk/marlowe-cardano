@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Protocol.Sync.Codec where
+module Language.Marlowe.Protocol.Sync.Codec
+  where
 
 import Data.Binary (get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS

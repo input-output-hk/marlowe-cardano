@@ -5,16 +5,16 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Plutus.Debug (
--- * Debugging
-  debug
-, debugIfTrue
-, debugIfFalse
-, debugError
--- * Decoding
-, recoverFromData
-, recoverPlutusData
-) where
+module Plutus.Debug
+  ( -- * Debugging
+    debug
+  , debugError
+  , debugIfFalse
+  , debugIfTrue
+    -- * Decoding
+  , recoverFromData
+  , recoverPlutusData
+  ) where
 
 
 import Codec.Serialise (deserialise)

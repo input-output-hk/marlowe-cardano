@@ -14,26 +14,26 @@
 {-# LANGUAGE RankNTypes #-}
 
 
-module Spec.Marlowe.Plutus.Lens (
--- * Operators
-  (<><~)
-, (<>%~)
--- * Lenses
-, scriptContextPurposeLens
-, scriptContextTxInfoLens
-, txInfoDCertLens
-, txInfoDataLens
-, txInfoFeeLens
-, txInfoIdLens
-, txInfoInputsLens
-, txInfoMintLens
-, txInfoOutputsLens
-, txInfoRedeemersLens
-, txInfoReferenceInputsLens
-, txInfoSignatoriesLens
-, txInfoValidRangeLens
-, txInfoWdrlLens
-) where
+module Spec.Marlowe.Plutus.Lens
+  ( -- * Operators
+    (<>%~)
+  , (<><~)
+    -- * Lenses
+  , scriptContextPurposeLens
+  , scriptContextTxInfoLens
+  , txInfoDCertLens
+  , txInfoDataLens
+  , txInfoFeeLens
+  , txInfoIdLens
+  , txInfoInputsLens
+  , txInfoMintLens
+  , txInfoOutputsLens
+  , txInfoRedeemersLens
+  , txInfoReferenceInputsLens
+  , txInfoSignatoriesLens
+  , txInfoValidRangeLens
+  , txInfoWdrlLens
+  ) where
 
 
 import Control.Lens (Lens', lens, use, (<>=))

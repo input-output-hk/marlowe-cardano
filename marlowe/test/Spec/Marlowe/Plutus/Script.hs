@@ -14,17 +14,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Spec.Marlowe.Plutus.Script (
--- * Evaluation
-  evaluateSemantics
-, evaluatePayout
--- * Addresses
-, semanticsAddress
-, payoutAddress
--- * Hashes
-, hashMarloweData
-, hashRole
-) where
+module Spec.Marlowe.Plutus.Script
+  ( -- * Evaluation
+    evaluatePayout
+  , evaluateSemantics
+    -- * Addresses
+  , payoutAddress
+  , semanticsAddress
+    -- * Hashes
+  , hashMarloweData
+  , hashRole
+  ) where
 
 
 import Codec.Serialise (serialise)

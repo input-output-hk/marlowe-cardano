@@ -24,46 +24,46 @@
 {-# LANGUAGE TypeFamilies #-}
 
 
-module Language.Marlowe.CLI.Transaction (
--- * Types
-  TxInEra
--- * Building
-, buildSimple
-, buildIncoming
-, buildContinuing
-, buildOutgoing
-, buildClean
-, buildFaucet
-, buildFaucetImpl
-, buildFaucet'
-, buildMinting
-, buildMintingImpl
-, buildPublishing
-, buildPublishingImpl
-, publishImpl
-, querySlotting
--- * Submitting
-, submit
--- * Quering
-, findPublished
-, findMarloweScriptsRefs
--- * Low-Level Functions
-, buildBody
-, buildPayFromScript
-, buildPayToScript
-, hashSigningKey
-, queryUtxos
-, makeTxOut
-, makeTxOut'
-, selectUtxos
-, selectUtxosImpl
-, submitBody
-, querySlotConfig
--- * Balancing
-, findMinUtxo
-, ensureMinUtxo
-, selectCoins
-) where
+module Language.Marlowe.CLI.Transaction
+  ( -- * Types
+    TxInEra
+    -- * Building
+  , buildClean
+  , buildContinuing
+  , buildFaucet
+  , buildFaucet'
+  , buildFaucetImpl
+  , buildIncoming
+  , buildMinting
+  , buildMintingImpl
+  , buildOutgoing
+  , buildPublishing
+  , buildPublishingImpl
+  , buildSimple
+  , publishImpl
+  , querySlotting
+    -- * Submitting
+  , submit
+    -- * Quering
+  , findMarloweScriptsRefs
+  , findPublished
+    -- * Low-Level Functions
+  , buildBody
+  , buildPayFromScript
+  , buildPayToScript
+  , hashSigningKey
+  , makeTxOut
+  , makeTxOut'
+  , querySlotConfig
+  , queryUtxos
+  , selectUtxos
+  , selectUtxosImpl
+  , submitBody
+    -- * Balancing
+  , ensureMinUtxo
+  , findMinUtxo
+  , selectCoins
+  ) where
 
 
 import Cardano.Api

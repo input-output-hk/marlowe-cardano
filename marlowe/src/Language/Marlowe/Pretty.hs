@@ -5,7 +5,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
-module Language.Marlowe.Pretty where
+module Language.Marlowe.Pretty
+  where
 
 import qualified Data.ByteString as BS
 import Data.Text (Text)

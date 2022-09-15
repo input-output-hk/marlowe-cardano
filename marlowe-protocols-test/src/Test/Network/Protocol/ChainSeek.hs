@@ -4,7 +4,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Test.Network.Protocol.ChainSeek where
+module Test.Network.Protocol.ChainSeek
+  where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Type.Equality (type (:~:)(Refl))

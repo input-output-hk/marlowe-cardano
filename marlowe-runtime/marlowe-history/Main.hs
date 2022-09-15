@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 
-module Main where
+module Main
+  where
 
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)

@@ -11,9 +11,9 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Plutus.Prelude (
-  tests
-) where
+module Spec.Marlowe.Plutus.Prelude
+  ( tests
+  ) where
 
 
 import Data.List (find)

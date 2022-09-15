@@ -16,14 +16,14 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command.Transaction (
--- * Marlowe CLI Commands
-  TransactionCommand(..)
-, findPublishedCommand
-, parseTransactionCommand
-, publishCommand
-, runTransactionCommand
-) where
+module Language.Marlowe.CLI.Command.Transaction
+  ( -- * Marlowe CLI Commands
+    TransactionCommand(..)
+  , findPublishedCommand
+  , parseTransactionCommand
+  , publishCommand
+  , runTransactionCommand
+  ) where
 
 
 import Cardano.Api

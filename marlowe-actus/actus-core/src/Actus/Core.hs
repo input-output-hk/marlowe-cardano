@@ -11,8 +11,7 @@ Given ACTUS contract terms, cashflows are projected based on risk factors.
 
 module Actus.Core
   ( genProjectedCashflows
-  )
-where
+  ) where
 
 import Actus.Domain
   ( ActusFrac

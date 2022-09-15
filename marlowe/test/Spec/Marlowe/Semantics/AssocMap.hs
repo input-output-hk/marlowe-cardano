@@ -11,17 +11,17 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Semantics.AssocMap (
--- * Utility functions
-  assocMapAdd
-, assocMapEq
-, assocMapInsert
-, assocMapSort
-, assocMapValid
-, assocMapMember
-, assocMapLookup
-, assocMapDelete
-) where
+module Spec.Marlowe.Semantics.AssocMap
+  ( -- * Utility functions
+    assocMapAdd
+  , assocMapDelete
+  , assocMapEq
+  , assocMapInsert
+  , assocMapLookup
+  , assocMapMember
+  , assocMapSort
+  , assocMapValid
+  ) where
 
 
 import Data.Bifunctor (bimap)

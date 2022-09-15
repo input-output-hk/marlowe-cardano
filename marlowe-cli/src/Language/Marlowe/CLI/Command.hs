@@ -18,14 +18,14 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command (
--- * Entry Point
-  runCLI
--- * Marlowe CLI Commands
-, Command(..)
-, parseCommand
-, runCommand
-) where
+module Language.Marlowe.CLI.Command
+  ( -- * Entry Point
+    runCLI
+    -- * Marlowe CLI Commands
+  , Command(..)
+  , parseCommand
+  , runCommand
+  ) where
 
 
 import Cardano.Api (IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra(..))

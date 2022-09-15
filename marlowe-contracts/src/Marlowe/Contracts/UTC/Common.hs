@@ -1,4 +1,5 @@
-module Marlowe.Contracts.UTC.Common where
+module Marlowe.Contracts.UTC.Common
+  where
 
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)

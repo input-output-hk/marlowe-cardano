@@ -11,9 +11,9 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Plutus.AssocMap (
-  tests
-) where
+module Spec.Marlowe.Plutus.AssocMap
+  ( tests
+  ) where
 
 
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap)

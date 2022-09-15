@@ -2,7 +2,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 
-module Actus.Domain.BusinessEvents where
+module Actus.Domain.BusinessEvents
+  where
 
 import Data.Aeson.Types (FromJSON, ToJSON)
 import GHC.Generics (Generic)

@@ -16,11 +16,11 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 -- | Slots and slot ranges.
-module Plutus.V1.Ledger.Slot(
-      Slot(..)
-    , SlotRange
-    , width
-    ) where
+module Plutus.V1.Ledger.Slot
+  ( Slot(..)
+  , SlotRange
+  , width
+  ) where
 
 import Codec.Serialise.Class (Serialise)
 import Control.DeepSeq (NFData)

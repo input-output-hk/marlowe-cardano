@@ -21,27 +21,27 @@
 {-# LANGUAGE TypeFamilies #-}
 
 
-module Language.Marlowe.CLI.Run (
--- * Computation
-  adjustMinimumUTxO
-,  initializeTransaction
-, initializeTransactionImpl
-, initializeTransactionUsingScriptRefsImpl
-, prepareTransaction
-, prepareTransactionImpl
-, makeMarlowe
-, autoRunTransaction
-, autoRunTransactionImpl
-, runTransaction
-, runTransactionImpl
--- * Roles
-, withdrawFunds
-, autoWithdrawFunds
--- * Input
-, makeDeposit
-, makeChoice
-, makeNotification
-) where
+module Language.Marlowe.CLI.Run
+  ( -- * Computation
+    adjustMinimumUTxO
+  , autoRunTransaction
+  , autoRunTransactionImpl
+  , initializeTransaction
+  , initializeTransactionImpl
+  , initializeTransactionUsingScriptRefsImpl
+  , makeMarlowe
+  , prepareTransaction
+  , prepareTransactionImpl
+  , runTransaction
+  , runTransactionImpl
+    -- * Roles
+  , autoWithdrawFunds
+  , withdrawFunds
+    -- * Input
+  , makeChoice
+  , makeDeposit
+  , makeNotification
+  ) where
 
 
 import Cardano.Api

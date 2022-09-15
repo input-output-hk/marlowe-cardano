@@ -2,7 +2,8 @@
 {-# OPTIONS_GHC -Wno-deprecations #-}
 {-# LANGUAGE BlockArguments #-}
 
-module Language.Marlowe.CLI.Test.Script.Debug where
+module Language.Marlowe.CLI.Test.Script.Debug
+  where
 
 import Control.Lens (view)
 import Control.Monad.Error.Class (catchError)

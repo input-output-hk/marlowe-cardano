@@ -15,15 +15,24 @@ in different situations without cluttering the code that goes on-chain
 (core Marlowe).
 -}
 
-module Language.Marlowe.Extended.V1 ( module Language.Marlowe.Extended.V1
-                                 , module Language.Marlowe.Pretty
-                                 , ada, adaSymbol, adaToken
-                                 , S.AccountId, S.Bound(..), S.ChoiceId(..)
-                                 , S.ChoiceName, S.ChosenNum, S.Party(..)
-                                 , S.TimeInterval, S.Token(..), S.ValueId(..)
-                                 , ToCore (..)
-                                 , (%)
-                                 ) where
+module Language.Marlowe.Extended.V1
+  ( module Language.Marlowe.Extended.V1
+  , module Language.Marlowe.Pretty
+  , S.AccountId
+  , S.Bound(..)
+  , S.ChoiceId(..)
+  , S.ChoiceName
+  , S.ChosenNum
+  , S.Party(..)
+  , S.TimeInterval
+  , S.Token(..)
+  , S.ValueId(..)
+  , ToCore(..)
+  , ada
+  , adaSymbol
+  , adaToken
+  , (%)
+  ) where
 
 import Control.Applicative ((<|>))
 import qualified Data.Aeson as JSON

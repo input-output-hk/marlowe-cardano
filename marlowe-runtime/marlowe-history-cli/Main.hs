@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-module Main where
+module Main
+  where
 
 import Control.Category ((>>>))
 import Control.Exception (bracket, bracketOnError, throwIO)

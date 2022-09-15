@@ -6,7 +6,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Actus.Domain.ContractTerms where
+module Actus.Domain.ContractTerms
+  where
 
 import Control.Applicative ((<|>))
 import Control.Monad (guard, mzero)

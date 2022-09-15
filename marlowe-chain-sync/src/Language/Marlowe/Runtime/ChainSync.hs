@@ -4,8 +4,8 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.ChainSync
-  ( ChainSync (..)
-  , ChainSyncDependencies (..)
+  ( ChainSync(..)
+  , ChainSyncDependencies(..)
   , mkChainSync
   ) where
 

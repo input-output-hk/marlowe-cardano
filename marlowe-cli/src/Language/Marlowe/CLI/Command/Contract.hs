@@ -16,12 +16,12 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command.Contract (
--- * Marlowe CLI Commands
-  ContractCommand(..)
-, parseContractCommand
-, runContractCommand
-) where
+module Language.Marlowe.CLI.Command.Contract
+  ( -- * Marlowe CLI Commands
+    ContractCommand(..)
+  , parseContractCommand
+  , runContractCommand
+  ) where
 
 
 import Cardano.Api (NetworkId(..), StakeAddressReference(..))

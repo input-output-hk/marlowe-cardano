@@ -1,7 +1,9 @@
 
 {-# LANGUAGE TupleSections #-}
 
-module Language.Marlowe.FindInputs(getAllInputs) where
+module Language.Marlowe.FindInputs
+  ( getAllInputs
+  ) where
 
 import Data.Bifunctor (Bifunctor(second), bimap)
 import Data.Maybe (catMaybes)

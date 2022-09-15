@@ -19,15 +19,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Language.Marlowe.CLI.Sync.Types (
--- * Types
-  MarloweAddresses
-, MarloweAddress(..)
-, MarloweIn(..)
-, MarloweOut(..)
-, MarloweEvent(..)
-, SavedPoint(..)
-) where
+module Language.Marlowe.CLI.Sync.Types
+  ( -- * Types
+    MarloweAddress(..)
+  , MarloweAddresses
+  , MarloweEvent(..)
+  , MarloweIn(..)
+  , MarloweOut(..)
+  , SavedPoint(..)
+  ) where
 
 
 import Cardano.Api (BlockHeader(..), ChainPoint(..), ChainTip, Hash, ScriptHash, SlotNo(..), TxId, TxIn, Value)

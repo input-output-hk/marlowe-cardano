@@ -8,15 +8,15 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.CLI.Cardano.Api.PlutusScript (
-  fromV1TypedValidator
-, fromV2TypedValidator
-, fromTypedValidator
-, IsPlutusScriptLanguage(..)
-, toScript
-, toScriptLanguageInEra
-, withPlutusScriptVersion
-) where
+module Language.Marlowe.CLI.Cardano.Api.PlutusScript
+  ( IsPlutusScriptLanguage(..)
+  , fromTypedValidator
+  , fromV1TypedValidator
+  , fromV2TypedValidator
+  , toScript
+  , toScriptLanguageInEra
+  , withPlutusScriptVersion
+  ) where
 
 import Cardano.Api
   ( IsScriptLanguage

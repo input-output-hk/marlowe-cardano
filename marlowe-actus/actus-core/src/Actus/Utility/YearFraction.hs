@@ -2,8 +2,7 @@
 
 module Actus.Utility.YearFraction
   ( yearFraction
-  )
-where
+  ) where
 
 import Actus.Domain (ActusFrac(..))
 import Actus.Domain.ContractTerms (DCC(..))

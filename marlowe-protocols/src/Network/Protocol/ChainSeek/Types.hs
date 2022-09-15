@@ -7,7 +7,8 @@
 
 -- | The type of the chain seek protocol.
 
-module Network.Protocol.ChainSeek.Types where
+module Network.Protocol.ChainSeek.Types
+  where
 
 import Data.Binary (Binary(..), Get, Put)
 import Data.Kind (Type)

@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Network.Protocol.ChainSeek.TH (mkSchemaVersion) where
+module Network.Protocol.ChainSeek.TH
+  ( mkSchemaVersion
+  ) where
 
 import Data.Hashable (Hashable(hash))
 import qualified Data.Text as T

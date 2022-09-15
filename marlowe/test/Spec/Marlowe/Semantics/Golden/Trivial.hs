@@ -18,13 +18,13 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Semantics.Golden.Trivial (
--- * Contracts
-  contract
--- * Test cases
-, valids
-, invalids
-) where
+module Spec.Marlowe.Semantics.Golden.Trivial
+  ( -- * Contracts
+    contract
+    -- * Test cases
+  , invalids
+  , valids
+  ) where
 
 
 import Data.String (IsString(..))

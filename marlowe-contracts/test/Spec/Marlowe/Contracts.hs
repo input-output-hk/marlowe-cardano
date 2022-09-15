@@ -5,8 +5,8 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 
 module Spec.Marlowe.Contracts
-    (tests)
-where
+  ( tests
+  ) where
 
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Language.Marlowe as C

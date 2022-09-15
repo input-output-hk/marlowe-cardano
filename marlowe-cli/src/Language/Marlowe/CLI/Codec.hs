@@ -14,11 +14,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 
-module Language.Marlowe.CLI.Codec (
--- * Codecs
-  decodeBech32
-, encodeBech32
-) where
+module Language.Marlowe.CLI.Codec
+  ( -- * Codecs
+    decodeBech32
+  , encodeBech32
+  ) where
 
 
 import Control.Monad.Except (MonadError, MonadIO, liftIO)

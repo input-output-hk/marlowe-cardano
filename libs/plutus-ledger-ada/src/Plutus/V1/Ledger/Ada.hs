@@ -8,23 +8,23 @@
 {-# OPTIONS_GHC -Wno-identities #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 -- | Functions for working with 'Ada' in Template Haskell.
-module Plutus.V1.Ledger.Ada(
-      Ada (..)
-    , getAda
-    , adaSymbol
-    , adaToken
+module Plutus.V1.Ledger.Ada
+  ( Ada(..)
+  , adaSymbol
+  , adaToken
+  , getAda
     -- * Constructors
-    , fromValue
-    , toValue
-    , lovelaceOf
-    , adaOf
-    , lovelaceValueOf
-    , adaValueOf
+  , adaOf
+  , adaValueOf
+  , fromValue
+  , lovelaceOf
+  , lovelaceValueOf
+  , toValue
     -- * Num operations
-    , divide
+  , divide
     -- * Etc.
-    , isZero
-    ) where
+  , isZero
+  ) where
 
 import qualified Prelude as Haskell
 

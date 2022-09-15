@@ -19,16 +19,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Spec.Marlowe.Marlowe (
--- * Testing
-  tests
-, prop_noFalsePositives
-, prop_showWorksForContracts
-, prop_contractJsonLoops
-, prop_marloweParamsJsonLoops
-, prop_intervalErrorJsonLoops
-)
-where
+module Spec.Marlowe.Marlowe
+  ( -- * Testing
+    prop_contractJsonLoops
+  , prop_intervalErrorJsonLoops
+  , prop_marloweParamsJsonLoops
+  , prop_noFalsePositives
+  , prop_showWorksForContracts
+  , tests
+  ) where
 
 
 import Control.Arrow (Arrow((***)))
@@ -469,4 +468,3 @@ prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJson
         s <- POSIXTime <$> arbitrary
         t <- (POSIXTime *** POSIXTime) <$> arbitrary
         return $ IntervalInPastError s t
-

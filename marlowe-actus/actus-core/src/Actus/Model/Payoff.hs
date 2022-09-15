@@ -3,10 +3,9 @@
 
 {-| = ACTUS payoff functions -}
 module Actus.Model.Payoff
-  ( payoff
-  , CtxPOF (..)
-  )
-where
+  ( CtxPOF(..)
+  , payoff
+  ) where
 
 import Actus.Domain
   ( ActusFrac

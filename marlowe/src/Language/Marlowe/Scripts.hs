@@ -24,7 +24,8 @@
 {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
 
 
-module Language.Marlowe.Scripts where
+module Language.Marlowe.Scripts
+  where
 import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics

@@ -3,7 +3,8 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.History where
+module Language.Marlowe.Runtime.History
+  where
 
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM)

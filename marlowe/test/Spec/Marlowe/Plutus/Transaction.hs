@@ -16,18 +16,18 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Spec.Marlowe.Plutus.Transaction (
--- * Types
-  ArbitraryTransaction
--- * Generation
-, arbitrarySemanticsTransaction
-, arbitraryPayoutTransaction
--- * Modification
-, noModify
-, shuffle
--- * Conditions
-, noVeto
-) where
+module Spec.Marlowe.Plutus.Transaction
+  ( -- * Types
+    ArbitraryTransaction
+    -- * Generation
+  , arbitraryPayoutTransaction
+  , arbitrarySemanticsTransaction
+    -- * Modification
+  , noModify
+  , shuffle
+    -- * Conditions
+  , noVeto
+  ) where
 
 
 import Control.Lens (Lens', use, uses, (.=), (<>=), (<~))

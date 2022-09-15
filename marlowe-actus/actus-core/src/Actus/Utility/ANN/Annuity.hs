@@ -1,7 +1,6 @@
-
 module Actus.Utility.ANN.Annuity
-  (annuity)
-where
+  ( annuity
+  ) where
 
 import Data.List (foldl', tails)
 

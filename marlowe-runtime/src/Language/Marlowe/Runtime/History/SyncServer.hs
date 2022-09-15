@@ -5,7 +5,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.History.SyncServer where
+module Language.Marlowe.Runtime.History.SyncServer
+  where
 
 import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, retry)

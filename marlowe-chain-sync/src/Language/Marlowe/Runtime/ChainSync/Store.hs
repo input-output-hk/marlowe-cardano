@@ -1,7 +1,7 @@
 module Language.Marlowe.Runtime.ChainSync.Store
-  ( Changes(..)
+  ( ChainStore(..)
   , ChainStoreDependencies(..)
-  , ChainStore(..)
+  , Changes(..)
   , mkChainStore
   ) where
 

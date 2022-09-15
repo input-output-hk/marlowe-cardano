@@ -19,10 +19,10 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
 
-module Language.Marlowe.CLI.Test (
--- * Testing
-  runTests
-) where
+module Language.Marlowe.CLI.Test
+  ( -- * Testing
+    runTests
+  ) where
 
 
 import Cardano.Api

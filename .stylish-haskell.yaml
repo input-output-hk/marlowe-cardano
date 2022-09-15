@@ -13,6 +13,9 @@ steps:
       style: vertical
       align: false
       remove_redundant: true
+  - module_header:
+      indent: 2
+      separate_lists: false
   - trailing_whitespace: {}
 columns: 120
 newline: native

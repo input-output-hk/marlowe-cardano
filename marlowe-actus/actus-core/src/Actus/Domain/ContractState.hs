@@ -3,7 +3,8 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Actus.Domain.ContractState where
+module Actus.Domain.ContractState
+  where
 
 import Actus.Domain.ContractTerms (PRF)
 import Control.Lens

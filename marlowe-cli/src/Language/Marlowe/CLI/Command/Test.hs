@@ -15,12 +15,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Language.Marlowe.CLI.Command.Test (
--- * Marlowe CLI Commands
-  TestCommand
-, parseTestCommand
-, runTestCommand
-) where
+module Language.Marlowe.CLI.Command.Test
+  ( -- * Marlowe CLI Commands
+    TestCommand
+  , parseTestCommand
+  , runTestCommand
+  ) where
 
 
 import Cardano.Api (IsShelleyBasedEra, NetworkId)

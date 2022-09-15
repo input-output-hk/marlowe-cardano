@@ -1,8 +1,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.Futures
-  ( future )
-where
+  ( future
+  ) where
 
 import Data.String (IsString(..))
 import Language.Marlowe.Extended.V1

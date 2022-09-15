@@ -26,50 +26,50 @@
 {-# LANGUAGE ViewPatterns #-}
 
 
-module Language.Marlowe.CLI.Test.Types (
-  AnyMarloweThread
-, ContractNickname(..)
-, ContractSource(..)
-, CustomCurrency(..)
-, CurrencyNickname(..)
-, Finished
-, MarloweContract(..)
-, MarloweReferenceScripts(..)
-, MarloweTests(..)
-, MarloweThread(..)
-, PartyRef(..)
-, Running
-, ScriptTest(..)
-, ScriptOperation(..)
-, ScriptState
-, ScriptEnv(..)
-, Seconds(..)
-, TokenAssignment(..)
-, TokenName(..)
-, UseTemplate(..)
-, Wallet(..)
-, WalletNickname(..)
-, WalletTransaction(..)
-, anyMarloweThread
-, faucetNickname
-, foldlMarloweThread
-, foldrMarloweThread
-, getMarloweThreadTransaction
-, getMarloweThreadTxIn
-, overAnyMarloweThread
-, scriptState
-, walletPubKeyHash
-, seConnection
-, seSlotConfig
-, seCostModelParams
-, seEra
-, seProtocolVersion
-, seTransactionTimeout
-, ssContracts
-, ssCurrencies
-, ssReferenceScripts
-, ssWallets
-) where
+module Language.Marlowe.CLI.Test.Types
+  ( AnyMarloweThread
+  , ContractNickname(..)
+  , ContractSource(..)
+  , CurrencyNickname(..)
+  , CustomCurrency(..)
+  , Finished
+  , MarloweContract(..)
+  , MarloweReferenceScripts(..)
+  , MarloweTests(..)
+  , MarloweThread(..)
+  , PartyRef(..)
+  , Running
+  , ScriptEnv(..)
+  , ScriptOperation(..)
+  , ScriptState
+  , ScriptTest(..)
+  , Seconds(..)
+  , TokenAssignment(..)
+  , TokenName(..)
+  , UseTemplate(..)
+  , Wallet(..)
+  , WalletNickname(..)
+  , WalletTransaction(..)
+  , anyMarloweThread
+  , faucetNickname
+  , foldlMarloweThread
+  , foldrMarloweThread
+  , getMarloweThreadTransaction
+  , getMarloweThreadTxIn
+  , overAnyMarloweThread
+  , scriptState
+  , seConnection
+  , seCostModelParams
+  , seEra
+  , seProtocolVersion
+  , seSlotConfig
+  , seTransactionTimeout
+  , ssContracts
+  , ssCurrencies
+  , ssReferenceScripts
+  , ssWallets
+  , walletPubKeyHash
+  ) where
 
 
 import Cardano.Api

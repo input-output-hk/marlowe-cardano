@@ -18,12 +18,12 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Language.Marlowe.CLI.Command.Util (
--- * Marlowe CLI Commands
-  UtilCommand(..)
-, parseUtilCommand
-, runUtilCommand
-) where
+module Language.Marlowe.CLI.Command.Util
+  ( -- * Marlowe CLI Commands
+    UtilCommand(..)
+  , parseUtilCommand
+  , runUtilCommand
+  ) where
 
 
 import Cardano.Api

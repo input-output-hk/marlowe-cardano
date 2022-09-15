@@ -16,10 +16,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Spec.Marlowe.Plutus.Specification (
--- * Testing
-  tests
-) where
+module Spec.Marlowe.Plutus.Specification
+  ( -- * Testing
+    tests
+  ) where
 
 
 import Control.Lens (use, uses, (%=), (<>=), (^.))

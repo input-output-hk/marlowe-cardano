@@ -1,22 +1,19 @@
 module Marlowe.Contracts.UTC.Options
-  (
-  -- * Options
-    option
-  , C.OptionType(..)
+  ( -- * Options
+    C.BarrierType(..)
   , C.ExerciseType(..)
-  , C.BarrierType(..)
-  -- * Option Strategies
-  -- ** Fully collateralized
+  , C.OptionType(..)
+  , option
+    -- * Option Strategies
+    -- ** Fully collateralized
   , coveredCall
-  -- ** Partially collateralized
+    -- ** Partially collateralized
   , callSpread
-  -- ** Not collateralized
+    -- ** Not collateralized
   , barrierOption
-  , strangle
   , straddle
-  )
-
-where
+  , strangle
+  ) where
 
 import Data.Time.Clock (UTCTime)
 import Language.Marlowe.Extended.V1

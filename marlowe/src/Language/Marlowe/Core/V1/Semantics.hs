@@ -41,7 +41,8 @@ and actions (i.e. /Choices/) are passed as
 /Validation Script/ is always the same Marlowe interpreter implementation, available below.
 -}
 
-module Language.Marlowe.Core.V1.Semantics where
+module Language.Marlowe.Core.V1.Semantics
+  where
 
 import Control.Applicative ((<*>), (<|>))
 import qualified Data.Aeson as JSON

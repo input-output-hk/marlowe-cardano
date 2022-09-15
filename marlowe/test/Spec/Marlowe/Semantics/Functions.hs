@@ -15,10 +15,10 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Spec.Marlowe.Semantics.Functions (
--- * Testing
-  tests
-) where
+module Spec.Marlowe.Semantics.Functions
+  ( -- * Testing
+    tests
+  ) where
 
 
 import Data.Maybe (fromMaybe, isNothing)

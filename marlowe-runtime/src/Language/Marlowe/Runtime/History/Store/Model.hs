@@ -4,7 +4,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.History.Store.Model where
+module Language.Marlowe.Runtime.History.Store.Model
+  where
 
 import Control.Monad (guard, (<=<))
 import Data.Bifunctor (first)

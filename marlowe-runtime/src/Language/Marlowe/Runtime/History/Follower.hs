@@ -15,9 +15,9 @@ module Language.Marlowe.Runtime.History.Follower
   , Follower(..)
   , FollowerDependencies(..)
   , SomeContractChanges(..)
-  , mkFollower
-  , isEmptyChanges
   , applyRollback
+  , isEmptyChanges
+  , mkFollower
   ) where
 
 import Control.Applicative ((<|>))

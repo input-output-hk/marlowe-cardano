@@ -9,13 +9,13 @@
 {-# LANGUAGE TypeFamilies #-}
 
 
-module Language.Marlowe.CLI.Cardano.Api (
-  adjustMinimumUTxO
-, toMultiAssetSupportedInEra
-, toReferenceTxInsScriptsInlineDatumsSupportedInEra
-, withShelleyBasedEra
-, toPlutusProtocolVersion
-) where
+module Language.Marlowe.CLI.Cardano.Api
+  ( adjustMinimumUTxO
+  , toMultiAssetSupportedInEra
+  , toPlutusProtocolVersion
+  , toReferenceTxInsScriptsInlineDatumsSupportedInEra
+  , withShelleyBasedEra
+  ) where
 
 
 import Cardano.Api

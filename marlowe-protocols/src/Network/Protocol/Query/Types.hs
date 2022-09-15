@@ -12,7 +12,8 @@
 -- query resources from a server and collect the results incrementally in pages.
 -- The server is expected to provide transactional reads to the client while the
 -- query is active.
-module Network.Protocol.Query.Types where
+module Network.Protocol.Query.Types
+  where
 
 import Data.Binary (Get, Put)
 import Data.Type.Equality (type (:~:))

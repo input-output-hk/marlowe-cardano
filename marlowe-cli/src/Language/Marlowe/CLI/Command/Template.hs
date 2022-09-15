@@ -19,16 +19,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Language.Marlowe.CLI.Command.Template (
--- * Marlowe CLI Commands
-  TemplateCommand(..)
-, OutputFiles(..)
-, parseTemplateCommand
-, parseTemplateCommandOutputFiles
-, runTemplateCommand
-, initialMarloweState
-, makeContract
-) where
+module Language.Marlowe.CLI.Command.Template
+  ( -- * Marlowe CLI Commands
+    OutputFiles(..)
+  , TemplateCommand(..)
+  , initialMarloweState
+  , makeContract
+  , parseTemplateCommand
+  , parseTemplateCommandOutputFiles
+  , runTemplateCommand
+  ) where
 
 
 import Actus.Marlowe (defaultRiskFactors, genContract', toMarlowe)

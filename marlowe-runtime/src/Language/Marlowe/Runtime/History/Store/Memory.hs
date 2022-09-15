@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.History.Store.Memory where
+module Language.Marlowe.Runtime.History.Store.Memory
+  where
 
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad.Trans.Class (lift)

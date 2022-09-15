@@ -18,8 +18,9 @@
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
 
-module Language.Marlowe.CLI.Orphans (
-) where
+module Language.Marlowe.CLI.Orphans
+  (
+  ) where
 
 
 import Cardano.Api

@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.History.FollowerSupervisor where
+module Language.Marlowe.Runtime.History.FollowerSupervisor
+  where
 
 import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)

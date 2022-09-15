@@ -5,7 +5,9 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (databaseQueries) where
+module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
+  ( databaseQueries
+  ) where
 
 import Cardano.Api
   ( AddressAny

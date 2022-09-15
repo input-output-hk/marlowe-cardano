@@ -7,7 +7,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Language.Marlowe.Runtime.Core.Api where
+module Language.Marlowe.Runtime.Core.Api
+  where
 
 import Data.Aeson (FromJSON(..), Result(..), ToJSON(..), Value(..), eitherDecode, encode)
 import Data.Aeson.Types (Parser, parse, parseFail)

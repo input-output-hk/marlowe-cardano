@@ -4,19 +4,16 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Actus.Marlowe.Instance
-  (
-  -- * Marlowe types
+  ( -- * Marlowe types
     CashFlowMarlowe
   , ContractStateMarlowe
   , ContractTermsMarlowe
   , RiskFactorsMarlowe
-
-  , toMarloweFixedPoint
   , fromMarloweFixedPoint
-  -- * Contract reduction
+  , toMarloweFixedPoint
+    -- * Contract reduction
   , reduceContract
-  )
-where
+  ) where
 
 import Actus.Domain (ActusFrac(..), ActusOps(..), CashFlow, ContractState, ContractTerms, RiskFactors)
 import Data.Functor ((<&>))

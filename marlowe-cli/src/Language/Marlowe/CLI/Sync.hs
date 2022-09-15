@@ -21,29 +21,29 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Language.Marlowe.CLI.Sync (
--- * Handlers
-  MarlowePrinter
-, Recorder
-, Processor
-, Reverter
-, Idler
-, TxHandler
--- * Activity
-, walkBlocks
-, watchChain
-, watchMarlowe
-, watchMarloweWithPrinter
--- * Points
-, savePoint
-, loadPoint
--- * Queries
-, isMarloweTransaction
-, isMarloweIn
-, isMarloweOut
--- * Utils
-, classifyOutputs
-) where
+module Language.Marlowe.CLI.Sync
+  ( -- * Handlers
+    Idler
+  , MarlowePrinter
+  , Processor
+  , Recorder
+  , Reverter
+  , TxHandler
+    -- * Activity
+  , walkBlocks
+  , watchChain
+  , watchMarlowe
+  , watchMarloweWithPrinter
+    -- * Points
+  , loadPoint
+  , savePoint
+    -- * Queries
+  , isMarloweIn
+  , isMarloweOut
+  , isMarloweTransaction
+    -- * Utils
+  , classifyOutputs
+  ) where
 
 
 import Cardano.Api

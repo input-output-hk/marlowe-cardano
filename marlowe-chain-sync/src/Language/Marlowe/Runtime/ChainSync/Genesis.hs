@@ -1,6 +1,6 @@
 module Language.Marlowe.Runtime.ChainSync.Genesis
-  ( GenesisBlock (..)
-  , GenesisTx (..)
+  ( GenesisBlock(..)
+  , GenesisTx(..)
   , computeByronGenesisBlock
   ) where
 

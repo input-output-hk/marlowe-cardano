@@ -8,7 +8,8 @@
 -- role of the protocol. The types should be much easier to use than the
 -- underlying typed protocol types.
 
-module Network.Protocol.ChainSeek.Server where
+module Network.Protocol.ChainSeek.Server
+  where
 
 import Network.Protocol.ChainSeek.Types
 import Network.TypedProtocol (Peer(..), PeerHasAgency(..))

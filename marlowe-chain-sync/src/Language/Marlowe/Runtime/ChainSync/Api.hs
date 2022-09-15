@@ -21,6 +21,10 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , Lovelace(..)
   , Metadata
   , Move(..)
+  , module Network.Protocol.ChainSeek.Client
+  , module Network.Protocol.ChainSeek.Codec
+  , module Network.Protocol.ChainSeek.Server
+  , module Network.Protocol.ChainSeek.Types
   , PaymentKeyHash(..)
   , PolicyId(..)
   , Quantity(..)
@@ -52,10 +56,10 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , fromRedeemer
   , getUTCTime
   , isAfter
+  , moveSchema
   , paymentCredential
   , putUTCTime
   , runtimeChainSeekCodec
-  , moveSchema
   , slotToUTCTime
   , stakeReference
   , toBech32
@@ -63,10 +67,6 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , toDatum
   , toPlutusData
   , toRedeemer
-  , module Network.Protocol.ChainSeek.Types
-  , module Network.Protocol.ChainSeek.Client
-  , module Network.Protocol.ChainSeek.Server
-  , module Network.Protocol.ChainSeek.Codec
   ) where
 
 import Cardano.Api (AsType(..), SerialiseAsRawBytes(serialiseToRawBytes), deserialiseFromBech32, serialiseToBech32)

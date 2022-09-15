@@ -4,7 +4,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Runtime.History.Api where
+module Language.Marlowe.Runtime.History.Api
+  where
 
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS

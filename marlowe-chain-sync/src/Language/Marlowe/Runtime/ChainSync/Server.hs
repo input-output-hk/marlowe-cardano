@@ -3,7 +3,8 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.ChainSync.Server where
+module Language.Marlowe.Runtime.ChainSync.Server
+  where
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano

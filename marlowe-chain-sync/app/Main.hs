@@ -1,4 +1,5 @@
-module Main where
+module Main
+  where
 
 import Cardano.Api (CardanoMode, ConsensusModeParams(..), EpochSlots(..), LocalNodeConnectInfo(..), queryNodeLocalState)
 import qualified Cardano.Api as Cardano

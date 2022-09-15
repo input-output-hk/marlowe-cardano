@@ -4,7 +4,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 
-module Language.Marlowe.Runtime.History.FollowerSpec (spec) where
+module Language.Marlowe.Runtime.History.FollowerSpec
+  ( spec
+  ) where
 
 import Control.Concurrent.Async (concurrently)
 import Control.Concurrent.STM (atomically, newEmptyTMVar, putTMVar, takeTMVar)

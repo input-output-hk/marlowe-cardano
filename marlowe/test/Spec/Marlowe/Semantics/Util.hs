@@ -14,12 +14,12 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Spec.Marlowe.Semantics.Util (
--- * Functions
-  truncatedDivide
-, flattenMoney
-, stateEq
-) where
+module Spec.Marlowe.Semantics.Util
+  ( -- * Functions
+    flattenMoney
+  , stateEq
+  , truncatedDivide
+  ) where
 
 
 import Data.Function (on)

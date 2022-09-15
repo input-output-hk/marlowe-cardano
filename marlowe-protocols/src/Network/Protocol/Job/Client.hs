@@ -6,7 +6,8 @@
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Job.Client where
+module Network.Protocol.Job.Client
+  where
 
 import Data.Void (Void, absurd)
 import Network.Protocol.Job.Types

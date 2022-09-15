@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Spec.Marlowe.Analysis
-where
+  where
 
 import Data.Maybe (isJust)
 import Data.Time.Clock (UTCTime)

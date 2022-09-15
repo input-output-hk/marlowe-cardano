@@ -1,12 +1,11 @@
 -- | Encoding and decoding of 'ByteString' and serialisable values
 --   as base16 encoded JSON strings
 module Data.ByteString.Base16.Aeson
-  ( byteStringToJSON
+  ( EncodeBase16(..)
   , byteStringFromJSON
-  , EncodeBase16(..)
+  , byteStringToJSON
   , unBase16
-  )
-  where
+  ) where
 
 import Data.Aeson (FromJSON, ToJSON(toJSON))
 import qualified Data.Aeson as A

@@ -15,10 +15,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Main(
--- * Testing
-  main
-) where
+module Main
+  ( -- * Testing
+    main
+  ) where
 
 
 import Test.Tasty (TestTree, defaultMain, testGroup)

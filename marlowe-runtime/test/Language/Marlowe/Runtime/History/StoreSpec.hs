@@ -2,7 +2,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.History.StoreSpec (spec) where
+module Language.Marlowe.Runtime.History.StoreSpec
+  ( spec
+  ) where
 
 import Control.Concurrent (forkFinally, killThread)
 import Control.Concurrent.STM
