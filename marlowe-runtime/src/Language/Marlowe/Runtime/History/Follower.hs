@@ -33,15 +33,10 @@ import Data.Foldable (asum, find, for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
-import Data.Time (UTCTime)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import Data.Void (Void, absurd)
 import GHC.Show (showSpace)
-import qualified Language.Marlowe.Core.V1.Semantics as V1
-import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
   ( BlockHeader
   , ChainPoint
@@ -65,8 +60,6 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses(..), ScriptAddressInfo(..))
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
-  , Datum
-  , IsMarloweVersion(Redeemer)
   , MarloweVersion(..)
   , MarloweVersionTag(..)
   , Payout(..)
@@ -79,7 +72,6 @@ import Language.Marlowe.Runtime.Core.Api
   , fromChainRedeemer
   )
 import Language.Marlowe.Runtime.History.Api
-import Plutus.V1.Ledger.Api (POSIXTime(POSIXTime))
 
 data ContractChanges v = ContractChanges
   { steps      :: Map Chain.BlockHeader [ContractStep v]
@@ -250,24 +242,15 @@ data FollowerStateClosed v = FollowerStateClosed
   }
 
 extractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs, validityRange} = do
+extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs} = do
   Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   marloweScriptHash <- getScriptHash scriptAddress
   (SomeMarloweVersion version, MarloweScriptAddresses{..}) <- note InvalidScriptHash $ getMarloweVersion marloweScriptHash
   let
     payoutValidatorHash = scriptHash payoutScriptAddress
-    wouldCloseContract' mdatum' mredeemer = fromMaybe False do
-      datum <- fromChainDatum version =<< mdatum'
-      redeemer <- fromChainRedeemer version =<< mredeemer
-      (minSlot, maxSlot) <- case validityRange of
-        Chain.MinMaxBound minSlot maxSlot -> Just (minSlot, maxSlot)
-        _                                 -> Nothing
-      let validityLowerBound = slotToUTCTime slotConfig minSlot
-      let validityUpperBound = slotToUTCTime slotConfig maxSlot
-      pure $ wouldCloseContract version validityLowerBound validityUpperBound redeemer datum
   for_ inputs \Chain.TransactionInput{..} ->
-    when (isScriptAddress marloweScriptHash address && not (wouldCloseContract' datumBytes redeemer)) $ Left NotCreationTransaction
+    when (isScriptAddress marloweScriptHash address) $ Left NotCreationTransaction
   txDatum <- note NoCreateDatum mdatum
   datum <- note InvalidCreateDatum $ fromChainDatum version txDatum
   pure $ SomeCreateStep version CreateStep{..}
@@ -486,10 +469,10 @@ processScriptTx
   -> Chain.Transaction
   -> WriterT (ContractChanges v) (Either ContractHistoryError) (TransactionOutput v)
 processScriptTx blockHeader FollowerContext{..} FollowerState{..} tx = do
-  let TransactionScriptOutput utxo prevDatum = scriptOutput
+  let TransactionScriptOutput utxo _ = scriptOutput
   marloweTx@Transaction{output} <- lift
     $ first ExtractMarloweTransactionFailed
-    $ extractMarloweTransaction version prevDatum slotConfig contractId scriptAddress payoutValidatorHash utxo blockHeader tx
+    $ extractMarloweTransaction version slotConfig contractId scriptAddress payoutValidatorHash utxo blockHeader tx
   tellStep blockHeader $ ApplyTransaction marloweTx
   pure output
 
@@ -502,7 +485,6 @@ tellStep blockHeader step = tell ContractChanges
 
 extractMarloweTransaction
   :: MarloweVersion v
-  -> Datum v
   -> SlotConfig
   -> ContractId
   -> Chain.Address
@@ -511,7 +493,7 @@ extractMarloweTransaction
   -> BlockHeader
   -> Chain.Transaction
   -> Either ExtractMarloweTransactionError (Transaction v)
-extractMarloweTransaction version prevDatum slotConfig contractId scriptAddress payoutValidatorHash consumedUTxO blockHeader Chain.Transaction{..} = do
+extractMarloweTransaction version slotConfig contractId scriptAddress payoutValidatorHash consumedUTxO blockHeader Chain.Transaction{..} = do
   let transactionId = txId
   Chain.TransactionInput { redeemer = mRedeemer } <-
     note TxInNotFound $ find (consumesUTxO consumedUTxO) inputs
@@ -522,9 +504,7 @@ extractMarloweTransaction version prevDatum slotConfig contractId scriptAddress 
     _                                 -> Left InvalidValidityRange
   let validityLowerBound = slotToUTCTime slotConfig minSlot
   let validityUpperBound = slotToUTCTime slotConfig maxSlot
-  let wouldClose = wouldCloseContract version validityLowerBound validityUpperBound redeemer prevDatum
   scriptOutput <- runMaybeT do
-    guard $ not wouldClose
     (ix, Chain.TransactionOutput{ datum = mDatum }) <-
       hoistMaybe $ find (isToAddress scriptAddress . snd) $ zip [0..] outputs
     lift do
@@ -543,21 +523,6 @@ extractMarloweTransaction version prevDatum slotConfig contractId scriptAddress 
     pure $ Payout assets payoutDatum
   let output = TransactionOutput{..}
   pure Transaction{..}
-
-wouldCloseContract :: MarloweVersion v -> UTCTime -> UTCTime -> Redeemer v -> Datum v -> Bool
-wouldCloseContract version validityLowerBound validityUpperBound redeemer datum = case version of
-  MarloweV1 ->
-    let
-      utcTimeToPOSIXTime = POSIXTime . round . (* 1000) . utcTimeToPOSIXSeconds
-      timeInterval = (utcTimeToPOSIXTime validityLowerBound, utcTimeToPOSIXTime validityUpperBound)
-      input = V1.TransactionInput timeInterval redeemer
-      V1.MarloweData{..} = datum
-    in
-      marloweContract == V1.Close || case V1.computeTransaction input marloweState marloweContract of
-        V1.TransactionOutput{..} -> txOutContract == V1.Close
-        -- TODO log a warning here when adding structured logging.
-        _                        -> False
-
 
 isToScriptHash :: Chain.ScriptHash -> Chain.TransactionOutput -> Bool
 isToScriptHash toScriptHash Chain.TransactionOutput{..} = case Chain.paymentCredential address of
