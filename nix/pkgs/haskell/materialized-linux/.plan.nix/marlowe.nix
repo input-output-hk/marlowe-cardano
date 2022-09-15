@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; limit-static-analysis-time = true; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe"; version = "0.1.0.1"; };
+      identifier = { name = "marlowe"; version = "0.1.0.2"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "alexander.nemish@iohk.io";
