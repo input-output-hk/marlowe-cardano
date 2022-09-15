@@ -1,11 +1,8 @@
-
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
-
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main
-where
-
+  where
 
 import Control.Monad.Writer (Writer, runWriter, tell)
 import Data.Aeson (encodeFile, object, (.=))
@@ -13,7 +10,7 @@ import Data.Foldable (foldrM)
 import Language.Marlowe.CLI.Merkle (deepMerkleize)
 import Language.Marlowe.CLI.Types (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Api (BuiltinByteString, POSIXTime (..), TokenName)
+import Plutus.V1.Ledger.Api (BuiltinByteString, POSIXTime(..), TokenName)
 
 
 

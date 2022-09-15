@@ -1,24 +1,21 @@
-
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
-
-module Main (
-  main
-) where
-
+module Main
+  ( main
+  ) where
 
 import Control.Monad.Writer (Writer, runWriter, tell)
 import Data.Aeson (encodeFile, object, (.=))
-import Data.Default (Default (..))
+import Data.Default (Default(..))
 import Data.Foldable (foldrM)
 import Data.Maybe (fromMaybe)
 import Data.String (fromString)
 import Language.Marlowe.CLI.Merkle (deepMerkleize)
 import Language.Marlowe.CLI.Types (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Api (BuiltinByteString, POSIXTime (..), TokenName)
+import Plutus.V1.Ledger.Api (BuiltinByteString, POSIXTime(..), TokenName)
 
 
 data Scenario =
