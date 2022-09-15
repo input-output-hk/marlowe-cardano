@@ -11,7 +11,7 @@ import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
-import qualified Language.Marlowe.Runtime.Core.Api as Core
+import qualified Language.Marlowe.Runtime.Core.AddressRegistry as Registry
 import Language.Marlowe.Runtime.History (History(..), HistoryDependencies(..), mkHistory)
 import Language.Marlowe.Runtime.History.Api (historyJobCodec, historyQueryCodec)
 import Language.Marlowe.Runtime.History.JobServer (RunJobServer(RunJobServer))
@@ -114,7 +114,7 @@ run Options{..} = withSocketsDo do
               let peer = marloweSyncServerPeer server
               fst <$> runPeerWithDriver driver peer (startDState driver)
 
-        let getMarloweVersion = Core.getMarloweVersion networkId
+        let getMarloweVersion = Registry.getMarloweVersion networkId
         let followerPageSize = 1024 -- TODO move to config with a default
         History{..} <- atomically do
           historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory

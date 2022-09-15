@@ -68,6 +68,7 @@ library
     Language.Marlowe.Protocol.Sync.Codec
     Language.Marlowe.Protocol.Sync.Server
     Language.Marlowe.Protocol.Sync.Types
+    Language.Marlowe.Runtime.Core.AddressRegistry
     Language.Marlowe.Runtime.Core.Api
     Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Api
@@ -198,7 +199,7 @@ test-suite marlowe-runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-    Language.Marlowe.Runtime.Core.ApiSpec
+    Language.Marlowe.Runtime.Core.AddressRegistrySpec
     Language.Marlowe.Runtime.History.FollowerSpec
     Language.Marlowe.Runtime.History.Script
     Language.Marlowe.Runtime.History.StoreSpec

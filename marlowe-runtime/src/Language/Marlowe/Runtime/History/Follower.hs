@@ -62,15 +62,14 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , slotToUTCTime
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses(..), ScriptAddressInfo(..))
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , Datum
   , IsMarloweVersion(Redeemer)
-  , MarloweScriptAddresses(..)
   , MarloweVersion(..)
   , MarloweVersionTag(..)
   , Payout(..)
-  , ScriptAddressInfo(..)
   , SomeMarloweVersion(..)
   , Transaction(..)
   , TransactionOutput(..)

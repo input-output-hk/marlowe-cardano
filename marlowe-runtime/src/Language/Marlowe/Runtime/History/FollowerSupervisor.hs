@@ -12,7 +12,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash, SlotConfig)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweScriptAddresses, SomeMarloweVersion)
+import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses)
+import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
 import Language.Marlowe.Runtime.History.Api (FollowerStatus(..))
 import Language.Marlowe.Runtime.History.Follower
   (Follower(..), FollowerDependencies(..), SomeContractChanges, mkFollower)

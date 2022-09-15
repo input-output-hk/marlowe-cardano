@@ -29,6 +29,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , runtimeChainSeekCodec
   , toBech32
   )
+import qualified Language.Marlowe.Runtime.Core.AddressRegistry as Registry
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -37,7 +38,6 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   , renderContractId
   )
-import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
 import Network.Channel (socketAsChannel)
@@ -71,7 +71,7 @@ run Options{..} = withSocketsDo do
       connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
       connectToChainSeek client = fst <$> runPeerWithDriver driver peer (startDState driver)
         where peer = chainSeekClientPeer Genesis client
-    let getMarloweVersion = Core.getMarloweVersion networkId
+    let getMarloweVersion = Registry.getMarloweVersion networkId
     Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
     Left result <- race runFollower (logChanges contractId changes)
     case result of

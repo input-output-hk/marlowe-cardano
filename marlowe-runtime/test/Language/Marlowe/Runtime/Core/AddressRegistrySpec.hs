@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Core.ApiSpec
+module Language.Marlowe.Runtime.Core.AddressRegistrySpec
   ( spec
   ) where
 
@@ -9,14 +9,8 @@ import Data.Foldable (traverse_)
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (Address(..), ScriptHash(..))
-import Language.Marlowe.Runtime.Core.Api
-  ( MarloweScriptAddresses(..)
-  , MarloweVersion
-  , ScriptAddressInfo(..)
-  , getCurrentScriptAddresses
-  , getScriptAddressSet
-  , withSomeMarloweVersion
-  )
+import Language.Marlowe.Runtime.Core.AddressRegistry
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion, withSomeMarloweVersion)
 import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
 import Plutus.V1.Ledger.Api (ValidatorHash(..), fromBuiltin)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
