@@ -65,12 +65,13 @@ run Options{..} = withSocketsDo do
   bracket (open chainSeekAddr) close \chainSeekSocket -> do
     slotConfig <- queryChainSync GetSlotConfig
     securityParameter <- queryChainSync GetSecurityParameter
+    networkId <- queryChainSync GetNetworkId
     let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
     let
       connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
       connectToChainSeek client = fst <$> runPeerWithDriver driver peer (startDState driver)
         where peer = chainSeekClientPeer Genesis client
-    let getMarloweVersion = Core.getMarloweVersion
+    let getMarloweVersion = Core.getMarloweVersion networkId
     Follower{..} <- atomically $ mkFollower FollowerDependencies{..}
     Left result <- race runFollower (logChanges contractId changes)
     case result of

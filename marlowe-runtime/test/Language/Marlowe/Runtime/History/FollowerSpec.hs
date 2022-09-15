@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.History.FollowerSpec
   ( spec
   ) where
 
+import qualified Cardano.Api as C
 import Control.Concurrent.Async (concurrently)
 import Control.Concurrent.STM (atomically, newEmptyTMVar, putTMVar, takeTMVar)
 import Control.Exception (Exception, catch, throwIO)
@@ -52,6 +53,7 @@ import Language.Marlowe.Runtime.Core.Api
   , parseContractId
   , toChainPayoutDatum
   )
+import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
 import qualified Plutus.V1.Ledger.Value as Plutus
@@ -102,19 +104,19 @@ testContractId :: ContractId
 testContractId = fromJust $ parseContractId "036e9b4cfdd668f9682d9153950980d7b065455f29b3b47923b2572bdd791e69#0"
 
 testScriptAddress :: Chain.Address
-testScriptAddress = "7045da42055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
+testScriptAddress = Core.scriptAddress $ Core.marloweScriptAddress $ Core.currentMarloweV1Addresses C.Mainnet
 
 testPayoutValidatorAddress :: Chain.Address
-testPayoutValidatorAddress = "70da4542055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
+testPayoutValidatorAddress = Core.scriptAddress $ Core.payoutScriptAddress $ Core.currentMarloweV1Addresses C.Mainnet
 
 testPayoutValidatorHash :: Chain.ScriptHash
-testPayoutValidatorHash = "da4542055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
+testPayoutValidatorHash = Core.scriptHash $ Core.payoutScriptAddress $ Core.currentMarloweV1Addresses C.Mainnet
 
 testScriptHash :: Chain.ScriptHash
-testScriptHash = "45da42055944c69f7b1c7840fc15bd0d05ff5e9097f5267b705acf8e"
+testScriptHash = Core.scriptHash $ Core.marloweScriptAddress $ Core.currentMarloweV1Addresses C.Mainnet
 
-marloweVersions :: [(ScriptHash, (SomeMarloweVersion, ScriptHash))]
-marloweVersions = [(testScriptHash, (SomeMarloweVersion MarloweV1, testPayoutValidatorHash))]
+marloweVersions :: [(ScriptHash, (SomeMarloweVersion, Core.MarloweScriptAddresses))]
+marloweVersions = [(testScriptHash, (SomeMarloweVersion MarloweV1, Core.getCurrentScriptAddresses C.Mainnet MarloweV1))]
 
 createUTxO :: TxOutRef
 createUTxO = unContractId testContractId
@@ -1111,7 +1113,7 @@ data FollowerTestResult a = FollowerTestResult
 runFollowerTestPostCreationFrom
   :: ChainPoint
   -> ChainPoint
-  -> [(ScriptHash, (SomeMarloweVersion, ScriptHash))]
+  -> [(ScriptHash, (SomeMarloweVersion, Core.MarloweScriptAddresses))]
   -> ServerStIdleScript Move ChainPoint ChainPoint (ReaderT Follower IO) a
   -> IO (FollowerTestResult a)
 runFollowerTestPostCreationFrom point tip marloweVersions' = runFollowerTest marloweVersions'
@@ -1121,13 +1123,13 @@ runFollowerTestPostCreationFrom point tip marloweVersions' = runFollowerTest mar
   . Do readChanges -- to empty them
 
 runFollowerTestPostCreation
-  :: [(ScriptHash, (SomeMarloweVersion, ScriptHash))]
+  :: [(ScriptHash, (SomeMarloweVersion, Core.MarloweScriptAddresses))]
   -> ServerStIdleScript Move ChainPoint ChainPoint (ReaderT Follower IO) a
   -> IO (FollowerTestResult a)
 runFollowerTestPostCreation = runFollowerTestPostCreationFrom point1 point2
 
 runFollowerTest
-  :: [(ScriptHash, (SomeMarloweVersion, ScriptHash))]
+  :: [(ScriptHash, (SomeMarloweVersion, Core.MarloweScriptAddresses))]
   -> ChainSeekServerScript Move ChainPoint ChainPoint (ReaderT Follower IO) a
   -> IO (FollowerTestResult a)
 runFollowerTest marloweVersions' script = do

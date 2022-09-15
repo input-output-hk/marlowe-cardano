@@ -66,9 +66,11 @@ import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , Datum
   , IsMarloweVersion(Redeemer)
+  , MarloweScriptAddresses(..)
   , MarloweVersion(..)
   , MarloweVersionTag(..)
   , Payout(..)
+  , ScriptAddressInfo(..)
   , SomeMarloweVersion(..)
   , Transaction(..)
   , TransactionOutput(..)
@@ -135,7 +137,7 @@ applyRollback (At blockHeader@Chain.BlockHeader{slotNo}) ContractChanges{..} = C
 
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
-  , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
+  , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, MarloweScriptAddresses)
   , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
   , slotConfig         :: SlotConfig
   , securityParameter  :: Int
@@ -252,9 +254,10 @@ extractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCr
 extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs, validityRange} = do
   Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
-  scriptHash <- getScriptHash scriptAddress
-  (SomeMarloweVersion version, payoutValidatorHash) <-note InvalidScriptHash $ getMarloweVersion scriptHash
+  marloweScriptHash <- getScriptHash scriptAddress
+  (SomeMarloweVersion version, MarloweScriptAddresses{..}) <- note InvalidScriptHash $ getMarloweVersion marloweScriptHash
   let
+    payoutValidatorHash = scriptHash payoutScriptAddress
     wouldCloseContract' mdatum' mredeemer = fromMaybe False do
       datum <- fromChainDatum version =<< mdatum'
       redeemer <- fromChainRedeemer version =<< mredeemer
@@ -265,7 +268,7 @@ extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs, validityRa
       let validityUpperBound = slotToUTCTime slotConfig maxSlot
       pure $ wouldCloseContract version validityLowerBound validityUpperBound redeemer datum
   for_ inputs \Chain.TransactionInput{..} ->
-    when (isScriptAddress scriptHash address && not (wouldCloseContract' datumBytes redeemer)) $ Left NotCreationTransaction
+    when (isScriptAddress marloweScriptHash address && not (wouldCloseContract' datumBytes redeemer)) $ Left NotCreationTransaction
   txDatum <- note NoCreateDatum mdatum
   datum <- note InvalidCreateDatum $ fromChainDatum version txDatum
   pure $ SomeCreateStep version CreateStep{..}

@@ -86,6 +86,7 @@ library
     , base16
     , binary
     , bytestring
+    , cardano-api
     , containers
     , marlowe
     , marlowe-chain-sync

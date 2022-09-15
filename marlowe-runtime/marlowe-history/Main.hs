@@ -82,6 +82,7 @@ run Options{..} = withSocketsDo do
       bracket (openServer syncAddr) close \syncSocket -> do
         slotConfig <- queryChainSync GetSlotConfig
         securityParameter <- queryChainSync GetSecurityParameter
+        networkId <- queryChainSync GetNetworkId
         let
 
           connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
@@ -113,7 +114,7 @@ run Options{..} = withSocketsDo do
               let peer = marloweSyncServerPeer server
               fst <$> runPeerWithDriver driver peer (startDState driver)
 
-        let getMarloweVersion = Core.getMarloweVersion
+        let getMarloweVersion = Core.getMarloweVersion networkId
         let followerPageSize = 1024 -- TODO move to config with a default
         History{..} <- atomically do
           historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
