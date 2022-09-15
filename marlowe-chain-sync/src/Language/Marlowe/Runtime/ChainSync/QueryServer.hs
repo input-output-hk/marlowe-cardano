@@ -86,6 +86,7 @@ mkWorker WorkerDependencies{..} =
     server = QueryServer $ pure $ ServerStInit \case
       GetSlotConfig        -> queryGenesisParameters extractSlotConfig
       GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
+      GetNetworkId -> queryGenesisParameters protocolParamNetworkId
 
     queryGenesisParameters :: (GenesisParameters -> a) -> IO (ServerStNext ChainSyncQuery 'CanReject Void () a IO ())
     queryGenesisParameters f = do

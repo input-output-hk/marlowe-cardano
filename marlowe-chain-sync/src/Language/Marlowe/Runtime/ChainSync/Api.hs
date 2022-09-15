@@ -69,7 +69,14 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , toRedeemer
   ) where
 
-import Cardano.Api (AsType(..), SerialiseAsRawBytes(serialiseToRawBytes), deserialiseFromBech32, serialiseToBech32)
+import Cardano.Api
+  ( AsType(..)
+  , NetworkId(..)
+  , NetworkMagic(..)
+  , SerialiseAsRawBytes(serialiseToRawBytes)
+  , deserialiseFromBech32
+  , serialiseToBech32
+  )
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
@@ -650,48 +657,65 @@ instance Binary SlotConfig where
 data ChainSyncQuery delimiter err result where
   GetSlotConfig :: ChainSyncQuery Void () SlotConfig
   GetSecurityParameter :: ChainSyncQuery Void () Int
+  GetNetworkId :: ChainSyncQuery Void () NetworkId
 
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
+    TagGetNetworkId :: Query.Tag ChainSyncQuery Void () NetworkId
   tagEq TagGetSlotConfig TagGetSlotConfig               = Just (Refl, Refl, Refl)
   tagEq TagGetSlotConfig _                              = Nothing
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
   tagEq TagGetSecurityParameter _                       = Nothing
+  tagEq TagGetNetworkId TagGetNetworkId = Just (Refl, Refl, Refl)
+  tagEq TagGetNetworkId _                       = Nothing
   putTag = \case
     TagGetSlotConfig        -> putWord8 0x01
     TagGetSecurityParameter -> putWord8 0x02
+    TagGetNetworkId -> putWord8 0x03
   getTag = do
     word <- getWord8
     case word of
       0x01 -> pure $ Query.SomeTag TagGetSlotConfig
       0x02 -> pure $ Query.SomeTag TagGetSecurityParameter
+      0x03 -> pure $ Query.SomeTag TagGetNetworkId
       _    -> fail "Invalid ChainSyncQuery tag"
   putQuery = \case
     GetSlotConfig        -> mempty
     GetSecurityParameter -> mempty
+    GetNetworkId -> mempty
   getQuery = \case
     TagGetSlotConfig        -> pure GetSlotConfig
     TagGetSecurityParameter -> pure GetSecurityParameter
+    TagGetNetworkId -> pure GetNetworkId
   putDelimiter = \case
     TagGetSlotConfig        -> absurd
     TagGetSecurityParameter -> absurd
+    TagGetNetworkId -> absurd
   getDelimiter = \case
     TagGetSlotConfig        -> fail "no delimiter defined"
     TagGetSecurityParameter -> fail "no delimiter defined"
+    TagGetNetworkId -> fail "no delimiter defined"
   putErr = \case
     TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
+    TagGetNetworkId -> put
   getErr = \case
     TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
+    TagGetNetworkId -> get
   putResult = \case
     TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
+    TagGetNetworkId -> put . \case
+      Mainnet -> Nothing
+      Testnet (NetworkMagic magic) -> Just magic
   getResult = \case
     TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
+    TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
   tagFromQuery = \case
     GetSlotConfig        -> TagGetSlotConfig
     GetSecurityParameter -> TagGetSecurityParameter
+    GetNetworkId -> TagGetNetworkId
