@@ -1,8 +1,8 @@
-{-# LANGUAGE DataKinds     #-}
-{-# LANGUAGE EmptyCase     #-}
-{-# LANGUAGE GADTs         #-}
-{-# LANGUAGE PolyKinds     #-}
-{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 -- | The type of the chain seek protocol.

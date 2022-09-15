@@ -1,5 +1,5 @@
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.Futures
   ( future )
 where

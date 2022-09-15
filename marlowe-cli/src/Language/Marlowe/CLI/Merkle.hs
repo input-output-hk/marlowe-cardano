@@ -12,7 +12,7 @@
 
 
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Language.Marlowe.CLI.Merkle (

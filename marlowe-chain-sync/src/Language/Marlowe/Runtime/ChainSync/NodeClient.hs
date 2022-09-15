@@ -1,5 +1,5 @@
-{-# LANGUAGE DataKinds     #-}
-{-# LANGUAGE GADTs         #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.Runtime.ChainSync.NodeClient

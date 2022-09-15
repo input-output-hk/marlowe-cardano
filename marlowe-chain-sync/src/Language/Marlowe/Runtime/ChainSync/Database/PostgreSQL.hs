@@ -1,9 +1,9 @@
-{-# LANGUAGE ApplicativeDo             #-}
-{-# LANGUAGE DuplicateRecordFields     #-}
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE NamedFieldPuns            #-}
-{-# LANGUAGE QuasiQuotes               #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (databaseQueries) where
 

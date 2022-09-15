@@ -1,7 +1,7 @@
-{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE EmptyCase             #-}
-{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.ChainSync.Server where
 

@@ -11,11 +11,11 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE BlockArguments     #-}
-{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module Language.Marlowe.CLI.Command.Util (

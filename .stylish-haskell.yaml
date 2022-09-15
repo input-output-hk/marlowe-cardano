@@ -9,6 +9,10 @@ steps:
       list_padding: 2
       separate_lists: false
       space_around: false
+  - language_pragmas:
+      style: vertical
+      align: false
+      remove_redundant: true
   - trailing_whitespace: {}
 columns: 120
 newline: native

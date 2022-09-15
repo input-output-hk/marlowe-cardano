@@ -1,7 +1,7 @@
-{-# LANGUAGE GADTs       #-}
-{-# LANGUAGE RankNTypes  #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE StrictData  #-}
+{-# LANGUAGE StrictData #-}
 
 module Language.Marlowe.Runtime.History where
 

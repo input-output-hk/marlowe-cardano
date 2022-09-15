@@ -11,8 +11,8 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE NumericUnderscores   #-}
-{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}

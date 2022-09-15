@@ -11,9 +11,9 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module Spec.Marlowe.Plutus.Transaction (

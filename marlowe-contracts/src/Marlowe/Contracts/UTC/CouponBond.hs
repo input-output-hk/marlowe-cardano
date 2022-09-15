@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE RecordWildCards #-}
 module Marlowe.Contracts.UTC.CouponBond where
 
 import Data.Time (Day, addDays)

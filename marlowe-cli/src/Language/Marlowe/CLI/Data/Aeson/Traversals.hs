@@ -1,6 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE LambdaCase     #-}
-{-# LANGUAGE TupleSections  #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.CLI.Data.Aeson.Traversals where
 

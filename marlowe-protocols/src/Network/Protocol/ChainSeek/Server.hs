@@ -1,7 +1,7 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | A view of the chain seek protocol from the point of view of the
 -- server. This provides a simplified interface for implementing the server

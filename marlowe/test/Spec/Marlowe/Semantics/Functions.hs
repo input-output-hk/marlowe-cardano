@@ -12,7 +12,7 @@
 
 
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TupleSections  #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module Spec.Marlowe.Semantics.Functions (

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
-{-# LANGUAGE BlockArguments   #-}
+{-# LANGUAGE BlockArguments #-}
 
 module Language.Marlowe.CLI.Test.Script.Debug where
 

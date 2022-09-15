@@ -1,9 +1,9 @@
 -- | Extraction of Marlowe contracts and history from transaction data.
 
-{-# LANGUAGE BlockArguments     #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 
 
 module Language.Marlowe.Client.History where

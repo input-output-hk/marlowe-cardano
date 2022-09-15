@@ -11,13 +11,12 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 
 module Language.Marlowe.CLI.Command.Template (

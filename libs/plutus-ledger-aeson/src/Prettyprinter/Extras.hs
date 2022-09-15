@@ -1,5 +1,5 @@
 -- | Copied from plutus-ledger-api because not exported
-{-# LANGUAGE DerivingVia      #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Prettyprinter.Extras(
