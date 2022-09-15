@@ -7,6 +7,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Language.Marlowe.Runtime.Transaction.Server
   (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
+import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Job.Codec (codecJob)
@@ -67,7 +68,7 @@ run Options{..} = withSocketsDo do
         pure $ RunTransactionServer \server -> do
           let peer = jobServerPeer server
           fst <$> runPeerWithDriver driver peer (startDState driver)
-    let runSubmitJob = error "Not implemented"
+    let mkSubmitJob = Submit.mkSubmitJob
     TransactionServer{..} <- atomically do
       mkTransactionServer TransactionServerDependencies{..}
     runTransactionServer
