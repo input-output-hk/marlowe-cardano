@@ -6,7 +6,16 @@
 module Language.Marlowe.Runtime.Transaction.Server
   where
 
-import Cardano.Api (ScriptDataSupportedInEra, SerialiseAsRawBytes(serialiseToRawBytes), Tx, TxBody, getTxBody, getTxId)
+import Cardano.Api
+  ( ScriptDataSupportedInEra(..)
+  , SerialiseAsRawBytes(..)
+  , Tx
+  , TxBody(..)
+  , TxBodyContent(..)
+  , TxOut(..)
+  , getTxBody
+  , getTxId
+  )
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
@@ -16,12 +25,16 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT)
 import qualified Data.Aeson as Aeson
 import Data.Bifunctor (first)
+import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromJust)
 import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, BlockHeader, SlotConfig, TokenName, TransactionOutput, TxId(TxId), TxOutRef)
+  (Address, BlockHeader, SlotConfig, TokenName, TransactionOutput, TxId(..), TxOutRef)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses, marloweScriptAddress, scriptAddress)
 import Language.Marlowe.Runtime.Core.Api
   (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, TransactionScriptOutput, utxo)
 import Language.Marlowe.Runtime.Transaction.Api
@@ -53,6 +66,7 @@ data TransactionServerDependencies = TransactionServerDependencies
   , loadMarloweScriptOutput :: LoadMarloweScriptOutput
   , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
   , slotConfig :: SlotConfig
+  , getCurrentScriptAddresses :: forall v. MarloweVersion v -> MarloweScriptAddresses
   }
 
 newtype TransactionServer = TransactionServer
@@ -85,6 +99,7 @@ data WorkerDependencies = WorkerDependencies
   , loadMarloweScriptOutput :: LoadMarloweScriptOutput
   , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
   , slotConfig :: SlotConfig
+  , getCurrentScriptAddresses :: forall v. MarloweVersion v -> MarloweScriptAddresses
   }
 
 newtype Worker = Worker
@@ -106,7 +121,16 @@ mkWorker WorkerDependencies{..} =
     serverInit = ServerStInit
       { recvMsgExec = \case
           Create era version addresses roles metadata contract ->
-            execCreate solveConstraints loadWalletContext era version addresses roles metadata contract
+            execCreate
+              getCurrentScriptAddresses
+              solveConstraints
+              loadWalletContext
+              era
+              version
+              addresses
+              roles
+              metadata
+              contract
           ApplyInputs era version addresses contractId invalidBefore invalidHereafter redeemer ->
             execApplyInputs
               slotConfig
@@ -152,7 +176,8 @@ type LoadPayoutScriptOutputs =
   forall v. MarloweVersion v -> PayoutDatum v -> IO (Map TxOutRef TransactionOutput)
 
 execCreate
-  :: SolveConstraints era v
+  :: (MarloweVersion v -> MarloweScriptAddresses)
+  -> SolveConstraints era v
   -> LoadWalletContext
   -> ScriptDataSupportedInEra era
   -> MarloweVersion v
@@ -161,7 +186,7 @@ execCreate
   -> Map Int Aeson.Value
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void CreateError (ContractId, TxBody era) IO ())
-execCreate solveConstraints loadWalletContext era version addresses roleTokens metadata contract = execExceptT do
+execCreate getCurrentScriptAddresses solveConstraints loadWalletContext era version addresses roleTokens metadata contract = execExceptT do
   constraints <- except $ buildCreateConstraints version roleTokens metadata contract
   walletContext <- lift $ loadWalletContext addresses
   -- The marlowe context for a create transaction has no marlowe output and
@@ -170,10 +195,20 @@ execCreate solveConstraints loadWalletContext era version addresses roleTokens m
   txBody <- except
     $ first CreateUnsolvableConstraints
     $ solveConstraints era marloweContext walletContext constraints
-  pure (ContractId $ findMarloweOutput version txBody, txBody)
-
-findMarloweOutput :: MarloweVersion v -> TxBody era -> TxOutRef
-findMarloweOutput = error "not implemented"
+  pure (ContractId $ findMarloweOutput txBody, txBody)
+  where
+  findMarloweOutput = \case
+    body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (Chain.TxId $ serialiseToRawBytes $ getTxId body)
+      $ fst
+      $ fromJust
+      $ find (isToCurrentScriptAddress . snd)
+      $ zip [0..] txOuts
+    where
+      currentScriptAddress = scriptAddress $ marloweScriptAddress $ getCurrentScriptAddresses version
+      isToCurrentScriptAddress (TxOut address _ _ _) =
+        currentScriptAddress == Chain.Address case era of
+          ScriptDataInAlonzoEra -> serialiseToRawBytes address
+          ScriptDataInBabbageEra -> serialiseToRawBytes address
 
 execApplyInputs
   :: SlotConfig
