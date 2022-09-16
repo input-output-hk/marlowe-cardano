@@ -900,7 +900,7 @@ getCurrency = do
   currencies <- use ssCurrencies
   case Map.toList currencies of
     [c] -> pure c
-    _   -> throwError "Ambigious currency lookup."
+    _   -> throwError "Ambiguous currency lookup."
 
 
 findCurrency :: (MonadState (ScriptState lang era) m, MonadError CliError m) => CurrencyNickname -> m Currency
