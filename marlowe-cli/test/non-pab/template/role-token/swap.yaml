@@ -13,8 +13,22 @@ stScriptOperations:
     soWalletNickname: aParty
 
   - tag: Mint
+    soCurrencyNickname: Swap
+    soTokenDistribution:
+      - taAmount: 1
+        taTokenName:
+          unTokenName: aParty
+        taWalletNickname: aParty
+      - taAmount: 1
+        taTokenName:
+          unTokenName: bParty
+        taWalletNickname: bParty
+
+
+  # Minting tokens aParty will use in the swap
+  - tag: Mint
     soCurrencyNickname: aPartyCurrency
-    soIssuer: "aParty"
+    soIssuer: aParty
     soTokenDistribution:
       - taAmount: 100
         taTokenName:
@@ -29,9 +43,10 @@ stScriptOperations:
       - 100000000
     soWalletNickname: bParty
 
+  # Minting tokens bParty will use in the swap
   - tag: Mint
     soCurrencyNickname: bPartyCurrency
-    soIssuer: "bParty"
+    soIssuer: bParty
     soTokenDistribution:
       - taAmount: 100
         taTokenName:
@@ -39,13 +54,14 @@ stScriptOperations:
         taWalletNickname: bParty
 
   - tag: Initialize
-    soContractNickname: "Swap"
+    soContractNickname: Swap
     soMinAda: 1000000
+    soRoleCurrency: Swap
     soContractSource:
       template:
-        tag: "UseSwap"
+        tag: UseSwap
         utAParty:
-          pk_hash: "aParty"
+          role_token: aParty
         utACurrencyNickname: aPartyCurrency
         utATokenName:
           unTokenName: aPartyTokenName
@@ -55,7 +71,7 @@ stScriptOperations:
         utATimeout:
           relative: 1000000
         utBParty:
-          pk_hash: "bParty"
+          role_token: "bParty"
         utBCurrencyNickname: bPartyCurrency
         utBTokenName:
           unTokenName: bPartyTokenName
@@ -65,38 +81,47 @@ stScriptOperations:
         utBTimeout:
           relative: 1000000
 
-  - tag: Prepare
-    soContractNickname: "Swap"
-    soInputs:
-      - input_from_party:
-          pk_hash: "aParty"
-        that_deposits: 50
-        of_token:
-          currency_symbol: "aPartyCurrency"
-          token_name: "aPartyTokenName"
-        into_account:
-          pk_hash: "aParty"
-    soMinimumTime:
-      relative: -1000
-    soMaximumTime:
-      relative: 8000
+  - tag: AutoRun
+    soSubmitter: aParty
+    soContractNickname: Swap
 
   - tag: Prepare
     soContractNickname: "Swap"
     soInputs:
       - input_from_party:
-          pk_hash: "bParty"
-        that_deposits: 40
+          role_token: "aParty"
+        that_deposits: 50
         of_token:
-          currency_symbol: "bPartyCurrency"
-          token_name: "bPartyTokenName"
+          currency_symbol: "aPartyCurrency"
+          token_name: "aPartyTokenName"
         into_account:
-          pk_hash: "bParty"
+          role_token: "aParty"
     soMinimumTime:
       relative: -1000
     soMaximumTime:
       relative: 8000
 
   - tag: AutoRun
+    soSubmitter: aParty
+    soContractNickname: Swap
+
+  - tag: Prepare
     soContractNickname: "Swap"
+    soInputs:
+      - input_from_party:
+          role_token: "bParty"
+        that_deposits: 40
+        of_token:
+          currency_symbol: "bPartyCurrency"
+          token_name: "bPartyTokenName"
+        into_account:
+          role_token: "bParty"
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: AutoRun
+    soContractNickname: Swap
+
 
