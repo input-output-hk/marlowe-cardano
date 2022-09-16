@@ -84,7 +84,6 @@ library
     Language.Marlowe.Runtime.Transaction.Constraints
     Language.Marlowe.Runtime.Transaction.Server
     Language.Marlowe.Runtime.Transaction.Submit
-    Language.Marlowe.Runtime.Transaction.SystemStart
   build-depends:
       base >= 4.9 && < 5
     , aeson

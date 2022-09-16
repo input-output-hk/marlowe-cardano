@@ -16,7 +16,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (PaymentKeyHash)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import qualified Language.Marlowe.Runtime.Transaction.SystemStart as Cardano
+import qualified Language.Marlowe.Runtime.SystemStart as Cardano
 import qualified Plutus.V2.Ledger.Api as P
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.

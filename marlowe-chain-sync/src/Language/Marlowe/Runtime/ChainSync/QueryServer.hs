@@ -26,12 +26,14 @@ import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
+import Data.Bifunctor (bimap, first)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..))
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import System.IO (hPutStrLn, stderr)
+import Unsafe.Coerce (unsafeCoerce)
 
 newtype RunQueryServer m = RunQueryServer (forall a. QueryServer ChainSyncQuery m a -> IO a)
 
@@ -87,36 +89,46 @@ mkWorker WorkerDependencies{..} =
       GetSlotConfig        -> queryGenesisParameters extractSlotConfig
       GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
       GetNetworkId -> queryGenesisParameters protocolParamNetworkId
+      GetProtocolParameters -> toServerStNext <$> queryShelley (const QueryProtocolParameters)
+      GetSystemStart ->
+        toServerStNext . bimap (const ()) unsafeCoerce <$> queryLocalNodeState Nothing QuerySystemStart
+      GetEraHistory ->
+        toServerStNext . first (const ()) <$> queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
+
+    toServerStNext :: Either () a -> ServerStNext ChainSyncQuery 'CanReject Void () a IO ()
+    toServerStNext = \case
+      Left _ -> SendMsgReject () ()
+      Right a -> SendMsgNextPage a Nothing $ ServerStPage
+        { recvMsgDone = pure ()
+        , recvMsgRequestNext = absurd
+        }
 
     queryGenesisParameters :: (GenesisParameters -> a) -> IO (ServerStNext ChainSyncQuery 'CanReject Void () a IO ())
-    queryGenesisParameters f = do
-      result <- runExceptT do
-        AnyCardanoEra era <- withExceptT (const ())
-          $ ExceptT
-          $ queryLocalNodeState Nothing
-          $ QueryCurrentEra CardanoModeIsMultiEra
-        eraInMode <- case toEraInMode era CardanoMode of
-          Nothing        -> throwE ()
-          Just eraInMode -> pure eraInMode
-        shelleyBasedEra <- case eraInMode of
-          ByronEraInCardanoMode   -> throwE ()
-          ShelleyEraInCardanoMode -> pure ShelleyBasedEraShelley
-          AllegraEraInCardanoMode -> pure ShelleyBasedEraAllegra
-          MaryEraInCardanoMode    -> pure ShelleyBasedEraMary
-          AlonzoEraInCardanoMode  -> pure ShelleyBasedEraAlonzo
-          BabbageEraInCardanoMode -> pure ShelleyBasedEraBabbage
-        result <- withExceptT (const ())
-          $ ExceptT
-          $ queryLocalNodeState Nothing
-          $ QueryInEra eraInMode
-          $ QueryInShelleyBasedEra shelleyBasedEra QueryGenesisParameters
-        withExceptT (const ()) $ except result
+    queryGenesisParameters f = toServerStNext . fmap f <$> queryShelley (const QueryGenesisParameters)
 
-      case result of
-        Left _ -> pure $ SendMsgReject () ()
-        Right genesisParameters -> pure $ SendMsgNextPage (f genesisParameters) Nothing $ ServerStPage
-          { recvMsgDone = pure ()
-          , recvMsgRequestNext = absurd
-          }
+    queryShelley
+      :: (forall era. ShelleyBasedEra era -> QueryInShelleyBasedEra era result)
+      -> IO (Either () result)
+    queryShelley query = runExceptT do
+      AnyCardanoEra era <- withExceptT (const ())
+        $ ExceptT
+        $ queryLocalNodeState Nothing
+        $ QueryCurrentEra CardanoModeIsMultiEra
+      eraInMode <- case toEraInMode era CardanoMode of
+        Nothing        -> throwE ()
+        Just eraInMode -> pure eraInMode
+      shelleyBasedEra <- case eraInMode of
+        ByronEraInCardanoMode   -> throwE ()
+        ShelleyEraInCardanoMode -> pure ShelleyBasedEraShelley
+        AllegraEraInCardanoMode -> pure ShelleyBasedEraAllegra
+        MaryEraInCardanoMode    -> pure ShelleyBasedEraMary
+        AlonzoEraInCardanoMode  -> pure ShelleyBasedEraAlonzo
+        BabbageEraInCardanoMode -> pure ShelleyBasedEraBabbage
+      result <- withExceptT (const ())
+        $ ExceptT
+        $ queryLocalNodeState Nothing
+        $ QueryInEra eraInMode
+        $ QueryInShelleyBasedEra shelleyBasedEra $ query shelleyBasedEra
+      withExceptT (const ()) $ except result
 
     extractSlotConfig GenesisParameters{..} = SlotConfig protocolParamSystemStart protocolParamSlotLength
