@@ -78,10 +78,12 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ValueId(ValueId)
   , emptyState
   )
+import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.Scripts (marloweValidator, smallMarloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V2.Ledger.Api (CurrencySymbol(CurrencySymbol), POSIXTime(POSIXTime), toBuiltin)
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
+import Spec.Marlowe.Semantics.Arbitrary ()
 import System.Timeout (timeout)
 import Test.QuickCheck
   ( Gen
@@ -102,6 +104,7 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
 import Test.Tasty.QuickCheck (Property, testProperty)
 
+import qualified Cardano.Api as C
 import qualified Codec.Serialise as Serialise
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as SBS
@@ -109,6 +112,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Language.Marlowe as M
+import qualified Ledger.Tx.CardanoAPI as C
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
@@ -143,6 +147,16 @@ tests = testGroup "Contracts"
   , testProperty "Multiply by zero" mulTest
   , testProperty "Divide zero and by zero" divZeroTest
   , testProperty "DivValue rounding" divisionRoundingTest
+  , testGroup "Address serialisation"
+    [
+      testProperty "Compare to Cardano API serialisation to Bech32" addressSerialiseCardanoApi
+    , testProperty "Serialise to bytes then deserialise" addressSerialiseDeserialiseBytes
+    , testProperty "Serialise to Bech32 then deserialise" addressSerialiseDeserialiseBech32
+    ]
+  , testGroup "Party serialization"
+    [
+      testProperty "Serialise toJSON then deserialise" partySerialiseDeserialiseJSON
+    ]
   ]
 
 
@@ -151,14 +165,14 @@ marloweValidatorSize :: IO ()
 marloweValidatorSize = do
     let validator = Scripts.validatorScript marloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15265)
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15200)
 
 -- | Test that the untyped validator is not too large.
 smallMarloweValidatorSize :: IO ()
 smallMarloweValidatorSize = do
     let validator = Scripts.validatorScript smallMarloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 12965)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 12750)
 
 
 -- | Test `extractNonMerkleizedContractRoles`.
@@ -468,3 +482,55 @@ prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJson
         s <- POSIXTime <$> arbitrary
         t <- (POSIXTime *** POSIXTime) <$> arbitrary
         return $ IntervalInPastError s t
+
+
+-- | Compare address serialisation to Cardano API.
+addressSerialiseCardanoApi :: Property
+addressSerialiseCardanoApi =
+  property
+  . forAll arbitrary
+  $ \(network, address) ->
+    let
+      encoded = serialiseAddressBech32 network address
+      encoded' = C.serialiseAddress <$> C.toCardanoAddressInEra (if network == mainnet then C.Mainnet else C.Testnet (C.NetworkMagic 2)) address
+    in
+      Right encoded === encoded'
+
+
+-- | Serialise an address to bytes and then deserialize.
+addressSerialiseDeserialiseBytes :: Property
+addressSerialiseDeserialiseBytes =
+  property
+  . forAll arbitrary
+  $ \(network, address) ->
+    let
+      encoded = serialiseAddress network address
+      decoded = deserialiseAddress encoded
+    in
+      Just (network, address) === decoded
+
+
+-- | Serialise an address to Bech32 and then deserialize.
+addressSerialiseDeserialiseBech32 :: Property
+addressSerialiseDeserialiseBech32 =
+  property
+  . forAll arbitrary
+  $ \(network, address) ->
+    let
+      encoded = serialiseAddressBech32 network address
+      decoded = deserialiseAddressBech32 encoded
+    in
+      Just (network, address) === decoded
+
+
+-- | Serialise a party to JSON and then deserialise.
+partySerialiseDeserialiseJSON :: Property
+partySerialiseDeserialiseJSON =
+  property
+  . forAll arbitrary
+  $ \party ->
+    let
+      encoded = encode (party :: Party)
+      decoded = decode encoded
+    in
+      Just party === decoded

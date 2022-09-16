@@ -43,17 +43,11 @@ import Data.String (IsString(..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
+import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api
-  ( Address
-  , Credential(..)
-  , CurrencySymbol(unCurrencySymbol)
-  , POSIXTime(..)
-  , StakingCredential(..)
-  , TokenName(unTokenName)
-  )
+import Plutus.V2.Ledger.Api (CurrencySymbol(unCurrencySymbol), POSIXTime(..), TokenName(unTokenName))
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
@@ -62,6 +56,7 @@ import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
 import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
+import Text.PrettyPrint.Leijen (text)
 
 
 {- Functions that used in Plutus Core must be inlineable,
@@ -78,13 +73,16 @@ import qualified Prelude as Haskell
 {-| = Type definitions for Marlowe's seamntics
 -}
 
-data Party = Address Address | Role TokenName
+data Party = Address Network Ledger.Address | Role TokenName
   deriving stock (Generic,Haskell.Eq,Haskell.Ord)
-  deriving anyclass (Pretty)
+
+instance Pretty Party where
+  prettyFragment (Address network address) = text $ "Address " ++ Haskell.show (serialiseAddressBech32 network address)
+  prettyFragment (Role role)               = text $ "Role "    ++ Haskell.show role
 
 instance Haskell.Show Party where
-  showsPrec p (Address address) = Haskell.showParen (p Haskell.>= 11) $ Haskell.showString "Address \""
-                                              . Haskell.showsPrec 11 address
+  showsPrec p (Address network address) = Haskell.showParen (p Haskell.>= 11) $ Haskell.showString "Address \""
+                                              . Haskell.showsPrec 11 (serialiseAddressBech32 network address)
                                               . Haskell.showString "\""
   showsPrec _ (Role role) = Haskell.showsPrec 11 $ unTokenName role
 
@@ -402,34 +400,16 @@ instance ToJSON State where
 instance FromJSON Party where
   parseJSON = withObject "Party" $ \v ->
         (
-          do
-            address <- v .: "address"
-            (Address .) . Ledger.Address <$> (address .: "payment") <*> (address .:? "staking")
+          maybe (parseFail "Address") (return . uncurry Address)
+            =<< deserialiseAddressBech32
+            <$> v .: "address"
         )
     <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
-
-instance FromJSON Credential where
-  parseJSON = withObject "Credential" $ \v ->
-        (PubKeyCredential . fromString <$> (v .: "publickey_hash"))
-    <|> (ScriptCredential . fromString <$> (v .: "validator_hash"))
-
-instance FromJSON StakingCredential where
-  parseJSON = withObject "StakingCredential" $ \v ->
-        (StakingHash <$> (v .: "credential"))
-    <|> ((\(i, j, k) -> StakingPtr i j k) <$> (v .: "pointer"))
-
 instance ToJSON Party where
-  toJSON (Address (Ledger.Address payment staking)) = object ["address" .= object ["payment" .= toJSON payment, "staking" .= toJSON staking]]
-  toJSON (Role (Val.TokenName name)) =
-    object [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
-
-instance ToJSON Credential where
-  toJSON (PubKeyCredential pkh) = object ["publickey_hash" .= Haskell.show pkh]
-  toJSON (ScriptCredential vkh) = object ["validator_hash" .= Haskell.show vkh]
-
-instance ToJSON StakingCredential where
-  toJSON (StakingHash credential) = object ["credential" .= toJSON credential]
-  toJSON (StakingPtr i j k      ) = object ["pointer"    .= toJSON (i, j, k) ]
+    toJSON (Address network address) = object
+        [ "address" .= serialiseAddressBech32 network address]
+    toJSON (Role (Val.TokenName name)) = object
+        [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
 
 instance ToJSONKey ChoiceId where
   toJSONKey = JSON.ToJSONKeyValue toJSON JSON.toEncoding
@@ -712,9 +692,9 @@ instance ToJSON Contract where
 
 instance Eq Party where
     {-# INLINABLE (==) #-}
-    (Address a1) == (Address a2) = a1 == a2
-    (Role r1) == (Role r2) = r1 == r2
-    _ == _                 = False
+    Address n1 a1 == Address n2 a2 = n1 == n2 && a1 == a2
+    Role r1       == Role r2       = r1 == r2
+    _             == _             = False
 
 
 instance Eq ChoiceId where

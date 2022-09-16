@@ -25,7 +25,7 @@
               "token_name": ""
             },
             "from_account": {
-              "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+              "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
             },
             "pay": {
               "if": true,
@@ -50,14 +50,14 @@
             }
           },
           "party": {
-            "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+            "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
           },
           "of_token": {
             "currency_symbol": "",
             "token_name": ""
           },
           "into_account": {
-            "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+            "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
           }
         }
       },
@@ -67,7 +67,7 @@
             "either": {
               "chose_something_for": {
                 "choice_owner": {
-                  "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+                  "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
                 },
                 "choice_name": "choice"
               }
@@ -76,7 +76,7 @@
               "value": {
                 "value_of_choice": {
                   "choice_owner": {
-                    "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+                    "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
                   },
                   "choice_name": "choice"
                 }
@@ -87,7 +87,7 @@
           "then": {
             "to": {
               "account": {
-                "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+                "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
               }
             },
             "then": "close",
@@ -96,7 +96,7 @@
               "token_name": "name"
             },
             "from_account": {
-              "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+              "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
             },
             "pay": {
               "by": 100,
@@ -106,7 +106,7 @@
                   "token_name": "name"
                 },
                 "in_account": {
-                  "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+                  "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
                 }
               }
             }
@@ -116,7 +116,7 @@
         "case": {
           "for_choice": {
             "choice_owner": {
-              "address": {"payment" : {"publickey_hash" : "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"}}
+              "address": "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
             },
             "choice_name": "choice"
           },

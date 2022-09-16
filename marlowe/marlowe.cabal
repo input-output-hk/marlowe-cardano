@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe
-version: 0.1.1.0
+version: 0.1.0.2
 license: Apache-2.0
 license-files:
   LICENSE
@@ -52,6 +52,7 @@ library
     aeson <2,
     base16-aeson,
     base16-bytestring,
+    bech32,
     bytestring,
     containers,
     deriving-aeson,
@@ -74,6 +75,7 @@ library
     Language.Marlowe.Extended.V1
     Language.Marlowe.Core.V1.Semantics
     Language.Marlowe.Core.V1.Semantics.Types
+    Language.Marlowe.Core.V1.Semantics.Types.Address
     Language.Marlowe.FindInputs
     Language.Marlowe.Client
     Language.Marlowe.Client.History
@@ -139,6 +141,7 @@ test-suite marlowe-test
         base >=4.9 && <5,
         aeson,
         bytestring,
+        cardano-api,
         containers,
         data-default,
         hint,

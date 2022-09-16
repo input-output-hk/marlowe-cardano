@@ -28,16 +28,14 @@ module Language.Marlowe.Scripts
   where
 import GHC.Generics
 import Language.Marlowe.Core.V1.Semantics as Semantics
-import Language.Marlowe.Core.V1.Semantics.Types as Semantics hiding (Address)
-import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Party(Address))
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.Script.Utils.Typed as Scripts
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as Scripts
 import qualified Plutus.V1.Ledger.Address as Address (scriptHashAddress)
 import qualified Plutus.V1.Ledger.Value as Val
 import Plutus.V2.Ledger.Api
-  ( Address(Address)
-  , Credential(..)
+  ( Credential(..)
   , CurrencySymbol
   , Datum(Datum)
   , DatumHash(DatumHash)
@@ -55,6 +53,7 @@ import Plutus.V2.Ledger.Api
   , ValidatorHash
   , mkValidatorScript
   )
+import qualified Plutus.V2.Ledger.Api as Ledger (Address(Address))
 import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valueSpent)
 import Plutus.V2.Ledger.Tx (OutputDatum(OutputDatumHash), TxOut(TxOut, txOutAddress, txOutDatum, txOutValue))
 import PlutusTx (makeIsDataIndexed, makeLift)
@@ -209,8 +208,8 @@ mkMarloweValidator
 
     sameValidatorHash:: TxInInfo -> TxInInfo -> Bool
     sameValidatorHash
-        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential vh1) _}}
-        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential vh2) _}} = vh1 == vh2
+        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh1) _}}
+        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh2) _}} = vh1 == vh2
     sameValidatorHash _ _ = False
 
 
@@ -260,9 +259,9 @@ mkMarloweValidator
                 IChoice (ChoiceId _ party) _ -> validatePartyWitness party
                 INotify                      -> True
           where
-            validatePartyWitness (Semantics.Address address) = traceIfFalse "S" $ txSignedByAddress address
-            validatePartyWitness (Role role)                 = traceIfFalse "T" -- "Spent value not OK"
-                                                               $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
+            validatePartyWitness (Address _ address) = traceIfFalse "S" $ txSignedByAddress address
+            validatePartyWitness (Role role)         = traceIfFalse "T" -- "Spent value not OK"
+                                                       $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
     collectDeposits :: InputContent -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
@@ -276,14 +275,14 @@ mkMarloweValidator
     payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
-            Semantics.Address pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidToAddress pk
+            Address _ address  -> traceIfFalse "P" $ value `Val.leq` valuePaidToAddress address
             Role role -> let
                 hsh = findDatumHash' (rolesCurrency, role)
                 addr = Address.scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "R" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
 
-    txSignedByAddress (Address (PubKeyCredential pkh) _) = scriptContextTxInfo `txSignedBy` pkh
-    txSignedByAddress _                                  = False
+    txSignedByAddress (Ledger.Address (PubKeyCredential pkh) _) = scriptContextTxInfo `txSignedBy` pkh
+    txSignedByAddress _                                         = False
 
     valuePaidToAddress address = foldMap txOutValue $ filter ((== address) . txOutAddress) allOutputs
 

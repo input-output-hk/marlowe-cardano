@@ -179,9 +179,9 @@ makeDeposit input' =
     address' <- lift arbitrary
     pure
       $ case getInputContent input' of
-          IDeposit _ (M.Address address) (Token c n) i -> pure . TxInInfo ref $ TxOut address  (V.singleton c n i) NoOutputDatum  Nothing
-          IDeposit _ (Role _           ) (Token c n) i -> pure . TxInInfo ref $ TxOut address' (V.singleton c n i) NoOutputDatum  Nothing
-          _                                   -> mempty
+          IDeposit _ (M.Address _ address) (Token c n) i -> pure . TxInInfo ref $ TxOut address  (V.singleton c n i) NoOutputDatum  Nothing
+          IDeposit _ (Role _             ) (Token c n) i -> pure . TxInInfo ref $ TxOut address' (V.singleton c n i) NoOutputDatum  Nothing
+          _                                              -> mempty
 
 -- | Create role input for a Marlowe semantics transaction.
 makeRoleIn :: Input
@@ -231,7 +231,7 @@ makeRoleOut (TxInInfo _ (TxOut _ token _ _)) =
 makePayment :: CurrencySymbol
             -> Payment
             -> ArbitraryTransaction SemanticsTransaction([TxOut], [(DatumHash, Datum)])
-makePayment _ (Payment _ (Party (M.Address address)) value) =
+makePayment _ (Payment _ (Party (M.Address _ address)) value) =
   pure
     (
       pure $ TxOut address value NoOutputDatum Nothing
@@ -255,9 +255,9 @@ makeActionSignatory :: Input
                     -> [PubKeyHash]
 makeActionSignatory input' =
   case getInputContent input' of
-    IDeposit _          (M.Address (Address (PubKeyCredential pkh) _))  _ _  -> pure pkh
-    IChoice (ChoiceId _ (M.Address (Address (PubKeyCredential pkh) _))) _    -> pure pkh
-    _                                                                        -> mempty
+    IDeposit _          (M.Address _ (Address (PubKeyCredential pkh) _))  _ _  -> pure pkh
+    IChoice (ChoiceId _ (M.Address _ (Address (PubKeyCredential pkh) _))) _    -> pure pkh
+    _                                                                          -> mempty
 
 
 -- | Create a spending signatory for a Marlowe semantics transaction.

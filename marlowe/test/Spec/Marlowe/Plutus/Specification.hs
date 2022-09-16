@@ -450,15 +450,15 @@ checkPositiveAccounts =
 
 -- | Compute the authorization for an input.
 authorizer :: Input -> ([PubKeyHash], [TokenName])
-authorizer (NormalInput     (IDeposit _ (M.Address address) _ _        )    ) = (maybeToList $ toPubKeyHash address, mempty    )
-authorizer (NormalInput     (IDeposit _ (Role role'       ) _ _        )    ) = (mempty                            , pure role')
-authorizer (NormalInput     (IChoice (ChoiceId _ (M.Address address)) _)    ) = (maybeToList $ toPubKeyHash address, mempty    )
-authorizer (NormalInput     (IChoice (ChoiceId _ (Role role'       )) _)    ) = (mempty                            , pure role')
-authorizer (MerkleizedInput (IDeposit _ (M.Address address) _ _        ) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
-authorizer (MerkleizedInput (IDeposit _ (Role role'       ) _ _        ) _ _) = (mempty                            , pure role')
-authorizer (MerkleizedInput (IChoice (ChoiceId _ (M.Address address)) _) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
-authorizer (MerkleizedInput (IChoice (ChoiceId _ (Role role'       )) _) _ _) = (mempty                            , pure role')
-authorizer _                                                                  = (mempty                            , mempty    )
+authorizer (NormalInput     (IDeposit _ (M.Address _ address) _ _        )    ) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (NormalInput     (IDeposit _ (Role role'         ) _ _        )    ) = (mempty                            , pure role')
+authorizer (NormalInput     (IChoice (ChoiceId _ (M.Address _ address)) _)    ) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (NormalInput     (IChoice (ChoiceId _ (Role role'         )) _)    ) = (mempty                            , pure role')
+authorizer (MerkleizedInput (IDeposit _ (M.Address _ address) _ _        ) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (MerkleizedInput (IDeposit _ (Role role'       ) _ _          ) _ _) = (mempty                            , pure role')
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (M.Address _ address)) _) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (Role role'         )) _) _ _) = (mempty                            , pure role')
+authorizer _                                                                    = (mempty                            , mempty    )
 
 
 -- | Determine whether there are any authorizations in the transaction.

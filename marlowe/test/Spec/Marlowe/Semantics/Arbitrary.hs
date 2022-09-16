@@ -283,7 +283,7 @@ randomPubKeyHashes =
   ]
 
 instance Arbitrary PubKeyHash where
-  arbitrary = arbitraryFibonacci randomPubKeyHashes
+  arbitrary = arbitraryFibonacci randomPubKeyHashes `suchThat` (\(PubKeyHash h) -> lengthOfByteString h == 28)
   shrink x = filter (< x) randomPubKeyHashes
 
 
@@ -382,11 +382,10 @@ instance Arbitrary Party where
     do
        isPubKeyHash <- frequency [(2, pure True), (8, pure False)]
        if isPubKeyHash
-         then Address <$> arbitrary
+         then Address <$> arbitrary <*> arbitrary
          else Role <$> arbitraryFibonacci randomRoleNames
-  shrink (Address (Ledger.Address (PubKeyCredential x) _)) = (Role <$> randomRoleNames) <> (Address . flip Ledger.Address Nothing . PubKeyCredential <$> filter (< x) randomPubKeyHashes)
-  shrink (Address _)                                       = Role <$> randomRoleNames
-  shrink (Role x)                                          = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
+  shrink (Address _ _) = Role <$> randomRoleNames
+  shrink (Role x)      = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
 
 instance SemiArbitrary Party where
   fromContext = parties
@@ -408,7 +407,7 @@ instance Arbitrary StakingCredential where
 
 
 instance Arbitrary ValidatorHash where
-  arbitrary = arbitraryFibonacci randomValidatorHashes
+  arbitrary = arbitraryFibonacci randomValidatorHashes `suchThat` (\(ValidatorHash h) -> lengthOfByteString h == 28)
 
 
 -- | Some validator hashes.

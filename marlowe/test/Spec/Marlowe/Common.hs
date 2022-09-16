@@ -68,6 +68,7 @@ module Spec.Marlowe.Common
 
 import Data.Map.Strict (Map)
 import Data.Ratio (Ratio)
+import Data.String (fromString)
 import Language.Marlowe.Core.V1.Semantics.Types
   ( Action(..)
   , Bound(..)
@@ -84,7 +85,6 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Util (merkleizedCase)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
-import Plutus.V2.Ledger.Api (Credential(PubKeyCredential), PubKeyHash(PubKeyHash))
 import Test.QuickCheck (Gen, choose, frequency, oneof, shrinkList, sized, vectorOf)
 
 import qualified Language.Marlowe.Extended.V1 as Extended
@@ -111,16 +111,16 @@ positiveAmount = choose (1, 100)
 
 -- | Generate one of three parties at random.
 partyGen :: Gen Party
-partyGen = oneof [ return $ Role "alice"
-                 , return $ Role "bob"
-                 , return $ Address $ Ledger.Address (PubKeyCredential $ PubKeyHash "6361726f6c") Nothing
+partyGen = oneof [ return $ fromString "alice"
+                 , return $ fromString "bob"
+                 , return $ fromString "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
                  ]
 
 
 -- | Shrink a generated party.
 shrinkParty :: Party -> [Party]
 shrinkParty party = case party of
-    Address _    -> [Role "alice", Role "bob"]
+    Address _ _  -> [Role "alice", Role "bob"]
     Role "bob"   -> [Role "alice"]
     Role "alice" -> []
     _            -> []
@@ -471,7 +471,7 @@ shrinkContract cont = case cont of
 
 -- | The primary key hash for Alice.
 alicePk :: Party
-alicePk = Address $ Ledger.Address (PubKeyCredential "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2") Nothing
+alicePk = fromString "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
 
 
 -- | A contract using all Marlowe DSL terms.

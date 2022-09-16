@@ -32,12 +32,13 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Contract(Close, Pay, When)
   , Input(NormalInput)
   , InputContent(IDeposit)
-  , Party(Role)
+  , Party
   , Payee(Party)
   , State(State, accounts, boundValues, choices, minTime)
   , Token(Token)
   , Value(Constant)
   )
+import Language.Marlowe.Util ()
 import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), Value(..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
@@ -48,14 +49,23 @@ aSymbol = "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8"
 bSymbol = "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741"
 
 
+aParty :: Party
+aParty = "Party A"
+
+bParty :: Party
+bParty = "Party B"
+
+aToken :: Token
+aToken = Token aSymbol "Token A"
+
+bToken :: Token
+bToken = Token bSymbol "Token B"
+
+
 -- | The Pangram contract.
 contract :: Contract
 contract =
   let
-    aParty = Role "Party A"
-    bParty = Role "Party B"
-    aToken = Token aSymbol "Token A"
-    bToken = Token bSymbol "Token B"
     aAmount = 300_000_000
     bAmount = 500_000_000
     aTimeout = 1000
@@ -92,8 +102,8 @@ valids :: [(POSIXTime, [TransactionInput], TransactionOutput)]
 valids =
   [
     (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 1000},POSIXTime {getPOSIXTime = 1000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 1000}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit (Role "Party A") (Role "Party A") (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 2000},POSIXTime {getPOSIXTime = 2000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment (Role "Party A") (Party (Role "Party A")) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 2000}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit (Role "Party A") (Role "Party A") (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit (Role "Party B") (Role "Party B") (Token "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741" "Token B") 500000000)]}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment (Role "Party A") (Party (Role "Party B")) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])])),Payment (Role "Party B") (Party (Role "Party A")) (Value(toAM $ Map [("1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741", toAM $ Map [("Token B",500000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit aParty aParty aToken 300000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 2000},POSIXTime {getPOSIXTime = 2000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment aParty (Party aParty) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 2000}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit aParty aParty aToken 300000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit bParty bParty bToken 500000000)]}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment aParty (Party bParty) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])])),Payment bParty (Party aParty) (Value(toAM $ Map [("1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741", toAM $ Map [("Token B",500000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
   ]
 
 
@@ -102,6 +112,6 @@ invalids :: [(POSIXTime, [TransactionInput], TransactionOutput)]
 invalids =
   [
     (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 900},POSIXTime {getPOSIXTime = 900}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 1000}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit (Role "Party A") (Role "Party A") (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 500000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 2000},POSIXTime {getPOSIXTime = 2000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment (Role "Party A") (Party (Role "Party A")) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 2000}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit (Role "Party A") (Role "Party A") (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit (Role "Party A") (Role "Party B") (Token "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741" "Token B") 500000000)]}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment (Role "Party A") (Party (Role "Party B")) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])])),Payment (Role "Party B") (Party (Role "Party A")) (Value(toAM $ Map [("1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741", toAM $ Map [("Token B",500000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit aParty aParty aToken 500000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 2000},POSIXTime {getPOSIXTime = 2000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment aParty (Party aParty) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 2000}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit aParty aParty aToken 300000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit aParty bParty bToken 500000000)]}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment aParty (Party bParty) (Value(toAM $ Map [("13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8", toAM $ Map [("Token A",300000000)])])),Payment bParty (Party aParty) (Value(toAM $ Map [("1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741", toAM $ Map [("Token B",500000000)])]))], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
   ]
