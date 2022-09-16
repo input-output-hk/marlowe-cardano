@@ -74,7 +74,6 @@ spec = do
   it "terminates with InvalidCreateDatum" checkInvalidCreateDatum
   it "terminates with NotCreationTransaction" checkNotCreationTransaction
   it "discovers a contract creation" checkCreation
-  it "discovers a contract creation in the same tx as a previous close" checkCreationWithClose
   it "terminates with FollowScriptUTxOFailed" checkFollowScriptUTxOFailed
   it "terminates with TxInNotFound" checkTxInNotFound
   it "terminates with NoRedeemer" checkNoRedeemer
@@ -95,7 +94,6 @@ spec = do
   it "handles rolling back to transaction" checkRollbackToTransaction
   it "discovers a contract transaction (close)" checkCloseTransaction
   it "discovers a contract transaction (non-close)" checkNonCloseTransaction
-  it "discovers a contract transaction (close, create new)" checkCloseAndCreateInSameTransaction
   it "discovers a payout (open, redeemed before next input))" checkPayoutOpenRedeemedBefore
   it "discovers a payout (open, redeemed after next input))" checkPayoutOpenRedeemedAfter
   it "discovers a payout (open, redeemed with next input))" checkPayoutOpenRedeemedTogether
@@ -471,26 +469,6 @@ checkCreation = do
   -- resets to empty each time it is read.
   followerChanges `shouldBe` Just (emptyChanges MarloweV1)
 
-checkCreationWithClose :: Expectation
-checkCreationWithClose = do
-  let datum = createDatum
-  let scriptAddress = testScriptAddress
-  let payoutValidatorHash = testPayoutValidatorHash
-  FollowerTestResult{..} <- runFollowerTest marloweVersions
-    $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
-    $ RollForward (createTx { Chain.validityRange = Chain.MinMaxBound 0 100, Chain.inputs = Set.singleton closeTxIn }) point1 point1
-    $ Do
-        ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.empty
-            , create = Just (block1, CreateStep{..})
-            , rollbackTo = Nothing
-            }
-        )
-    $ Halt ()
-  followerError `shouldBe` Nothing
-  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
-
 checkFollowScriptUTxOFailed :: Expectation
 checkFollowScriptUTxOFailed = do
   FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
@@ -854,32 +832,6 @@ checkNonCloseTransaction = do
                         { utxo = Chain.TxOutRef applyInputsTxId 0
                         , datum = createDatum
                         }
-                    }
-                ]
-            , create = Nothing
-            , rollbackTo = Nothing
-            }
-        )
-    $ Halt ()
-  followerError `shouldBe` Nothing
-  followerChanges `shouldBe` Just (emptyChanges MarloweV1)
-
-checkCloseAndCreateInSameTransaction :: Expectation
-checkCloseAndCreateInSameTransaction = do
-  FollowerTestResult{..} <- runFollowerTestPostCreation marloweVersions
-    $ ExpectQuery (FindConsumingTxs $ Set.singleton createUTxO)
-    $ RollForward (Map.singleton createUTxO $ closeTx { Chain.outputs = [createOutput] }) point2 point2
-    $ Do
-        ( expectChanges MarloweV1 ContractChanges
-            { steps = Map.singleton block2
-                [ ApplyTransaction Transaction
-                    { transactionId = let Chain.Transaction{..} = closeTx in txId
-                    , contractId = testContractId
-                    , blockHeader = block2
-                    , validityLowerBound = posixSecondsToUTCTime 0
-                    , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = closeRedeemer
-                    , output = TransactionOutput mempty Nothing
                     }
                 ]
             , create = Nothing
