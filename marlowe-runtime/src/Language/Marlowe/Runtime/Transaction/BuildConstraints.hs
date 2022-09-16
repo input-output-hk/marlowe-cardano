@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraints
 import qualified Data.Aeson as Aeson
 import Data.Map (Map)
 import Data.Time (UTCTime)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, Assets(..), SlotConfig, TokenName, TransactionOutput)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, SlotConfig, TokenName, TransactionOutput)
 import Language.Marlowe.Runtime.Core.Api (Contract, MarloweVersion, PayoutDatum, Redeemer, TransactionScriptOutput)
 import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, CreateError, WithdrawError)
 import Language.Marlowe.Runtime.Transaction.Constraints (TxConstraints)

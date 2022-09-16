@@ -31,12 +31,10 @@ import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (UTCTime)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, BlockHeader, SlotConfig, TokenName, TransactionOutput, TxId(..), TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, SlotConfig, TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses, marloweScriptAddress, scriptAddress)
-import Language.Marlowe.Runtime.Core.Api
-  (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, TransactionScriptOutput, utxo)
+import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, utxo)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
   , CreateError(..)
@@ -49,8 +47,8 @@ import Language.Marlowe.Runtime.Transaction.Api
   )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints
   (buildApplyInputsConstraints, buildCreateConstraints, buildWithdrawConstraints)
-import Language.Marlowe.Runtime.Transaction.Constraints
-  (MarloweContext(MarloweContext), SolveConstraints, WalletContext)
+import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(MarloweContext), SolveConstraints)
+import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweScriptOutput, LoadPayoutScriptOutputs, LoadWalletContext)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
@@ -166,14 +164,6 @@ attachSubmit
   -> IO (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
 attachSubmit jobId getSubmitJob =
   atomically $ fmap (hoistAttach atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
-
-type LoadWalletContext = WalletAddresses -> IO WalletContext
-
-type LoadMarloweScriptOutput =
-  forall v. MarloweVersion v -> ContractId -> IO (Maybe (TransactionScriptOutput v, TransactionOutput))
-
-type LoadPayoutScriptOutputs =
-  forall v. MarloweVersion v -> PayoutDatum v -> IO (Map TxOutRef TransactionOutput)
 
 execCreate
   :: (MarloweVersion v -> MarloweScriptAddresses)

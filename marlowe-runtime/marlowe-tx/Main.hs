@@ -5,6 +5,15 @@ module Main
 
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
+import Data.Either (fromRight)
+import Data.Void (Void)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
+import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses)
+import qualified Language.Marlowe.Runtime.Core.AddressRegistry as Registry
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion)
+import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
+import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
+import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server
   (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
@@ -12,6 +21,8 @@ import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
+import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
+import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket
   ( AddrInfo(..)
   , AddrInfoFlag(..)
@@ -23,6 +34,7 @@ import Network.Socket
   , accept
   , bind
   , close
+  , connect
   , defaultHints
   , getAddrInfo
   , listen
@@ -69,6 +81,23 @@ run Options{..} = withSocketsDo do
           let peer = jobServerPeer server
           fst <$> runPeerWithDriver driver peer (startDState driver)
     let mkSubmitJob = Submit.mkSubmitJob
+    systemStart <- queryChainSync GetSystemStart
+    eraHistory <- queryChainSync GetEraHistory
+    protocolParameters <- queryChainSync GetProtocolParameters
+    slotConfig <- queryChainSync GetSlotConfig
+    networkId <- queryChainSync GetNetworkId
+    let
+      solveConstraints :: forall era v. SolveConstraints era v
+      solveConstraints = Constraints.solveConstraints
+        systemStart
+        eraHistory
+        protocolParameters
+    let loadWalletContext = Query.loadWalletContext
+    let loadMarloweScriptOutput = Query.loadMarloweScriptOutput
+    let loadPayoutScriptOutputs = Query.loadPayoutScriptOutputs
+    let
+      getCurrentScriptAddresses :: MarloweVersion v -> MarloweScriptAddresses
+      getCurrentScriptAddresses = Registry.getCurrentScriptAddresses networkId
     TransactionServer{..} <- atomically do
       mkTransactionServer TransactionServerDependencies{..}
     runTransactionServer
@@ -83,6 +112,20 @@ run Options{..} = withSocketsDo do
     resolve p = do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
+
+    queryChainSync :: ChainSyncQuery Void e a -> IO a
+    queryChainSync query = do
+      addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
+      bracket (openClient addr) close \socket -> do
+        let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
+        let client = liftQuery query
+        let peer = queryClientPeer client
+        result <- fst <$> runPeerWithDriver driver peer (startDState driver)
+        pure $ fromRight (error "failed to query chain seek server") result
+
+    openClient addr = bracketOnError (openSocket addr) close \sock -> do
+      connect sock $ addrAddress addr
+      pure sock
 
 data Options = Options
   { chainSeekPort      :: PortNumber
