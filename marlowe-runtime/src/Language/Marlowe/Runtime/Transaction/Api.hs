@@ -20,6 +20,7 @@ import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, TokenName, TxId, getUTCTime, putUTCTime)
 import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Transaction.Constraints (UnsolvableConstraintsError)
 import Network.Protocol.Job.Types (Command(..), SomeTag(..))
 
 -- | The low-level runtime API for building and submitting transactions.
@@ -80,8 +81,6 @@ data MarloweTxCommand status err result where
     -- ^ The Marlowe version to use
     -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
-    -> ContractId
-    -- ^ The ID of the contract to withdraw assets from.
     -> PayoutDatum v
     -- ^ The names of the roles whose assets to withdraw.
     -> MarloweTxCommand Void WithdrawError
@@ -111,7 +110,7 @@ instance Command MarloweTxCommand where
   tagFromCommand = \case
     Create era _ _ _ _ _        -> TagCreate era
     ApplyInputs era _ _ _ _ _ _ -> TagApplyInputs era
-    Withdraw era _ _ _ _        -> TagWithdraw era
+    Withdraw era _ _ _        -> TagWithdraw era
     Submit era _                -> TagSubmit era
 
   tagFromJobId = \case
@@ -174,10 +173,9 @@ instance Command MarloweTxCommand where
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidBefore
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidHereafter
       putRedeemer version redeemer
-    Withdraw _ version walletAddresses contractId payoutDatum -> do
+    Withdraw _ version walletAddresses payoutDatum -> do
       put $ SomeMarloweVersion version
       put walletAddresses
-      put contractId
       putPayoutDatum version payoutDatum
     Submit era tx -> case era of
       ScriptDataInAlonzoEra  -> put $ serialiseToCBOR tx
@@ -211,9 +209,8 @@ instance Command MarloweTxCommand where
     TagWithdraw era    -> do
       SomeMarloweVersion version <- get
       walletAddresses <- get
-      contractId <- get
       payoutDatum <- getPayoutDatum version
-      pure $ Withdraw era version walletAddresses contractId payoutDatum
+      pure $ Withdraw era version walletAddresses payoutDatum
     TagSubmit era      -> do
       bytes <- get @ByteString
       Submit era <$> case era of
@@ -299,14 +296,20 @@ data WalletAddresses = WalletAddresses
   }
   deriving (Eq, Show, Generic, Binary)
 
-data CreateError
-  deriving (Eq, Show, Generic, Binary)
+newtype CreateError
+  = CreateUnsolvableConstraints UnsolvableConstraintsError
+  deriving (Eq, Show, Generic)
+  deriving anyclass Binary
 
 data ApplyInputsError
+  = ApplyInputsUnsolvableConstraints UnsolvableConstraintsError
+  | ScriptOutputNotFound
   deriving (Eq, Show, Generic, Binary)
 
-data WithdrawError
-  deriving (Eq, Show, Generic, Binary)
+newtype WithdrawError
+  = WithdrawUnsolvableConstraints UnsolvableConstraintsError
+  deriving (Eq, Show, Generic)
+  deriving anyclass Binary
 
 data SubmitError
   = SubmitException

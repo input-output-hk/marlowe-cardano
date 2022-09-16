@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.Transaction.Constraints
@@ -6,10 +7,12 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Data.Aeson as Aeson
+import Data.Binary (Binary)
 import Data.Function (on)
 import Data.Map (Map)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (PaymentKeyHash)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -239,6 +242,7 @@ satisfiesConstraints = error "not implemented"
 
 -- | Errors that can occur when trying to solve the constraints.
 data UnsolvableConstraintsError
+  deriving (Eq, Show, Generic, Binary)
 
 -- | Data from a wallet needed to solve the constraints.
 data WalletContext = WalletContext
@@ -251,6 +255,21 @@ data WalletContext = WalletContext
   -- ^ The change address of the wallet.
   }
 
+-- | Data from Marlowe Scripts needed to solve the constraints.
+data MarloweContext = MarloweContext
+  { scriptOutput :: Maybe (Chain.TxOutRef, Chain.TransactionOutput)
+  -- ^ The UTXO at the script address, if any.
+  , payoutOutputs :: Map Chain.TxOutRef Chain.TransactionOutput
+  -- ^ The UTXOs at the payout address.
+  }
+
+type SolveConstraints era v
+   = Cardano.ScriptDataSupportedInEra era
+  -> MarloweContext
+  -> WalletContext
+  -> TxConstraints v
+  -> Either UnsolvableConstraintsError (Cardano.TxBody era)
+
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
 --
@@ -258,11 +277,8 @@ data WalletContext = WalletContext
 -- law: makeTransactionBodyAutoBalance should return a balanced transaction on
 -- the result.
 solveConstraints
-  :: Cardano.ScriptDataSupportedInEra era
-  -> Cardano.SystemStart
+  :: Cardano.SystemStart
   -> Cardano.EraHistory Cardano.CardanoMode
   -> Cardano.ProtocolParameters
-  -> WalletContext
-  -> TxConstraints v
-  -> Either UnsolvableConstraintsError (Cardano.TxBody era)
+  -> SolveConstraints era v
 solveConstraints = error "not implemented"

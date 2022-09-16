@@ -12,23 +12,32 @@ import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Exception (SomeException, catch)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT)
 import qualified Data.Aeson as Aeson
+import Data.Bifunctor (first)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, TokenName, TxId(TxId))
-import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, MarloweVersion, PayoutDatum, Redeemer)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (Address, BlockHeader, SlotConfig, TokenName, TransactionOutput, TxId(TxId), TxOutRef)
+import Language.Marlowe.Runtime.Core.Api
+  (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, TransactionScriptOutput, utxo)
 import Language.Marlowe.Runtime.Transaction.Api
-  ( ApplyInputsError
-  , CreateError
+  ( ApplyInputsError(..)
+  , CreateError(..)
   , JobId(..)
   , MarloweTxCommand(..)
   , SubmitError(..)
   , SubmitStatus(..)
   , WalletAddresses(..)
-  , WithdrawError
+  , WithdrawError(..)
   )
+import Language.Marlowe.Runtime.Transaction.BuildConstraints
+  (buildApplyInputsConstraints, buildCreateConstraints, buildWithdrawConstraints)
+import Language.Marlowe.Runtime.Transaction.Constraints
+  (MarloweContext(MarloweContext), SolveConstraints, WalletContext)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
@@ -39,6 +48,11 @@ newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer Marlo
 data TransactionServerDependencies = TransactionServerDependencies
   { acceptRunTransactionServer :: IO (RunTransactionServer IO)
   , mkSubmitJob :: forall era. ScriptDataSupportedInEra era -> Tx era -> STM SubmitJob
+  , solveConstraints :: forall era v. SolveConstraints era v
+  , loadWalletContext :: LoadWalletContext
+  , loadMarloweScriptOutput :: LoadMarloweScriptOutput
+  , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
+  , slotConfig :: SlotConfig
   }
 
 newtype TransactionServer = TransactionServer
@@ -66,6 +80,11 @@ data WorkerDependencies = WorkerDependencies
   , getSubmitJob :: TxId -> STM (Maybe SubmitJob)
   , trackSubmitJob :: TxId -> SubmitJob -> STM ()
   , mkSubmitJob :: forall era. ScriptDataSupportedInEra era -> Tx era -> STM SubmitJob
+  , solveConstraints :: forall era v. SolveConstraints era v
+  , loadWalletContext :: LoadWalletContext
+  , loadMarloweScriptOutput :: LoadMarloweScriptOutput
+  , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
+  , slotConfig :: SlotConfig
   }
 
 newtype Worker = Worker
@@ -87,11 +106,29 @@ mkWorker WorkerDependencies{..} =
     serverInit = ServerStInit
       { recvMsgExec = \case
           Create era version addresses roles metadata contract ->
-            execCreate era version addresses roles metadata contract
+            execCreate solveConstraints loadWalletContext era version addresses roles metadata contract
           ApplyInputs era version addresses contractId invalidBefore invalidHereafter redeemer ->
-            execApplyInputs era version addresses contractId invalidBefore invalidHereafter redeemer
-          Withdraw era version addresses contractId payoutDatum ->
-            execWithdraw era version addresses contractId payoutDatum
+            execApplyInputs
+              slotConfig
+              solveConstraints
+              loadWalletContext
+              loadMarloweScriptOutput
+              era
+              version
+              addresses
+              contractId
+              invalidBefore
+              invalidHereafter
+              redeemer
+          Withdraw era version addresses payoutDatum ->
+            execWithdraw
+              solveConstraints
+              loadWalletContext
+              loadPayoutScriptOutputs
+              era
+              version
+              addresses
+              payoutDatum
           Submit era tx ->
             execSubmit mkSubmitJob trackSubmitJob era tx
       , recvMsgAttach = \case
@@ -106,18 +143,44 @@ attachSubmit
 attachSubmit jobId getSubmitJob =
   atomically $ fmap (hoistAttach atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
 
+type LoadWalletContext = WalletAddresses -> IO WalletContext
+
+type LoadMarloweScriptOutput =
+  forall v. MarloweVersion v -> ContractId -> IO (Maybe (TransactionScriptOutput v, TransactionOutput))
+
+type LoadPayoutScriptOutputs =
+  forall v. MarloweVersion v -> PayoutDatum v -> IO (Map TxOutRef TransactionOutput)
+
 execCreate
-  :: ScriptDataSupportedInEra era
+  :: SolveConstraints era v
+  -> LoadWalletContext
+  -> ScriptDataSupportedInEra era
   -> MarloweVersion v
   -> WalletAddresses
   -> Map TokenName Address
   -> Map Int Aeson.Value
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void CreateError (ContractId, TxBody era) IO ())
-execCreate = error "not implemented"
+execCreate solveConstraints loadWalletContext era version addresses roleTokens metadata contract = execExceptT do
+  constraints <- except $ buildCreateConstraints version roleTokens metadata contract
+  walletContext <- lift $ loadWalletContext addresses
+  -- The marlowe context for a create transaction has no marlowe output and
+  -- empty payout outputs.
+  let marloweContext = MarloweContext Nothing mempty
+  txBody <- except
+    $ first CreateUnsolvableConstraints
+    $ solveConstraints era marloweContext walletContext constraints
+  pure (ContractId $ findMarloweOutput version txBody, txBody)
+
+findMarloweOutput :: MarloweVersion v -> TxBody era -> TxOutRef
+findMarloweOutput = error "not implemented"
 
 execApplyInputs
-  :: ScriptDataSupportedInEra era
+  :: SlotConfig
+  -> SolveConstraints era v
+  -> LoadWalletContext
+  -> LoadMarloweScriptOutput
+  -> ScriptDataSupportedInEra era
   -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
@@ -125,16 +188,54 @@ execApplyInputs
   -> Maybe UTCTime
   -> Redeemer v
   -> IO (ServerStCmd MarloweTxCommand Void ApplyInputsError (TxBody era) IO ())
-execApplyInputs = error "not implemented"
+execApplyInputs
+  slotConfig
+  solveConstraints
+  loadWalletContext
+  loadMarloweScriptOutput
+  era
+  version
+  addresses
+  contractId
+  invalidBefore
+  invalidHereafter
+  inputs = execExceptT do
+    (scriptOutput, txOut) <-
+      ExceptT $ maybe (Left ScriptOutputNotFound) Right <$> loadMarloweScriptOutput version contractId
+    constraints <- except $ buildApplyInputsConstraints
+        slotConfig
+        version
+        (scriptOutput, txOut)
+        invalidBefore
+        invalidHereafter
+        inputs
+    walletContext <- lift $ loadWalletContext addresses
+    -- The Marlowe context for an apply inputs transaction has the previous
+    -- marlowe output and no payout outputs.
+    let marloweContext = MarloweContext (Just (utxo scriptOutput, txOut)) mempty
+    except
+      $ first ApplyInputsUnsolvableConstraints
+      $ solveConstraints era marloweContext walletContext constraints
 
 execWithdraw
-  :: ScriptDataSupportedInEra era
+  :: SolveConstraints era v
+  -> LoadWalletContext
+  -> LoadPayoutScriptOutputs
+  -> ScriptDataSupportedInEra era
   -> MarloweVersion v
   -> WalletAddresses
-  -> ContractId
   -> PayoutDatum v
   -> IO (ServerStCmd MarloweTxCommand Void WithdrawError (TxBody era) IO ())
-execWithdraw = error "not implemented"
+execWithdraw solveConstraints loadWalletContext loadPayoutScriptOutputs era version addresses datum = execExceptT do
+  constraints <- except $ buildWithdrawConstraints version datum
+  walletContext <- lift $ loadWalletContext addresses
+  payoutOutputs <- lift $ loadPayoutScriptOutputs version datum
+  -- The Marlowe context for a withdraw transaction has the payout script
+  -- outputs for the requested role and no marlowe script output.
+  let marloweContext = MarloweContext Nothing payoutOutputs
+  except
+    $ first WithdrawUnsolvableConstraints
+    $ solveConstraints era marloweContext walletContext constraints
 
 execSubmit
   :: (ScriptDataSupportedInEra era -> Tx era -> STM SubmitJob)
@@ -179,3 +280,9 @@ submitJobServerCmd jobId submitJob = do
       }
     Succeeded block -> SendMsgSucceed block ()
     Failed err -> SendMsgFail err ()
+
+execExceptT
+  :: Functor m
+  => ExceptT e m a
+  -> m (ServerStCmd cmd status e a m ())
+execExceptT = fmap (either (flip SendMsgFail ()) (flip SendMsgSucceed ())) . runExceptT
