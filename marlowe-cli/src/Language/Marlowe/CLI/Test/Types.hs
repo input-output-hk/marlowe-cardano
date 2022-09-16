@@ -11,85 +11,95 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingVia                #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns #-}
 
 
-module Language.Marlowe.CLI.Test.Types (
-  AnyMarloweThread
-, ContractNickname(..)
-, ContractSource(..)
-, CustomCurrency(..)
-, CurrencyNickname(..)
-, Finished
-, MarloweContract(..)
-, MarloweReferenceScripts(..)
-, MarloweTests(..)
-, MarloweThread(..)
-, PartyRef(..)
-, Running
-, ScriptTest(..)
-, ScriptOperation(..)
-, ScriptState
-, ScriptEnv(..)
-, Seconds(..)
-, TokenAssignment(..)
-, TokenName(..)
-, UseTemplate(..)
-, Wallet(..)
-, WalletNickname(..)
-, WalletTransaction(..)
-, anyMarloweThread
-, faucetNickname
-, foldlMarloweThread
-, foldrMarloweThread
-, getMarloweThreadTransaction
-, getMarloweThreadTxIn
-, overAnyMarloweThread
-, scriptState
-, walletPubKeyHash
-, seConnection
-, seSlotConfig
-, seCostModelParams
-, seEra
-, seProtocolVersion
-, seTransactionTimeout
-, ssContracts
-, ssCurrencies
-, ssReferenceScripts
-, ssWallets
-) where
+module Language.Marlowe.CLI.Test.Types
+  ( AnyMarloweThread
+  , ContractNickname(..)
+  , ContractSource(..)
+  , CurrencyNickname(..)
+  , CustomCurrency(..)
+  , Finished
+  , MarloweContract(..)
+  , MarloweReferenceScripts(..)
+  , MarloweTests(..)
+  , MarloweThread(..)
+  , PartyRef(..)
+  , Running
+  , ScriptEnv(..)
+  , ScriptOperation(..)
+  , ScriptState
+  , ScriptTest(..)
+  , Seconds(..)
+  , TokenAssignment(..)
+  , TokenName(..)
+  , UseTemplate(..)
+  , Wallet(..)
+  , WalletNickname(..)
+  , WalletTransaction(..)
+  , anyMarloweThread
+  , faucetNickname
+  , foldlMarloweThread
+  , foldrMarloweThread
+  , getMarloweThreadTransaction
+  , getMarloweThreadTxIn
+  , overAnyMarloweThread
+  , scriptState
+  , seConnection
+  , seCostModelParams
+  , seEra
+  , seProtocolVersion
+  , seSlotConfig
+  , seTransactionTimeout
+  , ssContracts
+  , ssCurrencies
+  , ssReferenceScripts
+  , ssWallets
+  , walletPubKeyHash
+  ) where
 
 
-import Cardano.Api (AddressInEra, CardanoMode, Key (VerificationKey), LocalNodeConnectInfo, Lovelace, NetworkId,
-                    PaymentKey, PolicyId, ScriptDataSupportedInEra, TxBody)
+import Cardano.Api
+  ( AddressInEra
+  , CardanoMode
+  , Key(VerificationKey)
+  , LocalNodeConnectInfo
+  , Lovelace
+  , NetworkId
+  , PaymentKey
+  , PolicyId
+  , ScriptDataSupportedInEra
+  , TxBody
+  )
 import qualified Cardano.Api as C
 import Control.Lens (makeLenses)
-import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
+import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
-import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.String (IsString (fromString))
+import Data.String (IsString(fromString))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (MarloweScriptsRefs, MarloweTransaction (MarloweTransaction, mtInputs),
-                                   SomePaymentSigningKey, SomeTimeout)
+import Language.Marlowe.CLI.Types
+  (MarloweScriptsRefs, MarloweTransaction(MarloweTransaction, mtInputs), SomePaymentSigningKey, SomeTimeout)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()

@@ -1,7 +1,7 @@
-module Main where
+module Main
+  where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..),
-                    queryNodeLocalState)
+import Cardano.Api (CardanoMode, ConsensusModeParams(..), EpochSlots(..), LocalNodeConnectInfo(..), queryNodeLocalState)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
@@ -9,33 +9,47 @@ import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
 import Control.Concurrent.STM (atomically, modifyTVar, newTVarIO, readTVar)
 import Control.Exception (bracket, bracketOnError, finally, throwIO)
 import Control.Monad ((<=<))
-import Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT, withExceptT)
+import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
-import Data.String (IsString (fromString))
+import Data.String (IsString(fromString))
 import Data.Text (unpack)
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
-import Hasql.Pool (UsageError (..))
+import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Language.Marlowe.Runtime.ChainSync (ChainSync (..), ChainSyncDependencies (..), mkChainSync)
-import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis (..), runtimeChainSeekCodec)
+import Language.Marlowe.Runtime.ChainSync (ChainSync(..), ChainSyncDependencies(..), mkChainSync)
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
-import Language.Marlowe.Runtime.ChainSync.QueryServer (RunQueryServer (..))
-import Language.Marlowe.Runtime.ChainSync.Server (RunChainSeekServer (..))
+import Language.Marlowe.Runtime.ChainSync.QueryServer (RunQueryServer(..))
+import Language.Marlowe.Runtime.ChainSync.Server (RunChainSeekServer(..))
 import Network.Channel (effectChannel, socketAsChannel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
-import Network.Socket (AddrInfo (..), AddrInfoFlag (..), SockAddr, SocketOption (ReuseAddr), SocketType (..), bind,
-                       close, defaultHints, getAddrInfo, listen, openSocket, setCloseOnExecIfNeeded, setSocketOption,
-                       withFdSocket, withSocketsDo)
+import Network.Socket
+  ( AddrInfo(..)
+  , AddrInfoFlag(..)
+  , SockAddr
+  , SocketOption(ReuseAddr)
+  , SocketType(..)
+  , bind
+  , close
+  , defaultHints
+  , getAddrInfo
+  , listen
+  , openSocket
+  , setCloseOnExecIfNeeded
+  , setSocketOption
+  , withFdSocket
+  , withSocketsDo
+  )
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
-import Options (Options (..), getOptions)
+import Options (Options(..), getOptions)
 import System.IO (hPrint, hPutStr, stderr)
 
 main :: IO ()

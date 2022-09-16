@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.Forward
   ( forward
-  )
-where
+  ) where
 
 import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common

@@ -1,18 +1,33 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
-module Actus.Domain.ContractTerms where
+module Actus.Domain.ContractTerms
+  where
 
 import Control.Applicative ((<|>))
 import Control.Monad (guard, mzero)
 import Data.Aeson.TH (deriveJSON)
-import Data.Aeson.Types (FromJSON, Options (..), Parser, SumEncoding (..), ToJSON, Value (..), defaultOptions,
-                         genericParseJSON, object, parseJSON, toJSON, (.:), (.:?), (.=))
+import Data.Aeson.Types
+  ( FromJSON
+  , Options(..)
+  , Parser
+  , SumEncoding(..)
+  , ToJSON
+  , Value(..)
+  , defaultOptions
+  , genericParseJSON
+  , object
+  , parseJSON
+  , toJSON
+  , (.:)
+  , (.:?)
+  , (.=)
+  )
 import Data.Maybe (fromMaybe)
 import Data.Text as T hiding (reverse, takeWhile)
 import Data.Text.Read as T

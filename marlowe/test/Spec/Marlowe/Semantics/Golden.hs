@@ -11,23 +11,23 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Semantics.Golden (
--- * Types
-  GoldenTransaction
-, GoldenCase
--- * Testing
-, tests
--- * Reference contracts
-, goldenContracts
-, goldenTransactions
-) where
+module Spec.Marlowe.Semantics.Golden
+  ( -- * Types
+    GoldenCase
+  , GoldenTransaction
+    -- * Testing
+  , tests
+    -- * Reference contracts
+  , goldenContracts
+  , goldenTransactions
+  ) where
 
 
 import Data.List (intercalate)

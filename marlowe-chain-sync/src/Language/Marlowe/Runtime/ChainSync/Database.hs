@@ -1,10 +1,11 @@
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.ChainSync.Database where
+module Language.Marlowe.Runtime.ChainSync.Database
+  where
 
-import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint (..), TxInMode)
+import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint(..), TxInMode)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
-import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock (..))
+import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock(..))
 import Ouroboros.Network.Point (WithOrigin)
 
 type CardanoBlock = BlockInMode CardanoMode

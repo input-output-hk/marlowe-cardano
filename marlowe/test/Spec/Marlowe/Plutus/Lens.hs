@@ -14,35 +14,47 @@
 {-# LANGUAGE RankNTypes #-}
 
 
-module Spec.Marlowe.Plutus.Lens (
--- * Operators
-  (<><~)
-, (<>%~)
--- * Lenses
-, scriptContextPurposeLens
-, scriptContextTxInfoLens
-, txInfoDCertLens
-, txInfoDataLens
-, txInfoFeeLens
-, txInfoIdLens
-, txInfoInputsLens
-, txInfoMintLens
-, txInfoOutputsLens
-, txInfoRedeemersLens
-, txInfoReferenceInputsLens
-, txInfoSignatoriesLens
-, txInfoValidRangeLens
-, txInfoWdrlLens
-) where
+module Spec.Marlowe.Plutus.Lens
+  ( -- * Operators
+    (<>%~)
+  , (<><~)
+    -- * Lenses
+  , scriptContextPurposeLens
+  , scriptContextTxInfoLens
+  , txInfoDCertLens
+  , txInfoDataLens
+  , txInfoFeeLens
+  , txInfoIdLens
+  , txInfoInputsLens
+  , txInfoMintLens
+  , txInfoOutputsLens
+  , txInfoRedeemersLens
+  , txInfoReferenceInputsLens
+  , txInfoSignatoriesLens
+  , txInfoValidRangeLens
+  , txInfoWdrlLens
+  ) where
 
 
 import Control.Lens (Lens', lens, use, (<>=))
 import Control.Monad.State (MonadState)
-import Plutus.V2.Ledger.Api (DCert, Datum, DatumHash, Map, POSIXTimeRange, PubKeyHash, Redeemer,
-                             ScriptContext (scriptContextPurpose, scriptContextTxInfo), ScriptPurpose,
-                             StakingCredential, TxId, TxInInfo,
-                             TxInfo (txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl),
-                             TxOut, Value)
+import Plutus.V2.Ledger.Api
+  ( DCert
+  , Datum
+  , DatumHash
+  , Map
+  , POSIXTimeRange
+  , PubKeyHash
+  , Redeemer
+  , ScriptContext(scriptContextPurpose, scriptContextTxInfo)
+  , ScriptPurpose
+  , StakingCredential
+  , TxId
+  , TxInInfo
+  , TxInfo(txInfoDCert, txInfoData, txInfoFee, txInfoId, txInfoInputs, txInfoMint, txInfoOutputs, txInfoRedeemers, txInfoReferenceInputs, txInfoSignatories, txInfoValidRange, txInfoWdrl)
+  , TxOut
+  , Value
+  )
 
 
 -- | Append a monadic value to a field.

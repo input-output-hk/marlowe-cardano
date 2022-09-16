@@ -3,8 +3,7 @@ module Actus.Utility
   , module Actus.Utility.DateShift
   , module Actus.Utility.ScheduleGenerator
   , module Actus.Utility.YearFraction
-  )
-  where
+  ) where
 
 import Actus.Utility.ANN.Annuity
 import Actus.Utility.DateShift

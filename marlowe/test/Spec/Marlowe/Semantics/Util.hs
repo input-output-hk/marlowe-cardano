@@ -14,16 +14,16 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Spec.Marlowe.Semantics.Util (
--- * Functions
-  truncatedDivide
-, flattenMoney
-, stateEq
-) where
+module Spec.Marlowe.Semantics.Util
+  ( -- * Functions
+    flattenMoney
+  , stateEq
+  , truncatedDivide
+  ) where
 
 
 import Data.Function (on)
-import Language.Marlowe.Core.V1.Semantics.Types (Money, State (..), Token (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Money, State(..), Token(..))
 import Plutus.V1.Ledger.Value (flattenValue)
 import Spec.Marlowe.Semantics.AssocMap (assocMapSort)
 

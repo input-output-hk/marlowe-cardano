@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 
-module Main where
+module Main
+  where
 
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
@@ -8,16 +9,16 @@ import Data.Either (fromRight)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery (..), RuntimeChainSeekClient, WithGenesis (..),
-                                               runtimeChainSeekCodec)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import Language.Marlowe.Runtime.History (History (..), HistoryDependencies (..), mkHistory)
+import Language.Marlowe.Runtime.History (History(..), HistoryDependencies(..), mkHistory)
 import Language.Marlowe.Runtime.History.Api (historyJobCodec, historyQueryCodec)
-import Language.Marlowe.Runtime.History.JobServer (RunJobServer (RunJobServer))
-import Language.Marlowe.Runtime.History.QueryServer (RunQueryServer (RunQueryServer))
+import Language.Marlowe.Runtime.History.JobServer (RunJobServer(RunJobServer))
+import Language.Marlowe.Runtime.History.QueryServer (RunQueryServer(RunQueryServer))
 import Language.Marlowe.Runtime.History.Store (hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
-import Language.Marlowe.Runtime.History.SyncServer (RunSyncServer (..))
+import Language.Marlowe.Runtime.History.SyncServer (RunSyncServer(..))
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
@@ -25,12 +26,45 @@ import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
-import Network.Socket (AddrInfo (..), AddrInfoFlag (..), HostName, PortNumber, SockAddr, SocketOption (..),
-                       SocketType (..), accept, bind, close, connect, defaultHints, getAddrInfo, listen, openSocket,
-                       setCloseOnExecIfNeeded, setSocketOption, withFdSocket, withSocketsDo)
+import Network.Socket
+  ( AddrInfo(..)
+  , AddrInfoFlag(..)
+  , HostName
+  , PortNumber
+  , SockAddr
+  , SocketOption(..)
+  , SocketType(..)
+  , accept
+  , bind
+  , close
+  , connect
+  , defaultHints
+  , getAddrInfo
+  , listen
+  , openSocket
+  , setCloseOnExecIfNeeded
+  , setSocketOption
+  , withFdSocket
+  , withSocketsDo
+  )
 import Network.TypedProtocol (runPeerWithDriver, startDState)
-import Options.Applicative (auto, execParser, fullDesc, header, help, helper, info, long, metavar, option, progDesc,
-                            short, showDefault, strOption, value)
+import Options.Applicative
+  ( auto
+  , execParser
+  , fullDesc
+  , header
+  , help
+  , helper
+  , info
+  , long
+  , metavar
+  , option
+  , progDesc
+  , short
+  , showDefault
+  , strOption
+  , value
+  )
 
 main :: IO ()
 main = run =<< getOptions

@@ -1,9 +1,27 @@
-module Options where
+module Options
+  where
 
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), parseContractId)
+import Language.Marlowe.Runtime.Core.Api (ContractId(..), parseContractId)
 import Network.Socket (HostName, PortNumber)
-import Options.Applicative (argument, auto, execParser, fullDesc, header, help, helper, info, long, maybeReader,
-                            metavar, option, progDesc, short, showDefault, strOption, value)
+import Options.Applicative
+  ( argument
+  , auto
+  , execParser
+  , fullDesc
+  , header
+  , help
+  , helper
+  , info
+  , long
+  , maybeReader
+  , metavar
+  , option
+  , progDesc
+  , short
+  , showDefault
+  , strOption
+  , value
+  )
 
 data Options = Options
   { port       :: PortNumber

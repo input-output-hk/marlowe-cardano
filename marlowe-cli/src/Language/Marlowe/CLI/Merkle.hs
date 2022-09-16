@@ -12,23 +12,23 @@
 
 
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Merkle (
--- * Merkleization
-  merkleize
-, merkleizeMarlowe
-, deepMerkleize
-, shallowMerkleize
--- * Demerkleization
-, demerkleize
-, deepDemerkleize
-, shallowDemerkleize
--- * Inputs
-, merkleizeInputs
-, merkleizeInput
-) where
+module Language.Marlowe.CLI.Merkle
+  ( -- * Merkleization
+    deepMerkleize
+  , merkleize
+  , merkleizeMarlowe
+  , shallowMerkleize
+    -- * Demerkleization
+  , deepDemerkleize
+  , demerkleize
+  , shallowDemerkleize
+    -- * Inputs
+  , merkleizeInput
+  , merkleizeInputs
+  ) where
 
 
 import Cardano.Api (AlonzoEra, PlutusScriptV2)
@@ -39,14 +39,21 @@ import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Writer (Writer, runWriter, tell)
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Types (CliError (..), Continuations, MarloweTransaction (..))
-import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ReduceResult (..), TransactionInput (..),
-                                           TransactionOutput (..), applyInput, computeTransaction, fixInterval,
-                                           reduceContractUntilQuiescent)
-import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Input (..), IntervalResult (..), State,
-                                                 TimeInterval)
+import Language.Marlowe.CLI.Types (CliError(..), Continuations, MarloweTransaction(..))
+import Language.Marlowe.Core.V1.Semantics
+  ( ApplyResult(..)
+  , ReduceResult(..)
+  , TransactionInput(..)
+  , TransactionOutput(..)
+  , applyInput
+  , computeTransaction
+  , fixInterval
+  , reduceContractUntilQuiescent
+  )
+import Language.Marlowe.Core.V1.Semantics.Types
+  (Case(..), Contract(..), Input(..), IntervalResult(..), State, TimeInterval)
 import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltinData)
+import Plutus.V1.Ledger.Api (DatumHash(..), toBuiltinData)
 
 import qualified Data.Map.Strict as M (lookup, singleton)
 

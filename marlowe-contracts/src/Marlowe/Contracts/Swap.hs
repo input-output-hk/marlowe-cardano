@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Marlowe.Contracts.Swap where
+module Marlowe.Contracts.Swap
+  where
 
 import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common

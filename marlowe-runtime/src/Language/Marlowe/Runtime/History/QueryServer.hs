@@ -1,13 +1,14 @@
-{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE EmptyCase             #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE StrictData            #-}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.History.QueryServer where
+module Language.Marlowe.Runtime.History.QueryServer
+  where
 
-import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
+import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
 import Data.Bifunctor (bimap)

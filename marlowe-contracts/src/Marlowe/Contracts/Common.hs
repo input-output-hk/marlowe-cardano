@@ -1,6 +1,7 @@
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
-module Marlowe.Contracts.Common where
+{-# LANGUAGE OverloadedStrings #-}
+module Marlowe.Contracts.Common
+  where
 
 import Language.Marlowe.Extended.V1
 

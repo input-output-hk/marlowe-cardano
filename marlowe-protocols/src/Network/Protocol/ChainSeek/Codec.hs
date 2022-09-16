@@ -1,16 +1,19 @@
-{-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ExplicitNamespaces        #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE KindSignatures            #-}
-{-# LANGUAGE PolyKinds                 #-}
-{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.ChainSeek.Codec (DeserializeError, codecChainSeek) where
+module Network.Protocol.ChainSeek.Codec
+  ( DeserializeError
+  , codecChainSeek
+  ) where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
-import Data.Type.Equality (type (:~:) (Refl))
+import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.TypedProtocol.Codec

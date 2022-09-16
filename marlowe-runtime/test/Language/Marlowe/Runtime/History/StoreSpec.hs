@@ -1,12 +1,14 @@
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.History.StoreSpec (spec) where
+module Language.Marlowe.Runtime.History.StoreSpec
+  ( spec
+  ) where
 
 import Control.Concurrent (forkFinally, killThread)
-import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newEmptyTMVarIO, newTVar, putTMVar, readTVar,
-                               tryTakeTMVar, writeTVar)
+import Control.Concurrent.STM
+  (STM, TVar, atomically, modifyTVar, newEmptyTMVarIO, newTVar, putTMVar, readTVar, tryTakeTMVar, writeTVar)
 import Control.Exception.Base (throwIO)
 import Control.Monad (mfilter)
 import Data.Either (fromRight)
@@ -14,24 +16,29 @@ import Data.Foldable (traverse_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Some (Some (..), withSome)
-import Data.Type.Equality (type (:~:) (Refl))
-import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion (..), Transaction (..),
-                                          assertVersionsEqual)
-import Language.Marlowe.Runtime.History.Api (ContractStep (..))
-import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..), applyRollback,
-                                                  isEmptyChanges)
-import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract (..))
-import Language.Marlowe.Runtime.History.Script (HistoryScript (..), HistoryScriptBlockState (..),
-                                                HistoryScriptContractState (..), HistoryScriptEvent (..),
-                                                HistoryScriptState, reduceScriptEvent)
+import Data.Some (Some(..), withSome)
+import Data.Type.Equality (type (:~:)(Refl))
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
+import Language.Marlowe.Runtime.Core.Api
+  (ContractId, MarloweVersion, SomeMarloweVersion(..), Transaction(..), assertVersionsEqual)
+import Language.Marlowe.Runtime.History.Api (ContractStep(..))
+import Language.Marlowe.Runtime.History.Follower
+  (ContractChanges(..), SomeContractChanges(..), applyRollback, isEmptyChanges)
+import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract(..))
+import Language.Marlowe.Runtime.History.Script
+  ( HistoryScript(..)
+  , HistoryScriptBlockState(..)
+  , HistoryScriptContractState(..)
+  , HistoryScriptEvent(..)
+  , HistoryScriptState
+  , reduceScriptEvent
+  )
 import Language.Marlowe.Runtime.History.Store
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
 import Language.Marlowe.Runtime.History.Store.Model (getRoots)
 import qualified Language.Marlowe.Runtime.History.Store.Model as Model
-import Language.Marlowe.Runtime.History.Store.ModelSpec (genFindCreateStepArgs, genFindIntersectionArgs,
-                                                         genFindNextStepArgs, modelFromScript)
+import Language.Marlowe.Runtime.History.Store.ModelSpec
+  (genFindCreateStepArgs, genFindIntersectionArgs, genFindNextStepArgs, modelFromScript)
 import Test.Hspec (Spec)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Property, Testable, discard, (===))

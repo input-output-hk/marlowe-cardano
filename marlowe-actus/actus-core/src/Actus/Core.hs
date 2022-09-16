@@ -1,7 +1,7 @@
-{-# LANGUAGE BangPatterns     #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
-{-# LANGUAGE TupleSections    #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 {-| = ACTUS
 
@@ -11,13 +11,24 @@ Given ACTUS contract terms, cashflows are projected based on risk factors.
 
 module Actus.Core
   ( genProjectedCashflows
-  )
-where
+  ) where
 
-import Actus.Domain (ActusFrac, CR (..), CT (..), CashFlow (..), ContractState (..), ContractStructure (..),
-                     ContractTerms (..), DS (..), EventType (..), Reference (..), ReferenceRole (..), RiskFactors (..),
-                     ShiftedDay (..))
-import Actus.Model (CtxPOF (CtxPOF), CtxSTF (..), initializeState, maturity, payoff, schedule, stateTransition)
+import Actus.Domain
+  ( ActusFrac
+  , CR(..)
+  , CT(..)
+  , CashFlow(..)
+  , ContractState(..)
+  , ContractStructure(..)
+  , ContractTerms(..)
+  , DS(..)
+  , EventType(..)
+  , Reference(..)
+  , ReferenceRole(..)
+  , RiskFactors(..)
+  , ShiftedDay(..)
+  )
+import Actus.Model (CtxPOF(CtxPOF), CtxSTF(..), initializeState, maturity, payoff, schedule, stateTransition)
 import Control.Applicative ((<|>))
 import Control.Monad (filterM)
 import Control.Monad.Reader (Reader, ask, runReader, withReader)

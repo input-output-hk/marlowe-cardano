@@ -1,15 +1,25 @@
-{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {-| = ACTUS payoff functions -}
 module Actus.Model.Payoff
-  ( payoff
-  , CtxPOF (..)
-  )
-where
+  ( CtxPOF(..)
+  , payoff
+  ) where
 
-import Actus.Domain (ActusFrac, ActusOps (..), CT (..), ContractState (..), ContractTerms (..), EventType (..),
-                     FEB (..), PYTP (..), RiskFactors (..), ShiftedDay (..), sign)
+import Actus.Domain
+  ( ActusFrac
+  , ActusOps(..)
+  , CT(..)
+  , ContractState(..)
+  , ContractTerms(..)
+  , EventType(..)
+  , FEB(..)
+  , PYTP(..)
+  , RiskFactors(..)
+  , ShiftedDay(..)
+  , sign
+  )
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Monad (join)
 import Control.Monad.Reader (Reader, reader)

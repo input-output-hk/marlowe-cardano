@@ -1,18 +1,18 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DefaultSignatures          #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingVia                #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE NoImplicitPrelude          #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- Big hammer, but helps
 {-# OPTIONS_GHC -fno-specialise #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
@@ -41,35 +41,82 @@ and actions (i.e. /Choices/) are passed as
 /Validation Script/ is always the same Marlowe interpreter implementation, available below.
 -}
 
-module Language.Marlowe.Core.V1.Semantics where
+module Language.Marlowe.Core.V1.Semantics
+  where
 
 import Control.Applicative ((<*>), (<|>))
 import qualified Data.Aeson as JSON
-import Data.Aeson.Types (FromJSON (parseJSON), KeyValue ((.=)), Parser, ToJSON (toJSON, toJSONList), object, withArray,
-                         withObject, (.:), (.:?))
+import Data.Aeson.Types
+  (FromJSON(parseJSON), KeyValue((.=)), Parser, ToJSON(toJSON, toJSONList), object, withArray, withObject, (.:), (.:?))
 import qualified Data.Aeson.Types as JSON
-import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
+import Data.ByteString.Base16.Aeson (EncodeBase16(EncodeBase16))
 import qualified Data.Foldable as F
 import Data.Scientific (Scientific)
 import Data.Text (pack)
 import Deriving.Aeson (Generic)
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (..), Case (..), Contract (..),
-                                                 Environment (..), Input (..), InputContent (..), IntervalError (..),
-                                                 IntervalResult (..), Money, Observation (..), Party, Payee (..),
-                                                 State (..), TimeInterval, Token (..), Value (..), ValueId, emptyState,
-                                                 getAction, getInputContent, inBounds)
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( AccountId
+  , Accounts
+  , Action(..)
+  , Case(..)
+  , Contract(..)
+  , Environment(..)
+  , Input(..)
+  , InputContent(..)
+  , IntervalError(..)
+  , IntervalResult(..)
+  , Money
+  , Observation(..)
+  , Party
+  , Payee(..)
+  , State(..)
+  , TimeInterval
+  , Token(..)
+  , Value(..)
+  , ValueId
+  , emptyState
+  , getAction
+  , getInputContent
+  , inBounds
+  )
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
-import Language.Marlowe.Pretty (Pretty (..))
-import Plutus.V2.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (..), ValidatorHash (ValidatorHash))
+import Language.Marlowe.Pretty (Pretty(..))
+import Plutus.V2.Ledger.Api (CurrencySymbol(CurrencySymbol), POSIXTime(..), ValidatorHash(ValidatorHash))
 import qualified Plutus.V2.Ledger.Api as Val
 import PlutusTx (makeIsDataIndexed)
 import qualified PlutusTx.AssocMap as Map
 import qualified PlutusTx.Builtins as Builtins
 import PlutusTx.Lift (makeLift)
-import PlutusTx.Prelude (AdditiveGroup ((-)), AdditiveSemigroup ((+)), Bool (..), Eq (..), Foldable (foldMap), Integer,
-                         Maybe (..), MultiplicativeSemigroup ((*)), Ord (max, min, (<), (<=), (>), (>=)), all, foldr,
-                         fromBuiltin, fst, map, negate, not, otherwise, return, reverse, snd, toBuiltin, ($), (&&),
-                         (++), (.), (=<<), (>>=), (||))
+import PlutusTx.Prelude
+  ( AdditiveGroup((-))
+  , AdditiveSemigroup((+))
+  , Bool(..)
+  , Eq(..)
+  , Foldable(foldMap)
+  , Integer
+  , Maybe(..)
+  , MultiplicativeSemigroup((*))
+  , Ord(max, min, (<), (<=), (>), (>=))
+  , all
+  , foldr
+  , fromBuiltin
+  , fst
+  , map
+  , negate
+  , not
+  , otherwise
+  , return
+  , reverse
+  , snd
+  , toBuiltin
+  , ($)
+  , (&&)
+  , (++)
+  , (.)
+  , (=<<)
+  , (>>=)
+  , (||)
+  )
 import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
 import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, (<>))

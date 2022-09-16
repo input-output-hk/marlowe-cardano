@@ -11,38 +11,37 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 
-module Language.Marlowe.CLI.Command.Template (
--- * Marlowe CLI Commands
-  TemplateCommand(..)
-, OutputFiles(..)
-, parseTemplateCommand
-, parseTemplateCommandOutputFiles
-, runTemplateCommand
-, initialMarloweState
-, makeContract
-) where
+module Language.Marlowe.CLI.Command.Template
+  ( -- * Marlowe CLI Commands
+    OutputFiles(..)
+  , TemplateCommand(..)
+  , initialMarloweState
+  , makeContract
+  , parseTemplateCommand
+  , parseTemplateCommandOutputFiles
+  , runTemplateCommand
+  ) where
 
 
 import Actus.Marlowe (defaultRiskFactors, genContract', toMarlowe)
 import Control.Monad.Except (MonadError, MonadIO)
-import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Aeson (FromJSON(..), ToJSON(..))
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCliMaybe)
-import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, TruncateMilliseconds (TruncateMilliseconds),
-                                   toMarloweTimeout)
-import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State (..))
-import Language.Marlowe.Extended.V1 as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
+import Language.Marlowe.CLI.Types
+  (CliError(..), SomeTimeout, TruncateMilliseconds(TruncateMilliseconds), toMarloweTimeout)
+import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State(..))
+import Language.Marlowe.Extended.V1 as E (AccountId, Contract(..), Party, Timeout, Token, Value(..), toCore)
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 

@@ -14,43 +14,68 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 
-module Language.Marlowe.CLI.IO (
--- * IO
-  decodeFileStrict
-, decodeFileBuiltinData
-, getProtocolVersion
-, readVerificationKey
-, readSigningKey
-, maybeWriteTextEnvelope
-, maybeWriteJson
-, queryInEra
-, readMaybeMetadata
--- * Environment
-, getDefaultCostModel
-, getNetworkMagic
-, getNodeSocketPath
--- * Lifting
-, liftCli
-, liftCliMaybe
-, liftCliIO
-) where
+module Language.Marlowe.CLI.IO
+  ( -- * IO
+    decodeFileBuiltinData
+  , decodeFileStrict
+  , getProtocolVersion
+  , maybeWriteJson
+  , maybeWriteTextEnvelope
+  , queryInEra
+  , readMaybeMetadata
+  , readSigningKey
+  , readVerificationKey
+    -- * Environment
+  , getDefaultCostModel
+  , getNetworkMagic
+  , getNodeSocketPath
+    -- * Lifting
+  , liftCli
+  , liftCliIO
+  , liftCliMaybe
+  ) where
 
 
-import Cardano.Api (AsType (..), CardanoMode, FromSomeType (..), HasTextEnvelope, LocalNodeConnectInfo, NetworkId (..),
-                    NetworkMagic (..), QueryInEra (QueryInShelleyBasedEra), QueryInMode (QueryInEra),
-                    QueryInShelleyBasedEra (QueryProtocolParameters), ScriptDataJsonSchema (..), TxMetadataInEra (..),
-                    TxMetadataJsonSchema (..), metadataFromJson, queryNodeLocalState, readFileTextEnvelopeAnyOf,
-                    scriptDataFromJson, serialiseToTextEnvelope, writeFileTextEnvelope)
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
+import Cardano.Api
+  ( AsType(..)
+  , CardanoMode
+  , FromSomeType(..)
+  , HasTextEnvelope
+  , LocalNodeConnectInfo
+  , NetworkId(..)
+  , NetworkMagic(..)
+  , QueryInEra(QueryInShelleyBasedEra)
+  , QueryInMode(QueryInEra)
+  , QueryInShelleyBasedEra(QueryProtocolParameters)
+  , ScriptDataJsonSchema(..)
+  , TxMetadataInEra(..)
+  , TxMetadataJsonSchema(..)
+  , metadataFromJson
+  , queryNodeLocalState
+  , readFileTextEnvelopeAnyOf
+  , scriptDataFromJson
+  , serialiseToTextEnvelope
+  , writeFileTextEnvelope
+  )
+import Cardano.Api.Shelley (ProtocolParameters(protocolParamProtocolVersion), toPlutusData)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
-import Data.Aeson (FromJSON (..), ToJSON)
+import Data.Aeson (FromJSON(..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
 import Data.Yaml (decodeFileEither)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), SigningKeyFile (unSigningKeyFile), SomePaymentSigningKey,
-                                   SomePaymentVerificationKey, askEra, asksEra, toEraInMode, toShelleyBasedEra,
-                                   toTxMetadataSupportedInEra)
+import Language.Marlowe.CLI.Types
+  ( CliEnv
+  , CliError(..)
+  , SigningKeyFile(unSigningKeyFile)
+  , SomePaymentSigningKey
+  , SomePaymentVerificationKey
+  , askEra
+  , asksEra
+  , toEraInMode
+  , toShelleyBasedEra
+  , toTxMetadataSupportedInEra
+  )
 import Plutus.V1.Ledger.Api (BuiltinData)
 import PlutusTx (dataToBuiltinData)
 import System.Environment (lookupEnv)

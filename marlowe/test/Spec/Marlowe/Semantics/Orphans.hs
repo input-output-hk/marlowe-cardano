@@ -16,11 +16,12 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Semantics.Orphans (
-) where
+module Spec.Marlowe.Semantics.Orphans
+  (
+  ) where
 
 
-import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ApplyWarning (..), ReduceResult (..), ReduceWarning (..))
+import Language.Marlowe.Core.V1.Semantics (ApplyResult(..), ApplyWarning(..), ReduceResult(..), ReduceWarning(..))
 
 import qualified PlutusTx.AssocMap as AM (Map, empty, fromList, toList)
 

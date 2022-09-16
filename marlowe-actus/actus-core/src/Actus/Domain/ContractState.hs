@@ -1,9 +1,10 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TemplateHaskell #-}
 
-module Actus.Domain.ContractState where
+module Actus.Domain.ContractState
+  where
 
 import Actus.Domain.ContractTerms (PRF)
 import Control.Lens

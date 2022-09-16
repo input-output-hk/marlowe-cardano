@@ -11,39 +11,39 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE BlockArguments   #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE LambdaCase       #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command (
--- * Entry Point
-  runCLI
--- * Marlowe CLI Commands
-, Command(..)
-, parseCommand
-, runCommand
-) where
+module Language.Marlowe.CLI.Command
+  ( -- * Entry Point
+    runCLI
+    -- * Marlowe CLI Commands
+  , Command(..)
+  , parseCommand
+  , runCommand
+  ) where
 
 
-import Cardano.Api (IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra (..))
+import Cardano.Api (IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra(..))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
-import Data.Foldable (Foldable (fold), asum)
+import Data.Foldable (Foldable(fold), asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
 import Language.Marlowe.CLI.Command.Input (InputCommand, parseInputCommand, runInputCommand)
 import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRoleCommand)
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
-import Language.Marlowe.CLI.Command.Template (OutputFiles (..), TemplateCommand, parseTemplateCommand,
-                                              parseTemplateCommandOutputFiles, runTemplateCommand)
+import Language.Marlowe.CLI.Command.Template
+  (OutputFiles(..), TemplateCommand, parseTemplateCommand, parseTemplateCommandOutputFiles, runTemplateCommand)
 import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTestCommand)
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
-import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), withShelleyBasedEra)
+import Language.Marlowe.CLI.Types (CliEnv(..), CliError(..), withShelleyBasedEra)
 import System.Exit (exitFailure)
-import System.IO (BufferMode (LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
+import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 
 import Control.Applicative ((<|>))
 import Control.Monad.Reader (runReaderT)

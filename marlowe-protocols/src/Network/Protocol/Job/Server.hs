@@ -1,12 +1,13 @@
-{-# LANGUAGE DataKinds  #-}
-{-# LANGUAGE GADTs      #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A generc server for the job protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Job.Server where
+module Network.Protocol.Job.Server
+  where
 
 import Network.Protocol.Job.Types
 import Network.TypedProtocol

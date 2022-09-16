@@ -1,10 +1,11 @@
-{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.History.Store.Model where
+module Language.Marlowe.Runtime.History.Store.Model
+  where
 
 import Control.Monad (guard, (<=<))
 import Data.Bifunctor (first)
@@ -12,19 +13,19 @@ import Data.Foldable (fold)
 import Data.List (intersperse)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Semigroup (Min (..))
+import Data.Semigroup (Min(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tuple (swap)
-import Data.Type.Equality (TestEquality (testEquality), type (:~:) (Refl))
+import Data.Type.Equality (TestEquality(testEquality), type (:~:)(Refl))
 import GHC.Show (showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion (..), MarloweVersion (..))
-import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep, SomeCreateStep (SomeCreateStep))
-import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..))
-import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract (..))
-import Language.Marlowe.Runtime.History.Store (FindNextStepsResponse (..), Intersection (Intersection),
-                                               SomeContractSteps (..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
+import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion(..))
+import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep, SomeCreateStep(SomeCreateStep))
+import Language.Marlowe.Runtime.History.Follower (ContractChanges(..), SomeContractChanges(..))
+import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract(..))
+import Language.Marlowe.Runtime.History.Store
+  (FindNextStepsResponse(..), Intersection(Intersection), SomeContractSteps(..))
 
 -- | The history store is modelled as a collection of contract history traces.
 -- Keyed by contract ID.

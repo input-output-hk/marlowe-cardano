@@ -11,69 +11,93 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE BlockArguments      #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Language.Marlowe.CLI.Export (
-  exportAddress
-, buildValidatorInfo
-, buildAddress
--- * Contract and Transaction
-, exportMarlowe
-, printMarlowe
-, buildMarlowe
--- * Address
-, buildMarloweAddress
-, exportMarloweAddress
--- * Validator
-, exportMarloweValidator
-, marloweValidatorInfo
--- * Datum
-, exportDatum
-, buildMarloweDatum
--- * Redeemer
-, exportRedeemer
-, buildRedeemer
--- * Roles Address
-, exportRoleAddress
-, buildRoleAddress
--- * Role Validator
-, exportRoleValidator
-, roleValidatorInfo
--- * Role Datum
-, exportRoleDatum
-, buildRoleDatum
--- * Role Redeemer
-, exportRoleRedeemer
-, buildRoleRedeemer
-) where
+module Language.Marlowe.CLI.Export
+  ( buildAddress
+  , buildValidatorInfo
+  , exportAddress
+    -- * Contract and Transaction
+  , buildMarlowe
+  , exportMarlowe
+  , printMarlowe
+    -- * Address
+  , buildMarloweAddress
+  , exportMarloweAddress
+    -- * Validator
+  , exportMarloweValidator
+  , marloweValidatorInfo
+    -- * Datum
+  , buildMarloweDatum
+  , exportDatum
+    -- * Redeemer
+  , buildRedeemer
+  , exportRedeemer
+    -- * Roles Address
+  , buildRoleAddress
+  , exportRoleAddress
+    -- * Role Validator
+  , exportRoleValidator
+  , roleValidatorInfo
+    -- * Role Datum
+  , buildRoleDatum
+  , exportRoleDatum
+    -- * Role Redeemer
+  , buildRoleRedeemer
+  , exportRoleRedeemer
+  ) where
 
 
-import Cardano.Api (AddressInEra, NetworkId, PaymentCredential (..), PlutusScriptV2, PlutusScriptVersion,
-                    Script (PlutusScript), ScriptDataJsonSchema (..), ScriptDataSupportedInEra (..),
-                    StakeAddressReference (..), hashScript, makeShelleyAddressInEra, scriptDataToJson, serialiseAddress)
+import Cardano.Api
+  ( AddressInEra
+  , NetworkId
+  , PaymentCredential(..)
+  , PlutusScriptV2
+  , PlutusScriptVersion
+  , Script(PlutusScript)
+  , ScriptDataJsonSchema(..)
+  , ScriptDataSupportedInEra(..)
+  , StakeAddressReference(..)
+  , hashScript
+  , makeShelleyAddressInEra
+  , scriptDataToJson
+  , serialiseAddress
+  )
 import Cardano.Api.Shelley (fromPlutusData)
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (encode)
-import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, maybeWriteJson, maybeWriteTextEnvelope,
-                                queryInEra)
-import Language.Marlowe.CLI.Types (CliEnv, CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
-                                   ValidatorInfo (..), askEra, asksEra, doWithCardanoEra, doWithShelleyBasedEra,
-                                   validatorInfo', withCardanoEra, withShelleyBasedEra)
-import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..), Token (Token))
+import Language.Marlowe.CLI.IO
+  (decodeFileStrict, getDefaultCostModel, maybeWriteJson, maybeWriteTextEnvelope, queryInEra)
+import Language.Marlowe.CLI.Types
+  ( CliEnv
+  , CliError(..)
+  , DatumInfo(..)
+  , MarloweInfo(..)
+  , RedeemerInfo(..)
+  , ValidatorInfo(..)
+  , askEra
+  , asksEra
+  , doWithCardanoEra
+  , doWithShelleyBasedEra
+  , validatorInfo'
+  , withCardanoEra
+  , withShelleyBasedEra
+  )
+import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract(..), Input, State(..), Token(Token))
 import Language.Marlowe.Scripts (marloweTxInputsFromInputs, rolePayoutValidator, smallMarloweValidator)
 import Ledger.Typed.Scripts ()
 import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum (..), Redeemer (..))
+import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum(..), Redeemer(..))
 import PlutusTx (builtinDataToData, toBuiltinData)
 import System.IO (hPutStrLn, stderr)
 
@@ -87,10 +111,10 @@ import Codec.Serialise (serialise)
 import Control.Monad.Reader (MonadReader)
 import qualified Data.ByteString.Short as SBS
 import qualified Language.Marlowe.CLI.Cardano.Api as C
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion), fromTypedValidator,
-                                                      fromV2TypedValidator)
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript
+  (IsPlutusScriptLanguage(plutusScriptVersion), fromTypedValidator, fromV2TypedValidator)
 import qualified Language.Marlowe.CLI.Cardano.Api.PlutusScript as PlutusScript
-import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV2))
+import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator'(TypedValidatorV2))
 import Plutus.ApiCommon (ProtocolVersion)
 
 

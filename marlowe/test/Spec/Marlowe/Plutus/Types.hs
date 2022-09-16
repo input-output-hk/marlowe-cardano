@@ -11,58 +11,86 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Plutus.Types (
--- *Types
-  PlutusTransaction(..)
-, SemanticsTransaction(..)
-, PayoutTransaction(..)
--- * Lenses
-, parameters
-, datum
-, redeemer
-, scriptContext
-, scriptPurpose
-, txInfo
-, infoInputs
-, infoReferenceInputs
-, infoOutputs
-, infoFee
-, infoMint
-, infoDCert
-, infoWdrl
-, infoValidRange
-, infoSignatories
-, infoRedeemers
-, infoData
-, infoId
-, paramsLens
-, inputStateLens
-, inputContractLens
-, inputLens
-, outputLens
-, marloweParams
-, inputState
-, inputContract
-, input
-, output
-, paramsLens'
-, roleLens
-, amountLens
-, marloweParamsPayout
-, role
-, amount
-) where
+module Spec.Marlowe.Plutus.Types
+  ( -- *Types
+    PayoutTransaction(..)
+  , PlutusTransaction(..)
+  , SemanticsTransaction(..)
+    -- * Lenses
+  , amount
+  , amountLens
+  , datum
+  , infoDCert
+  , infoData
+  , infoFee
+  , infoId
+  , infoInputs
+  , infoMint
+  , infoOutputs
+  , infoRedeemers
+  , infoReferenceInputs
+  , infoSignatories
+  , infoValidRange
+  , infoWdrl
+  , input
+  , inputContract
+  , inputContractLens
+  , inputLens
+  , inputState
+  , inputStateLens
+  , marloweParams
+  , marloweParamsPayout
+  , output
+  , outputLens
+  , parameters
+  , paramsLens
+  , paramsLens'
+  , redeemer
+  , role
+  , roleLens
+  , scriptContext
+  , scriptPurpose
+  , txInfo
+  ) where
 
 
 import Control.Lens (Lens', lens)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams, TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
-import Plutus.V2.Ledger.Api (DCert, Datum, DatumHash, Map, POSIXTimeRange, PubKeyHash, Redeemer, ScriptContext,
-                             ScriptPurpose, StakingCredential, TokenName, TxId, TxInInfo, TxInfo, TxOut, Value)
-import Spec.Marlowe.Plutus.Lens (scriptContextPurposeLens, scriptContextTxInfoLens, txInfoDCertLens, txInfoDataLens,
-                                 txInfoFeeLens, txInfoIdLens, txInfoInputsLens, txInfoMintLens, txInfoOutputsLens,
-                                 txInfoRedeemersLens, txInfoReferenceInputsLens, txInfoSignatoriesLens,
-                                 txInfoValidRangeLens, txInfoWdrlLens)
+import Plutus.V2.Ledger.Api
+  ( DCert
+  , Datum
+  , DatumHash
+  , Map
+  , POSIXTimeRange
+  , PubKeyHash
+  , Redeemer
+  , ScriptContext
+  , ScriptPurpose
+  , StakingCredential
+  , TokenName
+  , TxId
+  , TxInInfo
+  , TxInfo
+  , TxOut
+  , Value
+  )
+import Spec.Marlowe.Plutus.Lens
+  ( scriptContextPurposeLens
+  , scriptContextTxInfoLens
+  , txInfoDCertLens
+  , txInfoDataLens
+  , txInfoFeeLens
+  , txInfoIdLens
+  , txInfoInputsLens
+  , txInfoMintLens
+  , txInfoOutputsLens
+  , txInfoRedeemersLens
+  , txInfoReferenceInputsLens
+  , txInfoSignatoriesLens
+  , txInfoValidRangeLens
+  , txInfoWdrlLens
+  )
 
 
 -- | A Plutus transaction.

@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module PlutusCore.Data.Aeson where
+module PlutusCore.Data.Aeson
+  where
 
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson.ViaSerialise as Aeson

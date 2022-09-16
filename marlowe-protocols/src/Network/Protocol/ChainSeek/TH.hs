@@ -1,11 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Network.Protocol.ChainSeek.TH (mkSchemaVersion) where
+module Network.Protocol.ChainSeek.TH
+  ( mkSchemaVersion
+  ) where
 
-import Data.Hashable (Hashable (hash))
+import Data.Hashable (Hashable(hash))
 import qualified Data.Text as T
 import Language.Haskell.TH
-import Network.Protocol.ChainSeek.Types (SchemaVersion (..))
+import Network.Protocol.ChainSeek.Types (SchemaVersion(..))
 
 -- Template Haskell is used to reliably keep the schema version updated to
 -- match the query type.

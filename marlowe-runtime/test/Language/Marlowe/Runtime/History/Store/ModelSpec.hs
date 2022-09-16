@@ -2,28 +2,41 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
 module Language.Marlowe.Runtime.History.Store.ModelSpec
-  (spec
-  , genFindCreateStepArgs
+  ( genFindCreateStepArgs
+  , genFindIntersectionArgs
   , genFindNextStepArgs
   , modelFromScript
-  , genFindIntersectionArgs
+  , spec
   ) where
 
-import Data.Bifunctor (Bifunctor (first))
+import Data.Bifunctor (Bifunctor(first))
 import Data.List (foldl')
 import qualified Data.Set as Set
 import Data.Some (withSome)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), ChainPoint, TxIx (..), TxOutRef (..), WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), SomeMarloweVersion (..), Transaction (..))
-import Language.Marlowe.Runtime.History.Api (ContractStep (..), SomeCreateStep (..))
-import Language.Marlowe.Runtime.History.Script (HistoryScript (..), HistoryScriptEvent (..), genTxId)
-import Language.Marlowe.Runtime.History.Store (FindNextStepsResponse (..), Intersection (..), SomeContractSteps (..))
-import Language.Marlowe.Runtime.History.Store.Model (HistoryRoot (..), HistoryStoreModel (..), addContract, addSteps,
-                                                     emptyHistoryStore, findCreateStep, findIntersection, findNextSteps,
-                                                     getAllBlocks, getBlocks, getRootBlocks, getRoots, getTip, rollback)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader(..), ChainPoint, TxIx(..), TxOutRef(..), WithGenesis(..))
+import Language.Marlowe.Runtime.Core.Api (ContractId(..), SomeMarloweVersion(..), Transaction(..))
+import Language.Marlowe.Runtime.History.Api (ContractStep(..), SomeCreateStep(..))
+import Language.Marlowe.Runtime.History.Script (HistoryScript(..), HistoryScriptEvent(..), genTxId)
+import Language.Marlowe.Runtime.History.Store (FindNextStepsResponse(..), Intersection(..), SomeContractSteps(..))
+import Language.Marlowe.Runtime.History.Store.Model
+  ( HistoryRoot(..)
+  , HistoryStoreModel(..)
+  , addContract
+  , addSteps
+  , emptyHistoryStore
+  , findCreateStep
+  , findIntersection
+  , findNextSteps
+  , getAllBlocks
+  , getBlocks
+  , getRootBlocks
+  , getRoots
+  , getTip
+  , rollback
+  )
 import Test.Hspec (Spec)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Arbitrary (..), Gen, chooseInt, discard, elements, frequency, oneof, sublistOf, suchThat, (===))
+import Test.QuickCheck (Arbitrary(..), Gen, chooseInt, discard, elements, frequency, oneof, sublistOf, suchThat, (===))
 import Test.QuickCheck.Property ((==>))
 
 instance Arbitrary HistoryStoreModel where

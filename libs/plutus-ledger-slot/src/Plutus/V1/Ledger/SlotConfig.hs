@@ -1,46 +1,45 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE NamedFieldPuns     #-}
-{-# LANGUAGE NoImplicitPrelude  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-# OPTIONS_GHC -Wno-orphans        #-}
 
-module Plutus.V1.Ledger.SlotConfig(
-  SlotConfig(..)
-, SlotConversionError(..)
-, slotRangeToPOSIXTimeRange
-, slotToPOSIXTimeRange
-, slotToBeginPOSIXTime
-, slotToEndPOSIXTime
-, posixTimeRangeToContainedSlotRange
-, posixTimeToEnclosingSlot
-, currentSlot
-, utcTimeToPOSIXTime
-, posixTimeToUTCTime
-, nominalDiffTimeToPOSIXTime
-, posixTimeToNominalDiffTime
-) where
+module Plutus.V1.Ledger.SlotConfig
+  ( SlotConfig(..)
+  , SlotConversionError(..)
+  , currentSlot
+  , nominalDiffTimeToPOSIXTime
+  , posixTimeRangeToContainedSlotRange
+  , posixTimeToEnclosingSlot
+  , posixTimeToNominalDiffTime
+  , posixTimeToUTCTime
+  , slotRangeToPOSIXTimeRange
+  , slotToBeginPOSIXTime
+  , slotToEndPOSIXTime
+  , slotToPOSIXTimeRange
+  , utcTimeToPOSIXTime
+  ) where
 
 import Codec.Serialise (Serialise)
 import Control.DeepSeq (NFData)
 import Data.Aeson (FromJSON, ToJSON)
-import Data.Default (Default (def))
+import Data.Default (Default(def))
 import qualified Data.Time.Clock as Time
 import qualified Data.Time.Clock.POSIX as Time
 import GHC.Generics (Generic)
 import Ledger.Orphans ()
-import Plutus.V1.Ledger.Interval (Extended (..), Interval (Interval), LowerBound (..), UpperBound (..), interval,
-                                  member)
-import Plutus.V1.Ledger.Slot (Slot (Slot), SlotRange)
-import Plutus.V1.Ledger.Time (POSIXTime (POSIXTime, getPOSIXTime), POSIXTimeRange)
+import Plutus.V1.Ledger.Interval (Extended(..), Interval(Interval), LowerBound(..), UpperBound(..), interval, member)
+import Plutus.V1.Ledger.Slot (Slot(Slot), SlotRange)
+import Plutus.V1.Ledger.Time (POSIXTime(POSIXTime, getPOSIXTime), POSIXTimeRange)
 import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (Eq, (<$>))
 import Prelude (Eq, IO, Show, (<$>))
 import qualified Prelude as Haskell
-import Prettyprinter (Pretty (pretty), (<+>))
+import Prettyprinter (Pretty(pretty), (<+>))
 
 -- | Datatype to configure the length (ms) of one slot and the beginning of the
 -- first slot.

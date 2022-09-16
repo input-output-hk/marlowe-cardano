@@ -1,17 +1,17 @@
 -- | Copied from plutus-ledger-api because not exported
-{-# LANGUAGE DerivingVia      #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Prettyprinter.Extras(
-    PrettyShow(..)
-    , Pretty(..)
-    , PrettyFoldable(..)
-    , Tagged(Tagged)
-    ) where
+module Prettyprinter.Extras
+  ( Pretty(..)
+  , PrettyFoldable(..)
+  , PrettyShow(..)
+  , Tagged(Tagged)
+  ) where
 
-import Data.Foldable (Foldable (toList))
-import Data.Proxy (Proxy (..))
-import Data.String (IsString (..))
+import Data.Foldable (Foldable(toList))
+import Data.Proxy (Proxy(..))
+import Data.String (IsString(..))
 import Data.Tagged
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Prettyprinter

@@ -1,8 +1,9 @@
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.History.FollowerSupervisor where
+module Language.Marlowe.Runtime.History.FollowerSupervisor
+  where
 
-import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
+import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard, mfilter, when, (<=<))
 import Data.Foldable (sequenceA_)
@@ -12,11 +13,11 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash, SlotConfig)
 import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
-import Language.Marlowe.Runtime.History.Api (FollowerStatus (..))
-import Language.Marlowe.Runtime.History.Follower (Follower (..), FollowerDependencies (..), SomeContractChanges,
-                                                  mkFollower)
+import Language.Marlowe.Runtime.History.Api (FollowerStatus(..))
+import Language.Marlowe.Runtime.History.Follower
+  (Follower(..), FollowerDependencies(..), SomeContractChanges, mkFollower)
 import qualified Language.Marlowe.Runtime.History.Follower as Follower
-import Witherable (Witherable (wither))
+import Witherable (Witherable(wither))
 
 data FollowerActivation
   = Deactivate

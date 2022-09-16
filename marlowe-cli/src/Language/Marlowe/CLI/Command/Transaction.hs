@@ -11,32 +11,50 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command.Transaction (
--- * Marlowe CLI Commands
-  TransactionCommand(..)
-, findPublishedCommand
-, parseTransactionCommand
-, publishCommand
-, runTransactionCommand
-) where
+module Language.Marlowe.CLI.Command.Transaction
+  ( -- * Marlowe CLI Commands
+    TransactionCommand(..)
+  , findPublishedCommand
+  , parseTransactionCommand
+  , publishCommand
+  , runTransactionCommand
+  ) where
 
 
-import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
-                    LocalNodeConnectInfo (..), NetworkId (..), SlotNo, TxIn)
+import Cardano.Api
+  ( AddressInEra
+  , ConsensusModeParams(CardanoModeParams)
+  , EpochSlots(..)
+  , IsShelleyBasedEra
+  , LocalNodeConnectInfo(..)
+  , NetworkId(..)
+  , SlotNo
+  , TxIn
+  )
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId, parseSlotNo, parseTxIn, parseTxOut, parseValue,
-                                           publishingStrategyOpt, requiredSignerOpt, requiredSignersOpt, txBodyFileOpt)
-import Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildPublishing, buildSimple,
-                                         findPublished, submit)
-import Language.Marlowe.CLI.Types (CliEnv, CliError, PrintStats (PrintStats), PublishingStrategy, SigningKeyFile,
-                                   TxBodyFile (TxBodyFile))
+import Language.Marlowe.CLI.Command.Parse
+  ( parseAddress
+  , parseNetworkId
+  , parseSlotNo
+  , parseTxIn
+  , parseTxOut
+  , parseValue
+  , publishingStrategyOpt
+  , requiredSignerOpt
+  , requiredSignersOpt
+  , txBodyFileOpt
+  )
+import Language.Marlowe.CLI.Transaction
+  (buildContinuing, buildIncoming, buildOutgoing, buildPublishing, buildSimple, findPublished, submit)
+import Language.Marlowe.CLI.Types
+  (CliEnv, CliError, PrintStats(PrintStats), PublishingStrategy, SigningKeyFile, TxBodyFile(TxBodyFile))
 
 import qualified Cardano.Api as Api (Value)
 import Control.Monad.Reader.Class (MonadReader)

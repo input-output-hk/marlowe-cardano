@@ -1,40 +1,43 @@
-{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | = Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.
 module Actus.Marlowe
-  ( genContract,
-    genContract',
-    defaultRiskFactors,
-    CashFlowMarlowe,
-    ContractTermsMarlowe,
-    RiskFactorsMarlowe,
-
+  ( CashFlowMarlowe
+  , ContractTermsMarlowe
+  , RiskFactorsMarlowe
+  , defaultRiskFactors
+  , genContract
+  , genContract'
     -- == Conversion from Double to Marlowe representation
     -- re-export
-    module Actus.Domain,
-    genProjectedCashflows,
-
+  , module Actus.Domain
+  , genProjectedCashflows
     -- utility
-    toMarlowe,
-    toMarloweFixedPoint,
-    fromMarloweFixedPoint
-  )
-where
+  , fromMarloweFixedPoint
+  , toMarlowe
+  , toMarloweFixedPoint
+  ) where
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain
-import Actus.Marlowe.Instance (CashFlowMarlowe, ContractTermsMarlowe, RiskFactorsMarlowe, fromMarloweFixedPoint,
-                               reduceContract, toMarloweFixedPoint)
+import Actus.Marlowe.Instance
+  ( CashFlowMarlowe
+  , ContractTermsMarlowe
+  , RiskFactorsMarlowe
+  , fromMarloweFixedPoint
+  , reduceContract
+  , toMarloweFixedPoint
+  )
 import Actus.Model (validateTerms)
 import Data.List as L (foldl')
-import Data.Time (LocalTime (..), UTCTime (UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
+import Data.Time (LocalTime(..), UTCTime(UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
 import Data.Time.Clock.POSIX
-import Data.Validation (Validation (..))
+import Data.Validation (Validation(..))
 import Language.Marlowe.Extended.V1
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 

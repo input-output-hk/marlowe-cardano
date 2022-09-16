@@ -11,70 +11,80 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 
-module Spec.Marlowe.Common (
--- * Types
-  PubKey(..)
-, MarloweScenario(..)
--- * Generating
-, actionGen
-, actionGenSized
-, amount
-, boundListGen
-, caseRelGenSized
-, choiceIdGen
-, contractGen
-, contractGenSized
-, contractRelGenSized
-, listLengthGen
-, observationGen
-, observationGenSized
-, partyGen
-, payeeGen
-, positiveAmount
-, rationalGen
-, simpleIntegerGen
-, tokenGen
-, valueGen
-, valueGenSized
-, valueIdGen
--- * Shrinking
-, shrinkAction
-, shrinkCase
-, shrinkChoiceId
-, shrinkContract
-, shrinkObservation
-, shrinkPOSIXTime
-, shrinkParty
-, shrinkPayee
-, shrinkSimpleInteger
-, shrinkToken
-, shrinkValue
-, shrinkValueId
--- * Instances
-, alicePk
-, pangramContract
--- * Functions
-, secondsSinceShelley
-) where
+module Spec.Marlowe.Common
+  ( -- * Types
+    MarloweScenario(..)
+  , PubKey(..)
+    -- * Generating
+  , actionGen
+  , actionGenSized
+  , amount
+  , boundListGen
+  , caseRelGenSized
+  , choiceIdGen
+  , contractGen
+  , contractGenSized
+  , contractRelGenSized
+  , listLengthGen
+  , observationGen
+  , observationGenSized
+  , partyGen
+  , payeeGen
+  , positiveAmount
+  , rationalGen
+  , simpleIntegerGen
+  , tokenGen
+  , valueGen
+  , valueGenSized
+  , valueIdGen
+    -- * Shrinking
+  , shrinkAction
+  , shrinkCase
+  , shrinkChoiceId
+  , shrinkContract
+  , shrinkObservation
+  , shrinkPOSIXTime
+  , shrinkParty
+  , shrinkPayee
+  , shrinkSimpleInteger
+  , shrinkToken
+  , shrinkValue
+  , shrinkValueId
+    -- * Instances
+  , alicePk
+  , pangramContract
+    -- * Functions
+  , secondsSinceShelley
+  ) where
 
 
 import Data.Map.Strict (Map)
 import Data.Ratio (Ratio)
-import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
-                                                 Observation (..), Party (..), Payee (..), Token (..), Value (..),
-                                                 ValueId (..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Action(..)
+  , Bound(..)
+  , Case(..)
+  , ChoiceId(..)
+  , Contract(..)
+  , Observation(..)
+  , Party(..)
+  , Payee(..)
+  , Token(..)
+  , Value(..)
+  , ValueId(..)
+  )
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Util (merkleizedCase)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-import Plutus.V2.Ledger.Api (PubKeyHash (PubKeyHash))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
+import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash))
 import Test.QuickCheck (Gen, choose, frequency, oneof, shrinkList, sized, vectorOf)
 
 import qualified Language.Marlowe.Extended.V1 as Extended

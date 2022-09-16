@@ -1,20 +1,43 @@
-{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {-| = ACTUS state transformation functions -}
 module Actus.Model.StateTransition
-  ( stateTransition
-  , CtxSTF (..)
-  )
-where
+  ( CtxSTF(..)
+  , stateTransition
+  ) where
 
-import Actus.Domain (ActusFrac (..), ActusOps (..), CEGE (..), CT (..), ContractState (..), ContractTerms (..),
-                     EventType (..), FEB (..), IPCB (..), OPTP (..), RiskFactors (..), SCEF (..), ShiftedDay (..), sign)
-import qualified Actus.Domain.ContractState as L (accruedFees, accruedInterest, accruedInterestFirstLeg,
-                                                  accruedInterestSecondLeg, exerciseAmount, interestCalculationBase,
-                                                  interestScalingMultiplier, lastInterestPeriod,
-                                                  nextPrincipalRedemptionPayment, nominalInterest, notionalPrincipal,
-                                                  notionalScalingMultiplier, statusDate)
+import Actus.Domain
+  ( ActusFrac(..)
+  , ActusOps(..)
+  , CEGE(..)
+  , CT(..)
+  , ContractState(..)
+  , ContractTerms(..)
+  , EventType(..)
+  , FEB(..)
+  , IPCB(..)
+  , OPTP(..)
+  , RiskFactors(..)
+  , SCEF(..)
+  , ShiftedDay(..)
+  , sign
+  )
+import qualified Actus.Domain.ContractState as L
+  ( accruedFees
+  , accruedInterest
+  , accruedInterestFirstLeg
+  , accruedInterestSecondLeg
+  , exerciseAmount
+  , interestCalculationBase
+  , interestScalingMultiplier
+  , lastInterestPeriod
+  , nextPrincipalRedemptionPayment
+  , nominalInterest
+  , notionalPrincipal
+  , notionalScalingMultiplier
+  , statusDate
+  )
 import Actus.Utility (annuity, inf, sup, (<+>))
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Lens

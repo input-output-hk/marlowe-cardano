@@ -1,8 +1,9 @@
-{-# LANGUAGE DataKinds  #-}
-{-# LANGUAGE GADTs      #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Protocol.Sync.Client where
+module Language.Marlowe.Protocol.Sync.Client
+  where
 
 import Language.Marlowe.Protocol.Sync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)

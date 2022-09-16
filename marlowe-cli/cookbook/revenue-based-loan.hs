@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module RevenueBasedLoan where
+module RevenueBasedLoan
+  where
 
 import Language.Marlowe.Extended.V1
 

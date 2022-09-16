@@ -1,18 +1,19 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | A view of the chain seek protocol from the point of view of the
 -- server. This provides a simplified interface for implementing the server
 -- role of the protocol. The types should be much easier to use than the
 -- underlying typed protocol types.
 
-module Network.Protocol.ChainSeek.Server where
+module Network.Protocol.ChainSeek.Server
+  where
 
 import Network.Protocol.ChainSeek.Types
-import Network.TypedProtocol (Peer (..), PeerHasAgency (..))
-import Network.TypedProtocol.Core (PeerRole (..))
+import Network.TypedProtocol (Peer(..), PeerHasAgency(..))
+import Network.TypedProtocol.Core (PeerRole(..))
 
 -- | A chain seek protocol server that runs in some monad 'm'.
 newtype ChainSeekServer query point tip m a = ChainSeekServer

@@ -11,31 +11,39 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE NumericUnderscores   #-}
-{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
-module Spec.Marlowe.Semantics.Golden.Trivial (
--- * Contracts
-  contract
--- * Test cases
-, valids
-, invalids
-) where
+module Spec.Marlowe.Semantics.Golden.Trivial
+  ( -- * Contracts
+    contract
+    -- * Test cases
+  , invalids
+  , valids
+  ) where
 
 
-import Data.String (IsString (..))
-import Language.Marlowe.Core.V1.Semantics (Payment (Payment), TransactionInput (..), TransactionOutput (..))
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Action (Deposit, Notify), Case (Case),
-                                                 Contract (Close, Pay, When), Input (NormalInput),
-                                                 InputContent (IDeposit, INotify), Observation (TrueObs),
-                                                 Party (PK, Role), Payee (Party),
-                                                 State (State, accounts, boundValues, choices, minTime), Token (Token),
-                                                 Value (Constant))
-import Plutus.V2.Ledger.Api (POSIXTime (..), Value (..))
+import Data.String (IsString(..))
+import Language.Marlowe.Core.V1.Semantics (Payment(Payment), TransactionInput(..), TransactionOutput(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( AccountId
+  , Action(Deposit, Notify)
+  , Case(Case)
+  , Contract(Close, Pay, When)
+  , Input(NormalInput)
+  , InputContent(IDeposit, INotify)
+  , Observation(TrueObs)
+  , Party(PK, Role)
+  , Payee(Party)
+  , State(State, accounts, boundValues, choices, minTime)
+  , Token(Token)
+  , Value(Constant)
+  )
+import Plutus.V2.Ledger.Api (POSIXTime(..), Value(..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 

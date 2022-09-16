@@ -11,23 +11,23 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Language.Marlowe.CLI.Command.Test (
--- * Marlowe CLI Commands
-  TestCommand
-, parseTestCommand
-, runTestCommand
-) where
+module Language.Marlowe.CLI.Command.Test
+  ( -- * Marlowe CLI Commands
+    TestCommand
+  , parseTestCommand
+  , runTestCommand
+  ) where
 
 
 import Cardano.Api (IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests))
+import Language.Marlowe.CLI.Test.Types (MarloweTests(ScriptTests))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)

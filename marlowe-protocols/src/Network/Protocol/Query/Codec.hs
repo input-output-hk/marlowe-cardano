@@ -1,15 +1,16 @@
-{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE PolyKinds          #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Query.Codec where
+module Network.Protocol.Query.Codec
+  where
 
 import Data.Binary
 import qualified Data.ByteString.Lazy as LBS
-import Data.Type.Equality (type (:~:) (Refl))
+import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Query.Types
 import Network.TypedProtocol.Codec

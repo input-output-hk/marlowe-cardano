@@ -11,10 +11,10 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Semantics (
--- * Testing
-  tests
-) where
+module Spec.Marlowe.Semantics
+  ( -- * Testing
+    tests
+  ) where
 
 
 import Test.Tasty (TestTree, testGroup)

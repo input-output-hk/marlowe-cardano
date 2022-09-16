@@ -1,6 +1,6 @@
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE NamedFieldPuns   #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
 {-| = ACTUS contract state initialization per t0
@@ -12,12 +12,24 @@ Note: initial states rely also on some schedules (and vice versa)
 
 module Actus.Model.StateInitialization
   ( initializeState
-  )
-where
+  ) where
 
-import Actus.Domain (ActusFrac, CEGE (..), CT (..), ContractState (..), ContractStructure (..), ContractTerms (..),
-                     Cycle (..), FEB (..), IPCB (..), PRF (..), Reference (..), SCEF (..), sign)
-import Actus.Model.StateTransition (CtxSTF (..))
+import Actus.Domain
+  ( ActusFrac
+  , CEGE(..)
+  , CT(..)
+  , ContractState(..)
+  , ContractStructure(..)
+  , ContractTerms(..)
+  , Cycle(..)
+  , FEB(..)
+  , IPCB(..)
+  , PRF(..)
+  , Reference(..)
+  , SCEF(..)
+  , sign
+  )
+import Actus.Model.StateTransition (CtxSTF(..))
 import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup, yearFraction)
 import Control.Applicative ((<|>))
 import Control.Monad.Reader (Reader, reader)

@@ -1,8 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Language.Marlowe.Util (ada, addAccountsDiff, emptyAccountsDiff, extractNonMerkleizedContractRoles,
-                              foldMapNonMerkleizedContract, foldMapContract, getAccountsDiff, isEmptyAccountsDiff,
-                              merkleizedCase) where
+module Language.Marlowe.Util
+  ( ada
+  , addAccountsDiff
+  , emptyAccountsDiff
+  , extractNonMerkleizedContractRoles
+  , foldMapContract
+  , foldMapNonMerkleizedContract
+  , getAccountsDiff
+  , isEmptyAccountsDiff
+  , merkleizedCase
+  ) where
 import Data.List (foldl')
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map

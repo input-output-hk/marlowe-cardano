@@ -1,4 +1,6 @@
-module Language.Marlowe.Runtime.HistorySpec (spec) where
+module Language.Marlowe.Runtime.HistorySpec
+  ( spec
+  ) where
 
 import Language.Marlowe.Runtime.History.Script (foldHistoryScript)
 import Test.Hspec (Spec, describe)

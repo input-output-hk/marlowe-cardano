@@ -5,21 +5,21 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Plutus.Debug (
--- * Debugging
-  debug
-, debugIfTrue
-, debugIfFalse
-, debugError
--- * Decoding
-, recoverFromData
-, recoverPlutusData
-) where
+module Plutus.Debug
+  ( -- * Debugging
+    debug
+  , debugError
+  , debugIfFalse
+  , debugIfTrue
+    -- * Decoding
+  , recoverFromData
+  , recoverPlutusData
+  ) where
 
 
 import Codec.Serialise (deserialise)
-import Plutus.V2.Ledger.Api (ToData (..), unsafeFromBuiltinData)
-import PlutusTx (Data, FromData (..), fromData)
+import Plutus.V2.Ledger.Api (ToData(..), unsafeFromBuiltinData)
+import PlutusTx (Data, FromData(..), fromData)
 import PlutusTx.Prelude (BuiltinString, decodeUtf8, encodeUtf8, error, fromBuiltin, trace)
 import Prelude hiding (error)
 

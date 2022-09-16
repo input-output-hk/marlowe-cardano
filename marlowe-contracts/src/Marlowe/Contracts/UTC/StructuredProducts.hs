@@ -1,4 +1,5 @@
-module Marlowe.Contracts.UTC.StructuredProducts where
+module Marlowe.Contracts.UTC.StructuredProducts
+  where
 
 import Data.Time.Clock (UTCTime)
 import Language.Marlowe.Extended.V1

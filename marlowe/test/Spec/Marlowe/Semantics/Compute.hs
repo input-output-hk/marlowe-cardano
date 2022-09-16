@@ -11,54 +11,81 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE ConstraintKinds  #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes       #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans               #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds      #-}
 
 
-module Spec.Marlowe.Semantics.Compute (
--- * Testing
-  tests
-) where
+module Spec.Marlowe.Semantics.Compute
+  ( -- * Testing
+    tests
+  ) where
 
 
 import Control.Applicative (liftA2)
 import Control.Lens.Getter (Getter, to, view)
-import Control.Monad.Except (MonadError (throwError), unless, when)
-import Control.Monad.Reader (ReaderT (runReaderT))
-import Data.Default (Default (..))
+import Control.Monad.Except (MonadError(throwError), unless, when)
+import Control.Monad.Reader (ReaderT(runReaderT))
+import Data.Default (Default(..))
 import Data.Function (on)
 import Data.List (sort)
 import Data.Tuple (swap)
-import Language.Marlowe.Core.V1.Semantics (Payment (..),
-                                           TransactionError (TEAmbiguousTimeIntervalError, TEApplyNoMatchError, TEIntervalError, TEUselessTransaction),
-                                           TransactionInput (..),
-                                           TransactionOutput (Error, txOutContract, txOutPayments, txOutState, txOutWarnings),
-                                           TransactionWarning (TransactionAssertionFailed, TransactionShadowing),
-                                           computeTransaction, evalObservation, evalValue)
-import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Accounts, Action (Choice, Deposit, Notify), Case, ChoiceId,
-                                                 ChosenNum, Contract (..), Environment (Environment), Input,
-                                                 InputContent (IChoice, IDeposit, INotify),
-                                                 IntervalError (IntervalInPastError, InvalidInterval), Observation,
-                                                 Payee (Party), State (..), TimeInterval, Token (..), Value, ValueId,
-                                                 getAction, getInputContent)
+import Language.Marlowe.Core.V1.Semantics
+  ( Payment(..)
+  , TransactionError(TEAmbiguousTimeIntervalError, TEApplyNoMatchError, TEIntervalError, TEUselessTransaction)
+  , TransactionInput(..)
+  , TransactionOutput(Error, txOutContract, txOutPayments, txOutState, txOutWarnings)
+  , TransactionWarning(TransactionAssertionFailed, TransactionShadowing)
+  , computeTransaction
+  , evalObservation
+  , evalValue
+  )
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( AccountId
+  , Accounts
+  , Action(Choice, Deposit, Notify)
+  , Case
+  , ChoiceId
+  , ChosenNum
+  , Contract(..)
+  , Environment(Environment)
+  , Input
+  , InputContent(IChoice, IDeposit, INotify)
+  , IntervalError(IntervalInPastError, InvalidInterval)
+  , Observation
+  , Payee(Party)
+  , State(..)
+  , TimeInterval
+  , Token(..)
+  , Value
+  , ValueId
+  , getAction
+  , getInputContent
+  )
 import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.V1.Ledger.Value (flattenValue)
-import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
-import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary (semiArbitrary), arbitraryContractWeighted,
-                                         assertContractWeights, closeContractWeights, defaultContractWeights,
-                                         ifContractWeights, letContractWeights, whenContractWeights)
+import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
+import Spec.Marlowe.Semantics.Arbitrary
+  ( SemiArbitrary(semiArbitrary)
+  , arbitraryContractWeighted
+  , assertContractWeights
+  , closeContractWeights
+  , defaultContractWeights
+  , ifContractWeights
+  , letContractWeights
+  , whenContractWeights
+  )
 import Spec.Marlowe.Semantics.AssocMap (assocMapEq, assocMapInsert, assocMapLookup)
 import Spec.Marlowe.Semantics.Orphans ()
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Testable (property), discard, elements, forAll, forAllShrink,
-                              suchThat, testProperty)
+import Test.Tasty.QuickCheck
+  (Arbitrary(..), Gen, Testable(property), discard, elements, forAll, forAllShrink, suchThat, testProperty)
 
 import qualified Ledger.Value as Money (singleton)
 import qualified PlutusTx.AssocMap as AM

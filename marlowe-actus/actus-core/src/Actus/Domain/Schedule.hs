@@ -1,7 +1,8 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
-module Actus.Domain.Schedule where
+module Actus.Domain.Schedule
+  where
 
 import Data.Aeson.Types (FromJSON, ToJSON)
 import Data.Time (LocalTime)

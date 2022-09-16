@@ -11,27 +11,26 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DoAndIfThenElse     #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE NumericUnderscores  #-}
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DoAndIfThenElse #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Spec.Marlowe.Marlowe (
--- * Testing
-  tests
-, prop_noFalsePositives
-, prop_showWorksForContracts
-, prop_contractJsonLoops
-, prop_marloweParamsJsonLoops
-, prop_intervalErrorJsonLoops
-)
-where
+module Spec.Marlowe.Marlowe
+  ( -- * Testing
+    prop_contractJsonLoops
+  , prop_intervalErrorJsonLoops
+  , prop_marloweParamsJsonLoops
+  , prop_noFalsePositives
+  , prop_showWorksForContracts
+  , tests
+  ) where
 
 
-import Control.Arrow (Arrow ((***)))
+import Control.Arrow (Arrow((***)))
 import Control.Exception (SomeException, catch)
 import Control.Monad (when)
 import Data.Aeson (decode, eitherDecode, encode)
@@ -40,31 +39,64 @@ import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
-import Data.String (IsString (fromString))
+import Data.String (IsString(fromString))
 import Data.Text.Lazy (toStrict)
 import GHC.IO (unsafePerformIO)
-import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
-                                     languageExtensions, runInterpreter, set, setImports)
+import Language.Haskell.Interpreter
+  ( Extension(OverloadedStrings)
+  , MonadInterpreter
+  , OptionVal((:=))
+  , as
+  , interpret
+  , languageExtensions
+  , runInterpreter
+  , set
+  , setImports
+  )
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
-import Language.Marlowe.Core.V1.Semantics (MarloweParams (MarloweParams),
-                                           TransactionInput (TransactionInput, txInputs, txInterval),
-                                           TransactionOutput (TransactionOutput, txOutState), computeTransaction,
-                                           evalValue)
-import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice, Deposit), Bound (Bound), Case (Case),
-                                                 ChoiceId (ChoiceId), Contract (Close, If, Pay, When),
-                                                 Environment (Environment),
-                                                 IntervalError (IntervalInPastError, InvalidInterval),
-                                                 Observation (ValueGE), Party (Role), Payee (Account, Party),
-                                                 State (State, accounts, boundValues, choices, minTime), Token (Token),
-                                                 Value (AddValue, Constant, DivValue, MulValue, NegValue, SubValue, UseValue),
-                                                 ValueId (ValueId), emptyState)
+import Language.Marlowe.Core.V1.Semantics
+  ( MarloweParams(MarloweParams)
+  , TransactionInput(TransactionInput, txInputs, txInterval)
+  , TransactionOutput(TransactionOutput, txOutState)
+  , computeTransaction
+  , evalValue
+  )
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Action(Choice, Deposit)
+  , Bound(Bound)
+  , Case(Case)
+  , ChoiceId(ChoiceId)
+  , Contract(Close, If, Pay, When)
+  , Environment(Environment)
+  , IntervalError(IntervalInPastError, InvalidInterval)
+  , Observation(ValueGE)
+  , Party(Role)
+  , Payee(Account, Party)
+  , State(State, accounts, boundValues, choices, minTime)
+  , Token(Token)
+  , Value(AddValue, Constant, DivValue, MulValue, NegValue, SubValue, UseValue)
+  , ValueId(ValueId)
+  , emptyState
+  )
 import Language.Marlowe.Scripts (marloweValidator, smallMarloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
-import Plutus.V2.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (POSIXTime), toBuiltin)
+import Plutus.V2.Ledger.Api (CurrencySymbol(CurrencySymbol), POSIXTime(POSIXTime), toBuiltin)
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
 import System.Timeout (timeout)
-import Test.QuickCheck (Gen, arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate,
-                        withMaxSuccess, (.&&.), (=/=), (===))
+import Test.QuickCheck
+  ( Gen
+  , arbitrary
+  , counterexample
+  , forAll
+  , forAllShrink
+  , property
+  , suchThat
+  , tabulate
+  , withMaxSuccess
+  , (.&&.)
+  , (=/=)
+  , (===)
+  )
 import Test.QuickCheck.Instances.ByteString ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
@@ -436,4 +468,3 @@ prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJson
         s <- POSIXTime <$> arbitrary
         t <- (POSIXTime *** POSIXTime) <$> arbitrary
         return $ IntervalInPastError s t
-

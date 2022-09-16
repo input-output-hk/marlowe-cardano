@@ -1,4 +1,5 @@
-module FollowingUTxOs where
+module FollowingUTxOs
+  where
 
 import Data.List (uncons)
 import Data.Maybe (fromMaybe)

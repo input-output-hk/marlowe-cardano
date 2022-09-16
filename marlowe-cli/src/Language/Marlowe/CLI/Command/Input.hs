@@ -14,12 +14,12 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command.Input (
--- * Marlowe CLI Commands
-  InputCommand(..)
-, parseInputCommand
-, runInputCommand
-) where
+module Language.Marlowe.CLI.Command.Input
+  ( -- * Marlowe CLI Commands
+    InputCommand(..)
+  , parseInputCommand
+  , runInputCommand
+  ) where
 
 
 import Control.Monad.Except (MonadIO)

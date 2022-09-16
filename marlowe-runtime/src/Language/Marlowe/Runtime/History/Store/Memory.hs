@@ -1,25 +1,26 @@
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.History.Store.Memory where
+module Language.Marlowe.Runtime.History.Store.Memory
+  where
 
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
+import Control.Monad.Trans.Maybe (MaybeT(MaybeT, runMaybeT))
 import Data.Foldable (fold)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Semialign (alignWith)
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.These (These (..))
-import Data.Type.Equality ((:~:) (Refl))
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
+import Data.These (These(..))
+import Data.Type.Equality ((:~:)(Refl))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, assertVersionsEqual)
-import Language.Marlowe.Runtime.History.Api (History (..), SomeCreateStep (..), SomeHistory (..))
+import Language.Marlowe.Runtime.History.Api (History(..), SomeCreateStep(..), SomeHistory(..))
 import qualified Language.Marlowe.Runtime.History.Api as Api
-import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..))
-import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract (..))
-import Language.Marlowe.Runtime.History.Store (FindNextStepsResponse (..), HistoryQueries (..), Intersection (..),
-                                               SomeContractSteps (..))
+import Language.Marlowe.Runtime.History.Follower (ContractChanges(..), SomeContractChanges(..))
+import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract(..))
+import Language.Marlowe.Runtime.History.Store
+  (FindNextStepsResponse(..), HistoryQueries(..), Intersection(..), SomeContractSteps(..))
 import Witherable (catMaybes)
 
 -- | Creates an in-memory store of contract history that uses STM primitives

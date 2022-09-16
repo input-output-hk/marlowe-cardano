@@ -1,19 +1,18 @@
-{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Actus.Utility.ScheduleGenerator
   ( generateRecurrentSchedule
+  , inf
+  , sup
   , (<+>)
   , (<->)
-  , sup
-  , inf
-  )
-where
+  ) where
 
-import Actus.Domain (Cycle (..), ScheduleConfig (..), ShiftedSchedule, Stub (..), mkShiftedDay)
+import Actus.Domain (Cycle(..), ScheduleConfig(..), ShiftedSchedule, Stub(..), mkShiftedDay)
 import Actus.Utility.DateShift (applyBDC, applyEOMC, shiftDate)
 import qualified Data.List as L (delete, init, last, length)
-import Data.Time (LocalTime (..))
+import Data.Time (LocalTime(..))
 
 maximumMaybe :: Ord a => [a] -> Maybe a
 maximumMaybe [] = Nothing

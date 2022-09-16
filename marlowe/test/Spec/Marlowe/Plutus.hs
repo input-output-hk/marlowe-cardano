@@ -11,10 +11,10 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Plutus (
--- * Testing
-tests
-) where
+module Spec.Marlowe.Plutus
+  ( -- * Testing
+    tests
+  ) where
 
 
 import Test.Tasty (TestTree, testGroup)

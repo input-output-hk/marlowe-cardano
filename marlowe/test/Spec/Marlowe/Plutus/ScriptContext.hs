@@ -12,23 +12,27 @@
 
 
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TupleSections  #-}
+{-# LANGUAGE TupleSections #-}
 
 
-module Spec.Marlowe.Plutus.ScriptContext (
-  tests
-) where
+module Spec.Marlowe.Plutus.ScriptContext
+  ( tests
+  ) where
 
 
 import Data.List (find)
 import Data.Maybe (catMaybes)
-import Plutus.V2.Ledger.Api (Address (Address), Credential (PubKeyCredential), TxInInfo (txInInfoResolved),
-                             TxInfo (TxInfo, txInfoData, txInfoInputs, txInfoOutputs, txInfoSignatories),
-                             TxOut (TxOut, txOutAddress, txOutValue))
+import Plutus.V2.Ledger.Api
+  ( Address(Address)
+  , Credential(PubKeyCredential)
+  , TxInInfo(txInInfoResolved)
+  , TxInfo(TxInfo, txInfoData, txInfoInputs, txInfoOutputs, txInfoSignatories)
+  , TxOut(TxOut, txOutAddress, txOutValue)
+  )
 import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Property, elements, forAll, property, suchThat, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary(..), Property, elements, forAll, property, suchThat, testProperty)
 
 import qualified PlutusTx.AssocMap as AM (toList)
 

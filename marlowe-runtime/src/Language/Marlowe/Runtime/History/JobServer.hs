@@ -1,13 +1,14 @@
-{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE EmptyCase             #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE StrictData            #-}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.History.JobServer where
+module Language.Marlowe.Runtime.History.JobServer
+  where
 
-import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
+import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (SomeException, catch)
 import Data.Map (Map)

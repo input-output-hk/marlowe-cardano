@@ -1,12 +1,13 @@
 -- | Extraction of Marlowe contracts and history from transaction data.
 
-{-# LANGUAGE BlockArguments     #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 
 
-module Language.Marlowe.Client.History where
+module Language.Marlowe.Client.History
+  where
 
 
 import GHC.Generics (Generic)
@@ -14,7 +15,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData, TransactionInput)
 import Language.Marlowe.Scripts (TypedMarloweValidator, TypedRolePayoutValidator)
 import Plutus.Script.Utils.V1.Typed.Scripts (TypedScriptTxOut, TypedScriptTxOutRef)
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (TxId (..), TxOutRef (..))
+import Plutus.V2.Ledger.Api (TxId(..), TxOutRef(..))
 
 
 -- | A transaction-output reference specific to Marlowe.

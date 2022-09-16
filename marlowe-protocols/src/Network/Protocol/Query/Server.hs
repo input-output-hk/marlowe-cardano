@@ -1,15 +1,16 @@
-{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE KindSignatures        #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | A generc server for the query protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Query.Server where
+module Network.Protocol.Query.Server
+  where
 
 import Network.Protocol.Query.Types
 import Network.TypedProtocol

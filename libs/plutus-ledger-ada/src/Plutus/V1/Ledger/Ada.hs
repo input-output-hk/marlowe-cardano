@@ -1,30 +1,30 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE DerivingVia       #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- Otherwise we get a complaint about the 'fromIntegral' call in the generated instance of 'Integral' for 'Ada'
 {-# OPTIONS_GHC -Wno-identities #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 -- | Functions for working with 'Ada' in Template Haskell.
-module Plutus.V1.Ledger.Ada(
-      Ada (..)
-    , getAda
-    , adaSymbol
-    , adaToken
+module Plutus.V1.Ledger.Ada
+  ( Ada(..)
+  , adaSymbol
+  , adaToken
+  , getAda
     -- * Constructors
-    , fromValue
-    , toValue
-    , lovelaceOf
-    , adaOf
-    , lovelaceValueOf
-    , adaValueOf
+  , adaOf
+  , adaValueOf
+  , fromValue
+  , lovelaceOf
+  , lovelaceValueOf
+  , toValue
     -- * Num operations
-    , divide
+  , divide
     -- * Etc.
-    , isZero
-    ) where
+  , isZero
+  ) where
 
 import qualified Prelude as Haskell
 
@@ -34,7 +34,7 @@ import Codec.Serialise.Class (Serialise)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Tagged
 import GHC.Generics (Generic)
-import Plutus.V1.Ledger.Value (CurrencySymbol (..), TokenName (..), Value)
+import Plutus.V1.Ledger.Value (CurrencySymbol(..), TokenName(..), Value)
 import qualified Plutus.V1.Ledger.Value as TH
 import qualified PlutusTx as PlutusTx
 import PlutusTx.Lift (makeLift)

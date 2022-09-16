@@ -1,14 +1,14 @@
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 
 module Spec.Actus.Examples
-    (tests)
-where
+  ( tests
+  ) where
 
 import Actus.Domain
 import Actus.Marlowe

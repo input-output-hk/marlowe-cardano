@@ -1,20 +1,20 @@
-{-# LANGUAGE BlockArguments             #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DefaultSignatures          #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingVia                #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE NoImplicitPrelude          #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- Big hammer, but helps
 {-# OPTIONS_GHC -fno-specialise #-}
@@ -25,7 +25,8 @@
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 
-module Language.Marlowe.Core.V1.Semantics.Types where
+module Language.Marlowe.Core.V1.Semantics.Types
+  where
 
 import Control.Applicative ((<*>), (<|>))
 import Control.Newtype.Generics (Newtype)
@@ -34,19 +35,19 @@ import qualified Data.Aeson as JSON
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types hiding (Error, Value)
 import qualified Data.Aeson.Types as JSON
-import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
+import Data.ByteString.Base16.Aeson (EncodeBase16(EncodeBase16))
 import qualified Data.ByteString.Base16.Aeson as Base16.Aeson
 import qualified Data.Foldable as F
 import Data.Scientific (floatingOrInteger, scientific)
-import Data.String (IsString (..))
+import Data.String (IsString(..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
-import Language.Marlowe.Pretty (Pretty (..))
+import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (CurrencySymbol (unCurrencySymbol), POSIXTime (..), PubKeyHash (PubKeyHash, getPubKeyHash),
-                             TokenName (unTokenName))
+import Plutus.V2.Ledger.Api
+  (CurrencySymbol(unCurrencySymbol), POSIXTime(..), PubKeyHash(PubKeyHash, getPubKeyHash), TokenName(unTokenName))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map

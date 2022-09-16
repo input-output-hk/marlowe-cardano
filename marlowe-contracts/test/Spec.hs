@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Main(main) where
+module Main
+  ( main
+  ) where
 
 import qualified Spec.Marlowe.Analysis
 import qualified Spec.Marlowe.Contracts

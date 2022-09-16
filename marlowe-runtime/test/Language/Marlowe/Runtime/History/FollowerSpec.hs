@@ -1,40 +1,64 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE RankNTypes     #-}
-{-# LANGUAGE RecursiveDo    #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecursiveDo #-}
 
-module Language.Marlowe.Runtime.History.FollowerSpec (spec) where
+module Language.Marlowe.Runtime.History.FollowerSpec
+  ( spec
+  ) where
 
 import Control.Concurrent.Async (concurrently)
 import Control.Concurrent.STM (atomically, newEmptyTMVar, putTMVar, takeTMVar)
 import Control.Exception (Exception, catch, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Control.Monad.Trans.Reader (ReaderT(runReaderT), ask)
 import Data.Functor (void)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Data.Time (secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Language.Marlowe (POSIXTime (..))
+import Language.Marlowe (POSIXTime(..))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSeekClient, Move (..), ScriptHash, SlotConfig (..),
-                                               TransactionOutput (address), TxError (..), TxId, TxOutRef (..),
-                                               UTxOError (..), WithGenesis (..), hoistChainSeekClient, toDatum, AssetId (AssetId))
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( AssetId(AssetId)
+  , ChainPoint
+  , ChainSeekClient
+  , Move(..)
+  , ScriptHash
+  , SlotConfig(..)
+  , TransactionOutput(address)
+  , TxError(..)
+  , TxId
+  , TxOutRef(..)
+  , UTxOError(..)
+  , WithGenesis(..)
+  , hoistChainSeekClient
+  , toDatum
+  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), MarloweVersionTag (..), Payout (..),
-                                          SomeMarloweVersion (..), Transaction (..), TransactionOutput (..),
-                                          TransactionScriptOutput (..), parseContractId, toChainPayoutDatum)
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , Payout(..)
+  , SomeMarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  , parseContractId
+  , toChainPayoutDatum
+  )
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
+import qualified Plutus.V1.Ledger.Value as Plutus
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)
-import Test.Network.Protocol.ChainSeek (ChainSeekServerScript (..), ServerStIdleScript (..), ServerStNextScript (..),
-                                        runClientWithScript)
-import qualified Plutus.V1.Ledger.Value as Plutus
+import Test.Network.Protocol.ChainSeek
+  (ChainSeekServerScript(..), ServerStIdleScript(..), ServerStNextScript(..), runClientWithScript)
 
 spec :: Spec
 spec = do

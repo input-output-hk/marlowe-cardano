@@ -1,11 +1,12 @@
-{-# LANGUAGE GADTs       #-}
-{-# LANGUAGE RankNTypes  #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE StrictData  #-}
+{-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.History where
+module Language.Marlowe.Runtime.History
+  where
 
-import Control.Concurrent.Async (Concurrently (..))
+import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM)
 import Data.Foldable (asum)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash, SlotConfig)
@@ -13,10 +14,10 @@ import Language.Marlowe.Runtime.Core.Api (SomeMarloweVersion)
 import Language.Marlowe.Runtime.History.FollowerSupervisor
 import Language.Marlowe.Runtime.History.JobServer
 import Language.Marlowe.Runtime.History.QueryServer
-import Language.Marlowe.Runtime.History.Store (HistoryQueries, HistoryStore (..), HistoryStoreDependencies (..),
-                                               mkHistoryStore)
-import Language.Marlowe.Runtime.History.SyncServer (HistorySyncServer (..), HistorySyncServerDependencies (..),
-                                                    RunSyncServer, mkHistorySyncServer)
+import Language.Marlowe.Runtime.History.Store
+  (HistoryQueries, HistoryStore(..), HistoryStoreDependencies(..), mkHistoryStore)
+import Language.Marlowe.Runtime.History.SyncServer
+  (HistorySyncServer(..), HistorySyncServerDependencies(..), RunSyncServer, mkHistorySyncServer)
 import Numeric.Natural (Natural)
 
 data HistoryDependencies = HistoryDependencies

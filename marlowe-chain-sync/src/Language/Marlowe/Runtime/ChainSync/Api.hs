@@ -1,8 +1,8 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE EmptyDataDeriving     #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE EmptyDataDeriving #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api
   ( Address(..)
@@ -21,6 +21,10 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , Lovelace(..)
   , Metadata
   , Move(..)
+  , module Network.Protocol.ChainSeek.Client
+  , module Network.Protocol.ChainSeek.Codec
+  , module Network.Protocol.ChainSeek.Server
+  , module Network.Protocol.ChainSeek.Types
   , PaymentKeyHash(..)
   , PolicyId(..)
   , Quantity(..)
@@ -52,10 +56,10 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , fromRedeemer
   , getUTCTime
   , isAfter
+  , moveSchema
   , paymentCredential
   , putUTCTime
   , runtimeChainSeekCodec
-  , moveSchema
   , slotToUTCTime
   , stakeReference
   , toBech32
@@ -63,34 +67,37 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , toDatum
   , toPlutusData
   , toRedeemer
-  , module Network.Protocol.ChainSeek.Types
-  , module Network.Protocol.ChainSeek.Client
-  , module Network.Protocol.ChainSeek.Server
-  , module Network.Protocol.ChainSeek.Codec
   ) where
 
-import Cardano.Api (AsType (..), SerialiseAsRawBytes (serialiseToRawBytes), deserialiseFromBech32, serialiseToBech32)
+import Cardano.Api (AsType(..), SerialiseAsRawBytes(serialiseToRawBytes), deserialiseFromBech32, serialiseToBech32)
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Control.Monad ((>=>))
 import Data.Bifunctor (bimap)
-import Data.Binary (Binary (..), Get, Put, get, getWord8, put, putWord8)
+import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.String (IsString (..))
+import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.These (These (..))
-import Data.Time (NominalDiffTime, UTCTime (..), addUTCTime, diffTimeToPicoseconds, nominalDiffTimeToSeconds,
-                  picosecondsToDiffTime, secondsToNominalDiffTime)
+import Data.These (These(..))
+import Data.Time
+  ( NominalDiffTime
+  , UTCTime(..)
+  , addUTCTime
+  , diffTimeToPicoseconds
+  , nominalDiffTimeToSeconds
+  , picosecondsToDiffTime
+  , secondsToNominalDiffTime
+  )
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
-import Data.Type.Equality (type (:~:) (Refl))
+import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)

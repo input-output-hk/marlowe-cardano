@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs     #-}
-module Main where
+{-# LANGUAGE GADTs #-}
+module Main
+  where
 
 import Control.Category ((>>>))
 import Control.Exception (bracket, bracketOnError, throwIO)
@@ -16,22 +17,28 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Pretty (pretty)
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), BlockNo (..), SlotNo (..),
-                                               TxId (..), TxOutRef (..), toBech32)
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweVersion (..), Transaction (..),
-                                          TransactionOutput (..), TransactionScriptOutput (..), parseContractId,
-                                          renderContractId)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (BlockHeader(..), BlockHeaderHash(..), BlockNo(..), SlotNo(..), TxId(..), TxOutRef(..), toBech32)
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  , parseContractId
+  , renderContractId
+  )
 import Language.Marlowe.Runtime.History.Api
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Job.Client (jobClientPeer, liftCommand)
-import Network.Protocol.Query.Client (ClientStInit (..), ClientStNext (..), ClientStNextCanReject (..),
-                                      ClientStPage (..), QueryClient (..), queryClientPeer)
-import Network.Socket (AddrInfo (..), HostName, PortNumber, Socket, SocketType (..), close, connect, defaultHints,
-                       getAddrInfo, openSocket)
-import Network.TypedProtocol (Driver (..), runPeerWithDriver)
+import Network.Protocol.Query.Client
+  (ClientStInit(..), ClientStNext(..), ClientStNextCanReject(..), ClientStPage(..), QueryClient(..), queryClientPeer)
+import Network.Socket
+  (AddrInfo(..), HostName, PortNumber, Socket, SocketType(..), close, connect, defaultHints, getAddrInfo, openSocket)
+import Network.TypedProtocol (Driver(..), runPeerWithDriver)
 import qualified Options.Applicative as O
-import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), setSGR)
+import System.Console.ANSI (Color(..), ColorIntensity(..), ConsoleLayer(..), SGR(..), setSGR)
 import System.Exit (die)
 import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
 

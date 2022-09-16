@@ -1,13 +1,14 @@
-{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Test.Network.Protocol.ChainSeek where
+module Test.Network.Protocol.ChainSeek
+  where
 
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Type.Equality (type (:~:) (Refl))
+import Control.Monad.IO.Class (MonadIO(liftIO))
+import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Types
 import Test.Hspec (Expectation, expectationFailure)

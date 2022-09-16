@@ -1,14 +1,15 @@
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Protocol.Sync.Codec where
+module Language.Marlowe.Protocol.Sync.Codec
+  where
 
 import Data.Binary (get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS
 import Language.Marlowe.Protocol.Sync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), SomeMarloweVersion (..))
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
-import Network.TypedProtocol.Codec (Codec, PeerHasAgency (..), SomeMessage (SomeMessage))
+import Network.TypedProtocol.Codec (Codec, PeerHasAgency(..), SomeMessage(SomeMessage))
 
 codecMarloweSync :: Applicative m => Codec MarloweSync DeserializeError m LBS.ByteString
 codecMarloweSync = binaryCodec putMessage getMessage

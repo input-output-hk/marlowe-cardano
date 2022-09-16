@@ -1,32 +1,32 @@
-{-# LANGUAGE BlockArguments            #-}
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE DuplicateRecordFields     #-}
-{-# LANGUAGE EmptyDataDeriving         #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE MultiWayIf                #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE TypeApplications          #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Language.Marlowe.Runtime.History.Follower
   ( ContractChanges(..)
   , Follower(..)
   , FollowerDependencies(..)
   , SomeContractChanges(..)
-  , mkFollower
-  , isEmptyChanges
   , applyRollback
+  , isEmptyChanges
+  , mkFollower
   ) where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent.Async (Concurrently (..))
-import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newEmptyTMVar, newTVar, readTVar, takeTMVar,
-                               tryPutTMVar, tryTakeTMVar, writeTVar)
+import Control.Concurrent.Async (Concurrently(..))
+import Control.Concurrent.STM
+  (STM, TVar, atomically, modifyTVar, newEmptyTMVar, newTVar, readTVar, takeTMVar, tryPutTMVar, tryTakeTMVar, writeTVar)
 import Control.Monad (guard, mfilter, when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT (..))
+import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Writer.CPS (WriterT, execWriterT, runWriterT, tell)
 import Data.Bifunctor (first)
 import Data.Foldable (asum, find, for_)
@@ -42,17 +42,43 @@ import Data.Void (Void, absurd)
 import GHC.Show (showSpace)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, ChainSeekClient (..), ClientStHandshake (..),
-                                               ClientStIdle (..), ClientStInit (..), ClientStNext (..), Move (..),
-                                               RuntimeChainSeekClient, ScriptHash (..), SlotConfig, TxOutRef (..),
-                                               UTxOError, WithGenesis (..), isAfter, moveSchema, slotToUTCTime)
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( BlockHeader
+  , ChainPoint
+  , ChainSeekClient(..)
+  , ClientStHandshake(..)
+  , ClientStIdle(..)
+  , ClientStInit(..)
+  , ClientStNext(..)
+  , Move(..)
+  , RuntimeChainSeekClient
+  , ScriptHash(..)
+  , SlotConfig
+  , TxOutRef(..)
+  , UTxOError
+  , WithGenesis(..)
+  , isAfter
+  , moveSchema
+  , slotToUTCTime
+  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId (..), Datum, IsMarloweVersion (Redeemer), MarloweVersion (..),
-                                          MarloweVersionTag (..), Payout (..), SomeMarloweVersion (..),
-                                          Transaction (..), TransactionOutput (..), TransactionScriptOutput (..),
-                                          fromChainDatum, fromChainPayoutDatum, fromChainRedeemer)
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , Datum
+  , IsMarloweVersion(Redeemer)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , Payout(..)
+  , SomeMarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  , fromChainDatum
+  , fromChainPayoutDatum
+  , fromChainRedeemer
+  )
 import Language.Marlowe.Runtime.History.Api
-import Plutus.V1.Ledger.Api (POSIXTime (POSIXTime))
+import Plutus.V1.Ledger.Api (POSIXTime(POSIXTime))
 
 data ContractChanges v = ContractChanges
   { steps      :: Map Chain.BlockHeader [ContractStep v]

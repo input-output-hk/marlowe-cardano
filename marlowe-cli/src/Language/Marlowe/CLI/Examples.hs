@@ -14,10 +14,10 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Examples (
--- * Contracts
-  makeExample
-) where
+module Language.Marlowe.CLI.Examples
+  ( -- * Contracts
+    makeExample
+  ) where
 
 
 import Control.Monad.Except (MonadIO, liftIO)

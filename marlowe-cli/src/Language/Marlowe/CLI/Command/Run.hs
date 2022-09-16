@@ -11,35 +11,53 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.CLI.Command.Run (
--- * Marlowe CLI Commands
-  RunCommand(..)
-, parseRunCommand
-, runRunCommand
-) where
+module Language.Marlowe.CLI.Command.Run
+  ( -- * Marlowe CLI Commands
+    RunCommand(..)
+  , parseRunCommand
+  , runRunCommand
+  ) where
 
 
-import Cardano.Api (AddressInEra, ConsensusModeParams (CardanoModeParams), EpochSlots (..), IsShelleyBasedEra,
-                    LocalNodeConnectInfo (..), NetworkId (..), StakeAddressReference (..), TxIn)
+import Cardano.Api
+  ( AddressInEra
+  , ConsensusModeParams(CardanoModeParams)
+  , EpochSlots(..)
+  , IsShelleyBasedEra
+  , LocalNodeConnectInfo(..)
+  , NetworkId(..)
+  , StakeAddressReference(..)
+  , TxIn
+  )
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Foldable (asum)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseAddress, parseCurrencySymbol, parseInput, parseNetworkId,
-                                           parsePOSIXTime, parseStakeAddressReference, parseTokenName, parseTxIn,
-                                           parseTxOut, requiredSignersOpt, txBodyFileOpt)
-import Language.Marlowe.CLI.Run (autoRunTransaction, autoWithdrawFunds, initializeTransaction, prepareTransaction,
-                                 runTransaction, withdrawFunds)
+import Language.Marlowe.CLI.Command.Parse
+  ( parseAddress
+  , parseCurrencySymbol
+  , parseInput
+  , parseNetworkId
+  , parsePOSIXTime
+  , parseStakeAddressReference
+  , parseTokenName
+  , parseTxIn
+  , parseTxOut
+  , requiredSignersOpt
+  , txBodyFileOpt
+  )
+import Language.Marlowe.CLI.Run
+  (autoRunTransaction, autoWithdrawFunds, initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliEnv, CliError, PrintStats (PrintStats), SigningKeyFile, TxBodyFile)
+import Language.Marlowe.CLI.Types (CliEnv, CliError, PrintStats(PrintStats), SigningKeyFile, TxBodyFile)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Input)
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
 
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C

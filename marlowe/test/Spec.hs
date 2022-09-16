@@ -11,21 +11,21 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE CPP               #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Main(
--- * Testing
-  main
-) where
+module Main
+  ( -- * Testing
+    main
+  ) where
 
 
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 
-import qualified Spec.Marlowe.Marlowe (prop_contractJsonLoops, prop_intervalErrorJsonLoops, prop_marloweParamsJsonLoops,
-                                       prop_noFalsePositives, tests)
+import qualified Spec.Marlowe.Marlowe
+  (prop_contractJsonLoops, prop_intervalErrorJsonLoops, prop_marloweParamsJsonLoops, prop_noFalsePositives, tests)
 import qualified Spec.Marlowe.Plutus (tests)
 import qualified Spec.Marlowe.Semantics (tests)
 

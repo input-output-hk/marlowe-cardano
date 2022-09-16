@@ -1,17 +1,17 @@
 module Language.Marlowe.Runtime.ChainSync.Store
-  ( Changes(..)
+  ( ChainStore(..)
   , ChainStoreDependencies(..)
-  , ChainStore(..)
+  , Changes(..)
   , mkChainStore
   ) where
 
-import Cardano.Api (ChainPoint (..), ChainTip (..), SlotNo (..))
-import Cardano.Api.Shelley (Hash (..))
+import Cardano.Api (ChainPoint(..), ChainTip(..), SlotNo(..))
+import Cardano.Api.Shelley (Hash(..))
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT (..))
+import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort)
 import Data.Foldable (for_, traverse_)
@@ -19,11 +19,11 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks (..), CommitRollback (..))
-import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes (..), isEmptyChanges)
+import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks(..), CommitRollback(..))
+import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes(..), isEmptyChanges)
 import Prelude hiding (filter)
 import System.IO (stderr)
-import Witherable (Witherable (..))
+import Witherable (Witherable(..))
 
 -- | Set of dependencies required by the ChainStore
 data ChainStoreDependencies = ChainStoreDependencies

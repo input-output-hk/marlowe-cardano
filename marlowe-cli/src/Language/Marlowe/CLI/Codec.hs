@@ -14,11 +14,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 
-module Language.Marlowe.CLI.Codec (
--- * Codecs
-  decodeBech32
-, encodeBech32
-) where
+module Language.Marlowe.CLI.Codec
+  ( -- * Codecs
+    decodeBech32
+  , encodeBech32
+  ) where
 
 
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
@@ -26,8 +26,8 @@ import Language.Marlowe.CLI.IO (liftCli, liftCliMaybe)
 import Language.Marlowe.CLI.Types (CliError)
 import System.IO (hPutStrLn, stderr)
 
-import qualified Codec.Binary.Bech32 as Bech32 (dataPartFromBytes, dataPartToBytes, decodeLenient, encodeLenient,
-                                                humanReadablePartFromText, humanReadablePartToText)
+import qualified Codec.Binary.Bech32 as Bech32
+  (dataPartFromBytes, dataPartToBytes, decodeLenient, encodeLenient, humanReadablePartFromText, humanReadablePartToText)
 import qualified Data.ByteString.Base16 as Base16 (decode, encode)
 import qualified Data.ByteString.Char8 as BS (pack, unpack)
 import qualified Data.Text as T (pack, unpack)

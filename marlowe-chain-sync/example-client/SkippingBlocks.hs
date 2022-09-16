@@ -1,4 +1,5 @@
-module SkippingBlocks where
+module SkippingBlocks
+  where
 
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api

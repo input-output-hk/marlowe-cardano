@@ -1,26 +1,27 @@
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.History.Store where
+module Language.Marlowe.Runtime.History.Store
+  where
 
 import Control.Applicative (empty)
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVarIO, writeTVar)
 import Control.Concurrent.STM.TVar (readTVar)
 import Control.Monad (forever, mfilter)
-import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
+import Control.Monad.Trans.Maybe (MaybeT(MaybeT, runMaybeT))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (listToMaybe)
-import Data.Semialign (Semialign (alignWith))
-import Data.These (These (..))
-import Data.Type.Equality (testEquality, type (:~:) (..))
+import Data.Semialign (Semialign(alignWith))
+import Data.These (These(..))
+import Data.Type.Equality (testEquality, type (:~:)(..))
 import GHC.Show (showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), assertVersionsEqual)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), assertVersionsEqual)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
-import Language.Marlowe.Runtime.History.Follower (ContractChanges (..), SomeContractChanges (..))
-import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract (..))
+import Language.Marlowe.Runtime.History.Follower (ContractChanges(..), SomeContractChanges(..))
+import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract(..))
 
 -- | Data access methods for managing contract history.
 data HistoryQueries m = HistoryQueries

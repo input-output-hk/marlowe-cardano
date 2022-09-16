@@ -1,14 +1,15 @@
-{-# LANGUAGE DataKinds      #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE PolyKinds      #-}
-{-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Driver where
+module Network.Protocol.Driver
+  where
 
-import Network.Channel (Channel (..))
+import Network.Channel (Channel(..))
 import Network.TypedProtocol (Message, PeerHasAgency, PeerRole, SomeMessage)
-import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
-import Network.TypedProtocol.Driver (Driver (..))
+import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
+import Network.TypedProtocol.Driver (Driver(..))
 
 mkDriver
   :: forall ps failure bytes m

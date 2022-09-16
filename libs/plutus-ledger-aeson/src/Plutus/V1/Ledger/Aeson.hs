@@ -1,19 +1,20 @@
-{-# LANGUAGE DeriveAnyClass       #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE DerivingStrategies   #-}
-{-# LANGUAGE DerivingVia          #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE MonoLocalBinds       #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Plutus.V1.Ledger.Aeson where
+module Plutus.V1.Ledger.Aeson
+  where
 
-import Data.Aeson (FromJSON (parseJSON), FromJSONKey, ToJSON (toJSON), ToJSONKey, (.:))
+import Data.Aeson (FromJSON(parseJSON), FromJSONKey, ToJSON(toJSON), ToJSONKey, (.:))
 import qualified Data.Aeson as JSON
 
 import Plutus.V1.Ledger.Api
@@ -27,7 +28,7 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Base16.Aeson as Base16.Aeson
 import qualified Data.ByteString.Lazy as BSL
 import Data.Scientific (floatingOrInteger, scientific)
-import Data.String (IsString (fromString))
+import Data.String (IsString(fromString))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as E
 import qualified Flat

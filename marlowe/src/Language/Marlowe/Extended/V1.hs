@@ -1,9 +1,9 @@
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DerivingStrategies    #-}
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
 
@@ -15,15 +15,24 @@ in different situations without cluttering the code that goes on-chain
 (core Marlowe).
 -}
 
-module Language.Marlowe.Extended.V1 ( module Language.Marlowe.Extended.V1
-                                 , module Language.Marlowe.Pretty
-                                 , ada, adaSymbol, adaToken
-                                 , S.AccountId, S.Bound(..), S.ChoiceId(..)
-                                 , S.ChoiceName, S.ChosenNum, S.Party(..)
-                                 , S.TimeInterval, S.Token(..), S.ValueId(..)
-                                 , ToCore (..)
-                                 , (%)
-                                 ) where
+module Language.Marlowe.Extended.V1
+  ( module Language.Marlowe.Extended.V1
+  , module Language.Marlowe.Pretty
+  , S.AccountId
+  , S.Bound(..)
+  , S.ChoiceId(..)
+  , S.ChoiceName
+  , S.ChosenNum
+  , S.Party(..)
+  , S.TimeInterval
+  , S.Token(..)
+  , S.ValueId(..)
+  , ToCore(..)
+  , ada
+  , adaSymbol
+  , adaToken
+  , (%)
+  ) where
 
 import Control.Applicative ((<|>))
 import qualified Data.Aeson as JSON
@@ -35,7 +44,7 @@ import Data.Text (pack)
 import GHC.Generics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as S
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
-import Language.Marlowe.Pretty (Pretty (..), pretty)
+import Language.Marlowe.Pretty (Pretty(..), pretty)
 import Language.Marlowe.Util (ada)
 import Plutus.V2.Ledger.Api (adaSymbol, adaToken)
 import qualified Plutus.V2.Ledger.Api as L

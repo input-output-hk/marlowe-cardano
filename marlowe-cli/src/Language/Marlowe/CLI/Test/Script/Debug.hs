@@ -1,17 +1,18 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
-{-# LANGUAGE BlockArguments   #-}
+{-# LANGUAGE BlockArguments #-}
 
-module Language.Marlowe.CLI.Test.Script.Debug where
+module Language.Marlowe.CLI.Test.Script.Debug
+  where
 
 import Control.Lens (view)
 import Control.Monad.Error.Class (catchError)
-import Control.Monad.Except (MonadError (throwError))
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Reader (ReaderT (runReaderT))
+import Control.Monad.Except (MonadError(throwError))
+import Control.Monad.IO.Class (MonadIO(liftIO))
+import Control.Monad.Reader (ReaderT(runReaderT))
 import Control.Monad.Reader.Class (MonadReader)
-import Language.Marlowe.CLI.Test.Types (ScriptEnv, ScriptOperation (..), seEra)
-import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (CliError))
+import Language.Marlowe.CLI.Test.Types (ScriptEnv, ScriptOperation(..), seEra)
+import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(CliError))
 import Ledger.Orphans ()
 
 data SoFormat = SoName | SoShow

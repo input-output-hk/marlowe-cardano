@@ -1,23 +1,21 @@
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.Options
-  (
-  -- * Options
-    option
-  , OptionType(..)
+  ( -- * Options
+    BarrierType(..)
   , ExerciseType(..)
-  , BarrierType(..)
-  -- * Option Strategies
-  -- ** Fully collateralized
+  , OptionType(..)
+  , option
+    -- * Option Strategies
+    -- ** Fully collateralized
   , coveredCall
-  -- ** Partially collateralized
+    -- ** Partially collateralized
   , callSpread
-  -- ** Not collateralized
+    -- ** Not collateralized
   , barrierOption
-  , strangle
   , straddle
-  )
-where
+  , strangle
+  ) where
 
 import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common

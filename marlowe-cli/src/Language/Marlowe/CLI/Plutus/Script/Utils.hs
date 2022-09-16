@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.CLI.Plutus.Script.Utils where
+module Language.Marlowe.CLI.Plutus.Script.Utils
+  where
 
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as V1
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as V2

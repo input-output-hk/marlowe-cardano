@@ -1,15 +1,16 @@
-module Main where
+module Main
+  where
 
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Functor (void)
 import qualified FollowingUTxOs
-import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis (..), runtimeChainSeekCodec)
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), runtimeChainSeekCodec)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
-import Network.Socket (AddrInfo (..), HostName, PortNumber, Socket, SocketType (..), close, connect, defaultHints,
-                       getAddrInfo, openSocket)
-import Network.TypedProtocol (Driver (..), runPeerWithDriver)
+import Network.Socket
+  (AddrInfo(..), HostName, PortNumber, Socket, SocketType(..), close, connect, defaultHints, getAddrInfo, openSocket)
+import Network.TypedProtocol (Driver(..), runPeerWithDriver)
 import Numeric.Natural (Natural)
 import Options.Applicative (auto)
 import qualified Options.Applicative as O

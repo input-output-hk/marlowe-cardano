@@ -1,24 +1,35 @@
-{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE EmptyCase             #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE StrictData            #-}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.ChainSync.QueryServer where
+module Language.Marlowe.Runtime.ChainSync.QueryServer
+  where
 
-import Cardano.Api (AnyCardanoEra (..), CardanoMode, ConsensusMode (..), ConsensusModeIsMultiEra (..), EraInMode (..),
-                    GenesisParameters (..), QueryInEra (..), QueryInMode (..), QueryInShelleyBasedEra (..),
-                    ShelleyBasedEra (..), toEraInMode)
+import Cardano.Api
+  ( AnyCardanoEra(..)
+  , CardanoMode
+  , ConsensusMode(..)
+  , ConsensusModeIsMultiEra(..)
+  , EraInMode(..)
+  , GenesisParameters(..)
+  , QueryInEra(..)
+  , QueryInMode(..)
+  , QueryInShelleyBasedEra(..)
+  , ShelleyBasedEra(..)
+  , toEraInMode
+  )
 import qualified Cardano.Api as Cardano
-import Control.Concurrent.Async (Concurrently (Concurrently, runConcurrently))
+import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
-import Control.Monad.Trans.Except (ExceptT (ExceptT), except, runExceptT, throwE, withExceptT)
+import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery (..), SlotConfig (..))
-import Network.Protocol.Query.Server (QueryServer (..), ServerStInit (..), ServerStNext (..), ServerStPage (..))
-import Network.Protocol.Query.Types (StNextKind (..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..))
+import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
+import Network.Protocol.Query.Types (StNextKind(..))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import System.IO (hPutStrLn, stderr)
 
