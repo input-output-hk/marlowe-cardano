@@ -90,6 +90,7 @@ import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty)
 
+import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified PlutusTx.AssocMap as AM (fromList, insert, toList)
 
@@ -145,7 +146,7 @@ tests =
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
-              -- TODO: This test requires instrumenting the Plutus script.
+              testProperty "Invalid alteration of parameters." checkParamsOutput
             ]
         , testGroup "Constraint 10. Output state"
             [
@@ -410,26 +411,40 @@ checkDatumOutput perturb =
     checkSemanticsTransaction noModify modifyAfter notCloses False False
 
 
--- | Check that state output to a script matches its output state.
+-- | Check that parameters in the datum are not changed by the transaction.
+checkParamsOutput :: Property
+checkParamsOutput =
+  checkDatumOutput
+    $ \marloweData ->
+      do
+        -- Replace the output parameters with a random one.
+        let old = M.marloweParams marloweData
+        new <- arbitrary `suchThat` (/= old)
+        pure $ marloweData {M.marloweParams = new}
+
+
+-- | Check that state output to a script matches its semantic output.
 checkStateOutput :: Property
 checkStateOutput =
   checkDatumOutput
     $ \marloweData ->
       do
         -- Replace the output state with a random one.
-        marloweState' <- arbitrary
-        pure $ marloweData {marloweState = marloweState'}
+        let old = marloweState marloweData
+        new <- arbitrary `suchThat` (/= old)
+        pure $ marloweData {marloweState = new}
 
 
--- | Check that state output to a script matches its output state.
+-- | Check that state output to a script matches its semantic output.
 checkContractOutput :: Property
 checkContractOutput =
   checkDatumOutput
     $ \marloweData ->
       do
         -- Replace the output ccontact with a random one.
-        marloweContract' <- arbitrary
-        pure $ marloweData {marloweContract = marloweContract'}
+        let old = marloweContract marloweData
+        new <- arbitrary `suchThat` (/= old)
+        pure $ marloweData {marloweContract = new}
 
 
 -- | Check that non-positive accounts are rejected.
