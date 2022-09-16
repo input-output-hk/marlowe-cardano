@@ -126,6 +126,7 @@ import Language.Marlowe.CLI.Test.Types
   , seProtocolVersion
   , seSlotConfig
   , seTransactionTimeout
+  , seExecutionTimeout
   , ssContracts
   , ssCurrencies
   , ssReferenceScripts
@@ -171,7 +172,8 @@ interpret FundWallet {..} = do
   (Wallet faucetAddress faucetSigningKey _ _) <- getFaucet
   (Wallet address _ _ _) <- findWallet soWalletNickname
   connection <- view seConnection
-  Seconds timeout <- view seTransactionTimeout
+  -- Seconds timeout <- view seTransactionTimeout
+  executionTimeout <- view seExecutionTimeout
   txBody <- runCli "[FundWallet] " $ buildFaucetImpl
     connection
     values
@@ -179,7 +181,7 @@ interpret FundWallet {..} = do
     faucetAddress
     faucetSigningKey
     defaultCoinSelectionStrategy
-    (Just timeout)
+    executionTimeout
 
   let
     transaction = WalletTransaction { wtFees = 0, wtTxBody=txBody  }
@@ -193,7 +195,8 @@ interpret SplitWallet {..} = do
   let
     values = [ C.lovelaceToValue v | v <- soValues ]
 
-  Seconds timeout <- view seTransactionTimeout
+  -- Seconds timeout <- view seTransactionTimeout
+  executionTimeout <- view seExecutionTimeout
   void $ runCli "[createCollaterals] " $ buildFaucetImpl
     connection
     values
@@ -201,7 +204,7 @@ interpret SplitWallet {..} = do
     address
     skey
     defaultCoinSelectionStrategy
-    (Just timeout)
+    executionTimeout
 
 interpret so@Mint {..} = do
   currencies <- use ssCurrencies
@@ -217,7 +220,8 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
-  Seconds timeout <- view seTransactionTimeout
+  -- Seconds timeout <- view seTransactionTimeout
+  executionTimeout <- view seExecutionTimeout
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
     faucetSigningKey
@@ -226,7 +230,7 @@ interpret so@Mint {..} = do
     Nothing
     2_000_000       -- FIXME: should we compute minAda here?
     faucetAddress
-    (Just timeout)
+    executionTimeout
 
   let
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
@@ -389,7 +393,8 @@ interpret so@Publish {..} = do
       pure marloweScriptRefs
     Nothing -> do
       logSoMsg' so "Scripts not found so publishing them."
-      Seconds timeout <- view seTransactionTimeout
+      -- Seconds timeout <- view seTransactionTimeout
+      executionTimeout <- view seExecutionTimeout
       runSoCli so $ publishImpl
         connection
         waSigningKey
@@ -397,7 +402,7 @@ interpret so@Publish {..} = do
         waAddress
         publishingStrategy
         (CoinSelectionStrategy False False [])
-        timeout
+        executionTimeout
         (PrintStats True)
 
   assign ssReferenceScripts (Just marloweScriptRefs)
@@ -450,7 +455,8 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
   connection <- view seConnection
-  Seconds timeout <- view seTransactionTimeout
+  -- Seconds timeout <- view seTransactionTimeout
+  executionTimeout <- view seExecutionTimeout
   txBody <- runCli "[AutoRun] " $ autoRunTransactionImpl
       connection
       prev
@@ -458,7 +464,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       address
       [skey]
       C.TxMetadataNone
-      (Just timeout)
+      executionTimeout
       True
       invalid
 
