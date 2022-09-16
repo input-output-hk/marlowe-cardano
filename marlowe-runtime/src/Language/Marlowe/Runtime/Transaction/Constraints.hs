@@ -42,13 +42,15 @@ data TxConstraints v = TxConstraints
 
 -- | A constraint related to a role token.
 data RoleTokenConstraint
-  = MintRoleToken Chain.AssetId Chain.Address
+  = MintRoleToken Chain.TokenName Chain.Address
   -- ^ Specifies that the transaction must mint one role token with the given
-  -- AssetId and send it to the given address, along with the min UTXO ADA.
+  -- TokenName and send it to the given address, along with the min UTXO ADA.
   --
   -- Rules to check:
-  --   1. The transaction mints one token of the given assetID
-  --   2. The transaction sends one token of the given assetID to the given address.
+  --   1. The transaction mints one token with the given token name and some
+  --      policyId p.
+  --   2. The transaction sends one token with the given token name and the
+  --      policyId p from rule 1 to the given address.
   --   3. The output in rule 2 covers the min UTXO requirement.
   --   4. The output in rule 2 does not contain any other tokens.
   | SpendRoleToken Chain.AssetId
@@ -69,8 +71,9 @@ data RoleTokenConstraint
 
 -- | Require the transaction to mint 1 role token of the specified assetID and
 -- send it to the given address, along with the min UTXO ADA.
-mustMintRoleToken :: Core.IsMarloweVersion v => Chain.AssetId -> Chain.Address -> TxConstraints v
-mustMintRoleToken assetId address = mempty { roleTokenConstraints = Set.singleton $ MintRoleToken assetId address }
+mustMintRoleToken :: Core.IsMarloweVersion v => Chain.TokenName -> Chain.Address -> TxConstraints v
+mustMintRoleToken tokenName address =
+  mempty { roleTokenConstraints = Set.singleton $ MintRoleToken tokenName address }
 
 -- | Require the transaction to spend a UTXO with 1 role token of the specified
 -- assetID. It also needs to send an identical output (same assets) to the
@@ -118,12 +121,14 @@ mustPayToAddress assets address = mempty { outputConstraints = Set.singleton $ P
 -- | Require the transaction to send an output to the marlowe script address
 -- with the given assets and the given datum.
 mustSendMarloweOutput :: Core.IsMarloweVersion v => Chain.Assets -> Core.Datum v -> TxConstraints v
-mustSendMarloweOutput assets datum = mempty { outputConstraints = Set.singleton $ SendToMarloweScript assets datum }
+mustSendMarloweOutput assets datum =
+  mempty { outputConstraints = Set.singleton $ SendToMarloweScript assets datum }
 
 -- | Require the transaction to send an output to the payout script address
 -- with the given assets and the given datum.
 mustSendPayoutOutput :: Core.IsMarloweVersion v => Chain.Assets -> Core.PayoutDatum v -> TxConstraints v
-mustSendPayoutOutput assets datum = mempty { outputConstraints = Set.singleton $ SendToPayoutScript assets datum }
+mustSendPayoutOutput assets datum =
+  mempty { outputConstraints = Set.singleton $ SendToPayoutScript assets datum }
 
 data InputConstraint v
   = NoInput
@@ -167,7 +172,8 @@ data InputConstraint v
 -- | Require the transaction to consume an input from the Marlowe script with
 -- the given validity interval and redeemer (input). Used for apply-inputs.
 mustConsumeMarloweOutput :: Core.IsMarloweVersion v => Chain.TxOutRef -> P.POSIXTime -> P.POSIXTime -> Core.Redeemer v -> TxConstraints v
-mustConsumeMarloweOutput utxo invalidBefore invalidHereafter inputs = mempty { inputConstraint = MarloweInput utxo invalidBefore invalidHereafter inputs }
+mustConsumeMarloweOutput utxo invalidBefore invalidHereafter inputs =
+  mempty { inputConstraint = MarloweInput utxo invalidBefore invalidHereafter inputs }
 
 -- | Require the transaction to consume any input from the payout script that
 -- bear the given datum.
