@@ -44,6 +44,7 @@
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+          (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."semialign" or (errorHandler.buildDepError "semialign"))
           (hsPkgs."split" or (errorHandler.buildDepError "split"))
@@ -73,6 +74,8 @@
           "Language/Marlowe/Runtime/History/Store/Memory"
           "Language/Marlowe/Runtime/History/Store/Model"
           "Language/Marlowe/Runtime/History/SyncServer"
+          "Language/Marlowe/Runtime/Transaction/Constraints"
+          "Language/Marlowe/Runtime/Transaction/SystemStart"
           ];
         hsSourceDirs = [ "src" ];
         };
