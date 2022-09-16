@@ -20,9 +20,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
 
@@ -88,7 +85,13 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Data.Aeson.Traversals as A
 import Language.Marlowe.CLI.IO (liftCliMaybe, queryInEra)
 import Language.Marlowe.CLI.Run
-  (autoRunTransactionImpl, initializeTransactionImpl, initializeTransactionUsingScriptRefsImpl, prepareTransactionImpl)
+  ( autoRunTransactionImpl
+  , initializeTransactionImpl
+  , initializeTransactionUsingScriptRefsImpl
+  , marloweAddressFromCardanoAddress
+  , marloweAddressToCardanoAddress
+  , prepareTransactionImpl
+  )
 import Language.Marlowe.CLI.Sync (classifyOutputs, isMarloweOut)
 import Language.Marlowe.CLI.Sync.Types (MarloweOut(ApplicationOut, moTxIn))
 import Language.Marlowe.CLI.Test.Script.Debug
@@ -127,7 +130,6 @@ import Language.Marlowe.CLI.Test.Types
   , ssCurrencies
   , ssReferenceScripts
   , ssWallets
-  , walletPubKeyHash
   )
 import Language.Marlowe.CLI.Transaction
   (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl, selectUtxosImpl)
@@ -135,13 +137,12 @@ import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import Language.Marlowe.Pretty (pretty)
-import Ledger.Tx.CardanoAPI (fromCardanoPaymentKeyHash, fromCardanoPolicyId)
+import Ledger.Tx.CardanoAPI (fromCardanoPolicyId)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
 import Plutus.V1.Ledger.Value (mpsSymbol, valueOf)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
-import qualified Plutus.V2.Ledger.Api as P
 
 
 interpret :: forall era m
@@ -159,7 +160,7 @@ interpret so@CreateWallet {..} = do
   let LocalNodeConnectInfo {localNodeNetworkId} = connection
   let
     address = makeShelleyAddressInEra localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
-  let wallet = Wallet address (Left skey) mempty mempty vkey
+  let wallet = Wallet address (Left skey) mempty mempty
   logSoMsg' so $ "Wallet created with an address: " <> Text.unpack (C.serialiseAddress address)
   ssWallets `modifying` Map.insert soWalletNickname wallet
 
@@ -167,8 +168,8 @@ interpret FundWallet {..} = do
   let
     values = [ C.lovelaceToValue v | v <- soValues ]
 
-  (Wallet faucetAddress faucetSigningKey _ _ _) <- getFaucet
-  (Wallet address _ _ _ _) <- findWallet soWalletNickname
+  (Wallet faucetAddress faucetSigningKey _ _) <- getFaucet
+  (Wallet address _ _ _) <- findWallet soWalletNickname
   connection <- view seConnection
   Seconds timeout <- view seTransactionTimeout
   txBody <- runCli "[FundWallet] " $ buildFaucetImpl
@@ -183,11 +184,11 @@ interpret FundWallet {..} = do
   let
     transaction = WalletTransaction { wtFees = 0, wtTxBody=txBody  }
 
-  updateFaucet \faucet@(Wallet _ _ _ faucetTransactions _) ->
+  updateFaucet \faucet@(Wallet _ _ _ faucetTransactions) ->
     faucet { waTransactions = transaction : faucetTransactions }
 
 interpret SplitWallet {..} = do
-  Wallet address skey _ _ _ <- findWallet soWalletNickname
+  Wallet address skey _ _ <- findWallet soWalletNickname
   connection <- view seConnection
   let
     values = [ C.lovelaceToValue v | v <- soValues ]
@@ -206,13 +207,13 @@ interpret so@Mint {..} = do
   currencies <- use ssCurrencies
   when (isJust $ Map.lookup soCurrencyNickname currencies) do
     throwError "Currency with a given nickname already exist"
-  Wallet faucetAddress faucetSigningKey _ _ _ <- getFaucet
+  Wallet faucetAddress faucetSigningKey _ _ <- getFaucet
   (tokenDistribution, walletAssignemnts) <- unzip <$>forM soTokenDistribution \(TokenAssignment amount tokenName owner) -> do
     let
       nickname = case owner of
         Just wn -> wn
         Nothing -> WalletNickname $ show tokenName
-    wallet@(Wallet destAddress _ _ _ _) <- findWallet nickname
+    wallet@(Wallet destAddress _ _ _) <- findWallet nickname
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
@@ -231,7 +232,7 @@ interpret so@Mint {..} = do
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
     currency = CustomCurrency policy currencySymbol
 
-  forM_ walletAssignemnts \(nickname, wallet@(Wallet _ _ tokens _ _), tokenName, amount) -> do
+  forM_ walletAssignemnts \(nickname, wallet@(Wallet _ _ tokens _), tokenName, amount) -> do
     let
       value = Value.singleton currencySymbol tokenName amount
     ssWallets `modifying` Map.insert nickname (wallet { waTokens = value <> tokens })
@@ -250,12 +251,8 @@ interpret so@Initialize {..} = do
 
   let
     submitterNickname = fromMaybe faucetNickname soSubmitter
-  Wallet _ _ _ _ submitterVerificationKey <- findWallet submitterNickname
-  let
-    submitterParty = do
-      let
-        pubKeyHash = fromCardanoPaymentKeyHash . verificationKeyHash $ submitterVerificationKey
-      M.PK pubKeyHash
+  Wallet address _ _ _ <- findWallet submitterNickname
+  submitterParty <- uncurry M.Address <$> marloweAddressFromCardanoAddress address
 
   currencySymbol <- case soRoleCurrency of
     Nothing -> pure P.adaSymbol
@@ -409,7 +406,8 @@ interpret (Fail message) = throwError $ CliError message
 
 
 autoRunTransaction :: forall era lang m
-                    . IsPlutusScriptLanguage lang
+                    . IsShelleyBasedEra era
+                   => IsPlutusScriptLanguage lang
                    => MonadError CliError m
                    => MonadReader (ScriptEnv era) m
                    => MonadState (ScriptState lang era) m
@@ -444,10 +442,10 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
   log' $ "Output contract: " <> show (pretty mtContract)
   log' $ "Output state: " <> show mtState
 
-  Wallet address skey _ _ _ <- foldM getInputParty Nothing mtInputs >>= \case
-    Nothing          -> findWallet defaultSubmitter
-    Just (M.PK pkh)  -> snd <$> findWalletByPkh pkh
-    Just (M.Role rn) -> case currency of
+  Wallet address skey _ _ <- foldM getInputParty Nothing mtInputs >>= \case
+    Nothing                          -> findWallet defaultSubmitter
+    Just (M.Address network address) -> snd <$> (findWalletByAddress =<< marloweAddressToCardanoAddress network address)
+    Just (M.Role rn)                 -> case currency of
       Just cn -> snd <$> findWalletByUniqueToken cn rn
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
@@ -572,7 +570,7 @@ buildParty :: MonadState (ScriptState lang era) m
 buildParty currencyNickname = \case
   WalletRef nickname -> do
       wallet <- findWallet nickname
-      pure $ M.PK . walletPubKeyHash $ wallet
+      uncurry M.Address <$> marloweAddressFromCardanoAddress (waAddress wallet)
   RoleRef token -> do
     -- Cosistency check
     currency <- case currencyNickname of
@@ -625,10 +623,10 @@ findWalletByUniqueToken currencyNickname tokenName = do
   CustomCurrency {..} <- findCurrency currencyNickname
   let
     check value = valueOf value ccCurrencySymbol tokenName == 1
-    step Nothing (n, wallet@(Wallet _ _ tokens _ _)) = pure $ if check tokens
+    step Nothing (n, wallet@(Wallet _ _ tokens _)) = pure $ if check tokens
       then Just (n, wallet)
       else Nothing
-    step res c@(n, Wallet _ _ tokens _ _) = if check tokens
+    step res c@(n, Wallet _ _ tokens _) = if check tokens
       then case res of
         Just (n', _) ->
           throwError $ CliError $ "[findByUniqueToken] Token is not unique - found in two wallets: " <> show n <> " and " <> show n' <> "."
@@ -642,20 +640,20 @@ findWalletByUniqueToken currencyNickname tokenName = do
     walletInfo
 
 
-findWalletByPkh :: MonadError CliError m
+findWalletByAddress :: MonadError CliError m
                 => MonadState (ScriptState lang era) m
-                => P.PubKeyHash
+                => C.AddressInEra era
                 -> m (WalletNickname, Wallet era)
-findWalletByPkh pkh = do
+findWalletByAddress address = do
   wallets <- use ssWallets
   let
-    step _ (n, w) = if pkh == walletPubKeyHash w
+    step _ (n, w) = if address == waAddress w
       then Just (n, w)
       else Nothing
     wallet = foldl' step Nothing (Map.toList wallets)
 
   liftCliMaybe
-    ("[findWalletByPkh] Wallet not found for a given pkh: " <> show pkh)
+    ("[findWalletByPkh] Wallet not found for a given address: " <> show address)
     wallet
 
 
@@ -693,14 +691,14 @@ selectWalletUTxOs :: MonadIO m
                   -> T.OutputQuery era (OutputQueryResult era)
                   -> m (T.OutputQueryResult era)
 selectWalletUTxOs w q = do
-  Wallet address _ _ _ _ <- either findWallet pure w
+  Wallet address _ _ _ <- either findWallet pure w
   connection <- view seConnection
   runCli "[selectUtxosImpl]" $ selectUtxosImpl connection address q
 
 
 getWalletUTxO :: (MonadIO m, MonadReader (ScriptEnv era) m, MonadState (ScriptState lang era) m, MonadError CliError m) => Either WalletNickname (Wallet era) -> m (C.UTxO era)
 getWalletUTxO w = do
-  Wallet address _ _ _ _ <- either findWallet pure w
+  Wallet address _ _ _ <- either findWallet pure w
   connection <- view seConnection
   runCli "[getWalletUTxO]" $ queryInEra connection
     . C.QueryUTxO
@@ -752,11 +750,10 @@ rewritePartyRefs :: MonadIO m
 rewritePartyRefs = A.rewriteBottomUp rewrite
   where
     rewrite = \case
-      A.Object (KeyMap.toList -> [("pk_hash", A.String walletNickname)]) -> do
+      A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) -> do
         wallet <- findWallet (WalletNickname $ Text.unpack walletNickname)
-        let
-          pkh = walletPubKeyHash wallet
-        pure $ A.toJSON (M.PK pkh)
+        (network, address) <- marloweAddressFromCardanoAddress $ waAddress wallet
+        pure $ A.toJSON (M.Address network address)
       v -> do
         pure v
 

@@ -87,9 +87,10 @@ import Language.Marlowe.CLI.Types
   , TxBodyFile(TxBodyFile)
   )
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Input(..), InputContent(..), Party(..), Token(..))
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 import Ledger (POSIXTime(..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol(..), PubKeyHash(..), TokenName(..), toBuiltin)
+import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol(..), TokenName(..), toBuiltin)
 import Plutus.V1.Ledger.Slot (Slot(..))
 import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
@@ -295,22 +296,22 @@ parseParty =
     <|> O.readerError "Invalid party."
 
 
--- | Reader for `Party` `PK`.
+-- | Reader for `Party` `Address`.
 readPartyPkEither :: String               -- ^ The string to be read.
                   -> Either String Party  -- ^ Either the public key hash role or an error message.
 readPartyPkEither s =
-  case s =~ "^PK=([[:xdigit:]]{56})$" of
-    [[_, pubKeyHash]] -> PK <$> readPubKeyHashEither pubKeyHash
-    _                 -> Left "Invalid public key hash for party."
+  case deserialiseAddressBech32 $ T.pack s of
+    Just (network, address) -> Right $ Address network address
+    _                       -> Left "Invalid public key hash for party."
 
 
 -- | Reader for `Party` `Role`.
 readPartyRoleEither :: String               -- ^ The string to be read.
                     -> Either String Party  -- ^ Either the party role or an error message.
 readPartyRoleEither s =
-  case s =~ "^Role=(.+)$" of
-    [[_, role]] -> Right . Role . TokenName . toBuiltin . BS8.pack $ role
-    _           -> Left "Invalid role for party."
+  if length s <= 32
+    then Right . Role . TokenName . toBuiltin $ BS8.pack s
+    else Left "Invalid role for party."
 
 
 -- | Parser for `Token`.
@@ -390,15 +391,6 @@ parseUrl =
   O.eitherReader
     $ either (Left . show) Right
     . parseBaseUrl
-
-
--- | Read a public key hash.
-readPubKeyHashEither :: String                    -- ^ The string to be read.
-                     -> Either String PubKeyHash  -- ^ Either the public key hash or an error message.
-readPubKeyHashEither s =
-  case Base16.decode $ BS8.pack s of
-    Right pubKeyHash -> Right . PubKeyHash . toBuiltin $ pubKeyHash
-    Left  message    -> Left message
 
 
 -- | Parse a role.

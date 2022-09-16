@@ -41,6 +41,9 @@ module Language.Marlowe.CLI.Run
   , makeChoice
   , makeDeposit
   , makeNotification
+    -- * Party Addresses
+  , marloweAddressFromCardanoAddress
+  , marloweAddressToCardanoAddress
   ) where
 
 
@@ -48,8 +51,8 @@ import Cardano.Api
   ( AddressInEra(..)
   , CardanoMode
   , LocalNodeConnectInfo(..)
-  , NetworkId
-  , PaymentCredential(..)
+  , NetworkId(..)
+  , NetworkMagic(..)
   , PlutusScriptVersion(PlutusScriptV1, PlutusScriptV2)
   , QueryInShelleyBasedEra(..)
   , QueryUTxOFilter(..)
@@ -66,7 +69,6 @@ import Cardano.Api
   , UTxO(..)
   , getTxId
   , lovelaceToValue
-  , makeShelleyAddressInEra
   , txOutValueToValue
   , writeFileTextEnvelope
   )
@@ -74,6 +76,7 @@ import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceScript(ReferenceScriptNone))
 import qualified Cardano.Api.Shelley as CS
+import qualified Cardano.Ledger.BaseTypes as LC (Network(..))
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.Reader (MonadReader)
@@ -142,13 +145,14 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Token(..)
   , getInputContent
   )
-import Ledger.Address (PaymentPubKeyHash(PaymentPubKeyHash))
-import Ledger.Tx.CardanoAPI (toCardanoPaymentKeyHash, toCardanoScriptDataHash, toCardanoValue)
+import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testnet)
+import Ledger.Tx.CardanoAPI (fromCardanoAddressInEra, toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot)
 import Plutus.V1.Ledger.Value (AssetClass(..), Value(..), assetClassValue, singleton)
-import Plutus.V2.Ledger.Api (CostModelParams, Datum(..), POSIXTime, TokenName, adaSymbol, adaToken, toBuiltinData)
+import Plutus.V2.Ledger.Api
+  (Address, CostModelParams, Datum(..), POSIXTime, TokenName, adaSymbol, adaToken, toBuiltinData)
 import qualified PlutusTx.AssocMap as AM (toList)
 import Prettyprinter.Extras (Pretty(..))
 import System.IO (hPutStrLn, stderr)
@@ -533,7 +537,6 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
                                                           throwError "MarloweParams value is not preserved in continuation"
                                                         pure ([spend'], Just collateral, merkles)
         let
-          network = localNodeNetworkId connection
 
           scriptAddress = viAddress $ mtValidator marloweOut
 
@@ -559,17 +562,13 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
           <$> sequence
             [
               case payee of
-                Party (PK pkh)    -> do
-                                      address <-
-                                        liftCli $
-                                          withShelleyBasedEra era $ makeShelleyAddressInEra network
-                                            <$> (PaymentCredentialByKey <$> toCardanoPaymentKeyHash (PaymentPubKeyHash pkh))
-                                            <*> pure NoStakeAddress
+                Party (Address network address) -> do
+                                      address' <- withShelleyBasedEra era $ marloweAddressToCardanoAddress network address
                                       money' <-
                                         liftCli
                                           $ toCardanoValue money
-                                      (_, money'') <- liftCli $ adjustMinimumUTxO era protocol address Nothing money' ReferenceScriptNone
-                                      pure $ Just (address, Nothing, money'')
+                                      (_, money'') <- liftCli $ adjustMinimumUTxO era protocol address' Nothing money' ReferenceScriptNone
+                                      pure $ Just (address', Nothing, money'')
                 Party (Role role) -> do
                                       money' <-
                                         liftCli
@@ -791,8 +790,6 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
                                             -- Return the spending witness and the extra datum for demerkleization.
                                             pure ([spend'], merkles)
         let
-          -- Get the type of network.
-          network = localNodeNetworkId connection
           -- Compute the script address.
           scriptAddress = viAddress $ mtValidator marloweOut
           -- Build the datum output to the script.
@@ -822,14 +819,10 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
           <$> sequence
             [
               case payee of
-                Party (PK pkh)    -> do
-                                      address <-
-                                        liftCli $
-                                          withShelleyBasedEra era $ makeShelleyAddressInEra network
-                                            <$> (PaymentCredentialByKey <$> toCardanoPaymentKeyHash (PaymentPubKeyHash pkh))
-                                            <*> pure NoStakeAddress
+                Party (Address network address)    -> do
+                                      address' <- withShelleyBasedEra era $ marloweAddressToCardanoAddress network address
                                       money' <- liftCli $ toCardanoValue money
-                                      Just <$> ensureMinUtxo protocol (address, Nothing, money')
+                                      Just <$> ensureMinUtxo protocol (address', Nothing, money')
                 Party (Role role) -> do
                                       money' <- liftCli $ toCardanoValue money
                                       let
@@ -911,6 +904,42 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
         -- Return the transaction identifier.
         pure body
     go marloweOut'
+
+
+-- | Convert a Marlowe party address to a Cardano address.
+marloweAddressToCardanoAddress :: forall era m
+                               .  CS.IsShelleyBasedEra era
+                               => MonadError CliError m
+                               => Network
+                               -> Address
+                               -> m (AddressInEra era)
+marloweAddressToCardanoAddress network address =
+  do
+    address' <-
+      liftCli
+        $ toCardanoAddressInEra
+          (if network == mainnet then Mainnet else Testnet (NetworkMagic 2))
+          address
+    address'' <-
+      case address' of
+        AddressInEra (CS.ShelleyAddressInEra _) address'' -> pure address''
+        _                                                 -> throwError "Byron addresses are not supported."
+    let era = CS.shelleyBasedEra
+    pure $ AddressInEra (CS.ShelleyAddressInEra era) address''
+
+
+-- | Convert a cardano address to a Marlowe party address.
+marloweAddressFromCardanoAddress :: MonadError CliError m
+                                 => AddressInEra era
+                                 -> m (Network, Address)
+marloweAddressFromCardanoAddress address =
+  do
+    address' <- liftCli $ fromCardanoAddressInEra address
+    network' <-
+      case address of
+        AddressInEra _ (CS.ShelleyAddress network _ _) -> pure $ if network == LC.Mainnet then mainnet else testnet
+        _                                              -> throwError "Byron addresses are not supported."
+    pure (network', address')
 
 
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.

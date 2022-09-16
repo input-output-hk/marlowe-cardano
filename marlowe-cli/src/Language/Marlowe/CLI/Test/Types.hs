@@ -68,22 +68,11 @@ module Language.Marlowe.CLI.Test.Types
   , ssCurrencies
   , ssReferenceScripts
   , ssWallets
-  , walletPubKeyHash
   ) where
 
 
 import Cardano.Api
-  ( AddressInEra
-  , CardanoMode
-  , Key(VerificationKey)
-  , LocalNodeConnectInfo
-  , Lovelace
-  , NetworkId
-  , PaymentKey
-  , PolicyId
-  , ScriptDataSupportedInEra
-  , TxBody
-  )
+  (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
 import qualified Cardano.Api as C
 import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
@@ -103,7 +92,6 @@ import Language.Marlowe.CLI.Types
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
-import qualified Ledger.Tx.CardanoAPI as L
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
@@ -247,14 +235,8 @@ data Wallet era =
   , waTokens          :: P.Value                      -- ^ Custom tokens cache which simplifies
 
   , waTransactions    :: [WalletTransaction era]
-  , waVerificationKey :: VerificationKey PaymentKey
   }
   deriving stock (Generic, Show)
-
-
-walletPubKeyHash :: Wallet era -> P.PubKeyHash
-walletPubKeyHash Wallet { waVerificationKey } =
-  L.fromCardanoPaymentKeyHash . C.verificationKeyHash $ waVerificationKey
 
 
 -- | In many contexts this defaults to the `RoleName` but at some
