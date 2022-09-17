@@ -313,9 +313,9 @@ echo "We create the contract for the previously specified parameters."
 
 marlowe-cli template escrow --minimum-ada "$MINIMUM_ADA"               \
                             --price "$PRICE"                           \
-                            --seller "Role=$SELLER_ROLE"               \
-                            --buyer "Role=$BUYER_ROLE"                 \
-                            --mediator "Role=$MEDIATOR_ROLE"           \
+                            --seller "$SELLER_ROLE"                    \
+                            --buyer "$BUYER_ROLE"                      \
+                            --mediator "$MEDIATOR_ROLE"                \
                             --payment-deadline "$PAYMENT_DEADLINE"     \
                             --complaint-deadline "$COMPLAINT_DEADLINE" \
                             --dispute-deadline "$DISPUTE_DEADLINE"     \
@@ -375,8 +375,8 @@ echo "## Transaction 2. Buyer Deposits Funds into Seller's Account."
 echo "First we compute the Marlowe input required to make the initial deposit by the buyer."
 
 marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
-                        --deposit-account "Role=$SELLER_ROLE" \
-                        --deposit-party "Role=$BUYER_ROLE"    \
+                        --deposit-account "$SELLER_ROLE"      \
+                        --deposit-party "$BUYER_ROLE"         \
                         --deposit-amount "$PRICE"             \
                         --invalid-before "$NOW"               \
                         --invalid-hereafter "$((NOW+4*HOUR))" \
@@ -419,7 +419,7 @@ echo "First we compute the input for the contract to transition forward."
 
 marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
                         --choice-name "Everything is alright" \
-                        --choice-party "Role=$BUYER_ROLE"     \
+                        --choice-party "$BUYER_ROLE"          \
                         --choice-number 0                     \
                         --invalid-before "$NOW"               \
                         --invalid-hereafter "$((NOW+4*HOUR))" \

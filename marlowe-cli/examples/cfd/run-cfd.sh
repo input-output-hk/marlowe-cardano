@@ -555,8 +555,8 @@ echo "## Transaction 2. Party Deposits Margin Funds into Their Account."
 echo "First we compute the Marlowe input required to make the margin deposit by the party."
 
 marlowe-cli run prepare --marlowe-file tx-1.marlowe   \
-                        --deposit-account "Role=$PARTY_ROLE"  \
-                        --deposit-party "Role=$PARTY_ROLE"    \
+                        --deposit-account "$PARTY_ROLE"       \
+                        --deposit-party "$PARTY_ROLE"         \
                         --deposit-amount "$PARTY_MARGIN"      \
                         --invalid-before "$((NOW-18*MINUTE))" \
                         --invalid-hereafter "$((NOW+3*HOUR))" \
@@ -596,8 +596,8 @@ echo "## Transaction 3. Counterparty Deposits Margin Funds into Their Account."
 echo "First we compute the Marlowe input required to make the margin deposit by the counterparty."
 
 marlowe-cli run prepare --marlowe-file tx-2.marlowe         \
-                        --deposit-account "Role=$COUNTERPARTY_ROLE" \
-                        --deposit-party "Role=$COUNTERPARTY_ROLE"   \
+                        --deposit-account "$COUNTERPARTY_ROLE"      \
+                        --deposit-party "$COUNTERPARTY_ROLE"        \
                         --deposit-amount "$COUNTERPARTY_MARGIN"     \
                         --invalid-before "$((NOW-18*MINUTE))"       \
                         --invalid-hereafter "$((NOW+3*HOUR))"       \
@@ -638,7 +638,7 @@ echo "First we compute the Marlowe input required for the oracle to report the p
 
 marlowe-cli run prepare --marlowe-file tx-3.marlowe   \
                         --choice-name "Price in first window" \
-                        --choice-party "Role=$ORACLE_ROLE"    \
+                        --choice-party "$ORACLE_ROLE"         \
                         --choice-number "$FIRST_PRICE"        \
                         --invalid-before "$((NOW-18*MINUTE))" \
                         --invalid-hereafter "$((NOW+3*HOUR))" \
@@ -679,7 +679,7 @@ echo "First we compute the Marlowe input required for the oracle to report the p
 
 marlowe-cli run prepare --marlowe-file tx-4.marlowe    \
                         --choice-name "Price in second window" \
-                        --choice-party "Role=$ORACLE_ROLE"     \
+                        --choice-party "$ORACLE_ROLE"          \
                         --choice-number "$SECOND_PRICE"        \
                         --invalid-before "$((NOW-18*MINUTE))"  \
                         --invalid-hereafter "$((NOW+3*HOUR))"  \

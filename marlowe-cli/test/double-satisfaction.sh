@@ -43,7 +43,6 @@ then
                               --verification-key-file "$PARTY_A_PAYMENT_VKEY"
 fi
 PARTY_A_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY" )
-PARTY_A_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$PARTY_A_PAYMENT_VKEY")
 
 
 # Fund the first party's address.
@@ -58,7 +57,7 @@ marlowe-cli util faucet \
   --required-signer "$FAUCET_SKEY_FILE" \
   "$PARTY_A_ADDRESS"
 
-marlowe-cli util clean --testnet-magic "$MAGIC"          \
+marlowe-cli util clean --testnet-magic "$MAGIC"                  \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                        --required-signer "$PARTY_A_PAYMENT_SKEY" \
                        --change-address "$PARTY_A_ADDRESS"       \
@@ -72,11 +71,11 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_A_ADDRESS"
 # We select the UTxO with sufficient funds to use in executing the contract.
 
 TX_0_PARTY_A=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"       \
-                        --lovelace-only 50000000                        \
-                        "$PARTY_A_ADDRESS"                              \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'  \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 50000000                  \
+                        "$PARTY_A_ADDRESS"                        \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 
 
@@ -95,7 +94,6 @@ then
                               --verification-key-file "$PARTY_B_PAYMENT_VKEY"
 fi
 PARTY_B_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY" )
-PARTY_B_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY")
 
 
 # Fund the second party's address.
@@ -110,7 +108,7 @@ marlowe-cli util faucet \
   --required-signer "$FAUCET_SKEY_FILE" \
   "$PARTY_B_ADDRESS"
 
-marlowe-cli util clean --testnet-magic "$MAGIC"          \
+marlowe-cli util clean --testnet-magic "$MAGIC"                  \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                        --required-signer "$PARTY_B_PAYMENT_SKEY" \
                        --change-address "$PARTY_B_ADDRESS"       \
@@ -124,10 +122,10 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_B_ADDRESS"
 # We select the UTxO with sufficient funds to use in executing the contract.
 
 TX_0_PARTY_B=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"       \
-                        --lovelace-only 50000000                        \
-                        "$PARTY_B_ADDRESS"                              \
+marlowe-cli util select --testnet-magic "$MAGIC"                  \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 50000000                  \
+                        "$PARTY_B_ADDRESS"                        \
 | sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'  \
 )
 echo "TX_0_PARTY_B: $TX_0_PARTY_B"
@@ -137,8 +135,8 @@ echo "TX_0_PARTY_B: $TX_0_PARTY_B"
 
 CONTRACT_ADDRESS=$(marlowe-cli contract address --testnet-magic "$MAGIC")
 
-marlowe-cli contract validator --testnet-magic "$MAGIC" \
-                               --out-file marlowe.plutus        \
+marlowe-cli contract validator --testnet-magic "$MAGIC"  \
+                               --out-file marlowe.plutus \
                                --print-stats
 
 
@@ -163,11 +161,11 @@ cat > tx-1.state << EOI
   "choices": [],
   "accounts": [
     [
-      [ { "pk_hash": "$PARTY_A_PUBKEYHASH" }, { "currency_symbol": "", "token_name": "" } ],
+      [ { "address": "$PARTY_A_ADDRESS" }, { "currency_symbol": "", "token_name": "" } ],
       25000000
     ],
     [
-      [ { "pk_hash": "$PARTY_B_PUBKEYHASH" },
+      [ { "address": "$PARTY_B_ADDRESS" },
         { "currency_symbol": "", "token_name": "" } ],
       3000000
     ]
@@ -186,7 +184,7 @@ marlowe-cli contract datum --contract-file tx-1.contract \
                            --out-file      tx-1.datum
 
 TX_1=$(
-marlowe-cli transaction create --testnet-magic "$MAGIC"          \
+marlowe-cli transaction create --testnet-magic "$MAGIC"                  \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --tx-in "$TX_0_PARTY_A"                   \
                                --change-address "$PARTY_A_ADDRESS"       \
@@ -197,7 +195,7 @@ marlowe-cli transaction create --testnet-magic "$MAGIC"          \
                                --out-file tx-1.raw                       \
                                --print-stats                             \
                                --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                            \
+| sed -e 's/^TxId "\(.*\)"$/\1/'                                         \
 )
 echo "TxId $TX_1"
 
@@ -214,11 +212,11 @@ cat > tx-2.state << EOI
   "choices": [],
   "accounts": [
     [
-      [ { "pk_hash": "$PARTY_A_PUBKEYHASH" }, { "currency_symbol": "", "token_name": "" } ],
+      [ { "address": "$PARTY_A_ADDRESS" }, { "currency_symbol": "", "token_name": "" } ],
       20000000
     ],
     [
-      [ { "pk_hash": "$PARTY_B_PUBKEYHASH" },
+      [ { "address": "$PARTY_B_ADDRESS" },
         { "currency_symbol": "", "token_name": "" } ],
       4000000
     ]
@@ -233,11 +231,11 @@ cat > tx-2.contract << EOI
 EOI
 
 marlowe-cli contract datum --contract-file tx-2.contract  \
-                           --state-file    tx-2.state             \
+                           --state-file    tx-2.state     \
                            --out-file      tx-2.datum
 
 TX_2=$(
-marlowe-cli transaction create --testnet-magic "$MAGIC"          \
+marlowe-cli transaction create --testnet-magic "$MAGIC"                  \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --tx-in "$TX_0_PARTY_B"                   \
                                --change-address "$PARTY_B_ADDRESS"       \
@@ -248,7 +246,7 @@ marlowe-cli transaction create --testnet-magic "$MAGIC"          \
                                --out-file tx-2.raw                       \
                                --print-stats                             \
                                --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                            \
+| sed -e 's/^TxId "\(.*\)"$/\1/'                                         \
 )
 echo "TxId $TX_2"
 
@@ -271,7 +269,7 @@ marlowe-cli contract redeemer --out-file tx-2-second.redeemer
 # command prints the transaction ID, that indicates that the transaction would
 # run without error. (It doesn't matter which party submits this transaction.)
 
-marlowe-cli transaction close --testnet-magic "$MAGIC"           \
+marlowe-cli transaction close --testnet-magic "$MAGIC"                   \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
                               --tx-in-marlowe "$TX_1"#1                  \
                               --tx-in-script-file marlowe.plutus         \
@@ -293,7 +291,7 @@ marlowe-cli transaction close --testnet-magic "$MAGIC"           \
 # command prints the transaction ID, that indicates that the transaction would
 # run without error. (It doesn't matter which party submits this transaction.)
 
-marlowe-cli transaction close --testnet-magic "$MAGIC"           \
+marlowe-cli transaction close --testnet-magic "$MAGIC"                   \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
                               --tx-in-marlowe "$TX_2"#1                  \
                               --tx-in-script-file marlowe.plutus         \

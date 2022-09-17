@@ -86,9 +86,6 @@ BYSTANDER_ADDRESS=$(
   cardano-cli address build --testnet-magic "$MAGIC"                                  \
                             --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY" \
 )
-BYSTANDER_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY"
-)
 
 marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -99,7 +96,7 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --required-signer "$FAUCET_SKEY_FILE"     \
                         "$BYSTANDER_ADDRESS"
 
-echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'" and public-key hash "'`'"$BYSTANDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean --testnet-magic "$MAGIC"                    \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
@@ -141,9 +138,6 @@ PARTY_ADDRESS=$(
   cardano-cli address build --testnet-magic "$MAGIC"                              \
                             --payment-verification-key-file "$PARTY_PAYMENT_VKEY" \
 )
-PARTY_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$PARTY_PAYMENT_VKEY"
-)
 
 marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -154,7 +148,7 @@ marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --required-signer "$FAUCET_SKEY_FILE"     \
                         "$PARTY_ADDRESS"
 
-echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and the public-key hash "'`'"$PARTY_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean --testnet-magic "$MAGIC"                  \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -204,9 +198,9 @@ echo "The bystander $BYSTANDER_NAME will provide $MINIMUM_ADA lovelace during th
 
 echo "We create the contract for the previously specified parameters."
 
-marlowe-cli template simple --bystander "PK=$BYSTANDER_PUBKEYHASH"       \
+marlowe-cli template simple --bystander "$BYSTANDER_ADDRESS"             \
                             --minimum-ada "$MINIMUM_ADA"                 \
-                            --party "PK=$PARTY_PUBKEYHASH"               \
+                            --party "$PARTY_ADDRESS"                     \
                             --deposit-lovelace "$DEPOSIT_LOVELACE"       \
                             --withdrawal-lovelace "$WITHDRAWAL_LOVELACE" \
                             --timeout "$TIMEOUT_TIME"                    \
@@ -259,8 +253,8 @@ echo "## Transaction 2. Make the Initial Deposit"
 echo "First we compute the Marlowe input required to make the initial deposit by the party."
 
 marlowe-cli run prepare --marlowe-file tx-1.marlowe              \
-                        --deposit-account "PK=$PARTY_PUBKEYHASH" \
-                        --deposit-party "PK=$PARTY_PUBKEYHASH"   \
+                        --deposit-account "$PARTY_ADDRESS"       \
+                        --deposit-party "$PARTY_ADDRESS"         \
                         --deposit-amount "$DEPOSIT_LOVELACE"     \
                         --invalid-before "$NOW"                  \
                         --invalid-hereafter "$((NOW+4*HOUR))"    \
@@ -411,4 +405,5 @@ cleanup() {
 }
 
 cleanup "$BYSTANDER_PAYMENT_SKEY" "$BYSTANDER_ADDRESS" "$FAUCET_ADDRESS"
+
 cleanup "$PARTY_PAYMENT_SKEY" "$PARTY_ADDRESS" "$FAUCET_ADDRESS"

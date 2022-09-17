@@ -59,7 +59,6 @@ then
                               --verification-key-file "$ISSUER_PAYMENT_VKEY"
 fi
 ISSUER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$ISSUER_PAYMENT_VKEY" )
-ISSUER_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$ISSUER_PAYMENT_VKEY")
 
 echo "Fund the issuer's address."
 
@@ -92,7 +91,7 @@ marlowe-cli util mint --testnet-magic "$MAGIC"                  \
 )
 TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
 
-echo "The issuer $ISSUER_NAME is the minimum-ADA provider and has the address "'`'"$ISSUER_ADDRESS"'`'" and public-key hash "'`'"$ISSUER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The issuer $ISSUER_NAME is the minimum-ADA provider and has the address "'`'"$ISSUER_ADDRESS"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean --testnet-magic "$MAGIC"                  \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -137,7 +136,6 @@ then
                               --verification-key-file "$COUNTERPARTY_PAYMENT_VKEY"
 fi
 COUNTERPARTY_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY" )
-COUNTERPARTY_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$COUNTERPARTY_PAYMENT_VKEY")
 
 echo "Fund the counterparty's address."
 
@@ -168,7 +166,7 @@ marlowe-cli util mint --testnet-magic "$MAGIC"                       \
 )
 TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"
 
-echo "The counterparty $COUNTERPARTY_NAME has the address "'`'"$COUNTERPARTY_ADDRESS"'`'" and public-key hash "'`'"$COUNTERPARTY_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The counterparty $COUNTERPARTY_NAME has the address "'`'"$COUNTERPARTY_ADDRESS"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean --testnet-magic "$MAGIC"                       \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
@@ -213,8 +211,8 @@ echo "The contract has a minimum-ADA requirement and three timeouts. It also spe
 echo "We create the contract for the previously specified parameters."
 
 marlowe-cli template coveredCall --minimum-ada "$MINIMUM_ADA"                  \
-                                 --issuer "PK=$ISSUER_PUBKEYHASH"              \
-                                 --counter-party "PK=$COUNTERPARTY_PUBKEYHASH" \
+                                 --issuer "$ISSUER_ADDRESS"                    \
+                                 --counter-party "$COUNTERPARTY_ADDRESS"       \
                                  --currency "$TOKEN_B"                         \
                                  --underlying "$TOKEN_A"                       \
                                  --strike "$AMOUNT_B"                          \
@@ -271,8 +269,8 @@ echo "## Transaction 2. The issuer deposits Tokens into the Contract."
 echo "First we compute the Marlowe input required to deposit the tokens."
 
 marlowe-cli run prepare --marlowe-file tx-1.marlowe               \
-                        --deposit-account "PK=$ISSUER_PUBKEYHASH" \
-                        --deposit-party "PK=$ISSUER_PUBKEYHASH"   \
+                        --deposit-account "$ISSUER_ADDRESS"       \
+                        --deposit-party "$ISSUER_ADDRESS"         \
                         --deposit-token "$TOKEN_A"                \
                         --deposit-amount "$AMOUNT_A"              \
                         --invalid-before "$NOW"                   \
@@ -309,13 +307,13 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ISSUER_ADDRESS" | se
 
 echo "## Transaction 3. The Counter-Party chooses to exercise the option"
 
-marlowe-cli run prepare --marlowe-file tx-2.marlowe                  \
-                        --choice-name "Exercise Call"                \
-                        --choice-party "PK=$COUNTERPARTY_PUBKEYHASH" \
-                        --choice-number 1                            \
-                        --invalid-before "$NOW"                      \
-                        --invalid-hereafter "$((NOW+1*HOUR))"        \
-                        --out-file tx-3.marlowe                      \
+marlowe-cli run prepare --marlowe-file tx-2.marlowe            \
+                        --choice-name "Exercise Call"          \
+                        --choice-party "$COUNTERPARTY_ADDRESS" \
+                        --choice-number 1                      \
+                        --invalid-before "$NOW"                \
+                        --invalid-hereafter "$((NOW+1*HOUR))"  \
+                        --out-file tx-3.marlowe                \
                         --print-stats
 
 
@@ -340,8 +338,8 @@ echo "## Transaction 4. The Counter-Party Deposits their Tokens."
 echo "First we compute the input for the contract to transition forward."
 
 marlowe-cli run prepare --marlowe-file tx-3.marlowe                     \
-                        --deposit-account "PK=$COUNTERPARTY_PUBKEYHASH" \
-                        --deposit-party "PK=$COUNTERPARTY_PUBKEYHASH"   \
+                        --deposit-account "$COUNTERPARTY_ADDRESS"       \
+                        --deposit-party "$COUNTERPARTY_ADDRESS"         \
                         --deposit-token "$TOKEN_B"                      \
                         --deposit-amount "$AMOUNT_B"                    \
                         --invalid-before "$NOW"                         \
@@ -384,26 +382,26 @@ echo "## Clean Up"
 
 BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                                    \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                   \
-                               --tx-in "$TX_2#0"                                           \
-			       --tx-in "$TX_4#1"                                           \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                            \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"           \
+                               --tx-in "$TX_2#0"                                   \
+			       --tx-in "$TX_4#1"                                   \
                                --tx-out "$BURN_ADDRESS+1400000+$AMOUNT_B $TOKEN_B" \
-                               --required-signer "$ISSUER_PAYMENT_SKEY"                    \
-                               --change-address "$FAUCET_ADDRESS"                          \
-                               --out-file /dev/null                                        \
+                               --required-signer "$ISSUER_PAYMENT_SKEY"            \
+                               --change-address "$FAUCET_ADDRESS"                  \
+                               --out-file /dev/null                                \
                                --submit 600
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ISSUER_ADDRESS"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                                    \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                   \
-                               --tx-in "$TX_4#0"                                           \
-			       --tx-in "$TX_4#2"                                           \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                            \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"           \
+                               --tx-in "$TX_4#0"                                   \
+			       --tx-in "$TX_4#2"                                   \
                                --tx-out "$BURN_ADDRESS+1400000+$AMOUNT_A $TOKEN_A" \
-                               --required-signer "$COUNTERPARTY_PAYMENT_SKEY"                    \
-                               --change-address "$FAUCET_ADDRESS"                          \
-                               --out-file /dev/null                                        \
+                               --required-signer "$COUNTERPARTY_PAYMENT_SKEY"      \
+                               --change-address "$FAUCET_ADDRESS"                  \
+                               --out-file /dev/null                                \
                                --submit 600
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$COUNTERPARTY_ADDRESS"

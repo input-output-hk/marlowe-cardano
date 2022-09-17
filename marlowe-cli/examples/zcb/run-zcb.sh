@@ -106,7 +106,7 @@ echo "The lender mints the role tokens."
 MINT_EXPIRES=$((TIP + 1000000))
 
 ROLE_CURRENCY=$(
-marlowe-cli util mint --testnet-magic "$MAGIC" \
+marlowe-cli util mint --testnet-magic "$MAGIC"                  \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                       --required-signer "$LENDER_PAYMENT_SKEY"  \
                       --change-address  "$LENDER_ADDRESS"       \
@@ -217,8 +217,8 @@ echo "The contract has a minimum-ADA requirement and two timeouts. It also speci
 echo "We create the contract for the previously specified parameters."
 
 marlowe-cli template zcb --minimum-ada "$MINIMUM_ADA"               \
-                         --lender "Role=$LENDER_ROLE"               \
-                         --borrower "Role=$BORROWER_ROLE"           \
+                         --lender "$LENDER_ROLE"                    \
+                         --borrower "$BORROWER_ROLE"                \
                          --principal "$PRINCIPAL"                   \
                          --interest "$INTEREST"                     \
                          --lending-deadline "$LENDING_DEADLINE"     \
@@ -278,8 +278,8 @@ echo "## Transaction 2. Lender Deposits the Loan Amount"
 echo "First we compute the Marlowe input required to deposit the funds for the loan."
 
 marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
-                        --deposit-account "Role=$LENDER_ROLE" \
-                        --deposit-party "Role=$LENDER_ROLE"   \
+                        --deposit-account "$LENDER_ROLE"      \
+                        --deposit-party "$LENDER_ROLE"        \
                         --deposit-amount "$PRINCIPAL"         \
                         --invalid-before "$NOW"               \
                         --invalid-hereafter "$((NOW+4*HOUR))" \
@@ -352,8 +352,8 @@ echo "## Transaction 4. Borrower Repays the Loan's Principal and Interest"
 echo "First we compute the Marlowe input required to replay the funds for the loan."
 
 marlowe-cli run prepare --marlowe-file tx-2.marlowe                \
-                        --deposit-account "Role=$BORROWER_ROLE"    \
-                        --deposit-party "Role=$BORROWER_ROLE"      \
+                        --deposit-account "$BORROWER_ROLE"         \
+                        --deposit-party "$BORROWER_ROLE"           \
                         --deposit-amount "$((PRINCIPAL+INTEREST))" \
                         --invalid-before "$NOW"                    \
                         --invalid-hereafter "$((NOW+4*HOUR))"      \
@@ -430,27 +430,27 @@ echo "## Clean Up"
 
 BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                             \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
-                               --tx-in "$TX_4"#0                                    \
-                               --tx-in "$TX_4"#2                                    \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                           \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"          \
+                               --tx-in "$TX_4"#0                                  \
+                               --tx-in "$TX_4"#2                                  \
                                --tx-out "$BURN_ADDRESS+1400000+1 $BORROWER_TOKEN" \
-                               --required-signer "$BORROWER_PAYMENT_SKEY"           \
-                               --change-address "$FAUCET_ADDRESS"                   \
-                               --out-file /dev/null                                 \
+                               --required-signer "$BORROWER_PAYMENT_SKEY"         \
+                               --change-address "$FAUCET_ADDRESS"                 \
+                               --out-file /dev/null                               \
                                --submit 600
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                             \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
-                               --tx-in "$TX_5"#0                                    \
-                               --tx-in "$TX_5"#1                                    \
-                               --tx-in "$TX_5"#2                                    \
+marlowe-cli transaction simple --testnet-magic "$MAGIC"                         \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"        \
+                               --tx-in "$TX_5"#0                                \
+                               --tx-in "$TX_5"#1                                \
+                               --tx-in "$TX_5"#2                                \
                                --tx-out "$BURN_ADDRESS+1400000+1 $LENDER_TOKEN" \
-                               --required-signer "$LENDER_PAYMENT_SKEY"             \
-                               --change-address "$FAUCET_ADDRESS"                   \
-                               --out-file /dev/null                                 \
+                               --required-signer "$LENDER_PAYMENT_SKEY"         \
+                               --change-address "$FAUCET_ADDRESS"               \
+                               --out-file /dev/null                             \
                                --submit 600
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS"
