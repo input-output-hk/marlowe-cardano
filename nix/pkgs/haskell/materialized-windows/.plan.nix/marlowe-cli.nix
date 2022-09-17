@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-cli"; version = "0.0.8.0"; };
+      identifier = { name = "marlowe-cli"; version = "0.0.8.1"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "brian.bush@iohk.io";

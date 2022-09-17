@@ -1,7 +1,9 @@
 ---
-date: 24 September 2022
-version: marlowe-cli 0.0.7.0
+date: 17 September 2022
+version: marlowe-cli 0.0.8.0
 ---
+
+<div class="cell markdown">
 
 # Marlowe Command-Line Interface (CLI) Tool
 
@@ -14,6 +16,10 @@ to submit Marlowe transactions to the Cardano blockchain.
 See the [Marlowe Debugging Cookbook](../marlowe/debugging-cookbook.md)
 for troubleshooting information, or the [Marlowe CLI Pioneers
 Lectures](lectures/ReadMe.md).
+
+</div>
+
+<div class="cell markdown">
 
 ## Contents
 
@@ -29,11 +35,19 @@ Lectures](lectures/ReadMe.md).
 -   [Editing and rebuilding this
     documentation](#editing-and-rebuilding-this-documentation)
 
+</div>
+
+<div class="cell markdown">
+
 ## Installation
 
 One can install `marlowe-cli` either using Nix or Cabal. Detailed
 instructions are available
 [here](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc).
+
+</div>
+
+<div class="cell markdown">
 
 ### Installation via Nix
 
@@ -52,11 +66,23 @@ and simply enter a nix shell.
     cd marlowe-cardano
     nix develop
 
+</div>
+
+<div class="cell code" execution_count="2">
+
 ``` bash
 marlowe-cli --version
 ```
 
-    marlowe-cli 0.0.7.0
+<div class="output stream stdout">
+
+    marlowe-cli 0.0.8.0
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ### Installation via Cabal
 
@@ -66,18 +92,38 @@ Installing directly via `cabal` and `ghc` involves lengthy compilation,
 but avoids the use of Nix. First ensure that Cabal 3.4 and GHC 8.10.7
 are installed.
 
+</div>
+
+<div class="cell code" execution_count="2">
+
 ``` bash
 cabal --version
 ```
 
+<div class="output stream stdout">
+
     cabal-install version 3.4.0.0
     compiled using version 3.4.1.0 of the Cabal library 
+
+</div>
+
+</div>
+
+<div class="cell code" execution_count="3">
 
 ``` bash
 ghc --version
 ```
 
+<div class="output stream stdout">
+
     The Glorious Glasgow Haskell Compilation System, version 8.10.7
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 Clone the Marlowe repository and execute `cabal`:
 
@@ -85,21 +131,35 @@ Clone the Marlowe repository and execute `cabal`:
     cd marlowe-cardano
     cabal install exe:marlowe-cli
 
+</div>
+
+<div class="cell markdown">
+
 ## Available Commands
+
+</div>
+
+<div class="cell code" execution_count="4">
 
 ``` bash
 marlowe-cli --help
 ```
 
+<div class="output stream stdout">
+
     marlowe-cli : a command-line tool for Marlowe contracts
 
-    Usage: marlowe-cli [--version] (COMMAND | COMMAND)
+    Usage: marlowe-cli [--version] 
+                       (COMMAND | COMMAND | [--alonzo-era] (COMMAND | COMMAND) | 
+                         --babbage-era (COMMAND | COMMAND))
 
       Utilities for Marlowe.
 
     Available options:
       -h,--help                Show this help text
       --version                Show version.
+      --alonzo-era             Read and write Alonzo transactions
+      --babbage-era            Read and write Babbage transactions
 
     High-level commands:
       run                      Run a contract.
@@ -114,6 +174,20 @@ marlowe-cli --help
       transaction              Create and submit transactions.
       util                     Miscellaneous utilities.
 
+    Low-level commands:
+      contract                 Export contract address, validator, datum, or
+                               redeemer.
+      input                    Create inputs to a contract.
+      role                     Export role address, validator, datum, or redeemer.
+      transaction              Create and submit transactions.
+      util                     Miscellaneous utilities.
+
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 Further help is available for each subcommand:
 
 -   high-level commands
@@ -127,6 +201,10 @@ Further help is available for each subcommand:
     -   [`marlowe-cli transaction`](doc/transaction.md)
     -   [`marlowe-cli util`](doc/util.md)
 
+</div>
+
+<div class="cell markdown">
+
 ## Workflows
 
 Marlowe CLI supports workflows for specific use cases:
@@ -136,6 +214,10 @@ Marlowe CLI supports workflows for specific use cases:
     mechanics.
 -   [A low-level workflow](#low-level-workflow) that exposes the Plutus
     mechanics of Marlowe contracts.
+
+</div>
+
+<div class="cell markdown" tags="[]">
 
 ### High-Level Workflow
 
@@ -148,6 +230,10 @@ and submission of transactions.
 ![High-level Marlowe CLI
 workflow.](doc/diagrams/high-level-workflow.svg)
 
+</div>
+
+<div class="cell markdown" jp-MarkdownHeadingCollapsed="true" tags="[]">
+
 #### Examples
 
 -   [simple contract](examples/simple/ReadMe.md)
@@ -157,19 +243,27 @@ workflow.](doc/diagrams/high-level-workflow.svg)
 -   [contract for differences](examples/cfd/ReadMe.md)
 -   [covered call](examples/coveredCall/ReadMe.md)
 
+</div>
+
+<div class="cell markdown">
+
 #### Test Cases
 
 -   [simple contract](examples/simple/run-test.sh)
 -   escrow
-    -   [\"everything is
-        alright\"](examples/escrow/run-everything-is-alright.sh)
-    -   [\"confirm problem\"](examples/escrow/run-confirm-problem.sh)
-    -   [\"dismiss claim\"](examples/escrow/run-dimiss-claim.sh)
-    -   [\"confirm claim\"](examples/escrow/run-confirm-claim.sh)
+    -   ["everything is
+        alright"](examples/escrow/run-everything-is-alright.sh)
+    -   ["confirm problem"](examples/escrow/run-confirm-problem.sh)
+    -   ["dismiss claim"](examples/escrow/run-dimiss-claim.sh)
+    -   ["confirm claim"](examples/escrow/run-confirm-claim.sh)
 -   [swap](examples/swap/run-swap.sh)
 -   [zero-coupon bond](examples/zcb/run-zcb.sh)
 -   [contract for differences](examples/cfd/run-cfd.sh)
 -   [covered call](examples/coveredCall/run-coveredCall.sh)
+
+</div>
+
+<div class="cell markdown">
 
 ### Low-Level Workflow
 
@@ -177,6 +271,10 @@ The `marlowe-cli` tools supports both granular and monolithic workflows
 for creating the files and hashes needed to submit Marlowe contracts
 with `cardano-cli`. The workflows only differ in how information is
 packaged.
+
+</div>
+
+<div class="cell markdown">
 
 #### Monolithic Workflow
 
@@ -204,6 +302,10 @@ See [monolithic.marlowe](doc/monolithic.marlowe) for an example file
 containing this information for a simple contract. A tutorial for this
 workflow is available [here](doc/monolithic.md).
 
+</div>
+
+<div class="cell markdown" tags="[]">
+
 ### Granular Workflow
 
 The [`contract address`](doc/contract.md#address),
@@ -220,11 +322,22 @@ commands can be used in conjunction with `cardano-cli`.
 
 A tutorial for this workflow is available [here](doc/granular.md).
 
+</div>
+
+<div class="cell markdown">
 
 ## Automated Tests
 
+</div>
+
+<div class="cell markdown">
+
 -   Tests that interact directly with the Cardano blockchain:
     [run-nonpab-tests.sh](run-nonpab-tests.sh)
+
+</div>
+
+<div class="cell markdown">
 
 ## Editing and Rebuilding This Documentation
 
@@ -232,3 +345,5 @@ Most of this documentation is edited in Jupyter notebooks, execute
 `nix develop --command jupyter-lab` to launch Jupyter.
 
 Execute `make` or `./Makefile` to rebuild this documentation.
+
+</div>

@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe-cli
-version: 0.0.8.0
+version: 0.0.8.1
 license: Apache-2.0
 license-files:
   LICENSE

@@ -1,7 +1,9 @@
 ---
-date: 04 September 2022
-version: marlowe-cli 0.0.7.0
+date: 17 September 2022
+version: marlowe-cli 0.0.8.0
 ---
+
+<div class="cell markdown" tags="[]">
 
 # Marlowe CLI `run` Subcommands
 
@@ -12,6 +14,10 @@ contracts without dealing with the underlying its Plutus mechanics.
 The ["contract for differences" example](../examples/cfd/ReadMe.md)
 illustrates the use of `marlowe-cli run`.
 
+</div>
+
+<div class="cell markdown">
+
 ## Contents
 
 -   [Initialize](#initialize)
@@ -19,11 +25,21 @@ illustrates the use of `marlowe-cli run`.
 -   [Execute](#execute)
 -   [Withdraw](#withdraw)
 
+</div>
+
+<div class="cell markdown">
+
 ## Available Commands
+
+</div>
+
+<div class="cell code" execution_count="1">
 
 ``` bash
 marlowe-cli run --help
 ```
+
+<div class="output stream stdout">
 
     Usage: marlowe-cli run (COMMAND | COMMAND)
 
@@ -47,11 +63,23 @@ marlowe-cli run --help
                                address, selecting transaction inputs and outputs
                                automatically.
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ## Initialize
+
+</div>
+
+<div class="cell code" execution_count="2">
 
 ``` bash
 marlowe-cli run initialize --help
 ```
+
+<div class="output stream stdout">
 
     Usage: marlowe-cli run initialize --testnet-magic INTEGER
                                       --socket-path SOCKET_FILE 
@@ -83,6 +111,12 @@ marlowe-cli run initialize --help
       --print-stats            Print statistics.
       -h,--help                Show this help text
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ### Example
 
 Here is a sample invocation of `marlowe-cli run initialize`: it takes
@@ -106,11 +140,21 @@ Validator size: 12415
 Base-validator cost: ExBudget {exBudgetCPU = ExCPU 24652144, exBudgetMemory = ExMemory 82900}
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Prepare
+
+</div>
+
+<div class="cell code" execution_count="3">
 
 ``` bash
 marlowe-cli run prepare --help
 ```
+
+<div class="output stream stdout">
 
     Usage: marlowe-cli run prepare --marlowe-file MARLOWE_FILE 
                                    [--deposit-account PARTY --deposit-party PARTY 
@@ -144,6 +188,12 @@ marlowe-cli run prepare --help
       --print-stats            Print statistics.
       -h,--help                Show this help text
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ### Example
 
 Here is a sample invocation of `marlowe-cli run prepare`: it takes the
@@ -168,11 +218,21 @@ $ marlowe-cli run prepare --marlowe-file run-1.marlowe \
 Datum size: 901
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Execute
+
+</div>
+
+<div class="cell code" execution_count="4">
 
 ``` bash
 marlowe-cli run execute --help
 ```
+
+<div class="output stream stdout">
 
     Usage: marlowe-cli run execute --testnet-magic INTEGER --socket-path SOCKET_FILE
                                    [--marlowe-in-file MARLOWE_FILE
@@ -180,8 +240,8 @@ marlowe-cli run execute --help
                                      --tx-in-collateral TXID#TXIX]
                                    --marlowe-out-file MARLOWE_FILE 
                                    [--tx-in TXID#TXIX] [--tx-out ADDRESS+VALUE]
-                                   --change-address ADDRESS 
-                                   [--required-signer SIGNING_FILE] 
+                                   --change-address ADDRESS
+                                   (--required-signer SIGNING_FILE) 
                                    [--metadata-file METADATA_FILE] --out-file FILE 
                                    [--submit SECONDS] [--print-stats] 
                                    [--script-invalid]
@@ -219,6 +279,12 @@ marlowe-cli run execute --help
       --script-invalid         Assert that the transaction is invalid.
       -h,--help                Show this help text
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ### Example
 
 Here is a sample invocation of `marlowe-cli run execute`: it takes the
@@ -252,11 +318,21 @@ Execution units:
   Steps: 2467753419 / 10000000000 = 24%
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Withdraw
+
+</div>
+
+<div class="cell code" execution_count="5">
 
 ``` bash
 marlowe-cli run withdraw --help
 ```
+
+<div class="output stream stdout">
 
     Usage: marlowe-cli run withdraw --testnet-magic INTEGER
                                     --socket-path SOCKET_FILE
@@ -264,8 +340,8 @@ marlowe-cli run withdraw --help
                                     --role-name TOKEN_NAME
                                     --tx-in-collateral TXID#TXIX [--tx-in TXID#TXIX]
                                     [--tx-out ADDRESS+VALUE]
-                                    --change-address ADDRESS 
-                                    [--required-signer SIGNING_FILE] 
+                                    --change-address ADDRESS
+                                    (--required-signer SIGNING_FILE) 
                                     [--metadata-file METADATA_FILE] --out-file FILE 
                                     [--submit SECONDS] [--print-stats] 
                                     [--script-invalid]
@@ -299,6 +375,12 @@ marlowe-cli run withdraw --help
       --script-invalid         Assert that the transaction is invalid.
       -h,--help                Show this help text
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ### Example
 
 Here is a sample invocation of `marlowe-cli run withdraw`: it takes the
@@ -330,17 +412,27 @@ Execution units:
   Steps: 557930172 / 10000000000 = 5%
 ```
 
+</div>
+
+<div class="cell markdown" tags="[]">
+
 ## Automatically Execute
+
+</div>
+
+<div class="cell code" execution_count="6">
 
 ``` bash
 marlowe-cli run auto-execute --help
 ```
 
+<div class="output stream stdout">
+
     Usage: marlowe-cli run auto-execute 
              --testnet-magic INTEGER --socket-path SOCKET_FILE 
              [--marlowe-in-file MARLOWE_FILE --tx-in-marlowe TXID#TXIX]
-             --marlowe-out-file MARLOWE_FILE --change-address ADDRESS 
-             [--required-signer SIGNING_FILE] [--metadata-file METADATA_FILE]
+             --marlowe-out-file MARLOWE_FILE --change-address ADDRESS
+             (--required-signer SIGNING_FILE) [--metadata-file METADATA_FILE]
              --out-file FILE [--submit SECONDS] [--print-stats] [--script-invalid]
 
       [EXPERIMENTAL] Run a Marlowe transaction, selecting transaction inputs and
@@ -373,6 +465,12 @@ marlowe-cli run auto-execute --help
       --script-invalid         Assert that the transaction is invalid.
       -h,--help                Show this help text
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ### Example
 
 Here is a sample invocation of `marlowe-cli run execute`: it takes the
@@ -402,16 +500,26 @@ Execution units:
   Steps: 2467753419 / 10000000000 = 24%
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Automatically Withdraw
+
+</div>
+
+<div class="cell code" execution_count="7">
 
 ``` bash
 marlowe-cli run auto-withdraw --help
 ```
 
+<div class="output stream stdout">
+
     Usage: marlowe-cli run auto-withdraw 
              --testnet-magic INTEGER --socket-path SOCKET_FILE
              --marlowe-file MARLOWE_FILE --role-name TOKEN_NAME
-             --change-address ADDRESS [--required-signer SIGNING_FILE] 
+             --change-address ADDRESS (--required-signer SIGNING_FILE) 
              [--metadata-file METADATA_FILE] --out-file FILE [--submit SECONDS] 
              [--print-stats] [--script-invalid]
 
@@ -441,6 +549,12 @@ marlowe-cli run auto-withdraw --help
       --script-invalid         Assert that the transaction is invalid.
       -h,--help                Show this help text
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ### Example
 
 Here is a sample invocation of `marlowe-cli run withdraw`: it takes the
@@ -465,3 +579,5 @@ Execution units:
   Memory: 1461810 / 30000000 = 4%
   Steps: 557930172 / 10000000000 = 5%
 ```
+
+</div>

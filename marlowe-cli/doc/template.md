@@ -1,12 +1,18 @@
 ---
-date: 18 June 2022
-version: marlowe-cli 0.0.5.0
+date: 17 September 2022
+version: marlowe-cli 0.0.8.0
 ---
+
+<div class="cell markdown">
 
 # Marlowe CLI `template` Subcommands
 
 The `marlowe-cli template` command generates contract and state files
 for example Marlowe contracts.
+
+</div>
+
+<div class="cell markdown">
 
 ## Contents
 
@@ -16,17 +22,32 @@ for example Marlowe contracts.
 -   [Escrow](#escrow)
 -   [Covered call](#covered-call)
 
+</div>
+
+<div class="cell markdown">
+
 ## Available Commands
+
+</div>
+
+<div class="cell code" execution_count="1">
 
 ``` bash
 marlowe-cli template --help
 ```
 
-    Usage: marlowe-cli template COMMAND
+<div class="output stream stdout">
+
+    Usage: marlowe-cli template COMMAND --out-contract-file CONTRACT_FILE
+                                --out-state-file STATE_FILE
 
       Create a contract from a template.
 
     Available options:
+      --out-contract-file CONTRACT_FILE
+                               JSON output file for the contract.
+      --out-state-file STATE_FILE
+                               JSON output file for the contract's state.
       -h,--help                Show this help text
 
     Commands for creating Marlowe contracts from templates:
@@ -35,19 +56,30 @@ marlowe-cli template --help
       swap                     Create a swap contract.
       zcb                      Create a zero-coupon bond.
       coveredCall              Create a covered call Option.
+      actus                    Create an Actus contract.
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ## Simple
+
+</div>
+
+<div class="cell code" execution_count="2">
 
 ``` bash
 marlowe-cli template simple --help
 ```
 
+<div class="output stream stdout">
+
     Usage: marlowe-cli template simple --bystander PARTY --minimum-ada INTEGER
                                        --party PARTY --deposit-lovelace INTEGER
                                        --withdrawal-lovelace INTEGER
-                                       --timeout POSIX_TIME
-                                       --out-contract-file CONTRACT_FILE
-                                       --out-state-file STATE_FILE
+                                       --timeout TIMEOUT
 
       Create a simple example contract.
 
@@ -59,42 +91,57 @@ marlowe-cli template simple --help
                                Lovelace in the deposit.
       --withdrawal-lovelace INTEGER
                                Lovelace in the withdrawal.
-      --timeout POSIX_TIME     The timeout, in POSIX milliseconds.
-      --out-contract-file CONTRACT_FILE
-                               JSON output file for the contract.
-      --out-state-file STATE_FILE
-                               JSON output file for the contract's state.
+      --timeout TIMEOUT        The timeout. POSIX milliseconds or duration:
+                               `INTEGER[s|m|d|w|h]`.
       -h,--help                Show this help text
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ### Example
 
 Create a simple contract as [simple-1.contract](simple-1.contract) with
 initial state [simple-1.state](simple-1.state)
 
+</div>
+
+<div class="cell code" execution_count="3">
+
 ``` bash
 marlowe-cli template simple --minimum-ada 3000000 \
                             --deposit-lovelace 12000000 \
                             --withdrawal-lovelace 5000000 \
                             --timeout 1655663505000 \
-                            --party PK=84117ffa443e598527726f6509078114ecd1f2c031e71dd5d239d504 \
-                            --bystander PK=e107572dc2e0f7dadaf87c1a4f55d6b5b5456108c1de8f6d75ba0d15 \
+                            --party addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
+                            --bystander addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw \
                             --out-contract-file simple-1.contract \
                             --out-state-file simple-1.state
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Swap
+
+</div>
+
+<div class="cell code" execution_count="4">
 
 ``` bash
 marlowe-cli template swap --help
 ```
 
+<div class="output stream stdout">
+
     Usage: marlowe-cli template swap --minimum-ada INTEGER --a-party PARTY
                                      --a-token TOKEN --a-amount INTEGER
-                                     --a-timeout POSIX_TIME --b-party PARTY
+                                     --a-timeout TIMEOUT --b-party PARTY
                                      --b-token TOKEN --b-amount INTEGER
-                                     --b-timeout POSIX_TIME
-                                     --out-contract-file CONTRACT_FILE
-                                     --out-state-file STATE_FILE
+                                     --b-timeout TIMEOUT
 
       Create a swap contract.
 
@@ -104,31 +151,37 @@ marlowe-cli template swap --help
       --a-party PARTY          The first party.
       --a-token TOKEN          The first party's token.
       --a-amount INTEGER       The amount of the first party's token.
-      --a-timeout POSIX_TIME   The timeout for the first party's deposit, in POSIX
-                               milliseconds.
+      --a-timeout TIMEOUT      The timeout for the first party's deposit. POSIX
+                               milliseconds or duration: `INTEGER[s|m|d|w|h]`.
       --b-party PARTY          The second party.
       --b-token TOKEN          The second party's token.
       --b-amount INTEGER       The amount of the second party's token.
-      --b-timeout POSIX_TIME   The timeout for the second party's deposit, in POSIX
-                               milliseconds.
-      --out-contract-file CONTRACT_FILE
-                               JSON output file for the contract.
-      --out-state-file STATE_FILE
-                               JSON output file for the contract's state.
+      --b-timeout TIMEOUT      The timeout for the second party's deposit. POSIX
+                               milliseconds or duration: `INTEGER[s|m|d|w|h]`.
       -h,--help                Show this help text
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ### Example
 
 Create a swap contract [swap-1.contract](swap-1.contract) with initial
 state [swap-1.state](swap-1.state).
 
+</div>
+
+<div class="cell code" execution_count="5">
+
 ``` bash
 marlowe-cli template swap --minimum-ada 3000000 \
-                          --a-party PK=1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf \
+                          --a-party addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
                           --a-token d537d311e915c4d815607ead0bcd5880807895871ce9be7c1eaf72a6.Globe \
                           --a-amount 300 \
                           --a-timeout 1655621320000 \
-                          --b-party PK=fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff \
+                          --b-party addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw \
                           --b-token  ffd80473e79426fef5de6c124369bb96a67a8b5814211009354e311e.Swan\
                           --b-amount 500 \
                           --b-timeout 1655664520000 \
@@ -136,18 +189,26 @@ marlowe-cli template swap --minimum-ada 3000000 \
                           --out-state-file swap-1.state
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Zero-Coupon Bond
+
+</div>
+
+<div class="cell code" execution_count="6">
 
 ``` bash
 marlowe-cli template zcb --help
 ```
 
+<div class="output stream stdout">
+
     Usage: marlowe-cli template zcb --minimum-ada INTEGER --lender PARTY
                                     --borrower PARTY --principal INTEGER
-                                    --interest INTEGER --lending-deadline POSIX_TIME
-                                    --repayment-deadline POSIX_TIME
-                                    --out-contract-file CONTRACT_FILE
-                                    --out-state-file STATE_FILE
+                                    --interest INTEGER --lending-deadline TIMEOUT
+                                    --repayment-deadline TIMEOUT
 
       Create a zero-coupon bond.
 
@@ -158,25 +219,33 @@ marlowe-cli template zcb --help
       --borrower PARTY         The borrower.
       --principal INTEGER      The principal, in lovelace.
       --interest INTEGER       The interest, in lovelace.
-      --lending-deadline POSIX_TIME
-                               The lending deadline, in POSIX milliseconds.
-      --repayment-deadline POSIX_TIME
-                               The repayment deadline, in POSIX milliseconds.
-      --out-contract-file CONTRACT_FILE
-                               JSON output file for the contract.
-      --out-state-file STATE_FILE
-                               JSON output file for the contract's state.
+      --lending-deadline TIMEOUT
+                               The lending deadline. POSIX milliseconds or duration:
+                               `INTEGER[s|m|d|w|h]`.
+      --repayment-deadline TIMEOUT
+                               The repayment deadline. POSIX milliseconds or
+                               duration: `INTEGER[s|m|d|w|h]`.
       -h,--help                Show this help text
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ### Example
 
 Create a zero-coupon bond contract [zcb-1.contract](zcb-1.contract) with
 initial state [zcb-1.state](zcb-1.state).
 
+</div>
+
+<div class="cell code" execution_count="7">
+
 ``` bash
 marlowe-cli template zcb --minimum-ada 3000000 \
-                         --lender Role=JF \
-                         --borrower Role=TM \
+                         --lender JF \
+                         --borrower TM \
                          --principal 100000000 \
                          --interest 5000000 \
                          --lending-deadline 1655621700000 \
@@ -185,20 +254,28 @@ marlowe-cli template zcb --minimum-ada 3000000 \
                          --out-state-file zcb-1.state
 ```
 
+</div>
+
+<div class="cell markdown">
+
 # Escrow
+
+</div>
+
+<div class="cell code" execution_count="8">
 
 ``` bash
 marlowe-cli template escrow --help
 ```
 
+<div class="output stream stdout">
+
     Usage: marlowe-cli template escrow --minimum-ada INTEGER --price INTEGER
                                        --seller PARTY --buyer PARTY --mediator PARTY
-                                       --payment-deadline POSIX_TIME
-                                       --complaint-deadline POSIX_TIME
-                                       --dispute-deadline POSIX_TIME
-                                       --mediation-deadline POSIX_TIME
-                                       --out-contract-file CONTRACT_FILE
-                                       --out-state-file STATE_FILE
+                                       --payment-deadline TIMEOUT
+                                       --complaint-deadline TIMEOUT
+                                       --dispute-deadline TIMEOUT
+                                       --mediation-deadline TIMEOUT
 
       Create an escrow contract.
 
@@ -208,35 +285,41 @@ marlowe-cli template escrow --help
       --seller PARTY           The seller.
       --buyer PARTY            The buyer.
       --mediator PARTY         The mediator.
-      --payment-deadline POSIX_TIME
-                               The deadline for the buyer to pay, in POSIX
-                               milliseconds.
-      --complaint-deadline POSIX_TIME
-                               The deadline for the buyer to complain, in POSIX
-                               milliseconds.
-      --dispute-deadline POSIX_TIME
-                               The deadline for the seller to dispute a complaint,
-                               in POSIX milliseconds.
-      --mediation-deadline POSIX_TIME
-                               The deadline for the mediator to decide, in POSIX
-                               milliseconds.
-      --out-contract-file CONTRACT_FILE
-                               JSON output file for the contract.
-      --out-state-file STATE_FILE
-                               JSON output file for the contract's state.
+      --payment-deadline TIMEOUT
+                               The deadline for the buyer to pay. POSIX milliseconds
+                               or duration: `INTEGER[s|m|d|w|h]`.
+      --complaint-deadline TIMEOUT
+                               The deadline for the buyer to complain. POSIX
+                               milliseconds or duration: `INTEGER[s|m|d|w|h]`.
+      --dispute-deadline TIMEOUT
+                               The deadline for the seller to dispute a complaint.
+                               POSIX milliseconds or duration: `INTEGER[s|m|d|w|h]`.
+      --mediation-deadline TIMEOUT
+                               The deadline for the mediator to decide. POSIX
+                               milliseconds or duration: `INTEGER[s|m|d|w|h]`.
       -h,--help                Show this help text
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ### Example
 
 Create an escrow contract [escrow-1.contract](escrow-1.contract) with
 initial state [escrow-1.state](escrow-1.state).
 
+</div>
+
+<div class="cell code" execution_count="9">
+
 ``` bash
 marlowe-cli template escrow --minimum-ada 3000000 \
                             --price 256000000 \
-                            --seller Role=FB \
-                            --buyer Role=TM \
-                            --mediator Role=CM \
+                            --seller FB \
+                            --buyer TM \
+                            --mediator CM \
                             --payment-deadline 1655664900000 \
                             --complaint-deadline 1655751300000 \
                             --dispute-deadline 1655837700000 \
@@ -245,18 +328,26 @@ marlowe-cli template escrow --minimum-ada 3000000 \
                             --out-state-file escrow-1.state
 ```
 
+</div>
+
+<div class="cell markdown">
+
 ## Covered Call
+
+</div>
+
+<div class="cell code" execution_count="10">
 
 ``` bash
 marlowe-cli template coveredCall --help
 ```
 
+<div class="output stream stdout">
+
     Usage: marlowe-cli template coveredCall 
              --minimum-ada INTEGER --issuer PARTY --counter-party PARTY
              --currency TOKEN --underlying TOKEN --strike INTEGER --amount INTEGER
-             --issue-date POSIX_TIME --maturity-date POSIX_TIME
-             --settlement-date POSIX_TIME --out-contract-file CONTRACT_FILE
-             --out-state-file STATE_FILE
+             --issue-date TIMEOUT --maturity-date TIMEOUT --settlement-date TIMEOUT
 
       Create a covered call Option.
 
@@ -269,26 +360,34 @@ marlowe-cli template coveredCall --help
       --underlying TOKEN       The underlying asset.
       --strike INTEGER         The strike, in currency.
       --amount INTEGER         The amount of underlying
-      --issue-date POSIX_TIME  The issue date, in POSIX milliseconds.
-      --maturity-date POSIX_TIME
-                               The maturity date, in POSIX milliseconds.
-      --settlement-date POSIX_TIME
-                               The settlement date, in POSIX milliseconds.
-      --out-contract-file CONTRACT_FILE
-                               JSON output file for the contract.
-      --out-state-file STATE_FILE
-                               JSON output file for the contract's state.
+      --issue-date TIMEOUT     The issue date. POSIX milliseconds or duration:
+                               `INTEGER[s|m|d|w|h]`.
+      --maturity-date TIMEOUT  The maturity date. POSIX milliseconds or duration:
+                               `INTEGER[s|m|d|w|h]`.
+      --settlement-date TIMEOUT
+                               The settlement date. POSIX milliseconds or duration:
+                               `INTEGER[s|m|d|w|h]`.
       -h,--help                Show this help text
+
+</div>
+
+</div>
+
+<div class="cell markdown">
 
 ### Example
 
 Create a covered call contract [covered-1.contract](covered-1.contract)
 with initial state [covered-1.state](covered-1.state).
 
+</div>
+
+<div class="cell code" execution_count="11">
+
 ``` bash
 marlowe-cli template coveredCall --minimum-ada 3000000 \
-                                 --issuer PK=1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf \
-                                 --counter-party PK=fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff \
+                                 --issuer addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
+                                 --counter-party addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw \
                                  --currency 02332a91ff02a6801a5cc34ad6c4f15a77ac70348f8e305e6ae97659.Swan \
                                  --underlying 48a6526d690a0e5258d6b883507f540cf6e2348596aa03d754753423.Globe \
                                  --strike 500 \
@@ -299,3 +398,5 @@ marlowe-cli template coveredCall --minimum-ada 3000000 \
                                  --out-contract-file covered-1.contract \
                                  --out-state-file covered-1.state
 ```
+
+</div>
