@@ -1,31 +1,77 @@
 {
     "timeout": 1655596500000,
+    "timeout_continuation": "close",
     "when": [
         {
+            "case": {
+                "deposits": 300,
+                "into_account": {
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                },
+                "of_token": {
+                    "currency_symbol": "48a6526d690a0e5258d6b883507f540cf6e2348596aa03d754753423",
+                    "token_name": "Globe"
+                },
+                "party": {
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                }
+            },
             "then": {
                 "timeout": 1655578500000,
-                "when": [],
                 "timeout_continuation": {
                     "timeout": 1655621700000,
+                    "timeout_continuation": "close",
                     "when": [
                         {
+                            "case": {
+                                "choose_between": [
+                                    {
+                                        "from": 0,
+                                        "to": 1
+                                    }
+                                ],
+                                "for_choice": {
+                                    "choice_name": "Exercise Call",
+                                    "choice_owner": {
+                                        "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                    }
+                                }
+                            },
                             "then": {
                                 "else": {
                                     "timeout": 1655621700000,
+                                    "timeout_continuation": "close",
                                     "when": [
                                         {
+                                            "case": {
+                                                "deposits": 500,
+                                                "into_account": {
+                                                    "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                                },
+                                                "of_token": {
+                                                    "currency_symbol": "02332a91ff02a6801a5cc34ad6c4f15a77ac70348f8e305e6ae97659",
+                                                    "token_name": "Swan"
+                                                },
+                                                "party": {
+                                                    "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                                }
+                                            },
                                             "then": {
+                                                "from_account": {
+                                                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                                                },
+                                                "pay": 300,
                                                 "then": {
+                                                    "from_account": {
+                                                        "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                                    },
+                                                    "pay": 500,
                                                     "then": "close",
                                                     "to": {
                                                         "party": {
-                                                            "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                                                            "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                                                         }
                                                     },
-                                                    "from_account": {
-                                                        "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
-                                                    },
-                                                    "pay": 500,
                                                     "token": {
                                                         "currency_symbol": "02332a91ff02a6801a5cc34ad6c4f15a77ac70348f8e305e6ae97659",
                                                         "token_name": "Swan"
@@ -33,81 +79,35 @@
                                                 },
                                                 "to": {
                                                     "party": {
-                                                        "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
+                                                        "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
                                                     }
                                                 },
-                                                "from_account": {
-                                                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
-                                                },
-                                                "pay": 300,
                                                 "token": {
                                                     "currency_symbol": "48a6526d690a0e5258d6b883507f540cf6e2348596aa03d754753423",
                                                     "token_name": "Globe"
                                                 }
-                                            },
-                                            "case": {
-                                                "deposits": 500,
-                                                "into_account": {
-                                                    "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
-                                                },
-                                                "of_token": {
-                                                    "currency_symbol": "02332a91ff02a6801a5cc34ad6c4f15a77ac70348f8e305e6ae97659",
-                                                    "token_name": "Swan"
-                                                },
-                                                "party": {
-                                                    "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
-                                                }
                                             }
                                         }
-                                    ],
-                                    "timeout_continuation": "close"
+                                    ]
                                 },
-                                "then": "close",
                                 "if": {
                                     "equal_to": 0,
                                     "value": {
                                         "value_of_choice": {
                                             "choice_name": "Exercise Call",
                                             "choice_owner": {
-                                                "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
+                                                "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
                                             }
                                         }
                                     }
-                                }
-                            },
-                            "case": {
-                                "for_choice": {
-                                    "choice_name": "Exercise Call",
-                                    "choice_owner": {
-                                        "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
-                                    }
                                 },
-                                "choose_between": [
-                                    {
-                                        "from": 0,
-                                        "to": 1
-                                    }
-                                ]
+                                "then": "close"
                             }
                         }
-                    ],
-                    "timeout_continuation": "close"
-                }
-            },
-            "case": {
-                "deposits": 300,
-                "into_account": {
-                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                    ]
                 },
-                "of_token": {
-                    "currency_symbol": "48a6526d690a0e5258d6b883507f540cf6e2348596aa03d754753423",
-                    "token_name": "Globe"
-                },
-                "party": {
-                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
-                }
+                "when": []
             }
         }
-    ],
-    "timeout_continuation": "close"
+    ]
 }

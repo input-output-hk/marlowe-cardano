@@ -1,6 +1,4 @@
 {
-    "choices": [],
-    "boundValues": [],
     "accounts": [
         [
             [
@@ -15,5 +13,7 @@
             3000000
         ]
     ],
+    "boundValues": [],
+    "choices": [],
     "minTime": 1
 }

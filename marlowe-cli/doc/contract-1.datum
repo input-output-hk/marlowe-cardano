@@ -1,21 +1,51 @@
 {
+    "constructor": 0,
     "fields": [
         {
+            "constructor": 0,
+            "fields": [
+                {
+                    "bytes": ""
+                }
+            ]
+        },
+        {
+            "constructor": 0,
             "fields": [
                 {
                     "map": [
                         {
                             "k": {
+                                "constructor": 0,
                                 "fields": [
                                     {
+                                        "constructor": 0,
                                         "fields": [
                                             {
-                                                "bytes": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                                                "constructor": 0,
+                                                "fields": []
+                                            },
+                                            {
+                                                "constructor": 0,
+                                                "fields": [
+                                                    {
+                                                        "constructor": 0,
+                                                        "fields": [
+                                                            {
+                                                                "bytes": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "constructor": 1,
+                                                        "fields": []
+                                                    }
+                                                ]
                                             }
-                                        ],
-                                        "constructor": 0
+                                        ]
                                     },
                                     {
+                                        "constructor": 0,
                                         "fields": [
                                             {
                                                 "bytes": ""
@@ -23,11 +53,9 @@
                                             {
                                                 "bytes": ""
                                             }
-                                        ],
-                                        "constructor": 0
+                                        ]
                                     }
-                                ],
-                                "constructor": 0
+                                ]
                             },
                             "v": {
                                 "int": 8000000
@@ -44,13 +72,11 @@
                 {
                     "int": 40000000
                 }
-            ],
-            "constructor": 0
+            ]
         },
         {
-            "fields": [],
-            "constructor": 0
+            "constructor": 0,
+            "fields": []
         }
-    ],
-    "constructor": 0
+    ]
 }

@@ -1,59 +1,59 @@
 {
     "timeout": 1655663503000,
+    "timeout_continuation": "close",
     "when": [
         {
-            "then": {
-                "timeout": 1655663504000,
-                "when": [
-                    {
-                        "then": {
-                            "then": {
-                                "timeout": 1655663505000,
-                                "when": [
-                                    {
-                                        "then": "close",
-                                        "case": {
-                                            "notify_if": true
-                                        }
-                                    }
-                                ],
-                                "timeout_continuation": "close"
-                            },
-                            "to": {
-                                "party": {
-                                    "pk_hash": "84117ffa443e598527726f6509078114ecd1f2c031e71dd5d239d504"
-                                }
-                            },
-                            "from_account": {
-                                "pk_hash": "84117ffa443e598527726f6509078114ecd1f2c031e71dd5d239d504"
-                            },
-                            "pay": 5000000,
-                            "token": {
-                                "currency_symbol": "",
-                                "token_name": ""
-                            }
-                        },
-                        "case": {
-                            "notify_if": true
-                        }
-                    }
-                ],
-                "timeout_continuation": "close"
-            },
             "case": {
                 "deposits": 12000000,
                 "into_account": {
-                    "pk_hash": "84117ffa443e598527726f6509078114ecd1f2c031e71dd5d239d504"
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                 },
                 "of_token": {
                     "currency_symbol": "",
                     "token_name": ""
                 },
                 "party": {
-                    "pk_hash": "84117ffa443e598527726f6509078114ecd1f2c031e71dd5d239d504"
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                 }
+            },
+            "then": {
+                "timeout": 1655663504000,
+                "timeout_continuation": "close",
+                "when": [
+                    {
+                        "case": {
+                            "notify_if": true
+                        },
+                        "then": {
+                            "from_account": {
+                                "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                            },
+                            "pay": 5000000,
+                            "then": {
+                                "timeout": 1655663505000,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "notify_if": true
+                                        },
+                                        "then": "close"
+                                    }
+                                ]
+                            },
+                            "to": {
+                                "party": {
+                                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                                }
+                            },
+                            "token": {
+                                "currency_symbol": "",
+                                "token_name": ""
+                            }
+                        }
+                    }
+                ]
             }
         }
-    ],
-    "timeout_continuation": "close"
+    ]
 }
