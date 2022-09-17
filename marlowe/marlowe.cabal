@@ -166,7 +166,7 @@ test-suite marlowe-test
         mtl,
         plutus-ledger,
         plutus-ledger-api,
-        plutus-ledger-slot,
+        -- plutus-ledger-slot,
         plutus-script-utils,
         plutus-tx,
         QuickCheck,
