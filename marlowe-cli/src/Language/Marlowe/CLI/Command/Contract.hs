@@ -48,7 +48,7 @@ data ContractCommand =
       network         :: NetworkId                    -- ^ The network ID, if any.
     , stake           :: Maybe StakeAddressReference  -- ^ The stake address, if any.
     , rolesCurrency   :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , protocolVersion :: ProtocolVersion
+    , protocolVersion :: ProtocolVersion              -- ^ The protocol version.
     , contractFile    :: FilePath                     -- ^ The JSON file containing the contract.
     , stateFile       :: FilePath                     -- ^ The JSON file containing the contract's state.
     , inputFiles      :: [FilePath]                   -- ^ The JSON files containing the contract's input.
@@ -60,15 +60,13 @@ data ContractCommand =
     {
       network       :: NetworkId                    -- ^ The network ID, if any.
     , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     }
     -- | Export the validator for a Marlowe contract.
   | ExportValidator
     {
       network         :: NetworkId                    -- ^ The network ID, if any.
     , stake           :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency   :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , protocolVersion :: ProtocolVersion
+    , protocolVersion :: ProtocolVersion              -- ^ The protocol version.
     , outputFile      :: Maybe FilePath               -- ^ The output JSON file for the validator information.
     , printHash       :: Bool                         -- ^ Whether to print the validator hash.
     , printStats      :: Bool                         -- ^ Whether to print statistics about the contract.
@@ -76,11 +74,11 @@ data ContractCommand =
     -- | Export the datum for a Marlowe contract transaction.
   | ExportDatum
     {
-      rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , contractFile  :: FilePath        -- ^ The JSON file containing the contract.
-    , stateFile     :: FilePath        -- ^ The JSON file containing the contract's state.
-    , outputFile    :: Maybe FilePath  -- ^ The output JSON file for the datum.
-    , printStats    :: Bool            -- ^ Whether to print statistics about the datum.
+      rolesCurrency :: Maybe CurrencySymbol  -- ^ The role currency symbols, if any.
+    , contractFile  :: FilePath              -- ^ The JSON file containing the contract.
+    , stateFile     :: FilePath              -- ^ The JSON file containing the contract's state.
+    , outputFile    :: Maybe FilePath        -- ^ The output JSON file for the datum.
+    , printStats    :: Bool                  -- ^ Whether to print statistics about the datum.
     }
     -- | Export the redeemer for a Marlowe contract transaction.
   | ExportRedeemer
@@ -182,9 +180,8 @@ exportAddressOptions :: O.Mod O.OptionFields NetworkId
                      -> O.Parser ContractCommand
 exportAddressOptions network =
   ExportAddress
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
+    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER" <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"            <> O.help "Stake address, if any."                                                            )
 
 
 -- | Parser for the "validator" command.
@@ -201,13 +198,12 @@ exportValidatorOptions :: O.Mod O.OptionFields NetworkId
                        -> O.Parser ContractCommand
 exportValidatorOptions network =
   ExportValidator
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
+    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                <> O.help "Stake address, if any."                                                            )
     <*> protocolVersionOpt
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for validator."                                                   )
-    <*> O.switch                                           (O.long "print-hash"                                               <> O.help "Print validator hash."                                                             )
-    <*> O.switch                                           (O.long "print-stats"                                              <> O.help "Print statistics."                                                                 )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"            <> O.help "JSON output file for validator."                                                   )
+    <*> O.switch                                           (O.long "print-hash"                                           <> O.help "Print validator hash."                                                             )
+    <*> O.switch                                           (O.long "print-stats"                                          <> O.help "Print statistics."                                                                 )
 
 
 -- | Parser for the "datum" command.
@@ -222,11 +218,11 @@ exportDatumCommand =
 exportDatumOptions :: O.Parser ContractCommand
 exportDatumOptions =
   ExportDatum
-    <$> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
-    <*> O.strOption                (O.long "contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract."      )
-    <*> O.strOption                (O.long "state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON input file for the contract state.")
-    <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "DATUM_FILE"    <> O.help "JSON output file for datum."            )
-    <*> O.switch                   (O.long "print-stats"                                <> O.help "Print statistics."                      )
+    <$> (O.optional . O.option parseCurrencySymbol) (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any." )
+    <*> O.strOption                                 (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                                 (O.long "state-file"     <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
+    <*> (O.optional . O.strOption)                  (O.long "out-file"       <> O.metavar "DATUM_FILE"      <> O.help "JSON output file for datum."            )
+    <*> O.switch                                    (O.long "print-stats"                                   <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "redeemer" command.
