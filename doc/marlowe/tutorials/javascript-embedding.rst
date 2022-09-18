@@ -32,7 +32,7 @@ corresponding to each *constructor* there is a constant definition.
 .. code:: typescript
 
    import {
-      PK, Role, Account, Party, ada, AvailableMoney, Constant, ConstantParam,
+      Address, Role, Account, Party, ada, AvailableMoney, Constant, ConstantParam,
       NegValue, AddValue, SubValue, MulValue, DivValue, ChoiceValue, TimeIntervalStart,
       TimeIntervalEnd, UseValue, Cond, AndObs, OrObs, NotObs, ChoseSomething,
       ValueGE, ValueGT, ValueLT, ValueLE, ValueEQ, TrueObs, FalseObs, Deposit,

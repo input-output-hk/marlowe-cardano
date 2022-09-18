@@ -23,7 +23,7 @@ To access and view the dashboard, follow these steps:
 .. image:: images/demo-launch.png
    :alt: demo
 
-For this demo version of Marlowe Run, test wallets are generated with 10k ADA in them, so that you can use the service. You can use any wallet that exists on the server as  long as you know the public key. This will become the integration point with a real wallet in the full version of Marlowe Run, where only the wallet owner can authorize  payments.
+For this demo version of Marlowe Run, test wallets are generated with 10k ADA in them, so that you can use the service. You can use any wallet that exists on the server as  long as you know the address. This will become the integration point with a real wallet in the full version of Marlowe Run, where only the wallet owner can authorize  payments.
 
 4.  Click **Generate demo wallet** to use a demo wallet.
 

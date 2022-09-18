@@ -29,13 +29,12 @@ cannot "wake up" on its own, it can only respond to inputs. [1]_
 Running a contract may also produce external *effects*, by making
 payments to parties in the contract.
 
-Participants, roles, and public key
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Participants, roles, and addresses
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We should separate the notions of *participant*, *role*, and *public keys*
+We should separate the notions of *participant*, *role*, and *address*
 in a Marlowe contract. A participant (or party) in the contract can be
-represented by either a ``role`` or a ``public key`` (public keys
-will eventually be replaced by
+represented by either a ``role`` or an ``address`` (see
 `addresses <https://docs.cardano.org/core-concepts/cardano-addresses>`_).
 
 *Roles* are represented by tokens and they are distributed to addresses
@@ -47,10 +46,9 @@ This allows roles in running contracts to be *traded* between participants,
 through a mechanism of *tokenisation*. This will be available in the on-chain
 implementation of Marlowe but the simulation in the Marlowe Playground simply presents contract roles.
 
-*Public key* parties, are represented by the hash
-of a *public key* (or eventually an `addresses <https://docs.cardano.org/core-concepts/cardano-addresses>`_).
-Using public keys to represent parties is simpler because it doesn't require handling
-tokens, but they cannot be traded, because once you know the private key for a given public key
+*Address* parties are represented by `network addresses <https://docs.cardano.org/core-concepts/cardano-addresses>`_.
+Using addresses to represent parties is simpler because it doesn't require handling
+tokens, but they cannot be traded, because once you know the private key for a given address
 you cannot prove you have forgotten it.
 
 
