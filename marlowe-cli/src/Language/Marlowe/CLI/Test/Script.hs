@@ -101,6 +101,7 @@ import Language.Marlowe.CLI.Test.Types
   , ContractSource(..)
   , CurrencyNickname
   , CustomCurrency(CustomCurrency, ccCurrencySymbol)
+  , ExecutionMode(..)
   , MarloweContract(..)
   , PartyRef(RoleRef, WalletRef)
   , ScriptEnv(..)
@@ -125,8 +126,7 @@ import Language.Marlowe.CLI.Test.Types
   , seEra
   , seProtocolVersion
   , seSlotConfig
-  , seTransactionTimeout
-  , seExecutionTimeout
+  , seExecutionMode
   , ssContracts
   , ssCurrencies
   , ssReferenceScripts
@@ -145,6 +145,13 @@ import Plutus.V1.Ledger.Value (mpsSymbol, valueOf)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
 
+
+timeoutForExecutionMode :: ExecutionMode -> Maybe Integer
+timeoutForExecutionMode = do
+            executionMode <- view seExecutionMode
+            executionTimeout <- case executionMode of
+              Just (OnChainMode transactionTimeout) -> transactionTimeout
+              SimulationMode -> Nothing
 
 interpret :: forall era m
            . IsShelleyBasedEra era
@@ -172,8 +179,6 @@ interpret FundWallet {..} = do
   (Wallet faucetAddress faucetSigningKey _ _) <- getFaucet
   (Wallet address _ _ _) <- findWallet soWalletNickname
   connection <- view seConnection
-  -- Seconds timeout <- view seTransactionTimeout
-  executionTimeout <- view seExecutionTimeout
   txBody <- runCli "[FundWallet] " $ buildFaucetImpl
     connection
     values
@@ -181,7 +186,7 @@ interpret FundWallet {..} = do
     faucetAddress
     faucetSigningKey
     defaultCoinSelectionStrategy
-    executionTimeout
+    timeoutForExecutionMode
 
   let
     transaction = WalletTransaction { wtFees = 0, wtTxBody=txBody  }
@@ -195,8 +200,6 @@ interpret SplitWallet {..} = do
   let
     values = [ C.lovelaceToValue v | v <- soValues ]
 
-  -- Seconds timeout <- view seTransactionTimeout
-  executionTimeout <- view seExecutionTimeout
   void $ runCli "[createCollaterals] " $ buildFaucetImpl
     connection
     values
@@ -204,7 +207,7 @@ interpret SplitWallet {..} = do
     address
     skey
     defaultCoinSelectionStrategy
-    executionTimeout
+    timeoutForExecutionMode
 
 interpret so@Mint {..} = do
   currencies <- use ssCurrencies
@@ -220,8 +223,6 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
-  -- Seconds timeout <- view seTransactionTimeout
-  executionTimeout <- view seExecutionTimeout
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
     faucetSigningKey
@@ -230,7 +231,7 @@ interpret so@Mint {..} = do
     Nothing
     2_000_000       -- FIXME: should we compute minAda here?
     faucetAddress
-    executionTimeout
+    timeoutForExecutionMode
 
   let
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
@@ -393,8 +394,6 @@ interpret so@Publish {..} = do
       pure marloweScriptRefs
     Nothing -> do
       logSoMsg' so "Scripts not found so publishing them."
-      -- Seconds timeout <- view seTransactionTimeout
-      executionTimeout <- view seExecutionTimeout
       runSoCli so $ publishImpl
         connection
         waSigningKey
@@ -402,7 +401,7 @@ interpret so@Publish {..} = do
         waAddress
         publishingStrategy
         (CoinSelectionStrategy False False [])
-        executionTimeout
+        timeoutForExecutionMode
         (PrintStats True)
 
   assign ssReferenceScripts (Just marloweScriptRefs)
@@ -455,8 +454,6 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
   connection <- view seConnection
-  -- Seconds timeout <- view seTransactionTimeout
-  executionTimeout <- view seExecutionTimeout
   txBody <- runCli "[AutoRun] " $ autoRunTransactionImpl
       connection
       prev
@@ -464,7 +461,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       address
       [skey]
       C.TxMetadataNone
-      executionTimeout
+      timeoutForExecutionMode
       True
       invalid
 
@@ -739,7 +736,7 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
       transactionTimeout = Seconds 120
 
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig transactionTimeout))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig executionMode))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)

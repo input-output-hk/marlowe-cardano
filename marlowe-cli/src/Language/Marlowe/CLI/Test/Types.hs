@@ -32,6 +32,7 @@ module Language.Marlowe.CLI.Test.Types
   , ContractSource(..)
   , CurrencyNickname(..)
   , CustomCurrency(..)
+  , ExecutionMode(..)
   , Finished
   , MarloweContract(..)
   , MarloweReferenceScripts(..)
@@ -63,14 +64,12 @@ module Language.Marlowe.CLI.Test.Types
   , seEra
   , seProtocolVersion
   , seSlotConfig
-  , seTransactionTimeout
-  , seExecutionTimeoute
+  , seExecutionMode
   , ssContracts
   , ssCurrencies
   , ssReferenceScripts
   , ssWallets
   ) where
-
 
 import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
@@ -115,7 +114,7 @@ data MarloweTests era a =
     deriving stock (Eq, Generic, Show)
 
 -- | Configuration for executing Marlowe CLI DSL commands on the blockchain
-data ExecutionMode = PureSimulation | OnChainExecution { transactionTimeout :: Seconds }
+data ExecutionMode = SimulationMode | OnChainMode { transactionTimeout :: Seconds }
 
 -- | An on-chain test of the Marlowe contract and payout validators.
 data ScriptTest =
@@ -489,8 +488,7 @@ data ScriptEnv era = ScriptEnv
   , _seEra                :: ScriptDataSupportedInEra era
   , _seProtocolVersion    :: ProtocolVersion
   , _seSlotConfig         :: SlotConfig
-  -- , _seTransactionTimeout :: Seconds
-  , _seExecutionTimeout   :: ExecutionMode
+  , _seExecutionMode      :: ExecutionMode
   }
 
 
