@@ -500,14 +500,20 @@ choiceNotInBounds bounds =
 -- interestingChoiceId _ = error "not implemented yet"
 
 -- Write interestingChoiceName function that takes the name of the valid choice and returns a list of interesting choices that are either valid or invalid
+-- interestingChoiceNum :: [Bound] -> [ChosenNum]
+-- interestingChoiceNum bounds = concatMap (interestingChoiceNum' True bounds)
 
 -- rewrite interestingParties to return a list of valid or invalid
 -- rewrite to make it work with public key hashes
-interestingParties :: Party -> [Party]
-interestingParties (Role "Alice") = [Role "Alice", Role "Alic", Role "Alices"]
+interestingParties :: Party -> Bool -> [Party]
+interestingParties validRole True = [validRole]
+interestingParties (Role roleName) False = [
+    Role (removeFirstLetter roleName)
+  , Role roleName <> "s"
+  ]
 
-interestingChoiceNum :: [Bound] -> [ChosenNum]
-interestingChoiceNum bounds = concatMap (interestingChoiceNum' True bounds)
+removeFirstLetter :: TokenName -> TokenName
+removeFirstLetter (_:remaining) = remaining
 
 interestingChoiceNum' :: Bool -> Bound -> [ChosenNum]
 interestingChoiceNum' True (Bound lower upper)  = validValues lower upper
@@ -520,10 +526,7 @@ invalidValues :: Integer -> Integer -> [Integer]
 invalidValues lower upper = [x | x <- testValueRange, x < lower  || x > upper]
 
 testValueRange :: [Integer]
-testValueRange = [(-rangeLimit)..rangeLimit]
-
-rangeLimit :: Integer
-rangeLimit = 10000
+testValueRange = [0..] >>= \x -> [x, -x]
 
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
