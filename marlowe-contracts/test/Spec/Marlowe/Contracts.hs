@@ -60,7 +60,7 @@ tokValueOf = singleton tokSymbol tokName
 assertTotalPayments :: Party -> [C.Payment] -> C.Money -> Assertion
 assertTotalPayments p t = assertEqual "total payments to party" $ totalPayments t
   where
-    totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party p)
+    totalPayments = foldMap C.paymentMoney . filter (\(C.Payment _ a _ _) -> a == C.Party p)
 
 assertNoWarnings :: [a] -> Assertion
 assertNoWarnings [] = pure ()

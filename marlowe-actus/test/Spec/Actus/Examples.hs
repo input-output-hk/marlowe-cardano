@@ -18,7 +18,6 @@ import Data.Maybe (fromJust, mapMaybe)
 import Data.Time.LocalTime
 import Language.Marlowe
 import Language.Marlowe.Extended.V1 as Ex (ada, toCore)
-import qualified Ledger.Value as Val
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -296,8 +295,9 @@ emptyRiskFactors _ _ _ =
 totalPayments :: Payee -> [Payment] -> Integer
 totalPayments payee = fromMarloweFixedPoint . sum . map m . filter f
   where
-    m (Payment _ _ mon) = Val.valueOf mon "" ""
-    f (Payment _ pay _) = pay == payee
+    m (Payment _ _ (Token "" "") amt) = amt
+    m _                               = 0
+    f (Payment _ pay _ _) = pay == payee
 
 contractFromFile :: FilePath -> IO (Either String (ContractTerms Double))
 contractFromFile f = eitherDecode <$> B.readFile f

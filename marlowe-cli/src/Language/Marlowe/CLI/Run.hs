@@ -130,6 +130,7 @@ import Language.Marlowe.Core.V1.Semantics
   , TransactionOutput(..)
   , TransactionWarning
   , computeTransaction
+  , paymentMoney
   )
 import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
@@ -381,7 +382,8 @@ prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats =
                 , (token, amount) <- AM.toList tokenAmounts
                 ]
           |
-            (i, Payment accountId payee money) <- zip [1..] mtPayments
+            (i, payment@(Payment accountId payee _ _)) <- zip [1..] mtPayments
+          , let money = paymentMoney payment
           ]
     pure marloweOut
 
@@ -584,7 +586,8 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
                                   <$> (groupBy ((==) `on` fst) . sortBy (compare `on` fst))
                                   [
                                     (payee, money)
-                                  | Payment _ payee money <- mtPayments marloweOut
+                                  | payment@(Payment _ payee _ _) <- mtPayments marloweOut
+                                  , let money = paymentMoney payment
                                   ]
             ]
         outputs' <- for (payments <> outputs <> datumOutputs) (uncurry3 makeTxOut')
@@ -835,7 +838,8 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
                                   <$> (groupBy ((==) `on` fst) . sortBy (compare `on` fst))
                                   [
                                     (payee, money)
-                                  | Payment _ payee money <- mtPayments marloweOut
+                                  | payment@(Payment _ payee _ _) <- mtPayments marloweOut
+                                  , let money = paymentMoney payment
                                   ]
             ]
         let

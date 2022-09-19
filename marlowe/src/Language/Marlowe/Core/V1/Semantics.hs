@@ -153,6 +153,10 @@ data Payment = Payment AccountId Payee Token Integer
   deriving stock (Haskell.Eq, Haskell.Show)
 
 
+paymentMoney :: Payment -> Money
+paymentMoney (Payment _ _ (Token cur tok) amt) = Val.singleton cur tok amt
+
+
 -- | Effect of 'reduceContractStep' computation
 data ReduceEffect = ReduceWithPayment Payment
                   | ReduceNoPayment
