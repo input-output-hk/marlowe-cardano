@@ -69,6 +69,7 @@ library
     Language.Marlowe.Protocol.Sync.Server
     Language.Marlowe.Protocol.Sync.Types
     Language.Marlowe.Runtime.Core.Api
+    Language.Marlowe.Runtime.Core.ScriptRegistry
     Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Api
     Language.Marlowe.Runtime.History.Follower
@@ -86,6 +87,7 @@ library
     , base16
     , binary
     , bytestring
+    , cardano-api
     , containers
     , marlowe
     , marlowe-chain-sync
@@ -197,6 +199,7 @@ test-suite marlowe-runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    Language.Marlowe.Runtime.Core.ScriptRegistrySpec
     Language.Marlowe.Runtime.History.FollowerSpec
     Language.Marlowe.Runtime.History.Script
     Language.Marlowe.Runtime.History.StoreSpec
@@ -214,6 +217,7 @@ test-suite marlowe-runtime-test
       base >= 4.9 && < 5
     , async
     , bytestring
+    , cardano-api
     , containers
     , hspec
     , marlowe

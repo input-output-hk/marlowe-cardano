@@ -39,6 +39,7 @@
           (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+          (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
@@ -61,6 +62,7 @@
           "Language/Marlowe/Protocol/Sync/Server"
           "Language/Marlowe/Protocol/Sync/Types"
           "Language/Marlowe/Runtime/Core/Api"
+          "Language/Marlowe/Runtime/Core/ScriptRegistry"
           "Language/Marlowe/Runtime/History"
           "Language/Marlowe/Runtime/History/Api"
           "Language/Marlowe/Runtime/History/Follower"
@@ -169,6 +171,7 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
@@ -192,6 +195,7 @@
             ];
           buildable = true;
           modules = [
+            "Language/Marlowe/Runtime/Core/ScriptRegistrySpec"
             "Language/Marlowe/Runtime/History/FollowerSpec"
             "Language/Marlowe/Runtime/History/Script"
             "Language/Marlowe/Runtime/History/StoreSpec"

@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -19,7 +20,6 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
-import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
@@ -29,7 +29,7 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, ScriptHash, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, putUTCTime, unPolicyId)
+  (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
@@ -66,6 +66,7 @@ data MarloweVersionTag
 
 data MarloweVersion (v :: MarloweVersionTag) where
   MarloweV1 :: MarloweVersion 'V1
+
 
 instance TestEquality MarloweVersion where
   testEquality MarloweV1 MarloweV1 = Just Refl
@@ -176,9 +177,23 @@ instance Eq SomeMarloweVersion where
 instance Ord SomeMarloweVersion where
   compare (SomeMarloweVersion MarloweV1) (SomeMarloweVersion MarloweV1) = EQ
 
+instance Bounded SomeMarloweVersion where
+  minBound = SomeMarloweVersion MarloweV1
+  maxBound = SomeMarloweVersion MarloweV1
+
+instance Enum SomeMarloweVersion where
+  toEnum = \case
+    0 -> SomeMarloweVersion MarloweV1
+    _ -> error "toEnum: value out of range of Marlowe versions"
+  fromEnum (SomeMarloweVersion version) = case version of
+    MarloweV1 -> 0
+
 instance Show SomeMarloweVersion where
   showsPrec p (SomeMarloweVersion version) = showParen (p >= 11)
     $ showString "SomeMarloweVersion " . showsPrec 11 version
+
+withSomeMarloweVersion :: (forall v. MarloweVersion v -> r) -> SomeMarloweVersion -> r
+withSomeMarloweVersion f (SomeMarloweVersion v) = f v
 
 instance ToJSON (MarloweVersion v) where
   toJSON = String . \case
@@ -313,12 +328,3 @@ toChainRedeemer = \case
 fromChainRedeemer :: MarloweVersion v -> Chain.Redeemer -> Maybe (Redeemer v)
 fromChainRedeemer = \case
   MarloweV1 -> Chain.fromRedeemer
-
-getMarloweVersion :: ScriptHash -> Maybe (SomeMarloweVersion, ScriptHash)
-getMarloweVersion hash
-  | hash == "62c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307" =
-      Just (SomeMarloweVersion MarloweV1, "") --TODO
-  | otherwise = Nothing
-
-getScriptHashes :: MarloweVersion v -> Set ScriptHash
-getScriptHashes = mempty
