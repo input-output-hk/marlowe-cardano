@@ -80,6 +80,8 @@ library
     Language.Marlowe.Runtime.History.Store.Memory
     Language.Marlowe.Runtime.History.Store.Model
     Language.Marlowe.Runtime.History.SyncServer
+    Language.Marlowe.Runtime.Transaction.Constraints
+    Language.Marlowe.Runtime.Transaction.SystemStart
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -92,6 +94,7 @@ library
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
+    , ouroboros-network
     , plutus-ledger-api
     , semialign
     , split
