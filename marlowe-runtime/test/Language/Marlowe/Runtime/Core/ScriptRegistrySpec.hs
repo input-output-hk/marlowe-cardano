@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Core.AddressRegistrySpec
+module Language.Marlowe.Runtime.Core.ScriptRegistrySpec
   ( spec
   ) where
 
@@ -6,8 +6,8 @@ import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash(..))
-import Language.Marlowe.Runtime.Core.AddressRegistry
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion, withSomeMarloweVersion)
+import Language.Marlowe.Runtime.Core.ScriptRegistry
 import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
 import Plutus.V1.Ledger.Api (ValidatorHash(..), fromBuiltin)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)

@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Core.AddressRegistry
+module Language.Marlowe.Runtime.Core.ScriptRegistry
   where
 
 import Data.Foldable (asum)

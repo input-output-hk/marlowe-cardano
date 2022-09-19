@@ -40,7 +40,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , toDatum
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScripts(..), currentV1Scripts)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -52,6 +51,7 @@ import Language.Marlowe.Runtime.Core.Api
   , parseContractId
   , toChainPayoutDatum
   )
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), currentV1Scripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
 import qualified Plutus.V1.Ledger.Value as Plutus

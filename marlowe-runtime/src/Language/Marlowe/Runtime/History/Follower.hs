@@ -57,7 +57,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , slotToUTCTime
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScripts(..), getMarloweVersion)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -71,6 +70,7 @@ import Language.Marlowe.Runtime.Core.Api
   , fromChainPayoutDatum
   , fromChainRedeemer
   )
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion)
 import Language.Marlowe.Runtime.History.Api
 
 data ContractChanges v = ContractChanges
