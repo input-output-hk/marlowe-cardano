@@ -146,7 +146,9 @@ import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
 
 
-timeoutForExecutionMode :: _
+timeoutForExecutionMode :: MonadError CliError m
+          => MonadReader (ScriptEnv era) m
+          => m (Maybe Int)
 timeoutForExecutionMode = do
             executionMode <- view seExecutionMode
             let
@@ -382,6 +384,7 @@ interpret so@Publish {..} = do
       _         -> PublishAtAddress waAddress
 
   connection <- view seConnection
+  timeout <- timeoutForExecutionMode
   marloweScriptRefs <- runSoCli so (findMarloweScriptsRefs connection publishingStrategy (PrintStats True)) >>= \case
     Just marloweScriptRefs@(MarloweScriptsRefs (AnUTxO (mTxIn, _), mv) (AnUTxO (pTxIn, _), pv)) -> do
       let
@@ -399,7 +402,6 @@ interpret so@Publish {..} = do
       pure marloweScriptRefs
     Nothing -> do
       logSoMsg' so "Scripts not found so publishing them."
-      timeout <- timeoutForExecutionMode
       runSoCli so $ publishImpl
         connection
         waSigningKey
@@ -740,7 +742,6 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
       interpretLoop = for_ stScriptOperations \operation -> do
         logSoMsg SoName operation "..."
         interpret operation
-      transactionTimeout = Seconds 120
 
     void $ catchError
       (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig SimulationMode))
