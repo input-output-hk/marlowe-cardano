@@ -146,12 +146,14 @@ import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
 
 
-timeoutForExecutionMode :: ExecutionMode -> Maybe Integer
+timeoutForExecutionMode :: _
 timeoutForExecutionMode = do
             executionMode <- view seExecutionMode
-            executionTimeout <- case executionMode of
-              Just (OnChainMode transactionTimeout) -> transactionTimeout
-              SimulationMode -> Nothing
+            let
+              executionTimeout = case executionMode of
+                (OnChainMode (Seconds transactionTimeout)) -> Just transactionTimeout
+                SimulationMode -> Nothing
+            pure executionTimeout
 
 interpret :: forall era m
            . IsShelleyBasedEra era
@@ -179,6 +181,7 @@ interpret FundWallet {..} = do
   (Wallet faucetAddress faucetSigningKey _ _) <- getFaucet
   (Wallet address _ _ _) <- findWallet soWalletNickname
   connection <- view seConnection
+  timeout <- timeoutForExecutionMode
   txBody <- runCli "[FundWallet] " $ buildFaucetImpl
     connection
     values
@@ -186,7 +189,7 @@ interpret FundWallet {..} = do
     faucetAddress
     faucetSigningKey
     defaultCoinSelectionStrategy
-    timeoutForExecutionMode
+    timeout
 
   let
     transaction = WalletTransaction { wtFees = 0, wtTxBody=txBody  }
@@ -197,6 +200,7 @@ interpret FundWallet {..} = do
 interpret SplitWallet {..} = do
   Wallet address skey _ _ <- findWallet soWalletNickname
   connection <- view seConnection
+  timeout <- timeoutForExecutionMode
   let
     values = [ C.lovelaceToValue v | v <- soValues ]
 
@@ -207,7 +211,7 @@ interpret SplitWallet {..} = do
     address
     skey
     defaultCoinSelectionStrategy
-    timeoutForExecutionMode
+    timeout
 
 interpret so@Mint {..} = do
   currencies <- use ssCurrencies
@@ -223,6 +227,7 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
+  timeout <- timeoutForExecutionMode
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
     faucetSigningKey
@@ -231,7 +236,7 @@ interpret so@Mint {..} = do
     Nothing
     2_000_000       -- FIXME: should we compute minAda here?
     faucetAddress
-    timeoutForExecutionMode
+    timeout
 
   let
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
@@ -394,6 +399,7 @@ interpret so@Publish {..} = do
       pure marloweScriptRefs
     Nothing -> do
       logSoMsg' so "Scripts not found so publishing them."
+      timeout <- timeoutForExecutionMode
       runSoCli so $ publishImpl
         connection
         waSigningKey
@@ -401,7 +407,7 @@ interpret so@Publish {..} = do
         waAddress
         publishingStrategy
         (CoinSelectionStrategy False False [])
-        timeoutForExecutionMode
+        timeout
         (PrintStats True)
 
   assign ssReferenceScripts (Just marloweScriptRefs)
@@ -454,6 +460,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
   connection <- view seConnection
+  timeout <- timeoutForExecutionMode
   txBody <- runCli "[AutoRun] " $ autoRunTransactionImpl
       connection
       prev
@@ -461,7 +468,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       address
       [skey]
       C.TxMetadataNone
-      timeoutForExecutionMode
+      timeout
       True
       invalid
 
@@ -736,7 +743,7 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
       transactionTimeout = Seconds 120
 
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig executionMode))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig SimulationMode))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
