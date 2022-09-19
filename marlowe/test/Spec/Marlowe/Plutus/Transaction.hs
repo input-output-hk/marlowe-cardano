@@ -466,8 +466,8 @@ shuffle =
       go field = field <~ (lift . elements . permutations =<< use field)
     go infoInputs
     go infoOutputs
---  go infoData  -- FIXME
     go infoSignatories
+    infoData <~ (lift . fmap AM.fromList . elements . permutations . AM.toList =<< use infoData)
 
 
 -- | Generate an arbitrary, valid Marlowe payout transaction: datum, redeemer, and script context.
