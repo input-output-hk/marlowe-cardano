@@ -56,7 +56,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints
   (buildApplyInputsConstraints, buildCreateConstraints, buildWithdrawConstraints)
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(MarloweContext), SolveConstraints)
+import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(..), SolveConstraints)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweScriptOutput, LoadPayoutScriptOutputs, LoadWalletContext)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Job.Server
@@ -191,8 +191,8 @@ execCreate solveConstraints loadWalletContext networkId era mStakeCredential ver
   constraints <- except $ buildCreateConstraints version roleTokens metadata contract
   walletContext <- lift $ loadWalletContext addresses
   -- The marlowe context for a create transaction has no marlowe output and
-  -- empty payout outputs.
-  let marloweContext = MarloweContext Nothing mempty
+  -- an empty payout output set. It may specify a stake credential to use.
+  let marloweContext = MarloweContext mStakeCredential Nothing mempty
   txBody <- except
     $ first CreateUnsolvableConstraints
     $ solveConstraints era marloweContext walletContext constraints
@@ -253,7 +253,7 @@ execApplyInputs
     walletContext <- lift $ loadWalletContext addresses
     -- The Marlowe context for an apply inputs transaction has the previous
     -- marlowe output and no payout outputs.
-    let marloweContext = MarloweContext (Just (utxo scriptOutput, txOut)) mempty
+    let marloweContext = MarloweContext Nothing (Just (utxo scriptOutput, txOut)) mempty
     except
       $ first ApplyInputsUnsolvableConstraints
       $ solveConstraints era marloweContext walletContext constraints
@@ -273,7 +273,7 @@ execWithdraw solveConstraints loadWalletContext loadPayoutScriptOutputs era vers
   payoutOutputs <- lift $ loadPayoutScriptOutputs version datum
   -- The Marlowe context for a withdraw transaction has the payout script
   -- outputs for the requested role and no marlowe script output.
-  let marloweContext = MarloweContext Nothing payoutOutputs
+  let marloweContext = MarloweContext Nothing Nothing payoutOutputs
   except
     $ first WithdrawUnsolvableConstraints
     $ solveConstraints era marloweContext walletContext constraints

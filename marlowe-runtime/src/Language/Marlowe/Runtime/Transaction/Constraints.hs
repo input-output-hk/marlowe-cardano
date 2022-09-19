@@ -5,6 +5,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
 import qualified Cardano.Api as Cardano
+import Cardano.Api.Shelley (NetworkId, StakeCredential)
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
@@ -257,7 +258,9 @@ data WalletContext = WalletContext
 
 -- | Data from Marlowe Scripts needed to solve the constraints.
 data MarloweContext = MarloweContext
-  { scriptOutput :: Maybe (Chain.TxOutRef, Chain.TransactionOutput)
+  { stakeCredential :: Maybe StakeCredential
+  -- ^ The stake credential to use when building a new marlowe script address.
+  , scriptOutput :: Maybe (Chain.TxOutRef, Chain.TransactionOutput)
   -- ^ The UTXO at the script address, if any.
   , payoutOutputs :: Map Chain.TxOutRef Chain.TransactionOutput
   -- ^ The UTXOs at the payout address.
@@ -277,7 +280,8 @@ type SolveConstraints era v
 -- law: makeTransactionBodyAutoBalance should return a balanced transaction on
 -- the result.
 solveConstraints
-  :: Cardano.SystemStart
+  :: NetworkId
+  -> Cardano.SystemStart
   -> Cardano.EraHistory Cardano.CardanoMode
   -> Cardano.ProtocolParameters
   -> SolveConstraints era v
