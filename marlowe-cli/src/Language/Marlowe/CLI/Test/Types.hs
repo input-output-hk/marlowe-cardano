@@ -251,10 +251,10 @@ instance IsString WalletNickname where fromString = WalletNickname
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
--- | In the case of the `PubKeyHash` you should use standard encoding but
+-- | In the case of the `Address` you should use standard encoding but
 -- | reference a wallet instead of providing hash value:
 -- | ```
--- |  "pk_hash": "Wallet-1"
+-- |  "address": "Wallet-1"
 -- | ```
 data PartyRef =
     WalletRef WalletNickname
@@ -264,7 +264,7 @@ data PartyRef =
 
 instance FromJSON PartyRef where
   parseJSON = \case
-    Aeson.Object (KeyMap.toList -> [("pk_hash", A.String walletNickname)]) ->
+    Aeson.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
       pure . WalletRef . WalletNickname . T.unpack $ walletNickname
     Aeson.Object (KeyMap.toList -> [("role_token", A.String roleToken)]) ->
       pure . RoleRef . P.tokenName . T.encodeUtf8 $ roleToken
@@ -273,7 +273,7 @@ instance FromJSON PartyRef where
 
 instance ToJSON PartyRef where
     toJSON (WalletRef (WalletNickname walletNickname)) = A.object
-        [ "pk_hash" .= A.String (T.pack walletNickname) ]
+        [ "address" .= A.String (T.pack walletNickname) ]
     toJSON (RoleRef (P.TokenName name)) = A.object
         [ "role_token" .= (A.String $ T.decodeUtf8 $ P.fromBuiltin name) ]
 

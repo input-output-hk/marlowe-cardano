@@ -291,23 +291,23 @@ readAddressEither s = do
 -- | Parser for `Party`.
 parseParty :: O.ReadM Party
 parseParty =
-        O.eitherReader readPartyPkEither
+        O.eitherReader readPartyAddressEither
     <|> O.eitherReader readPartyRoleEither
     <|> O.readerError "Invalid party."
 
 
 -- | Reader for `Party` `Address`.
-readPartyPkEither :: String               -- ^ The string to be read.
-                  -> Either String Party  -- ^ Either the public key hash role or an error message.
-readPartyPkEither s =
+readPartyAddressEither :: String               -- ^ The string to be read.
+                       -> Either String Party  -- ^ Either the address party or an error message.
+readPartyAddressEither s =
   case deserialiseAddressBech32 $ T.pack s of
     Just (network, address) -> Right $ Address network address
-    _                       -> Left "Invalid public key hash for party."
+    _                       -> Left "Invalid address for party."
 
 
 -- | Reader for `Party` `Role`.
 readPartyRoleEither :: String               -- ^ The string to be read.
-                    -> Either String Party  -- ^ Either the party role or an error message.
+                    -> Either String Party  -- ^ Either the role party or an error message.
 readPartyRoleEither s =
   if length s <= 32
     then Right . Role . TokenName . toBuiltin $ BS8.pack s
