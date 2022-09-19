@@ -253,8 +253,8 @@ echo "The contract has a minimum-ADA requirement and two timeouts. It also speci
 echo "We create the contract for the previously specified parameters."
 
 marlowe-cli template actus --minimum-ada "$MINIMUM_ADA"               \
-                           --party "Role=$LENDER_ROLE"                \
-                           --counter-party "Role=$BORROWER_ROLE"      \
+                           --party "$LENDER_ROLE"                     \
+                           --counter-party "$BORROWER_ROLE"           \
                            --actus-terms-file "$ACTUS_TERMS_FILE"     \
                            --out-contract-file tx-1.contract          \
                            --out-state-file    tx-1.state
@@ -311,8 +311,8 @@ echo "## Transaction 2. Lender Deposits the Loan Amount"
 echo "First we compute the Marlowe input required to deposit the funds for the loan."
 
 marlowe-cli run prepare --marlowe-file tx-1.marlowe                   \
-                        --deposit-account "Role=$LENDER_ROLE"         \
-                        --deposit-party "Role=$LENDER_ROLE"           \
+                        --deposit-account "$LENDER_ROLE"              \
+                        --deposit-party "$LENDER_ROLE"                \
                         --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
                         --invalid-before "$NOW"                       \
                         --invalid-hereafter "$((NOW+4*HOUR))"         \
@@ -385,8 +385,8 @@ echo "## Transaction 4. Borrower Repays the Loan's Interest"
 echo "First we compute the Marlowe input required to repay the intest of the loan."
 
 marlowe-cli run prepare --marlowe-file tx-2.marlowe                  \
-                        --deposit-account "Role=$BORROWER_ROLE"      \
-                        --deposit-party "Role=$BORROWER_ROLE"        \
+                        --deposit-account "$BORROWER_ROLE"           \
+                        --deposit-party "$BORROWER_ROLE"             \
                         --deposit-amount "$((INTEREST*FIXED_POINT))" \
                         --invalid-before "$NOW"                      \
                         --invalid-hereafter "$((NOW+4*HOUR))"        \
@@ -419,8 +419,8 @@ echo "## Transaction 5. Borrower Repays the Loan's Principal"
 echo "First we compute the Marlowe input required to repay the principal of the loan."
 
 marlowe-cli run prepare --marlowe-file tx-4.marlowe                   \
-                        --deposit-account "Role=$BORROWER_ROLE"       \
-                        --deposit-party "Role=$BORROWER_ROLE"         \
+                        --deposit-account "$BORROWER_ROLE"            \
+                        --deposit-party "$BORROWER_ROLE"              \
                         --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
                         --invalid-before "$NOW"                       \
                         --invalid-hereafter "$((NOW+4*HOUR))"         \

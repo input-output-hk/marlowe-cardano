@@ -68,22 +68,11 @@ module Language.Marlowe.CLI.Test.Types
   , ssCurrencies
   , ssReferenceScripts
   , ssWallets
-  , walletPubKeyHash
   ) where
 
 
 import Cardano.Api
-  ( AddressInEra
-  , CardanoMode
-  , Key(VerificationKey)
-  , LocalNodeConnectInfo
-  , Lovelace
-  , NetworkId
-  , PaymentKey
-  , PolicyId
-  , ScriptDataSupportedInEra
-  , TxBody
-  )
+  (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
 import qualified Cardano.Api as C
 import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
@@ -103,7 +92,6 @@ import Language.Marlowe.CLI.Types
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
-import qualified Ledger.Tx.CardanoAPI as L
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
@@ -247,14 +235,8 @@ data Wallet era =
   , waTokens          :: P.Value                      -- ^ Custom tokens cache which simplifies
 
   , waTransactions    :: [WalletTransaction era]
-  , waVerificationKey :: VerificationKey PaymentKey
   }
   deriving stock (Generic, Show)
-
-
-walletPubKeyHash :: Wallet era -> P.PubKeyHash
-walletPubKeyHash Wallet { waVerificationKey } =
-  L.fromCardanoPaymentKeyHash . C.verificationKeyHash $ waVerificationKey
 
 
 -- | In many contexts this defaults to the `RoleName` but at some
@@ -269,10 +251,10 @@ instance IsString WalletNickname where fromString = WalletNickname
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
--- | In the case of the `PubKeyHash` you should use standard encoding but
+-- | In the case of the `Address` you should use standard encoding but
 -- | reference a wallet instead of providing hash value:
 -- | ```
--- |  "pk_hash": "Wallet-1"
+-- |  "address": "Wallet-1"
 -- | ```
 data PartyRef =
     WalletRef WalletNickname
@@ -282,7 +264,7 @@ data PartyRef =
 
 instance FromJSON PartyRef where
   parseJSON = \case
-    Aeson.Object (KeyMap.toList -> [("pk_hash", A.String walletNickname)]) ->
+    Aeson.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
       pure . WalletRef . WalletNickname . T.unpack $ walletNickname
     Aeson.Object (KeyMap.toList -> [("role_token", A.String roleToken)]) ->
       pure . RoleRef . P.tokenName . T.encodeUtf8 $ roleToken
@@ -291,7 +273,7 @@ instance FromJSON PartyRef where
 
 instance ToJSON PartyRef where
     toJSON (WalletRef (WalletNickname walletNickname)) = A.object
-        [ "pk_hash" .= A.String (T.pack walletNickname) ]
+        [ "address" .= A.String (T.pack walletNickname) ]
     toJSON (RoleRef (P.TokenName name)) = A.object
         [ "role_token" .= (A.String $ T.decodeUtf8 $ P.fromBuiltin name) ]
 

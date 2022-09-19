@@ -31,7 +31,6 @@ module Language.Marlowe.CLI.Merkle
   ) where
 
 
-import Cardano.Api (AlonzoEra, PlutusScriptV2)
 import Control.Monad (foldM)
 import Control.Monad.Except (MonadError, MonadIO, catchError, throwError)
 import Control.Monad.Fix (fix)
@@ -39,7 +38,7 @@ import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Writer (Writer, runWriter, tell)
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Types (CliError(..), Continuations, MarloweTransaction(..))
+import Language.Marlowe.CLI.Types (CliError(..), Continuations, MarloweTransaction(..), SomeMarloweTransaction(..))
 import Language.Marlowe.Core.V1.Semantics
   ( ApplyResult(..)
   , ReduceResult(..)
@@ -64,11 +63,12 @@ merkleize :: MonadError CliError m
           => FilePath        -- ^ The JSON file containing the Marlowe transaction information.
           -> Maybe FilePath  -- ^ Output JSON file containing the merkleized Marlowe transaction information.
           -> m ()            -- ^ Action to perform the merkleization.
-merkleize contractFile outputFile =
+merkleize marloweFile outputFile =
   do
-    marlowe <- decodeFileStrict contractFile
+    SomeMarloweTransaction lang era marlowe <- decodeFileStrict marloweFile
     maybeWriteJson outputFile
-      (merkleizeMarlowe marlowe :: MarloweTransaction PlutusScriptV2 AlonzoEra)  -- FIXME: Generalize eras.
+      . SomeMarloweTransaction lang era
+      $ merkleizeMarlowe marlowe
 
 
 -- | Deeply merkleize a Marlowe transaction.
@@ -128,9 +128,9 @@ demerkleize :: MonadError CliError m
             => FilePath        -- ^ The JSON file containing the Marlowe transaction information.
             -> Maybe FilePath  -- ^ Output JSON file containing the demerkleized Marlowe transaction information.
             -> m ()
-demerkleize contractFile outputFile =
+demerkleize marloweFile outputFile =
   do
-    marlowe <- decodeFileStrict contractFile
+    SomeMarloweTransaction lang era marlowe <- decodeFileStrict marloweFile
     contract <-
       runReaderT
        (deepDemerkleize $ mtContract marlowe)
@@ -142,8 +142,7 @@ demerkleize contractFile outputFile =
           mtContract      = contract
         , mtContinuations = mempty
         }
-        :: MarloweTransaction PlutusScriptV2 AlonzoEra
-    maybeWriteJson outputFile marlowe'
+    maybeWriteJson outputFile $ SomeMarloweTransaction lang era marlowe'
 
 
 -- | Demerkleize any top-level case statements in a contract.

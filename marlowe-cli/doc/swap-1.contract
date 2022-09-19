@@ -1,23 +1,55 @@
 {
     "timeout": 1655621320000,
+    "timeout_continuation": "close",
     "when": [
         {
+            "case": {
+                "deposits": 300,
+                "into_account": {
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                },
+                "of_token": {
+                    "currency_symbol": "d537d311e915c4d815607ead0bcd5880807895871ce9be7c1eaf72a6",
+                    "token_name": "Globe"
+                },
+                "party": {
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                }
+            },
             "then": {
                 "timeout": 1655664520000,
+                "timeout_continuation": "close",
                 "when": [
                     {
+                        "case": {
+                            "deposits": 500,
+                            "into_account": {
+                                "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                            },
+                            "of_token": {
+                                "currency_symbol": "ffd80473e79426fef5de6c124369bb96a67a8b5814211009354e311e",
+                                "token_name": "Swan"
+                            },
+                            "party": {
+                                "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                            }
+                        },
                         "then": {
+                            "from_account": {
+                                "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                            },
+                            "pay": 300,
                             "then": {
+                                "from_account": {
+                                    "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                },
+                                "pay": 500,
                                 "then": "close",
                                 "to": {
                                     "party": {
-                                        "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                                        "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                                     }
                                 },
-                                "from_account": {
-                                    "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
-                                },
-                                "pay": 500,
                                 "token": {
                                     "currency_symbol": "ffd80473e79426fef5de6c124369bb96a67a8b5814211009354e311e",
                                     "token_name": "Swan"
@@ -25,49 +57,17 @@
                             },
                             "to": {
                                 "party": {
-                                    "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
+                                    "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
                                 }
                             },
-                            "from_account": {
-                                "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
-                            },
-                            "pay": 300,
                             "token": {
                                 "currency_symbol": "d537d311e915c4d815607ead0bcd5880807895871ce9be7c1eaf72a6",
                                 "token_name": "Globe"
                             }
-                        },
-                        "case": {
-                            "deposits": 500,
-                            "into_account": {
-                                "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
-                            },
-                            "of_token": {
-                                "currency_symbol": "ffd80473e79426fef5de6c124369bb96a67a8b5814211009354e311e",
-                                "token_name": "Swan"
-                            },
-                            "party": {
-                                "pk_hash": "fd37884bbd044c72e5f29de1b777a9c1c1d531773535cd5b55e2f6ff"
-                            }
                         }
                     }
-                ],
-                "timeout_continuation": "close"
-            },
-            "case": {
-                "deposits": 300,
-                "into_account": {
-                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
-                },
-                "of_token": {
-                    "currency_symbol": "d537d311e915c4d815607ead0bcd5880807895871ce9be7c1eaf72a6",
-                    "token_name": "Globe"
-                },
-                "party": {
-                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
-                }
+                ]
             }
         }
-    ],
-    "timeout_continuation": "close"
+    ]
 }

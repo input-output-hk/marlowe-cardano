@@ -93,7 +93,7 @@ Here we have to choose
 -  … in which **currency**, or **token** (often ada)
 
 -  Into which account, given by a **party**, which is
-   either a role or a public key.
+   either a role or an address.
 
 -  The continuation **contract**.   
 

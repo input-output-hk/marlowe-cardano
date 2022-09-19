@@ -46,21 +46,20 @@ In modelling basic parts of Marlowe we use a combination of Haskell
 ``data`` types, that define *new* types, and ``type`` synonyms that give
 a new name to an existing type. [1]_
 
-A ``Party`` to a contract is represented as used above, either a public key or a role name.
+A ``Party`` to a contract is represented as used above, either a network
+address or a role name.
 
 .. code:: haskell
 
-   data Party = PubKey PubKeyHash
+   data Party = Address Bool Address
               | Role   TokenName
 
 In order to progress a Marlowe contract, a party must provide an
-evidence. For ``PubKey`` party that would be a valid signature of a
-transaction signed by a private key of the public key, similarly to Bitcoin's
-``Pay to Public Key Hash`` mechanism.
-
-.. code:: haskell
-
-   newtype PubKeyHash = PubKeyHash { getPubKeyHash :: ByteString }
+evidence. For an ``Address`` party that would be a valid signature of a
+transaction signed by a private key of the address, similarly to Bitcoin's
+``Pay to Public Key Hash`` mechanism. The ``Bool`` indicates whether the
+address is for the main network or a test network and the subsequent Plutus
+``Address`` is equivalent to a Bech32-encoded Cardano network address.
 
 For a ``Role`` party the evidence is spending a *role token* within the
 same transaction, usually to the same owner.

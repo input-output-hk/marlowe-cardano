@@ -25,6 +25,7 @@ module Spec.Marlowe.Plutus.Specification
 import Control.Lens (use, uses, (%=), (<>=), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
+import Data.Maybe (maybeToList)
 import Data.Proxy (Proxy(..))
 import Data.These (These(That, These, This))
 import Language.Marlowe.Core.V1.Semantics
@@ -39,12 +40,13 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Contract(Close)
   , Input(..)
   , InputContent(IChoice, IDeposit)
-  , Party(PK, Role)
+  , Party(Role)
   , Payee(Party)
   , State(accounts)
   )
 import Language.Marlowe.Scripts (MarloweInput)
 import Plutus.Script.Utils.Scripts (datumHash)
+import Plutus.V1.Ledger.Address (toPubKeyHash)
 import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
 import Plutus.V2.Ledger.Api
   ( Address(Address)
@@ -88,6 +90,8 @@ import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty)
 
+import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
+import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified PlutusTx.AssocMap as AM (fromList, insert, toList)
 
 
@@ -142,7 +146,7 @@ tests =
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
-              -- TODO: This test requires instrumenting the Plutus script.
+              testProperty "Invalid alteration of parameters." checkParamsOutput
             ]
         , testGroup "Constraint 10. Output state"
             [
@@ -407,26 +411,40 @@ checkDatumOutput perturb =
     checkSemanticsTransaction noModify modifyAfter notCloses False False
 
 
--- | Check that state output to a script matches its output state.
+-- | Check that parameters in the datum are not changed by the transaction.
+checkParamsOutput :: Property
+checkParamsOutput =
+  checkDatumOutput
+    $ \marloweData ->
+      do
+        -- Replace the output parameters with a random one.
+        let old = M.marloweParams marloweData
+        new <- arbitrary `suchThat` (/= old)
+        pure $ marloweData {M.marloweParams = new}
+
+
+-- | Check that state output to a script matches its semantic output.
 checkStateOutput :: Property
 checkStateOutput =
   checkDatumOutput
     $ \marloweData ->
       do
         -- Replace the output state with a random one.
-        marloweState' <- arbitrary
-        pure $ marloweData {marloweState = marloweState'}
+        let old = marloweState marloweData
+        new <- arbitrary `suchThat` (/= old)
+        pure $ marloweData {marloweState = new}
 
 
--- | Check that state output to a script matches its output state.
+-- | Check that state output to a script matches its semantic output.
 checkContractOutput :: Property
 checkContractOutput =
   checkDatumOutput
     $ \marloweData ->
       do
         -- Replace the output ccontact with a random one.
-        marloweContract' <- arbitrary
-        pure $ marloweData {marloweContract = marloweContract'}
+        let old = marloweContract marloweData
+        new <- arbitrary `suchThat` (/= old)
+        pure $ marloweData {marloweContract = new}
 
 
 -- | Check that non-positive accounts are rejected.
@@ -447,15 +465,15 @@ checkPositiveAccounts =
 
 -- | Compute the authorization for an input.
 authorizer :: Input -> ([PubKeyHash], [TokenName])
-authorizer (NormalInput     (IDeposit _ (PK   pkh  ) _ _        )    ) = (pure pkh, mempty    )
-authorizer (NormalInput     (IDeposit _ (Role role') _ _        )    ) = (mempty  , pure role')
-authorizer (NormalInput     (IChoice (ChoiceId _ (PK pkh    )) _)    ) = (pure pkh, mempty    )
-authorizer (NormalInput     (IChoice (ChoiceId _ (Role role')) _)    ) = (mempty  , pure role')
-authorizer (MerkleizedInput (IDeposit _ (PK   pkh  ) _ _        ) _ _) = (pure pkh, mempty    )
-authorizer (MerkleizedInput (IDeposit _ (Role role') _ _        ) _ _) = (mempty  , pure role')
-authorizer (MerkleizedInput (IChoice (ChoiceId _ (PK pkh    )) _) _ _) = (pure pkh, mempty    )
-authorizer (MerkleizedInput (IChoice (ChoiceId _ (Role role')) _) _ _) = (mempty  , pure role')
-authorizer _                                                           = (mempty  , mempty    )
+authorizer (NormalInput     (IDeposit _ (M.Address _ address) _ _        )    ) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (NormalInput     (IDeposit _ (Role role'         ) _ _        )    ) = (mempty                            , pure role')
+authorizer (NormalInput     (IChoice (ChoiceId _ (M.Address _ address)) _)    ) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (NormalInput     (IChoice (ChoiceId _ (Role role'         )) _)    ) = (mempty                            , pure role')
+authorizer (MerkleizedInput (IDeposit _ (M.Address _ address) _ _        ) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (MerkleizedInput (IDeposit _ (Role role'       ) _ _          ) _ _) = (mempty                            , pure role')
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (M.Address _ address)) _) _ _) = (maybeToList $ toPubKeyHash address, mempty    )
+authorizer (MerkleizedInput (IChoice (ChoiceId _ (Role role'         )) _) _ _) = (mempty                            , pure role')
+authorizer _                                                                    = (mempty                            , mempty    )
 
 
 -- | Determine whether there are any authorizations in the transaction.

@@ -25,9 +25,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Scripts (MarloweTxInput(..))
 import Plutus.V1.Ledger.Value (gt)
 import Plutus.V2.Ledger.Api
-  ( Address(..)
-  , BuiltinData(..)
-  , Credential(..)
+  ( BuiltinData(..)
   , Data(..)
   , Datum(..)
   , DatumHash(..)
@@ -35,18 +33,15 @@ import Plutus.V2.Ledger.Api
   , Interval(..)
   , LowerBound(..)
   , OutputDatum(..)
-  , PubKeyHash(..)
   , Redeemer(..)
   , ScriptContext(..)
   , ScriptPurpose(..)
-  , StakingCredential(..)
   , TxId(..)
   , TxInInfo(..)
   , TxInfo(..)
   , TxOut(..)
   , TxOutRef(..)
   , UpperBound(..)
-  , ValidatorHash(..)
   , Value(..)
   , adaSymbol
   , adaToken
@@ -62,10 +57,6 @@ import qualified Data.ByteString as BS (ByteString, pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 
 
-instance Arbitrary Address where
-  arbitrary = Address <$> arbitrary <*> arbitrary
-
-
 instance Arbitrary BS.ByteString where
   arbitrary = BS8.pack <$> arbitrary
 
@@ -76,15 +67,6 @@ instance Arbitrary BuiltinByteString where
 
 instance Arbitrary BuiltinData where
   arbitrary = BuiltinData <$> arbitrary
-
-
-instance Arbitrary Credential where
-  arbitrary =
-    do
-      isPubKey <- frequency [(9, pure True), (1, pure False)]
-      if isPubKey
-        then PubKeyCredential . PubKeyHash    <$> arbitraryByteString 28
-        else ScriptCredential . ValidatorHash <$> arbitraryByteString 28
 
 
 instance Arbitrary Data where
@@ -152,10 +134,6 @@ instance Arbitrary ScriptPurpose where
      ]
 
 
-instance Arbitrary StakingCredential where
-  arbitrary = StakingHash <$> arbitrary
-
-
 instance Arbitrary TxId where
   arbitrary = TxId <$> arbitraryByteString 32
 
@@ -193,10 +171,6 @@ instance Arbitrary TxOutRef where
 
 instance Arbitrary a => Arbitrary (UpperBound a) where
   arbitrary = UpperBound <$> arbitrary <*> arbitrary
-
-
-instance Arbitrary ValidatorHash where
-  arbitrary = ValidatorHash <$> arbitrary
 
 
 instance Arbitrary Value where

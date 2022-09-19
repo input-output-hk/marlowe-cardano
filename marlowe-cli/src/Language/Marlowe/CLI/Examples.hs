@@ -11,7 +11,6 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE RecordWildCards #-}
 
 
 module Language.Marlowe.CLI.Examples

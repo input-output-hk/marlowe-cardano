@@ -1,22 +1,38 @@
 ---
-date: 18 June 2022
-version: marlowe-cli 0.0.5.0
+date: 17 September 2022
+version: marlowe-cli 0.0.8.0
 ---
+
+<div class="cell markdown">
 
 # Marlowe CLI `test` Commands
 
 The `marlowe-cli test` command provided scripted testing of Marlowe
 contracts.
 
+</div>
+
+<div class="cell markdown" jp-MarkdownHeadingCollapsed="true" tags="[]">
+
 ## Contents
 
 -   [Contracts](#contracts)
 
+</div>
+
+<div class="cell markdown">
+
 ## Available Commands
+
+</div>
+
+<div class="cell code" execution_count="1">
 
 ``` bash
 marlowe-cli test --help
 ```
+
+<div class="output stream stdout">
 
     Usage: marlowe-cli test COMMAND
 
@@ -26,22 +42,33 @@ marlowe-cli test --help
       -h,--help                Show this help text
 
     Commands for testing contracts:
-      contracts                Test Marlowe contracts using the Marlowe PAB.
+      scripts                  Test Marlowe scripts on-chain.
 
-## Contracts
+</div>
+
+</div>
+
+<div class="cell markdown">
+
+## Scripts
+
+</div>
+
+<div class="cell code" execution_count="2">
 
 ``` bash
-marlowe-cli test contracts --help
+marlowe-cli test scripts --help
 ```
 
-    Usage: marlowe-cli test contracts --testnet-magic INTEGER
-                                      --socket-path SOCKET_FILE --wallet-url URL
-                                      --pab-url URL --faucet-key SIGNING_FILE
-                                      --faucet-address ADDRESS
-                                      --burn-address ADDRESS --passphrase PASSWORD
-                                      TEST_FILE
+<div class="output stream stdout">
 
-      Test Marlowe contracts using the Marlowe PAB.
+    Usage: marlowe-cli test scripts --testnet-magic INTEGER
+                                    --socket-path SOCKET_FILE
+                                    --faucet-key SIGNING_FILE
+                                    --faucet-address ADDRESS --burn-address ADDRESS
+                                    TEST_FILE
+
+      Test Marlowe scripts on-chain.
 
     Available options:
       --testnet-magic INTEGER  Network magic. Defaults to the CARDANO_TESTNET_MAGIC
@@ -50,17 +77,26 @@ marlowe-cli test contracts --help
                                Location of the cardano-node socket file. Defaults to
                                the CARDANO_NODE_SOCKET_PATH environment variable's
                                value.
-      --wallet-url URL         URL for Cardano Wallet.
-      --pab-url URL            URL for the Marlowe PAB.
       --faucet-key SIGNING_FILE
                                The file containing the signing key for the faucet.
       --faucet-address ADDRESS The address of the faucet.
       --burn-address ADDRESS   Burn address for discarding used tokens.
-      --passphrase PASSWORD    The passphrase used for the Marlowe PAB.
       TEST_FILE                JSON file containing a test case.
       -h,--help                Show this help text
 
+</div>
+
+</div>
+
+<div class="cell markdown">
+
 ### Example
 
-See [run-tests.sh](../run-tests.sh) for an example of testing Marlowe
-contracts on the PAB.
+</div>
+
+<div class="cell markdown">
+
+See the folder [marlowe-cli/test/non-pab/](../test/non-pab/) for example
+input files.
+
+</div>

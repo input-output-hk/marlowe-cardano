@@ -17,16 +17,21 @@ import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String
+import qualified Data.Text as T (pack)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 import Plutus.Script.Utils.Scripts (dataHash)
 import qualified Plutus.V1.Ledger.Value as Val
 import Plutus.V2.Ledger.Api (adaSymbol, adaToken)
 import qualified PlutusTx
 import qualified PlutusTx.Prelude as P
 
+
 instance IsString Party where
-    fromString s = Role (fromString s)
+  fromString s = case deserialiseAddressBech32 $ T.pack s of
+                   Just (network, address) -> Address network address
+                   Nothing                 -> Role $ fromString s
 
 
 ada :: Token

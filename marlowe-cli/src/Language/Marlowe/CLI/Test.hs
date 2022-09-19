@@ -13,7 +13,6 @@
 
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
@@ -73,8 +72,7 @@ runTests era ScriptTests{..} =
     faucetSigningKey <- readSigningKey (SigningKeyFile faucetSigningKeyFile)
     let
       protocolVersion = toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
-      vkey = T.toPaymentVerificationKey . T.getVerificationKey $ faucetSigningKey
-      faucet = Wallet faucetAddress faucetSigningKey mempty mempty vkey
+      faucet = Wallet faucetAddress faucetSigningKey mempty mempty
 
     slotConfig <- runCli $ querySlotConfig connection
     tests' <- mapM decodeFileStrict tests

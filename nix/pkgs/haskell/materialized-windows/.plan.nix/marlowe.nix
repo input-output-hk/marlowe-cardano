@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; limit-static-analysis-time = true; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe"; version = "0.1.0.2"; };
+      identifier = { name = "marlowe"; version = "0.1.0.3"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "alexander.nemish@iohk.io";
@@ -37,6 +37,7 @@
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base16-aeson" or (errorHandler.buildDepError "base16-aeson"))
           (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
+          (hsPkgs."bech32" or (errorHandler.buildDepError "bech32"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."deriving-aeson" or (errorHandler.buildDepError "deriving-aeson"))
@@ -60,6 +61,7 @@
           "Language/Marlowe/Extended/V1"
           "Language/Marlowe/Core/V1/Semantics"
           "Language/Marlowe/Core/V1/Semantics/Types"
+          "Language/Marlowe/Core/V1/Semantics/Types/Address"
           "Language/Marlowe/FindInputs"
           "Language/Marlowe/Client"
           "Language/Marlowe/Client/History"
@@ -78,6 +80,7 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
             (hsPkgs."hint" or (errorHandler.buildDepError "hint"))

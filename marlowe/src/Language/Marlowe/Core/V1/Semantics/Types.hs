@@ -43,11 +43,12 @@ import Data.String (IsString(..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
+import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty(..))
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api
-  (CurrencySymbol(unCurrencySymbol), POSIXTime(..), PubKeyHash(PubKeyHash, getPubKeyHash), TokenName(unTokenName))
+import Plutus.V2.Ledger.Api (CurrencySymbol(unCurrencySymbol), POSIXTime(..), TokenName(unTokenName))
+import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
@@ -55,6 +56,7 @@ import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
 import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
+import Text.PrettyPrint.Leijen (text)
 
 
 {- Functions that used in Plutus Core must be inlineable,
@@ -71,14 +73,15 @@ import qualified Prelude as Haskell
 {-| = Type definitions for Marlowe's seamntics
 -}
 
-data Party = PK PubKeyHash | Role TokenName
+data Party = Address Network Ledger.Address | Role TokenName
   deriving stock (Generic,Haskell.Eq,Haskell.Ord)
-  deriving anyclass (Pretty)
+
+instance Pretty Party where
+  prettyFragment (Address network address) = text $ "Address " ++ Haskell.show (serialiseAddressBech32 network address)
+  prettyFragment (Role role)               = text $ "Role "    ++ Haskell.show role
 
 instance Haskell.Show Party where
-  showsPrec p (PK pk) = Haskell.showParen (p Haskell.>= 11) $ Haskell.showString "PK \""
-                                              . Haskell.showsPrec 11 pk
-                                              . Haskell.showString "\""
+  showsPrec _ (Address network address) = Haskell.showsPrec 11 $ Haskell.show (serialiseAddressBech32 network address)
   showsPrec _ (Role role) = Haskell.showsPrec 11 $ unTokenName role
 
 type AccountId = Party
@@ -393,14 +396,16 @@ instance ToJSON State where
         , "minTime" .= ms ]
 
 instance FromJSON Party where
-  parseJSON = withObject "Party" (\v -> do
-        EncodeBase16 bs <- parseJSON =<< (v .: "pk_hash")
-        return $ PK . PubKeyHash . toBuiltin $ bs
+  parseJSON = withObject "Party" $ \v ->
+        (
+          maybe (parseFail "Address") (return . uncurry Address)
+            =<< deserialiseAddressBech32
+            <$> v .: "address"
+        )
     <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
-                                 )
 instance ToJSON Party where
-    toJSON (PK pkh) = object
-        [ "pk_hash" .= (toJSON $ EncodeBase16 $ fromBuiltin $ getPubKeyHash pkh) ]
+    toJSON (Address network address) = object
+        [ "address" .= serialiseAddressBech32 network address]
     toJSON (Role (Val.TokenName name)) = object
         [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
 
@@ -685,9 +690,9 @@ instance ToJSON Contract where
 
 instance Eq Party where
     {-# INLINABLE (==) #-}
-    (PK p1) == (PK p2)     = p1 == p2
-    (Role r1) == (Role r2) = r1 == r2
-    _ == _                 = False
+    Address n1 a1 == Address n2 a2 = n1 == n2 && a1 == a2
+    Role r1       == Role r2       = r1 == r2
+    _             == _             = False
 
 
 instance Eq ChoiceId where
@@ -787,7 +792,7 @@ instance Eq State where
 
 -- Lifting data types to Plutus Core
 makeLift ''Party
-makeIsDataIndexed ''Party [('PK,0),('Role,1)]
+makeIsDataIndexed ''Party [('Address,0),('Role,1)]
 makeLift ''ChoiceId
 makeIsDataIndexed ''ChoiceId [('ChoiceId,0)]
 makeLift ''Token

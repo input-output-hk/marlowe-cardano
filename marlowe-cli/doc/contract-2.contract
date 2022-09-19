@@ -5,7 +5,7 @@
             "then": {
                 "to": {
                     "party": {
-                        "pk_hash": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                        "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                     }
                 },
                 "then": "close",
@@ -14,21 +14,21 @@
                     "token_name": ""
                 },
                 "from_account": {
-                    "pk_hash": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                 },
                 "pay": 5000000
             },
             "case": {
                 "deposits": 10000000,
                 "party": {
-                    "pk_hash": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                 },
                 "of_token": {
                     "currency_symbol": "",
                     "token_name": ""
                 },
                 "into_account": {
-                    "pk_hash": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                 }
             }
         }

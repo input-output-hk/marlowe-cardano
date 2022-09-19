@@ -87,9 +87,10 @@ import Language.Marlowe.CLI.Types
   , TxBodyFile(TxBodyFile)
   )
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Input(..), InputContent(..), Party(..), Token(..))
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 import Ledger (POSIXTime(..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol(..), PubKeyHash(..), TokenName(..), toBuiltin)
+import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol(..), TokenName(..), toBuiltin)
 import Plutus.V1.Ledger.Slot (Slot(..))
 import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
@@ -117,7 +118,7 @@ parseStakeAddressReference =
     $ \s ->
       case deserialiseAddress AsStakeAddress $ T.pack s of
         Just (StakeAddress _ credential) -> Right . StakeAddressByValue . fromShelleyStakeCredential $ credential
-        Nothing                          -> Left "Invalid stake address."
+        Nothing                          -> Left "Invalid Bech32 stake address."
 
 
 -- | Parser for slot number.
@@ -290,27 +291,27 @@ readAddressEither s = do
 -- | Parser for `Party`.
 parseParty :: O.ReadM Party
 parseParty =
-        O.eitherReader readPartyPkEither
+        O.eitherReader readPartyAddressEither
     <|> O.eitherReader readPartyRoleEither
     <|> O.readerError "Invalid party."
 
 
--- | Reader for `Party` `PK`.
-readPartyPkEither :: String               -- ^ The string to be read.
-                  -> Either String Party  -- ^ Either the public key hash role or an error message.
-readPartyPkEither s =
-  case s =~ "^PK=([[:xdigit:]]{56})$" of
-    [[_, pubKeyHash]] -> PK <$> readPubKeyHashEither pubKeyHash
-    _                 -> Left "Invalid public key hash for party."
+-- | Reader for `Party` `Address`.
+readPartyAddressEither :: String               -- ^ The string to be read.
+                       -> Either String Party  -- ^ Either the address party or an error message.
+readPartyAddressEither s =
+  case deserialiseAddressBech32 $ T.pack s of
+    Just (network, address) -> Right $ Address network address
+    _                       -> Left "Invalid Bech32 address for party."
 
 
 -- | Reader for `Party` `Role`.
 readPartyRoleEither :: String               -- ^ The string to be read.
-                    -> Either String Party  -- ^ Either the party role or an error message.
+                    -> Either String Party  -- ^ Either the role party or an error message.
 readPartyRoleEither s =
-  case s =~ "^Role=(.+)$" of
-    [[_, role]] -> Right . Role . TokenName . toBuiltin . BS8.pack $ role
-    _           -> Left "Invalid role for party."
+  if length s <= 32
+    then Right . Role . TokenName . toBuiltin $ BS8.pack s
+    else Left "Invalid role name for party."
 
 
 -- | Parser for `Token`.
@@ -390,15 +391,6 @@ parseUrl =
   O.eitherReader
     $ either (Left . show) Right
     . parseBaseUrl
-
-
--- | Read a public key hash.
-readPubKeyHashEither :: String                    -- ^ The string to be read.
-                     -> Either String PubKeyHash  -- ^ Either the public key hash or an error message.
-readPubKeyHashEither s =
-  case Base16.decode $ BS8.pack s of
-    Right pubKeyHash -> Right . PubKeyHash . toBuiltin $ pubKeyHash
-    Left  message    -> Left message
 
 
 -- | Parse a role.

@@ -1,11 +1,9 @@
 {
-    "choices": [],
-    "boundValues": [],
     "accounts": [
         [
             [
                 {
-                    "pk_hash": "1cb51be3ab4e4b540e86bd4c9be02682db8150f69c3cded2422cc1bf"
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
                 },
                 {
                     "currency_symbol": "",
@@ -15,5 +13,7 @@
             3000000
         ]
     ],
+    "boundValues": [],
+    "choices": [],
     "minTime": 1
 }
