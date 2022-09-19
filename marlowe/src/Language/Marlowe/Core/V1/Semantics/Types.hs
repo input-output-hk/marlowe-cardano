@@ -81,9 +81,7 @@ instance Pretty Party where
   prettyFragment (Role role)               = text $ "Role "    ++ Haskell.show role
 
 instance Haskell.Show Party where
-  showsPrec p (Address network address) = Haskell.showParen (p Haskell.>= 11) $ Haskell.showString "Address \""
-                                              . Haskell.showsPrec 11 (serialiseAddressBech32 network address)
-                                              . Haskell.showString "\""
+  showsPrec _ (Address network address) = Haskell.showsPrec 11 $ Haskell.show (serialiseAddressBech32 network address)
   showsPrec _ (Role role) = Haskell.showsPrec 11 $ unTokenName role
 
 type AccountId = Party
