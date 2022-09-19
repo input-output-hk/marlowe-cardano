@@ -118,7 +118,7 @@ parseStakeAddressReference =
     $ \s ->
       case deserialiseAddress AsStakeAddress $ T.pack s of
         Just (StakeAddress _ credential) -> Right . StakeAddressByValue . fromShelleyStakeCredential $ credential
-        Nothing                          -> Left "Invalid stake address."
+        Nothing                          -> Left "Invalid Bech32 stake address."
 
 
 -- | Parser for slot number.
@@ -302,7 +302,7 @@ readPartyAddressEither :: String               -- ^ The string to be read.
 readPartyAddressEither s =
   case deserialiseAddressBech32 $ T.pack s of
     Just (network, address) -> Right $ Address network address
-    _                       -> Left "Invalid address for party."
+    _                       -> Left "Invalid Bech32 address for party."
 
 
 -- | Reader for `Party` `Role`.
@@ -311,7 +311,7 @@ readPartyRoleEither :: String               -- ^ The string to be read.
 readPartyRoleEither s =
   if length s <= 32
     then Right . Role . TokenName . toBuiltin $ BS8.pack s
-    else Left "Invalid role for party."
+    else Left "Invalid role name for party."
 
 
 -- | Parser for `Token`.
