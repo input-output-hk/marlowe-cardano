@@ -21,6 +21,7 @@ data Options = Options
   , host              :: !HostName
   , port              :: !PortNumber
   , queryPort         :: !PortNumber
+  , commandPort       :: !PortNumber
   , costModel         :: !CostModel
   , maxCost           :: !Int
   } deriving (Show, Eq)
@@ -33,7 +34,8 @@ getOptions version = do
   defaultHost <- O.value . fromMaybe "127.0.0.1" <$> readHost
   defaultPort <- O.value . fromMaybe 3715 <$> readPort
   defaultQueryPort <- O.value . fromMaybe 3716 <$> readQueryPort
-  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort version
+  defaultJobPort <- O.value . fromMaybe 3720 <$> readJobPort
+  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort defaultJobPort version
   where
     readNetworkId :: IO (Maybe NetworkId)
     readNetworkId = do
@@ -71,6 +73,11 @@ getOptions version = do
       value <- lookupEnv "CHAIN_SYNC_QUERY_PORT"
       pure $ readMaybe =<< value
 
+    readJobPort :: IO (Maybe PortNumber)
+    readJobPort = do
+      value <- lookupEnv "CHAIN_SYNC_JOB_PORT"
+      pure $ readMaybe =<< value
+
 parseOptions
   :: O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
@@ -78,9 +85,10 @@ parseOptions
   -> O.Mod O.OptionFields HostName
   -> O.Mod O.OptionFields PortNumber
   -> O.Mod O.OptionFields PortNumber
+  -> O.Mod O.OptionFields PortNumber
   -> String
   -> O.ParserInfo Options
-parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort version = O.info parser infoMod
+parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort defaultJobPort version = O.info parser infoMod
   where
     parser :: O.Parser Options
     parser = O.helper
@@ -94,6 +102,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> hostOption
               <*> portOption
               <*> queryPortOption
+              <*> jobPortOption
               <*> costModelParser
               <*> maxCostParser
           )
@@ -177,6 +186,15 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , defaultQueryPort
           , O.metavar "PORT_NUMBER"
           , O.help "The port number to serve the query protocol on."
+          , O.showDefault
+          ]
+
+        jobPortOption :: O.Parser PortNumber
+        jobPortOption = O.option O.auto $ mconcat
+          [ O.long "job-port-number"
+          , defaultJobPort
+          , O.metavar "PORT_NUMBER"
+          , O.help "The port number to serve the job protocol on."
           , O.showDefault
           ]
 
