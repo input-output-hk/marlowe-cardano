@@ -8,9 +8,6 @@ import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Either (fromRight)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
-import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses)
-import qualified Language.Marlowe.Runtime.Core.AddressRegistry as Registry
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
@@ -85,7 +82,6 @@ run Options{..} = withSocketsDo do
     eraHistory <- queryChainSync GetEraHistory
     protocolParameters <- queryChainSync GetProtocolParameters
     slotConfig <- queryChainSync GetSlotConfig
-    networkId <- queryChainSync GetNetworkId
     let
       solveConstraints :: forall era v. SolveConstraints era v
       solveConstraints = Constraints.solveConstraints
@@ -95,9 +91,6 @@ run Options{..} = withSocketsDo do
     let loadWalletContext = Query.loadWalletContext
     let loadMarloweScriptOutput = Query.loadMarloweScriptOutput
     let loadPayoutScriptOutputs = Query.loadPayoutScriptOutputs
-    let
-      getCurrentScriptAddresses :: MarloweVersion v -> MarloweScriptAddresses
-      getCurrentScriptAddresses = Registry.getCurrentScriptAddresses networkId
     TransactionServer{..} <- atomically do
       mkTransactionServer TransactionServerDependencies{..}
     runTransactionServer
