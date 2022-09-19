@@ -82,6 +82,7 @@ run Options{..} = withSocketsDo do
     eraHistory <- queryChainSync GetEraHistory
     protocolParameters <- queryChainSync GetProtocolParameters
     slotConfig <- queryChainSync GetSlotConfig
+    networkId <- queryChainSync GetNetworkId
     let
       solveConstraints :: forall era v. SolveConstraints era v
       solveConstraints = Constraints.solveConstraints

@@ -7,17 +7,24 @@ module Language.Marlowe.Runtime.Transaction.Server
   where
 
 import Cardano.Api
-  ( ScriptDataSupportedInEra(..)
+  ( AddressInEra(..)
+  , AddressTypeInEra(..)
+  , NetworkId
+  , PaymentCredential(..)
+  , ScriptDataSupportedInEra(..)
   , SerialiseAsRawBytes(..)
+  , ShelleyBasedEra(..)
+  , StakeAddressReference(..)
+  , StakeCredential
   , Tx
   , TxBody(..)
   , TxBodyContent(..)
   , TxOut(..)
   , getTxBody
   , getTxId
+  , makeShelleyAddress
   )
 import qualified Cardano.Api as C
-import qualified Cardano.Api.Shelley as S
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
@@ -66,6 +73,7 @@ data TransactionServerDependencies = TransactionServerDependencies
   , loadMarloweScriptOutput :: LoadMarloweScriptOutput
   , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
   , slotConfig :: SlotConfig
+  , networkId :: NetworkId
   }
 
 newtype TransactionServer = TransactionServer
@@ -98,6 +106,7 @@ data WorkerDependencies = WorkerDependencies
   , loadMarloweScriptOutput :: LoadMarloweScriptOutput
   , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
   , slotConfig :: SlotConfig
+  , networkId :: NetworkId
   }
 
 newtype Worker = Worker
@@ -118,11 +127,13 @@ mkWorker WorkerDependencies{..} =
     serverInit :: ServerStInit MarloweTxCommand IO ()
     serverInit = ServerStInit
       { recvMsgExec = \case
-          Create era version addresses roles metadata contract ->
+          Create era mStakeCredential version addresses roles metadata contract ->
             execCreate
               solveConstraints
               loadWalletContext
+              networkId
               era
+              mStakeCredential
               version
               addresses
               roles
@@ -167,14 +178,16 @@ attachSubmit jobId getSubmitJob =
 execCreate
   :: SolveConstraints era v
   -> LoadWalletContext
+  -> NetworkId
   -> ScriptDataSupportedInEra era
+  -> Maybe StakeCredential
   -> MarloweVersion v
   -> WalletAddresses
   -> Map TokenName Address
   -> Map Int Aeson.Value
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void CreateError (ContractId, TxBody era) IO ())
-execCreate solveConstraints loadWalletContext era version addresses roleTokens metadata contract = execExceptT do
+execCreate solveConstraints loadWalletContext networkId era mStakeCredential version addresses roleTokens metadata contract = execExceptT do
   constraints <- except $ buildCreateConstraints version roleTokens metadata contract
   walletContext <- lift $ loadWalletContext addresses
   -- The marlowe context for a create transaction has no marlowe output and
@@ -192,18 +205,16 @@ execCreate solveConstraints loadWalletContext era version addresses roleTokens m
       $ find (isToCurrentScriptAddress . snd)
       $ zip [0..] txOuts
     where
-      currentCardanoScriptHash = fromJust
+      scriptHash = fromJust
         $ deserialiseFromRawBytes C.AsScriptHash
         $ unScriptHash
         $ marloweScript
         $ getCurrentScripts version
-      isToCurrentScriptAddress (TxOut address _ _ _) = case address of
-        C.AddressInEra
-          (C.ShelleyAddressInEra _)
-          (S.ShelleyAddress _ credential _) -> case S.fromShelleyPaymentCredential credential of
-            S.PaymentCredentialByScript scriptHash -> scriptHash == currentCardanoScriptHash
-            _ -> False
-        _ -> False
+      scriptAddress = makeShelleyAddress networkId (PaymentCredentialByScript scriptHash)
+        $ maybe NoStakeAddress StakeAddressByValue mStakeCredential
+      isToCurrentScriptAddress = case era of
+        ScriptDataInAlonzoEra -> \(TxOut address _ _ _) -> address == AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) scriptAddress
+        ScriptDataInBabbageEra -> \(TxOut address _ _ _) -> address == AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) scriptAddress
 
 execApplyInputs
   :: SlotConfig

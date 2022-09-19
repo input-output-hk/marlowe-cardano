@@ -6,7 +6,17 @@
 module Language.Marlowe.Runtime.Transaction.Api
   where
 
-import Cardano.Api (AsType(..), ScriptDataSupportedInEra(..), Tx, TxBody, deserialiseFromCBOR, serialiseToCBOR)
+import Cardano.Api
+  ( AsType(..)
+  , ScriptDataSupportedInEra(..)
+  , SerialiseAsRawBytes(serialiseToRawBytes)
+  , Tx
+  , TxBody
+  , deserialiseFromCBOR
+  , deserialiseFromRawBytes
+  , serialiseToCBOR
+  )
+import Cardano.Api.Shelley (StakeCredential(..))
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
@@ -31,6 +41,8 @@ data MarloweTxCommand status err result where
   -- the transaction to the attached Cardano node.
   Create
     :: ScriptDataSupportedInEra era
+    -> Maybe StakeCredential
+    -- ^ A reference to the stake address to use for script addresses.
     -> MarloweVersion v
     -- ^ The Marlowe version to use
     -> WalletAddresses
@@ -108,7 +120,7 @@ instance Command MarloweTxCommand where
     JobIdSubmit :: ScriptDataSupportedInEra era -> TxId -> JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   tagFromCommand = \case
-    Create era _ _ _ _ _        -> TagCreate era
+    Create era _ _ _ _ _ _        -> TagCreate era
     ApplyInputs era _ _ _ _ _ _ -> TagApplyInputs era
     Withdraw era _ _ _        -> TagWithdraw era
     Submit era _                -> TagSubmit era
@@ -160,8 +172,19 @@ instance Command MarloweTxCommand where
     TagSubmit era    -> JobIdSubmit era <$> get
 
   putCommand = \case
-    Create _ version walletAddresses roles metadata contract -> do
+    Create _ mStakeCredential version walletAddresses roles metadata contract -> do
       put $ SomeMarloweVersion version
+      case mStakeCredential of
+        Nothing -> putWord8 0x01
+        Just credential -> do
+          putWord8 0x02
+          case credential of
+            StakeCredentialByKey stakeKeyHash -> do
+              putWord8 0x01
+              put $ serialiseToRawBytes stakeKeyHash
+            StakeCredentialByScript scriptHash -> do
+              putWord8 0x02
+              put $ serialiseToRawBytes scriptHash
       put walletAddresses
       put roles
       put $ fmap Aeson.encode metadata
@@ -184,6 +207,24 @@ instance Command MarloweTxCommand where
   getCommand = \case
     TagCreate era      -> do
       SomeMarloweVersion version <- get
+      mStakeCredentialTag <- getWord8
+      mStakeCredential <- case mStakeCredentialTag of
+        0x01 -> pure Nothing
+        0x02 -> Just <$> do
+          stakeCredentialTag <- getWord8
+          case stakeCredentialTag  of
+            0x01 -> do
+              bytes <- get
+              case deserialiseFromRawBytes (AsHash AsStakeKey) bytes of
+                Nothing -> fail "invalid stake key hash bytes"
+                Just stakeKeyHash -> pure $ StakeCredentialByKey stakeKeyHash
+            0x02 -> do
+              bytes <- get
+              case deserialiseFromRawBytes AsScriptHash bytes of
+                Nothing -> fail "invalid stake key hash bytes"
+                Just scriptHash -> pure $ StakeCredentialByScript scriptHash
+            _ -> fail $ "Invalid stake credential tag " <> show stakeCredentialTag
+        _ -> fail $ "Invalid Maybe tag " <> show mStakeCredentialTag
       walletAddresses <- get
       roles <- get
       metadataRaw <- get
@@ -191,7 +232,7 @@ instance Command MarloweTxCommand where
       metadata <- case traverse Aeson.decode metadataRaw of
         Nothing       -> fail "failed to parse metadata JSON"
         Just metadata -> pure metadata
-      pure $ Create era version walletAddresses roles metadata contract
+      pure $ Create era mStakeCredential version walletAddresses roles metadata contract
     TagApplyInputs era -> do
       SomeMarloweVersion version <- get
       walletAddresses <- get
