@@ -29,7 +29,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Writer.CPS (WriterT, execWriterT, runWriterT, tell)
 import Data.Bifunctor (first)
-import Data.Foldable (asum, find, for_)
+import Data.Foldable (asum, find, fold, for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -109,7 +109,7 @@ instance Monoid (ContractChanges v) where
   mempty = ContractChanges Map.empty Nothing Nothing
 
 isEmptyChanges :: SomeContractChanges -> Bool
-isEmptyChanges (SomeContractChanges _ (ContractChanges steps Nothing Nothing)) = Map.null steps
+isEmptyChanges (SomeContractChanges _ (ContractChanges steps Nothing Nothing)) = null $ fold steps
 isEmptyChanges _                                                               = False
 
 applyRollback :: ChainPoint -> ContractChanges v -> ContractChanges v
