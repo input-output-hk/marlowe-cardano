@@ -2,13 +2,10 @@ module Language.Marlowe.Runtime.Core.AddressRegistrySpec
   ( spec
   ) where
 
-import Cardano.Api (serialiseToRawBytes)
-import qualified Cardano.Api as C
 import Control.Monad (unless)
 import Data.Foldable (traverse_)
-import Data.Maybe (fromJust)
 import qualified Data.Set as Set
-import Language.Marlowe.Runtime.ChainSync.Api (Address(..), ScriptHash(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash(..))
 import Language.Marlowe.Runtime.Core.AddressRegistry
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion, withSomeMarloweVersion)
 import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
@@ -16,38 +13,25 @@ import Plutus.V1.Ledger.Api (ValidatorHash(..), fromBuiltin)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 
 spec :: Spec
-spec = traverse_ (uncurry $ withSomeMarloweVersion addressSetSpec) $ (,) <$> [minBound..maxBound] <*> [C.Mainnet, C.Testnet $ C.NetworkMagic 0]
+spec = traverse_ (withSomeMarloweVersion scriptSetSpec) [minBound..maxBound]
 
-addressSetSpec :: MarloweVersion v -> C.NetworkId -> Spec
-addressSetSpec marloweVersion networkId = do
-  describe (show (marloweVersion, networkId)) do
-    let currentAddresses = getCurrentScriptAddresses networkId marloweVersion
-    let addressSet = getScriptAddressSet networkId marloweVersion
-    it "Contains the current script address in its address set." do
-      unless (Set.member currentAddresses addressSet) do
+scriptSetSpec :: MarloweVersion v -> Spec
+scriptSetSpec marloweVersion = do
+  describe (show marloweVersion) do
+    let currentScripts = getCurrentScripts marloweVersion
+    let scripts = getScripts marloweVersion
+    it "Contains the current scripts in its script set." do
+      unless (Set.member currentScripts scripts) do
         expectationFailure $ unwords
-          ["Expected the address set to contain"
-          , show currentAddresses
+          ["Expected the script set to contain"
+          , show currentScripts
           , "but it does not."
           ]
-    it "Should specify the correct current script addresses" do
-      let payoutScriptAddress = toAddress networkId rolePayoutValidatorHash
-      let payoutScriptHash = fromPlutusValidatorHash rolePayoutValidatorHash
-      let marloweScriptAddress = toAddress networkId marloweValidatorHash
-      let marloweScriptHash = fromPlutusValidatorHash marloweValidatorHash
-      let payoutScriptAddressInfo = ScriptAddressInfo payoutScriptAddress payoutScriptHash
-      let marloweScriptAddressInfo = ScriptAddressInfo marloweScriptAddress marloweScriptHash
-      let currentAddresses' = MarloweScriptAddresses marloweScriptAddressInfo payoutScriptAddressInfo
-      currentAddresses `shouldBe` currentAddresses'
+    it "Should specify the correct current scripts" do
+      let payoutScript = fromPlutusValidatorHash rolePayoutValidatorHash
+      let marloweScript = fromPlutusValidatorHash marloweValidatorHash
+      let currentAddresses' = MarloweScripts{..}
+      currentScripts `shouldBe` currentAddresses'
 
 fromPlutusValidatorHash :: ValidatorHash -> ScriptHash
 fromPlutusValidatorHash (ValidatorHash hash) = ScriptHash $ fromBuiltin hash
-
-toAddress :: C.NetworkId -> ValidatorHash -> Address
-toAddress networkId = Address . serialiseToRawBytes . toShelleyAddress networkId
-
-toShelleyAddress :: C.NetworkId -> ValidatorHash -> C.Address C.ShelleyAddr
-toShelleyAddress networkId (ValidatorHash hash) = C.makeShelleyAddress
-  networkId
-  (C.PaymentCredentialByScript $ fromJust $ C.deserialiseFromRawBytes C.AsScriptHash $ fromBuiltin hash)
-  C.NoStakeAddress

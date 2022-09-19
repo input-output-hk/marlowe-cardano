@@ -57,7 +57,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , slotToUTCTime
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses(..), ScriptAddressInfo(..))
+import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScripts(..), getMarloweVersion)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -128,7 +128,6 @@ applyRollback (At blockHeader@Chain.BlockHeader{slotNo}) ContractChanges{..} = C
 
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
-  , getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, MarloweScriptAddresses)
   , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
   , slotConfig         :: SlotConfig
   , securityParameter  :: Int
@@ -246,9 +245,8 @@ extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs} = do
   Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   marloweScriptHash <- getScriptHash scriptAddress
-  (SomeMarloweVersion version, MarloweScriptAddresses{..}) <- note InvalidScriptHash $ getMarloweVersion marloweScriptHash
-  let
-    payoutValidatorHash = scriptHash payoutScriptAddress
+  (SomeMarloweVersion version, MarloweScripts{..}) <- note InvalidScriptHash $ getMarloweVersion marloweScriptHash
+  let payoutValidatorHash = payoutScript
   for_ inputs \Chain.TransactionInput{..} ->
     when (isScriptAddress marloweScriptHash address) $ Left NotCreationTransaction
   txDatum <- note NoCreateDatum mdatum

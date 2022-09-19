@@ -9,9 +9,7 @@ module Language.Marlowe.Runtime.History
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM)
 import Data.Foldable (asum)
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash, SlotConfig)
-import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses)
-import Language.Marlowe.Runtime.Core.Api (SomeMarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, SlotConfig)
 import Language.Marlowe.Runtime.History.FollowerSupervisor
 import Language.Marlowe.Runtime.History.JobServer
 import Language.Marlowe.Runtime.History.QueryServer
@@ -24,7 +22,6 @@ import Numeric.Natural (Natural)
 data HistoryDependencies = HistoryDependencies
   { acceptRunJobServer   :: IO (RunJobServer IO)
   , acceptRunQueryServer :: IO (RunQueryServer IO)
-  , getMarloweVersion    :: ScriptHash -> Maybe (SomeMarloweVersion, MarloweScriptAddresses)
   , connectToChainSeek   :: forall a. RuntimeChainSeekClient IO a -> IO a
   , followerPageSize     :: Natural
   , slotConfig           :: SlotConfig

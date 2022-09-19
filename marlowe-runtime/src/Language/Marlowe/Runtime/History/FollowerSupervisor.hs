@@ -11,9 +11,8 @@ import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash, SlotConfig)
-import Language.Marlowe.Runtime.Core.AddressRegistry (MarloweScriptAddresses)
-import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, SlotConfig)
+import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.History.Api (FollowerStatus(..))
 import Language.Marlowe.Runtime.History.Follower
   (Follower(..), FollowerDependencies(..), SomeContractChanges, mkFollower)
@@ -25,8 +24,7 @@ data FollowerActivation
   | Activate
 
 data FollowerSupervisorDependencies = FollowerSupervisorDependencies
-  { getMarloweVersion  :: ScriptHash -> Maybe (SomeMarloweVersion, MarloweScriptAddresses)
-  , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+  { connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
   , slotConfig         :: SlotConfig
   , securityParameter  :: Int
   }
