@@ -150,9 +150,9 @@ You must be a https://nixos.org/nix/manual/#ssec-multi-user[trusted user] to do 
 . On NixOS, set the following NixOS options:
 +
 ----
-nix = {
-  binaryCaches          = [ "https://hydra.iohk.io" "https://iohk.cachix.org" ];
-  binaryCachePublicKeys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" "iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo=" ];
+nix.settings = {
+  substituters        = [ "https://hydra.iohk.io" "https://iohk.cachix.org" ];
+  trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" "iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo=" ];
 };
 ----
 
