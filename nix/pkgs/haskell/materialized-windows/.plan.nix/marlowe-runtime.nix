@@ -61,8 +61,8 @@
           "Language/Marlowe/Protocol/Sync/Codec"
           "Language/Marlowe/Protocol/Sync/Server"
           "Language/Marlowe/Protocol/Sync/Types"
-          "Language/Marlowe/Runtime/Core/AddressRegistry"
           "Language/Marlowe/Runtime/Core/Api"
+          "Language/Marlowe/Runtime/Core/ScriptRegistry"
           "Language/Marlowe/Runtime/History"
           "Language/Marlowe/Runtime/History/Api"
           "Language/Marlowe/Runtime/History/Follower"
@@ -195,7 +195,7 @@
             ];
           buildable = true;
           modules = [
-            "Language/Marlowe/Runtime/Core/AddressRegistrySpec"
+            "Language/Marlowe/Runtime/Core/ScriptRegistrySpec"
             "Language/Marlowe/Runtime/History/FollowerSpec"
             "Language/Marlowe/Runtime/History/Script"
             "Language/Marlowe/Runtime/History/StoreSpec"
