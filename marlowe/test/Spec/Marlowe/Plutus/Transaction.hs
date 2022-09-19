@@ -231,20 +231,20 @@ makeRoleOut (TxInInfo _ (TxOut _ token _ _)) =
 makePayment :: CurrencySymbol
             -> Payment
             -> ArbitraryTransaction SemanticsTransaction([TxOut], [(DatumHash, Datum)])
-makePayment _ (Payment _ (Party (M.Address _ address)) value) =
+makePayment _ (Payment _ (Party (M.Address _ address)) (Token cur nam) amount') =
   pure
     (
-      pure $ TxOut address value NoOutputDatum Nothing
+      pure $ TxOut address (V.singleton cur nam amount') NoOutputDatum Nothing
     , mempty
     )
-makePayment currencySymbol (Payment _ (Party (Role role')) value) =
+makePayment currencySymbol (Payment _ (Party (Role role')) (Token cur nam) amount') =
   do
     let
       roleDatum = Datum $ toBuiltinData (currencySymbol, role')
       roleDatumHash = datumHash roleDatum
     pure
       (
-        pure $ TxOut payoutAddress value (OutputDatumHash roleDatumHash) Nothing
+        pure $ TxOut payoutAddress (V.singleton cur nam amount') (OutputDatumHash roleDatumHash) Nothing
       , pure (roleDatumHash, roleDatum)
       )
 makePayment _ _ = pure (mempty, mempty)

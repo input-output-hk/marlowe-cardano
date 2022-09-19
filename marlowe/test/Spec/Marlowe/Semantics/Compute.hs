@@ -68,7 +68,6 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , getInputContent
   )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.V1.Ledger.Value (flattenValue)
 import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
 import Spec.Marlowe.Semantics.Arbitrary
   ( SemiArbitrary(semiArbitrary)
@@ -87,7 +86,6 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck
   (Arbitrary(..), Gen, Testable(property), discard, elements, forAll, forAllShrink, suchThat, testProperty)
 
-import qualified Ledger.Value as Money (singleton)
 import qualified PlutusTx.AssocMap as AM
 
 
@@ -106,7 +104,7 @@ newtype Payment' = Payment' (AccountId, Payee, [(CurrencySymbol, TokenName, Inte
 
 -- | Unpack a payment.
 unPayment :: Payment -> Payment'
-unPayment (Payment a p m) = Payment' (a, p, flattenValue m)
+unPayment (Payment a p (Token c n) i) = Payment' (a, p, [(c, n, i)])
 
 
 -- | The context of transaction execution for Marlowe.
@@ -564,7 +562,7 @@ noPayments = view payments >>= throwUnless "Payments present." null
 
 -- | Pay tokens to oneself.
 paySelf :: ((AccountId, Token), Integer) -> Payment
-paySelf ((a, Token c n), i) = Payment a (Party a) $ Money.singleton c n i
+paySelf ((a, t), i) = Payment a (Party a) t i
 
 
 -- | Assert that a set of payments are made.

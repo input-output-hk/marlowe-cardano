@@ -71,7 +71,7 @@ tests =
       testGolden "Escrow"           _GENERATE_TEST_CASES_ Escrow.contract  Escrow.valids  Escrow.invalids
     , testGolden "Pangram"          _GENERATE_TEST_CASES_ Pangram.contract Pangram.valids Pangram.invalids
     , testGolden "Swap"             _GENERATE_TEST_CASES_ Swap.contract    Swap.valids    Swap.invalids
-    , testGolden "Trivial"          _GENERATE_TEST_CASES_ Trivial.contract  Trivial.valids  Trivial.invalids
+    , testGolden "Trivial"          _GENERATE_TEST_CASES_ Trivial.contract Trivial.valids Trivial.invalids
     , testGolden "Zero Coupon Bond" _GENERATE_TEST_CASES_ ZCB.contract     ZCB.valids     ZCB.invalids
     ]
 

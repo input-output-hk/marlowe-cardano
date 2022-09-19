@@ -268,8 +268,10 @@ mkMarloweValidator
     collectDeposits _                                     = zero
 
     payoutByParty :: Payment -> AssocMap.Map Party Val.Value
-    payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
-    payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
+    payoutByParty (Payment _ (Party party) (Token cur tok) amount)
+      | amount > 0 = AssocMap.singleton party $ Val.singleton cur tok amount
+      | otherwise  = AssocMap.empty  -- Required because semantics may make zero payments.
+    payoutByParty (Payment _ (Account _) _ _ )       = AssocMap.empty
 
     payoutConstraints :: [(Party, Val.Value)] -> Bool
     payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty

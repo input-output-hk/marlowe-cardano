@@ -47,7 +47,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Scripts (MarloweInput)
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address (toPubKeyHash)
-import Plutus.V1.Ledger.Value (flattenValue, gt, valueOf)
+import Plutus.V1.Ledger.Value (flattenValue, valueOf)
 import Plutus.V2.Ledger.Api
   ( Address(Address)
   , BuiltinData(BuiltinData)
@@ -520,8 +520,8 @@ hasExternalPayments = any externalPayment . txOutPayments . ( ^. output)
 
 -- | Determine whether a payment is external.
 externalPayment :: Payment -> Bool
-externalPayment (Payment _ (Party _) value) = value `gt` mempty
-externalPayment _                           = False
+externalPayment (Payment _ (Party _) _ amount) = amount > 0
+externalPayment _                              = False
 
 
 -- | Decrement the value of each token by one.

@@ -63,7 +63,7 @@ getAccountsDiff payments inputs =
     foldl' (\acc (p, m) -> addAccountsDiff p m acc) emptyAccountsDiff (incomes ++ outcomes)
   where
     incomes  = [ (p, Val.singleton cur tok m) | IDeposit _ p (Token cur tok) m <- map getInputContent inputs ]
-    outcomes = [ (p, P.negate m) | Payment _ (Party p) m  <- payments ]
+    outcomes = [ (p, P.negate $ Val.singleton cur tok amount) | Payment _ (Party p) (Token cur tok) amount <- payments ]
 
 
 foldMapContract :: Monoid m

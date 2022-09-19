@@ -149,7 +149,7 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
 {-| Payment occurs during 'Pay' contract evaluation, and
     when positive balances are payed out on contract closure.
 -}
-data Payment = Payment AccountId Payee Money
+data Payment = Payment AccountId Payee Token Integer
   deriving stock (Haskell.Eq, Haskell.Show)
 
 
@@ -362,12 +362,12 @@ evalObservation env state obs = let
 
 
 -- | Pick the first account with money in it
-refundOne :: Accounts -> Maybe ((Party, Money), Accounts)
+refundOne :: Accounts -> Maybe ((Party, Token, Integer), Accounts)
 refundOne accounts = case Map.toList accounts of
     [] -> Nothing
-    ((accId, Token cur tok), balance) : rest ->
+    ((accId, token), balance) : rest ->
         if balance > 0
-        then Just ((accId, Val.singleton cur tok balance), Map.fromList rest)
+        then Just ((accId, token, balance), Map.fromList rest)
         else refundOne (Map.fromList rest)
 
 
@@ -398,11 +398,11 @@ addMoneyToAccount accId token amount accounts = let
     Returns the appropriate effect and updated accounts
 -}
 giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts -> (ReduceEffect, Accounts)
-giveMoney accountId payee (Token cur tok) amount accounts = let
+giveMoney accountId payee token amount accounts = let
     newAccounts = case payee of
         Party _       -> accounts
-        Account accId -> addMoneyToAccount accId (Token cur tok) amount accounts
-    in (ReduceWithPayment (Payment accountId payee (Val.singleton cur tok amount)), newAccounts)
+        Account accId -> addMoneyToAccount accId token amount accounts
+    in (ReduceWithPayment (Payment accountId payee token amount), newAccounts)
 
 
 -- | Carry a step of the contract with no inputs
@@ -410,9 +410,9 @@ reduceContractStep :: Environment -> State -> Contract -> ReduceStepResult
 reduceContractStep env state contract = case contract of
 
     Close -> case refundOne (accounts state) of
-        Just ((party, money), newAccounts) -> let
+        Just ((party, token, amount), newAccounts) -> let
             newState = state { accounts = newAccounts }
-            in Reduced ReduceNoWarning (ReduceWithPayment (Payment party (Party party) money)) newState Close
+            in Reduced ReduceNoWarning (ReduceWithPayment (Payment party (Party party) token amount)) newState Close
         Nothing -> NotReduced
 
     Pay accId payee tok val cont -> let
@@ -747,7 +747,7 @@ instance ToJSON TransactionWarning where
 
 instance Eq Payment where
     {-# INLINABLE (==) #-}
-    Payment a1 p1 m1 == Payment a2 p2 m2 = a1 == a2 && p1 == p2 && m1 == m2
+    Payment a1 p1 t1 i1 == Payment a2 p2 t2 i2 = a1 == a2 && p1 == p2 && t1 == t2 && i1 == i2
 
 
 instance Eq ReduceWarning where
