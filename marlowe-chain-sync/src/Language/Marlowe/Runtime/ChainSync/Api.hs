@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api
   ( Address(..)
@@ -13,6 +14,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , BlockNo(..)
   , CertIx(..)
   , ChainPoint
+  , ChainSyncCommand(..)
   , ChainSyncQuery(..)
   , Credential(..)
   , Datum(..)
@@ -78,9 +80,13 @@ import Cardano.Api
   , EraHistory(..)
   , NetworkId(..)
   , NetworkMagic(..)
+  , ScriptDataSupportedInEra(..)
   , SerialiseAsRawBytes(..)
+  , Tx
   , deserialiseFromBech32
+  , deserialiseFromCBOR
   , serialiseToBech32
+  , serialiseToCBOR
   )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (ProtocolParameters)
@@ -125,6 +131,7 @@ import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.TH (mkSchemaVersion)
 import Network.Protocol.ChainSeek.Types
+import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
@@ -810,3 +817,65 @@ instance Query.IsQuery ChainSyncQuery where
     GetProtocolParameters -> TagGetProtocolParameters
     GetEraHistory -> TagGetEraHistory
     GetSystemStart -> TagGetSystemStart
+
+data ChainSyncCommand status err result where
+  SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
+
+instance Job.Command ChainSyncCommand where
+  data Tag ChainSyncCommand status err result where
+    TagSubmitTx :: ScriptDataSupportedInEra era -> Job.Tag ChainSyncCommand Void String ()
+
+  data JobId ChainSyncCommand status err result where
+
+  tagFromCommand = \case
+    SubmitTx era _ -> TagSubmitTx era
+  tagFromJobId = \case
+  tagEq (TagSubmitTx era1) (TagSubmitTx era2) = do
+    Refl <- eraEq era1 era2
+    pure (Refl, Refl, Refl)
+  putTag = \case
+    TagSubmitTx era -> do
+      putWord8 0x01
+      case era of
+        ScriptDataInAlonzoEra -> putWord8 0x01
+        ScriptDataInBabbageEra -> putWord8 0x02
+  getTag = getWord8 >>= \case
+    0x01 -> getWord8 >>= \case
+      0x01 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
+      0x02 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
+      tag ->  fail $ "invalid era tag " <> show tag
+    tag -> fail $ "invalid command tag " <> show tag
+  putJobId = \case
+  getJobId = \case
+    TagSubmitTx _ -> fail "SubmitTx does not support job IDs"
+  putCommand = \case
+    SubmitTx ScriptDataInAlonzoEra tx -> put $ serialiseToCBOR tx
+    SubmitTx ScriptDataInBabbageEra tx -> put $ serialiseToCBOR tx
+  getCommand = \case
+    TagSubmitTx era -> SubmitTx era <$> do
+      bytes <- get @ByteString
+      case era of
+        ScriptDataInAlonzoEra -> case deserialiseFromCBOR (AsTx AsAlonzo) bytes of
+          Left err -> fail $ show err
+          Right tx -> pure tx
+        ScriptDataInBabbageEra -> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
+          Left err -> fail $ show err
+          Right tx -> pure tx
+  putStatus = \case
+    TagSubmitTx _ -> absurd
+  getStatus = \case
+    TagSubmitTx _ -> fail "SubmitTx does not support job statuses"
+  putErr = \case
+    TagSubmitTx _ -> put
+  getErr = \case
+    TagSubmitTx _ -> get
+  putResult = \case
+    TagSubmitTx _ -> mempty
+  getResult = \case
+    TagSubmitTx _ -> pure ()
+
+eraEq :: ScriptDataSupportedInEra era1 -> ScriptDataSupportedInEra era2 -> Maybe (era1 :~: era2)
+eraEq ScriptDataInAlonzoEra ScriptDataInAlonzoEra   = Just Refl
+eraEq ScriptDataInAlonzoEra _                       = Nothing
+eraEq ScriptDataInBabbageEra ScriptDataInBabbageEra = Just Refl
+eraEq ScriptDataInBabbageEra _                      = Nothing
