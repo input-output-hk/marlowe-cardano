@@ -26,8 +26,8 @@ data MarloweScripts = MarloweScripts
 -- been published).
 currentV1Scripts :: MarloweScripts
 currentV1Scripts = MarloweScripts
-  "44377808ec69200314c2601b096f9009734ae4f741888f67ad61d941"
-  "6db99855e93e8fda9e917692bc746c9f6db73e9e9234a3abeeea971c"
+  "e3d45305a82b6817e120a29cfc1b6cd7c1535b6640e49a99dc267e57"
+  "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
 
 -- | The set of known script hash sets for Marlowe V1.
 v1Scripts :: Set MarloweScripts

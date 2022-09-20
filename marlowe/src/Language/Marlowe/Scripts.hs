@@ -118,7 +118,6 @@ closeInterval _ = Nothing
 
 
 {-# INLINABLE mkMarloweValidator #-}
-{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 mkMarloweValidator
     :: ValidatorHash
     -> MarloweData
