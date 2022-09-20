@@ -225,6 +225,7 @@ data Contract = Close
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
+
 {-| Marlowe contract internal state. Stored in a /Datum/ of a transaction output.
 -}
 data State = State { accounts    :: Accounts
@@ -382,7 +383,7 @@ instance FromJSON State where
          State <$> (v .: "accounts" >>= fromJSONAssocMap)
                <*> (v .: "choices" >>= fromJSONAssocMap)
                <*> (v .: "boundValues" >>= fromJSONAssocMap)
-               <*> (POSIXTime <$> (withInteger =<< (v .: "minTime")))
+               <*> (POSIXTime <$> (withInteger "minTime" =<< (v .: "minTime")))
                                  )
 
 instance ToJSON State where
@@ -446,7 +447,6 @@ instance FromJSON ValueId where
 instance ToJSON ValueId where
     toJSON (ValueId x) = JSON.String (Text.decodeUtf8 $ fromBuiltin x)
 
-
 instance FromJSON (Value Observation) where
   parseJSON (Object v) =
         (AvailableMoney <$> (v .: "in_account")
@@ -466,7 +466,7 @@ instance FromJSON (Value Observation) where
               <*> (v .: "else"))
   parseJSON (String "time_interval_start") = return TimeIntervalStart
   parseJSON (String "time_interval_end") = return TimeIntervalEnd
-  parseJSON (Number n) = Constant <$> getInteger n
+  parseJSON (Number n) = Constant <$> getInteger "constant value" n
   parseJSON _ = Haskell.fail "Value must be either an object or an integer"
 instance ToJSON (Value Observation) where
   toJSON (AvailableMoney accountId token) = object
@@ -566,8 +566,8 @@ instance ToJSON Observation where
 
 instance FromJSON Bound where
   parseJSON = withObject "Bound" (\v ->
-       Bound <$> (getInteger =<< (v .: "from"))
-             <*> (getInteger =<< (v .: "to"))
+       Bound <$> (getInteger "lower bound"=<< (v .: "from"))
+             <*> (getInteger "higher bound" =<< (v .: "to"))
                                  )
 instance ToJSON Bound where
   toJSON (Bound from to) = object
@@ -649,7 +649,7 @@ instance FromJSON Contract where
                    withArray "Case list" (\cl ->
                      mapM parseJSON (F.toList cl)
                                           ))
-              <*> (POSIXTime <$> (withInteger =<< (v .: "timeout")))
+              <*> (POSIXTime <$> (withInteger "when timeout" =<< (v .: "timeout")))
               <*> (v .: "timeout_continuation"))
     <|> (Let <$> (v .: "let")
              <*> (v .: "be")

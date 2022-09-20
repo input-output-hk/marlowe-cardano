@@ -43,6 +43,7 @@
           (hsPkgs."deriving-aeson" or (errorHandler.buildDepError "deriving-aeson"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
+          (hsPkgs."ordered-containers" or (errorHandler.buildDepError "ordered-containers"))
           (hsPkgs."plutus-ledger-ada" or (errorHandler.buildDepError "plutus-ledger-ada"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-ledger-slot" or (errorHandler.buildDepError "plutus-ledger-slot"))
@@ -59,6 +60,7 @@
         modules = [
           "Language/Marlowe"
           "Language/Marlowe/Extended/V1"
+          "Language/Marlowe/Extended/V1/Metadata/Types"
           "Language/Marlowe/Core/V1/Semantics"
           "Language/Marlowe/Core/V1/Semantics/Types"
           "Language/Marlowe/Core/V1/Semantics/Types/Address"
@@ -100,6 +102,7 @@
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."these" or (errorHandler.buildDepError "these"))
+            (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
             ];
           buildable = true;
           modules = [
@@ -117,6 +120,9 @@
             "Spec/Marlowe/Plutus/Transaction"
             "Spec/Marlowe/Plutus/Types"
             "Spec/Marlowe/Plutus/Value"
+            "Spec/Marlowe/Serialization"
+            "Spec/Marlowe/Serialization/CoreJson"
+            "Spec/Marlowe/Serialization/ExtendedJson"
             "Spec/Marlowe/Semantics/Arbitrary"
             "Spec/Marlowe/Semantics/AssocMap"
             "Spec/Marlowe/Semantics/Compute"

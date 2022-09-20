@@ -683,8 +683,8 @@ instance FromJSON TransactionInput where
                      mapM parseJSON (F.toList cl)
                                                       ))
     where parseTimeInterval = withObject "TimeInterval" (\v ->
-            do from <- POSIXTime <$> (withInteger =<< (v .: "from"))
-               to <- POSIXTime <$> (withInteger =<< (v .: "to"))
+            do from <- POSIXTime <$> (withInteger "TimeInterval from" =<< (v .: "from"))
+               to <- POSIXTime <$> (withInteger "TimeInterval to" =<< (v .: "to"))
                return (from, to)
                                                       )
   parseJSON _ = Haskell.fail "TransactionInput must be an object"
@@ -714,7 +714,7 @@ instance FromJSON TransactionWarning where
               Just butOnlyPaid -> TransactionPartialPay <$> (v .: "account")
                                                         <*> (v .: "to_payee")
                                                         <*> (v .: "of_token")
-                                                        <*> getInteger butOnlyPaid
+                                                        <*> getInteger "but only paid" butOnlyPaid
                                                         <*> (v .: "asked_to_pay"))
     <|> (TransactionShadowing <$> (v .: "value_id")
                               <*> (v .: "had_value")

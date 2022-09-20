@@ -5,13 +5,13 @@ import qualified Data.Aeson as JSON
 import Data.Aeson.Types hiding (Error, Value)
 import Data.Scientific (Scientific, floatingOrInteger)
 
-getInteger :: Scientific -> Parser Integer
-getInteger x = case (floatingOrInteger x :: Either Double Integer) of
+getInteger :: String -> Scientific -> Parser Integer
+getInteger ctx x = case (floatingOrInteger x :: Either Double Integer) of
                  Right a -> return a
-                 Left _  -> fail "Account number is not an integer"
+                 Left _  -> fail $ "parsing " ++ ctx ++ " failed, expected integer, but encountered floating point"
 
-withInteger :: JSON.Value -> Parser Integer
-withInteger = withScientific "" getInteger
+withInteger :: String -> JSON.Value -> Parser Integer
+withInteger ctx = withScientific ctx $ getInteger ctx
 
 customOptions :: Options
 customOptions = defaultOptions

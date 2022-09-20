@@ -479,6 +479,7 @@
         "logict".revision = (((hackage."logict")."0.7.0.3").revisions).default;
         "mersenne-random-pure64".revision = (((hackage."mersenne-random-pure64")."0.2.2.0").revisions).default;
         "mersenne-random-pure64".flags.small_base = false;
+        "ordered-containers".revision = (((hackage."ordered-containers")."0.2.2").revisions).default;
         "these".revision = (((hackage."these")."1.1.1.1").revisions).default;
         "these".flags.assoc = true;
         "split".revision = (((hackage."split")."0.2.3.4").revisions).default;
@@ -1507,6 +1508,7 @@
           "cardano-crypto".components.library.planned = lib.mkOverride 900 true;
           "tls".components.library.planned = lib.mkOverride 900 true;
           "bytestring-strict-builder".components.library.planned = lib.mkOverride 900 true;
+          "ordered-containers".components.library.planned = lib.mkOverride 900 true;
           "hpc".components.library.planned = lib.mkOverride 900 true;
           "http-types".components.library.planned = lib.mkOverride 900 true;
           "websockets-snap".components.library.planned = lib.mkOverride 900 true;

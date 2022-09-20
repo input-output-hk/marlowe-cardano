@@ -58,6 +58,7 @@ library
     deriving-aeson,
     mtl,
     newtype-generics,
+    ordered-containers,
     plutus-ledger-ada,
     plutus-ledger-api,
     plutus-ledger-slot,
@@ -73,6 +74,7 @@ library
   exposed-modules:
     Language.Marlowe
     Language.Marlowe.Extended.V1
+    Language.Marlowe.Extended.V1.Metadata.Types
     Language.Marlowe.Core.V1.Semantics
     Language.Marlowe.Core.V1.Semantics.Types
     Language.Marlowe.Core.V1.Semantics.Types.Address
@@ -123,6 +125,9 @@ test-suite marlowe-test
         Spec.Marlowe.Plutus.Transaction
         Spec.Marlowe.Plutus.Types
         Spec.Marlowe.Plutus.Value
+        Spec.Marlowe.Serialization
+        Spec.Marlowe.Serialization.CoreJson
+        Spec.Marlowe.Serialization.ExtendedJson
         Spec.Marlowe.Semantics.Arbitrary
         Spec.Marlowe.Semantics.AssocMap
         Spec.Marlowe.Semantics.Compute
@@ -161,3 +166,4 @@ test-suite marlowe-test
         tasty-quickcheck,
         text,
         these,
+        directory,

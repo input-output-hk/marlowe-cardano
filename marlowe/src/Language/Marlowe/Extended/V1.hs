@@ -43,6 +43,7 @@ import Data.Ratio ((%))
 import Data.Text (pack)
 import GHC.Generics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as S
+import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty(..), pretty)
 import Language.Marlowe.Util (ada)
@@ -53,8 +54,7 @@ import Text.PrettyPrint.Leijen (parens, text)
 
 data Timeout = TimeParam String
              | POSIXTime Integer
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving stock (Show,Generic,Eq)
 
 instance Pretty Timeout where
     prettyFragment (POSIXTime n)    = prettyFragment n
@@ -91,7 +91,7 @@ data Value = AvailableMoney S.AccountId S.Token
            | TimeIntervalEnd
            | UseValue S.ValueId
            | Cond Observation Value Value
-  deriving stock (Show,Generic)
+  deriving stock (Show,Generic,Eq)
   deriving anyclass (Pretty)
 
 data Observation = AndObs Observation Observation
@@ -105,22 +105,22 @@ data Observation = AndObs Observation Observation
                  | ValueEQ Value Value
                  | TrueObs
                  | FalseObs
-  deriving stock (Show,Generic)
+  deriving stock (Show,Generic,Eq)
   deriving anyclass (Pretty)
 
 data Action = Deposit S.AccountId S.Party S.Token Value
             | Choice S.ChoiceId [S.Bound]
             | Notify Observation
-  deriving stock (Show,Generic)
+  deriving stock (Show,Generic,Eq)
   deriving anyclass (Pretty)
 
 data Payee = Account S.AccountId
            | Party S.Party
-  deriving stock (Show,Generic)
+  deriving stock (Show,Generic,Eq)
   deriving anyclass (Pretty)
 
 data Case = Case Action Contract
-  deriving stock (Show,Generic)
+  deriving stock (Show,Generic,Eq)
   deriving anyclass (Pretty)
 
 data Contract = Close
@@ -129,8 +129,29 @@ data Contract = Close
               | When [Case] Timeout Contract
               | Let S.ValueId Value Contract
               | Assert Observation Contract
-  deriving stock (Show,Generic)
+  deriving stock (Show,Generic, Eq)
   deriving anyclass (Pretty)
+
+{-| A module is a way to package a contract with it's metadata. Eventually
+    this type could include imports and exports (reason behind the name).
+    We don't include the version number in the datatype because it is implicit
+    by the package name (`Language.Marlowe.Extended.V1`) and explicit by the
+    JSON serialization.
+-}
+data Module = Module { metadata :: MetaData
+                     -- ^ The name and information covered by this field is under discussion
+                     --   on the following thread:
+                     --   https://github.com/input-output-hk/MIPs/discussions/7
+                     --   Version 1 of Marlowe Extended shouldn't be closed until the discussion
+                     --   is resolved.
+                     , contract :: Contract
+                     -- ^ Currently we have a single entrypoint for the full contract, but we could
+                     --   extend this to be a `OMap Identifier Contract` to enable functions.
+                     --   In order to guarantee that we can convert to Marlowe Core we would need to
+                     --   validate that a function can only call functions defined above (if bottom-up)
+                     --   and that they cannot call themselves
+                     }
+    deriving stock (Show,Eq)
 
 class ToCore a b where
   toCore :: a -> Maybe b
@@ -207,7 +228,7 @@ instance FromJSON Value where
     <|> (ConstantParam <$> (v .: "constant_param"))
   parseJSON (String "time_interval_start") = return TimeIntervalStart
   parseJSON (String "time_interval_end") = return TimeIntervalEnd
-  parseJSON (Number n) = Constant <$> getInteger n
+  parseJSON (Number n) = Constant <$> getInteger "constant value" n
   parseJSON _ = fail "Value must be either an object or an integer"
 instance ToJSON Value where
   toJSON (AvailableMoney accountId token) = object
@@ -367,8 +388,7 @@ instance FromJSON Contract where
                    withArray "Case list" (\cl ->
                      mapM parseJSON (F.toList cl)
                                           ))
-              <*> ((POSIXTime <$> (withInteger =<< (v .: "timeout")))
-                <|> (TimeParam <$> (v .: "time_param")))
+              <*> (v .: "timeout")
               <*> (v .: "timeout_continuation"))
     <|> (Let <$> (v .: "let")
              <*> (v .: "be")
@@ -379,12 +399,12 @@ instance FromJSON Contract where
 
 instance ToJSON Contract where
   toJSON Close = JSON.String $ pack "close"
-  toJSON (Pay accountId payee token value contract) = object
+  toJSON (Pay accountId payee token value cont) = object
       [ "from_account" .= accountId
       , "to" .= payee
       , "token" .= token
       , "pay" .= value
-      , "then" .= contract
+      , "then" .= cont
       ]
   toJSON (If obs cont1 cont2) = object
       [ "if" .= obs
@@ -405,6 +425,25 @@ instance ToJSON Contract where
       [ "assert" .= obs
       , "then" .= cont
       ]
+
+instance FromJSON Module where
+  parseJSON =
+    withObject "Module" (\v -> do
+        version <- withInteger "module version" =<< (v .: "me_version")
+        if version /= 1 then
+            fail $ "Module version mismatch, expected version 1, got " ++ show version
+            else do
+                cont <- v .: "contract"
+                meta <- v .: "metadata"
+                return $ Module {contract = cont , metadata = meta }
+    )
+
+
+
+instance FromJSON Timeout where
+    parseJSON (Number n) = POSIXTime <$> getInteger "timeout" n
+    parseJSON (Object v) = TimeParam <$> (v .: "time_param")
+    parseJSON _          = fail "Timeout must be an integer or an object with a time_param key"
 
 toJSONTimeout :: Timeout -> JSON.Value
 toJSONTimeout (POSIXTime t) = toJSON t

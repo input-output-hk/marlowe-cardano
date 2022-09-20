@@ -21,22 +21,18 @@
 
 module Spec.Marlowe.Marlowe
   ( -- * Testing
-    prop_contractJsonLoops
-  , prop_intervalErrorJsonLoops
-  , prop_marloweParamsJsonLoops
-  , prop_noFalsePositives
+    prop_noFalsePositives
   , prop_showWorksForContracts
   , tests
   ) where
 
 
-import Control.Arrow (Arrow((***)))
+
 import Control.Exception (SomeException, catch)
 import Control.Monad (when)
 import Data.Aeson (decode, eitherDecode, encode)
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Bifunctor (first)
-import Data.ByteString (ByteString)
 import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
 import Data.String (IsString(fromString))
@@ -55,8 +51,7 @@ import Language.Haskell.Interpreter
   )
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
 import Language.Marlowe.Core.V1.Semantics
-  ( MarloweParams(MarloweParams)
-  , TransactionInput(TransactionInput, txInputs, txInterval)
+  ( TransactionInput(TransactionInput, txInputs, txInterval)
   , TransactionOutput(TransactionOutput, txOutState)
   , computeTransaction
   , evalValue
@@ -68,7 +63,6 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ChoiceId(ChoiceId)
   , Contract(Close, If, Pay, When)
   , Environment(Environment)
-  , IntervalError(IntervalInPastError, InvalidInterval)
   , Observation(ValueGE)
   , Party(Role)
   , Payee(Account, Party)
@@ -81,24 +75,12 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.Scripts (marloweValidator, smallMarloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
-import Plutus.V2.Ledger.Api (CurrencySymbol(CurrencySymbol), POSIXTime(POSIXTime), toBuiltin)
+import Plutus.V2.Ledger.Api (POSIXTime(POSIXTime))
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import System.Timeout (timeout)
 import Test.QuickCheck
-  ( Gen
-  , arbitrary
-  , counterexample
-  , forAll
-  , forAllShrink
-  , property
-  , suchThat
-  , tabulate
-  , withMaxSuccess
-  , (.&&.)
-  , (=/=)
-  , (===)
-  )
+  (arbitrary, counterexample, forAll, forAllShrink, property, suchThat, tabulate, (.&&.), (=/=), (===))
 import Test.QuickCheck.Instances.ByteString ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
@@ -437,51 +419,6 @@ noFalsePositivesForContract timeLimit cont =
 -- | Test that contract execution does not exhibit false positives for warnings.
 prop_noFalsePositives :: Maybe Int -> Property
 prop_noFalsePositives = forAllShrink contractGen shrinkContract . noFalsePositivesForContract
-
-
--- | Test that JSON decoding inverts encoding for a contract.
-contractJsonLoops :: Contract -> Property
-contractJsonLoops cont = decode (encode cont) === Just cont
-
-
--- | Test that JSON decoding inverts encoding for contracts.
-prop_contractJsonLoops :: Property
-prop_contractJsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract contractJsonLoops
-
-
--- | Test that JSON decoding inverts encoding for Marlowe parameters.
-marloweParamsJsonLoops :: MarloweParams -> Property
-marloweParamsJsonLoops mp = decode (encode mp) === Just mp
-
-
--- | Test that JSON decoding inverts encoding for Marlowe parameters.
-prop_marloweParamsJsonLoops :: Property
-prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJsonLoops
-  where
-    gen = do
-      c <- toBuiltin <$> (arbitrary :: Gen ByteString)
-      return $ MarloweParams (CurrencySymbol c)
-
-
--- | Test that JSON decoding inverts encoding for an interval error.
-intervalErrorJsonLoops :: IntervalError -> Property
-intervalErrorJsonLoops ie = decode (encode ie) === Just ie
-
-
--- | Test that JSON decoding inverts encoding for interval errors.
-prop_intervalErrorJsonLoops :: Property
-prop_intervalErrorJsonLoops = withMaxSuccess 1000 $ forAll gen intervalErrorJsonLoops
-  where
-    gen = do
-      b <- arbitrary
-      if b
-      then do
-        t <- (POSIXTime *** POSIXTime) <$> arbitrary
-        return $ InvalidInterval t
-      else do
-        s <- POSIXTime <$> arbitrary
-        t <- (POSIXTime *** POSIXTime) <$> arbitrary
-        return $ IntervalInPastError s t
 
 
 -- | Compare address serialisation to Cardano API.
