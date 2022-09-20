@@ -326,9 +326,6 @@ marloweValidator = Scripts.mkTypedValidator
 marloweValidatorHash :: ValidatorHash
 marloweValidatorHash = Scripts.validatorHash marloweValidator
 
-defaultTxValidationRange :: POSIXTime
-defaultTxValidationRange = 10000
-
 marloweTxInputFromInput :: Input -> MarloweTxInput
 marloweTxInputFromInput (NormalInput i)         = Input i
 marloweTxInputFromInput (MerkleizedInput i h _) = MerkleizedTxInput i h
