@@ -148,7 +148,8 @@ mkMarloweValidator
         inputs (either other contracts or P2PKH).
         Then, we check scriptOutput to be correct.
      -}
-    let inputsOk = validateInputs inputs
+    let inputContents = fmap getInputContent inputs
+    let inputsOk = validateInputs inputContents
 
     -- total balance of all accounts in State
     -- accounts must be positive, and we checked it above
@@ -177,7 +178,7 @@ mkMarloweValidator
                 checkContinuation = case txOutContract of
                     Close -> traceIfFalse "c" checkScriptOutputAny
                     _ -> let
-                        totalIncome = foldMap (collectDeposits . getInputContent) inputs
+                        totalIncome = foldMap collectDeposits inputContents
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
                         in checkOwnOutputConstraint marloweData finalBalance
@@ -249,8 +250,8 @@ mkMarloweValidator
             Nothing -> traceError "h"
     marloweTxInputToInput (Input input) = NormalInput input
 
-    validateInputs :: [Input] -> Bool
-    validateInputs inputs = all (validateInputWitness . getInputContent) inputs
+    validateInputs :: [InputContent] -> Bool
+    validateInputs = all validateInputWitness
       where
         validateInputWitness :: InputContent -> Bool
         validateInputWitness input =
