@@ -214,8 +214,8 @@ applyInputsV1 vLow vHigh txId txInputs V1.MarloweData{..} =
   where
     txInterval = (vLow, vHigh)
     paymentToPayout :: V1.Payment -> Maybe (Payout 'V1)
-    paymentToPayout (V1.Payment _ (V1.Party (V1.Role role)) money) = Just $ Payout
-      { assets = moneyToAssets money
+    paymentToPayout payment@(V1.Payment _ (V1.Party (V1.Role role)) _ _) = Just $ Payout
+      { assets = moneyToAssets $ V1.paymentMoney payment
       , datum = AssetId (fromPlutusCurrencySymbol rolesCurrency) (fromPlutusTokenName role)
       }
     paymentToPayout _                                              = Nothing

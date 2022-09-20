@@ -36,7 +36,13 @@ import Control.Monad.State (StateT, execStateT, lift)
 import Data.Bifunctor (bimap, second)
 import Data.List (nub, permutations)
 import Language.Marlowe.Core.V1.Semantics
-  (MarloweData(MarloweData), MarloweParams(..), Payment(Payment), TransactionInput(..), TransactionOutput(..))
+  ( MarloweData(MarloweData)
+  , MarloweParams(..)
+  , Payment(Payment)
+  , TransactionInput(..)
+  , TransactionOutput(..)
+  , paymentMoney
+  )
 import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(ChoiceId)
   , Contract(Close)
@@ -231,20 +237,20 @@ makeRoleOut (TxInInfo _ (TxOut _ token _ _)) =
 makePayment :: CurrencySymbol
             -> Payment
             -> ArbitraryTransaction SemanticsTransaction([TxOut], [(DatumHash, Datum)])
-makePayment _ (Payment _ (Party (M.Address _ address)) value) =
+makePayment _ payment@(Payment _ (Party (M.Address _ address)) _ _) =
   pure
     (
-      pure $ TxOut address value NoOutputDatum Nothing
+      pure $ TxOut address (paymentMoney payment) NoOutputDatum Nothing
     , mempty
     )
-makePayment currencySymbol (Payment _ (Party (Role role')) value) =
+makePayment currencySymbol payment@(Payment _ (Party (Role role')) _ _) =
   do
     let
       roleDatum = Datum $ toBuiltinData (currencySymbol, role')
       roleDatumHash = datumHash roleDatum
     pure
       (
-        pure $ TxOut payoutAddress value (OutputDatumHash roleDatumHash) Nothing
+        pure $ TxOut payoutAddress (paymentMoney payment) (OutputDatumHash roleDatumHash) Nothing
       , pure (roleDatumHash, roleDatum)
       )
 makePayment _ _ = pure (mempty, mempty)

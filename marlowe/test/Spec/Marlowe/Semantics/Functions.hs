@@ -79,7 +79,7 @@ import Spec.Marlowe.Semantics.Arbitrary
   )
 import Spec.Marlowe.Semantics.AssocMap (assocMapAdd, assocMapEq, assocMapInsert)
 import Spec.Marlowe.Semantics.Orphans ()
-import Spec.Marlowe.Semantics.Util (flattenMoney, stateEq, truncatedDivide)
+import Spec.Marlowe.Semantics.Util (stateEq, truncatedDivide)
 import Test.QuickCheck.Monadic (monadicIO, pick, run)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
@@ -637,12 +637,10 @@ checkRefundOne f =
   property
     $ forAll' (arbitrary `suchThat` (f . length . AM.toList)) $ \accounts' ->
       case (AM.null accounts', refundOne accounts') of
-         (True, Nothing                          ) -> True
-         (True, _                                ) -> False
-         (_   , Nothing                          ) -> False
-         (_   , Just ((party, money), accounts'')) -> case flattenMoney money of
-                                                        [(token, amount)] -> accounts' `assocMapEq` assocMapInsert (party, token) amount accounts''
-                                                        _                 -> False
+         (True, Nothing                                  ) -> True
+         (True, _                                        ) -> False
+         (_   , Nothing                                  ) -> False
+         (_   , Just ((party, token, amount), accounts'')) -> accounts' `assocMapEq` assocMapInsert (party, token) amount accounts''
 
 
 -- | Test `Language.Marlowe.Core.V1.Semantics.Types.refundOne` for a non-positive amount.
@@ -723,13 +721,12 @@ checkGiveMoney =
     in
       (if amount > 0 then newAccounts else accounts') `assocMapEq` accounts''
         && case result of
-             ReduceWithPayment (Payment account'' payee'' money'') -> case flattenMoney money'' of
-                                                                        [(token', amount')] -> account'' == account
-                                                                                                 && payee == payee''
-                                                                                                 && token == token'
-                                                                                                 && amount == amount'
-                                                                        []                  -> amount <= 0
-                                                                        _                     -> False
+             ReduceWithPayment (Payment account'' payee'' token' amount') -> if amount' /= 0
+                                                                               then account'' == account
+                                                                                      && payee == payee''
+                                                                                      && token == token'
+                                                                                      && amount == amount'
+                                                                               else amount <= 0
              _                                                     -> False
 
 
@@ -739,13 +736,12 @@ checkReduceContractStepClose =
   property $ do
   forAll' ((,) <$> arbitrary <*> arbitrary) $ \(environment, state) ->
     let
-      checkPayment (Payment payee (Party payee') money) state' Close =
+      checkPayment (Payment payee (Party payee') token amount) state' Close =
         payee == payee'
-          && case flattenMoney money of
-               [(token, amount)] -> AM.lookup (payee, token) (accounts state) == Just amount
-                                      && isNothing (AM.lookup (payee, token) (accounts state'))
-                                      && state == state' {accounts = assocMapInsert (payee, token) amount (accounts state')}
-               _                 -> False
+          && amount /= 0
+          && AM.lookup (payee, token) (accounts state) == Just amount
+          && isNothing (AM.lookup (payee, token) (accounts state'))
+          && state == state' {accounts = assocMapInsert (payee, token) amount (accounts state')}
       checkPayment _ _ _ = False
     in
       case reduceContractStep environment state Close of
@@ -777,24 +773,22 @@ checkReduceContractStepPay =
       fullAmount = request == debit
       posterior = prior - debit
       newState = state {accounts = (if posterior == 0 then AM.delete else flip assocMapInsert posterior) (account, token) (accounts state)}
-      checkPayment (Payment account' (Party payee') money) state' =
+      checkPayment (Payment account' (Party payee') token' amount) state' =
         account' == account
           && Party payee' == payee
-          && case flattenMoney money of
-               [(token', amount)] -> token == token' && amount == debit && state' `stateEq` newState
-               []                 -> state' `stateEq` state
-               _                  -> False
-      checkPayment (Payment account' (Account payee') money) state' =
+          && if amount /= 0
+               then token == token' && amount == debit && state' `stateEq` newState
+               else state' `stateEq` state
+      checkPayment (Payment account' (Account payee') token' amount) state' =
         let
           other = fromMaybe 0 $ AM.lookup (payee', token) (accounts newState)
           newState' = if other + debit > 0 then newState {accounts = assocMapInsert (payee', token) (other + debit) (accounts newState)} else newState
         in
           account' == account
             && Account payee' == payee
-            && case flattenMoney money of
-                 [(token', amount)] -> token' == token && amount == debit && state' `stateEq` newState'
-                 []                 -> state' `stateEq` state
-                 _                  -> False
+            && if amount /= 0
+                 then token' == token && amount == debit && state' `stateEq` newState'
+                 else state' `stateEq` state
     in
       case reduceContractStep environment state (Pay account payee token value contract) of
         Reduced (ReduceNonPositivePay account' payee' token' request')    ReduceNoPayment state' contract'             -> not positiveAmount

@@ -72,12 +72,13 @@ instance ToJSON TransactionOutput where
 
 
 instance ToJSON Payment where
-  toJSON (Payment accountId payee money) =
+  toJSON (Payment accountId payee token amount) =
     object
       [
         "accountId" .= toJSON accountId
       , "payee"     .= toJSON payee
-      , "money"     .= toJSON money
+      , "token"     .= toJSON token
+      , "amount"    .= toJSON amount
       ]
 
 
@@ -88,7 +89,8 @@ instance FromJSON Payment where
         Payment
           <$> (o .: "accountId")
           <*> (o .: "payee"    )
-          <*> (o .: "money"    )
+          <*> (o .: "token"    )
+          <*> (o .: "amount"   )
 
 
 instance ToJSON AddressAny where
