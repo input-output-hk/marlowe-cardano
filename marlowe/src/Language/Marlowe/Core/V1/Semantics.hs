@@ -566,11 +566,15 @@ applyAllInputs env state contract inputs = let
     applyAllLoop contractChanged env state contract inputs warnings payments =
         case reduceContractUntilQuiescent env state contract of
             RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
-            ContractQuiescent reduced reduceWarns pays curState cont -> case inputs of
+            ContractQuiescent reduced reduceWarns pays curState cont ->
+              let
+                warnings' = warnings ++ convertReduceWarnings reduceWarns
+                payments' = payments ++ pays
+              in case inputs of
                 [] -> ApplyAllSuccess
                     (contractChanged || reduced)
-                    (warnings ++ convertReduceWarnings reduceWarns)
-                    (payments ++ pays)
+                    warnings'
+                    payments'
                     curState
                     cont
                 (input : rest) -> case applyInput env curState input cont of
@@ -581,10 +585,8 @@ applyAllInputs env state contract inputs = let
                             newState
                             cont
                             rest
-                            (warnings
-                                ++ convertReduceWarnings reduceWarns
-                                ++ convertApplyWarning applyWarn)
-                            (payments ++ pays)
+                            (warnings' ++ convertApplyWarning applyWarn)
+                            payments'
                     ApplyNoMatchError -> ApplyAllNoMatchError
                     ApplyHashMismatch -> ApplyAllHashMismatch
     in applyAllLoop False env state contract inputs [] []
