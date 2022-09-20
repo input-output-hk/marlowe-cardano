@@ -100,7 +100,7 @@ rolePayoutValidator = mkTypedValidator @TypedRolePayoutValidator
 {-# INLINABLE rolePayoutValidator #-}
 mkRolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Bool
 mkRolePayoutValidator (currency, role) _ ctx =
-    Val.valueOf (valueSpent (scriptContextTxInfo ctx)) currency role > 0
+    Val.singleton currency role 1 `Val.leq` valueSpent (scriptContextTxInfo ctx)
 
 rolePayoutValidatorHash :: ValidatorHash
 rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
