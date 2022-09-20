@@ -136,8 +136,8 @@ mkMarloweValidator
             -- Marlowe semantics require a closed interval, so we might adjust by one millisecond.
             case closeInterval $ txInfoValidRange scriptContextTxInfo of
                 Just interval' -> interval'
-                Nothing        -> traceError "R0"
-    let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
+                Nothing        -> traceError "a"
+    let positiveBalances = traceIfFalse "b" $ validateBalances marloweState
 
     {- Find Contract continuation in TxInfo datums by hash or fail with error -}
     let inputs = fmap marloweTxInputToInput marloweTxInputs
@@ -155,7 +155,7 @@ mkMarloweValidator
     let inputBalance = totalBalance (accounts marloweState)
 
     -- ensure that a contract TxOut has what it suppose to have
-    let balancesOk = traceIfFalse "B1" $ inputBalance == scriptInValue
+    let balancesOk = traceIfFalse "v" $ inputBalance == scriptInValue
 
     let preconditionsOk = positiveBalances && balancesOk
 
@@ -175,19 +175,19 @@ mkMarloweValidator
                 payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
                 payoutsOk = payoutConstraints payoutsByParty
                 checkContinuation = case txOutContract of
-                    Close -> traceIfFalse "L2" checkScriptOutputAny
+                    Close -> traceIfFalse "c" checkScriptOutputAny
                     _ -> let
                         totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
-                        in traceIfFalse "L1+" $ checkOwnOutputConstraint marloweData finalBalance
+                        in checkOwnOutputConstraint marloweData finalBalance
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
-        Error TEAmbiguousTimeIntervalError -> traceError "E1"
-        Error TEApplyNoMatchError -> traceError "E2"
-        Error (TEIntervalError (InvalidInterval _)) -> traceError "E3"
-        Error (TEIntervalError (IntervalInPastError _ _)) -> traceError "E4"
-        Error TEUselessTransaction -> traceError "E5"
-        Error TEHashMismatch -> traceError "E6"
+        Error TEAmbiguousTimeIntervalError -> traceError "i"
+        Error TEApplyNoMatchError -> traceError "n"
+        Error (TEIntervalError (InvalidInterval _)) -> traceError "j"
+        Error (TEIntervalError (IntervalInPastError _ _)) -> traceError "k"
+        Error TEUselessTransaction -> traceError "u"
+        Error TEHashMismatch -> traceError "m"
 
   where
     MarloweParams{ rolesCurrency } = marloweParams
@@ -203,8 +203,8 @@ mkMarloweValidator
             Just ownTxInInfo ->
                 case filter (sameValidatorHash ownTxInInfo) (txInfoInputs scriptContextTxInfo) of
                     [i] -> i
-                    _   -> traceError "I1" -- multiple Marlowe contract inputs with the same address, it's forbidden
-            _ -> traceError "I0" {-"Can't find validation input"-}
+                    _   -> traceError "w" -- multiple Marlowe contract inputs with the same address, it's forbidden
+            _ -> traceError "x" {-"Can't find validation input"-}
 
     sameValidatorHash:: TxInInfo -> TxInInfo -> Bool
     sameValidatorHash
@@ -219,13 +219,13 @@ mkMarloweValidator
     checkOwnOutputConstraint :: MarloweData -> Val.Value -> Bool
     checkOwnOutputConstraint ocDatum ocValue =
         let hsh = findDatumHash' ocDatum
-        in traceIfFalse "L1" -- "Output constraint"
+        in traceIfFalse "d" -- "Output constraint"
         $ checkScriptOutput ownAddress hsh ocValue getContinuingOutput
 
     getContinuingOutput :: TxOut
     getContinuingOutput = case filter (\TxOut{txOutAddress} -> ownAddress == txOutAddress) allOutputs of
         [out] -> out
-        _     -> traceError "O0" -- no continuation or multiple Marlowe contract outputs, it's forbidden
+        _     -> traceError "o" -- no continuation or multiple Marlowe contract outputs, it's forbidden
 
     checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
                     txOutValue == value && hsh == Just svh && txOutAddress == addr
@@ -246,7 +246,7 @@ mkMarloweValidator
             Just (Datum d) -> let
                 continuation = PlutusTx.unsafeFromBuiltinData d
                 in MerkleizedInput input hash continuation
-            Nothing -> traceError "H"
+            Nothing -> traceError "h"
     marloweTxInputToInput (Input input) = NormalInput input
 
     validateInputs :: [Input] -> Bool
@@ -259,8 +259,8 @@ mkMarloweValidator
                 IChoice (ChoiceId _ party) _ -> validatePartyWitness party
                 INotify                      -> True
           where
-            validatePartyWitness (Address _ address) = traceIfFalse "S" $ txSignedByAddress address
-            validatePartyWitness (Role role)         = traceIfFalse "T" -- "Spent value not OK"
+            validatePartyWitness (Address _ address) = traceIfFalse "s" $ txSignedByAddress address
+            validatePartyWitness (Role role)         = traceIfFalse "t" -- "Spent value not OK"
                                                        $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
     collectDeposits :: InputContent -> Val.Value
@@ -270,18 +270,20 @@ mkMarloweValidator
     payoutByParty :: Payment -> AssocMap.Map Party Val.Value
     payoutByParty (Payment _ (Party party) (Token cur tok) amount)
       | amount > 0 = AssocMap.singleton party $ Val.singleton cur tok amount
-      | otherwise  = AssocMap.empty  -- Required because semantics may make zero payments.
+      | otherwise  = AssocMap.empty  -- NOTE: Perhaps required because semantics may make zero payments
+                                     -- (though this passes the test suite), but removing this function's
+                                     -- guard reduces the validator size by 20 bytes.
     payoutByParty (Payment _ (Account _) _ _ )       = AssocMap.empty
 
     payoutConstraints :: [(Party, Val.Value)] -> Bool
     payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
-            Address _ address  -> traceIfFalse "P" $ value `Val.leq` valuePaidToAddress address
+            Address _ address  -> traceIfFalse "p" $ value `Val.leq` valuePaidToAddress address
             Role role -> let
                 hsh = findDatumHash' (rolesCurrency, role)
                 addr = Address.scriptHashAddress rolePayoutValidatorHash
-                in traceIfFalse "R" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
+                in traceIfFalse "r" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
 
     txSignedByAddress (Ledger.Address (PubKeyCredential pkh) _) = scriptContextTxInfo `txSignedBy` pkh
     txSignedByAddress _                                         = False

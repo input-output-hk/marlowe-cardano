@@ -98,28 +98,27 @@ Transaction failures occur in either phase 1 validation (ledger rules) or phase 
 
 ## Marlowe Validator Script
 
-*   If a transaction fails phase two validation, a terse Marlowe error will be reported:
-    *   `"B0"`: All accounts must have positive balances.
-    *   `"B1"`: The value input from the script does not match that specified in its datum.
+*   If a transaction fails phase two validation, a terse Marlowe error will be reported in the Plutus trace log:
+    *   `"a"`: The slot/time validity range for the transaction is infinite or semi-infinite. The range should be finite/bounded.
+    *   `"b"`: All accounts must have positive balances.
+    *   `"c"`: A transaction containing a contract that closes may not also include the creation of a new contract.
+    *   `"d"`: The datum or value at the script output does not match the contract's transition.
+    *   `"o"`: Outputing to two Marlowe scripts with the same address in the same transaction is forbidden.
+    *   `"p"`: Insufficient value is paid to a public-key address.
+    *   `"r"`: Insufficient value is paid in a role payout. This may occur because the role payout was adjusted to satisfy the minimum-ADA ledger rule, despite that adjustment violating the terms of the contract.
+    *   `"s"`: A required public-key signature was not present in the transaction.
+    *   `"t"`: The role token authorizing the application of input is not present in the transaction.
+    *   `"v"`: The value input from the script does not match that specified in its datum.
+    *   `"w"`: Inputting from two Marlowe scripts with the same address in the same transaction is forbidden.
+    *   `"x"`: The input datum was not provided to the script.
     *   If these errors occur during Plutus validation but not outside of it, then there likely is a clock inconsistency between local time and the node.
-        *   `"E1" = TEAmbiguousTimeIntervalError`: The time interval for a transaction straddles the timeout of a `When` statement.
-        *   `"E2" = TEApplyNoMatchError`: The attempted application of input to the contract was illegal.
-        *   `"E3" = TEIntervalError InvalidInterval`: The start of the time interval is after its end.
-        *   `"E4" = IntervalInPast`: The interval falls before the current time.
-        *   `"E5" = TEUselessTransaction`: The attempted application of input does not change the state of the contract.
-        *   `"E6" = TEHashMismatch`: An incorrect contract was provided for the merkleized continuation.
-    *   `"H"`: The merkleized continuation for the contract is missing from the transaction.
-    *   `"I0"`: The input datum was not provided to the script.
-    *   `"I1"`: Inputting from two Marlowe scripts with the same address in the same transaction is forbidden.
-    *   `"L1+"`: The datum or value at the script output does not match the contract's transition.
-    *   `"L2"`: A transaction containing a contract that closes may not also include the creation of a new contract.
-    *   `"O0"`: Outputing to two Marlowe scripts with the same address in the same transaction is forbidden.
-    *   `"P"`: Insufficient value is paid to a public-key address.
-    *   `"R"`: Insufficient value is paid in a role payout. This may occur because the role payout was adjusted to satisfy the minimum-ADA ledger rule, despite that adjustment violating the terms of the contract.
-    *   `"R0"`: The slot/time validity range for the transaction is infinite or semi-infinite. The range should be finite/bounded.
-    *   `"S"`: A required public-key signature was not present in the transaction.
-    *   `"T"`: The role token authorizing the application of input is not present in the transaction.
-*   Validation error codes not mentioned above result from Plutus or Plutus Apps functions.
+        *   `"i" = TEAmbiguousTimeIntervalError`: The time interval for a transaction straddles the timeout of a `When` statement.
+        *   `"j" = TEIntervalError InvalidInterval`: The start of the time interval is after its end.
+        *   `"k" = IntervalInPast`: The interval falls before the current time.
+        *   `"m" = TEHashMismatch`: An incorrect contract was provided for the merkleized continuation.
+        *   `"n" = TEApplyNoMatchError`: The attempted application of input to the contract was illegal.
+        *   `"u" = TEUselessTransaction`: The attempted application of input does not change the state of the contract.
+*   Validation error codes not mentioned above result from Plutus or Plutus Apps functions: those generally are upper case letters and numbers.
 
 
 ## Specific Approaches
