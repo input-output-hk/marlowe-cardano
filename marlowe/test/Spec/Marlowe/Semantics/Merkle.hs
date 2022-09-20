@@ -17,7 +17,7 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Spec.Marlowe.Plutus.Merkle
+module Spec.Marlowe.Semantics.Merkle
   ( -- * Types
     Continuations
     -- * Merkleization
@@ -28,6 +28,7 @@ module Spec.Marlowe.Plutus.Merkle
   ) where
 
 
+import Control.Monad (foldM)
 import Control.Monad.Fix (fix)
 import Control.Monad.Writer (Writer, runWriter, tell)
 import Language.Marlowe.Core.V1.Semantics
@@ -46,13 +47,13 @@ type Continuations = M.Map DatumHash Contract
 
 -- | Merkleize any top-level case statements in a contract.
 shallowMerkleize :: Contract                   -- ^ The contract.
-                 -> (Contract, Continuations)  -- ^ Action for the merkleized contract.
+                 -> (Contract, Continuations)  -- ^ The merkleized contract.
 shallowMerkleize = runWriter . merkleize' pure
 
 
 -- | Merkleize all case statements in a contract.
 deepMerkleize :: Contract                   -- ^ The contract.
-              -> (Contract, Continuations)  -- ^ Action for the merkleized contract.
+              -> (Contract, Continuations)  -- ^ The merkleized contract.
 deepMerkleize = runWriter . fix merkleize'
 
 
@@ -78,23 +79,23 @@ merkleize' f (When cases timeout contract) = When <$> mapM merkleizeCase cases <
 
 
 -- | Merkleize whatever inputs need merkleization before application to a contract.
-merkleizeInputs :: Continuations
-                -> State
-                -> Contract
-                -> TransactionInput             -- ^ The input to the contract.
-                -> TransactionInput           -- ^ Action for the merkleized input to the contract.
+merkleizeInputs :: Continuations           -- ^ The merkliezed continuations.
+                -> State                   -- ^ The initial state.
+                -> Contract                -- ^ The initial contract.
+                -> TransactionInput        -- ^ The input to the contract.
+                -> Maybe TransactionInput  -- ^ The merkleized input to the contract, if they could be merkleized.
 merkleizeInputs continuations state contract TransactionInput{..} =
   TransactionInput txInterval
     . snd
-    $ foldl (merkleizeInput continuations txInterval) ((state, contract), []) txInputs
+    <$> foldM (merkleizeInput continuations txInterval) ((state, contract), []) txInputs
 
 
 -- | Merkleize an input if needed before application to a contract.
 merkleizeInput :: Continuations
-               -> TimeInterval                   -- ^ The validity interval.
-               -> ((State, Contract), [Input])   -- ^ The current state and contract, along with the prior inputs.
-               -> Input                          -- ^ The input.
-               -> ((State, Contract), [Input]) -- ^ The new state and contract, along with the prior inputs.
+               -> TimeInterval                        -- ^ The validity interval.
+               -> ((State, Contract), [Input])        -- ^ The current state and contract, along with the prior inputs.
+               -> Input                               -- ^ The input.
+               -> Maybe ((State, Contract), [Input])  -- ^ The new state and contract, along with the prior inputs.
 merkleizeInput continuations txInterval ((state, contract), inputs) input =
   let
     demerkleize Close = Close
@@ -118,12 +119,12 @@ merkleizeInput continuations txInterval ((state, contract), inputs) input =
         _ -> Nothing
   in
     case attempt of
-      Nothing                          -> error "Failed to merkleize input."
+      Nothing                          -> Nothing
       Just (txOutState, txOutContract) ->
-        ((txOutState, txOutContract), )
-          $ inputs
-          <> [
-               case input of
-                 NormalInput content -> MerkleizedInput content (dataHash $ toBuiltinData txOutContract) txOutContract
-                 MerkleizedInput{}   -> error "Unexpected mekleized input."
-             ]
+        case input of
+          NormalInput content -> pure
+                                   (
+                                     (txOutState, txOutContract)
+                                   , inputs <> [MerkleizedInput content (dataHash $ toBuiltinData txOutContract) txOutContract]
+                                   )
+          MerkleizedInput{}   -> Nothing

@@ -113,7 +113,6 @@
             "Spec/Marlowe/Plutus/Arbitrary"
             "Spec/Marlowe/Plutus/AssocMap"
             "Spec/Marlowe/Plutus/Lens"
-            "Spec/Marlowe/Plutus/Merkle"
             "Spec/Marlowe/Plutus/Prelude"
             "Spec/Marlowe/Plutus/Script"
             "Spec/Marlowe/Plutus/ScriptContext"
@@ -135,6 +134,7 @@
             "Spec/Marlowe/Semantics/Golden/Swap"
             "Spec/Marlowe/Semantics/Golden/Trivial"
             "Spec/Marlowe/Semantics/Golden/ZeroCouponBond"
+            "Spec/Marlowe/Semantics/Merkle"
             "Spec/Marlowe/Semantics/Orphans"
             "Spec/Marlowe/Semantics/Util"
             ];

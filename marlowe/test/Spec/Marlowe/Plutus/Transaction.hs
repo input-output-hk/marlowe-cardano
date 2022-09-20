@@ -82,7 +82,6 @@ import Plutus.V2.Ledger.Api
   )
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Spec.Marlowe.Plutus.Lens ((<><~))
-import Spec.Marlowe.Plutus.Merkle (deepMerkleize, merkleizeInputs)
 import Spec.Marlowe.Plutus.Script (payoutAddress, semanticsAddress)
 import Spec.Marlowe.Plutus.Types
   ( PayoutTransaction(..)
@@ -108,6 +107,7 @@ import Spec.Marlowe.Plutus.Types
   )
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
+import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, suchThat)
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
@@ -484,7 +484,7 @@ merkleize =
     -- Merkleize the contract and the input.
     let
       (contract', continuations) = deepMerkleize contract
-      inputs' = merkleizeInputs continuations state contract' inputs
+      inputs' = maybe (error "Merkleization of inputs failed.") id $ merkleizeInputs continuations state contract' inputs
     -- Update the contract, inputs, and outputs.
     inputContract .= contract'
     input .= inputs'
