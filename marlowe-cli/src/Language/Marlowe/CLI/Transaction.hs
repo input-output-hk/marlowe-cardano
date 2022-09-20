@@ -861,7 +861,7 @@ publishImpl :: forall era m
             -> AddressInEra era                  -- ^ The change address.
             -> PublishingStrategy era
             -> CoinSelectionStrategy
-            -> Maybe Int
+            -> Int
             -> PrintStats
             -> m (MarloweScriptsRefs MarlowePlutusVersion era)
 publishImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy timeout printStats = do
@@ -874,8 +874,7 @@ publishImpl connection signingKey expires changeAddress publishingStrategy coinS
     coinSelectionStrategy
     printStats
 
-  forM_ timeout
-    $ submitBody connection txBody [signingKey]
+  void $ submitBody connection txBody [signingKey] timeout
   findMarloweScriptsRefs connection publishingStrategy printStats >>= \case
     Nothing -> throwError . CliError $ "Unable to find just published scripts by tx:" <> show (getTxId txBody)
     Just m  -> pure m

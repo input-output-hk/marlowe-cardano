@@ -384,7 +384,6 @@ interpret so@Publish {..} = do
       _         -> PublishAtAddress waAddress
 
   connection <- view seConnection
-  timeout <- timeoutForExecutionMode
   marloweScriptRefs <- runSoCli so (findMarloweScriptsRefs connection publishingStrategy (PrintStats True)) >>= \case
     Just marloweScriptRefs@(MarloweScriptsRefs (AnUTxO (mTxIn, _), mv) (AnUTxO (pTxIn, _), pv)) -> do
       let
@@ -401,16 +400,19 @@ interpret so@Publish {..} = do
 
       pure marloweScriptRefs
     Nothing -> do
-      logSoMsg' so "Scripts not found so publishing them."
-      runSoCli so $ publishImpl
-        connection
-        waSigningKey
-        Nothing
-        waAddress
-        publishingStrategy
-        (CoinSelectionStrategy False False [])
-        timeout
-        (PrintStats True)
+      timeoutForExecutionMode >>= \case
+        Nothing -> throwSoError so "Can't perform on chain script publishing in simulation mode"
+        (Just timeout) -> do
+          logSoMsg' so "Scripts not found so publishing them."
+          runSoCli so $ publishImpl
+            connection
+            waSigningKey
+            Nothing
+            waAddress
+            publishingStrategy
+            (CoinSelectionStrategy False False [])
+            timeout
+            (PrintStats True)
 
   assign ssReferenceScripts (Just marloweScriptRefs)
 

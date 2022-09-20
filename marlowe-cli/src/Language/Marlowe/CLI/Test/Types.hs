@@ -114,6 +114,11 @@ data MarloweTests era a =
     deriving stock (Eq, Generic, Show)
 
 -- | Configuration for executing Marlowe CLI DSL commands on the blockchain
+-- | The idea behind simulation mode is to use it as a "first line of defense" to detect
+-- | errors in code or in the test case itself before spending the time/resources to run the same
+-- | scenarios on chain.
+-- | Tests that fail in simulation mode should also fail on chain
+-- | Tests that pass on chain should also pass in simulation mode
 data ExecutionMode = SimulationMode | OnChainMode { transactionTimeout :: Seconds }
 
 -- | An on-chain test of the Marlowe contract and payout validators.
