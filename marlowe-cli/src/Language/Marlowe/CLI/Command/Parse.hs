@@ -41,6 +41,7 @@ module Language.Marlowe.CLI.Command.Parse
   , parseTxOut
   , parseUrl
   , parseValue
+  , parseWallet
   , protocolVersionOpt
   , publishingStrategyOpt
   , readTokenName
@@ -48,6 +49,7 @@ module Language.Marlowe.CLI.Command.Parse
   , requiredSignersOpt
   , timeoutHelpMsg
   , txBodyFileOpt
+  , walletOpt
   ) where
 
 
@@ -97,6 +99,7 @@ import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
 
 import qualified Cardano.Api as C
+import Control.Category ((>>>))
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 import Data.Maybe (fromMaybe)
@@ -439,6 +442,17 @@ requiredSignerOpt = SigningKeyFile <$> O.strOption (O.long "required-signer" <> 
 requiredSignersOpt :: O.Parser [SigningKeyFile]
 requiredSignersOpt =  map SigningKeyFile <$> (O.some . O.strOption) (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
 
+parseWallet :: IsShelleyBasedEra era => O.ReadM (AddressInEra era, SigningKeyFile)
+parseWallet =
+  O.eitherReader
+    $ splitOn ":" >>> \case
+        [address, signingKeyFile] -> do
+            address' <- readAddressEither address
+            pure (address', SigningKeyFile signingKeyFile)
+        _  -> Left "Expecting address and signing key file path: ADDRESS:SIGNING_FILE"
+
+walletOpt :: IsShelleyBasedEra era => O.Mod O.OptionFields (AddressInEra era, SigningKeyFile) -> O.Parser (AddressInEra era, SigningKeyFile)
+walletOpt = O.option parseWallet
 
 txBodyFileOpt :: O.Parser TxBodyFile
 txBodyFileOpt = TxBodyFile <$> O.strOption (O.long "out-file" <> O.metavar "FILE"         <> O.help "Output file for transaction body.")
@@ -449,3 +463,4 @@ publishingStrategyOpt =
       PublishAtAddress <$> O.option parseAddress                 (O.long "at-address"                     <> O.metavar "ADDRESS"          <> O.help "Publish script at a given address. This is a default strategy which uses change address as a destination.")
   <|> PublishPermanently <$> O.option parseStakeAddressReference (O.long "permanently"                    <> O.metavar "STAKING_ADDRESS"  <> O.help "Publish permanently at unspendable script address staking the min. ADA value.")
   <|> O.flag' (PublishPermanently C.NoStakeAddress)              (O.long "permanently-without-staking"                                    <> O.help "Publish permanently at unspendable script address without min. ADA staking.")
+

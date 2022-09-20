@@ -1,0 +1,46 @@
+stTestName: Test burning scenario
+
+stScriptOperations:
+
+  - tag: CreateWallet
+    soWalletNickname: Party-1
+
+  - tag: CreateWallet
+    soWalletNickname: Party-2
+
+  # Pass some tokens to the issuer
+  - tag: Mint
+    soCurrencyNickname: Currency
+    soTokenDistribution:
+      - taAmount: 1
+        taTokenName:
+          unTokenName: Token1
+        taWalletNickname: Party-1
+      - taAmount: 2
+        taTokenName:
+          unTokenName: Token2
+        taWalletNickname: Party-2
+      - taAmount: 2
+        taTokenName:
+          unTokenName: Token3
+
+  - tag: BurnAll
+    soCurrencyNickname: Currency
+
+
+  # Skip issuer from distribution
+  - tag: Mint
+    soCurrencyNickname: Currency
+    soTokenDistribution:
+      - taAmount: 1
+        taTokenName:
+          unTokenName: Token1
+        taWalletNickname: Party-1
+      - taAmount: 2
+        taTokenName:
+          unTokenName: Token2
+        taWalletNickname: Party-2
+
+  - tag: BurnAll
+    soCurrencyNickname: Currency
+

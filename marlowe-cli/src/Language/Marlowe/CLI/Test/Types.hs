@@ -30,8 +30,8 @@ module Language.Marlowe.CLI.Test.Types
   ( AnyMarloweThread
   , ContractNickname(..)
   , ContractSource(..)
+  , Currency(..)
   , CurrencyNickname(..)
-  , CustomCurrency(..)
   , ExecutionMode(..)
   , Finished
   , MarloweContract(..)
@@ -87,6 +87,7 @@ import Data.String (IsString(fromString))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import GHC.Generics (Generic)
+import GHC.Num (Natural)
 import Language.Marlowe.CLI.Types
   (MarloweScriptsRefs, MarloweTransaction(MarloweTransaction, mtInputs), SomePaymentSigningKey, SomeTimeout)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
@@ -154,6 +155,9 @@ instance FromJSON ContractSource where
       _ -> fail "Expected object with a single field of either `inline` or `template`"
 
 
+-- In the current setup we use really a unique currency
+-- per issuer. Should we drop this and identify currencies
+-- using `WalletNickname`?
 newtype CurrencyNickname = CurrencyNickname String
     deriving stock (Eq, Ord, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
@@ -161,7 +165,7 @@ instance IsString CurrencyNickname where fromString = CurrencyNickname
 
 
 data TokenAssignment = TokenAssignment
-  { taAmount         :: Integer
+  { taAmount         :: Natural
   , taTokenName      :: TokenName
   , taWalletNickname :: Maybe WalletNickname  -- ^ Default to the same wallet nickname as a token name.
   }
@@ -179,6 +183,11 @@ data ScriptOperation =
     , soIssuer            :: Maybe WalletNickname   -- ^ Fallbacks to faucet
     , soMetadata          :: Maybe Aeson.Object
     , soTokenDistribution :: [TokenAssignment]
+    }
+  | BurnAll
+    {
+      soCurrencyNickname :: CurrencyNickname
+    , soMetadata          :: Maybe Aeson.Object
     }
   | Initialize
     {
@@ -399,6 +408,7 @@ getMarloweThreadTransaction (Created mt _ _)           = mt
 getMarloweThreadTransaction (InputsApplied mt _ _ _ _) = mt
 getMarloweThreadTransaction (Closed mt _ _ _)          = mt
 
+
 getMarloweThreadTxIn :: MarloweThread lang era status -> Maybe C.TxIn
 getMarloweThreadTxIn (Created _ _ txIn)           = Just txIn
 getMarloweThreadTxIn (InputsApplied _ _ txIn _ _) = Just txIn
@@ -454,10 +464,11 @@ data MarloweContract lang era = MarloweContract
   }
 
 
-data CustomCurrency = CustomCurrency
+data Currency = Currency
   {
-    ccPolicyId       :: PolicyId
-  , ccCurrencySymbol :: CurrencySymbol
+    ccCurrencySymbol :: CurrencySymbol
+  , ccIssuer         :: WalletNickname
+  , ccPolicyId       :: PolicyId
   }
 
 
@@ -470,7 +481,7 @@ data MarloweReferenceScripts = MarloweReferenceScripts
 data ScriptState lang era = ScriptState
   {
     _ssContracts        :: Map ContractNickname (MarloweContract lang era)
-  , _ssCurrencies       :: Map CurrencyNickname CustomCurrency
+  , _ssCurrencies       :: Map CurrencyNickname Currency
   , _ssReferenceScripts :: Maybe (MarloweScriptsRefs lang era)
   , _ssWallets          :: Map WalletNickname (Wallet era)                    -- ^ Faucet wallet should be included here.
   }

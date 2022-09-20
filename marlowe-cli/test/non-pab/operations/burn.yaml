@@ -1,0 +1,20 @@
+stTestName: Test burning scenario
+
+stScriptOperations:
+
+  - tag: Mint
+    soCurrencyNickname: Trivial
+    soTokenDistribution:
+      - taAmount: 1
+        taTokenName:
+          unTokenName: Token-1
+      - taAmount: 2
+        taTokenName:
+          unTokenName: Token-2
+      - taAmount: 3
+        taTokenName:
+          unTokenName: Token-3
+
+  - tag: BurnAll
+    soCurrencyNickname: Trivial
+

@@ -47,6 +47,7 @@ import Language.Marlowe.CLI.Types
   , CliEnv(..)
   , CliError(..)
   , CoinSelectionStrategy(CoinSelectionStrategy)
+  , CurrencyIssuer(CurrencyIssuer)
   , MarlowePlutusVersion
   , MarloweScriptsRefs(MarloweScriptsRefs)
   , MarloweTransaction(mtState)
@@ -65,7 +66,8 @@ import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
 
 import qualified Cardano.Api as C
-import Control.Lens (assign, modifying, use, view)
+import Control.Category ((>>>))
+import Control.Lens (assign, modifying, use, uses, view)
 import Control.Monad.Extra (whenM)
 import Control.Monad.RWS.Class (MonadReader)
 import Control.Monad.Reader (ReaderT(runReaderT))
@@ -74,7 +76,9 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.OneLine as A
 import Data.Foldable (foldl')
 import Data.Foldable.Extra (for_)
+import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty((:|)), (<|))
+import qualified Data.List.NonEmpty as L.NonEmpty
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust)
@@ -99,6 +103,7 @@ import Language.Marlowe.CLI.Test.Script.Debug
 import Language.Marlowe.CLI.Test.Types
   ( ContractNickname
   , ContractSource(..)
+  , Currency(Currency, ccCurrencySymbol, ccIssuer)
   , CurrencyNickname
   , CustomCurrency(CustomCurrency, ccCurrencySymbol)
   , ExecutionMode(..)
@@ -144,7 +149,8 @@ import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
 import Plutus.V1.Ledger.Value (mpsSymbol, valueOf)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
-
+import qualified Plutus.V2.Ledger.Api as P
+import System.IO.Temp (emptySystemTempFile, emptyTempFile)
 
 timeoutForOnChainMode :: MonadError CliError m
           => MonadReader (ScriptEnv era) m
@@ -167,13 +173,18 @@ interpret :: forall era m
           -> m ()
 interpret so@CreateWallet {..} = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
-  let vkey = getVerificationKey skey
   connection <- view seConnection
-  let LocalNodeConnectInfo {localNodeNetworkId} = connection
   let
+    vkey = getVerificationKey skey
+    LocalNodeConnectInfo {localNodeNetworkId} = connection
     address = makeShelleyAddressInEra localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
-  let wallet = Wallet address (Left skey) mempty mempty
-  logSoMsg' so $ "Wallet created with an address: " <> Text.unpack (C.serialiseAddress address)
+    WalletNickname rawNickname = soWalletNickname
+  let wallet = Wallet address (Left skey) mempty mempty vkey
+  logSoMsg' so $ "Wallet " <> show rawNickname <> " created with an address: " <> Text.unpack (C.serialiseAddress address)
+
+  (addrFile, T.SigningKeyFile skeyFile) <- liftIO $ saveWallet soWalletNickname wallet Nothing
+  logSoMsg' so $ "Wallet info stored in " <> addrFile <> ", " <> skeyFile
+
   ssWallets `modifying` Map.insert soWalletNickname wallet
 
 interpret FundWallet {..} = do
@@ -216,40 +227,67 @@ interpret SplitWallet {..} = do
     timeout
 
 interpret so@Mint {..} = do
+  let
+    issuerNickname = fromMaybe faucetNickname soIssuer
+
   currencies <- use ssCurrencies
-  when (isJust $ Map.lookup soCurrencyNickname currencies) do
-    throwError "Currency with a given nickname already exist"
-  Wallet faucetAddress faucetSigningKey _ _ <- getFaucet
-  (tokenDistribution, walletAssignemnts) <- unzip <$>forM soTokenDistribution \(TokenAssignment amount tokenName owner) -> do
+  case Map.lookup soCurrencyNickname currencies of
+    Just Currency { ccIssuer=ci } -> when (ci /= issuerNickname)  do
+      throwError "Currency with a given nickname already exist and is minted by someone else."
+    Nothing -> pure ()
+
+  Wallet issuerAddress issuerSigningKey _ _ _ <- maybe getFaucet findWallet soIssuer
+  (tokenDistribution, walletAssignemnts) <- unzip <$> forM soTokenDistribution \(TokenAssignment amount tokenName owner) -> do
     let
       nickname = case owner of
         Just wn -> wn
-        Nothing -> WalletNickname $ show tokenName
-    wallet@(Wallet destAddress _ _ _) <- findWallet nickname
-    pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
+        Nothing -> issuerNickname
+    wallet@(Wallet destAddress _ _ _ _) <- findWallet nickname
+    pure ((tokenName, amount, destAddress), (nickname, wallet, tokenName, amount))
+
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
+
   connection <- view seConnection
   timeout <- timeoutForOnChainMode
+  tokenDistribution' <- maybe (throwSoError so "Token distribution shouldn't be empty") pure $ L.NonEmpty.nonEmpty tokenDistribution
+  let
+    mintingAction = T.Mint
+      (CurrencyIssuer issuerAddress issuerSigningKey)
+      tokenDistribution'
+
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
-    faucetSigningKey
-    tokenDistribution
+    mintingAction
     soMetadata
     Nothing
-    2_000_000       -- FIXME: should we compute minAda here?
-    faucetAddress
     timeout
 
+  logSoMsg' so $ "This currency symbol is " <> show policy
   let
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
-    currency = CustomCurrency policy currencySymbol
+    currency = Currency currencySymbol issuerNickname policy
 
   forM_ walletAssignemnts \(nickname, wallet@(Wallet _ _ tokens _), tokenName, amount) -> do
     let
-      value = Value.singleton currencySymbol tokenName amount
+      value = Value.singleton currencySymbol tokenName (toInteger amount)
     ssWallets `modifying` Map.insert nickname (wallet { waTokens = value <> tokens })
 
   ssCurrencies `modifying` Map.insert soCurrencyNickname currency
+
+interpret so@BurnAll {..} = do
+  Currency { ccIssuer } <- findCurrency soCurrencyNickname
+  Wallet { waAddress=issuerAddress, waSigningKey=issuerSigningKey } <- findWallet ccIssuer
+  providers <- uses ssWallets Map.elems <&>
+    ( map (\Wallet { waAddress, waSigningKey } -> (waAddress, waSigningKey))
+      >>> filter ((issuerAddress /=) . fst)
+    )
+  let
+    currencyIssuer = T.CurrencyIssuer issuerAddress issuerSigningKey
+    mintingAction = T.BurnAll currencyIssuer $ (issuerAddress, issuerSigningKey) :| providers
+  connection <- view seConnection
+  Seconds timeout <- view seTransactionTimeout
+  -- TODO: Add wallet transaction tracking
+  void $ runSoCli so $ buildMintingImpl connection mintingAction soMetadata Nothing (Just timeout)
 
 interpret so@Initialize {..} = do
   let
@@ -269,7 +307,7 @@ interpret so@Initialize {..} = do
   currencySymbol <- case soRoleCurrency of
     Nothing -> pure P.adaSymbol
     Just nickname -> do
-      CustomCurrency { ccCurrencySymbol } <- findCurrency nickname
+      Currency { ccCurrencySymbol } <- findCurrency nickname
       pure ccCurrencySymbol
 
   let
@@ -637,7 +675,7 @@ findWalletByUniqueToken :: MonadError CliError m
                         -> TokenName
                         -> m (WalletNickname, Wallet era)
 findWalletByUniqueToken currencyNickname tokenName = do
-  CustomCurrency {..} <- findCurrency currencyNickname
+  Currency {..} <- findCurrency currencyNickname
   let
     check value = valueOf value ccCurrencySymbol tokenName == 1
     step Nothing (n, wallet@(Wallet _ _ tokens _)) = pure $ if check tokens
@@ -686,7 +724,7 @@ runCli msg action = do
 
 getCurrency :: MonadError CliError m
             => MonadState (ScriptState lang era) m
-            => m (CurrencyNickname, CustomCurrency)
+            => m (CurrencyNickname, Currency)
 getCurrency = do
   currencies <- use ssCurrencies
   case Map.toList currencies of
@@ -694,7 +732,7 @@ getCurrency = do
     _   -> throwError "Ambigious currency lookup."
 
 
-findCurrency :: (MonadState (ScriptState lang era) m, MonadError CliError m) => CurrencyNickname -> m CustomCurrency
+findCurrency :: (MonadState (ScriptState lang era) m, MonadError CliError m) => CurrencyNickname -> m Currency
 findCurrency nickname = do
   currencies <- use ssCurrencies
   liftCliMaybe ("[findWallet] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
@@ -797,5 +835,29 @@ decodeInputJSON json = do
   case A.fromJSON contractJSON of
     A.Error err -> throwError . CliError $ "[decodeInputJSON] contract input json (" <> Text.unpack (A.renderValue json) <> ") parsing error: " <> show err
     A.Success input -> pure input
+
+
+saveWallet :: C.IsCardanoEra era => WalletNickname -> Wallet era -> Maybe FilePath -> IO (FilePath, T.SigningKeyFile)
+saveWallet walletNickname wallet dir = do
+  let
+    WalletNickname nickname = walletNickname
+    Wallet { waAddress, waSigningKey=sskey } = wallet
+    addrFileTpl = "wallet-of-" <> nickname <> "-" <> ".pay"
+    skeyFileTpl = "wallet-of-" <> nickname <> "-" <> ".skey"
+    writeEnvelope p c = C.writeFileTextEnvelope p Nothing c
+
+  (addrFile, skeyFile) <- case dir of
+    Nothing -> do
+      a <- emptySystemTempFile addrFileTpl
+      s <- emptySystemTempFile skeyFileTpl
+      pure (a, s)
+
+    Just dir' -> do
+      a <- emptyTempFile dir' addrFileTpl
+      s <- emptyTempFile dir' skeyFileTpl
+      pure (a, s)
+  writeFile addrFile (Text.unpack $ C.serialiseAddress waAddress)
+  void $ either (writeEnvelope skeyFile) (writeEnvelope skeyFile) sskey
+  pure (addrFile, T.SigningKeyFile skeyFile)
 
 
