@@ -237,7 +237,7 @@ check1Invalid _ allowEmptyList allowByteString allowUnit =
             restrictUnit (BuiltinData (Constr 0 [])) = allowUnit
             restrictUnit _                           = True
           in
-            -- FIXME: There is a very slight chance that a valid item might be generated at random.
+            -- TODO: There is a very slight chance that a valid item might be generated at random.
             arbitrary `suchThat` (\x -> restrictEmptyList x && restrictByteString x && restrictUnit x)
       in
         forAll gen

@@ -161,7 +161,7 @@ arbitraryValid =
           Right candidates -> elements candidates
           Left _           -> discard
       let
-        -- FIXME: Generalize to arbitrary starting state.
+        -- TODO: Generalize to arbitrary starting state.
         mcState = State AM.empty AM.empty AM.empty time
         mcInput = head inputs'
         mcOutput = computeTransaction mcInput mcState mcContract

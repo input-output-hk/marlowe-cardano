@@ -30,6 +30,7 @@ module Spec.Marlowe.Semantics.Arbitrary
   , arbitraryFibonacci
   , arbitraryGoldenTransaction
   , arbitraryPositiveInteger
+  , arbitraryTimeIntervalAround
   , arbitraryValidInput
   , arbitraryValidInputs
   , arbitraryValidStep
@@ -92,11 +93,6 @@ import Test.Tasty.QuickCheck
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
-
-
--- | FIXME: Turn this off if semantics should allow applying `[]` to a non-quiescent contract without ever throwing a timeout-related error.
-_FORBID_NONQUIESCENT_TIMEOUT_ :: Bool
-_FORBID_NONQUIESCENT_TIMEOUT_ = True
 
 
 -- | Part of the Fibonacci sequence.
@@ -1018,17 +1014,21 @@ arbitraryValidStep state@State{..} (When cases timeout _) =
                     Notify _        -> pure INotify
              pure $ TransactionInput times [NormalInput i]
 arbitraryValidStep State{minTime} contract =
-  if _FORBID_NONQUIESCENT_TIMEOUT_
-    then let
-           nextTimeout Close                                    = minTime
-           nextTimeout (Pay _ _ _ _ continuation)               = nextTimeout continuation
-           nextTimeout (If _ thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
-           nextTimeout (When _ timeout _)                       = timeout
-           nextTimeout (Let _ _ continuation)                   = nextTimeout continuation
-           nextTimeout (Assert _ continuation)                  = nextTimeout continuation
-         in
-           TransactionInput <$> arbitraryTimeIntervalAfter (maximum [minTime, nextTimeout contract]) <*> pure []
-    else TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
+{-
+  NOTE: Alternatively, if semantics should allow applying `[]` to a non-quiescent contract
+  without ever throwing a timeout-related error, then replace the above with the following:
+
+  TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
+-}
+  let
+    nextTimeout Close                                    = minTime
+    nextTimeout (Pay _ _ _ _ continuation)               = nextTimeout continuation
+    nextTimeout (If _ thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
+    nextTimeout (When _ timeout _)                       = timeout
+    nextTimeout (Let _ _ continuation)                   = nextTimeout continuation
+    nextTimeout (Assert _ continuation)                  = nextTimeout continuation
+  in
+    TransactionInput <$> arbitraryTimeIntervalAfter (maximum [minTime, nextTimeout contract]) <*> pure []
 
 
 -- | Generate random transaction input.

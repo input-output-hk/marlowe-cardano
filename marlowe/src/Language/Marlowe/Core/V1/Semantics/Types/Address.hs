@@ -72,7 +72,7 @@ serialiseAddress network address =
   let
     header x = consByteString (x + toInteger (fromEnum network)) mempty
     encodeInteger :: Integer -> BuiltinByteString
-    encodeInteger = error "Staking pointers not supported."  -- FIXME: Add support for staking pointers, even though these may never have been used on the ledger.
+    encodeInteger = error "Staking pointers not supported."  -- TODO: Add support for staking pointers, even though these may never have been used on the ledger.
   in
     fromBuiltin
       $ case address of
@@ -109,8 +109,8 @@ deserialiseAddress bs =
             0x10 -> guard2 scc pkc
             0x20 -> guard2 pkc scc
             0x30 -> guard2 scc scc
-            0x40 -> fail "Staking pointers not supported."  -- FIXME: Add support for staking pointers, even though these may never have been used on the ledger.
-            0x50 -> fail "Staking pointers not supported."  -- FIXME: Add support for staking pointers, even though these may never have been used on the ledger.
+            0x40 -> fail "Staking pointers not supported."  -- TODO: Add support for staking pointers, even though these may never have been used on the ledger.
+            0x50 -> fail "Staking pointers not supported."  -- TODO: Add support for staking pointers, even though these may never have been used on the ledger.
             0x60 -> guard1 pkc
             0x70 -> guard1 scc
             _      -> fail "Invalid address header."

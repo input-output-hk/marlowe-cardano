@@ -184,7 +184,12 @@ instance Arbitrary MarloweData where
 
 
 instance Arbitrary MarloweTxInput where
-  arbitrary = Input <$> arbitrary  -- FIXME: Add merkleized case.
+  arbitrary =
+    frequency
+      [
+        (19, Input             <$> arbitrary              )
+      , ( 1, MerkleizedTxInput <$> arbitrary <*> arbitrary)
+      ]
 
 
 -- | Generate an arbitrary bytestring of specified length.

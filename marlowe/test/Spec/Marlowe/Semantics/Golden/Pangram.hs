@@ -126,7 +126,7 @@ contract =
     let1 = Let "x" value11
     let2 = Let "lab" (value10 `AddValue` Constant 10 `AddValue` value12)
     assert1 = Assert (observation3 `OrObs` observation2)
-    when i as c = When (fmap ($ c) as) (timeout i) Close  -- FIXME: Ideally, this should timeout to `c` instead of to `Close`, but the combinations are too many.
+    when i as c = When (fmap ($ c) as) (timeout i) Close  -- TODO: Ideally, this should timeout to `c` instead of to `Close`, but the combinations are too many.
     both i a1 a2 c =
       When [
         a1 $ When [ a2 c ] (timeout $ i + 1) c

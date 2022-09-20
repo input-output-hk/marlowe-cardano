@@ -980,7 +980,7 @@ checkPlayTrace =
           do
             start <- arbitrary
             contract <- arbitrary
-            -- FIXME: This is tautological in that `arbitraryValidInputs` uses `computeTransaction` as a filter.
+            -- NOTE: This is somewhat tautological in that `arbitraryValidInputs` uses `computeTransaction` as a filter.
             inputs <- arbitraryValidInputs (State AM.empty AM.empty AM.empty start) contract
             pure (start, contract, inputs)
     forAll gen $ \(start, contract, inputs) ->
