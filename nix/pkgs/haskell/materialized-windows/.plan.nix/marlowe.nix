@@ -113,6 +113,7 @@
             "Spec/Marlowe/Plutus/Arbitrary"
             "Spec/Marlowe/Plutus/AssocMap"
             "Spec/Marlowe/Plutus/Lens"
+            "Spec/Marlowe/Plutus/Merkle"
             "Spec/Marlowe/Plutus/Prelude"
             "Spec/Marlowe/Plutus/Script"
             "Spec/Marlowe/Plutus/ScriptContext"

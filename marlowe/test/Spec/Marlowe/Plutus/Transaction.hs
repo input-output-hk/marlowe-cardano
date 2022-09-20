@@ -23,6 +23,7 @@ module Spec.Marlowe.Plutus.Transaction
   , arbitraryPayoutTransaction
   , arbitrarySemanticsTransaction
     -- * Modification
+  , merkleize
   , noModify
   , shuffle
     -- * Conditions
@@ -41,6 +42,7 @@ import Language.Marlowe.Core.V1.Semantics
   , Payment(Payment)
   , TransactionInput(..)
   , TransactionOutput(..)
+  , computeTransaction
   , paymentMoney
   )
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -80,6 +82,7 @@ import Plutus.V2.Ledger.Api
   )
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Spec.Marlowe.Plutus.Lens ((<><~))
+import Spec.Marlowe.Plutus.Merkle (deepMerkleize, merkleizeInputs)
 import Spec.Marlowe.Plutus.Script (payoutAddress, semanticsAddress)
 import Spec.Marlowe.Plutus.Types
   ( PayoutTransaction(..)
@@ -468,6 +471,24 @@ shuffle =
     go infoOutputs
     go infoSignatories
     infoData <~ (lift . fmap AM.fromList . elements . permutations . AM.toList =<< use infoData)
+
+
+-- | Merkleize a transaction.
+merkleize :: ArbitraryTransaction SemanticsTransaction ()
+merkleize =
+  do
+   -- Fetch the original state, contract, and inputs.
+    state <- use inputState
+    contract <- use inputContract
+    inputs <- use input
+    -- Merkleize the contract and the input.
+    let
+      (contract', continuations) = deepMerkleize contract
+      inputs' = merkleizeInputs continuations state contract' inputs
+    -- Update the contract, inputs, and outputs.
+    inputContract .= contract'
+    input .= inputs'
+    output .= computeTransaction inputs' state contract'
 
 
 -- | Generate an arbitrary, valid Marlowe payout transaction: datum, redeemer, and script context.

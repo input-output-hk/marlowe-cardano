@@ -37,7 +37,7 @@ import Language.Marlowe.Core.V1.Semantics
   )
 import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(ChoiceId)
-  , Contract(Close)
+  , Contract(..)
   , Input(..)
   , InputContent(IChoice, IDeposit)
   , Party(Role)
@@ -54,6 +54,7 @@ import Plutus.V2.Ledger.Api
   , Credential(PubKeyCredential)
   , Data(B, Constr, List)
   , Datum(Datum)
+  , DatumHash(DatumHash)
   , FromData(..)
   , OutputDatum(..)
   , PubKeyHash
@@ -70,7 +71,14 @@ import Plutus.V2.Ledger.Api
   )
 import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
 import Spec.Marlowe.Plutus.Transaction
-  (ArbitraryTransaction, arbitraryPayoutTransaction, arbitrarySemanticsTransaction, noModify, noVeto, shuffle)
+  ( ArbitraryTransaction
+  , arbitraryPayoutTransaction
+  , arbitrarySemanticsTransaction
+  , merkleize
+  , noModify
+  , noVeto
+  , shuffle
+  )
 import Spec.Marlowe.Plutus.Types
   ( PayoutTransaction
   , PlutusTransaction(..)
@@ -138,11 +146,11 @@ tests =
             ]
         , testGroup "Constraint 7. Input state"
             [
-              -- TODO: This test requires instrumenting the Plutus script.
+              -- TODO: This test requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
         , testGroup "Constraint 8. Input contract"
             [
-              -- TODO: This test requires instrumenting the Plutus script.
+              -- TODO: This test requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
@@ -158,7 +166,8 @@ tests =
             ]
         , testGroup "Constraint 12. Merkleized continuations"
             [
-              -- FIXME: Add generator for merkleized contracts.
+              testProperty "Valid merkleization"   $ checkMerkleization True
+            , testProperty "Invalid merkleization" $ checkMerkleization False
             ]
         , testGroup "Constraint 13. Positive balances"
             [
@@ -445,6 +454,37 @@ checkContractOutput =
         let old = marloweContract marloweData
         new <- arbitrary `suchThat` (/= old)
         pure $ marloweData {marloweContract = new}
+
+
+-- | Check that the input contract is merkleized.
+hasMerkleizedInput :: PlutusTransaction SemanticsTransaction -> Bool
+hasMerkleizedInput =
+  let
+    isMerkleized NormalInput{}     = False
+    isMerkleized MerkleizedInput{} = True
+  in
+    any isMerkleized . txInputs . (^. input)
+
+
+-- | Check than an invalid merkleization is rejected.
+checkMerkleization :: Bool -> Property
+checkMerkleization valid =
+  let
+    -- Merkleizedd the contract and its input.
+    modifyBefore = merkleize
+    -- Extract the merkle hash, if any.
+    merkleHash (NormalInput _)            = mempty
+    merkleHash (MerkleizedInput _ hash _) = pure $ DatumHash hash
+    -- Modify the contract if requested.
+    modifyAfter =
+      if valid
+        then pure ()
+        else do
+               -- Remove the merkleized continuation datums for the input.
+               hashes <- input `uses` (concatMap merkleHash . txInputs)
+               infoData %= (AM.fromList . filter ((`notElem` hashes) . fst) . AM.toList)
+  in
+    checkSemanticsTransaction modifyBefore modifyAfter hasMerkleizedInput valid False
 
 
 -- | Check that non-positive accounts are rejected.
