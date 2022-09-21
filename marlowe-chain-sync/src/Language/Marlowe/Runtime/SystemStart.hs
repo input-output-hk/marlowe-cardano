@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Transaction.SystemStart
+module Language.Marlowe.Runtime.SystemStart
   where
 
 import qualified Cardano.Api as Cardano

@@ -80,14 +80,19 @@ library
     Language.Marlowe.Runtime.History.Store.Memory
     Language.Marlowe.Runtime.History.Store.Model
     Language.Marlowe.Runtime.History.SyncServer
+    Language.Marlowe.Runtime.Transaction.Api
+    Language.Marlowe.Runtime.Transaction.BuildConstraints
     Language.Marlowe.Runtime.Transaction.Constraints
-    Language.Marlowe.Runtime.Transaction.SystemStart
+    Language.Marlowe.Runtime.Transaction.Query
+    Language.Marlowe.Runtime.Transaction.Server
+    Language.Marlowe.Runtime.Transaction.Submit
   build-depends:
       base >= 4.9 && < 5
     , aeson
     , async
     , base16
     , binary
+    , cardano-api
     , bytestring
     , cardano-api
     , containers
@@ -97,6 +102,7 @@ library
     , ouroboros-network
     , plutus-ledger-api
     , semialign
+    , some
     , split
     , stm
     , text
@@ -175,6 +181,31 @@ executable marlowe-follower
   other-modules:
     Paths_marlowe_runtime
     Options
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , containers
+    , marlowe
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
+    , network
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , text
+    , wl-pprint
+
+executable marlowe-tx
+  import: lang
+  hs-source-dirs:   marlowe-tx
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:

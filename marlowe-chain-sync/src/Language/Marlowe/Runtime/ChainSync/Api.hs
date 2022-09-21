@@ -71,17 +71,23 @@ module Language.Marlowe.Runtime.ChainSync.Api
 
 import Cardano.Api
   ( AsType(..)
+  , CardanoMode
+  , ConsensusMode(..)
+  , EraHistory(..)
   , NetworkId(..)
   , NetworkMagic(..)
-  , SerialiseAsRawBytes(serialiseToRawBytes)
+  , SerialiseAsRawBytes(..)
   , deserialiseFromBech32
   , serialiseToBech32
   )
 import qualified Cardano.Api as Cardano
+import Cardano.Api.Shelley (ProtocolParameters)
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
+import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Monad ((>=>))
+import qualified Data.Aeson as Aeson
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
@@ -109,6 +115,7 @@ import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
+import Language.Marlowe.Runtime.SystemStart (SystemStart(..))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
@@ -658,64 +665,119 @@ data ChainSyncQuery delimiter err result where
   GetSlotConfig :: ChainSyncQuery Void () SlotConfig
   GetSecurityParameter :: ChainSyncQuery Void () Int
   GetNetworkId :: ChainSyncQuery Void () NetworkId
+  GetProtocolParameters :: ChainSyncQuery Void () ProtocolParameters
+  GetSystemStart :: ChainSyncQuery Void () SystemStart
+  GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
 
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
     TagGetNetworkId :: Query.Tag ChainSyncQuery Void () NetworkId
+    TagGetProtocolParameters :: Query.Tag ChainSyncQuery Void () ProtocolParameters
+    TagGetSystemStart :: Query.Tag ChainSyncQuery Void () SystemStart
+    TagGetEraHistory :: Query.Tag ChainSyncQuery Void () (EraHistory CardanoMode)
   tagEq TagGetSlotConfig TagGetSlotConfig               = Just (Refl, Refl, Refl)
   tagEq TagGetSlotConfig _                              = Nothing
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
   tagEq TagGetSecurityParameter _                       = Nothing
   tagEq TagGetNetworkId TagGetNetworkId = Just (Refl, Refl, Refl)
   tagEq TagGetNetworkId _                       = Nothing
+  tagEq TagGetProtocolParameters TagGetProtocolParameters = Just (Refl, Refl, Refl)
+  tagEq TagGetProtocolParameters _                       = Nothing
+  tagEq TagGetEraHistory TagGetEraHistory = Just (Refl, Refl, Refl)
+  tagEq TagGetEraHistory _                       = Nothing
+  tagEq TagGetSystemStart TagGetSystemStart = Just (Refl, Refl, Refl)
+  tagEq TagGetSystemStart _                       = Nothing
   putTag = \case
     TagGetSlotConfig        -> putWord8 0x01
     TagGetSecurityParameter -> putWord8 0x02
     TagGetNetworkId -> putWord8 0x03
+    TagGetProtocolParameters -> putWord8 0x04
+    TagGetSystemStart -> putWord8 0x05
+    TagGetEraHistory -> putWord8 0x06
   getTag = do
     word <- getWord8
     case word of
       0x01 -> pure $ Query.SomeTag TagGetSlotConfig
       0x02 -> pure $ Query.SomeTag TagGetSecurityParameter
       0x03 -> pure $ Query.SomeTag TagGetNetworkId
+      0x04 -> pure $ Query.SomeTag TagGetProtocolParameters
+      0x05 -> pure $ Query.SomeTag TagGetSystemStart
+      0x06 -> pure $ Query.SomeTag TagGetEraHistory
       _    -> fail "Invalid ChainSyncQuery tag"
   putQuery = \case
     GetSlotConfig        -> mempty
     GetSecurityParameter -> mempty
     GetNetworkId -> mempty
+    GetProtocolParameters -> mempty
+    GetSystemStart -> mempty
+    GetEraHistory -> mempty
   getQuery = \case
     TagGetSlotConfig        -> pure GetSlotConfig
     TagGetSecurityParameter -> pure GetSecurityParameter
     TagGetNetworkId -> pure GetNetworkId
+    TagGetProtocolParameters -> pure GetProtocolParameters
+    TagGetSystemStart -> pure GetSystemStart
+    TagGetEraHistory -> pure GetEraHistory
   putDelimiter = \case
     TagGetSlotConfig        -> absurd
     TagGetSecurityParameter -> absurd
     TagGetNetworkId -> absurd
+    TagGetProtocolParameters -> absurd
+    TagGetSystemStart -> absurd
+    TagGetEraHistory -> absurd
   getDelimiter = \case
     TagGetSlotConfig        -> fail "no delimiter defined"
     TagGetSecurityParameter -> fail "no delimiter defined"
     TagGetNetworkId -> fail "no delimiter defined"
+    TagGetProtocolParameters -> fail "no delimiter defined"
+    TagGetSystemStart -> fail "no delimiter defined"
+    TagGetEraHistory -> fail "no delimiter defined"
   putErr = \case
     TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
     TagGetNetworkId -> put
+    TagGetProtocolParameters -> put
+    TagGetSystemStart -> put
+    TagGetEraHistory -> put
   getErr = \case
     TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
     TagGetNetworkId -> get
+    TagGetProtocolParameters -> get
+    TagGetSystemStart -> get
+    TagGetEraHistory -> get
   putResult = \case
     TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
     TagGetNetworkId -> put . \case
       Mainnet -> Nothing
       Testnet (NetworkMagic magic) -> Just magic
+    TagGetProtocolParameters -> put . Aeson.encode
+    TagGetEraHistory -> \case
+      EraHistory _ interpreter -> put $ serialise interpreter
+    TagGetSystemStart -> \case
+      SystemStart start -> putUTCTime start
   getResult = \case
     TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
     TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
+    TagGetProtocolParameters -> do
+      bytes <- get
+      case Aeson.decode bytes of
+        Nothing -> fail "failed to decode protocol parameters JSON"
+        Just params -> pure params
+    TagGetEraHistory -> do
+      bytes <- get
+      case deserialiseOrFail bytes of
+        Left err -> fail $ show err
+        Right interpreter -> pure $ EraHistory CardanoMode interpreter
+    TagGetSystemStart -> SystemStart <$> getUTCTime
   tagFromQuery = \case
     GetSlotConfig        -> TagGetSlotConfig
     GetSecurityParameter -> TagGetSecurityParameter
     GetNetworkId -> TagGetNetworkId
+    GetProtocolParameters -> TagGetProtocolParameters
+    GetEraHistory -> TagGetEraHistory
+    GetSystemStart -> TagGetSystemStart

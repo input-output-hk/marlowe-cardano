@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc server for the job protocol. Includes a function for
+-- | A generic server for the job protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
@@ -28,13 +28,13 @@ data ServerStInit cmd m a = ServerStInit
   , recvMsgAttach
     :: forall status err result
      . JobId cmd status err result
-    -> m (ServerStCmd cmd status err result m a)
+    -> m (ServerStAttach cmd status err result m a)
   }
 
 deriving instance Functor m => Functor (ServerStInit cmd m)
 
--- | In the 'StCmd' state, the server has agency. It is obtaining the status of
--- the job associated with a previously issued command, and may send:
+-- | In the 'StCmd' state, the server has agency. It is running a command
+-- sent by the client and starting the job. It may send either:
 --
 -- * A failure message with an error
 -- * A success message with a result
@@ -54,6 +54,21 @@ data ServerStCmd cmd status err result m a where
     -> JobId cmd status err result
     -> ServerStAwait cmd status err result m a
     -> ServerStCmd cmd status err result m a
+
+deriving instance Functor m => Functor (ServerStAttach cmd status err result m)
+
+-- | In the 'StAttach' state, the server has agency. It is looking up the job
+-- associated with the given job ID. It may send either:
+--
+-- * An attach failed message.
+-- * An attached message.
+data ServerStAttach cmd status err result m a where
+
+  -- | Send a failure message to the client and terminate the protocol.
+  SendMsgAttachFailed :: a -> ServerStAttach cmd status err result m a
+
+  -- | Send a success message to the client and terminate the protocol.
+  SendMsgAttached :: ServerStCmd cmd status err result m a -> ServerStAttach cmd status err result m a
 
 deriving instance Functor m => Functor (ServerStCmd cmd status err result m)
 
@@ -77,28 +92,50 @@ hoistJobServer
   => (forall x. m x -> n x)
   -> JobServer cmd m a
   -> JobServer cmd n a
-hoistJobServer phi = JobServer . phi . fmap hoistInit . runJobServer
-  where
-  hoistInit ServerStInit{..} = ServerStInit
-    { recvMsgExec = phi . fmap hoistCmd . recvMsgExec
-    , recvMsgAttach = phi . fmap hoistCmd . recvMsgAttach
-    }
+hoistJobServer phi = JobServer . phi . fmap (hoistInit phi) . runJobServer
 
-  hoistCmd
-    :: ServerStCmd cmd status err result m a
-    -> ServerStCmd cmd status err result n a
-  hoistCmd = \case
-    SendMsgFail err a               -> SendMsgFail err a
-    SendMsgSucceed result a         -> SendMsgSucceed result a
-    SendMsgAwait status cmdId await -> SendMsgAwait status cmdId $ hoistAwait await
+hoistInit
+  :: forall cmd m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStInit cmd m a
+  -> ServerStInit cmd n a
+hoistInit phi ServerStInit{..} = ServerStInit
+  { recvMsgExec = phi . fmap (hoistCmd phi) . recvMsgExec
+  , recvMsgAttach = phi . fmap (hoistAttach phi) . recvMsgAttach
+  }
 
-  hoistAwait
-    :: ServerStAwait cmd status err result m a
-    -> ServerStAwait cmd status err result n a
-  hoistAwait ServerStAwait{..} = ServerStAwait
-    { recvMsgPoll = phi $ hoistCmd <$> recvMsgPoll
-    , recvMsgDetach = phi recvMsgDetach
-    }
+hoistAttach
+  :: forall cmd status err result m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStAttach cmd status err result m a
+  -> ServerStAttach cmd status err result n a
+hoistAttach phi = \case
+  SendMsgAttachFailed a -> SendMsgAttachFailed a
+  SendMsgAttached cmd   -> SendMsgAttached $ hoistCmd phi cmd
+
+hoistCmd
+  :: forall cmd status err result m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStCmd cmd status err result m a
+  -> ServerStCmd cmd status err result n a
+hoistCmd phi = \case
+  SendMsgFail err a               -> SendMsgFail err a
+  SendMsgSucceed result a         -> SendMsgSucceed result a
+  SendMsgAwait status cmdId await -> SendMsgAwait status cmdId $ hoistAwait phi await
+
+hoistAwait
+  :: forall cmd status err result m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStAwait cmd status err result m a
+  -> ServerStAwait cmd status err result n a
+hoistAwait phi ServerStAwait{..} = ServerStAwait
+  { recvMsgPoll = phi $ hoistCmd phi <$> recvMsgPoll
+  , recvMsgDetach = phi recvMsgDetach
+  }
 
 -- | Interpret a server as a typed-protocols peer.
 jobServerPeer
@@ -113,7 +150,15 @@ jobServerPeer JobServer{..} =
   peerInit ServerStInit{..} =
     Await (ClientAgency TokInit) $ Effect . \case
       MsgExec cmd     -> peerCmd (tagFromCommand cmd) <$> recvMsgExec cmd
-      MsgAttach cmdId -> peerCmd (tagFromJobId cmdId) <$> recvMsgAttach cmdId
+      MsgAttach cmdId -> peerAttach (tagFromJobId cmdId) <$> recvMsgAttach cmdId
+
+  peerAttach
+    :: Tag cmd status err result
+    -> ServerStAttach cmd status err result m a
+    -> Peer (Job cmd) 'AsServer ('StAttach status err result) m a
+  peerAttach tag = \case
+    SendMsgAttachFailed a -> Yield (ServerAgency (TokAttach tag)) MsgAttachFailed $ Done TokDone a
+    SendMsgAttached await -> Yield (ServerAgency (TokAttach tag)) MsgAttached $ peerCmd tag await
 
   peerCmd
     :: Tag cmd status err result
@@ -146,7 +191,7 @@ liftCommandHandler handle = JobServer $ pure $ ServerStInit
         Right result -> SendMsgSucceed result a
   , recvMsgAttach = \cmdId -> do
       (a, e) <- handle $ Right cmdId
-      pure case e of
+      pure $ SendMsgAttached case e of
         Left err     -> SendMsgFail err a
         Right result -> SendMsgSucceed result a
   }

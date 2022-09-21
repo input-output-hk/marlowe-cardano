@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc client for the job protocol. Includes a function for
+-- | A generic client for the job protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
@@ -31,7 +31,7 @@ data ClientStInit cmd m a where
   -- | Ask to attach to an existing job.
   SendMsgAttach
     :: JobId cmd status err result
-    -> ClientStCmd cmd status err result m a
+    -> ClientStAttach cmd status err result m a
     -> ClientStInit cmd m a
 
 deriving instance Functor m => Functor (ClientStInit cmd m)
@@ -49,6 +49,18 @@ data ClientStCmd cmd status err result m a = ClientStCmd
   }
 
 deriving instance Functor m => Functor (ClientStCmd cmd status err result m)
+
+-- | In the 'StAttach' state, the server has agency. The client must be prepared
+-- to handle either:
+--
+-- * An attach failed message.
+-- * An attached message.
+data ClientStAttach cmd status err result m a = ClientStAttach
+  { recvMsgAttachFailed :: m a
+  , recvMsgAttached     :: m (ClientStCmd cmd status err result m a)
+  }
+
+deriving instance Functor m => Functor (ClientStAttach cmd status err result m)
 
 -- | In the 'StAwait' state, the client has agency. It can send either:
 --
@@ -74,8 +86,16 @@ hoistJobClient
 hoistJobClient phi = JobClient . phi . fmap hoistInit . runJobClient
   where
   hoistInit = \case
-    SendMsgExec cmd stCmd     -> SendMsgExec cmd $ hoistCmd stCmd
-    SendMsgAttach jobId stCmd -> SendMsgAttach jobId $ hoistCmd stCmd
+    SendMsgExec cmd stCmd        -> SendMsgExec cmd $ hoistCmd stCmd
+    SendMsgAttach jobId stAttach -> SendMsgAttach jobId $ hoistAttach stAttach
+
+  hoistAttach
+    :: ClientStAttach cmd status err result m a
+    -> ClientStAttach cmd status err result n a
+  hoistAttach ClientStAttach{..} = ClientStAttach
+    { recvMsgAttachFailed = phi recvMsgAttachFailed
+    , recvMsgAttached = phi $ hoistCmd <$> recvMsgAttached
+    }
 
   hoistCmd
     :: ClientStCmd cmd status err result m a
@@ -105,25 +125,34 @@ jobClientPeer JobClient{..} =
   peerInit :: ClientStInit cmd m a -> Peer (Job cmd) 'AsClient 'StInit m a
   peerInit = \case
     SendMsgExec cmd stCmd     -> Yield (ClientAgency TokInit) (MsgExec cmd) $ peerCmd (tagFromCommand cmd) stCmd
-    SendMsgAttach jobId stCmd -> Yield (ClientAgency TokInit) (MsgAttach jobId) $ peerCmd (tagFromJobId jobId) stCmd
+    SendMsgAttach jobId stAttach -> Yield (ClientAgency TokInit) (MsgAttach jobId) $ peerAttach (tagFromJobId jobId) stAttach
 
   peerCmd
     :: Tag cmd status err result
     -> ClientStCmd cmd status err result m a
     -> Peer (Job cmd) 'AsClient ('StCmd status err result) m a
-  peerCmd tokCmd ClientStCmd{..} =
-    Await (ServerAgency (TokCmd tokCmd)) $ Effect . \case
+  peerCmd tag ClientStCmd{..} =
+    Await (ServerAgency (TokCmd tag)) $ Effect . \case
       MsgFail err           -> Done TokDone <$> recvMsgFail err
       MsgSucceed result     -> Done TokDone <$> recvMsgSucceed result
-      MsgAwait status jobId -> peerAwait tokCmd <$> recvMsgAwait status jobId
+      MsgAwait status jobId -> peerAwait tag <$> recvMsgAwait status jobId
+
+  peerAttach
+    :: Tag cmd status err result
+    -> ClientStAttach cmd status err result m a
+    -> Peer (Job cmd) 'AsClient ('StAttach status err result) m a
+  peerAttach tag ClientStAttach{..} =
+    Await (ServerAgency (TokAttach tag)) $ Effect . \case
+      MsgAttachFailed -> Done TokDone <$> recvMsgAttachFailed
+      MsgAttached     -> peerCmd tag <$> recvMsgAttached
 
   peerAwait
     :: Tag cmd status err result
     -> ClientStAwait cmd status err result m a
     -> Peer (Job cmd) 'AsClient ('StAwait status err result) m a
-  peerAwait tokCmd = \case
-    SendMsgPoll stCmd -> Yield (ClientAgency (TokAwait tokCmd)) MsgPoll $ peerCmd tokCmd stCmd
-    SendMsgDetach a   -> Yield (ClientAgency (TokAwait tokCmd)) MsgDetach $ Done TokDone a
+  peerAwait tag = \case
+    SendMsgPoll stCmd -> Yield (ClientAgency (TokAwait tag)) MsgPoll $ peerCmd tag stCmd
+    SendMsgDetach a   -> Yield (ClientAgency (TokAwait tag)) MsgDetach $ Done TokDone a
 
 -- | Create a client that runs a command that cannot await to completion and
 -- returns the result.
