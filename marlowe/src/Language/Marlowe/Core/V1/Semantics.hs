@@ -142,6 +142,7 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
 {-# INLINABLE convertReduceWarnings #-}
 {-# INLINABLE applyAllInputs #-}
 {-# INLINABLE isClose #-}
+{-# INLINABLE notClose #-}
 {-# INLINABLE computeTransaction #-}
 {-# INLINABLE contractLifespanUpperBound #-}
 {-# INLINABLE totalBalance #-}
@@ -442,12 +443,11 @@ reduceContractStep env state contract = case contract of
         in Reduced ReduceNoWarning ReduceNoPayment state cont
 
     When _ timeout cont -> let
-        startSlot = fst (timeInterval env)
-        endSlot   = snd (timeInterval env)
+        (startTime, endTime) = timeInterval env
         -- if timeout in future – do not reduce
-        in if endSlot < timeout then NotReduced
+        in if endTime < timeout then NotReduced
         -- if timeout in the past – reduce to timeout continuation
-        else if timeout <= startSlot then Reduced ReduceNoWarning ReduceNoPayment state cont
+        else if timeout <= startTime then Reduced ReduceNoWarning ReduceNoPayment state cont
         -- if timeout in the time range – issue an ambiguity error
         else AmbiguousTimeIntervalReductionError
 
@@ -602,6 +602,10 @@ isClose :: Contract -> Bool
 isClose Close = True
 isClose _     = False
 
+notClose :: Contract -> Bool
+notClose Close = False
+notClose _     = True
+
 -- | Try to compute outputs of a transaction given its inputs, a contract, and it's @State@
 computeTransaction :: TransactionInput -> State -> Contract -> TransactionOutput
 computeTransaction tx state contract = let
@@ -609,7 +613,7 @@ computeTransaction tx state contract = let
     in case fixInterval (txInterval tx) state of
         IntervalTrimmed env fixState -> case applyAllInputs env fixState contract inputs of
             ApplyAllSuccess reduced warnings payments newState cont ->
-                   if not reduced && (not (isClose contract) || (Map.null $ accounts state))
+                   if not reduced && (notClose contract || (Map.null $ accounts state))
                     then Error TEUselessTransaction
                     else TransactionOutput { txOutWarnings = warnings
                                            , txOutPayments = payments
