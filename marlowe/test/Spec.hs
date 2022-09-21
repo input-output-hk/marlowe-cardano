@@ -28,6 +28,8 @@ import qualified Spec.Marlowe.Marlowe (prop_noFalsePositives, tests)
 import qualified Spec.Marlowe.Plutus (tests)
 import qualified Spec.Marlowe.Semantics (tests)
 import qualified Spec.Marlowe.Serialization (tests)
+import qualified Spec.Marlowe.Semantics.Oracle (tests)
+
 
 -- | Timeout seconds for static analysis, which can take so much time on a complex contract
 --   that it exceeds hydra/CI resource limits, see SCP-4267.
@@ -57,4 +59,5 @@ tests =
     , Spec.Marlowe.Serialization.tests
     , Spec.Marlowe.Semantics.tests
     , Spec.Marlowe.Plutus.tests
+    , Spec.Marlowe.Semantics.Oracle.tests
     ]

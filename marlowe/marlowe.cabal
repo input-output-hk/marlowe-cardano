@@ -99,7 +99,9 @@ flag limit-static-analysis-time
 
 test-suite marlowe-test
     import: lang
-    hs-source-dirs: test
+    hs-source-dirs:
+      test
+      ../marlowe-contracts/src
 
     if flag(limit-static-analysis-time)
       cpp-options: -DSTATIC_ANALYSIS_TIMEOUT=180
@@ -111,6 +113,13 @@ test-suite marlowe-test
     main-is: Spec.hs
 
     other-modules:
+        Marlowe.Contracts.Common
+        Marlowe.Contracts.Escrow
+        Marlowe.Contracts.Forward
+        Marlowe.Contracts.Futures
+        Marlowe.Contracts.Swap
+        Marlowe.Contracts.Trivial
+        Marlowe.Contracts.ZeroCouponBond
         Spec.Marlowe.Common
         Spec.Marlowe.Marlowe
         Spec.Marlowe.Semantics
@@ -140,6 +149,7 @@ test-suite marlowe-test
         Spec.Marlowe.Semantics.Golden.Trivial
         Spec.Marlowe.Semantics.Golden.ZeroCouponBond
         Spec.Marlowe.Semantics.Merkle
+        Spec.Marlowe.Semantics.Oracle
         Spec.Marlowe.Semantics.Orphans
         Spec.Marlowe.Semantics.Util
 
@@ -150,6 +160,8 @@ test-suite marlowe-test
         cardano-api,
         containers,
         data-default,
+        directory,
+        filepath,
         hint,
         lens,
         marlowe,
@@ -167,4 +179,4 @@ test-suite marlowe-test
         tasty-quickcheck,
         text,
         these,
-        filepath,
+        vector,

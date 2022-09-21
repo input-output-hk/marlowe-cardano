@@ -85,6 +85,8 @@
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
+            (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
+            (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
             (hsPkgs."hint" or (errorHandler.buildDepError "hint"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
@@ -102,10 +104,17 @@
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."these" or (errorHandler.buildDepError "these"))
-            (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
+            (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
             ];
           buildable = true;
           modules = [
+            "Marlowe/Contracts/Common"
+            "Marlowe/Contracts/Escrow"
+            "Marlowe/Contracts/Forward"
+            "Marlowe/Contracts/Futures"
+            "Marlowe/Contracts/Swap"
+            "Marlowe/Contracts/Trivial"
+            "Marlowe/Contracts/ZeroCouponBond"
             "Spec/Marlowe/Common"
             "Spec/Marlowe/Marlowe"
             "Spec/Marlowe/Semantics"
@@ -135,10 +144,11 @@
             "Spec/Marlowe/Semantics/Golden/Trivial"
             "Spec/Marlowe/Semantics/Golden/ZeroCouponBond"
             "Spec/Marlowe/Semantics/Merkle"
+            "Spec/Marlowe/Semantics/Oracle"
             "Spec/Marlowe/Semantics/Orphans"
             "Spec/Marlowe/Semantics/Util"
             ];
-          hsSourceDirs = [ "test" ];
+          hsSourceDirs = [ "test" "../marlowe-contracts/src" ];
           mainPath = [ "Spec.hs" ];
           };
         };
