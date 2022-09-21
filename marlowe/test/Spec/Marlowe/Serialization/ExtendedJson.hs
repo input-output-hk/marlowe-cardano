@@ -17,7 +17,7 @@ module Spec.Marlowe.Serialization.ExtendedJson
 
 import Data.Aeson (eitherDecodeFileStrict)
 import Language.Marlowe.Extended.V1 (Contract, Module)
-import System.Directory (getCurrentDirectory)
+import System.FilePath ((</>))
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertFailure, testCase)
 
@@ -29,12 +29,13 @@ tests = testGroup "Extended Contract Serialization"
 
 -- TODO: Do a small non-property round-trip with example contracts.
 
+goldenPath :: FilePath
+goldenPath = "test" </> "Spec" </> "Marlowe" </> "Serialization" </> "golden"
 
 -- | Checks that we can decode the Golden JSON Contract for Swap
 testGoldenSwapContract :: IO ()
 testGoldenSwapContract = do
-    filePath <- (\d -> d ++ "/test/Spec/Marlowe/Serialization/golden/swap-contract.json") <$> getCurrentDirectory
-    mContract <- eitherDecodeFileStrict filePath
+    mContract <- eitherDecodeFileStrict $ goldenPath </> "swap-contract.json"
     case mContract of
         Left err              -> assertFailure err
         Right (_ :: Contract) -> return ()
@@ -43,8 +44,7 @@ testGoldenSwapContract = do
 -- | TODO: If we are more of these tests, add a helper function with a Proxy type
 testGoldenSwapModule :: IO ()
 testGoldenSwapModule = do
-    filePath <- (\d -> d ++ "/test/Spec/Marlowe/Serialization/golden/swap-module.json") <$> getCurrentDirectory
-    mContract <- eitherDecodeFileStrict filePath
-    case mContract of
+    mModule <- eitherDecodeFileStrict $ goldenPath </> "swap-module.json"
+    case mModule of
         Left err            -> assertFailure err
         Right (_ :: Module) -> return ()

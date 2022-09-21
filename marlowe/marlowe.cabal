@@ -166,4 +166,4 @@ test-suite marlowe-test
         tasty-quickcheck,
         text,
         these,
-        directory,
+        filepath,
