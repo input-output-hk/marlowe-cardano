@@ -28,7 +28,7 @@ import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, TokenName, TxId, getUTCTime, putUTCTime)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, TokenName, TxId, TxOutRef, getUTCTime, putUTCTime)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (UnsolvableConstraintsError)
 import Network.Protocol.Job.Types (Command(..), SomeTag(..))
@@ -334,6 +334,7 @@ getEra = getWord8 >>= \case
 data WalletAddresses = WalletAddresses
   { changeAddress  :: Address
   , extraAddresses :: Set Address
+  , collateralUtxos :: Set TxOutRef
   }
   deriving (Eq, Show, Generic, Binary)
 
