@@ -184,7 +184,12 @@ tests =
             [
               testProperty "Invalid insufficient payment" checkPayment
             ]
-        , testProperty "Script hash matches reference value" $ checkValidatorHash semanticsScriptHash "3d1647e8a85efc6784da6518429c6f41727fc4afc706dc63b795e204"
+        , testProperty "Script hash matches reference hash"
+            $ checkValidatorHash semanticsScriptHash
+              -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
+              -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
+              -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
+              "3d1647e8a85efc6784da6518429c6f41727fc4afc706dc63b795e204"
         ]
     , testGroup "Payout Validator"
         [
@@ -207,7 +212,12 @@ tests =
               testProperty "Invalid authorization for withdrawal" $ checkWithdrawal True
             , testProperty "Missing authorized withdrawal"        $ checkWithdrawal False
             ]
-        , testProperty "Script hash matches reference value" $ checkValidatorHash payoutScriptHash "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
+        , testProperty "Script hash matches reference hash"
+            $ checkValidatorHash payoutScriptHash
+              -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
+              -- APPROVED CHANGES TO MARLOWE'S ROLE VALIDATOR. THIS HASH HAS
+              -- IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
+              "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
         ]
     ]
 
