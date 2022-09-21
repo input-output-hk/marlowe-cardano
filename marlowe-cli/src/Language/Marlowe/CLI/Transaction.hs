@@ -273,7 +273,7 @@ import Language.Marlowe.CLI.Types
   , withShelleyBasedEra
   )
 import qualified Language.Marlowe.CLI.Types as PayToScript (PayToScript(value))
-import Language.Marlowe.Scripts (rolePayoutValidator, smallMarloweValidator)
+import Language.Marlowe.Scripts (marloweValidator, rolePayoutValidator)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult(..))
 import Plutus.V1.Ledger.Api (Datum(..), POSIXTime(..), Redeemer(..), TokenName(..), fromBuiltin, toData)
@@ -755,7 +755,7 @@ buildPublishingImpl :: forall era m
                     -> PrintStats
                     -> m (TxBody era, PublishMarloweScripts MarlowePlutusVersion era)
 buildPublishingImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = do
-  pm <- buildPublishScript connection (fromV2TypedValidator smallMarloweValidator) publishingStrategy
+  pm <- buildPublishScript connection (fromV2TypedValidator marloweValidator) publishingStrategy
   pp <- buildPublishScript connection (fromV2TypedValidator rolePayoutValidator) publishingStrategy
 
   let
@@ -924,7 +924,7 @@ findMarloweScriptsRefs
   -> m (Maybe (MarloweScriptsRefs MarlowePlutusVersion era))
 findMarloweScriptsRefs connection publishingStrategy printStats = do
   let
-    marloweHash = hashScript (PS.toScript $ fromV2TypedValidator smallMarloweValidator)
+    marloweHash = hashScript (PS.toScript $ fromV2TypedValidator marloweValidator)
     payoutHash = hashScript (PS.toScript $ fromV2TypedValidator rolePayoutValidator)
 
   runMaybeT do

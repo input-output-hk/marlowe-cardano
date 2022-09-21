@@ -34,8 +34,7 @@ import Control.Monad.Except (runExcept)
 import Data.Bifunctor (Bifunctor(first))
 import Data.These (These(..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
-import Language.Marlowe.Scripts
-  (rolePayoutValidator, rolePayoutValidatorHash, smallMarloweValidator, smallMarloweValidatorHash)
+import Language.Marlowe.Scripts (marloweValidator, marloweValidatorHash, rolePayoutValidator, rolePayoutValidatorHash)
 import Ledger.Typed.Scripts (validatorScript)
 import Plutus.ApiCommon
   ( EvaluationContext
@@ -99,7 +98,7 @@ serialiseSemanticsValidator =
   . serialise
   . getValidator
   . validatorScript
-  $ smallMarloweValidator
+  $ marloweValidator
 
 
 -- | Compute the address of the Marlowe semantics validator.
@@ -109,7 +108,7 @@ semanticsAddress = scriptHashAddress semanticsScriptHash
 
 -- | Compute the hash of the Marlowe semantics validator.
 semanticsScriptHash :: ValidatorHash
-semanticsScriptHash = smallMarloweValidatorHash
+semanticsScriptHash = marloweValidatorHash
 
 
 -- | Serialize the Marlowe payout validator.

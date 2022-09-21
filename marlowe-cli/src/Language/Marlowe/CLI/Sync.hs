@@ -106,7 +106,7 @@ import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError(..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract(..), Input(..), TimeInterval)
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput(..), rolePayoutValidatorHash, smallMarloweValidatorHash)
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput(..), marloweValidatorHash, rolePayoutValidatorHash)
 import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V1.Ledger.Api
@@ -602,7 +602,7 @@ makeParameters meBlock meTxId meMetadata policy =
         MintingPolicyHash currencyHash = fromCardanoPolicyId policy
         meParams = marloweParams $ CurrencySymbol currencyHash
 
-      meApplicationAddress <-  anomaly $ ApplicationCredential <$> toCardanoScriptHash smallMarloweValidatorHash
+      meApplicationAddress <-  anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidatorHash
       mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
       pure Parameters{..}
 

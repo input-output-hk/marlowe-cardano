@@ -295,8 +295,8 @@ mkMarloweValidator
 --  * Create a validator which is simply typed.
 --  * Create "typed by `Any` validator".
 --  * Coerce it if you like. This step is not required - we only need `TypedValidator`.
-smallMarloweValidator :: Scripts.TypedValidator TypedMarloweValidator
-smallMarloweValidator =
+marloweValidator :: Scripts.TypedValidator TypedMarloweValidator
+marloweValidator =
   let
     mkUntypedMarloweValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
     mkUntypedMarloweValidator rp = mkUntypedValidator (mkMarloweValidator rp)
@@ -311,12 +311,12 @@ smallMarloweValidator =
   in
     unsafeCoerce typedValidator
 
-smallMarloweValidatorHash :: ValidatorHash
-smallMarloweValidatorHash = Scripts.validatorHash smallMarloweValidator
+marloweValidatorHash :: ValidatorHash
+marloweValidatorHash = Scripts.validatorHash marloweValidator
 
-{-# DEPRECATED marloweValidator "This validator is too large. Use `smallMarloweValidator` instead." #-}
-marloweValidator :: Scripts.TypedValidator TypedMarloweValidator
-marloweValidator = Scripts.mkTypedValidator
+{-# DEPRECATED alternateMarloweValidator "This validator is too large. Use `marloweValidator` instead." #-}
+alternateMarloweValidator :: Scripts.TypedValidator TypedMarloweValidator
+alternateMarloweValidator = Scripts.mkTypedValidator
     @TypedMarloweValidator
     compiledMarloweValidator
     compiledArgsValidator
@@ -329,9 +329,9 @@ marloweValidator = Scripts.mkTypedValidator
         compiledArgsValidator =
           $$(PlutusTx.compile [|| mkArgsValidator ||])
 
-{-# DEPRECATED marloweValidatorHash "This validator is too large. Use `smallMarloweValidatorHash` instead." #-}
-marloweValidatorHash :: ValidatorHash
-marloweValidatorHash = Scripts.validatorHash marloweValidator
+{-# DEPRECATED alternateMarloweValidatorHash "This validator is too large. Use `marloweValidatorHash` instead." #-}
+alternateMarloweValidatorHash :: ValidatorHash
+alternateMarloweValidatorHash = Scripts.validatorHash alternateMarloweValidator
 
 marloweTxInputFromInput :: Input -> MarloweTxInput
 marloweTxInputFromInput (NormalInput i)         = Input i
