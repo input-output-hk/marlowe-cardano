@@ -8,7 +8,7 @@ import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion, withSomeMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry
-import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
+import Language.Marlowe.Scripts (rolePayoutValidatorHash, smallMarloweValidatorHash)
 import Plutus.V1.Ledger.Api (ValidatorHash(..), fromBuiltin)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 
@@ -29,9 +29,9 @@ scriptSetSpec marloweVersion = do
           ]
     it "Should specify the correct current scripts" do
       let payoutScript = fromPlutusValidatorHash rolePayoutValidatorHash
-      let marloweScript = fromPlutusValidatorHash marloweValidatorHash
-      let currentScripts' = MarloweScripts{..}
-      currentScripts `shouldBe` currentScripts'
+      let marloweScript = fromPlutusValidatorHash smallMarloweValidatorHash
+      let currentAddresses' = MarloweScripts{..}
+      currentScripts `shouldBe` currentAddresses'
 
 fromPlutusValidatorHash :: ValidatorHash -> ScriptHash
 fromPlutusValidatorHash (ValidatorHash hash) = ScriptHash $ fromBuiltin hash

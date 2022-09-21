@@ -106,7 +106,7 @@ import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError(..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract(..), Input(..), TimeInterval)
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput(..), marloweValidator, rolePayoutValidatorHash)
+import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput(..), rolePayoutValidatorHash, smallMarloweValidatorHash)
 import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V1.Ledger.Api
@@ -135,7 +135,6 @@ import qualified Data.ByteString as BS (hPutStr)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (hPutStrLn)
 import qualified Data.Map.Strict as M (elems, filter, null, toList)
 import qualified Data.Set as S (singleton, toList)
-import qualified Plutus.Script.Utils.V1.Typed.Scripts as Scripts
 
 
 -- | Record the point on the chain.
@@ -602,9 +601,8 @@ makeParameters meBlock meTxId meMetadata policy =
         anomaly = liftAnomaly meBlock meTxId
         MintingPolicyHash currencyHash = fromCardanoPolicyId policy
         meParams = marloweParams $ CurrencySymbol currencyHash
-        marloweValidatorHash = Scripts.validatorHash marloweValidator
 
-      meApplicationAddress <-  anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidatorHash
+      meApplicationAddress <-  anomaly $ ApplicationCredential <$> toCardanoScriptHash smallMarloweValidatorHash
       mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
       pure Parameters{..}
 

@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -63,13 +64,15 @@ import Plutus.V2.Ledger.Api
   , TokenName
   , TxInInfo(TxInInfo, txInInfoResolved)
   , TxOut(TxOut, txOutValue)
+  , ValidatorHash
   , Value
   , adaSymbol
   , adaToken
   , singleton
   , toData
   )
-import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
+import Spec.Marlowe.Plutus.Script
+  (evaluatePayout, evaluateSemantics, payoutAddress, payoutScriptHash, semanticsAddress, semanticsScriptHash)
 import Spec.Marlowe.Plutus.Transaction
   ( ArbitraryTransaction
   , arbitraryPayoutTransaction
@@ -96,7 +99,7 @@ import Spec.Marlowe.Plutus.Types
   )
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty, (===))
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
@@ -181,6 +184,7 @@ tests =
             [
               testProperty "Invalid insufficient payment" checkPayment
             ]
+        , testProperty "Script hash matches reference value" $ checkValidatorHash semanticsScriptHash "3d1647e8a85efc6784da6518429c6f41727fc4afc706dc63b795e204"
         ]
     , testGroup "Payout Validator"
         [
@@ -203,6 +207,7 @@ tests =
               testProperty "Invalid authorization for withdrawal" $ checkWithdrawal True
             , testProperty "Missing authorized withdrawal"        $ checkWithdrawal False
             ]
+        , testProperty "Script hash matches reference value" $ checkValidatorHash payoutScriptHash "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
         ]
     ]
 
@@ -628,3 +633,11 @@ checkWithdrawal mutate =
   checkPayoutTransaction noModify
     (if mutate then mutateRoleIn else removeRoleIn)
     noVeto False False
+
+
+-- | Check that a validator hash is correct.
+checkValidatorHash :: ValidatorHash
+                   -> ValidatorHash
+                   -> Property
+checkValidatorHash actual reference =
+  property $ actual === reference

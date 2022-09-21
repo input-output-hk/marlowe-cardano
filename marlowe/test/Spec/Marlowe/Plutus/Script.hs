@@ -24,6 +24,8 @@ module Spec.Marlowe.Plutus.Script
     -- * Hashes
   , hashMarloweData
   , hashRole
+  , payoutScriptHash
+  , semanticsScriptHash
   ) where
 
 
@@ -32,8 +34,9 @@ import Control.Monad.Except (runExcept)
 import Data.Bifunctor (Bifunctor(first))
 import Data.These (These(..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
-import Language.Marlowe.Scripts (rolePayoutValidator, rolePayoutValidatorHash, smallMarloweValidator)
-import Ledger.Typed.Scripts (validatorHash, validatorScript)
+import Language.Marlowe.Scripts
+  (rolePayoutValidator, rolePayoutValidatorHash, smallMarloweValidator, smallMarloweValidatorHash)
+import Ledger.Typed.Scripts (validatorScript)
 import Plutus.ApiCommon
   ( EvaluationContext
   , LedgerPlutusVersion(PlutusV2)
@@ -46,7 +49,16 @@ import Plutus.ApiCommon
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V2.Ledger.Api
-  (Address, CostModelParams, Data, Datum(Datum), DatumHash, ToData(toBuiltinData), TokenName, Validator(getValidator))
+  ( Address
+  , CostModelParams
+  , Data
+  , Datum(Datum)
+  , DatumHash
+  , ToData(toBuiltinData)
+  , TokenName
+  , Validator(getValidator)
+  , ValidatorHash
+  )
 
 import qualified Data.ByteString.Lazy as LBS (toStrict)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
@@ -92,10 +104,12 @@ serialiseSemanticsValidator =
 
 -- | Compute the address of the Marlowe semantics validator.
 semanticsAddress :: Address
-semanticsAddress =
-    scriptHashAddress
-  . validatorHash
-  $ smallMarloweValidator
+semanticsAddress = scriptHashAddress semanticsScriptHash
+
+
+-- | Compute the hash of the Marlowe semantics validator.
+semanticsScriptHash :: ValidatorHash
+semanticsScriptHash = smallMarloweValidatorHash
 
 
 -- | Serialize the Marlowe payout validator.
@@ -111,7 +125,12 @@ serialisePayoutValidator =
 
 -- | Compute the address of the Marlowe payout validator.
 payoutAddress :: Address
-payoutAddress = scriptHashAddress rolePayoutValidatorHash
+payoutAddress = scriptHashAddress payoutScriptHash
+
+
+-- | Compute the hash of the Marlowe payout validator.
+payoutScriptHash :: ValidatorHash
+payoutScriptHash = rolePayoutValidatorHash
 
 
 -- | Compute the hash of Marlowe datum.

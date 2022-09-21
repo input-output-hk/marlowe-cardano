@@ -311,6 +311,10 @@ smallMarloweValidator =
   in
     unsafeCoerce typedValidator
 
+smallMarloweValidatorHash :: ValidatorHash
+smallMarloweValidatorHash = Scripts.validatorHash smallMarloweValidator
+
+{-# DEPRECATED marloweValidator "This validator is too large. Use `smallMarloweValidator` instead." #-}
 marloweValidator :: Scripts.TypedValidator TypedMarloweValidator
 marloweValidator = Scripts.mkTypedValidator
     @TypedMarloweValidator
@@ -325,6 +329,7 @@ marloweValidator = Scripts.mkTypedValidator
         compiledArgsValidator =
           $$(PlutusTx.compile [|| mkArgsValidator ||])
 
+{-# DEPRECATED marloweValidatorHash "This validator is too large. Use `smallMarloweValidatorHash` instead." #-}
 marloweValidatorHash :: ValidatorHash
 marloweValidatorHash = Scripts.validatorHash marloweValidator
 

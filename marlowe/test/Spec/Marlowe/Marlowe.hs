@@ -18,6 +18,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+{-# OPTIONS_GHC -fno-warn-deprecations #-}
+
 
 module Spec.Marlowe.Marlowe
   ( -- * Testing
@@ -147,14 +149,14 @@ marloweValidatorSize :: IO ()
 marloweValidatorSize = do
     let validator = Scripts.validatorScript marloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15040)
+    assertBool ("marloweValidator is too large " <> show vsize) (vsize < 15040)
 
 -- | Test that the untyped validator is not too large.
 smallMarloweValidatorSize :: IO ()
 smallMarloweValidatorSize = do
     let validator = Scripts.validatorScript smallMarloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 12515)
+    assertBool ("smallMarloweValidator is too large " <> show vsize) (vsize < 12515)
 
 
 -- | Test `extractNonMerkleizedContractRoles`.
