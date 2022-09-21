@@ -9,7 +9,14 @@ import Data.Either (fromRight)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( ChainSyncCommand
+  , ChainSyncQuery(..)
+  , RuntimeChainSeekClient
+  , WithGenesis(..)
+  , chainSeekClientPeer
+  , runtimeChainSeekCodec
+  )
 import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
@@ -18,6 +25,7 @@ import Language.Marlowe.Runtime.Transaction.Server
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Driver (mkDriver)
+import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
@@ -72,6 +80,7 @@ run :: Options -> IO ()
 run Options{..} = withSocketsDo do
   addr <- resolve port
   bracket (openServer addr) close \socket -> do
+    {- Setup Dependencies -}
     let
       acceptRunTransactionServer = do
         (conn, _ :: SockAddr) <- accept socket
@@ -88,7 +97,23 @@ run Options{..} = withSocketsDo do
           let peer = marloweSyncClientPeer client
           fst <$> runPeerWithDriver driver peer (startDState driver)
 
-    let mkSubmitJob = Submit.mkSubmitJob
+      connectToChainSeek :: RuntimeChainSeekClient IO a -> IO a
+      connectToChainSeek client = do
+        chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+        bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
+          let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
+          let peer = chainSeekClientPeer Genesis client
+          fst <$> runPeerWithDriver driver peer (startDState driver)
+
+      runChainSyncJobClient :: JobClient ChainSyncCommand IO a -> IO a
+      runChainSyncJobClient client = do
+        chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
+        bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
+          let driver = mkDriver throwIO codecJob $ socketAsChannel chainSeekSocket
+          let peer = jobClientPeer client
+          fst <$> runPeerWithDriver driver peer (startDState driver)
+
+    let mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
     systemStart <- queryChainSync GetSystemStart
     eraHistory <- queryChainSync GetEraHistory
     protocolParameters <- queryChainSync GetProtocolParameters
@@ -105,6 +130,8 @@ run Options{..} = withSocketsDo do
     let loadMarloweContext = Query.loadMarloweContext runHistorySyncClient
     TransactionServer{..} <- atomically do
       mkTransactionServer TransactionServerDependencies{..}
+
+    {- Run the server -}
     runTransactionServer
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
@@ -135,6 +162,7 @@ run Options{..} = withSocketsDo do
 data Options = Options
   { chainSeekPort      :: PortNumber
   , chainSeekQueryPort :: PortNumber
+  , chainSeekCommandPort :: PortNumber
   , chainSeekHost      :: HostName
   , port               :: PortNumber
   , host               :: HostName
@@ -148,6 +176,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
     parser = Options
       <$> chainSeekPortParser
       <*> chainSeekQueryPortParser
+      <*> chainSeekCommandPortParser
       <*> chainSeekHostParser
       <*> portParser
       <*> hostParser
@@ -167,6 +196,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , value 3716
       , metavar "PORT_NUMBER"
       , help "The port number of the chain sync query server."
+      , showDefault
+      ]
+
+    chainSeekCommandPortParser = option auto $ mconcat
+      [ long "chain-seek-command-port-number"
+      , value 3720
+      , metavar "PORT_NUMBER"
+      , help "The port number of the chain sync job server."
       , showDefault
       ]
 

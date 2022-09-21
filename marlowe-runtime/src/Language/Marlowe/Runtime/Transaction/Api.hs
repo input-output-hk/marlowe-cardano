@@ -368,6 +368,7 @@ data LoadMarloweContextError
 data SubmitError
   = SubmitException
   | SubmitFailed String -- should be from show TxValidationErrorInMode
+  | TxDiscarded
   deriving (Eq, Show, Generic, Binary)
 
 data SubmitStatus
