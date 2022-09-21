@@ -14,7 +14,6 @@ import Data.Map (Map)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.ChainSync.Api (PaymentKeyHash)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.SystemStart as Cardano
@@ -26,9 +25,9 @@ data TxConstraints v = TxConstraints
   -- ^ The constraint on the script input of the transaction
   , roleTokenConstraints :: Set RoleTokenConstraint
   -- ^ Constraints related to role tokens
-  , outputConstraints :: Set (OutputConstraint v)
+  , outputConstraints :: [OutputConstraint v]
   -- ^ Constraints on the outputs of a transaction
-  , signatureConstraints :: Set PaymentKeyHash
+  , signatureConstraints :: Set Chain.PaymentKeyHash
   -- ^ Extra payment key hashes that require signatures.
   --
   -- Rules to check (for each key in the set):
@@ -46,17 +45,17 @@ data TxConstraints v = TxConstraints
 
 -- | A constraint related to a role token.
 data RoleTokenConstraint
-  = MintRoleToken Chain.TokenName Chain.Address
+  = MintRoleToken Chain.TxOutRef Chain.AssetId Chain.Address
   -- ^ Specifies that the transaction must mint one role token with the given
-  -- TokenName and send it to the given address, along with the min UTXO ADA.
+  -- AssetId and send it to the given address, along with the min UTXO ADA. The
+  -- TxOutRef must be consumed by the transaction, as it was used to create the
+  -- policyId
   --
   -- Rules to check:
-  --   1. The transaction mints one token with the given token name and some
-  --      policyId p.
-  --   2. The transaction sends one token with the given token name and the
-  --      policyId p from rule 1 to the given address.
-  --   3. The output in rule 2 covers the min UTXO requirement.
-  --   4. The output in rule 2 does not contain any other tokens.
+  --   1. The transaction mints one token with the given assetId.
+  --   2. The transaction sends one token with the given assetId to the given address.
+  --   3. The output in rule 2 does not contain any other tokens aside from ADA.
+  --   4. The transaction consumes the given TxOutRef.
   | SpendRoleToken Chain.AssetId
   -- ^ Specifies that the transaction must spend a UTXO containing 1 role token
   -- of the given assetId. Furthermore, the transaction must send an output
@@ -70,14 +69,21 @@ data RoleTokenConstraint
   --      the UTXO in rule 1 was spent in a single output.
   --   3. The output in rule 2 includes all other assets contained in the UTXO
   --      in rule 1.
-  --   4. The output in rule 2 covers the min UTXO requirement.
+  --   4. The output in rule 2 contains no other tokens except for optional
+  --      additional ADA.
   deriving (Eq, Ord, Show)
 
--- | Require the transaction to mint 1 role token of the specified assetID and
--- send it to the given address, along with the min UTXO ADA.
-mustMintRoleToken :: Core.IsMarloweVersion v => Chain.TokenName -> Chain.Address -> TxConstraints v
-mustMintRoleToken tokenName address =
-  mempty { roleTokenConstraints = Set.singleton $ MintRoleToken tokenName address }
+-- | Require the transaction to mint 1 role token with the specified assetId and
+-- send it to the given address. Additionally, require that the given UTXO is
+-- consumed.
+mustMintRoleToken
+  :: Core.IsMarloweVersion v
+  => Chain.TxOutRef
+  -> Chain.AssetId
+  -> Chain.Address
+  -> TxConstraints v
+mustMintRoleToken txOutRef assetId address =
+  mempty { roleTokenConstraints = Set.singleton $ MintRoleToken txOutRef assetId address }
 
 -- | Require the transaction to spend a UTXO with 1 role token of the specified
 -- assetID. It also needs to send an identical output (same assets) to the
@@ -120,19 +126,19 @@ data OutputConstraint v
 
 -- | Require the transaction to send the specified assets to the address.
 mustPayToAddress :: Core.IsMarloweVersion v => Chain.Assets -> Chain.Address -> TxConstraints v
-mustPayToAddress assets address = mempty { outputConstraints = Set.singleton $ PayAssets assets address }
+mustPayToAddress assets address = mempty { outputConstraints = [PayAssets assets address] }
 
 -- | Require the transaction to send an output to the marlowe script address
 -- with the given assets and the given datum.
 mustSendMarloweOutput :: Core.IsMarloweVersion v => Chain.Assets -> Core.Datum v -> TxConstraints v
 mustSendMarloweOutput assets datum =
-  mempty { outputConstraints = Set.singleton $ SendToMarloweScript assets datum }
+  mempty { outputConstraints = [SendToMarloweScript assets datum] }
 
 -- | Require the transaction to send an output to the payout script address
 -- with the given assets and the given datum.
 mustSendPayoutOutput :: Core.IsMarloweVersion v => Chain.Assets -> Core.PayoutDatum v -> TxConstraints v
 mustSendPayoutOutput assets datum =
-  mempty { outputConstraints = Set.singleton $ SendToPayoutScript assets datum }
+  mempty { outputConstraints = [SendToPayoutScript assets datum] }
 
 data InputConstraint v
   = NoInput
@@ -142,12 +148,12 @@ data InputConstraint v
   -- Rules to check:
   --   1. All inputs of the transaction do not come from any of the script
   --      addresses (marlowe or payout) associated with marlowe version v.
-  | MarloweInput Chain.TxOutRef P.POSIXTime P.POSIXTime (Core.Redeemer v)
+  | MarloweInput P.POSIXTime P.POSIXTime (Core.Redeemer v)
   -- ^ Specifies that the transaction consumes the Marlowe UTXO with the given
   -- TxOutRef.
   --
   -- Rules to check:
-  --   1. An input that matches the given TxOutRef is consumed.
+  --   1. The input at the Marlowe Script Address for the contract is consumed.
   --   2. The input in rule 1 includes the given redeemer.
   --   3. The validity range of the transaction matches the given min and max
   --      validity bounds (converted to slots).
@@ -173,16 +179,21 @@ data InputConstraint v
   --   5. For all inputs i, the address of i does not exist in the set of
   --      Marlowe script addresses associated with Marlowe version v.
 
--- | Require the transaction to consume an input from the Marlowe script with
+-- | Require the transaction to consume the input from the Marlowe script with
 -- the given validity interval and redeemer (input). Used for apply-inputs.
-mustConsumeMarloweOutput :: Core.IsMarloweVersion v => Chain.TxOutRef -> P.POSIXTime -> P.POSIXTime -> Core.Redeemer v -> TxConstraints v
-mustConsumeMarloweOutput utxo invalidBefore invalidHereafter inputs =
-  mempty { inputConstraint = MarloweInput utxo invalidBefore invalidHereafter inputs }
+mustConsumeMarloweOutput :: Core.IsMarloweVersion v => P.POSIXTime -> P.POSIXTime -> Core.Redeemer v -> TxConstraints v
+mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
+  mempty { inputConstraint = MarloweInput invalidBefore invalidHereafter inputs }
 
 -- | Require the transaction to consume any input from the payout script that
 -- bear the given datum.
 mustConsumePayouts :: Core.IsMarloweVersion v => Core.PayoutDatum v -> TxConstraints v
 mustConsumePayouts payoutDatum = mempty { inputConstraint = PayoutInputs payoutDatum }
+
+-- | Require the transaction to hold a signature for the given payment key
+-- hash.
+requiresSignature :: Core.IsMarloweVersion v => Chain.PaymentKeyHash -> TxConstraints v
+requiresSignature pkh = mempty { signatureConstraints = Set.singleton pkh }
 
 instance Core.IsMarloweVersion v => Show (OutputConstraint v) where
   showsPrec = case Core.marloweVersion @v of
@@ -233,12 +244,26 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
     , metadataConstraints = mempty
     }
 
+data ConstraintCheck
+  = CheckTrue
+  | CheckFalseMissingSignature Chain.PaymentKeyHash
+  | CheckFalseRoleTokenNotMinted Chain.TokenName
+  | CheckFalseRoleTokenNotPaid Chain.TokenName Chain.Address
+  | CheckFalseRoleTokenNotSpent Chain.AssetId
+  | CheckFalseRoleTokenNotReturned Chain.AssetId
+  | CheckFalseExtraneousTokens Chain.TxIx Chain.Assets
+  | CheckFalseInsufficientAssets Chain.Address Chain.Assets
+  | CheckFalseRoleTokenOutputAltered Chain.TxIx
+  deriving (Show, Eq, Ord)
+
 -- | Determines if the given transaction body satisfies the given constraints.
 satisfiesConstraints
   :: Cardano.ProtocolParameters
   -> Cardano.TxBody era
+  -> MarloweContext
+  -> WalletContext
   -> TxConstraints v
-  -> Bool
+  -> ConstraintCheck
 satisfiesConstraints = error "not implemented"
 
 -- | Errors that can occur when trying to solve the constraints.
