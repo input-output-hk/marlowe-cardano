@@ -746,7 +746,7 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
         interpret operation
 
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig SimulationMode))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig executionMode))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)
