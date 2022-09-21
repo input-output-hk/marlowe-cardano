@@ -59,6 +59,7 @@
           (hsPkgs."parallel" or (errorHandler.buildDepError "parallel"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."profunctors" or (errorHandler.buildDepError "profunctors"))
+          (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."stm-delay" or (errorHandler.buildDepError "stm-delay"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -80,6 +81,7 @@
           "Language/Marlowe/Runtime/ChainSync/QueryServer"
           "Language/Marlowe/Runtime/ChainSync/Store"
           "Language/Marlowe/Runtime/ChainSync/Api"
+          "Language/Marlowe/Runtime/SystemStart"
           ];
         hsSourceDirs = [ "src" ];
         };

@@ -64,6 +64,7 @@ library
     Language.Marlowe.Runtime.ChainSync.QueryServer
     Language.Marlowe.Runtime.ChainSync.Store
     Language.Marlowe.Runtime.ChainSync.Api
+    Language.Marlowe.Runtime.SystemStart
   other-modules:
   build-depends:
       base >= 4.9 && < 5
@@ -92,6 +93,7 @@ library
     , parallel
     , plutus-ledger-api
     , profunctors
+    , serialise
     , stm
     , stm-delay
     , text
