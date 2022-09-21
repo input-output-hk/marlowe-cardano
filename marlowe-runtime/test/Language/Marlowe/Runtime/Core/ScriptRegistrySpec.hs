@@ -30,8 +30,8 @@ scriptSetSpec marloweVersion = do
     it "Should specify the correct current scripts" do
       let payoutScript = fromPlutusValidatorHash rolePayoutValidatorHash
       let marloweScript = fromPlutusValidatorHash marloweValidatorHash
-      let currentAddresses' = MarloweScripts{..}
-      currentScripts `shouldBe` currentAddresses'
+      let currentScripts' = MarloweScripts{..}
+      currentScripts `shouldBe` currentScripts'
 
 fromPlutusValidatorHash :: ValidatorHash -> ScriptHash
 fromPlutusValidatorHash (ValidatorHash hash) = ScriptHash $ fromBuiltin hash
