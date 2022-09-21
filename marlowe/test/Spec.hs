@@ -24,11 +24,10 @@ module Main
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 
-import qualified Spec.Marlowe.Marlowe
-  (prop_contractJsonLoops, prop_intervalErrorJsonLoops, prop_marloweParamsJsonLoops, prop_noFalsePositives, tests)
+import qualified Spec.Marlowe.Marlowe (prop_noFalsePositives, tests)
 import qualified Spec.Marlowe.Plutus (tests)
 import qualified Spec.Marlowe.Semantics (tests)
-
+import qualified Spec.Marlowe.Serialization (tests)
 
 -- | Timeout seconds for static analysis, which can take so much time on a complex contract
 --   that it exceeds hydra/CI resource limits, see SCP-4267.
@@ -55,12 +54,7 @@ tests =
       [
         testProperty "No false positives" $ Spec.Marlowe.Marlowe.prop_noFalsePositives timeout
       ]
-    , testGroup "JSON Serialisation"
-      [
-        testProperty "Serialise deserialise Contract loops" Spec.Marlowe.Marlowe.prop_contractJsonLoops
-      , testProperty "Serialise deserialise MarloweParams loops" Spec.Marlowe.Marlowe.prop_marloweParamsJsonLoops
-      , testProperty "Serialise deserialise IntervalError loops" Spec.Marlowe.Marlowe.prop_intervalErrorJsonLoops
-      ]
+    , Spec.Marlowe.Serialization.tests
     , Spec.Marlowe.Semantics.tests
     , Spec.Marlowe.Plutus.tests
     ]

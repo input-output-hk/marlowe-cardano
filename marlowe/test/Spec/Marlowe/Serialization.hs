@@ -11,7 +11,7 @@
 -----------------------------------------------------------------------------
 
 
-module Spec.Marlowe.Semantics
+module Spec.Marlowe.Serialization
   ( -- * Testing
     tests
   ) where
@@ -19,18 +19,14 @@ module Spec.Marlowe.Semantics
 
 import Test.Tasty (TestTree, testGroup)
 
-import qualified Spec.Marlowe.Semantics.Compute (tests)
-import qualified Spec.Marlowe.Semantics.Entropy (tests)
-import qualified Spec.Marlowe.Semantics.Functions (tests)
-import qualified Spec.Marlowe.Semantics.Golden (tests)
+import qualified Spec.Marlowe.Serialization.CoreJson (tests)
+import qualified Spec.Marlowe.Serialization.ExtendedJson (tests)
 
 -- | Run the tests.
 tests :: TestTree
 tests =
-  testGroup "Semantics"
+  testGroup "Serialization"
     [
-      Spec.Marlowe.Semantics.Entropy.tests
-    , Spec.Marlowe.Semantics.Functions.tests
-    , Spec.Marlowe.Semantics.Compute.tests
-    , Spec.Marlowe.Semantics.Golden.tests
+      Spec.Marlowe.Serialization.CoreJson.tests
+    , Spec.Marlowe.Serialization.ExtendedJson.tests
     ]
