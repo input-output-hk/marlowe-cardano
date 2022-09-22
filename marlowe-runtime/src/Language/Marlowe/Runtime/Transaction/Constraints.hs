@@ -280,7 +280,7 @@ data WalletContext = WalletContext
 
 -- | Data from Marlowe Scripts needed to solve the constraints.
 data MarloweContext v = MarloweContext
-  { stakeCredential :: Maybe Chain.Credential
+  { stakeCredential :: Maybe Chain.StakeCredential
   -- ^ The stake credential to use when building a new marlowe script address.
   , scriptOutput :: Maybe (Core.TransactionScriptOutput v)
   -- ^ The UTXO at the script address, if any.
