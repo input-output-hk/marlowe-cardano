@@ -149,14 +149,14 @@ alternateMarloweValidatorSize :: IO ()
 alternateMarloweValidatorSize = do
     let validator = Scripts.validatorScript alternateMarloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("alternateMarloweValidator is too large " <> show vsize) (vsize < 15040)
+    assertBool ("alternateMarloweValidator is too large " <> show vsize) (vsize < 15030)
 
 -- | Test that the untyped validator is not too large.
 marloweValidatorSize :: IO ()
 marloweValidatorSize = do
     let validator = Scripts.validatorScript marloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("marloweValidator is too large " <> show vsize) (vsize < 12515)
+    assertBool ("marloweValidator is too large " <> show vsize) (vsize < 12510)
 
 
 -- | Test `extractNonMerkleizedContractRoles`.
