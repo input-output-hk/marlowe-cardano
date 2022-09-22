@@ -55,6 +55,7 @@ library
   import: lang
   hs-source-dirs:   src
   exposed-modules:
+    Language.Marlowe.Runtime.Cardano.Api
     Language.Marlowe.Runtime.Cardano.Feature
     Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
