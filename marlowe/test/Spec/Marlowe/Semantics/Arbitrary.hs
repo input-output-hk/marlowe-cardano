@@ -30,6 +30,7 @@ module Spec.Marlowe.Semantics.Arbitrary
   , arbitraryFibonacci
   , arbitraryGoldenTransaction
   , arbitraryPositiveInteger
+  , arbitraryTimeIntervalAround
   , arbitraryValidInput
   , arbitraryValidInputs
   , arbitraryValidStep
@@ -92,11 +93,6 @@ import Test.Tasty.QuickCheck
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
-
-
--- | FIXME: Turn this off if semantics should allow applying `[]` to a non-quiescent contract without ever throwing a timeout-related error.
-_FORBID_NONQUIESCENT_TIMEOUT_ :: Bool
-_FORBID_NONQUIESCENT_TIMEOUT_ = True
 
 
 -- | Part of the Fibonacci sequence.
@@ -648,7 +644,7 @@ instance SemiArbitrary (Value Observation) where
   semiArbitrary context =
     frequency
       [
-        ( 8, uncurry AvailableMoney <$> perturb ((,) <$> arbitrary <*> arbitrary) (AM.keys $ caccounts context))
+        ( 8, uncurry AvailableMoney <$> perturb arbitrary (AM.keys $ caccounts context))
       , (14, Constant <$> semiArbitrary context)
       , ( 8, NegValue <$> semiArbitrary context)
       , ( 8, AddValue <$> semiArbitrary context <*> semiArbitrary context)
@@ -757,7 +753,7 @@ instance SemiArbitrary Action where
     let
       arbitraryDeposit =
         do
-          (account, token) <- perturb ((,) <$> arbitrary <*> arbitrary) $ AM.keys caccounts
+          (account, token) <- perturb arbitrary $ AM.keys caccounts
           party <- semiArbitrary context
           Deposit account party token <$> semiArbitrary context
       arbitraryChoice = Choice <$> semiArbitrary context <*> semiArbitrary context
@@ -839,39 +835,48 @@ arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) contex
     ]
 arbitraryContractWeighted [] _ = pure Close
 
+
 -- | Default weights for contract terms.
 defaultContractWeights :: (Int, Int, Int, Int, Int, Int)
 defaultContractWeights = (35, 20, 10, 15, 20, 5)
+
 
 -- | Contract weights selecting only `Close`.
 closeContractWeights :: (Int, Int, Int, Int, Int, Int)
 closeContractWeights = (1, 0, 0, 0, 0, 0)
 
+
 -- | Contract weights selecting only `Pay`.
 payContractWeights :: (Int, Int, Int, Int, Int, Int)
 payContractWeights = (0, 1, 0, 0, 0, 0)
+
 
 -- | Contract weights selecting only `If`.
 ifContractWeights :: (Int, Int, Int, Int, Int, Int)
 ifContractWeights = (0, 0, 1, 0, 0, 0)
 
+
 -- | Contract weights selecting only `When`.
 whenContractWeights :: (Int, Int, Int, Int, Int, Int)
 whenContractWeights = (0, 0, 0, 1, 0, 0)
+
 
 -- | Contractt weights selecing only `Let`.
 letContractWeights :: (Int, Int, Int, Int, Int, Int)
 letContractWeights = (0, 0, 0, 0, 1, 0)
 
+
 -- | Contract weights selecting only `Assert`.
 assertContractWeights :: (Int, Int, Int, Int, Int, Int)
 assertContractWeights = (0, 0, 0, 0, 0, 1)
+
 
 -- | Generate a semi-random contract of a given depth.
 arbitraryContractSized :: Int           -- ^ The maximum depth.
                        -> Context       -- ^ The Marlowe context.
                        -> Gen Contract  -- ^ Generator for a contract.
 arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContractWeights)
+
 
 instance SemiArbitrary Contract where
   semiArbitrary = arbitraryContractSized 5
@@ -898,7 +903,7 @@ shrinkAssocMap am =
 
 
 instance Arbitrary Accounts where
-  arbitrary = arbitraryAssocMap ((,) <$> arbitrary <*> arbitrary) arbitraryPositiveInteger
+  arbitrary = arbitraryAssocMap arbitrary arbitraryPositiveInteger
   shrink = shrinkAssocMap
 
 instance SemiArbitrary Accounts where
@@ -1018,17 +1023,21 @@ arbitraryValidStep state@State{..} (When cases timeout _) =
                     Notify _        -> pure INotify
              pure $ TransactionInput times [NormalInput i]
 arbitraryValidStep State{minTime} contract =
-  if _FORBID_NONQUIESCENT_TIMEOUT_
-    then let
-           nextTimeout Close                                    = minTime
-           nextTimeout (Pay _ _ _ _ continuation)               = nextTimeout continuation
-           nextTimeout (If _ thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
-           nextTimeout (When _ timeout _)                       = timeout
-           nextTimeout (Let _ _ continuation)                   = nextTimeout continuation
-           nextTimeout (Assert _ continuation)                  = nextTimeout continuation
-         in
-           TransactionInput <$> arbitraryTimeIntervalAfter (maximum [minTime, nextTimeout contract]) <*> pure []
-    else TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
+{-
+  NOTE: Alternatively, if semantics should allow applying `[]` to a non-quiescent contract
+  without ever throwing a timeout-related error, then replace the above with the following:
+
+  TransactionInput <$> arbitraryTimeIntervalAround minTime <*> pure []
+-}
+  let
+    nextTimeout Close                                    = minTime
+    nextTimeout (Pay _ _ _ _ continuation)               = nextTimeout continuation
+    nextTimeout (If _ thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
+    nextTimeout (When _ timeout _)                       = timeout
+    nextTimeout (Let _ _ continuation)                   = nextTimeout continuation
+    nextTimeout (Assert _ continuation)                  = nextTimeout continuation
+  in
+    TransactionInput <$> arbitraryTimeIntervalAfter (maximum [minTime, nextTimeout contract]) <*> pure []
 
 
 -- | Generate random transaction input.

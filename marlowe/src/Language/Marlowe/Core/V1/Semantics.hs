@@ -1,3 +1,33 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | = Marlowe: financial contracts domain specific language for blockchain
+--
+--   Here we present a reference implementation of Marlowe, domain-specific language targeted at
+--   the execution of financial contracts in the style of Peyton Jones et al
+--   on Cardano.
+--
+--   This is the Haskell implementation of Marlowe semantics for Cardano.
+--
+--   == Semantics
+--
+--   Semantics is based on <https://github.com/input-output-hk/marlowe/blob/stable/src/Semantics.hs>
+--
+--   Marlowe Contract execution is a chain of transactions,
+--   where remaining contract and its state is passed through /Datum/,
+--   and actions (i.e. /Choices/) are passed as
+--   /Redeemer Script/
+--
+--   /Validation Script/ is always the same Marlowe interpreter implementation, available below.
+--
+-----------------------------------------------------------------------------
+
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveAnyClass #-}
@@ -13,36 +43,70 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
--- Big hammer, but helps
-{-# OPTIONS_GHC -fno-specialise #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
+{-# OPTIONS_GHC -fno-specialise #-}  -- A big hammer, but it helps.
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
-{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
-{-| = Marlowe: financial contracts domain specific language for blockchain
+{- HLINT ignore "Avoid restricted function" -}
 
-Here we present a reference implementation of Marlowe, domain-specific language targeted at
-the execution of financial contracts in the style of Peyton Jones et al
-on Cardano.
-
-== Semantics
-
-Semantics is based on <https://github.com/input-output-hk/marlowe/blob/stable/src/Semantics.hs>
-
-Marlowe Contract execution is a chain of transactions,
-where remaining contract and its state is passed through /Datum/,
-and actions (i.e. /Choices/) are passed as
-/Redeemer Script/
-
-/Validation Script/ is always the same Marlowe interpreter implementation, available below.
--}
 
 module Language.Marlowe.Core.V1.Semantics
-  where
+  ( -- * Semantics
+    MarloweData(..)
+  , MarloweParams(..)
+  , Payment(..)
+  , TransactionInput(..)
+  , TransactionOutput(..)
+  , computeTransaction
+  , playTrace
+    -- * Supporting Functions
+  , addMoneyToAccount
+  , applyAction
+  , applyAllInputs
+  , applyCases
+  , applyInput
+  , convertReduceWarnings
+  , evalObservation
+  , evalValue
+  , fixInterval
+  , getContinuation
+  , giveMoney
+  , moneyInAccount
+  , playTraceAux
+  , reduceContractStep
+  , reduceContractUntilQuiescent
+  , refundOne
+  , updateMoneyInAccount
+    -- * Supporting Types
+  , ApplyAction(..)
+  , ApplyAllResult(..)
+  , ApplyResult(..)
+  , ApplyWarning(..)
+  , ReduceEffect(..)
+  , ReduceResult(..)
+  , ReduceStepResult(..)
+  , ReduceWarning(..)
+  , TransactionError(..)
+  , TransactionWarning(..)
+    -- * Utility Functions
+  , contractLifespanUpperBound
+  , isClose
+  , notClose
+  , paymentMoney
+  , totalBalance
+  , validateBalances
+    -- * Serialisation
+  , currencySymbolFromJSON
+  , currencySymbolToJSON
+  , validatorHashFromJSON
+  , validatorHashToJSON
+  ) where
+
 
 import Control.Applicative ((<*>), (<|>))
 import qualified Data.Aeson as JSON
@@ -121,10 +185,9 @@ import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
 import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, (<>))
 
-{- HLINT ignore "Avoid restricted function" -}
 
-{- Functions that used in Plutus Core must be inlineable,
-   so their code is available for PlutusTx compiler -}
+-- Functions that used in Plutus Core must be inlineable,
+-- so their code is available for PlutusTx compiler.
 {-# INLINABLE fixInterval #-}
 {-# INLINABLE evalValue #-}
 {-# INLINABLE evalObservation #-}
@@ -142,9 +205,11 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
 {-# INLINABLE convertReduceWarnings #-}
 {-# INLINABLE applyAllInputs #-}
 {-# INLINABLE isClose #-}
+{-# INLINABLE notClose #-}
 {-# INLINABLE computeTransaction #-}
 {-# INLINABLE contractLifespanUpperBound #-}
 {-# INLINABLE totalBalance #-}
+
 
 {-| Payment occurs during 'Pay' contract evaluation, and
     when positive balances are payed out on contract closure.
@@ -153,6 +218,7 @@ data Payment = Payment AccountId Payee Token Integer
   deriving stock (Haskell.Eq, Haskell.Show)
 
 
+-- | Extract the money value from a payment.
 paymentMoney :: Payment -> Money
 paymentMoney (Payment _ _ (Token cur tok) amt) = Val.singleton cur tok amt
 
@@ -230,8 +296,7 @@ data TransactionError = TEAmbiguousTimeIntervalError
   deriving anyclass (ToJSON, FromJSON)
 
 
-{-| Marlowe transaction input.
--}
+-- | Marlowe transaction input.
 data TransactionInput = TransactionInput
     { txInterval :: TimeInterval
     , txInputs   :: [Input] }
@@ -244,8 +309,7 @@ instance Pretty TransactionInput where
             txInpLine = hang 2 $ text "txInputs = " <> prettyFragment (txInputs tInp) <> rbrace
 
 
-{-| Marlowe transaction output.
--}
+-- | Marlowe transaction output.
 data TransactionOutput =
     TransactionOutput
         { txOutWarnings :: [TransactionWarning]
@@ -255,25 +319,30 @@ data TransactionOutput =
     | Error TransactionError
   deriving stock (Haskell.Show)
 
+
+-- | Parse a validator hash from JSON.
 validatorHashFromJSON :: JSON.Value -> Parser ValidatorHash
 validatorHashFromJSON v = do
   EncodeBase16 bs <- parseJSON v
   return $ ValidatorHash $ toBuiltin bs
 
+-- | Serialise a validator hash as JSON.
 validatorHashToJSON :: ValidatorHash -> JSON.Value
 validatorHashToJSON (ValidatorHash h) = toJSON . EncodeBase16 . fromBuiltin $ h
 
+
+-- | Parse a currency symbol from JSON.
 currencySymbolFromJSON :: JSON.Value -> Parser CurrencySymbol
 currencySymbolFromJSON v = do
   EncodeBase16 bs <- parseJSON v
   return $ CurrencySymbol $ toBuiltin bs
 
+-- | Serialise a currency symbol to JSON.
 currencySymbolToJSON :: CurrencySymbol -> JSON.Value
 currencySymbolToJSON (CurrencySymbol h) = toJSON . EncodeBase16 . fromBuiltin $ h
 
-{-|
-    This data type is a content of a contract's /Datum/
--}
+
+-- | This data type is a content of a contract's /Datum/
 data MarloweData = MarloweData {
         marloweParams   :: MarloweParams,
         marloweState    :: State,
@@ -282,6 +351,7 @@ data MarloweData = MarloweData {
       deriving anyclass (ToJSON, FromJSON)
 
 
+-- | Parameters constant during the course of a contract.
 newtype MarloweParams = MarloweParams { rolesCurrency :: CurrencySymbol }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
 
@@ -298,7 +368,8 @@ instance ToJSON MarloweParams where
   toJSON (MarloweParams c) = JSON.object
     [ ("rolesCurrency", currencySymbolToJSON c) ]
 
-{- Checks 'interval' and trim it if necessary. -}
+
+-- | Checks 'interval' and trims it if necessary.
 fixInterval :: TimeInterval -> State -> IntervalResult
 fixInterval interval state =
     case interval of
@@ -316,9 +387,7 @@ fixInterval interval state =
             else IntervalTrimmed env newState
 
 
-{-|
-  Evaluates @Value@ given current @State@ and @Environment@
--}
+-- | Evaluates @Value@ given current @State@ and @Environment@.
 evalValue :: Environment -> State -> Value Observation -> Integer
 evalValue env state value = let
     eval = evalValue env state
@@ -346,6 +415,7 @@ evalValue env state value = let
                 Nothing -> 0
         Cond cond thn els    -> if evalObservation env state cond then eval thn else eval els
 
+
 -- | Evaluate 'Observation' to 'Bool'.
 evalObservation :: Environment -> State -> Observation -> Bool
 evalObservation env state obs = let
@@ -365,7 +435,7 @@ evalObservation env state obs = let
         FalseObs                -> False
 
 
--- | Pick the first account with money in it
+-- | Pick the first account with money in it.
 refundOne :: Accounts -> Maybe ((Party, Token, Integer), Accounts)
 refundOne accounts = case Map.toList accounts of
     [] -> Nothing
@@ -375,21 +445,21 @@ refundOne accounts = case Map.toList accounts of
         else refundOne (Map.fromList rest)
 
 
--- | Obtains the amount of money available an account
+-- | Obtains the amount of money available an account.
 moneyInAccount :: AccountId -> Token -> Accounts -> Integer
 moneyInAccount accId token accounts = case Map.lookup (accId, token) accounts of
     Just x  -> x
     Nothing -> 0
 
 
--- | Sets the amount of money available in an account
+-- | Sets the amount of money available in an account.
 updateMoneyInAccount :: AccountId -> Token -> Integer -> Accounts -> Accounts
 updateMoneyInAccount accId token amount =
     if amount <= 0 then Map.delete (accId, token) else Map.insert (accId, token) amount
 
 
--- Add the given amount of money to an accoun (only if it is positive)
--- Return the updated Map
+-- | Add the given amount of money to an accoun (only if it is positive).
+--   Return the updated Map.
 addMoneyToAccount :: AccountId -> Token -> Integer -> Accounts -> Accounts
 addMoneyToAccount accId token amount accounts = let
     balance = moneyInAccount accId token accounts
@@ -398,9 +468,8 @@ addMoneyToAccount accId token amount accounts = let
     else updateMoneyInAccount accId token newBalance accounts
 
 
-{-| Gives the given amount of money to the given payee.
-    Returns the appropriate effect and updated accounts
--}
+-- | Gives the given amount of money to the given payee.
+--   Returns the appropriate effect and updated accounts.
 giveMoney :: AccountId -> Payee -> Token -> Integer -> Accounts -> (ReduceEffect, Accounts)
 giveMoney accountId payee token amount accounts = let
     newAccounts = case payee of
@@ -409,7 +478,7 @@ giveMoney accountId payee token amount accounts = let
     in (ReduceWithPayment (Payment accountId payee token amount), newAccounts)
 
 
--- | Carry a step of the contract with no inputs
+-- | Carry a step of the contract with no inputs.
 reduceContractStep :: Environment -> State -> Contract -> ReduceStepResult
 reduceContractStep env state contract = case contract of
 
@@ -442,12 +511,11 @@ reduceContractStep env state contract = case contract of
         in Reduced ReduceNoWarning ReduceNoPayment state cont
 
     When _ timeout cont -> let
-        startSlot = fst (timeInterval env)
-        endSlot   = snd (timeInterval env)
+        (startTime, endTime) = timeInterval env
         -- if timeout in future – do not reduce
-        in if endSlot < timeout then NotReduced
+        in if endTime < timeout then NotReduced
         -- if timeout in the past – reduce to timeout continuation
-        else if timeout <= startSlot then Reduced ReduceNoWarning ReduceNoPayment state cont
+        else if timeout <= startTime then Reduced ReduceNoWarning ReduceNoPayment state cont
         -- if timeout in the time range – issue an ambiguity error
         else AmbiguousTimeIntervalReductionError
 
@@ -466,7 +534,8 @@ reduceContractStep env state contract = case contract of
                   else ReduceAssertionFailed
         in Reduced warning ReduceNoPayment state cont
 
--- | Reduce a contract until it cannot be reduced more
+
+-- | Reduce a contract until it cannot be reduced more.
 reduceContractUntilQuiescent :: Environment -> State -> Contract -> ReduceResult
 reduceContractUntilQuiescent env state contract = let
     reductionLoop
@@ -487,11 +556,14 @@ reduceContractUntilQuiescent env state contract = let
 
     in reductionLoop False env state contract [] []
 
+
+-- | Result of applying an action to a contract.
 data ApplyAction = AppliedAction ApplyWarning State
                  | NotAppliedAction
   deriving stock (Haskell.Show)
 
--- | Try to apply a single input content to a single action
+
+-- | Try to apply a single input content to a single action.
 applyAction :: Environment -> State -> InputContent -> Action -> ApplyAction
 applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party2 tok2 val) =
     if accId1 == accId2 && party1 == party2 && tok1 == tok2 && amount == evalValue env state val
@@ -510,7 +582,8 @@ applyAction env state INotify (Notify obs)
     | evalObservation env state obs = AppliedAction ApplyNoWarning state
 applyAction _ _ _ _ = NotAppliedAction
 
--- | Try to get a continuation from a pair of Input and Case
+
+-- | Try to get a continuation from a pair of Input and Case.
 getContinuation :: Input -> Case Contract -> Maybe Contract
 getContinuation (NormalInput _) (Case _ continuation) = Just continuation
 getContinuation (MerkleizedInput _ inputContinuationHash continuation) (MerkleizedCase _ continuationHash) =
@@ -519,6 +592,7 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
+-- | Try to apply an input to a list of cases.
 applyCases :: Environment -> State -> Input -> [Case Contract] -> ApplyResult
 applyCases env state input (headCase : tailCase) =
     let inputContent = getInputContent input :: InputContent
@@ -532,12 +606,14 @@ applyCases env state input (headCase : tailCase) =
          NotAppliedAction -> applyCases env state input tailCase
 applyCases _ _ _ [] = ApplyNoMatchError
 
--- | Apply a single @Input@ to a current contract
+
+-- | Apply a single @Input@ to a current contract.
 applyInput :: Environment -> State -> Input -> Contract -> ApplyResult
 applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
 
--- | Propagate 'ReduceWarning' to 'TransactionWarning'
+
+-- | Propagate 'ReduceWarning' to 'TransactionWarning'.
 convertReduceWarnings :: [ReduceWarning] -> [TransactionWarning]
 convertReduceWarnings = foldr (\warn acc -> case warn of
     ReduceNoWarning -> acc
@@ -551,7 +627,8 @@ convertReduceWarnings = foldr (\warn acc -> case warn of
         TransactionAssertionFailed : acc
     ) []
 
--- | Apply a list of Inputs to the contract
+
+-- | Apply a list of Inputs to the contract.
 applyAllInputs :: Environment -> State -> Contract -> [Input] -> ApplyAllResult
 applyAllInputs env state contract inputs = let
     applyAllLoop
@@ -566,11 +643,15 @@ applyAllInputs env state contract inputs = let
     applyAllLoop contractChanged env state contract inputs warnings payments =
         case reduceContractUntilQuiescent env state contract of
             RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
-            ContractQuiescent reduced reduceWarns pays curState cont -> case inputs of
+            ContractQuiescent reduced reduceWarns pays curState cont ->
+              let
+                warnings' = warnings ++ convertReduceWarnings reduceWarns
+                payments' = payments ++ pays
+              in case inputs of
                 [] -> ApplyAllSuccess
                     (contractChanged || reduced)
-                    (warnings ++ convertReduceWarnings reduceWarns)
-                    (payments ++ pays)
+                    warnings'
+                    payments'
                     curState
                     cont
                 (input : rest) -> case applyInput env curState input cont of
@@ -581,10 +662,8 @@ applyAllInputs env state contract inputs = let
                             newState
                             cont
                             rest
-                            (warnings
-                                ++ convertReduceWarnings reduceWarns
-                                ++ convertApplyWarning applyWarn)
-                            (payments ++ pays)
+                            (warnings' ++ convertApplyWarning applyWarn)
+                            payments'
                     ApplyNoMatchError -> ApplyAllNoMatchError
                     ApplyHashMismatch -> ApplyAllHashMismatch
     in applyAllLoop False env state contract inputs [] []
@@ -596,9 +675,18 @@ applyAllInputs env state contract inputs = let
             ApplyNonPositiveDeposit party accId tok amount ->
                 [TransactionNonPositiveDeposit party accId tok amount]
 
+
+-- | Check if a contract is just @Close@.
 isClose :: Contract -> Bool
 isClose Close = True
 isClose _     = False
+
+
+-- | Check if a contract is not just @Close@.
+notClose :: Contract -> Bool
+notClose Close = False
+notClose _     = True
+
 
 -- | Try to compute outputs of a transaction given its inputs, a contract, and it's @State@
 computeTransaction :: TransactionInput -> State -> Contract -> TransactionOutput
@@ -607,7 +695,7 @@ computeTransaction tx state contract = let
     in case fixInterval (txInterval tx) state of
         IntervalTrimmed env fixState -> case applyAllInputs env fixState contract inputs of
             ApplyAllSuccess reduced warnings payments newState cont ->
-                   if not reduced && (not (isClose contract) || (Map.null $ accounts state))
+                   if not reduced && (notClose contract || (Map.null $ accounts state))
                     then Error TEUselessTransaction
                     else TransactionOutput { txOutWarnings = warnings
                                            , txOutPayments = payments
@@ -618,6 +706,7 @@ computeTransaction tx state contract = let
             ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
 
+-- | Run a set of inputs starting from the results of a transaction, reporting the new result.
 playTraceAux :: TransactionOutput -> [TransactionInput] -> TransactionOutput
 playTraceAux res [] = res
 playTraceAux TransactionOutput
@@ -637,6 +726,8 @@ playTraceAux TransactionOutput
           Error _ -> transRes
 playTraceAux err@(Error _) _ = err
 
+
+-- | Run a set of inputs starting from a contract and empty state, reporting the result.
 playTrace :: POSIXTime -> Contract -> [TransactionInput] -> TransactionOutput
 playTrace minTime c = playTraceAux TransactionOutput
                                  { txOutWarnings = []
@@ -660,20 +751,17 @@ contractLifespanUpperBound contract = case contract of
     Assert _ cont -> contractLifespanUpperBound cont
 
 
+-- | Total the balance in all accounts.
 totalBalance :: Accounts -> Money
 totalBalance accounts = foldMap
     (\((_, Token cur tok), balance) -> Val.singleton cur tok balance)
     (Map.toList accounts)
 
 
-{-|
-    Check that all accounts have positive balance.
- -}
+-- | Check that all accounts have positive balance.
 validateBalances :: State -> Bool
 validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList accounts)
 
-
--- Typeclass instances
 
 instance FromJSON TransactionInput where
   parseJSON (JSON.Object v) =
@@ -771,7 +859,6 @@ instance Eq ReduceEffect where
     ReduceNoPayment == ReduceNoPayment           = True
     ReduceWithPayment p1 == ReduceWithPayment p2 = p1 == p2
     _ == _                                       = False
-
 
 
 -- Lifting data types to Plutus Core

@@ -12,7 +12,8 @@
 
 
 module Spec.Marlowe.Plutus.Prelude
-  ( tests
+  ( -- * Testing
+    tests
   ) where
 
 

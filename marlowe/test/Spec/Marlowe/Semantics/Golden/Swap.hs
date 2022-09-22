@@ -62,7 +62,7 @@ bToken :: Token
 bToken = Token bSymbol "Token B"
 
 
--- | The Pangram contract.
+-- | The Swap contract.
 contract :: Contract
 contract =
   let

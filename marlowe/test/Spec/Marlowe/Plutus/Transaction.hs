@@ -23,6 +23,7 @@ module Spec.Marlowe.Plutus.Transaction
   , arbitraryPayoutTransaction
   , arbitrarySemanticsTransaction
     -- * Modification
+  , merkleize
   , noModify
   , shuffle
     -- * Conditions
@@ -41,6 +42,7 @@ import Language.Marlowe.Core.V1.Semantics
   , Payment(Payment)
   , TransactionInput(..)
   , TransactionOutput(..)
+  , computeTransaction
   , paymentMoney
   )
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -105,6 +107,7 @@ import Spec.Marlowe.Plutus.Types
   )
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
+import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, suchThat)
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
@@ -466,8 +469,26 @@ shuffle =
       go field = field <~ (lift . elements . permutations =<< use field)
     go infoInputs
     go infoOutputs
---  go infoData  -- FIXME
     go infoSignatories
+    infoData <~ (lift . fmap AM.fromList . elements . permutations . AM.toList =<< use infoData)
+
+
+-- | Merkleize a transaction.
+merkleize :: ArbitraryTransaction SemanticsTransaction ()
+merkleize =
+  do
+   -- Fetch the original state, contract, and inputs.
+    state <- use inputState
+    contract <- use inputContract
+    inputs <- use input
+    -- Merkleize the contract and the input.
+    let
+      (contract', continuations) = deepMerkleize contract
+      inputs' = maybe (error "Merkleization of inputs failed.") id $ merkleizeInputs continuations state contract' inputs
+    -- Update the contract, inputs, and outputs.
+    inputContract .= contract'
+    input .= inputs'
+    output .= computeTransaction inputs' state contract'
 
 
 -- | Generate an arbitrary, valid Marlowe payout transaction: datum, redeemer, and script context.

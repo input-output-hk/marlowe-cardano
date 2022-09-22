@@ -93,7 +93,7 @@ import Language.Marlowe.CLI.Types
   )
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract(..), Input, State(..), Token(Token))
-import Language.Marlowe.Scripts (marloweTxInputsFromInputs, rolePayoutValidator, smallMarloweValidator)
+import Language.Marlowe.Scripts (marloweTxInputsFromInputs, marloweValidator, rolePayoutValidator)
 import Ledger.Typed.Scripts ()
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum(..), Redeemer(..))
@@ -130,7 +130,7 @@ buildMarlowe :: MarloweParams
              -> Either CliError (MarloweInfo PlutusScriptV2 era)  -- ^ The contract and transaction information, or an error message.
 buildMarlowe marloweParams era protocolVersion costModel network stake contract state inputs =
   do
-    miValidatorInfo <- validatorInfo' (fromV2TypedValidator smallMarloweValidator) Nothing era protocolVersion costModel network stake
+    miValidatorInfo <- validatorInfo' (fromV2TypedValidator marloweValidator) Nothing era protocolVersion costModel network stake
     let
       miDatumInfo = buildMarloweDatum marloweParams contract state
       miRedeemerInfo = buildRedeemer inputs
@@ -258,7 +258,7 @@ buildMarloweAddress :: ScriptDataSupportedInEra era
                     -> NetworkId              -- ^ The network ID.
                     -> StakeAddressReference  -- ^ The stake address.
                     -> AddressInEra era       -- ^ The script address.
-buildMarloweAddress = buildAddress (TypedValidatorV2 smallMarloweValidator)
+buildMarloweAddress = buildAddress (TypedValidatorV2 marloweValidator)
 
 -- | Print the address of a validator.
 exportAddress :: forall era lang m t
@@ -280,7 +280,7 @@ exportMarloweAddress :: (MonadIO m, MonadReader (CliEnv era) m)
                      => NetworkId              -- ^ The network ID.
                      -> StakeAddressReference  -- ^ The stake address.
                      -> m ()                   -- ^ Action to print the script address.
-exportMarloweAddress = exportAddress (TypedValidatorV2 smallMarloweValidator)
+exportMarloweAddress = exportAddress (TypedValidatorV2 marloweValidator)
 
 
 buildValidatorInfo :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, IsPlutusScriptLanguage lang)
@@ -340,7 +340,7 @@ marloweValidatorInfo :: ScriptDataSupportedInEra era         -- ^ The era to bui
                      -> NetworkId                            -- ^ The network ID.
                      -> StakeAddressReference                -- ^ The stake address.
                      -> Either CliError (ValidatorInfo PlutusScriptV2 era)  -- ^ The validator information, or an error message.
-marloweValidatorInfo = validatorInfo' (fromV2TypedValidator smallMarloweValidator) Nothing
+marloweValidatorInfo = validatorInfo' (fromV2TypedValidator marloweValidator) Nothing
 
 
 -- | Export to a file the validator information about a Marlowe contract.
@@ -354,7 +354,7 @@ exportMarloweValidator :: (MonadError CliError m, MonadReader (CliEnv era) m)
                        -> Bool                   -- ^ Whether to print the validator hash.
                        -> Bool                   -- ^ Whether to print statistics about the validator.
                        -> m ()                   -- ^ Action to export the validator information to a file.
-exportMarloweValidator = exportValidatorImpl (TypedValidatorV2 smallMarloweValidator)
+exportMarloweValidator = exportValidatorImpl (TypedValidatorV2 marloweValidator)
 
 
 -- | Build the datum information about a Marlowe transaction.

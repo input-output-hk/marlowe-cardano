@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -37,7 +38,7 @@ import Language.Marlowe.Core.V1.Semantics
   )
 import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(ChoiceId)
-  , Contract(Close)
+  , Contract(..)
   , Input(..)
   , InputContent(IChoice, IDeposit)
   , Party(Role)
@@ -54,6 +55,7 @@ import Plutus.V2.Ledger.Api
   , Credential(PubKeyCredential)
   , Data(B, Constr, List)
   , Datum(Datum)
+  , DatumHash(DatumHash)
   , FromData(..)
   , OutputDatum(..)
   , PubKeyHash
@@ -62,15 +64,24 @@ import Plutus.V2.Ledger.Api
   , TokenName
   , TxInInfo(TxInInfo, txInInfoResolved)
   , TxOut(TxOut, txOutValue)
+  , ValidatorHash
   , Value
   , adaSymbol
   , adaToken
   , singleton
   , toData
   )
-import Spec.Marlowe.Plutus.Script (evaluatePayout, evaluateSemantics, payoutAddress, semanticsAddress)
+import Spec.Marlowe.Plutus.Script
+  (evaluatePayout, evaluateSemantics, payoutAddress, payoutScriptHash, semanticsAddress, semanticsScriptHash)
 import Spec.Marlowe.Plutus.Transaction
-  (ArbitraryTransaction, arbitraryPayoutTransaction, arbitrarySemanticsTransaction, noModify, noVeto, shuffle)
+  ( ArbitraryTransaction
+  , arbitraryPayoutTransaction
+  , arbitrarySemanticsTransaction
+  , merkleize
+  , noModify
+  , noVeto
+  , shuffle
+  )
 import Spec.Marlowe.Plutus.Types
   ( PayoutTransaction
   , PlutusTransaction(..)
@@ -88,7 +99,7 @@ import Spec.Marlowe.Plutus.Types
   )
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty, (===))
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
@@ -138,11 +149,11 @@ tests =
             ]
         , testGroup "Constraint 7. Input state"
             [
-              -- TODO: This test requires instrumenting the Plutus script.
+              -- TODO: This test requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
         , testGroup "Constraint 8. Input contract"
             [
-              -- TODO: This test requires instrumenting the Plutus script.
+              -- TODO: This test requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
@@ -158,7 +169,8 @@ tests =
             ]
         , testGroup "Constraint 12. Merkleized continuations"
             [
-              -- FIXME: Add generator for merkleized contracts.
+              testProperty "Valid merkleization"   $ checkMerkleization True
+            , testProperty "Invalid merkleization" $ checkMerkleization False
             ]
         , testGroup "Constraint 13. Positive balances"
             [
@@ -172,6 +184,12 @@ tests =
             [
               testProperty "Invalid insufficient payment" checkPayment
             ]
+        , testProperty "Script hash matches reference hash"
+            $ checkValidatorHash semanticsScriptHash
+              -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
+              -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
+              -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
+              "6a9391d6aa51af28dd876ebb5565b69d1e83e5ac7861506bd29b56b0"
         ]
     , testGroup "Payout Validator"
         [
@@ -194,6 +212,12 @@ tests =
               testProperty "Invalid authorization for withdrawal" $ checkWithdrawal True
             , testProperty "Missing authorized withdrawal"        $ checkWithdrawal False
             ]
+        , testProperty "Script hash matches reference hash"
+            $ checkValidatorHash payoutScriptHash
+              -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
+              -- APPROVED CHANGES TO MARLOWE'S ROLE VALIDATOR. THIS HASH HAS
+              -- IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
+              "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
         ]
     ]
 
@@ -228,7 +252,7 @@ check1Invalid _ allowEmptyList allowByteString allowUnit =
             restrictUnit (BuiltinData (Constr 0 [])) = allowUnit
             restrictUnit _                           = True
           in
-            -- FIXME: There is a very slight chance that a valid item might be generated at random.
+            -- TODO: There is a very slight chance that a valid item might be generated at random.
             arbitrary `suchThat` (\x -> restrictEmptyList x && restrictByteString x && restrictUnit x)
       in
         forAll gen
@@ -435,7 +459,7 @@ checkStateOutput =
         pure $ marloweData {marloweState = new}
 
 
--- | Check that state output to a script matches its semantic output.
+-- | Check that contract output to a script matches its semantic output.
 checkContractOutput :: Property
 checkContractOutput =
   checkDatumOutput
@@ -445,6 +469,37 @@ checkContractOutput =
         let old = marloweContract marloweData
         new <- arbitrary `suchThat` (/= old)
         pure $ marloweData {marloweContract = new}
+
+
+-- | Check that the input contract is merkleized.
+hasMerkleizedInput :: PlutusTransaction SemanticsTransaction -> Bool
+hasMerkleizedInput =
+  let
+    isMerkleized NormalInput{}     = False
+    isMerkleized MerkleizedInput{} = True
+  in
+    any isMerkleized . txInputs . (^. input)
+
+
+-- | Check than an invalid merkleization is rejected.
+checkMerkleization :: Bool -> Property
+checkMerkleization valid =
+  let
+    -- Merkleizedd the contract and its input.
+    modifyBefore = merkleize
+    -- Extract the merkle hash, if any.
+    merkleHash (NormalInput _)            = mempty
+    merkleHash (MerkleizedInput _ hash _) = pure $ DatumHash hash
+    -- Modify the contract if requested.
+    modifyAfter =
+      if valid
+        then pure ()
+        else do
+               -- Remove the merkleized continuation datums for the input.
+               hashes <- input `uses` (concatMap merkleHash . txInputs)
+               infoData %= (AM.fromList . filter ((`notElem` hashes) . fst) . AM.toList)
+  in
+    checkSemanticsTransaction modifyBefore modifyAfter hasMerkleizedInput valid False
 
 
 -- | Check that non-positive accounts are rejected.
@@ -588,3 +643,11 @@ checkWithdrawal mutate =
   checkPayoutTransaction noModify
     (if mutate then mutateRoleIn else removeRoleIn)
     noVeto False False
+
+
+-- | Check that a validator hash is correct.
+checkValidatorHash :: ValidatorHash
+                   -> ValidatorHash
+                   -> Property
+checkValidatorHash actual reference =
+  property $ actual === reference

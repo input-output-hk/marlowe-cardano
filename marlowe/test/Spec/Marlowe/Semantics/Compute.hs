@@ -80,11 +80,12 @@ import Spec.Marlowe.Semantics.Arbitrary
   , whenContractWeights
   )
 import Spec.Marlowe.Semantics.AssocMap (assocMapEq, assocMapInsert, assocMapLookup)
+import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
 import Spec.Marlowe.Semantics.Orphans ()
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, Testable(property), discard, elements, forAll, forAllShrink, suchThat, testProperty)
+  (Arbitrary(..), Gen, Testable(property), discard, elements, forAll, forAllShrink, frequency, suchThat, testProperty)
 
 import qualified PlutusTx.AssocMap as AM
 
@@ -129,10 +130,16 @@ instance Arbitrary MarloweContext where
 instance SemiArbitrary MarloweContext where
   semiArbitrary context =
     do
-      mcInput    <- semiArbitrary context
-      mcState    <- semiArbitrary context
-      mcContract <- semiArbitrary context
+      mcState  <- semiArbitrary context
+      contract <- semiArbitrary context
+      input    <- semiArbitrary context
+      isMerkleized <- frequency [(9, pure False), (1, pure True)]
       let
+        (contract', continuations) = deepMerkleize contract
+        (mcContract, mcInput) =
+          case (isMerkleized, merkleizeInputs continuations mcState contract' input) of
+            (True, Just input') -> (contract', input')
+            _                   -> (contract , input )
         mcOutput = computeTransaction mcInput mcState mcContract
       pure MarloweContext{..}
 
@@ -161,7 +168,7 @@ arbitraryValid =
           Right candidates -> elements candidates
           Left _           -> discard
       let
-        -- FIXME: Generalize to arbitrary starting state.
+        -- TODO: Generalize to arbitrary starting state.
         mcState = State AM.empty AM.empty AM.empty time
         mcInput = head inputs'
         mcOutput = computeTransaction mcInput mcState mcContract

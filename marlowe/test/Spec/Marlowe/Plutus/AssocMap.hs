@@ -12,7 +12,8 @@
 
 
 module Spec.Marlowe.Plutus.AssocMap
-  ( tests
+  ( -- * Testing
+    tests
   ) where
 
 
