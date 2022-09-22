@@ -33,13 +33,7 @@ data TxConstraints v = TxConstraints
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
   , marloweOutputConstraints :: MarloweOutputConstraints v
   , signatureConstraints :: Set Chain.PaymentKeyHash
-  -- ^ Extra payment key hashes that require signatures.
   , metadataConstraints :: Map Int Aeson.Value
-  -- ^ Metadata to add to the transaction.
-  --
-  -- Rules to check:
-  --   1. forall (i, value) in the constraints, the transaction contains value
-  --     at index i of its metadata.
   }
 
 deriving instance Show (TxConstraints 'V1)
@@ -235,6 +229,13 @@ mustConsumePayouts payoutDatum = mempty { payoutInputConstraints = Set.singleton
 --      key.
 requiresSignature :: Core.IsMarloweVersion v => Chain.PaymentKeyHash -> TxConstraints v
 requiresSignature pkh = mempty { signatureConstraints = Set.singleton pkh }
+
+-- | Require the transaction include the given metadata.
+--
+-- Requires that:
+--   1. The given metadata is present in the given index in the transaction.
+requiresMetadata :: Core.IsMarloweVersion v => Int -> Aeson.Value -> TxConstraints v
+requiresMetadata i value = mempty { metadataConstraints = Map.singleton i value }
 
 instance Core.IsMarloweVersion v => Semigroup (TxConstraints v) where
   a <> b = case Core.marloweVersion @v of
