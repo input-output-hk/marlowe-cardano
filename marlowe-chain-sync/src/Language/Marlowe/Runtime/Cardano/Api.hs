@@ -13,7 +13,10 @@ module Language.Marlowe.Runtime.Cardano.Api
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
+import qualified Cardano.Ledger.BaseTypes as L
+import Cardano.Ledger.Credential (Ptr(Ptr))
 import Data.Bifunctor (Bifunctor(bimap))
+import Data.ByteString.Short (fromShort, toShort)
 import Data.Foldable (fold)
 import Data.Functor.Identity (Identity(..))
 import Data.Kind (Type)
@@ -31,17 +34,38 @@ class HasCardanoType a f | a -> f where
   toCardano :: a -> UnwrapIdentity (f (CardanoType a))
   fromCardano :: CardanoType a -> a
 
-class CardanoFeature (CardanoFeatureType a) => HasCardanoTypeWithEra a f | a -> f where
-  type CardanoTypeWithEra a :: Type -> Type
-  type CardanoFeatureType a :: Type -> Type
-  toCardanoInEra
-    :: CardanoFeatureType a era
+class CardanoFeature (FeatureType a) => HasFeatureDependentCardanoType a f | a -> f where
+  type FeatureDependentCardanoType a :: Type -> Type
+  type FeatureType a :: Type -> Type
+  toCardanoFeatureDependent
+    :: FeatureType a era
     -> a
-    -> UnwrapIdentity (f (CardanoTypeWithEra a era))
-  fromCardanoInEra
-    :: CardanoFeatureType a era
-    -> CardanoTypeWithEra a era
+    -> UnwrapIdentity (f (FeatureDependentCardanoType a era))
+  fromCardanoFeatureDependent
+    :: FeatureType a era
+    -> FeatureDependentCardanoType a era
     -> a
+
+instance HasCardanoType BlockHeader Identity where
+  type CardanoType BlockHeader = C.BlockHeader
+  toCardano BlockHeader{..} = C.BlockHeader (toCardano slotNo) (toCardano headerHash) (toCardano blockNo)
+  fromCardano (C.BlockHeader slotNo headerHash blockNo) =
+    BlockHeader (fromCardano slotNo) (fromCardano headerHash) (fromCardano blockNo)
+
+instance HasCardanoType SlotNo Identity where
+  type CardanoType SlotNo = C.SlotNo
+  toCardano = C.SlotNo . fromIntegral
+  fromCardano (C.SlotNo slotNo) = fromIntegral slotNo
+
+instance HasCardanoType BlockNo Identity where
+  type CardanoType BlockNo = C.BlockNo
+  toCardano = C.BlockNo . fromIntegral
+  fromCardano (C.BlockNo blockNo) = fromIntegral blockNo
+
+instance HasCardanoType BlockHeaderHash Identity where
+  type CardanoType BlockHeaderHash = C.Hash C.BlockHeader
+  toCardano = C.HeaderHash . toShort . unBlockHeaderHash
+  fromCardano (C.HeaderHash hash) = BlockHeaderHash $ fromShort hash
 
 instance HasCardanoType ScriptHash Maybe where
   type CardanoType ScriptHash = C.ScriptHash
@@ -68,10 +92,50 @@ instance HasCardanoType Datum Identity where
     C.ScriptDataNumber i -> I i
     C.ScriptDataBytes bs -> B bs
 
+instance HasCardanoType Credential Maybe where
+  type CardanoType Credential = C.PaymentCredential
+  toCardano = \case
+    PaymentKeyCredential pkh -> C.PaymentCredentialByKey <$> toCardano pkh
+    ScriptCredential sh -> C.PaymentCredentialByScript <$> toCardano sh
+  fromCardano = \case
+    C.PaymentCredentialByKey pkh -> PaymentKeyCredential $ fromCardano pkh
+    C.PaymentCredentialByScript sh -> ScriptCredential $ fromCardano sh
+
+instance HasCardanoType StakeCredential Maybe where
+  type CardanoType StakeCredential = C.StakeCredential
+  toCardano = \case
+    StakeKeyCredential skh -> C.StakeCredentialByKey <$> toCardano skh
+    StakeScriptCredential sh -> C.StakeCredentialByScript <$> toCardano sh
+  fromCardano = \case
+    C.StakeCredentialByKey skh -> StakeKeyCredential $ fromCardano skh
+    C.StakeCredentialByScript sh -> StakeScriptCredential $ fromCardano sh
+
+instance HasCardanoType (Maybe StakeReference) Maybe where
+  type CardanoType (Maybe StakeReference) = C.StakeAddressReference
+  toCardano = \case
+    Nothing -> Just C.NoStakeAddress
+    Just (StakeCredential cred) -> C.StakeAddressByValue <$> toCardano cred
+    Just (StakePointer slotNo txIx certIx) -> Just
+      $ C.StakeAddressByPointer
+      $ C.StakeAddressPointer
+      $ Ptr (toCardano slotNo) (L.TxIx $ fromIntegral txIx) (toCardano certIx)
+  fromCardano = \case
+    C.NoStakeAddress -> Nothing
+    C.StakeAddressByValue credential -> Just $ StakeCredential $ fromCardano credential
+    C.StakeAddressByPointer (C.StakeAddressPointer (Ptr slotNo (L.TxIx txIx) certIx)) -> Just $ StakePointer
+      (fromCardano slotNo)
+      (fromIntegral txIx)
+      (fromCardano certIx)
+
 instance HasCardanoType PaymentKeyHash Maybe where
   type CardanoType PaymentKeyHash = C.Hash C.PaymentKey
   toCardano = C.deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) . unPaymentKeyHash
   fromCardano = PaymentKeyHash . C.serialiseToRawBytes
+
+instance HasCardanoType StakeKeyHash Maybe where
+  type CardanoType StakeKeyHash = C.Hash C.StakeKey
+  toCardano = C.deserialiseFromRawBytes (C.AsHash C.AsStakeKey) . unStakeKeyHash
+  fromCardano = StakeKeyHash . C.serialiseToRawBytes
 
 instance HasCardanoType PolicyId Maybe where
   type CardanoType PolicyId = C.PolicyId
@@ -98,17 +162,22 @@ instance HasCardanoType TxIx Identity where
   toCardano = C.TxIx . fromIntegral . unTxIx
   fromCardano (C.TxIx txIx) = TxIx $ fromIntegral txIx
 
+instance HasCardanoType CertIx Identity where
+  type CardanoType CertIx = L.CertIx
+  toCardano = L.CertIx . unCertIx
+  fromCardano (L.CertIx certIx) = CertIx certIx
+
 instance HasCardanoType TxOutRef Maybe where
   type CardanoType TxOutRef = C.TxIn
   toCardano TxOutRef{..} = C.TxIn <$> toCardano txId <*> pure (toCardano txIx)
   fromCardano (C.TxIn txId txIx) = TxOutRef (fromCardano txId) (fromCardano txIx)
 
-instance HasCardanoTypeWithEra Address Maybe where
-  type CardanoTypeWithEra Address = C.AddressInEra
-  type CardanoFeatureType Address = C.CardanoEra
-  toCardanoInEra era = withCardanoEra era
+instance HasFeatureDependentCardanoType Address Maybe where
+  type FeatureDependentCardanoType Address = C.AddressInEra
+  type FeatureType Address = C.CardanoEra
+  toCardanoFeatureDependent era = withCardanoEra era
     $ C.deserialiseFromRawBytes (C.AsAddressInEra $ cardanoEraToAsType era) . unAddress
-  fromCardanoInEra era = withCardanoEra era
+  fromCardanoFeatureDependent era = withCardanoEra era
     $ Address . C.serialiseToRawBytes
 
 instance HasCardanoType Lovelace Identity where
@@ -142,46 +211,46 @@ instance HasCardanoType Assets Maybe where
     , tokens = fromCardano value
     }
 
-instance HasCardanoTypeWithEra Assets Maybe where
-  type CardanoTypeWithEra Assets = C.TxOutValue
-  type CardanoFeatureType Assets = C.MultiAssetSupportedInEra
-  toCardanoInEra era assets = C.TxOutValue era <$> toCardano assets
-  fromCardanoInEra era = \case
+instance HasFeatureDependentCardanoType Assets Maybe where
+  type FeatureDependentCardanoType Assets = C.TxOutValue
+  type FeatureType Assets = C.MultiAssetSupportedInEra
+  toCardanoFeatureDependent era assets = C.TxOutValue era <$> toCardano assets
+  fromCardanoFeatureDependent era = \case
     C.TxOutValue _ value -> fromCardano value
     C.TxOutAdaOnly era' _ -> case (era, era') of
 
-instance HasCardanoTypeWithEra (Maybe DatumHash, Maybe Datum) Maybe where
-  type CardanoTypeWithEra (Maybe DatumHash, Maybe Datum) = C.TxOutDatum C.CtxTx
-  type CardanoFeatureType (Maybe DatumHash, Maybe Datum) = C.CardanoEra
-  toCardanoInEra era = case featureInCardanoEra era of
+instance HasFeatureDependentCardanoType (Maybe DatumHash, Maybe Datum) Maybe where
+  type FeatureDependentCardanoType (Maybe DatumHash, Maybe Datum) = C.TxOutDatum C.CtxTx
+  type FeatureType (Maybe DatumHash, Maybe Datum) = C.CardanoEra
+  toCardanoFeatureDependent era = case featureInCardanoEra era of
     Nothing -> const $ Just C.TxOutDatumNone
     Just scriptDataSupported -> \case
       (Nothing, Nothing) -> Just C.TxOutDatumNone
       (Just hash, Nothing) -> C.TxOutDatumHash scriptDataSupported <$> toCardano hash
       (_, Just datum) -> Just $ C.TxOutDatumInTx scriptDataSupported $ toCardano datum
-  fromCardanoInEra _ = \case
+  fromCardanoFeatureDependent _ = \case
     C.TxOutDatumNone -> (Nothing, Nothing)
     C.TxOutDatumHash _ hash -> (Just $ fromCardano hash, Nothing)
     C.TxOutDatumInTx _ datum -> (Nothing, Just $ fromCardano datum)
     C.TxOutDatumInline _ datum -> (Nothing, Just $ fromCardano datum)
 
-instance HasCardanoTypeWithEra TransactionOutput Maybe where
-  type CardanoTypeWithEra TransactionOutput = C.TxOut C.CtxTx
-  type CardanoFeatureType TransactionOutput = C.MultiAssetSupportedInEra
-  toCardanoInEra era TransactionOutput{..} = C.TxOut
-    <$> toCardanoInEra (cardanoEraOfFeature era) address
-    <*> toCardanoInEra era assets
-    <*> toCardanoInEra (cardanoEraOfFeature era) (datumHash, datum)
+instance HasFeatureDependentCardanoType TransactionOutput Maybe where
+  type FeatureDependentCardanoType TransactionOutput = C.TxOut C.CtxTx
+  type FeatureType TransactionOutput = C.MultiAssetSupportedInEra
+  toCardanoFeatureDependent era TransactionOutput{..} = C.TxOut
+    <$> toCardanoFeatureDependent (cardanoEraOfFeature era) address
+    <*> toCardanoFeatureDependent era assets
+    <*> toCardanoFeatureDependent (cardanoEraOfFeature era) (datumHash, datum)
     <*> pure C.ReferenceScriptNone
 
-  fromCardanoInEra era (C.TxOut address value txOutDatum _) =
+  fromCardanoFeatureDependent era (C.TxOut address value txOutDatum _) =
     TransactionOutput
-      (fromCardanoInEra (cardanoEraOfFeature era) address)
-      (fromCardanoInEra era value)
+      (fromCardanoFeatureDependent (cardanoEraOfFeature era) address)
+      (fromCardanoFeatureDependent era value)
       hash
       datum
     where
-      (hash, datum) = fromCardanoInEra (cardanoEraOfFeature era) txOutDatum
+      (hash, datum) = fromCardanoFeatureDependent (cardanoEraOfFeature era) txOutDatum
 
 cardanoEraToAsType :: C.CardanoEra era -> C.AsType era
 cardanoEraToAsType = \case
