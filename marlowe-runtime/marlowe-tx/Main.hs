@@ -7,6 +7,8 @@ import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Either (fromRight)
 import Data.Void (Void)
+import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
+import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
@@ -77,6 +79,15 @@ run Options{..} = withSocketsDo do
         pure $ RunTransactionServer \server -> do
           let peer = jobServerPeer server
           fst <$> runPeerWithDriver driver peer (startDState driver)
+
+      runHistorySyncClient :: MarloweSyncClient IO a -> IO a
+      runHistorySyncClient client = do
+        historySyncAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
+        bracket (openClient historySyncAddr) close \historySyncSocket -> do
+          let driver = mkDriver throwIO codecMarloweSync $ socketAsChannel historySyncSocket
+          let peer = marloweSyncClientPeer client
+          fst <$> runPeerWithDriver driver peer (startDState driver)
+
     let mkSubmitJob = Submit.mkSubmitJob
     systemStart <- queryChainSync GetSystemStart
     eraHistory <- queryChainSync GetEraHistory
@@ -91,8 +102,7 @@ run Options{..} = withSocketsDo do
         eraHistory
         protocolParameters
     let loadWalletContext = Query.loadWalletContext
-    let loadMarloweScriptOutput = Query.loadMarloweScriptOutput
-    let loadPayoutScriptOutputs = Query.loadPayoutScriptOutputs
+    let loadMarloweContext = Query.loadMarloweContext runHistorySyncClient
     TransactionServer{..} <- atomically do
       mkTransactionServer TransactionServerDependencies{..}
     runTransactionServer
@@ -128,6 +138,8 @@ data Options = Options
   , chainSeekHost      :: HostName
   , port               :: PortNumber
   , host               :: HostName
+  , historySyncPort :: PortNumber
+  , historyHost :: HostName
   }
 
 getOptions :: IO Options
@@ -139,6 +151,8 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> chainSeekHostParser
       <*> portParser
       <*> hostParser
+      <*> historySyncPortParser
+      <*> historyHostParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-seek-port-number"
@@ -178,6 +192,22 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , value "127.0.0.1"
       , metavar "HOST_NAME"
       , help "The host name to run the tx server on."
+      , showDefault
+      ]
+
+    historySyncPortParser = option auto $ mconcat
+      [ long "history-sync-port"
+      , value 3719
+      , metavar "PORT_NUMBER"
+      , help "The port number of the history sync server."
+      , showDefault
+      ]
+
+    historyHostParser = strOption $ mconcat
+      [ long "history-host"
+      , value "127.0.0.1"
+      , metavar "HOST_NAME"
+      , help "The host name of the history server."
       , showDefault
       ]
 
