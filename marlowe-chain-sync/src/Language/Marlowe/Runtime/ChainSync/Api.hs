@@ -93,7 +93,9 @@ import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
+import Data.Function (on)
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text (Text)
@@ -244,10 +246,25 @@ data Assets = Assets
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+instance Semigroup Assets where
+  a <> b = Assets
+    { ada = on (+) ada a b
+    , tokens = on (<>) tokens a b
+    }
+
+instance Monoid Assets where
+  mempty = Assets 0 mempty
+
 -- | A collection of token quantities by their asset ID.
 newtype Tokens = Tokens { unTokens :: Map AssetId Quantity }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid)
+  deriving newtype (Binary)
+
+instance Semigroup Tokens where
+  (<>) = fmap Tokens . on (Map.unionWith (+)) unTokens
+
+instance Monoid Tokens where
+  mempty = Tokens mempty
 
 -- | A newtype wrapper for parsing base 16 strings as byte strings.
 newtype Base16 = Base16 { unBase16 :: ByteString }
