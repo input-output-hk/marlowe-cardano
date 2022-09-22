@@ -25,13 +25,14 @@ import Cardano.Api
   , makeShelleyAddress
   )
 import qualified Cardano.Api as C
+import Cardano.Api.Shelley (StakeCredential(..))
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT)
+import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
 import qualified Data.Aeson as Aeson
 import Data.Bifunctor (first)
 import Data.List (find)
@@ -42,7 +43,7 @@ import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, ScriptHash(..), SlotConfig, TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, utxo)
+import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
@@ -57,7 +58,7 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints
   (buildApplyInputsConstraints, buildCreateConstraints, buildWithdrawConstraints)
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(..), SolveConstraints)
-import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweScriptOutput, LoadPayoutScriptOutputs, LoadWalletContext)
+import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
@@ -70,8 +71,7 @@ data TransactionServerDependencies = TransactionServerDependencies
   , mkSubmitJob :: forall era. ScriptDataSupportedInEra era -> Tx era -> STM SubmitJob
   , solveConstraints :: forall era v. SolveConstraints era v
   , loadWalletContext :: LoadWalletContext
-  , loadMarloweScriptOutput :: LoadMarloweScriptOutput
-  , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
+  , loadMarloweContext :: LoadMarloweContext
   , slotConfig :: SlotConfig
   , networkId :: NetworkId
   }
@@ -103,8 +103,7 @@ data WorkerDependencies = WorkerDependencies
   , mkSubmitJob :: forall era. ScriptDataSupportedInEra era -> Tx era -> STM SubmitJob
   , solveConstraints :: forall era v. SolveConstraints era v
   , loadWalletContext :: LoadWalletContext
-  , loadMarloweScriptOutput :: LoadMarloweScriptOutput
-  , loadPayoutScriptOutputs :: LoadPayoutScriptOutputs
+  , loadMarloweContext :: LoadMarloweContext
   , slotConfig :: SlotConfig
   , networkId :: NetworkId
   }
@@ -144,7 +143,7 @@ mkWorker WorkerDependencies{..} =
               slotConfig
               solveConstraints
               loadWalletContext
-              loadMarloweScriptOutput
+              loadMarloweContext
               era
               version
               addresses
@@ -152,14 +151,15 @@ mkWorker WorkerDependencies{..} =
               invalidBefore
               invalidHereafter
               redeemer
-          Withdraw era version addresses payoutDatum ->
+          Withdraw era version addresses contractId payoutDatum ->
             execWithdraw
               solveConstraints
               loadWalletContext
-              loadPayoutScriptOutputs
+              loadMarloweContext
               era
               version
               addresses
+              contractId
               payoutDatum
           Submit era tx ->
             execSubmit mkSubmitJob trackSubmitJob era tx
@@ -192,7 +192,7 @@ execCreate solveConstraints loadWalletContext networkId era mStakeCredential ver
   walletContext <- lift $ loadWalletContext addresses
   -- The marlowe context for a create transaction has no marlowe output and
   -- an empty payout output set. It may specify a stake credential to use.
-  let marloweContext = MarloweContext mStakeCredential Nothing mempty
+  let marloweContext = MarloweContext (fromCardanoStakeCredential <$> mStakeCredential) Nothing mempty
   txBody <- except
     $ first CreateUnsolvableConstraints
     $ solveConstraints era marloweContext walletContext constraints
@@ -216,11 +216,16 @@ execCreate solveConstraints loadWalletContext networkId era mStakeCredential ver
         ScriptDataInAlonzoEra -> \(TxOut address _ _ _) -> address == AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) scriptAddress
         ScriptDataInBabbageEra -> \(TxOut address _ _ _) -> address == AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) scriptAddress
 
+fromCardanoStakeCredential :: StakeCredential -> Chain.Credential
+fromCardanoStakeCredential = \case
+  StakeCredentialByKey pkh -> Chain.PaymentKeyCredential $ Chain.PaymentKeyHash $ serialiseToRawBytes pkh
+  StakeCredentialByScript sh -> Chain.ScriptCredential $ Chain.ScriptHash $ serialiseToRawBytes sh
+
 execApplyInputs
   :: SlotConfig
   -> SolveConstraints era v
   -> LoadWalletContext
-  -> LoadMarloweScriptOutput
+  -> LoadMarloweContext
   -> ScriptDataSupportedInEra era
   -> MarloweVersion v
   -> WalletAddresses
@@ -233,7 +238,7 @@ execApplyInputs
   slotConfig
   solveConstraints
   loadWalletContext
-  loadMarloweScriptOutput
+  loadMarloweContext
   era
   version
   addresses
@@ -241,19 +246,18 @@ execApplyInputs
   invalidBefore
   invalidHereafter
   inputs = execExceptT do
-    (scriptOutput, txOut) <-
-      ExceptT $ maybe (Left ScriptOutputNotFound) Right <$> loadMarloweScriptOutput version contractId
+    marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
+      $ ExceptT
+      $ loadMarloweContext version contractId
+    scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     constraints <- except $ buildApplyInputsConstraints
         slotConfig
         version
-        (scriptOutput, txOut)
+        scriptOutput'
         invalidBefore
         invalidHereafter
         inputs
     walletContext <- lift $ loadWalletContext addresses
-    -- The Marlowe context for an apply inputs transaction has the previous
-    -- marlowe output and no payout outputs.
-    let marloweContext = MarloweContext Nothing (Just (utxo scriptOutput, txOut)) mempty
     except
       $ first ApplyInputsUnsolvableConstraints
       $ solveConstraints era marloweContext walletContext constraints
@@ -261,19 +265,19 @@ execApplyInputs
 execWithdraw
   :: SolveConstraints era v
   -> LoadWalletContext
-  -> LoadPayoutScriptOutputs
+  -> LoadMarloweContext
   -> ScriptDataSupportedInEra era
   -> MarloweVersion v
   -> WalletAddresses
+  -> ContractId
   -> PayoutDatum v
   -> IO (ServerStCmd MarloweTxCommand Void WithdrawError (TxBody era) IO ())
-execWithdraw solveConstraints loadWalletContext loadPayoutScriptOutputs era version addresses datum = execExceptT do
+execWithdraw solveConstraints loadWalletContext loadMarloweContext era version addresses contractId datum = execExceptT do
   constraints <- except $ buildWithdrawConstraints version datum
   walletContext <- lift $ loadWalletContext addresses
-  payoutOutputs <- lift $ loadPayoutScriptOutputs version datum
-  -- The Marlowe context for a withdraw transaction has the payout script
-  -- outputs for the requested role and no marlowe script output.
-  let marloweContext = MarloweContext Nothing Nothing payoutOutputs
+  marloweContext <- withExceptT WithdrawLoadMarloweContextFailed
+    $ ExceptT
+    $ loadMarloweContext version contractId
   except
     $ first WithdrawUnsolvableConstraints
     $ solveConstraints era marloweContext walletContext constraints
