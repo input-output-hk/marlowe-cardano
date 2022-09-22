@@ -31,8 +31,8 @@ module Spec.Marlowe.Semantics.Golden
 
 
 import Data.List (intercalate)
-import Language.Marlowe.Core.V1.Semantics
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput(..), computeTransaction, playTrace)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, State(State))
 import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.V2.Ledger.Api (POSIXTime)
 import Test.Tasty (TestTree, testGroup)

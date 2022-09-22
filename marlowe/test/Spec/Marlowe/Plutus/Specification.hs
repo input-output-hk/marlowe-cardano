@@ -459,7 +459,7 @@ checkStateOutput =
         pure $ marloweData {marloweState = new}
 
 
--- | Check that state output to a script matches its semantic output.
+-- | Check that contract output to a script matches its semantic output.
 checkContractOutput :: Property
 checkContractOutput =
   checkDatumOutput

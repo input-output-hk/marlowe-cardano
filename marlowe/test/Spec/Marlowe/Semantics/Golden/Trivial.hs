@@ -52,7 +52,7 @@ ada :: Token
 ada = Token "" ""
 
 
--- | The Pangram contract.
+-- | The Trivial contract.
 contract :: Contract
 contract =
   let

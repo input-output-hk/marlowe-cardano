@@ -59,7 +59,7 @@ ada :: Token
 ada = Token "" ""
 
 
--- | The Pangram contract.
+-- | The Escrow contract.
 contract :: Contract
 contract =
   let

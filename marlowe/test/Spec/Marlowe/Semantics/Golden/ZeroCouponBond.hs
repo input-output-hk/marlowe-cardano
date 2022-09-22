@@ -54,7 +54,7 @@ ada :: Token
 ada = Token "" ""
 
 
--- | The Pangram contract.
+-- | The Zero-Coupon Bond contract.
 contract :: Contract
 contract =
   let

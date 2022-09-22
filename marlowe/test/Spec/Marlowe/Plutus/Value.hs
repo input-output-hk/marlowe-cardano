@@ -15,7 +15,8 @@
 
 
 module Spec.Marlowe.Plutus.Value
-  ( tests
+  ( -- * Testing
+    tests
   ) where
 
 
@@ -70,7 +71,7 @@ checkMappend =
         all check . foldl1 union $ tokens <$> [x, y, z]
 
 
--- | Check equality operator.
+-- | Check equality operator on `Value`.
 checkEq :: Property
 checkEq =
   property
@@ -111,7 +112,7 @@ checkLeq =
         (x `leq` y) == (all check . foldl1 union $ tokens <$> [x, y])
 
 
--- | Check that `leq` is a partial ordering requiring that quantity of each token in the first
+-- | Check that `geq` is a partial ordering requiring that quantity of each token in the first
 --   operand is less than or equal to quanity of the corresponding token in the second operand,
 --   where a missing token in one operand represents a zero quantity.
 checkGeq :: Property
@@ -135,7 +136,7 @@ valueOf' v c t =
     sum $ concat v''
 
 
--- | Check the `valueOf` function.
+-- | `valueOf` correctly extract the value of a currency and token name.
 checkValueOf :: Property
 checkValueOf =
   property
@@ -144,7 +145,7 @@ checkValueOf =
       valueOf v c t == valueOf' v c t
 
 
--- | Check the `singleton` function.
+-- | `singleton` creates a value for a single currency and token name.
 checkSingleton :: Property
 checkSingleton =
   property
@@ -156,6 +157,6 @@ checkSingleton =
         valueOf v c t == i && length (AM.toList $ getValue v) == 1
 
 
--- | Check the `zero` function.
+-- | `zero` has not value.
 checkZero :: Property
 checkZero = getValue zero === AM.empty

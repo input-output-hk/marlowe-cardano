@@ -99,12 +99,12 @@ newtype PubKey = PubKey String
 newtype MarloweScenario = MarloweScenario { mlInitialBalances :: Map PubKey Ledger.Value }
 
 
--- | Generate a small integer at random.
+-- | Generate a small integer amount at random.
 amount :: Gen Integer
 amount = choose (-100, 100)
 
 
--- | Generate a small positive integer at random.
+-- | Generate a small positive integer amount at random.
 positiveAmount :: Gen Integer
 positiveAmount = choose (1, 100)
 

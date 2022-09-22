@@ -6,7 +6,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Tests of Marlowe semantics.
+-- | Tests of Marlowe serialisation.
 --
 -----------------------------------------------------------------------------
 
@@ -21,6 +21,7 @@ import Test.Tasty (TestTree, testGroup)
 
 import qualified Spec.Marlowe.Serialization.CoreJson (tests)
 import qualified Spec.Marlowe.Serialization.ExtendedJson (tests)
+
 
 -- | Run the tests.
 tests :: TestTree

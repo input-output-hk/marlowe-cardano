@@ -16,7 +16,8 @@
 
 
 module Spec.Marlowe.Plutus.ScriptContext
-  ( tests
+  ( -- * Testing
+    tests
   ) where
 
 
@@ -50,7 +51,7 @@ tests =
     ]
 
 
--- | Test `findDatum`.
+-- | `findDatum` locates a datum in a script context.
 checkFindDatum :: Property
 checkFindDatum =
   property
@@ -68,7 +69,7 @@ checkFindDatum =
             findDatum h txInfo == fmap snd (find ((== h) . fst) $ AM.toList txInfoData)
 
 
--- | Test `findDatumHash`.
+-- | `findDatumHash` locates a datum hash in a script context.
 checkFindDatumHash :: Property
 checkFindDatumHash =
   property
@@ -86,7 +87,7 @@ checkFindDatumHash =
             findDatumHash d txInfo == fmap fst (find ((== d) . snd) $ AM.toList txInfoData)
 
 
--- | Test `txSignedBy`.
+-- | `txSignedBy` detects a signature in a script context.
 checkSignedBy :: Property
 checkSignedBy =
   property
@@ -104,7 +105,7 @@ checkSignedBy =
             txSignedBy txInfo pkh == elem pkh txInfoSignatories
 
 
--- | Test `valuePaidTo`.
+-- | `valuePaidTo` fetches correct total value paid in a script context.
 checkValuePaid :: Property
 checkValuePaid =
   property
@@ -130,7 +131,7 @@ checkValuePaid =
               valuePaidTo txInfo pkh == foldMap txOutValue (filter matchPkh txInfoOutputs)
 
 
--- | Test `valueSpent`.
+-- | `valueSpent` fetches correct total value spent in a script context.
 checkValueSpent :: Property
 checkValueSpent =
   property

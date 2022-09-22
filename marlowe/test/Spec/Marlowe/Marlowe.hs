@@ -75,6 +75,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , emptyState
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address
+  (deserialiseAddress, deserialiseAddressBech32, mainnet, serialiseAddress, serialiseAddressBech32)
 import Language.Marlowe.Scripts (alternateMarloweValidator, marloweValidator)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V2.Ledger.Api (POSIXTime(POSIXTime))

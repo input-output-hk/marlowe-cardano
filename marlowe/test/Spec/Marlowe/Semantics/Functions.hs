@@ -44,6 +44,7 @@ import Language.Marlowe.Core.V1.Semantics
   , giveMoney
   , isClose
   , moneyInAccount
+  , notClose
   , playTrace
   , reduceContractStep
   , reduceContractUntilQuiescent
@@ -84,18 +85,7 @@ import Test.QuickCheck.Monadic (monadicIO, pick, run)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
 import Test.Tasty.QuickCheck
-  ( Arbitrary(..)
-  , Gen
-  , Property
-  , Testable(property)
-  , chooseInt
-  , elements
-  , forAll
-  , forAllShrink
-  , listOf
-  , suchThat
-  , testProperty
-  )
+  (Arbitrary(..), Gen, Property, Testable(property), chooseInt, elements, forAll, forAllShrink, suchThat, testProperty)
 
 import qualified PlutusTx.AssocMap as AM (delete, empty, filter, fromList, insert, keys, lookup, member, null, toList)
 
@@ -208,6 +198,7 @@ tests =
     , testProperty "applyInput" checkApplyInput
 --  , testProperty "applyAllInputs" checkApplyAllInputs
     , testCase "isClose" checkIsClose
+    , testCase "notClose" checkNotClose
     , testProperty "computeTransaction (via playTrace)" checkComputeTransaction
     , testProperty "playTrace" checkPlayTrace
     ]
@@ -223,7 +214,9 @@ forAll' :: Arbitrary a
 forAll' = flip forAllShrink shrink
 
 
--- | Test the `Language.Marlowe.Core.V1.Semantics.fixInterval` function.
+-- | Test the `Language.Marlowe.Core.V1.Semantics.fixInterval` function by
+--   generating arbitrary valid and invalid intervals and checking that
+--   results or errors re reported correctly.
 checkFixInterval :: Bool      -- ^ Whether the validity interval should be invalid.
                  -> Bool      -- ^ Whethe the validity interval should be in the past.
                  -> Property  -- ^ The test.
@@ -243,7 +236,7 @@ checkFixInterval invalid inPast =
       IntervalError (IntervalInPastError _ _) -> not invalid && inPast
 
 
--- | Test the evaluation of values and observations.
+-- | Test the evaluation of values and observations using a generation function and a test function.
 checkValue :: Arbitrary a
            => Show a
            => (Environment -> State -> Gen a)                                                                 -- ^ The test-case generator.
@@ -260,7 +253,8 @@ checkValue gen f =
     f (evalValue environment state) (evalObservation environment state) environment state x
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.AvailableMoney`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.AvailableMoney` according to
+--   whether the account is indeed present in the state.
 checkAvailableMoney :: Bool      -- ^ Whether the account is present in the state.
                     -> Property  -- ^ The test.
 checkAvailableMoney isElement =
@@ -268,7 +262,7 @@ checkAvailableMoney isElement =
      gen _ State{accounts} =
        if isElement && not (AM.null accounts)
          then elements $ AM.keys accounts
-         else (,) <$> arbitrary <*> arbitrary
+         else arbitrary
   in
     checkValue gen $ \eval _ _ State{accounts} (account, token) ->
       let
@@ -279,48 +273,44 @@ checkAvailableMoney isElement =
           Just x' -> eval x == x'
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.Constant`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.Constant` by evaluating
+--   the value.
 checkConstant :: Property
 checkConstant =
   checkValue (const . const $ arbitrary) $ \eval _ _ _ x ->
     eval (Constant x) == x
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.NegValue`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.NegValue` by evaluating
+--   the value.
 checkNegValue :: Property
 checkNegValue =
   checkValue (const . const $ arbitrary) $ \eval _ _ _ x ->
     eval (NegValue x) == - eval x
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.AddValue`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.AddValue` by evaluating
+--   the values.
 checkAddValue :: Property
 checkAddValue =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval _ _ _ (x, y) ->
-      eval (AddValue x y) == eval x + eval y
+  checkValue (const $ const arbitrary) $ \eval _ _ _ (x, y) ->
+    eval (AddValue x y) == eval x + eval y
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.SubValue`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.SubValue` by evaluating
+--   the values.
 checkSubValue :: Property
 checkSubValue =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval _ _ _ (x, y) ->
-      eval (SubValue x y) == eval x - eval y
+  checkValue (const $ const arbitrary) $ \eval _ _ _ (x, y) ->
+    eval (SubValue x y) == eval x - eval y
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.MulValue`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.MulValue` by evaluating
+--   the values.
 checkMulValue :: Property
 checkMulValue =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval _ _ _ (x, y) ->
-      eval (MulValue x y) == eval x * eval y
+  checkValue (const $ const arbitrary) $ \eval _ _ _ (x, y) ->
+    eval (MulValue x y) == eval x * eval y
 
 
 -- | Test `Language.Marlowe.Core.V1.Semantics.Types.DivValue` for 0/0.
@@ -347,24 +337,20 @@ checkDivValueDenominatorZero =
 -- | Test ` Language.Marlowe.Core.V1.Semantics.Types.DivValue . Language.Marlowe.Core.V1.Semantics.Types.MulValue`.
 checkDivValueMultiple :: Property
 checkDivValueMultiple =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval _ _ _ (x, n) ->
-      eval (DivValue (MulValue x n) n) == eval x || eval n == 0
+  checkValue (const $ const arbitrary) $ \eval _ _ _ (x, n) ->
+    eval (DivValue (MulValue x n) n) == eval x || eval n == 0
 
 
--- | Test rounding of `Language.Marlowe.Core.V1.Semantics.Types.DivValue`.
+-- | Test rounding of `Language.Marlowe.Core.V1.Semantics.Types.DivValue` by evaluating
+--   the values and comparing to `truncatedDivide`.
 checkDivValueRounding :: Property
 checkDivValueRounding =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval _ _ _ (x, y) ->
-      eval (DivValue x y) == eval x `truncatedDivide` eval y || eval y == 0
+  checkValue (const $ const arbitrary) $ \eval _ _ _ (x, y) ->
+    eval (DivValue x y) == eval x `truncatedDivide` eval y || eval y == 0
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.ChoiceValue`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.ChoiceValue` depending
+--   upon whether the choice has indeed been made.
 checkChoiceValue :: Bool      -- ^ Whether the choice should be taken from the state.
                  -> Property  -- ^ The test.
 checkChoiceValue isElement =
@@ -383,21 +369,25 @@ checkChoiceValue isElement =
           Just x' -> eval x == x'
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.TimeIntervalStart`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.TimeIntervalStart` by
+--   evaluating the value in the context of the environment.
 checkTimeIntervalStart :: Property
 checkTimeIntervalStart =
   checkValue (const . const $ pure ()) $ \eval _ Environment{timeInterval} _ () ->
     POSIXTime (eval TimeIntervalStart) == fst timeInterval
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.TimeIntervalEnd`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.TimeIntervalEnd` by
+--   evaluating the value in the context of the environment.
 checkTimeIntervalEnd :: Property
 checkTimeIntervalEnd =
   checkValue (const . const $ pure ()) $ \eval _ Environment{timeInterval} _ () ->
     POSIXTime (eval TimeIntervalEnd) == snd timeInterval
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.UseValue`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.UseValue` by
+--   evaluating the value in the context of the state, for both its
+--   presence and absence.
 checkUseValue :: Bool      -- ^ Whether the bound value is present in the state.
               -> Property  -- ^ The test.
 checkUseValue isElement =
@@ -416,44 +406,40 @@ checkUseValue isElement =
           Just x' -> eval x == x'
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.Cond`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.Cond` by comparison
+--   to Haskell.
 checkCond :: Property
 checkCond =
-  let
-    gen _ _ = (,,) <$> arbitrary <*> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval eval' _ _ (condition, thenValue, elseValue) ->
-      eval (Cond condition thenValue elseValue) == (if eval' condition then eval thenValue else eval elseValue)
+  checkValue (const $ const arbitrary) $ \eval eval' _ _ (condition, thenValue, elseValue) ->
+    eval (Cond condition thenValue elseValue) == (if eval' condition then eval thenValue else eval elseValue)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.AndObs`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.AndObs` by comparison
+--   to Haskell.
 checkAndObs :: Property
 checkAndObs =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \_ eval _ _ (x, y) ->
-      eval (AndObs x y) == (eval x && eval y)
+  checkValue (const $ const arbitrary) $ \_ eval _ _ (x, y) ->
+    eval (AndObs x y) == (eval x && eval y)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.OrObs`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.OrObs` by comparison
+--   to Haskell.
 checkOrObs :: Property
 checkOrObs =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \_ eval _ _ (x, y) ->
-      eval (OrObs x y) == (eval x || eval y)
+  checkValue (const $ const arbitrary) $ \_ eval _ _ (x, y) ->
+    eval (OrObs x y) == (eval x || eval y)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.NotObs`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.NotObs` by comparison
+--   to Haskell.
 checkNotObs :: Property
 checkNotObs =
   checkValue (const . const $ arbitrary) $ \_ eval _ _ x ->
     eval (NotObs x) == not (eval x)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.ChoseSomething`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.ChoseSomething` according
+--   to whether the choice has been made in the state.
 checkChoseSomething :: Bool      -- ^ Whether the choice is present in the state.
                     -> Property  -- ^ The test.
 checkChoseSomething isElement =
@@ -470,64 +456,56 @@ checkChoseSomething isElement =
         choice `AM.member` choices == eval x
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueGE`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueGE`
+--   by comparison to Haskell semantics.
 checkValueGE :: Property
 checkValueGE =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval eval' _ _ (x, y) ->
-      eval' (ValueGE x y) == (eval x >= eval y)
+  checkValue (const $ const arbitrary) $ \eval eval' _ _ (x, y) ->
+    eval' (ValueGE x y) == (eval x >= eval y)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueGT`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueGT`
+--   by comparison to Haskell semantics.
 checkValueGT :: Property
 checkValueGT =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval eval' _ _ (x, y) ->
-      eval' (ValueGT x y) == (eval x > eval y)
+  checkValue (const $ const arbitrary) $ \eval eval' _ _ (x, y) ->
+    eval' (ValueGT x y) == (eval x > eval y)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueLT`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueLT`
+--   by comparison to Haskell semantics.
 checkValueLT :: Property
 checkValueLT =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval eval' _ _ (x, y) ->
-      eval' (ValueLT x y) == (eval x < eval y)
+  checkValue (const $ const arbitrary) $ \eval eval' _ _ (x, y) ->
+    eval' (ValueLT x y) == (eval x < eval y)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueLE`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueLE`
+--   by comparison to Haskell semantics.
 checkValueLE :: Property
 checkValueLE =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval eval' _ _ (x, y) ->
-      eval' (ValueLE x y) == (eval x <= eval y)
+  checkValue (const $ const arbitrary) $ \eval eval' _ _ (x, y) ->
+    eval' (ValueLE x y) == (eval x <= eval y)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueEQ`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.ValueEQ`
+--   by comparison to Haskell semantics.
 checkValueEQ :: Property
 checkValueEQ =
-  let
-    gen _ _ = (,) <$> arbitrary <*> arbitrary
-  in
-    checkValue gen $ \eval eval' _ _ (x, y) ->
-      eval' (ValueEQ x y) == (eval x == eval y)
+  checkValue (const $ const arbitrary) $ \eval eval' _ _ (x, y) ->
+    eval' (ValueEQ x y) == (eval x == eval y)
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.TrueObs`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.TrueObs`
+--   by comparison to Haskell semantics.
 checkTrueObs :: Assertion
 checkTrueObs =
   assertBool "TrueObs is true."
     $ evalObservation undefined undefined TrueObs
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.Types.FalseObs`.
+-- | Test `Language.Marlowe.Core.V1.Semantics.Types.FalseObs`
+--   by comparison to Haskell semantics.
 checkFalseObs :: Assertion
 checkFalseObs =
   assertBool "FalseObs is false."
@@ -647,7 +625,7 @@ checkRefundOne f =
 checkRefundOneNotPositive :: Property
 checkRefundOneNotPositive =
   property
-    $ forAll' (arbitraryAssocMap ((,) <$> arbitrary <*> arbitrary) arbitrary) $ \accountsMixed ->
+    $ forAll' (arbitraryAssocMap arbitrary arbitrary) $ \accountsMixed ->
       let
         positive = AM.fromList . filter ((> 0) . snd) . AM.toList
         accountsPositive = positive accountsMixed
@@ -734,7 +712,7 @@ checkGiveMoney =
 checkReduceContractStepClose :: Property
 checkReduceContractStepClose =
   property $ do
-  forAll' ((,) <$> arbitrary <*> arbitrary) $ \(environment, state) ->
+  forAll' arbitrary $ \(environment, state) ->
     let
       checkPayment (Payment payee (Party payee') token amount) state' Close =
         payee == payee'
@@ -818,7 +796,7 @@ checkReduceContractStepPay =
 checkReduceContractStepIf :: Property
 checkReduceContractStepIf =
   property $ do
-  forAll' ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, thenContract, elseContract) ->
+  forAll' arbitrary $ \(environment, state, observation, thenContract, elseContract) ->
     let
       passed = evalObservation environment state observation
     in
@@ -831,7 +809,7 @@ checkReduceContractStepIf =
 checkReduceContractStepWhen :: Property
 checkReduceContractStepWhen =
   property $ do
-  forAll' ((,,,,) <$> arbitrary <*> arbitrary <*> listOf arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, cases, timeout, contract) ->
+  forAll' arbitrary $ \(environment, state, cases, timeout, contract) ->
     let
       before = snd (timeInterval environment) < timeout
       afterwards = fst (timeInterval environment) >= timeout
@@ -846,7 +824,7 @@ checkReduceContractStepWhen =
 checkReduceContractStepLet :: Property
 checkReduceContractStepLet =
   property $ do
-  forAll' ((,,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, valueId, value, contract) ->
+  forAll' arbitrary $ \(environment, state, valueId, value, contract) ->
     let
       x = evalValue environment state value
       shadow = valueId `AM.member` boundValues state
@@ -866,7 +844,7 @@ checkReduceContractStepLet =
 checkReduceContractStepAssert :: Property
 checkReduceContractStepAssert =
   property $ do
-  forAll' ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, observation, contract) ->
+  forAll' arbitrary $ \(environment, state, observation, contract) ->
     let
       passed = evalObservation environment state observation
     in
@@ -880,7 +858,7 @@ checkReduceContractStepAssert =
 checkReduceContractUntilQuiescent :: Property
 checkReduceContractUntilQuiescent =
   property $ do
-    forAll' ((,,) <$> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, contract) ->
+    forAll' arbitrary $ \(environment, state, contract) ->
       case reduceContractUntilQuiescent environment state contract of
         ContractQuiescent _ _ _ _ Close              -> True
         ContractQuiescent _ _ _ _ (When _ timeout _) -> snd (timeInterval environment) < timeout
@@ -939,14 +917,14 @@ checkApplyCases =
 checkApplyInput :: Property
 checkApplyInput =
   property $ do
-    forAll ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary) $ \(environment, state, input, contract) ->
+    forAll arbitrary $ \(environment, state, input, contract) ->
       case (contract, applyInput environment state input contract) of
         (When cases _ _, result           ) -> result == applyCases environment state input cases
         (_             , ApplyNoMatchError) -> True
         e                                   -> error $ show e
 
 
--- | Test `Language.Marlowe.Core.V1.Semantics.isClose`.
+-- | Test that `Language.Marlowe.Core.V1.Semantics.isClose` reports correctly.
 checkIsClose :: Assertion
 checkIsClose =
   do
@@ -956,6 +934,18 @@ checkIsClose =
     assertBool "isClose When = False"  . not . isClose $ When undefined undefined undefined
     assertBool "isClose Let = False"   . not . isClose $ Let undefined undefined undefined
     assertBool "isClose Asset = False" . not . isClose $ Assert undefined undefined
+
+
+-- | Test that `Language.Marlowe.Core.V1.Semantics.notClose` reports correctly.
+checkNotClose :: Assertion
+checkNotClose =
+  do
+    assertBool "notClose Close = False" . not $ notClose Close
+    assertBool "notClose Pay = True"   . notClose $ Pay undefined undefined undefined undefined undefined
+    assertBool "notClose If = True"    . notClose $ If undefined undefined undefined
+    assertBool "notClose When = True"  . notClose $ When undefined undefined undefined
+    assertBool "notClose Let = True"   . notClose $ Let undefined undefined undefined
+    assertBool "notClose Asset = True" . notClose $ Assert undefined undefined
 
 
 -- | Test `Language.Marlowe.Core.V1.Semantics.computeTransaction` against static analysis cases that should succeed.
