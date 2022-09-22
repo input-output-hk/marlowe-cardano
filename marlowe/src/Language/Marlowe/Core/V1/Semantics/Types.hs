@@ -1,3 +1,16 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Types for Marlowe semantics
+--
+-----------------------------------------------------------------------------
+
+
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
@@ -16,17 +29,56 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
--- Big hammer, but helps
-{-# OPTIONS_GHC -fno-specialise #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
-
+{-# OPTIONS_GHC -fno-specialise #-}  -- A big hammer, but it helps.
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
-{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
+
 module Language.Marlowe.Core.V1.Semantics.Types
-  where
+  ( -- * Type Aliases
+    AccountId
+  , Accounts
+  , ChoiceName
+  , ChosenNum
+  , Money
+  , TimeInterval
+  , Timeout
+    -- * Contract Types
+  , Action(..)
+  , Bound(..)
+  , Case(..)
+  , ChoiceId(..)
+  , Contract(..)
+  , Environment(..)
+  , Input(..)
+  , InputContent(..)
+  , IntervalResult(..)
+  , Observation(..)
+  , Party(..)
+  , Payee(..)
+  , State(..)
+  , Token(..)
+  , Value(..)
+  , ValueId(..)
+    -- * Error Types
+  , IntervalError(..)
+    -- * Utility Functions
+  , emptyState
+  , getAction
+  , getInputContent
+  , inBounds
+    -- * Serialisation
+  , fromJSONAssocMap
+  , posixTimeFromJSON
+  , posixTimeToJSON
+  , toJSONAssocMap
+  ) where
+
 
 import Control.Applicative ((<*>), (<|>))
 import Control.Newtype.Generics (Newtype)
@@ -59,21 +111,18 @@ import qualified Prelude as Haskell
 import Text.PrettyPrint.Leijen (text)
 
 
-{- Functions that used in Plutus Core must be inlineable,
-   so their code is available for PlutusTx compiler -}
+-- Functions that used in Plutus Core must be inlinable,
+-- so their code is available for PlutusTx compiler.
 {-# INLINABLE getAction #-}
 {-# INLINABLE getInputContent #-}
 {-# INLINABLE inBounds #-}
 {-# INLINABLE emptyState #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
-{-| = Type definitions for Marlowe's seamntics
--}
 
-data Party = Address Network Ledger.Address | Role TokenName
+-- | A Party to a contractt.
+data Party =
+    Address Network Ledger.Address  -- ^ Party identified by a network address.
+  | Role TokenName                  -- ^ Party identified by a role token name.
   deriving stock (Generic,Haskell.Eq,Haskell.Ord)
 
 instance Pretty Party where
@@ -84,26 +133,44 @@ instance Haskell.Show Party where
   showsPrec _ (Address network address) = Haskell.showsPrec 11 $ Haskell.show (serialiseAddressBech32 network address)
   showsPrec _ (Role role) = Haskell.showsPrec 11 $ unTokenName role
 
+
+-- | A party's internal account in a contract.
 type AccountId = Party
+
+
+-- | A timeout in a contract.
 type Timeout = POSIXTime
+
+
+-- | A multi-asset value.
 type Money = Val.Value
+
+
+-- | The name of a choice in a contract.
 type ChoiceName = BuiltinByteString
+
+
+-- | A numeric choice in a contract.
 type ChosenNum = Integer
+
+
+-- | The time validity range for a Marlowe transaction, inclusive of both endpoints.
 type TimeInterval = (POSIXTime, POSIXTime)
+
+
+-- | The accounts in a contract.
 type Accounts = Map (AccountId, Token) Integer
 
--- * Data Types
-{-| Choices – of integers – are identified by ChoiceId
-    which combines a name for the choice with the Party who had made the choice.
--}
+
+-- | Choices – of integers – are identified by ChoiceId which combines a name for
+-- the choice with the Party who had made the choice.
 data ChoiceId = ChoiceId BuiltinByteString Party
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
 
-{-| Token - represents a currency or token, it groups
-    a pair of a currency symbol and token name.
--}
+-- | Token - represents a currency or token, it groups
+--   a pair of a currency symbol and token name.
 data Token = Token CurrencySymbol TokenName
   deriving stock (Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
@@ -112,20 +179,19 @@ instance Haskell.Show Token where
   showsPrec p (Token cs tn) =
     Haskell.showParen (p Haskell.>= 11) (Haskell.showString $ "Token \"" Haskell.++ Haskell.show cs Haskell.++ "\" " Haskell.++ Haskell.show tn)
 
-{-| Values, as defined using Let ar e identified by name,
-    and can be used by 'UseValue' construct.
--}
+
+-- | Values, as defined using Let ar e identified by name,
+--   and can be used by 'UseValue' construct.
 newtype ValueId = ValueId BuiltinByteString
   deriving (IsString, Haskell.Show) via TokenName
   deriving stock (Haskell.Eq,Haskell.Ord,Generic)
   deriving anyclass (Newtype)
 
-{-| Values include some quantities that change with time,
-    including “the time interval”, “the current balance of an account (in Lovelace)”,
-    and any choices that have already been made.
-
-    Values can also be scaled, and combined using addition, subtraction, and negation.
--}
+-- | Values include some quantities that change with time,
+--   including “the time interval”, “the current balance of an account”,
+--   and any choices that have already been made.
+--
+--   Values can also be scaled, and combined using addition, subtraction, and negation.
 data Value a = AvailableMoney AccountId Token
            | Constant Integer
            | NegValue (Value a)
@@ -142,12 +208,11 @@ data Value a = AvailableMoney AccountId Token
   deriving anyclass (Pretty)
 
 
-{-| Observations are Boolean values derived by comparing values,
-    and can be combined using the standard Boolean operators.
-
-    It is also possible to observe whether any choice has been made
-    (for a particular identified choice).
--}
+-- | Observations are Boolean values derived by comparing values,
+--   and can be combined using the standard Boolean operators.
+--
+--   It is also possible to observe whether any choice has been made
+--   (for a particular identified choice).
 data Observation = AndObs Observation Observation
                  | OrObs Observation Observation
                  | NotObs Observation
@@ -163,23 +228,24 @@ data Observation = AndObs Observation Observation
   deriving anyclass (Pretty)
 
 
+-- | The (inclusive) bound on a choice number.
 data Bound = Bound Integer Integer
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
 
-{-| Actions happen at particular points during execution.
-    Three kinds of action are possible:
-
-    * A @Deposit n p v@ makes a deposit of value @v@ into account @n@ belonging to party @p@.
-
-    * A choice is made for a particular id with a list of bounds on the values that are acceptable.
-      For example, @[(0, 0), (3, 5]@ offers the choice of one of 0, 3, 4 and 5.
-
-    * The contract is notified that a particular observation be made.
-      Typically this would be done by one of the parties,
-      or one of their wallets acting automatically.
--}
+-- | Actions happen at particular points during execution.
+--   Three kinds of action are possible:
+--
+--   * A @Deposit n p v@ makes a deposit of value @v@ into account @n@ belonging to party @p@.
+--
+--   * A choice is made for a particular id with a list of bounds on the values that are acceptable.
+--     For example, @[(0, 0), (3, 5]@ offers the choice of one of 0, 3, 4 and 5.
+--
+--   * The contract is notified that a particular observation be made.
+--     Typically this would be done by one of the parties,
+--     or one of their wallets acting automatically.
+--
 data Action = Deposit AccountId Party Token (Value Observation)
             | Choice ChoiceId [Bound]
             | Notify Observation
@@ -187,35 +253,38 @@ data Action = Deposit AccountId Party Token (Value Observation)
   deriving anyclass (Pretty)
 
 
-{-| A payment can be made to one of the parties to the contract,
-    or to one of the accounts of the contract,
-    and this is reflected in the definition.
--}
+-- | A payment can be made to one of the parties to the contract,
+--   or to one of the accounts of the contract,
+--   and this is reflected in the definition.
 data Payee = Account AccountId
            | Party Party
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
 
-{-  Plutus doesn't support mutually recursive data types yet.
-    datatype Case is mutually recurvive with @Contract@
--}
+-- | A case is a branch of a when clause, guarded by an action.
+--   The continuation of the contrack may be merkleized or not.
+--
+--   Plutus doesn't support mutually recursive data types yet.
+--   datatype Case is mutually recurvive with @Contract@
 data Case a = Case Action a
             | MerkleizedCase Action BuiltinByteString
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
+
+-- | Extract the @Action@ from a @Case@.
 getAction :: Case a -> Action
 getAction (Case action _)           = action
 getAction (MerkleizedCase action _) = action
 
-{-| Marlowe has six ways of building contracts.
-    Five of these – 'Pay', 'Let', 'If', 'When' and 'Assert' –
-    build a complex contract from simpler contracts, and the sixth, 'Close',
-    is a simple contract.
-    At each step of execution, as well as returning a new state and continuation contract,
-    it is possible that effects – payments – and warnings can be generated too.
--}
+
+-- | Marlowe has six ways of building contracts.
+--   Five of these – 'Pay', 'Let', 'If', 'When' and 'Assert' –
+--   build a complex contract from simpler contracts, and the sixth, 'Close',
+--   is a simple contract.
+--   At each step of execution, as well as returning a new state and continuation contract,
+--   it is possible that effects – payments – and warnings can be generated too.
 data Contract = Close
               | Pay AccountId Payee Token (Value Observation) Contract
               | If Observation Contract Contract
@@ -226,21 +295,20 @@ data Contract = Close
   deriving anyclass (Pretty)
 
 
-{-| Marlowe contract internal state. Stored in a /Datum/ of a transaction output.
--}
+-- | Marlowe contract internal state. Stored in a /Datum/ of a transaction output.
 data State = State { accounts    :: Accounts
                    , choices     :: Map ChoiceId ChosenNum
                    , boundValues :: Map ValueId Integer
                    , minTime     :: POSIXTime }
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
 
-{-| Execution environment. Contains a time interval of a transaction.
--}
+
+-- | Execution environment. Contains a time interval of a transaction.
 newtype Environment = Environment { timeInterval :: TimeInterval }
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord)
 
-{-| Input for a Marlowe contract. Correspond to expected 'Action's.
--}
+
+-- | Input for a Marlowe contract. Correspond to expected 'Action's.
 data InputContent = IDeposit AccountId Party Token Integer
                   | IChoice ChoiceId ChosenNum
                   | INotify
@@ -271,6 +339,9 @@ instance ToJSON InputContent where
       ]
   toJSON INotify = JSON.String $ pack "input_notify"
 
+
+-- | Input to a contract, which may include the merkleized continuation
+--   of the contract and its hash.
 data Input = NormalInput InputContent
            | MerkleizedInput InputContent BuiltinByteString Contract
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
@@ -303,31 +374,20 @@ instance ToJSON Input where
         ]
 
 
+-- | Extract the content of input.
 getInputContent :: Input -> InputContent
 getInputContent (NormalInput inputContent)         = inputContent
 getInputContent (MerkleizedInput inputContent _ _) = inputContent
 
-{-| Time interval errors.
-    'InvalidInterval' means @slotStart > slotEnd@, and
-    'IntervalInPastError' means time interval is in the past, relative to the contract.
 
-    These errors should never occur, but we are always prepared.
--}
+-- | Time interval errors.
+--   'InvalidInterval' means @slotStart > slotEnd@, and
+--   'IntervalInPastError' means time interval is in the past, relative to the contract.
+--
+--   These errors should never occur, but we are always prepared.
 data IntervalError = InvalidInterval TimeInterval
                    | IntervalInPastError POSIXTime TimeInterval
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
-
-posixTimeFromJSON :: JSON.Value -> Parser POSIXTime
-posixTimeFromJSON = \case
-  v@(JSON.Number n) ->
-      either (\_ -> JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Integer" v))
-             (return . POSIXTime)
-             (floatingOrInteger n :: Either Haskell.Double Integer)
-  invalid ->
-      JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Number" invalid)
-
-posixTimeToJSON :: POSIXTime -> JSON.Value
-posixTimeToJSON (POSIXTime n) = JSON.Number $ scientific n 0
 
 instance ToJSON IntervalError where
   toJSON (InvalidInterval (s, e)) = A.object
@@ -352,6 +412,22 @@ instance FromJSON IntervalError where
       JSON.prependFailure "parsing IntervalError failed, " (JSON.typeMismatch "Object" invalid)
 
 
+-- | Parse a JSON value as time.
+posixTimeFromJSON :: JSON.Value -> Parser POSIXTime
+posixTimeFromJSON = \case
+  v@(JSON.Number n) ->
+      either (\_ -> JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Integer" v))
+             (return . POSIXTime)
+             (floatingOrInteger n :: Either Haskell.Double Integer)
+  invalid ->
+      JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Number" invalid)
+
+
+-- | Serialise time as a JSON value.
+posixTimeToJSON :: POSIXTime -> JSON.Value
+posixTimeToJSON (POSIXTime n) = JSON.Number $ scientific n 0
+
+
 -- | Result of 'fixInterval'
 data IntervalResult = IntervalTrimmed Environment State
                     | IntervalError IntervalError
@@ -372,12 +448,6 @@ inBounds :: ChosenNum -> [Bound] -> Bool
 inBounds num = any (\(Bound l u) -> num >= l && num <= u)
 
 
-toJSONAssocMap :: ToJSON k => ToJSON v => Map k v -> JSON.Value
-toJSONAssocMap = toJSON . Map.toList
-
-fromJSONAssocMap :: FromJSON k => FromJSON v => JSON.Value -> JSON.Parser (Map k v)
-fromJSONAssocMap v = Map.fromList <$> parseJSON v
-
 instance FromJSON State where
   parseJSON = withObject "State" (\v ->
          State <$> (v .: "accounts" >>= fromJSONAssocMap)
@@ -385,7 +455,6 @@ instance FromJSON State where
                <*> (v .: "boundValues" >>= fromJSONAssocMap)
                <*> (POSIXTime <$> (withInteger "minTime" =<< (v .: "minTime")))
                                  )
-
 instance ToJSON State where
   toJSON State { accounts = a
                , choices = c
@@ -396,6 +465,17 @@ instance ToJSON State where
         , "boundValues" .= toJSONAssocMap bv
         , "minTime" .= ms ]
 
+
+-- | Serialise an association list to JSON.
+toJSONAssocMap :: ToJSON k => ToJSON v => Map k v -> JSON.Value
+toJSONAssocMap = toJSON . Map.toList
+
+
+-- | Parse an association list from JSON.
+fromJSONAssocMap :: FromJSON k => FromJSON v => JSON.Value -> JSON.Parser (Map k v)
+fromJSONAssocMap v = Map.fromList <$> parseJSON v
+
+
 instance FromJSON Party where
   parseJSON = withObject "Party" $ \v ->
         (
@@ -404,11 +484,13 @@ instance FromJSON Party where
             <$> v .: "address"
         )
     <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
+
 instance ToJSON Party where
     toJSON (Address network address) = object
         [ "address" .= serialiseAddressBech32 network address]
     toJSON (Role (Val.TokenName name)) = object
         [ "role_token" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin name) ]
+
 
 instance ToJSONKey ChoiceId where
   toJSONKey = JSON.ToJSONKeyValue toJSON JSON.toEncoding
@@ -442,10 +524,13 @@ instance ToJSON Token where
       , "token_name" .= (JSON.String $ Text.decodeUtf8 $ fromBuiltin $ unTokenName tokName)
       ]
 
+
 instance FromJSON ValueId where
     parseJSON = withText "ValueId" $ return . ValueId . toBuiltin . Text.encodeUtf8
+
 instance ToJSON ValueId where
     toJSON (ValueId x) = JSON.String (Text.decodeUtf8 $ fromBuiltin x)
+
 
 instance FromJSON (Value Observation) where
   parseJSON (Object v) =
@@ -468,6 +553,7 @@ instance FromJSON (Value Observation) where
   parseJSON (String "time_interval_end") = return TimeIntervalEnd
   parseJSON (Number n) = Constant <$> getInteger "constant value" n
   parseJSON _ = Haskell.fail "Value must be either an object or an integer"
+
 instance ToJSON (Value Observation) where
   toJSON (AvailableMoney accountId token) = object
       [ "amount_of_token" .= token
@@ -574,6 +660,7 @@ instance ToJSON Bound where
       [ "from" .= from
       , "to" .= to
       ]
+
 
 instance FromJSON Action where
   parseJSON = withObject "Action" (\v ->
@@ -699,9 +786,11 @@ instance Eq ChoiceId where
     {-# INLINABLE (==) #-}
     (ChoiceId n1 p1) == (ChoiceId n2 p2) = n1 == n2 && p1 == p2
 
+
 instance Eq Token where
     {-# INLINABLE (==) #-}
     (Token n1 p1) == (Token n2 p2) = n1 == n2 && p1 == p2
+
 
 instance Eq ValueId where
     {-# INLINABLE (==) #-}
@@ -710,6 +799,7 @@ instance Eq ValueId where
 
 instance Pretty ValueId where
     prettyFragment (ValueId n) = prettyFragment n
+
 
 instance Eq Payee where
     {-# INLINABLE (==) #-}
@@ -734,6 +824,7 @@ instance Eq a => Eq (Value a) where
     Cond obs1 thn1 els1 == Cond obs2 thn2 els2 =  obs1 == obs2 && thn1 == thn2 && els1 == els2
     _ == _ = False
 
+
 instance Eq Observation where
     {-# INLINABLE (==) #-}
     AndObs o1l o2l == AndObs o1r o2r           = o1l == o1r && o2l == o2r
@@ -749,6 +840,7 @@ instance Eq Observation where
     FalseObs == FalseObs                       = True
     _ == _                                     = False
 
+
 instance Eq Action where
     {-# INLINABLE (==) #-}
     Deposit acc1 party1 tok1 val1 == Deposit acc2 party2 tok2 val2 =
@@ -761,11 +853,13 @@ instance Eq Action where
     Notify obs1 == Notify obs2 = obs1 == obs2
     _ == _ = False
 
+
 instance Eq a => Eq (Case a) where
     {-# INLINABLE (==) #-}
     Case acl cl == Case acr cr                       = acl == acr && cl == cr
     MerkleizedCase acl bsl == MerkleizedCase acr bsr = acl == acr && bsl == bsr
     _ == _                                           = False
+
 
 instance Eq Contract where
     {-# INLINABLE (==) #-}
@@ -783,12 +877,14 @@ instance Eq Contract where
     Assert obs1 cont1 == Assert obs2 cont2 = obs1 == obs2 && cont1 == cont2
     _ == _ = False
 
+
 instance Eq State where
     {-# INLINABLE (==) #-}
     l == r = minTime l == minTime r
         && accounts l == accounts r
         && choices l == choices r
         && boundValues l == boundValues r
+
 
 -- Lifting data types to Plutus Core
 makeLift ''Party
