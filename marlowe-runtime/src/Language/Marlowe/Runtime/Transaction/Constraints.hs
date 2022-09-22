@@ -263,28 +263,6 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
       , metadataConstraints = mempty
       }
 
-data ConstraintCheck
-  = CheckTrue
-  | CheckFalseMissingSignature Chain.PaymentKeyHash
-  | CheckFalseRoleTokenNotMinted Chain.TokenName
-  | CheckFalseRoleTokenNotPaid Chain.TokenName Chain.Address
-  | CheckFalseRoleTokenNotSpent Chain.AssetId
-  | CheckFalseRoleTokenNotReturned Chain.AssetId
-  | CheckFalseExtraneousTokens Chain.TxIx Chain.Assets
-  | CheckFalseInsufficientAssets Chain.Address Chain.Assets
-  | CheckFalseRoleTokenOutputAltered Chain.TxIx
-  deriving (Show, Eq, Ord)
-
--- | Determines if the given transaction body satisfies the given constraints.
-satisfiesConstraints
-  :: Cardano.ProtocolParameters
-  -> Cardano.TxBody era
-  -> MarloweContext
-  -> WalletContext
-  -> TxConstraints v
-  -> ConstraintCheck
-satisfiesConstraints = error "not implemented"
-
 -- | Errors that can occur when trying to solve the constraints.
 data UnsolvableConstraintsError
   deriving (Eq, Show, Generic, Binary)
