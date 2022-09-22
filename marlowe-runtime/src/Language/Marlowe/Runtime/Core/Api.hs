@@ -137,13 +137,12 @@ instance Binary (TransactionOutput 'V1) where
   put TransactionOutput{..} = do
     put payouts
     put scriptOutput
-  get = TransactionOutput
-    <$> get
-    <*> get
+  get = TransactionOutput <$> get <*> get
 
 data Payout v = Payout
-  { assets :: Chain.Assets
-  , datum  :: PayoutDatum v
+  { address :: Chain.Address
+  , assets :: Chain.Assets
+  , datum :: PayoutDatum v
   }
 
 deriving instance Show (Payout 'V1)
@@ -151,12 +150,15 @@ deriving instance Eq (Payout 'V1)
 
 instance Binary (Payout 'V1) where
   put Payout{..} = do
+    put address
     put assets
     put datum
-  get = Payout <$> get <*> get
+  get = Payout <$> get <*> get <*> get
 
 data TransactionScriptOutput v = TransactionScriptOutput
-  { utxo  :: TxOutRef
+  { address :: Chain.Address
+  , assets :: Chain.Assets
+  , utxo  :: TxOutRef
   , datum :: Datum v
   }
 
@@ -165,9 +167,11 @@ deriving instance Eq (TransactionScriptOutput 'V1)
 
 instance Binary (TransactionScriptOutput 'V1) where
   put TransactionScriptOutput{..} = do
+    put address
+    put assets
     put utxo
     putDatum MarloweV1 datum
-  get = TransactionScriptOutput <$> get <*> getDatum MarloweV1
+  get = TransactionScriptOutput <$> get <*> get <*> get <*> getDatum MarloweV1
 
 data SomeMarloweVersion = forall v. SomeMarloweVersion (MarloweVersion v)
 
