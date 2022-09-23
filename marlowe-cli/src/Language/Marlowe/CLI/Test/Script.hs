@@ -147,10 +147,10 @@ import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
 
 
-timeoutForExecutionMode :: MonadError CliError m
+timeoutForOnChainMode :: MonadError CliError m
           => MonadReader (ScriptEnv era) m
           => m (Maybe Int)
-timeoutForExecutionMode = do
+timeoutForOnChainMode = do
             executionMode <- view seExecutionMode
             let
               executionTimeout = case executionMode of
@@ -184,7 +184,7 @@ interpret FundWallet {..} = do
   (Wallet faucetAddress faucetSigningKey _ _) <- getFaucet
   (Wallet address _ _ _) <- findWallet soWalletNickname
   connection <- view seConnection
-  timeout <- timeoutForExecutionMode
+  timeout <- timeoutForOnChainMode
   txBody <- runCli "[FundWallet] " $ buildFaucetImpl
     connection
     values
@@ -203,7 +203,7 @@ interpret FundWallet {..} = do
 interpret SplitWallet {..} = do
   Wallet address skey _ _ <- findWallet soWalletNickname
   connection <- view seConnection
-  timeout <- timeoutForExecutionMode
+  timeout <- timeoutForOnChainMode
   let
     values = [ C.lovelaceToValue v | v <- soValues ]
 
@@ -230,7 +230,7 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
-  timeout <- timeoutForExecutionMode
+  timeout <- timeoutForOnChainMode
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
     faucetSigningKey
@@ -344,7 +344,7 @@ interpret Prepare {..} = do
   modifying ssContracts $ Map.insert soContractNickname marloweContract'
 
 interpret so@AutoRun {..} = do
-  timeoutForExecutionMode >>= \case
+  timeoutForOnChainMode >>= \case
     Nothing -> logSoMsg' so "Execution Mode set to 'Simulation' - Transactions are not submitted to chain in simulation mode"
     (Just _) -> do
       marloweContract@MarloweContract {..} <- findMarloweContract soContractNickname
@@ -404,7 +404,7 @@ interpret so@Publish {..} = do
 
       pure marloweScriptRefs
     Nothing -> do
-      timeoutForExecutionMode >>= \case
+      timeoutForOnChainMode >>= \case
         Nothing -> throwSoError so "Can't perform on chain script publishing in simulation mode"
         (Just timeout) -> do
           logSoMsg' so "Scripts not found so publishing them."
@@ -468,7 +468,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
   connection <- view seConnection
-  timeout <- timeoutForExecutionMode
+  timeout <- timeoutForOnChainMode
   txBody <- runCli "[AutoRun] " $ autoRunTransactionImpl
       connection
       prev

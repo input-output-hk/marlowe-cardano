@@ -104,13 +104,13 @@ data MarloweTests era a =
     -- | Test contracts on-chain.
     ScriptTests
     {
-      network              :: NetworkId   -- ^ The network ID, if any.
-    , socketPath           :: FilePath    -- ^ The path to the node socket.
-    , faucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
-    , faucetAddress        :: AddressInEra era  -- ^ The faucet address.
-    , burnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
-    , executionMode        :: ExecutionMode
-    , tests                :: [a]         -- ^ Input for the tests.
+      stNetwork              :: NetworkId   -- ^ The network ID, if any.
+    , stSocketPath           :: FilePath    -- ^ The path to the node socket.
+    , stFaucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
+    , stFaucetAddress        :: AddressInEra era  -- ^ The faucet address.
+    , stBurnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
+    , stExecutionMode        :: ExecutionMode
+    , stTests                :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
 
