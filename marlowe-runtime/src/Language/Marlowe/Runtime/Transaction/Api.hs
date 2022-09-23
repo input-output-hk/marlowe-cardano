@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -318,7 +319,18 @@ data ApplyInputsError v
   = ApplyInputsConstraintError (ConstraintError v)
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
+<<<<<<< HEAD
   deriving (Generic)
+=======
+  | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
+  deriving (Eq, Show, Generic)
+  deriving anyclass Binary
+
+newtype ApplyInputsConstraintsBuildupError
+  = MarloweComputeTransactionFailed String
+  deriving (Eq, Show, Generic)
+  deriving anyclass Binary
+>>>>>>> b6cec538c (Implement main logic of buildApplyInputsConstraints)
 
 deriving instance Eq (ApplyInputsError 'V1)
 deriving instance Show (ApplyInputsError 'V1)

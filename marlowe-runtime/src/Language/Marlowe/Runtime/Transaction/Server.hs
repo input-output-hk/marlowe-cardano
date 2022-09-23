@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 
+
 module Language.Marlowe.Runtime.Transaction.Server
   where
 
@@ -43,7 +44,19 @@ import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Credential(..), SlotConfig, TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer)
+import Language.Marlowe.Runtime.Core.Api
+    ( Contract,
+      ContractId(..),
+      MarloweVersion,
+      PayoutDatum,
+      Redeemer,
+      Contract,
+      ContractId(..),
+      IsMarloweVersion(marloweVersion),
+      MarloweVersion,
+      PayoutDatum,
+      Redeemer,
+      withMarloweVersion )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
@@ -139,13 +152,13 @@ mkWorker WorkerDependencies{..} =
               roles
               metadata
               contract
-          ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
-            execApplyInputs
+          ApplyInputs era version addresses contractId invalidBefore invalidHereafter redeemer ->
+            withMarloweVersion version $ execApplyInputs
               slotConfig
               solveConstraints
               loadWalletContext
               loadMarloweContext
-              version
+              era
               addresses
               contractId
               invalidBefore
@@ -238,11 +251,12 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
       isToCurrentScriptAddress _ = False
 
 execApplyInputs
-  :: SlotConfig
+  :: IsMarloweVersion v
+  => SlotConfig
   -> SolveConstraints
   -> LoadWalletContext
   -> LoadMarloweContext
-  -> MarloweVersion v
+  -> ScriptDataSupportedInEra era
   -> WalletAddresses
   -> ContractId
   -> Maybe UTCTime
@@ -254,7 +268,7 @@ execApplyInputs
   solveConstraints
   loadWalletContext
   loadMarloweContext
-  version
+  era
   addresses
   contractId
   invalidBefore
@@ -262,11 +276,11 @@ execApplyInputs
   inputs = execExceptT do
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
-      $ loadMarloweContext version contractId
+      $ loadMarloweContext marloweVersion contractId
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     constraints <- except $ buildApplyInputsConstraints
         slotConfig
-        version
+        marloweVersion
         scriptOutput'
         invalidBefore
         invalidHereafter

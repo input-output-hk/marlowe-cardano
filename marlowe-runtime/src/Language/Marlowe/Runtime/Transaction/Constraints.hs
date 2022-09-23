@@ -56,6 +56,7 @@ data RoleTokenConstraints
   | SpendRoleTokens (Set Chain.AssetId)
   deriving (Eq, Show)
 
+
 instance Semigroup RoleTokenConstraints where
   a <> RoleTokenConstraintsNone = a
   MintRoleTokens _ _ a <> MintRoleTokens witness ref b = MintRoleTokens witness ref $ a <> b

@@ -76,6 +76,7 @@ deriving instance Ord (MarloweVersion v)
 
 class IsMarloweVersion (v :: MarloweVersionTag) where
   type Contract v :: *
+  type TransactionError v :: *
   type Datum v :: *
   type Redeemer v :: *
   type PayoutDatum v :: *
@@ -83,6 +84,7 @@ class IsMarloweVersion (v :: MarloweVersionTag) where
 
 instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
+  type TransactionError 'V1 = V1.TransactionError
   type Datum 'V1 = V1.MarloweData
   type Redeemer 'V1 = V1.MarloweInput
   type PayoutDatum 'V1 = Chain.AssetId
@@ -192,6 +194,10 @@ instance Show SomeMarloweVersion where
 
 withSomeMarloweVersion :: (forall v. MarloweVersion v -> r) -> SomeMarloweVersion -> r
 withSomeMarloweVersion f (SomeMarloweVersion v) = f v
+
+withMarloweVersion :: MarloweVersion v -> (IsMarloweVersion v => a) -> a
+withMarloweVersion = \case
+  MarloweV1 -> id
 
 instance ToJSON (MarloweVersion v) where
   toJSON = String . \case
