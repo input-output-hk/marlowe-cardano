@@ -72,6 +72,8 @@
           ];
         buildable = true;
         modules = [
+          "Language/Marlowe/Runtime/Cardano/Api"
+          "Language/Marlowe/Runtime/Cardano/Feature"
           "Language/Marlowe/Runtime/ChainSync"
           "Language/Marlowe/Runtime/ChainSync/Database"
           "Language/Marlowe/Runtime/ChainSync/Database/PostgreSQL"
