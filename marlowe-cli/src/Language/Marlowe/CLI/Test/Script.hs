@@ -124,6 +124,7 @@ import Language.Marlowe.CLI.Test.Types
   , seConnection
   , seCostModelParams
   , seEra
+  , seExecutionMode
   , seProtocolVersion
   , seSlotConfig
   , seExecutionMode
