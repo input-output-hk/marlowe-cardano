@@ -342,36 +342,39 @@ interpret Prepare {..} = do
 
   modifying ssContracts $ Map.insert soContractNickname marloweContract'
 
-interpret AutoRun {..} = do
-  marloweContract@MarloweContract {..} <- findMarloweContract soContractNickname
-  let
-    plan = do
+interpret so@AutoRun {..} = do
+  timeoutForExecutionMode >>= \case
+    Nothing -> logSoMsg' so "Execution Mode set to 'Simulation' - Transactions are not submitted to chain in simulation mode"
+    (Just _) -> do
+      marloweContract@MarloweContract {..} <- findMarloweContract soContractNickname
       let
-        whole = reverse $ NE.toList mcPlan
-      case mcThread of
-        Just thread -> do
+        plan = do
           let
-            l = overAnyMarloweThread (foldrMarloweThread (const (+ 1)) 0) thread
-          drop l whole
-        Nothing -> whole
-    step th mt = do
+            whole = reverse $ NE.toList mcPlan
+          case mcThread of
+            Just thread -> do
+              let
+                l = overAnyMarloweThread (foldrMarloweThread (const (+ 1)) 0) thread
+              drop l whole
+            Nothing -> whole
+        step th mt = do
+          let
+            prev :: Maybe (MarloweTransaction MarlowePlutusVersion era, C.TxIn)
+            prev = do
+              pmt <- overAnyMarloweThread getMarloweThreadTransaction <$> th
+              txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< th
+              pure (pmt, txIn)
+            invalid = fromMaybe False soInvalid
+
+          (txBody, mTxIn) <- autoRunTransaction mcCurrency mcSubmitter prev mt invalid
+          case anyMarloweThread mt txBody mTxIn th of
+            Just th' -> pure $ Just th'
+            Nothing  -> throwError "[AutoRun] Extending of the marlowe thread failed."
+
+      thread' <- foldM step mcThread plan
       let
-        prev :: Maybe (MarloweTransaction MarlowePlutusVersion era, C.TxIn)
-        prev = do
-          pmt <- overAnyMarloweThread getMarloweThreadTransaction <$> th
-          txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< th
-          pure (pmt, txIn)
-        invalid = fromMaybe False soInvalid
-
-      (txBody, mTxIn) <- autoRunTransaction mcCurrency mcSubmitter prev mt invalid
-      case anyMarloweThread mt txBody mTxIn th of
-        Just th' -> pure $ Just th'
-        Nothing  -> throwError "[AutoRun] Extending of the marlowe thread failed."
-
-  thread' <- foldM step mcThread plan
-  let
-    marloweContract' = marloweContract { mcThread = thread' }
-  ssContracts `modifying`  Map.insert soContractNickname marloweContract'
+        marloweContract' = marloweContract { mcThread = thread' }
+      ssContracts `modifying`  Map.insert soContractNickname marloweContract'
 
 interpret so@Publish {..} = do
   whenM (isJust <$> use ssReferenceScripts) do
@@ -733,9 +736,10 @@ scriptTest  :: forall era m
             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
             -> Wallet era                        -- ^ Wallet which should be used as faucet.
             -> SlotConfig                        -- ^ The time and slot correspondence.
+            -> ExecutionMode
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest{..} =
+scriptTest era protocolVersion costModel connection faucet slotConfig executionMode ScriptTest{..} =
   do
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"

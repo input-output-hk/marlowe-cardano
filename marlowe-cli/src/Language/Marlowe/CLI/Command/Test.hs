@@ -22,12 +22,12 @@ module Language.Marlowe.CLI.Command.Test
   , runTestCommand
   ) where
 
-
+import Data.Maybe (fromMaybe)
 import Cardano.Api (IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
-import Language.Marlowe.CLI.Test.Types (MarloweTests(ScriptTests))
+import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests), ExecutionMode(..), Seconds(..))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)
@@ -69,6 +69,11 @@ scriptsCommand network socket =
     $ O.info (scriptsOptions network socket)
     $ O.progDesc "Test Marlowe scripts on-chain."
 
+executionModeParser :: O.Parser ExecutionMode
+executionModeParser = fmap (fromMaybe (OnChainMode (Seconds 120))) simulationModeOpt
+
+simulationModeOpt :: O.Parser (Maybe ExecutionMode)
+simulationModeOpt = O.optional (O.flag' SimulationMode  (O.long "simulation-mode" <> O.help "Run test suite in simulation mode by ignoring the transaction submission timeout"))
 
 -- | Parser for the "scripts" options.
 scriptsOptions :: IsShelleyBasedEra era
@@ -82,4 +87,5 @@ scriptsOptions network socket =
     <*> O.strOption              (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"            <> O.help "The file containing the signing key for the faucet."                                                             )
     <*> O.option parseAddress    (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
     <*> O.option parseAddress    (O.long "burn-address"   <> O.metavar "ADDRESS"                 <> O.help "Burn address for discarding used tokens."                                                                        )
+    <*> executionModeParser
     <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )

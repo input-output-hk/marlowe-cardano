@@ -109,6 +109,7 @@ data MarloweTests era a =
     , faucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
     , faucetAddress        :: AddressInEra era  -- ^ The faucet address.
     , burnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
+    , executionMode        :: ExecutionMode
     , tests                :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
@@ -119,7 +120,8 @@ data MarloweTests era a =
 -- | scenarios on chain.
 -- | Tests that fail in simulation mode should also fail on chain
 -- | Tests that pass on chain should also pass in simulation mode
-data ExecutionMode = SimulationMode | OnChainMode { transactionTimeout :: Seconds }
+data ExecutionMode = SimulationMode | OnChainMode { transactionSubmissionTimeout :: Seconds }
+    deriving stock (Eq, Show)
 
 -- | An on-chain test of the Marlowe contract and payout validators.
 data ScriptTest =
@@ -485,6 +487,7 @@ scriptState faucet = do
   ScriptState mempty mempty Nothing wallets
 
 newtype Seconds = Seconds Int
+    deriving stock (Eq, Show)
 
 
 data ScriptEnv era = ScriptEnv
