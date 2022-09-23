@@ -127,7 +127,6 @@ import Language.Marlowe.CLI.Test.Types
   , seExecutionMode
   , seProtocolVersion
   , seSlotConfig
-  , seExecutionMode
   , ssContracts
   , ssCurrencies
   , ssReferenceScripts
