@@ -850,7 +850,7 @@ checkPayoutOpenRedeemedBefore = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
                         (Chain.TxOutRef applyInputsTxId 0)
@@ -931,7 +931,7 @@ checkPayoutOpenRedeemedAfter = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
                         (Chain.TxOutRef applyInputsTxId 0)
@@ -995,7 +995,7 @@ checkPayoutOpenRedeemedTogether = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
                         (Chain.TxOutRef applyInputsTxId 0)
