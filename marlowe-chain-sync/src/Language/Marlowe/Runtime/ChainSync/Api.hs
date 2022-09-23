@@ -36,6 +36,8 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , ScriptHash(..)
   , SlotConfig(..)
   , SlotNo(..)
+  , StakeCredential(..)
+  , StakeKeyHash(..)
   , StakeReference(..)
   , TokenName(..)
   , Tokens(..)
@@ -374,6 +376,11 @@ data Credential
   | ScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
 
+data StakeCredential
+  = StakeKeyCredential StakeKeyHash
+  | StakeScriptCredential ScriptHash
+  deriving stock (Show, Eq, Ord, Generic)
+
 fromCardanoPaymentCredential :: Cardano.PaymentCredential -> Credential
 fromCardanoPaymentCredential = \case
   Cardano.PaymentCredentialByKey pkh           -> PaymentKeyCredential $ fromCardanoPaymentKeyHash pkh
@@ -384,11 +391,16 @@ newtype PaymentKeyHash = PaymentKeyHash { unPaymentKeyHash :: ByteString }
   deriving newtype (Binary)
   deriving (IsString, Show) via Base16
 
+newtype StakeKeyHash = StakeKeyHash { unStakeKeyHash :: ByteString }
+  deriving stock (Eq, Ord, Generic)
+  deriving newtype (Binary)
+  deriving (IsString, Show) via Base16
+
 fromCardanoPaymentKeyHash :: Cardano.Hash Cardano.PaymentKey -> PaymentKeyHash
 fromCardanoPaymentKeyHash = PaymentKeyHash . Cardano.serialiseToRawBytes
 
-fromCardanoStakeKeyHash :: Cardano.Hash Cardano.StakeKey -> PaymentKeyHash
-fromCardanoStakeKeyHash = PaymentKeyHash . Cardano.serialiseToRawBytes
+fromCardanoStakeKeyHash :: Cardano.Hash Cardano.StakeKey -> StakeKeyHash
+fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
@@ -399,7 +411,7 @@ fromCardanoScriptHash :: Cardano.ScriptHash -> ScriptHash
 fromCardanoScriptHash = ScriptHash . Cardano.serialiseToRawBytes
 
 data StakeReference
-  = StakeCredential Credential
+  = StakeCredential StakeCredential
   | StakePointer SlotNo TxIx CertIx
   deriving stock (Show, Eq, Ord, Generic)
 
@@ -415,10 +427,10 @@ fromCardanoStakeAddressReference = \case
 fromCardanoStakeAddressPointer :: Cardano.StakeAddressPointer -> Word64
 fromCardanoStakeAddressPointer = error "not implemented"
 
-fromCardanoStakeCredential :: Cardano.StakeCredential -> Credential
+fromCardanoStakeCredential :: Cardano.StakeCredential -> StakeCredential
 fromCardanoStakeCredential = \case
-  Cardano.StakeCredentialByKey pkh           -> PaymentKeyCredential $ fromCardanoStakeKeyHash pkh
-  Cardano.StakeCredentialByScript scriptHash -> ScriptCredential $ fromCardanoScriptHash scriptHash
+  Cardano.StakeCredentialByKey skh           -> StakeKeyCredential $ fromCardanoStakeKeyHash skh
+  Cardano.StakeCredentialByScript scriptHash -> StakeScriptCredential $ fromCardanoScriptHash scriptHash
 
 -- | Reasons a 'FindTx' request can be rejected.
 data TxError

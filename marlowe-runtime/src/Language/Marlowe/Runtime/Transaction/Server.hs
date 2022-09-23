@@ -12,7 +12,6 @@ import Cardano.Api
   , NetworkId
   , PaymentCredential(..)
   , ScriptDataSupportedInEra(..)
-  , SerialiseAsRawBytes(..)
   , ShelleyBasedEra(..)
   , StakeAddressReference(..)
   , StakeCredential
@@ -24,8 +23,6 @@ import Cardano.Api
   , getTxId
   , makeShelleyAddress
   )
-import qualified Cardano.Api as C
-import Cardano.Api.Shelley (StakeCredential(..))
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
@@ -41,7 +38,8 @@ import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (UTCTime)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, ScriptHash(..), SlotConfig, TokenName, TxId(..))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoStakeCredential, fromCardanoTxId, toCardanoScriptHash)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, SlotConfig, TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
@@ -199,15 +197,14 @@ execCreate solveConstraints loadWalletContext networkId era mStakeCredential ver
   pure (ContractId $ findMarloweOutput txBody, txBody)
   where
   findMarloweOutput = \case
-    body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (Chain.TxId $ serialiseToRawBytes $ getTxId body)
+    body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (fromCardanoTxId $ getTxId body)
       $ fst
       $ fromJust
       $ find (isToCurrentScriptAddress . snd)
       $ zip [0..] txOuts
     where
       scriptHash = fromJust
-        $ deserialiseFromRawBytes C.AsScriptHash
-        $ unScriptHash
+        $ toCardanoScriptHash
         $ marloweScript
         $ getCurrentScripts version
       scriptAddress = makeShelleyAddress networkId (PaymentCredentialByScript scriptHash)
@@ -215,11 +212,6 @@ execCreate solveConstraints loadWalletContext networkId era mStakeCredential ver
       isToCurrentScriptAddress = case era of
         ScriptDataInAlonzoEra -> \(TxOut address _ _ _) -> address == AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) scriptAddress
         ScriptDataInBabbageEra -> \(TxOut address _ _ _) -> address == AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) scriptAddress
-
-fromCardanoStakeCredential :: StakeCredential -> Chain.Credential
-fromCardanoStakeCredential = \case
-  StakeCredentialByKey pkh -> Chain.PaymentKeyCredential $ Chain.PaymentKeyHash $ serialiseToRawBytes pkh
-  StakeCredentialByScript sh -> Chain.ScriptCredential $ Chain.ScriptHash $ serialiseToRawBytes sh
 
 execApplyInputs
   :: SlotConfig
@@ -289,7 +281,7 @@ execSubmit
   -> Tx era
   -> IO (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
 execSubmit mkSubmitJob trackSubmitJob era tx = do
-  let txId = TxId $ serialiseToRawBytes $ getTxId $ getTxBody tx
+  let txId = fromCardanoTxId $ getTxId $ getTxBody tx
   (submitJob, exVar) <- atomically do
     exVar <- newEmptyTMVar
     submitJob <- mkSubmitJob era tx
