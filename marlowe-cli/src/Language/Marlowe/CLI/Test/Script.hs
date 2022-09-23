@@ -101,6 +101,7 @@ import Language.Marlowe.CLI.Test.Types
   , ContractSource(..)
   , CurrencyNickname
   , CustomCurrency(CustomCurrency, ccCurrencySymbol)
+  , ExecutionMode(..)
   , MarloweContract(..)
   , PartyRef(RoleRef, WalletRef)
   , ScriptEnv(..)
@@ -123,9 +124,9 @@ import Language.Marlowe.CLI.Test.Types
   , seConnection
   , seCostModelParams
   , seEra
+  , seExecutionMode
   , seProtocolVersion
   , seSlotConfig
-  , seTransactionTimeout
   , ssContracts
   , ssCurrencies
   , ssReferenceScripts
@@ -144,6 +145,17 @@ import Plutus.V1.Ledger.Value (mpsSymbol, valueOf)
 import qualified Plutus.V1.Ledger.Value as P
 import qualified Plutus.V1.Ledger.Value as Value
 
+
+timeoutForOnChainMode :: MonadError CliError m
+          => MonadReader (ScriptEnv era) m
+          => m (Maybe Int)
+timeoutForOnChainMode = do
+            executionMode <- view seExecutionMode
+            let
+              executionTimeout = case executionMode of
+                (OnChainMode (Seconds transactionTimeout)) -> Just transactionTimeout
+                SimulationMode -> Nothing
+            pure executionTimeout
 
 interpret :: forall era m
            . IsShelleyBasedEra era
@@ -171,7 +183,7 @@ interpret FundWallet {..} = do
   (Wallet faucetAddress faucetSigningKey _ _) <- getFaucet
   (Wallet address _ _ _) <- findWallet soWalletNickname
   connection <- view seConnection
-  Seconds timeout <- view seTransactionTimeout
+  timeout <- timeoutForOnChainMode
   txBody <- runCli "[FundWallet] " $ buildFaucetImpl
     connection
     values
@@ -179,7 +191,7 @@ interpret FundWallet {..} = do
     faucetAddress
     faucetSigningKey
     defaultCoinSelectionStrategy
-    (Just timeout)
+    timeout
 
   let
     transaction = WalletTransaction { wtFees = 0, wtTxBody=txBody  }
@@ -190,10 +202,10 @@ interpret FundWallet {..} = do
 interpret SplitWallet {..} = do
   Wallet address skey _ _ <- findWallet soWalletNickname
   connection <- view seConnection
+  timeout <- timeoutForOnChainMode
   let
     values = [ C.lovelaceToValue v | v <- soValues ]
 
-  Seconds timeout <- view seTransactionTimeout
   void $ runCli "[createCollaterals] " $ buildFaucetImpl
     connection
     values
@@ -201,7 +213,7 @@ interpret SplitWallet {..} = do
     address
     skey
     defaultCoinSelectionStrategy
-    (Just timeout)
+    timeout
 
 interpret so@Mint {..} = do
   currencies <- use ssCurrencies
@@ -217,7 +229,7 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, Just destAddress), (nickname, wallet, tokenName, amount))
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
   connection <- view seConnection
-  Seconds timeout <- view seTransactionTimeout
+  timeout <- timeoutForOnChainMode
   (_, policy) <- runCli "[Mint] " $ buildMintingImpl
     connection
     faucetSigningKey
@@ -226,7 +238,7 @@ interpret so@Mint {..} = do
     Nothing
     2_000_000       -- FIXME: should we compute minAda here?
     faucetAddress
-    (Just timeout)
+    timeout
 
   let
     currencySymbol = mpsSymbol . fromCardanoPolicyId $ policy
@@ -330,36 +342,39 @@ interpret Prepare {..} = do
 
   modifying ssContracts $ Map.insert soContractNickname marloweContract'
 
-interpret AutoRun {..} = do
-  marloweContract@MarloweContract {..} <- findMarloweContract soContractNickname
-  let
-    plan = do
+interpret so@AutoRun {..} = do
+  timeoutForOnChainMode >>= \case
+    Nothing -> logSoMsg' so "Execution Mode set to 'Simulation' - Transactions are not submitted to chain in simulation mode"
+    (Just _) -> do
+      marloweContract@MarloweContract {..} <- findMarloweContract soContractNickname
       let
-        whole = reverse $ NE.toList mcPlan
-      case mcThread of
-        Just thread -> do
+        plan = do
           let
-            l = overAnyMarloweThread (foldrMarloweThread (const (+ 1)) 0) thread
-          drop l whole
-        Nothing -> whole
-    step th mt = do
+            whole = reverse $ NE.toList mcPlan
+          case mcThread of
+            Just thread -> do
+              let
+                l = overAnyMarloweThread (foldrMarloweThread (const (+ 1)) 0) thread
+              drop l whole
+            Nothing -> whole
+        step th mt = do
+          let
+            prev :: Maybe (MarloweTransaction MarlowePlutusVersion era, C.TxIn)
+            prev = do
+              pmt <- overAnyMarloweThread getMarloweThreadTransaction <$> th
+              txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< th
+              pure (pmt, txIn)
+            invalid = fromMaybe False soInvalid
+
+          (txBody, mTxIn) <- autoRunTransaction mcCurrency mcSubmitter prev mt invalid
+          case anyMarloweThread mt txBody mTxIn th of
+            Just th' -> pure $ Just th'
+            Nothing  -> throwError "[AutoRun] Extending of the marlowe thread failed."
+
+      thread' <- foldM step mcThread plan
       let
-        prev :: Maybe (MarloweTransaction MarlowePlutusVersion era, C.TxIn)
-        prev = do
-          pmt <- overAnyMarloweThread getMarloweThreadTransaction <$> th
-          txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< th
-          pure (pmt, txIn)
-        invalid = fromMaybe False soInvalid
-
-      (txBody, mTxIn) <- autoRunTransaction mcCurrency mcSubmitter prev mt invalid
-      case anyMarloweThread mt txBody mTxIn th of
-        Just th' -> pure $ Just th'
-        Nothing  -> throwError "[AutoRun] Extending of the marlowe thread failed."
-
-  thread' <- foldM step mcThread plan
-  let
-    marloweContract' = marloweContract { mcThread = thread' }
-  ssContracts `modifying`  Map.insert soContractNickname marloweContract'
+        marloweContract' = marloweContract { mcThread = thread' }
+      ssContracts `modifying`  Map.insert soContractNickname marloweContract'
 
 interpret so@Publish {..} = do
   whenM (isJust <$> use ssReferenceScripts) do
@@ -388,17 +403,19 @@ interpret so@Publish {..} = do
 
       pure marloweScriptRefs
     Nothing -> do
-      logSoMsg' so "Scripts not found so publishing them."
-      Seconds timeout <- view seTransactionTimeout
-      runSoCli so $ publishImpl
-        connection
-        waSigningKey
-        Nothing
-        waAddress
-        publishingStrategy
-        (CoinSelectionStrategy False False [])
-        timeout
-        (PrintStats True)
+      timeoutForOnChainMode >>= \case
+        Nothing -> throwSoError so "Can't perform on chain script publishing in simulation mode"
+        (Just timeout) -> do
+          logSoMsg' so "Scripts not found so publishing them."
+          runSoCli so $ publishImpl
+            connection
+            waSigningKey
+            Nothing
+            waAddress
+            publishingStrategy
+            (CoinSelectionStrategy False False [])
+            timeout
+            (PrintStats True)
 
   assign ssReferenceScripts (Just marloweScriptRefs)
 
@@ -450,7 +467,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
   connection <- view seConnection
-  Seconds timeout <- view seTransactionTimeout
+  timeout <- timeoutForOnChainMode
   txBody <- runCli "[AutoRun] " $ autoRunTransactionImpl
       connection
       prev
@@ -458,7 +475,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       address
       [skey]
       C.TxMetadataNone
-      (Just timeout)
+      timeout
       True
       invalid
 
@@ -719,9 +736,10 @@ scriptTest  :: forall era m
             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
             -> Wallet era                        -- ^ Wallet which should be used as faucet.
             -> SlotConfig                        -- ^ The time and slot correspondence.
+            -> ExecutionMode
             -> ScriptTest                        -- ^ The tests to be run.
             -> m ()                              -- ^ Action for running the tests.
-scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest{..} =
+scriptTest era protocolVersion costModel connection faucet slotConfig executionMode ScriptTest{..} =
   do
     liftIO $ putStrLn ""
     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
@@ -730,10 +748,9 @@ scriptTest era protocolVersion costModel connection faucet slotConfig ScriptTest
       interpretLoop = for_ stScriptOperations \operation -> do
         logSoMsg SoName operation "..."
         interpret operation
-      transactionTimeout = Seconds 120
 
     void $ catchError
-      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig transactionTimeout))
+      (runReaderT (execStateT interpretLoop (scriptState faucet)) (ScriptEnv connection costModel era protocolVersion slotConfig executionMode))
       $ \e -> do
         -- TODO: Clean up wallets and instances.
         liftIO (print e)

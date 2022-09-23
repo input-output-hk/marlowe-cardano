@@ -32,6 +32,7 @@ module Language.Marlowe.CLI.Test.Types
   , ContractSource(..)
   , CurrencyNickname(..)
   , CustomCurrency(..)
+  , ExecutionMode(..)
   , Finished
   , MarloweContract(..)
   , MarloweReferenceScripts(..)
@@ -61,15 +62,14 @@ module Language.Marlowe.CLI.Test.Types
   , seConnection
   , seCostModelParams
   , seEra
+  , seExecutionMode
   , seProtocolVersion
   , seSlotConfig
-  , seTransactionTimeout
   , ssContracts
   , ssCurrencies
   , ssReferenceScripts
   , ssWallets
   ) where
-
 
 import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
@@ -104,15 +104,24 @@ data MarloweTests era a =
     -- | Test contracts on-chain.
     ScriptTests
     {
-      network              :: NetworkId   -- ^ The network ID, if any.
-    , socketPath           :: FilePath    -- ^ The path to the node socket.
-    , faucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
-    , faucetAddress        :: AddressInEra era  -- ^ The faucet address.
-    , burnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
-    , tests                :: [a]         -- ^ Input for the tests.
+      stNetwork              :: NetworkId   -- ^ The network ID, if any.
+    , stSocketPath           :: FilePath    -- ^ The path to the node socket.
+    , stFaucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
+    , stFaucetAddress        :: AddressInEra era  -- ^ The faucet address.
+    , stBurnAddress          :: AddressInEra era -- ^ The address to which to send unneeded native tokens.
+    , stExecutionMode        :: ExecutionMode
+    , stTests                :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
 
+-- | Configuration for executing Marlowe CLI DSL commands on the blockchain
+-- | The idea behind simulation mode is to use it as a "first line of defense" to detect
+-- | errors in code or in the test case itself before spending the time/resources to run the same
+-- | scenarios on chain.
+-- | Tests that fail in simulation mode should also fail on chain
+-- | Tests that pass on chain should also pass in simulation mode
+data ExecutionMode = SimulationMode | OnChainMode { transactionSubmissionTimeout :: Seconds }
+    deriving stock (Eq, Show)
 
 -- | An on-chain test of the Marlowe contract and payout validators.
 data ScriptTest =
@@ -478,6 +487,7 @@ scriptState faucet = do
   ScriptState mempty mempty Nothing wallets
 
 newtype Seconds = Seconds Int
+    deriving stock (Eq, Show)
 
 
 data ScriptEnv era = ScriptEnv
@@ -486,7 +496,7 @@ data ScriptEnv era = ScriptEnv
   , _seEra                :: ScriptDataSupportedInEra era
   , _seProtocolVersion    :: ProtocolVersion
   , _seSlotConfig         :: SlotConfig
-  , _seTransactionTimeout :: Seconds
+  , _seExecutionMode      :: ExecutionMode
   }
 
 
