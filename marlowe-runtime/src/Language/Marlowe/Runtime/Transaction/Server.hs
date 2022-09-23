@@ -12,7 +12,6 @@ import Cardano.Api
   , NetworkId
   , PaymentCredential(..)
   , ScriptDataSupportedInEra(..)
-  , SerialiseAsRawBytes(..)
   , ShelleyBasedEra(..)
   , StakeAddressReference(..)
   , StakeCredential
@@ -39,7 +38,7 @@ import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (UTCTime)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.Cardano.Api (fromCardano, toCardano)
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoStakeCredential, fromCardanoTxId, toCardanoScriptHash)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, SlotConfig, TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer)
@@ -191,21 +190,21 @@ execCreate solveConstraints loadWalletContext networkId era mStakeCredential ver
   walletContext <- lift $ loadWalletContext addresses
   -- The marlowe context for a create transaction has no marlowe output and
   -- an empty payout output set. It may specify a stake credential to use.
-  let marloweContext = MarloweContext (fromCardano <$> mStakeCredential) Nothing mempty
+  let marloweContext = MarloweContext (fromCardanoStakeCredential <$> mStakeCredential) Nothing mempty
   txBody <- except
     $ first CreateUnsolvableConstraints
     $ solveConstraints era marloweContext walletContext constraints
   pure (ContractId $ findMarloweOutput txBody, txBody)
   where
   findMarloweOutput = \case
-    body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (fromCardano $ getTxId body)
+    body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (fromCardanoTxId $ getTxId body)
       $ fst
       $ fromJust
       $ find (isToCurrentScriptAddress . snd)
       $ zip [0..] txOuts
     where
       scriptHash = fromJust
-        $ toCardano
+        $ toCardanoScriptHash
         $ marloweScript
         $ getCurrentScripts version
       scriptAddress = makeShelleyAddress networkId (PaymentCredentialByScript scriptHash)
@@ -282,7 +281,7 @@ execSubmit
   -> Tx era
   -> IO (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
 execSubmit mkSubmitJob trackSubmitJob era tx = do
-  let txId = fromCardano $ getTxId $ getTxBody tx
+  let txId = fromCardanoTxId $ getTxId $ getTxBody tx
   (submitJob, exVar) <- atomically do
     exVar <- newEmptyTMVar
     submitJob <- mkSubmitJob era tx
