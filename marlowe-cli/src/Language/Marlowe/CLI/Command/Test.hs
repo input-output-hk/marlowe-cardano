@@ -22,12 +22,12 @@ module Language.Marlowe.CLI.Command.Test
   , runTestCommand
   ) where
 
-import Data.Maybe (fromMaybe)
 import Cardano.Api (IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
+import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
-import Language.Marlowe.CLI.Test.Types (MarloweTests (ScriptTests), ExecutionMode(..), Seconds(..))
+import Language.Marlowe.CLI.Test.Types (ExecutionMode(..), MarloweTests(ScriptTests), Seconds(..))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)
