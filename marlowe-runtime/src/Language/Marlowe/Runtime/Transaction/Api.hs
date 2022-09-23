@@ -93,6 +93,8 @@ data MarloweTxCommand status err result where
     -- ^ The Marlowe version to use
     -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
+    -> ContractId
+    -- ^ The ID of the contract to apply the inputs to.
     -> PayoutDatum v
     -- ^ The names of the roles whose assets to withdraw.
     -> MarloweTxCommand Void WithdrawError
@@ -122,7 +124,7 @@ instance Command MarloweTxCommand where
   tagFromCommand = \case
     Create era _ _ _ _ _ _        -> TagCreate era
     ApplyInputs era _ _ _ _ _ _ -> TagApplyInputs era
-    Withdraw era _ _ _        -> TagWithdraw era
+    Withdraw era _ _ _ _        -> TagWithdraw era
     Submit era _                -> TagSubmit era
 
   tagFromJobId = \case
@@ -196,9 +198,10 @@ instance Command MarloweTxCommand where
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidBefore
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidHereafter
       putRedeemer version redeemer
-    Withdraw _ version walletAddresses payoutDatum -> do
+    Withdraw _ version walletAddresses contractId payoutDatum -> do
       put $ SomeMarloweVersion version
       put walletAddresses
+      put contractId
       putPayoutDatum version payoutDatum
     Submit era tx -> case era of
       ScriptDataInAlonzoEra  -> put $ serialiseToCBOR tx
@@ -250,8 +253,9 @@ instance Command MarloweTxCommand where
     TagWithdraw era    -> do
       SomeMarloweVersion version <- get
       walletAddresses <- get
+      contractId <- get
       payoutDatum <- getPayoutDatum version
-      pure $ Withdraw era version walletAddresses payoutDatum
+      pure $ Withdraw era version walletAddresses contractId payoutDatum
     TagSubmit era      -> do
       bytes <- get @ByteString
       Submit era <$> case era of
@@ -346,11 +350,19 @@ newtype CreateError
 data ApplyInputsError
   = ApplyInputsUnsolvableConstraints UnsolvableConstraintsError
   | ScriptOutputNotFound
+  | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   deriving (Eq, Show, Generic, Binary)
 
-newtype WithdrawError
+data WithdrawError
   = WithdrawUnsolvableConstraints UnsolvableConstraintsError
+  | WithdrawLoadMarloweContextFailed LoadMarloweContextError
   deriving (Eq, Show, Generic)
+  deriving anyclass Binary
+
+data LoadMarloweContextError
+  = LoadMarloweContextErrorNotFound
+  | LoadMarloweContextErrorVersionMismatch SomeMarloweVersion
+  deriving (Eq, Show, Ord, Generic)
   deriving anyclass Binary
 
 data SubmitError

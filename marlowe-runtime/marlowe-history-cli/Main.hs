@@ -280,6 +280,7 @@ logHistory contractId (SomeHistory version History{..}) = do
 
 logCreateStep :: MarloweVersion v -> ContractId -> BlockHeader -> CreateStep v -> IO ()
 logCreateStep version contractId BlockHeader{..} CreateStep{..} = do
+  let TransactionScriptOutput scriptAddress _ _ datum = createOutput
   setSGR [SetColor Foreground Vivid Yellow]
   putStr "transaction "
   putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId

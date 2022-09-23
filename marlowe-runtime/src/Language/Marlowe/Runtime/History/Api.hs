@@ -72,8 +72,7 @@ data FollowerStatus
   deriving anyclass Binary
 
 data CreateStep v = CreateStep
-  { datum               :: Datum v
-  , scriptAddress       :: Chain.Address
+  { createOutput :: TransactionScriptOutput v
   , payoutValidatorHash :: ScriptHash
   }
 
@@ -90,10 +89,9 @@ instance Show SomeCreateStep where
 
 instance Binary (CreateStep 'V1) where
   put CreateStep{..} = do
-    putDatum MarloweV1 datum
-    put scriptAddress
+    put createOutput
     put payoutValidatorHash
-  get = CreateStep <$> getDatum MarloweV1 <*> get <*> get
+  get = CreateStep <$> get <*> get
 
 data RedeemStep v = RedeemStep
   { utxo        :: TxOutRef

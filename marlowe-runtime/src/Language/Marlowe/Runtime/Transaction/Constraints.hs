@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (NetworkId, StakeCredential)
+import Cardano.Api.Shelley (NetworkId)
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
@@ -279,18 +279,18 @@ data WalletContext = WalletContext
   }
 
 -- | Data from Marlowe Scripts needed to solve the constraints.
-data MarloweContext = MarloweContext
-  { stakeCredential :: Maybe StakeCredential
+data MarloweContext v = MarloweContext
+  { stakeCredential :: Maybe Chain.Credential
   -- ^ The stake credential to use when building a new marlowe script address.
-  , scriptOutput :: Maybe (Chain.TxOutRef, Chain.TransactionOutput)
+  , scriptOutput :: Maybe (Core.TransactionScriptOutput v)
   -- ^ The UTXO at the script address, if any.
-  , payoutOutputs :: Map Chain.TxOutRef Chain.TransactionOutput
+  , payoutOutputs :: Map Chain.TxOutRef (Core.Payout v)
   -- ^ The UTXOs at the payout address.
   }
 
 type SolveConstraints era v
    = Cardano.ScriptDataSupportedInEra era
-  -> MarloweContext
+  -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
   -> Either UnsolvableConstraintsError (Cardano.TxBody era)

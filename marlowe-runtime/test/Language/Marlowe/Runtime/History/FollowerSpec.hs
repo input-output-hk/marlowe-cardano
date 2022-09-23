@@ -44,10 +44,10 @@ import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
   , MarloweVersionTag(..)
-  , Payout(..)
+  , Payout(Payout)
   , Transaction(..)
   , TransactionOutput(..)
-  , TransactionScriptOutput(..)
+  , TransactionScriptOutput(TransactionScriptOutput)
   , parseContractId
   , toChainPayoutDatum
   )
@@ -143,7 +143,7 @@ createTx =
     validityRange = Chain.Unbounded
     metadata = Nothing
     inputs = mempty
-    outputs = [createOutput]
+    outputs = [creationOutput]
     mintedTokens = Chain.Tokens mempty
   in
     Chain.Transaction{..}
@@ -157,8 +157,8 @@ testScriptAddress = mkScriptAddress $ marloweScript currentV1Scripts
 testPayoutValidatorAddress :: Chain.Address
 testPayoutValidatorAddress = mkScriptAddress $ payoutScript currentV1Scripts
 
-createOutput :: Chain.TransactionOutput
-createOutput =
+creationOutput :: Chain.TransactionOutput
+creationOutput =
   let
     address = testScriptAddress
     assets = Chain.Assets
@@ -248,7 +248,7 @@ payout =
       }
     datum = Chain.AssetId policyId (Chain.TokenName "test_role")
   in
-    Payout{..}
+    Payout testPayoutValidatorAddress assets datum
 
 payoutUTxO :: TxOutRef
 payoutUTxO = TxOutRef applyInputsTxId 1
@@ -257,7 +257,7 @@ payoutOutput :: Chain.TransactionOutput
 payoutOutput =
   let
     address = testPayoutValidatorAddress
-    Payout{assets} = payout
+    Payout _ assets _ = payout
     datumHash = Nothing
     datum = Just $ toChainPayoutDatum MarloweV1 $ AssetId policyId (Chain.TokenName "test_role")
   in
@@ -289,7 +289,7 @@ redeemPayoutOutput :: Chain.TransactionOutput
 redeemPayoutOutput =
   let
     address = "6022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6"
-    Payout{assets} = payout
+    Payout _ assets _ = payout
     datumHash = Nothing
     datum = Nothing
   in
@@ -375,7 +375,7 @@ checkByronAddress = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
-    $ RollForward createTx { Chain.outputs = [createOutput { address = "" }] } point1 point1
+    $ RollForward createTx { Chain.outputs = [creationOutput { address = "" }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed ByronAddress)
   followerChanges `shouldBe` Nothing
@@ -385,7 +385,7 @@ checkNonScriptAddress = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
-    $ RollForward createTx { Chain.outputs = [createOutput { address = "6022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6" }] } point1 point1
+    $ RollForward createTx { Chain.outputs = [creationOutput { address = "6022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6" }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed NonScriptAddress)
   followerChanges `shouldBe` Nothing
@@ -395,7 +395,7 @@ checkInvalidScriptHash = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
-    $ RollForward createTx { Chain.outputs = [createOutput { address = "7022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6" }] } point1 point1
+    $ RollForward createTx { Chain.outputs = [creationOutput { address = "7022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6" }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed InvalidScriptHash)
   followerChanges `shouldBe` Nothing
@@ -405,7 +405,7 @@ checkNoCreateDatum = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
-    $ RollForward createTx { Chain.outputs = [createOutput { Chain.datum = Nothing }] } point1 point1
+    $ RollForward createTx { Chain.outputs = [creationOutput { Chain.datum = Nothing }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed NoCreateDatum)
   followerChanges `shouldBe` Nothing
@@ -415,7 +415,7 @@ checkInvalidCreateDatum = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
-    $ RollForward createTx { Chain.outputs = [createOutput { Chain.datum = Just $ Chain.I 0 }] } point1 point1
+    $ RollForward createTx { Chain.outputs = [creationOutput { Chain.datum = Just $ Chain.I 0 }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed InvalidCreateDatum)
   followerChanges `shouldBe` Nothing
@@ -440,9 +440,8 @@ checkNotCreationTransaction = do
 
 checkCreation :: Expectation
 checkCreation = do
-  let datum = createDatum
-  let scriptAddress = testScriptAddress
   let payoutValidatorHash = payoutScript currentV1Scripts
+  let createOutput = TransactionScriptOutput testScriptAddress mempty createUTxO createDatum
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId)
@@ -675,10 +674,11 @@ checkRollbackToCreationWithInputs = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput mempty $ Just TransactionScriptOutput
-                        { utxo = Chain.TxOutRef applyInputsTxId 0
-                        , datum = createDatum
-                        }
+                    , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
+                        testScriptAddress
+                        mempty
+                        (Chain.TxOutRef applyInputsTxId 0)
+                        createDatum
                     }
                 ]
             , create = Nothing
@@ -745,10 +745,11 @@ checkRollbackToTransaction = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput mempty $ Just TransactionScriptOutput
-                        { utxo = Chain.TxOutRef applyInputsTxId 0
-                        , datum = createDatum
-                        }
+                    , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
+                        testScriptAddress
+                        mempty
+                        (Chain.TxOutRef applyInputsTxId 0)
+                        createDatum
                     }
                 ]
             , create = Nothing
@@ -819,10 +820,11 @@ checkNonCloseTransaction = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput mempty $ Just TransactionScriptOutput
-                        { utxo = Chain.TxOutRef applyInputsTxId 0
-                        , datum = createDatum
-                        }
+                    , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
+                        testScriptAddress
+                        mempty
+                        (Chain.TxOutRef applyInputsTxId 0)
+                        createDatum
                     }
                 ]
             , create = Nothing
@@ -848,10 +850,11 @@ checkPayoutOpenRedeemedBefore = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just TransactionScriptOutput
-                        { utxo = Chain.TxOutRef applyInputsTxId 0
-                        , datum = createDatum
-                        }
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
+                        testScriptAddress
+                        mempty
+                        (Chain.TxOutRef applyInputsTxId 0)
+                        createDatum
                     }
                 ]
             , create = Nothing
@@ -928,10 +931,11 @@ checkPayoutOpenRedeemedAfter = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just TransactionScriptOutput
-                        { utxo = Chain.TxOutRef applyInputsTxId 0
-                        , datum = createDatum
-                        }
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
+                        testScriptAddress
+                        mempty
+                        (Chain.TxOutRef applyInputsTxId 0)
+                        createDatum
                     }
                 ]
             , create = Nothing
@@ -991,10 +995,11 @@ checkPayoutOpenRedeemedTogether = do
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
                     , redeemer = applyInputsRedeemer
-                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just TransactionScriptOutput
-                        { utxo = Chain.TxOutRef applyInputsTxId 0
-                        , datum = createDatum
-                        }
+                    , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
+                        testScriptAddress
+                        mempty
+                        (Chain.TxOutRef applyInputsTxId 0)
+                        createDatum
                     }
                 ]
             , create = Nothing

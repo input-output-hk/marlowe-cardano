@@ -25,12 +25,14 @@ import Data.Type.Equality (testEquality)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
-  ( AssetId(..)
+  ( Address(..)
+  , AssetId(..)
   , Assets(..)
   , BlockHeader(..)
   , BlockHeaderHash(..)
   , Lovelace(..)
   , PolicyId(..)
+  , ScriptHash(..)
   , SlotNo(..)
   , TokenName(..)
   , Tokens(..)
@@ -89,6 +91,8 @@ data HistoryScriptBlockState = HistoryScriptBlockState
 -- A state snapshot for a particular contract
 data HistoryScriptContractState v = HistoryScriptContractState
   { contractVersion   :: MarloweVersion v
+  , statePayoutAddress :: Address
+  , stateScriptAddress :: Address
   , statePayouts      :: Map TxOutRef (Payout v)
   , stateScriptOutput :: Maybe (TransactionScriptOutput v)
   }
@@ -147,10 +151,9 @@ reduceScriptEvent = \case
               contractState = HistoryScriptContractState
                 { contractVersion = version
                 , statePayouts = mempty
-                , stateScriptOutput = Just TransactionScriptOutput
-                    { utxo = unContractId contractId
-                    , datum
-                    }
+                , stateScriptOutput = Just createOutput
+                , stateScriptAddress = let TransactionScriptOutput address _ _ _ = createOutput in address
+                , statePayoutAddress = Address $ unAddress "70" <> unScriptHash payoutValidatorHash
                 }
               state' = state { contractStates = Map.insert contractId (Some contractState) contractStates }
             in
@@ -172,6 +175,8 @@ reduceScriptEvent = \case
                       { contractVersion
                       , statePayouts = Map.union statePayouts payouts
                       , stateScriptOutput = scriptOutput
+                      , stateScriptAddress
+                      , statePayoutAddress
                       }
                     )
                     contractStates
@@ -193,13 +198,15 @@ reduceScriptEvent = \case
                     { contractVersion
                     , stateScriptOutput
                     , statePayouts = Map.delete utxo statePayouts
+                      , stateScriptAddress
+                      , statePayoutAddress
                     }
                   state' = state { contractStates = Map.insert contractId (Some contractState') contractStates }
                 in
                   Right $ state' : states
 
-applyInputsV1 :: P.POSIXTime -> P.POSIXTime -> TxId -> [V1.Input] -> V1.MarloweData -> Maybe (TransactionOutput 'V1)
-applyInputsV1 vLow vHigh txId txInputs V1.MarloweData{..} =
+applyInputsV1 :: Address -> Address -> P.POSIXTime -> P.POSIXTime -> TxId -> [V1.Input] -> V1.MarloweData -> Maybe (TransactionOutput 'V1)
+applyInputsV1 marloweAddress payoutAddress vLow vHigh txId txInputs V1.MarloweData{..} =
   case V1.computeTransaction V1.TransactionInput{..} marloweState marloweContract of
     V1.Error _ -> Nothing
     V1.TransactionOutput{..} -> Just $ TransactionOutput
@@ -207,7 +214,9 @@ applyInputsV1 vLow vHigh txId txInputs V1.MarloweData{..} =
       , scriptOutput = case txOutContract of
           V1.Close -> Nothing
           _ -> Just TransactionScriptOutput
-            { utxo = TxOutRef txId 0
+            { address = marloweAddress
+            , assets = moneyToAssets $ V1.totalBalance $ V1.accounts txOutState
+            , utxo = TxOutRef txId 0
             , datum = V1.MarloweData marloweParams txOutState txOutContract
             }
       }
@@ -215,7 +224,8 @@ applyInputsV1 vLow vHigh txId txInputs V1.MarloweData{..} =
     txInterval = (vLow, vHigh)
     paymentToPayout :: V1.Payment -> Maybe (Payout 'V1)
     paymentToPayout payment@(V1.Payment _ (V1.Party (V1.Role role)) _ _) = Just $ Payout
-      { assets = moneyToAssets $ V1.paymentMoney payment
+      { address = payoutAddress
+      , assets = moneyToAssets $ V1.paymentMoney payment
       , datum = AssetId (fromPlutusCurrencySymbol rolesCurrency) (fromPlutusTokenName role)
       }
     paymentToPayout _                                              = Nothing
@@ -281,7 +291,7 @@ genHistoryScriptEvent HistoryScriptBlockState{..} n = frequency $ fold
     blockEvents = (5, genRollForward) : ((1,) <$> genRollBackward n)
     contractEvents :: ContractId -> HistoryScriptContractState v -> [Gen (Maybe (HistoryScriptEvent v))]
     contractEvents contractId HistoryScriptContractState{..} = fold
-      [ maybeToList $ genApplyInputs contractVersion block contractId <$> stateScriptOutput
+      [ maybeToList $ genApplyInputs contractVersion statePayoutAddress block contractId <$> stateScriptOutput
       , fmap Just . uncurry (genWithdraw contractVersion contractId) <$> Map.toList statePayouts
       ]
 
@@ -314,23 +324,24 @@ genCreateContract slot = do
   datum <- V1.MarloweData marloweParams (V1.emptyState $ fromIntegral slot) <$> arbitrary
   let scriptAddress = "7062c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307"
   let payoutValidatorHash = "a2c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307"
+  let createOutput = TransactionScriptOutput scriptAddress mempty (unContractId contractId) datum
   pure $ Some $ CreateContract contractId MarloweV1 CreateStep{..}
 
 genTxId :: Gen TxId
 genTxId = TxId . BS.pack <$> replicateM 8 arbitrary
 
-genApplyInputs :: MarloweVersion v -> BlockHeader -> ContractId -> TransactionScriptOutput v -> Gen (Maybe (HistoryScriptEvent v))
+genApplyInputs :: MarloweVersion v -> Address -> BlockHeader -> ContractId -> TransactionScriptOutput v -> Gen (Maybe (HistoryScriptEvent v))
 genApplyInputs = \case
   MarloweV1 -> genApplyInputsV1
 
-genApplyInputsV1 :: BlockHeader -> ContractId -> TransactionScriptOutput 'V1 -> Gen (Maybe (HistoryScriptEvent 'V1))
-genApplyInputsV1 blockHeader contractId TransactionScriptOutput{..} = do
+genApplyInputsV1 :: Address -> BlockHeader -> ContractId -> TransactionScriptOutput 'V1 -> Gen (Maybe (HistoryScriptEvent 'V1))
+genApplyInputsV1 payoutAddress blockHeader contractId TransactionScriptOutput{..} = do
   let V1.MarloweData{..} = datum
   let minTime = fromIntegral $ slotNo blockHeader
   V1.TransactionInput (vLow, vHigh) inputs <- arbitraryValidStep marloweState {V1.minTime=minTime} marloweContract
   transactionId <- genTxId
   pure do
-    output <- applyInputsV1 vLow vHigh transactionId inputs datum
+    output <- applyInputsV1 address payoutAddress vLow vHigh transactionId inputs datum
     pure $ ApplyInputs MarloweV1 $ Transaction
       { contractId
       , transactionId

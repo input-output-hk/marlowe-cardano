@@ -180,7 +180,7 @@ mkFollower deps@FollowerDependencies{..} = do
                 writeTVar statusVar $ Following $ SomeMarloweVersion version
                 pure changesVar
               let payouts = mempty
-              let scriptOutput = TransactionScriptOutput (unContractId contractId) datum
+              let scriptOutput = createOutput
               let previousState = Nothing
               followContract blockHeader FollowerContext{..} FollowerState{..}
       , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
@@ -214,7 +214,6 @@ data FollowerContext v = FollowerContext
   , contractId          :: ContractId
   , changesVar          :: TVar (ContractChanges v)
   , statusVar           :: TVar FollowerStatus
-  , scriptAddress       :: Chain.Address
   , payoutValidatorHash :: ScriptHash
   , slotConfig          :: SlotConfig
   , securityParameter   :: Int
@@ -242,7 +241,7 @@ data FollowerStateClosed v = FollowerStateClosed
 
 extractCreation :: FollowerDependencies -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
 extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs} = do
-  Chain.TransactionOutput{ address = scriptAddress, datum = mdatum } <-
+  Chain.TransactionOutput{ assets, address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   marloweScriptHash <- getScriptHash scriptAddress
   (SomeMarloweVersion version, MarloweScripts{..}) <- note InvalidScriptHash $ getMarloweVersion marloweScriptHash
@@ -251,6 +250,7 @@ extractCreation FollowerDependencies{..} tx@Chain.Transaction{inputs} = do
     when (isScriptAddress marloweScriptHash address) $ Left NotCreationTransaction
   txDatum <- note NoCreateDatum mdatum
   datum <- note InvalidCreateDatum $ fromChainDatum version txDatum
+  let createOutput = TransactionScriptOutput scriptAddress assets (unContractId contractId) datum
   pure $ SomeCreateStep version CreateStep{..}
 
 getScriptHash :: Chain.Address -> Either ExtractCreationError ScriptHash
@@ -467,7 +467,7 @@ processScriptTx
   -> Chain.Transaction
   -> WriterT (ContractChanges v) (Either ContractHistoryError) (TransactionOutput v)
 processScriptTx blockHeader FollowerContext{..} FollowerState{..} tx = do
-  let TransactionScriptOutput utxo _ = scriptOutput
+  let TransactionScriptOutput scriptAddress _  utxo _ = scriptOutput
   marloweTx@Transaction{output} <- lift
     $ first ExtractMarloweTransactionFailed
     $ extractMarloweTransaction version slotConfig contractId scriptAddress payoutValidatorHash utxo blockHeader tx
@@ -503,22 +503,23 @@ extractMarloweTransaction version slotConfig contractId scriptAddress payoutVali
   let validityLowerBound = slotToUTCTime slotConfig minSlot
   let validityUpperBound = slotToUTCTime slotConfig maxSlot
   scriptOutput <- runMaybeT do
-    (ix, Chain.TransactionOutput{ datum = mDatum }) <-
+    (ix, Chain.TransactionOutput{ assets, datum = mDatum }) <-
       hoistMaybe $ find (isToAddress scriptAddress . snd) $ zip [0..] outputs
     lift do
       rawDatum <- note NoTransactionDatum mDatum
       datum <- note InvalidTransactionDatum $ fromChainDatum version rawDatum
       let txIx = Chain.TxIx ix
       let utxo = Chain.TxOutRef{..}
+      let address = scriptAddress
       pure TransactionScriptOutput{..}
   let
     payoutOutputs = Map.filter (isToScriptHash payoutValidatorHash)
       $ Map.fromList
       $ (\(txIx, output) -> (Chain.TxOutRef{..}, output)) <$> zip [0..] outputs
-  payouts <- flip Map.traverseWithKey payoutOutputs \txOut Chain.TransactionOutput{datum=mPayoutDatum, assets} -> do
+  payouts <- flip Map.traverseWithKey payoutOutputs \txOut Chain.TransactionOutput{address, datum=mPayoutDatum, assets} -> do
     rawPayoutDatum <- note (NoPayoutDatum txOut) mPayoutDatum
     payoutDatum <- note (InvalidPayoutDatum txOut) $ fromChainPayoutDatum version rawPayoutDatum
-    pure $ Payout assets payoutDatum
+    pure $ Payout address assets payoutDatum
   let output = TransactionOutput{..}
   pure Transaction{..}
 
