@@ -509,11 +509,15 @@ interestingParties :: Party -> Bool -> [Party]
 interestingParties validRole True = [validRole]
 interestingParties (Role roleName) False = [
     Role (removeFirstLetter roleName)
-  , Role roleName <> "s"
+  , Role (TokenName $ unTokenName roleName `appendByteString` "s")
   ]
 
+-- removeFirstLetter :: TokenName -> TokenName
+-- removeFirstLetter "" = ""
+-- removeFirstLetter (_:remaining) = remaining
+
 removeFirstLetter :: TokenName -> TokenName
-removeFirstLetter (_:remaining) = remaining
+removeFirstLetter (TokenName tokenName) = TokenName $ sliceByteString 1 (lengthOfByteString tokenName) tokenName
 
 interestingChoiceNum' :: Bool -> Bound -> [ChosenNum]
 interestingChoiceNum' True (Bound lower upper)  = validValues lower upper
@@ -526,7 +530,7 @@ invalidValues :: Integer -> Integer -> [Integer]
 invalidValues lower upper = [x | x <- testValueRange, x < lower  || x > upper]
 
 testValueRange :: [Integer]
-testValueRange = [0..] >>= \x -> [x, -x]
+testValueRange = tail $ [0..] >>= \x -> [x, -x]
 
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
