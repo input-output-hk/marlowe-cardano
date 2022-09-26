@@ -78,6 +78,7 @@
           "Language/Marlowe/Runtime/ChainSync/Database"
           "Language/Marlowe/Runtime/ChainSync/Database/PostgreSQL"
           "Language/Marlowe/Runtime/ChainSync/Genesis"
+          "Language/Marlowe/Runtime/ChainSync/JobServer"
           "Language/Marlowe/Runtime/ChainSync/NodeClient"
           "Language/Marlowe/Runtime/ChainSync/Server"
           "Language/Marlowe/Runtime/ChainSync/QueryServer"
