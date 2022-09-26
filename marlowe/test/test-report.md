@@ -50,7 +50,7 @@ Marlowe transactions utilize one of two Plutus V2 validators, residing in the [`
 - The *Semantics Validator* is Plutus code that verifies that a transaction obeys the Marlowe DSL semantics along with the Cardano ledger rules. This validator resides in the `smallUntypedValidator` function that marshals Plutus types to call `computeTransaction` and checks constraints on input and output.
 - The *Payout Validator* is Plutus code that verifies that a transaction is properly authorized by a Marlowe role to withdraw funds paid by the Semantics Validator. This validator resides in the  `rolePayoutValidator`  function that simply verifies authorization.
 
-Marlowe's property-based and golden tests reside in the `marlowe-test` executable of the [marlowe](../) package of the [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/) repository, while Marlowe's on-chain tests reside in the [`run-nonpab-test.sh`](../../marlowe-cli/run-nonpab-tests.sh) script of the [marlowe-cli](../../marlowe-cli/) package of the repository. The test suite `marlowe-actus-test` in the [marlowe-actus](../../marlowe-actus/) package heavily stresses the Haskell implementation of Marlowe semantics, too. Informal tests are scattered throughout the Marlowe repositories.
+Marlowe's property-based and golden tests reside in the `marlowe-test` executable of the [marlowe](../) package of the [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/) repository, while Marlowe's on-chain tests reside in the [`run-nonpab-test.sh`](../../marlowe-cli/run-nonpab-tests.sh) script of the [marlowe-cli](../../marlowe-cli/) package of the repository. Informal tests are scattered throughout the Marlowe repositories.
 
 
 ## Formal Guarantees for Marlowe
