@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name: marlowe-runtime
 version: 0.0.0.0
 synopsis:
@@ -111,6 +111,17 @@ library
     , transformers
     , typed-protocols
     , witherable
+
+library config
+  import: lang
+  hs-source-dirs: config
+  exposed-modules:
+    Language.Marlowe.Runtime.CLI.Option
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , network
+    , optparse-applicative
 
 executable marlowed
   import: lang
