@@ -379,7 +379,12 @@ Value.leq (Value.singleton rolesCurrency' role 1) spent
 
 ## Summary Comparison of Haskell versus Isabelle Types
 
-| Isabelle in [`BlockchainTypes`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/BlockchainTypes.thy), [`SemanticsTypes`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/SemanticsTypes.thy), [`Semantics`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/Semantics.thy) | Marlowe in [`Language.Marlowe.Core.V1`](../src/Language/Marlowe/Core/V1/) |
+This table compares . . .
+
+- Isabelle types in [`BlockchainTypes`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/BlockchainTypes.thy), [`SemanticsTypes`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/SemanticsTypes.thy), [`Semantics`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/Semantics.thy)
+- Marlowe-Cardano Haskell types [`Language.Marlowe.Core.V1`](../src/Language/Marlowe/Core/V1/) |
+
+| Category                              | Isabelle           | Haskell            |
 |---------------------------------------|--------------------|--------------------|
 | Blockchain                            | AccountId          | AccountId          |
 |                                       | Accounts           | Accounts           |
