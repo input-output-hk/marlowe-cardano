@@ -77,7 +77,7 @@ The property-based tests (generally using [Tasty](https://hackage.haskell.org/pa
 
 ### Tests of Marlowe Semantics Implementation
 
-The property-based tests for the Haskell implementation of Marlowe semantics run are implemented in the [`Spec.Marlowe.Semantics`](Spec/Marlowe/Semantics/) modules. The table below lists categories of these tests and the name of each test.
+The property-based tests for the Haskell implementation of Marlowe semantics are implemented in the [`Spec.Marlowe.Semantics`](Spec/Marlowe/Semantics/) modules. The table below lists categories of these tests and the name of each test.
 - The *golden tests* compare the output of the Haskell `computeTransaction` to a constraint-solver analysis of all possible valid paths through a reference set of Marlowe contracts; that analysis is independent of the Haskell implementation. Manually created sets of invalid inputs to the contract are also tested. Additional contracts could easily be added to this category of tests, but it is labor intensive to manually develop the invalid inputs.
 - The *holistic tests* verify the response of `computeTransaction` to specific types of invalid inputs and to specific side effects of applying inputs. The testing framework implements a monad that checks preconditions, invariants, and postconditions in the transaction computation that is being tested. This makes the test cases succinct and readable: only minimal effort would be required to include additional tests.
 - The tests of *support functions* used by `computeTransaction` exhaustively cover each behavior of nearly every function. Other semantic functions like `applyInputs`, `reduceUntilQuiescent`, etc. are tested indirectly by exhaustively testing `computeTransaction`.
