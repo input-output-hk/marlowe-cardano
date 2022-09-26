@@ -1,12 +1,9 @@
 # On-Chain Transaction Specification for Marlowe
 
 
-***General Note:*** this document will be revised, edited, and finalized shortly after the Marlowe validators are frozen.
-
-
 ## Scope
 
-This document defines the specification for Marlowe semantics's interface with the Cardano blockchain. Marlowe utilizes three Plutus scripts: (i) a monetary policy for the roles currency used in some Marlowe contracts; (ii) the Marlowe application validator script that enforces Marlowe semantics; and (iii) the Marlowe payout-validator script that allows the holder of a role token to withdraw funds paid by the Marlowe application. Marlowe semantics are defined in the Isabelle language and specified in [FIXME: insert cross-reference to Isabelle specification for Marlowe].
+This document defines the specification for Marlowe semantics's interface with the Cardano blockchain. Marlowe utilizes three Plutus scripts: (i) a monetary policy for the roles currency used in some Marlowe contracts; (ii) the Marlowe application validator script that enforces Marlowe semantics; and (iii) the Marlowe payout-validator script that allows the holder of a role token to withdraw funds paid by the Marlowe application. Marlowe semantics are defined in the Isabelle language and specified in [Marlowe Specification, Version 3 (draft)](marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf).
 
 
 ## Contents
@@ -37,14 +34,18 @@ The execution of a Marlowe contract instance proceeds as a sequence of applicati
 4. If the contract instance pays funds to a role during application of inputs, those funds are sent to the address of the Marlowe payout-validator script, with a datum equal to the role name.
 5. When a contract instance closes, there is no output to the contract's script address.
 
-Thus each Marlowe contract instance is a finite sequence of continuations at the script address, from creation to closure.
+Thus each Marlowe contract instance is a finite sequence of continuations at the script address, from creation to closure. The following three UTxO diagrams illustrate the three typical types of Marlowe transactions.
+
+![A typical transaction creating a new Marlowe contract instance at the semantics validator address](creation.svg)
+
+![A typical transaction applying inputs to a Marlowe contract instance at the semantics validator address](apply-inputs.svg)
+
+![A typical transaction to withdraw funds from the Marlowe payout validator script address](redeem.svg)
 
 
 ## Monetary Policy for Role Tokens
 
 Any Cardano monetary policy may be used to mint the role tokens used in a Marlowe contract instance. For security in standard Marlowe use cases, a one-time or locked minting policy such as `Plutus.Contracts.Currency.OneShotCurrency` is recommended. Exotic use cases might employ other monetary policies. It is the responsibility both of the developer of the off-chain code managing a contract instance and also of the user of the contract instance to verify that the monetary policy of the role tokens meets their security requirements.
-
-[FIXME: Before finalizing, discuss to what extent monetary policy is in scope for this document.]
 
 
 ## Representation of Marlowe Semantics in Plutus
@@ -127,7 +128,6 @@ data MarloweParams =
     MarloweParams
     {
       rolePayoutValidatorHash :: ValidatorHash
-    , rolesCurrency           :: CurrencySymbol  -- FIXME: Review/edit when validator is finalized.
     }
 ```
 
@@ -317,7 +317,6 @@ all authorized (fmap getInputContent transactionInput) ≡ True
         authorizedHash hash = elem hash (txInfoSignatories $ scriptContextTxInfo scriptContext)
         authorizedRole role = Value.leq (Value.singleton (rolesCurrency $ marloweparams marloweData) role 1) spent
         spent = foldMap (txOutValue . txInInfoResolved) (txInfoInputs $ scriptContextTxInfo scriptContext)
-        -- FIXME: We should write out `Value.leq` ourselves, so the specification does not depend upon Plutus's convenience functions.
 ```
 
 
@@ -328,18 +327,14 @@ Sufficient funds are paid to the public keys or roles.
 all sufficient (txOutPayments transactionOutput)
   where sufficient (Payment _ (Party (PK hash)) value) = Value.leq value (foldMap (paidToHash hash) (txInfoOutputs $ scriptContextTxInfo scriptContext))
                    (Payment _ (Party (Role role)) value) = any (paysToRole role value) (txInfoOutputs $ scriptContextTxInfo scriptContext)
-        -- FIXME: Should `paysToRole` test the value in *any* UTxO or the *sum* of values?
         paysToRole (TxOut txOutAddress txOutValue (Just hash)) role value = txOutAddress == (Ledger.scriptHashAddress . rolePayoutValidatorHash $ marloweParams marloweData)
                                                                               && lookup hash (txInfoData $ scriptContextTxInfo scriptContext) == Just (Datum $ toBuiltinData role)
                                                                               && Value.leq value txOutValue
         paysToRole _ _ = False
         paidToHash hash (TxOut (Address (PubKeyCredential hash') _) txOutValue _) = if hash == hash' then txOutValue else mempty
-        -- FIXME: We should write out `Value.leq` ourselves, so the specification does not depend upon Plutus's convenience functions.
 ```
 
 Note that the comparison is `leq` instead of equality because additional Ada may be required in the payment in order to satisfy the ledger's `minimum UTxO` constraint.
-
-**FIXME:** Perhaps we should not use `leq`, but instead use an operator that is `<=` on Ada and `==` on non-Ada tokens?
 
 
 ## Plutus Validator for Marlowe Payouts
@@ -347,8 +342,7 @@ Note that the comparison is `leq` instead of equality because additional Ada may
 
 The Marlowe payout validator for roles is a Plutus script parameterized by currency symbol.
 ```haskell
--- FIXME: Revised/edit after validator is finalized.
-rolePayoutValidator :: CurrencySymbol -> TokenName -> () -> ScriptContext -> Bool
+rolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Bool
 ```
 
 
@@ -380,10 +374,47 @@ The role token matching the datum must be spent in the transaction in order to r
 ```haskell
 Value.leq (Value.singleton rolesCurrency' role 1) spent
   where spent = foldMap (txOutValue . txInInfoResolved) (txInfoInputs $ scriptContextTxInfo scriptContext)
-        -- FIXME: We should write out `Value.leq` ourselves, so the specification does not depend upon Plutus's convenience functions.
 ```
 
 
 ## Summary Comparison of Haskell versus Isabelle Types
 
-[FIXME: After both codebases are frozen, put a correspondence table here.]
+| Isabelle in [`BlockchainTypes`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/BlockchainTypes.thy), [`SemanticsTypes`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/SemanticsTypes.thy), [`Semantics`](https://github.com/input-output-hk/marlowe/blob/master/isabelle/Core/Semantics.thy) | Marlowe in [`Language.Marlowe.Core.V1`](../src/Language/Marlowe/Core/V1/) |
+|---------------------------------------|--------------------|--------------------|
+| Blockchain                            | AccountId          | AccountId          |
+|                                       | Accounts           | Accounts           |
+|                                       | ChoiceName         | ChoiceName         |
+|                                       | ChosenNum          | ChosenNum          |
+|                                       | -                  | Money              |
+|                                       | TimeInterval       | TimeInterval       |
+|                                       | Timeout            | Timeout            |
+| Contract                              | Action             | Action             |
+|                                       | Bound              | Bound              |
+|                                       | Case               | Case Contract      |
+|                                       | ChoiceId           | ChoiceId           |
+|                                       | Contract           | Contract           |
+|                                       | Observation        | Observation        |
+|                                       | Party              | Party              |
+|                                       | Payee              | Payee              |
+|                                       | Token              | Token              |
+|                                       | Value              | Value Observation  |
+|                                       | ValueId            | ValueId            |
+| Transaction                           | -                  | Input              |
+|                                       | Input              | InputContent       |
+|                                       | Payment            | Payment            |
+|                                       | Environment        | Environment        |
+|                                       | State              | State              |
+|                                       | -                  | TransactionInput   |
+|                                       | TransactionOutput  | TransactionOutput  |
+| Result                                | -                  | ApplyAction        |
+|                                       | ApplyAllResult     | ApplyAllResult     |
+|                                       | ApplyResult        | ApplyResult        |
+|                                       | ApplyWarning       | ApplyWarning       |
+|                                       | IntervalError      | IntervalError      |
+|                                       | IntervalResult     | IntervalResult     |
+|                                       | ReduceEffect       | ReduceEffect       |
+|                                       | ReduceResult       | ReduceResult       |
+|                                       | ReduceStepResult   | ReduceStepResult   |
+|                                       | ReduceWarning      | ReduceWarning      |
+|                                       | TransactionError   | TransactionError   |
+|                                       | TransactionWarning | TransactionWarning |

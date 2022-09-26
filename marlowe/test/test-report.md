@@ -1,11 +1,9 @@
-# Pre-Audit Test Report for Marlowe's Plutus Validators
-
-*Note: hyperlinks to code and folders will be completed in this document before it is finalized.*
+# Test Report for Marlowe's Plutus Validators
 
 
 ## Executive Summary
 
-This document summarizes the testing status of Marlowe's Cardano implementation prior to the audit of Version 1 of the Marlowe validators, which are coded in Plutus V2. Marlowe uses a *Semantics Validator* to validate transitions (application of inputs, timeouts, payments, etc.) in Marlowe contracts and a *Payout Validator* to validate receipt of funds from roles in Marlowe contracts. The [On-Chain Transaction Specification for Marlowe](../specification/ReadMe.md) defines the behavior of these validators. The [Isabelle Specification for Marlowe](https://github.com/input-output-hk/marlowe/tree/master/isabelle) defines the behavior of the Marlowe DSL (domain-specific language) itself.
+This document summarizes the testing status of Marlowe's Cardano implementation prior to the audit of Version 1 of the Marlowe validators, which are coded in Plutus V2. Marlowe uses a *Semantics Validator* to validate transitions (application of inputs, timeouts, payments, etc.) in Marlowe contracts and a *Payout Validator* to validate receipt of funds from roles in Marlowe contracts. The [On-Chain Transaction Specification for Marlowe](../specification/marlowe-cardano-specification.md) defines the behavior of these validators. The [Isabelle Specification for Marlowe](https://github.com/input-output-hk/marlowe/tree/master/isabelle) defines the behavior of the Marlowe DSL (domain-specific language) itself.
 
 This test report covers the tests of the Haskell implementation of Marlowe semantics and of the Plutus validators that connect those semantics to the Cardano blockchain. Testing involves approximately two hundred property-based tests and dozens of on-chain tests. This document summarizes [two risk areas](#summary-of-testing-history-and-results) that were discovered and demonstrated during testing:
 1. Marlowe contracts that are created with an initially invalid state are either unexecutable or their execution behavior may vary from Marlowe's abstract semantics. 
@@ -38,7 +36,7 @@ This test report covers the tests of the Haskell implementation of Marlowe seman
 
 Two specifications define the behavior of Marlowe on the Cardano blockchain:
 - The [Isabelle Specification for Marlowe](https://github.com/input-output-hk/marlowe/tree/master/isabelle) defines the Marlowe DSL and its operational/executable semantics. The language and the semantics are independent of the particular blockchain where Marlowe contracts are run.
-- The [On-Chain Transaction Specification for Marlowe](../specification/ReadMe.md) defines the realization of Marlowe on the Cardano blockchain. In particular, this specification relates abstract Marlowe types and constructs to the concrete types present in Cardano's Plutus language in such a way the Marlowe transactions conform to Cardano's [Ledger Specifications](https://github.com/input-output-hk/cardano-ledger#cardano-ledger) and the [Formal Specification of the Plutus Core Language](https://github.com/input-output-hk/plutus/blob/master/plutus-core-spec/draft-new-specification/plutus-core-specification.pdf).
+- The [On-Chain Transaction Specification for Marlowe](../specification/marlowe-cardano-specification.md) defines the realization of Marlowe on the Cardano blockchain. In particular, this specification relates abstract Marlowe types and constructs to the concrete types present in Cardano's Plutus language in such a way the Marlowe transactions conform to Cardano's [Ledger Specifications](https://github.com/input-output-hk/cardano-ledger#cardano-ledger) and the [Formal Specification of the Plutus Core Language](https://github.com/input-output-hk/plutus/blob/master/plutus-core-spec/draft-new-specification/plutus-core-specification.pdf).
 
 The bridge between abstract semantics and concrete Plutus is the [`Language.Marlowe.Core.V1.Semantics`](../src/Language/Marlowe/Core/V1/Semantics.hs) function `computeTransaction`:
 ```haskell
@@ -99,6 +97,12 @@ The table below summarizes the property-based tests for the semantics implementa
 |                                    |         | Invalid inputs |
 |                                    | Zero-Coupon Bond | Valid inputs |
 |                                    |                  | Invalid inputs |
+| Semantics Oracle | Escrow | |
+|                  | Forward | |
+|                  | Future | |
+|                  | Swap | |
+|                  | Trivial | |
+|                  | Zero-Coupon Bond | |
 | Holistic tests of `computeTransaction` | Detect invalid time interval | |
 |                                        | Detect time interval in past | |
 |                                        | Ambiguous interval for timeout | |
@@ -159,6 +163,7 @@ The table below summarizes the property-based tests for the semantics implementa
 |                                          | `applyCases` | |
 |                                          | `applyInput` | |
 |                                          | `isClose` | |
+|                                          | `notClose` | |
 |                                          | `playTrace` | |
 | Suitability of `Arbitrary` instances | Sufficient entropy | `PubKeyHash` |
 |                                      |                    | `CurrencySymbol` |
@@ -229,7 +234,7 @@ Marlowe's Haskell implementation relies on the Plutus Haskell functions behaving
 
 ### Tests of Marlowe's Plutus Validators
 
-Requirements for bridging `computeTransaction` to Plutus validation are defined as seventeen constraining properties in the [On-Chain Transaction Specification for Marlowe](../specification/ReadMe.md). These property based tests run arbitrary transactions using Marlowe's serialized Plutus validators via `Plutus.ApiCommon.evaluateScriptCounting`: this provides a mock execution environment that performs the same Phase 2 validation that would occur at a node on the live blockchain. To this end, the [`Spec.Marlowe.Plutus.Script`](Spec/Marlowe/Plutus/Script.hs) package provides a pair of functions for simulating Marlowe transactions:
+Requirements for bridging `computeTransaction` to Plutus validation are defined as seventeen constraining properties in the [On-Chain Transaction Specification for Marlowe](../specification/marlowe-cardano-specification.md). These property based tests run arbitrary transactions using Marlowe's serialized Plutus validators via `Plutus.ApiCommon.evaluateScriptCounting`: this provides a mock execution environment that performs the same Phase 2 validation that would occur at a node on the live blockchain. To this end, the [`Spec.Marlowe.Plutus.Script`](Spec/Marlowe/Plutus/Script.hs) package provides a pair of functions for simulating Marlowe transactions:
 ```haskell
 -- | Run the Plutus evaluator on the Marlowe semantics validator's UPLC serialization.
 evaluateSemantics :: MarloweParams           -- ^ The parameters.
@@ -381,6 +386,16 @@ Several other property-based tests, in the [`Spec.Marlowe.Marlowe`](Spec/Marlowe
 | State | Transfers between accounts work |
 | Contract | `extractContractRoles` |
 | Static Analysis | No false positives |
+| Address serialisation | Compare to Cardano API serialisation to Bech32 |
+| | Serialise to bytes then deserialise |
+| | Serialise to Bech32 then deserialise |
+| Party serialization | Serialise toJSON then deserialise |
+| Core Contract Serialization | Serialise deserialise Contract loops |
+| | Serialise deserialise MarloweParams loops |
+| | Serialise deserialise IntervalError loops |
+| Extended Contract Serialization | Golden Swap contract |
+| | Golden Swap module |
+ 
 
 
 ## Test Oracle for Marlowe
@@ -390,7 +405,7 @@ A test oracle service, based on Marlowe's PureScript export from Isabelle is ava
 
 ## On-Chain Tests of Marlowe
 
-On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verify that invalid transactions fail. Formal tests are codified as scripts for the [`marlowe-cli`](../../marlowe-clil/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
+On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verify that invalid transactions fail. Formal tests are codified as scripts for the [`marlowe-cli`](../../marlowe-cli/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
 
 
 ### Formal Tests
@@ -469,7 +484,7 @@ A set of informal tests are provided in the [Marlowe Contract Cookbook](../../ma
 ## Summary of Testing History and Results
 
 The Marlowe validator implementation currently passes all property-based and on-chain tests. The testing code and process outlined above revealed several issues that were further scrutinized:
-1. The test for ["Constraint 4: No output to script on close"](../specification/ReadMe.md#constraint-4-no-output-to-script-on-close) of the Marlowe-Cardano specification originally failed. This failure was eliminated with a minor modification to the semantics validator.
+1. The test for ["Constraint 4: No output to script on close"](../specification/marlowe-cardano-specification.md#constraint-4-no-output-to-script-on-close) of the Marlowe-Cardano specification originally failed. This failure was eliminated with a minor modification to the semantics validator.
 2. Testing revealed an ambiguity regarding how a payment of no value should be warned as `ReduceNonPositivePay` versus `ReducePartialPay`. In documentation, we clarify that an intentional payment of zero results in the warning `ReduceNonPositivePay`, which means "the contract was meant to pay zero or less but that is impossible so it pays nothing", whereas a payment that happens to be zero because of insufficient funds results in the warning `ReducePartialPay`, which means "the contract is meant to pay more than there is, so it pays what there is".
 3. The `computeTransaction` function does not guard for the preconditions (1) that internal account balances are positive and (2) that duplicate `(Account, Token)` pairs are not present in the association map `accounts :: PlutusTx.Map (Account, Token) Integer`.
     1. Marlowe's semantics validator *guards* against the first case by failing to execute any transaction that begins with a non-positive balance in an internal account. *This causes permanent locking of funds in the contract.*
