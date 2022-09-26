@@ -400,7 +400,7 @@ A dozen on-chain tests, embodied as `bash` scripts, are regularly run for qualit
 | File | Test |
 |-----|------|
 | [marlowe-cli/test/double-satisfaction.sh](../../marlowe-cli/test/double-satisfaction.sh) | Double-satisfaction, where one Marlowe contract steals funds from another. |
-| [marlowe-cli/examples/actus/run-actus.sh](../../marlowe-cli/examples/actus/run-actus.sh) | An ACTUS contract. |
+| [marlowe-cli/examples/actus/run-actus.sh](../../marlowe-cli/examples/actus/run-actus.sh) | An ACTUS contract (Zero-Coupon Bond). |
 | [marlowe-cli/examples/cfd/run-cfd.sh](../../marlowe-cli/examples/cfd/run-cfd.sh) | A contract for differences, using an oracle. |
 | [marlowe-cli/examples/coveredCall/run-coveredCall.sh](../../marlowe-cli/examples/coveredCall/run-coveredCall.sh) | A covered-call contract. |
 | [marlowe-cli/examples/escrow/run-confirm-claim.sh](../../marlowe-cli/examples/escrow/run-confirm-claim.sh) | The "confirm claim" path through the example escrow contract. |
