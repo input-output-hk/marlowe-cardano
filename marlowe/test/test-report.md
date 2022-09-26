@@ -506,7 +506,7 @@ The following protocol parameters affect the viability of semantically-valid Mar
     1. A `Pay` might send so many token in the same UTxO that the UTxO exceeds the maximum value size.
     2. A `Deposit` might place so many tokens at the script address that the UTxO exceeds the maximum value size.
 
-The table below summarize the situation. Items are marked "locks" if they would prevent further execution of the contract if they are the top-level construct or the timeout continuation of a `When` contract; otherwise, they just block some (but not all) execution paths for the contract. They are marked "blocks" if they can never lock the contract.
+The table below summarizes the situation. Items are marked "locks" if they would prevent further execution of the contract if they are the top-level construct or the timeout continuation of a `When` contract; otherwise, they just block some (but not all) execution paths for the contract. They are marked "blocks" if they can never lock the contract.
 
 | Protocol Limit   | Protocol Parameter           | `Pay` | `Let` | `If`/`Assert` | `When` | `Close` | `Deposit` | `Choice` | `Notify` |
 |------------------|------------------------------|-------|-------|---------------|--------|---------|-----------|----------|----------|
