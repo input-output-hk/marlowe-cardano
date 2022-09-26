@@ -36,7 +36,7 @@ The execution of a Marlowe contract instance proceeds as a sequence of applicati
 
 Thus each Marlowe contract instance is a finite sequence of continuations at the script address, from creation to closure. The following three UTxO diagrams illustrate the three typical types of Marlowe transactions.
 
-![A typical transaction creating a new Marlowe contract instance at the semantics validator address](creation.svg)
+![A typical transaction creating a new Marlowe contract instance at the semantics validator address](create.svg)
 
 ![A typical transaction applying inputs to a Marlowe contract instance at the semantics validator address](apply-inputs.svg)
 

@@ -35,7 +35,7 @@ This test report covers the tests of the Haskell implementation of Marlowe seman
 ## Introduction
 
 Two specifications define the behavior of Marlowe on the Cardano blockchain:
-- The [Isabelle Specification for Marlowe](https://github.com/input-output-hk/marlowe/tree/master/isabelle) defines the Marlowe DSL and its operational/executable semantics. The language and the semantics are independent of the particular blockchain where Marlowe contracts are run.
+- The [Isabelle Specification for Marlowe](../specification/marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf) defines the Marlowe DSL and its operational/executable semantics. The language and the semantics are independent of the particular blockchain where Marlowe contracts are run.
 - The [On-Chain Transaction Specification for Marlowe](../specification/marlowe-cardano-specification.md) defines the realization of Marlowe on the Cardano blockchain. In particular, this specification relates abstract Marlowe types and constructs to the concrete types present in Cardano's Plutus language in such a way the Marlowe transactions conform to Cardano's [Ledger Specifications](https://github.com/input-output-hk/cardano-ledger#cardano-ledger) and the [Formal Specification of the Plutus Core Language](https://github.com/input-output-hk/plutus/blob/master/plutus-core-spec/draft-new-specification/plutus-core-specification.pdf).
 
 The bridge between abstract semantics and concrete Plutus is the [`Language.Marlowe.Core.V1.Semantics`](../src/Language/Marlowe/Core/V1/Semantics.hs) function `computeTransaction`:
