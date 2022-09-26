@@ -326,7 +326,7 @@ We use the aforementioned simulation technique to test properties constraining t
 | Constraint 4. No output to script on close | Invalid attempt to output to Marlowe on close |
 | Constraint 5. Input value from script | Invalid mismatch between state and script input |
 | Constraint 6. Output value to script | Invalid mismatch between state and script input |
-| Constraint 7.  Input state | (Manual code inspection instead of property-based test) |
+| Constraint 7. Input state | (Manual code inspection instead of property-based test) |
 | Constraint 8. Input contract | (Manual code inspection instead of property-based test) |
 | Constraint 9. Marlowe parameters | (Manual code inspection instead of property-based test) |
 | Constraint 10. Output state | Invalid mismatch between state and script output |
