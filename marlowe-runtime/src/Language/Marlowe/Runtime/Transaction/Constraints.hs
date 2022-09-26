@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (NetworkId)
 import qualified Cardano.Api.Shelley as Cardano
+import Control.Applicative ((<|>))
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
 import Data.Function (on)
@@ -276,7 +277,14 @@ data WalletContext = WalletContext
   -- ^ The subset of keys in 'availableUtxos' that may be used for collateral.
   , changeAddress :: Chain.Address
   -- ^ The change address of the wallet.
-  }
+  } deriving (Show, Eq, Ord)
+
+instance Semigroup WalletContext where
+  a <> b = WalletContext
+    { availableUtxos = on (<>) availableUtxos a b
+    , collateralUtxos = on (<>) collateralUtxos a b
+    , changeAddress = changeAddress b
+    }
 
 -- | Data from Marlowe Scripts needed to solve the constraints.
 data MarloweContext v = MarloweContext
@@ -287,6 +295,16 @@ data MarloweContext v = MarloweContext
   , payoutOutputs :: Map Chain.TxOutRef (Core.Payout v)
   -- ^ The UTXOs at the payout address.
   }
+
+instance Semigroup (MarloweContext v) where
+  a <> b = MarloweContext
+    { stakeCredential = on (<|>) stakeCredential a b
+    , scriptOutput = on (<|>) scriptOutput a b
+    , payoutOutputs = on (<>) payoutOutputs a b
+    }
+
+deriving instance Eq (MarloweContext 'V1)
+deriving instance Show (MarloweContext 'V1)
 
 type SolveConstraints era v
    = Cardano.ScriptDataSupportedInEra era

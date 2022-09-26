@@ -179,9 +179,8 @@ toCardanoAddressInEra :: C.CardanoEra era -> Address -> Maybe (C.AddressInEra er
 toCardanoAddressInEra era = withCardanoEra era
   $ C.deserialiseFromRawBytes (C.AsAddressInEra $ cardanoEraToAsType era) . unAddress
 
-fromCardanoAddressInEra :: C.CardanoEra era -> C.AddressInEra era -> Address
-fromCardanoAddressInEra era = withCardanoEra era
-  $ Address . C.serialiseToRawBytes
+fromCardanoAddressInEra :: C.IsCardanoEra era => C.AddressInEra era -> Address
+fromCardanoAddressInEra = Address . C.serialiseToRawBytes
 
 toCardanoLovelace :: Lovelace -> C.Lovelace
 toCardanoLovelace = C.Lovelace . fromIntegral . unLovelace
@@ -253,12 +252,12 @@ toCardanoTxOut era TransactionOutput{..} = C.TxOut
   <*> pure C.ReferenceScriptNone
 
 fromCardanoTxOut
-  :: C.CardanoEra era
-  -> C.TxOut C.CtxTx era
+  :: C.IsCardanoEra era
+  => C.TxOut C.CtxTx era
   -> TransactionOutput
-fromCardanoTxOut era (C.TxOut address value txOutDatum _) =
+fromCardanoTxOut (C.TxOut address value txOutDatum _) =
   TransactionOutput
-    (fromCardanoAddressInEra era address)
+    (fromCardanoAddressInEra address)
     (fromCardanoTxOutValue value)
     hash
     datum

@@ -239,6 +239,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.History.StoreSpec
     Language.Marlowe.Runtime.History.Store.ModelSpec
     Language.Marlowe.Runtime.HistorySpec
+    Language.Marlowe.Runtime.Transaction.ConstraintSpec
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.Golden
     Spec.Marlowe.Semantics.Golden.Escrow
