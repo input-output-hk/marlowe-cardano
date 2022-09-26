@@ -123,6 +123,38 @@ library config
     , network
     , optparse-applicative
 
+executable marlowe
+  import: lang
+  hs-source-dirs: cli
+  main-is: Main.hs
+  other-modules:
+    Language.Marlowe.Runtime.CLI.Env
+    Language.Marlowe.Runtime.CLI.Monad
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , bytestring
+    , containers
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:config
+    , monad-control
+    , network
+    , transformers
+    , transformers-base
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , text
+    , wl-pprint
+
 executable marlowed
   import: lang
   hs-source-dirs:   app
@@ -141,57 +173,6 @@ executable marlowe-history
   main-is: Main.hs
   other-modules:
     Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , ansi-terminal
-    , async
-    , base16
-    , containers
-    , marlowe
-    , marlowe-protocols
-    , marlowe-runtime
-    , marlowe-chain-sync
-    , network
-    , typed-protocols
-    , optparse-applicative
-    , stm
-    , text
-    , wl-pprint
-
-executable marlowe-history-cli
-  import: lang
-  hs-source-dirs:   marlowe-history-cli
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , ansi-terminal
-    , async
-    , base16
-    , containers
-    , marlowe
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime
-    , network
-    , typed-protocols
-    , optparse-applicative
-    , stm
-    , text
-    , wl-pprint
-
-executable marlowe-follower
-  import: lang
-  hs-source-dirs:   marlowe-follower
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_runtime
-    Options
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
