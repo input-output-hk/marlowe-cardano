@@ -62,7 +62,7 @@ import Language.Marlowe.CLI.Types
   , unAnUTxO
   )
 import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Party)
-import Marlowe.Contracts (trivial, swap)
+import Marlowe.Contracts (swap, trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
 
 import qualified Cardano.Api as C
@@ -143,7 +143,6 @@ import Language.Marlowe.CLI.Test.Types
   , ssCurrencies
   , ssReferenceScripts
   , ssWallets
-  , walletPubKeyHash
   )
 import Language.Marlowe.CLI.Transaction
   (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl, selectUtxosImpl)

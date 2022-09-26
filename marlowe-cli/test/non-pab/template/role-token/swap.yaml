@@ -12,6 +12,14 @@ stScriptOperations:
       - 100000000
     soWalletNickname: aParty
 
+  - tag: CreateWallet
+    soWalletNickname: bParty
+
+  - tag: FundWallet
+    soValues:
+      - 100000000
+    soWalletNickname: bParty
+
   - tag: Mint
     soCurrencyNickname: Swap
     soTokenDistribution:
@@ -34,14 +42,6 @@ stScriptOperations:
         taTokenName:
           unTokenName: aPartyTokenName
         taWalletNickname: aParty
-
-  - tag: CreateWallet
-    soWalletNickname: bParty
-
-  - tag: FundWallet
-    soValues:
-      - 100000000
-    soWalletNickname: bParty
 
   # Minting tokens bParty will use in the swap
   - tag: Mint
