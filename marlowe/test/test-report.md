@@ -352,7 +352,7 @@ We use the aforementioned simulation technique to test properties constraining t
 |                                 | Invalid redeemer does not deserialize |
 |                                 | Invalid script context does not deserialize |
 | Constraint 17. Payment authorized | Invalid authorization for withdrawal |
-|                                   | Missing authorized withdrawal |
+|                                   | Missing authorization for withdrawal |
 
 
 ### Miscellaneous Property-Based Tests
