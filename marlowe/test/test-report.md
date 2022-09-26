@@ -422,8 +422,8 @@ A new off- and on-chain testing DSL is being readied for release (executable via
 | [marlowe-cli/test/test-escrow-with-collateral.yaml](../../marlowe-cli/test/test-escrow-with-collateral.yaml) | An escrow contract that includes collateral. |
 | [marlowe-cli/test/test-escrow.yaml](../../marlowe-cli/test/test-escrow.yaml) | An escrow contract that does not include collateral. |
 | [marlowe-cli/test/test-simple.yaml](../../marlowe-cli/test/test-simple.yaml) | A simple notify-then-close contract. |
-| [marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml](../../marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml) | A swap of Ada tokens for USD tokens. |
-| [marlowe-cli/test/test-swap-of-ada-for-ada.yaml](../../marlowe-cli/test/test-swap-of-ada-for-ada.yaml) | A swap of Ada tokens for Ada tokens. |
+| [marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml](../../marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml) | A swap of Ada for USD tokens. |
+| [marlowe-cli/test/test-swap-of-ada-for-ada.yaml](../../marlowe-cli/test/test-swap-of-ada-for-ada.yaml) | A swap of Ada for Ada. |
 | [marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml](../../marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml) | A zero-coupon bond where a timeout occurs late in the contract. |
 | [marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml](../../marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml) | A zero-coupon bond where a timeout occurs early in the contract. |
 | [marlowe-cli/test/test-zero-coupon-bond-too-late.yaml](../../marlowe-cli/test/test-zero-coupon-bond-too-late.yaml) | A zero-coupon bond where input fails due to a timeout. |
