@@ -8,16 +8,16 @@ import Control.Monad (MonadPlus, (>=>))
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Control (MonadBaseControl, liftBaseWith)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, local)
 import Data.Void (Void)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
+import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.History.Api (HistoryCommand, HistoryQuery)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
-import Network.Protocol.Job.Client (JobClient, liftCommand)
-import Network.Protocol.Query.Client (QueryClient, liftQuery)
+import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand)
+import Network.Protocol.Query.Client (QueryClient, hoistQueryClient, liftQuery)
 import Options.Applicative (Alternative)
 import System.Exit (die)
 
@@ -49,20 +49,32 @@ localEnv :: (Env IO -> Env IO) -> CLI a -> CLI a
 localEnv f = CLI . local f . runCLI
 
 -- | Run a History Job client.
-runHistoryJobClient :: JobClient HistoryCommand IO a -> CLI a
-runHistoryJobClient client = liftIO . ($ client) =<< asksEnv envRunHistoryJobClient
+runHistoryJobClient :: JobClient HistoryCommand CLI a -> CLI a
+runHistoryJobClient client = do
+  Env{..} <- askEnv
+  liftBaseWith \runInBase ->
+    envRunHistoryJobClient $ hoistJobClient runInBase client
 
 -- | Run a History Query client.
-runHistoryQueryClient :: QueryClient HistoryQuery IO a -> CLI a
-runHistoryQueryClient client = liftIO . ($ client) =<< asksEnv envRunHistoryQueryClient
+runHistoryQueryClient :: QueryClient HistoryQuery CLI a -> CLI a
+runHistoryQueryClient client = do
+  Env{..} <- askEnv
+  liftBaseWith \runInBase ->
+    envRunHistoryQueryClient $ hoistQueryClient runInBase client
 
 -- | Run a Marlowe Sync client.
-runHistorySyncClient :: MarloweSyncClient IO a -> CLI a
-runHistorySyncClient client = liftIO . ($ client) =<< asksEnv envRunHistorySyncClient
+runHistorySyncClient :: MarloweSyncClient CLI a -> CLI a
+runHistorySyncClient client = do
+  Env{..} <- askEnv
+  liftBaseWith \runInBase ->
+    envRunHistorySyncClient $ hoistMarloweSyncClient runInBase client
 
 -- | Run a Tx Job client.
-runTxJobClient :: JobClient MarloweTxCommand IO a -> CLI a
-runTxJobClient client = liftIO . ($ client) =<< asksEnv envRunTxJobClient
+runTxJobClient :: JobClient MarloweTxCommand CLI a -> CLI a
+runTxJobClient client = do
+  Env{..} <- askEnv
+  liftBaseWith \runInBase ->
+    envRunTxJobClient $ hoistJobClient runInBase client
 
 -- | Run a simple History command.
 runHistoryCommand :: HistoryCommand Void err result -> CLI (Either err result)
