@@ -7,8 +7,9 @@ module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (NetworkId)
+import Cardano.Api.Shelley (NetworkId, StakeCredential, protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits)
 import qualified Cardano.Api.Shelley as Cardano
+import Control.Monad.Except (Except, runExcept, throwError)
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
 import Data.Function (on)
@@ -265,6 +266,7 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
 
 -- | Errors that can occur when trying to solve the constraints.
 data UnsolvableConstraintsError
+  = UnsolvableConstraintsError
   deriving (Eq, Show, Generic, Binary)
 
 -- | Data from a wallet needed to solve the constraints.
@@ -307,4 +309,55 @@ solveConstraints
   -> Cardano.EraHistory Cardano.CardanoMode
   -> Cardano.ProtocolParameters
   -> SolveConstraints era v
-solveConstraints = error "not implemented"
+solveConstraints _networkId _start _history protocol _eraInMode _marloweCtx _walletCtx _constraints =
+  runExcept $ do
+    let
+      protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
+      -- Have collateral :: Set Chain.TxOutRef
+      -- which is: TxOutRef TxId TxIx
+      -- need a [TxIn]
+      txInsCollateral = TxInsCollateral (toCollateralSupportedInEra era) $ maybeToList collateral
+    throwError UnsolvableConstraintsError
+--   where
+--     -- This code is from L.M.CLI.Transaction
+--     protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
+--     -- Have collateral :: Set Chain.TxOutRef
+--     -- which is: TxOutRef TxId TxIx
+--     -- need a [TxIn]
+--     txInsCollateral = TxInsCollateral (toCollateralSupportedInEra era) $ maybeToList collateral
+    -- txReturnCollateral = TxReturnCollateralNone
+    -- txTotalCollateral  = TxTotalCollateralNone
+    -- txFee              = TxFeeExplicit (toTxFeesExplicitInEra era) 0
+    -- txValidityRange    = (
+    --                        maybe
+    --                          TxValidityNoLowerBound
+    --                          (TxValidityLowerBound (toValidityLowerBoundSupportedInEra era) . fst)
+    --                          slotRange
+    --                      , maybe
+    --                          (TxValidityNoUpperBound (toValidityNoUpperBoundSupportedInEra era))
+    --                          (TxValidityUpperBound (toValidityUpperBoundSupportedInEra era) . snd)
+    --                          slotRange
+    --                      )
+    -- txMetadata         = metadata
+    -- txAuxScripts       = TxAuxScriptsNone
+    -- txExtraKeyWits     = TxExtraKeyWitnesses (toExtraKeyWitnessesSupportedInEra era) extraSigners
+    -- txProtocolParams   = BuildTxWith $ Just protocol'
+    -- txWithdrawals      = TxWithdrawalsNone
+    -- txCertificates     = TxCertificatesNone
+    -- txUpdateProposal   = TxUpdateProposalNone
+    -- txMintValue        = mintValue
+    -- txScriptValidity   = if invalid
+    --                        then TxScriptValidity (toTxScriptValiditySupportedInEra era) ScriptInvalid
+    --                        else TxScriptValidityNone
+    -- txIns = extraInputs <> scriptTxIn <> fmap makeTxIn inputs
+    -- scriptTxOut = maybe [] (payScript era) payToScript
+    -- txOuts = scriptTxOut <> outputs
+
+    -- This code is new
+    -- utxo <- ?
+    -- provisionalTxBody = Cardano.makeTransactionBody
+    --   eraInMode start history protocol Set.empty utxo TxBodyContent{..} (changeAddress walletCtx) Nothing
+
+{-
+  Cardano.Api.makeTransactionbodyAutoBalance
+-}

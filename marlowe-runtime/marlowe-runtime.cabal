@@ -99,6 +99,7 @@ library
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
+    , mtl
     , ouroboros-network
     , plutus-ledger-api
     , semialign
