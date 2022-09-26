@@ -386,7 +386,7 @@ A test oracle service, based on Marlowe's PureScript export from Isabelle is ava
 
 ## On-Chain Tests of Marlowe
 
-On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verifying failure of invalid transactions. Formal tests are codified as scripts for the [`marlowe-cli`](../../marlowe-clil/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
+On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verify that invalid transactions fail. Formal tests are codified as scripts for the [`marlowe-cli`](../../marlowe-clil/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
 
 
 ### Formal Tests
