@@ -128,6 +128,15 @@ executable marlowe
   hs-source-dirs: cli
   main-is: Main.hs
   other-modules:
+    Language.Marlowe.Runtime.CLI.Command
+    Language.Marlowe.Runtime.CLI.Command.Add
+    Language.Marlowe.Runtime.CLI.Command.Apply
+    Language.Marlowe.Runtime.CLI.Command.Create
+    Language.Marlowe.Runtime.CLI.Command.Log
+    Language.Marlowe.Runtime.CLI.Command.Ls
+    Language.Marlowe.Runtime.CLI.Command.Rm
+    Language.Marlowe.Runtime.CLI.Command.Submit
+    Language.Marlowe.Runtime.CLI.Command.Withdraw
     Language.Marlowe.Runtime.CLI.Env
     Language.Marlowe.Runtime.CLI.Monad
     Paths_marlowe_runtime
