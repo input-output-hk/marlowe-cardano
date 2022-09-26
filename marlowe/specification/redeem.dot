@@ -1,0 +1,36 @@
+digraph Redeem {
+
+rankdir=LR
+
+node [shape=record]
+
+
+Tx0_Role [label="A Contract Role|2 ₳ + 1 role token"]
+
+
+Tx0_Script [label="Marlowe Payout|X ₳|Role to be paid"]
+
+
+Tx1 [shape=oval label="Redemption Tx"]
+
+Tx0_Role -> Tx1
+
+Tx0_Script -> Tx1 [label="(empty redeemer)"]
+
+
+Tx1_0 [label="Same Contract Role|X - 0.4 ₳"]
+
+Tx1 -> Tx1_0 [label="#0"]
+
+
+Tx1_1 [label="Same Contract Role|2 ₳ + 1 role token"]
+
+Tx1 -> Tx1_1 [label="#1"]
+
+
+Tx1_Fee [label="Fee\n0.4 ₳"]
+
+Tx1 -> Tx1_Fee
+
+
+}

@@ -6,6 +6,7 @@ This is just a checklist, all the normative suggestions are covered in more deta
 Pre-submit checklist:
 - Branch
     - [ ] Tests are provided (if possible)
+    - [ ] [Test report is updated](https://github.com/input-output-hk/marlowe-cardano/blob/main/marlowe/test/test-report.md) (if relevant)
     - [ ] Commit sequence broadly makes sense
     - [ ] Key commits have useful messages
     - [ ] Relevant tickets are mentioned in commit messages
