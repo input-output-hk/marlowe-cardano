@@ -3,11 +3,13 @@
 module Language.Marlowe.Runtime.CLI.Monad
   where
 
-import Control.Monad (MonadPlus)
+import Control.Exception (Exception(displayException))
+import Control.Monad (MonadPlus, (>=>))
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, local)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
@@ -17,6 +19,7 @@ import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Client (JobClient, liftCommand)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Options.Applicative (Alternative)
+import System.Exit (die)
 
 -- | A monad type for Marlowe Runtime CLI programs.
 newtype CLI a = CLI { runCLI :: ReaderT (Env IO) IO a }
@@ -72,3 +75,8 @@ queryHistory = runHistoryQueryClient . liftQuery
 -- | Run a simple Tx command.
 runTxCommand :: MarloweTxCommand Void err result -> CLI (Either err result)
 runTxCommand = runTxJobClient . liftCommand
+
+runCLIExceptT :: Show e => ExceptT e CLI a -> CLI a
+runCLIExceptT = runExceptT >=> \case
+  Left ex -> liftIO $ die $ show ex
+  Right a -> pure a

@@ -120,6 +120,7 @@ library config
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , marlowe-runtime
     , network
     , optparse-applicative
 

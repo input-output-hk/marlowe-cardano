@@ -1,6 +1,8 @@
 module Language.Marlowe.Runtime.CLI.Option
   where
 
+import Control.Arrow ((>>>))
+import Language.Marlowe.Runtime.Core.Api (ContractId, parseContractId)
 import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 import System.Environment (lookupEnv)
@@ -57,6 +59,16 @@ host optPrefix envPrefix defaultValue description = CliOption
       , showDefault
       ])
   }
+
+contractIdArgument :: String -> Parser ContractId
+contractIdArgument description = argument parser $ mconcat
+  [ metavar "CONTRACT_ID"
+  , help description
+  ]
+  where
+    parser = eitherReader $ parseContractId >>> \case
+      Nothing  -> Left "Invalid contract ID - expected format: <hex-tx-id>#<tx-out-ix>"
+      Just cid -> Right cid
 
 optParserWithEnvDefault :: HasValue f => CliOption f a -> IO (Parser a)
 optParserWithEnvDefault CliOption{..} = do
