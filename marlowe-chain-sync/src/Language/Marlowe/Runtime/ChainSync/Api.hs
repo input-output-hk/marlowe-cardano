@@ -487,8 +487,9 @@ data Move err result where
   -- consumes the tx out.
   FindConsumingTxs :: Set TxOutRef -> Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
 
-  -- | Advance to the block containing a transaction.
-  FindTx :: TxId -> Move TxError Transaction
+  -- | Advance to the block containing a transaction. The boolean flag
+  -- indicates whether or not to wait for the transaction to be produced.
+  FindTx :: TxId -> Bool -> Move TxError Transaction
 
 mkSchemaVersion "moveSchema" ''Move
 
@@ -526,7 +527,7 @@ instance Query Move where
     AdvanceBlocks _    -> TagAdvanceBlocks
     Intersect _        -> TagIntersect
     FindConsumingTx _  -> TagFindConsumingTx
-    FindTx _           -> TagFindTx
+    FindTx _ _         -> TagFindTx
     FindConsumingTxs _ -> TagFindConsumingTxs
 
   tagEq = curry \case
@@ -571,7 +572,7 @@ instance Query Move where
     AdvanceBlocks blocks -> put blocks
     FindConsumingTx utxo -> put utxo
     Intersect points -> put points
-    FindTx txId -> put txId
+    FindTx txId wait -> put txId *> put wait
     FindConsumingTxs utxos -> put utxos
 
   getTag = do
@@ -595,7 +596,7 @@ instance Query Move where
     TagAdvanceBlocks    -> AdvanceBlocks <$> get
     TagFindConsumingTx  -> FindConsumingTx <$> get
     TagIntersect        -> Intersect <$> get
-    TagFindTx           -> FindTx <$> get
+    TagFindTx           -> FindTx <$> get <*> get
     TagFindConsumingTxs -> FindConsumingTxs <$> get
 
   putResult = \case

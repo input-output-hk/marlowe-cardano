@@ -156,7 +156,7 @@ mkFollower deps@FollowerDependencies{..} = do
       }
 
     findContract = do
-      let move = FindTx $ txId $ unContractId contractId
+      let move = FindTx (txId $ unContractId contractId) False
       pure $ SendMsgQueryNext move handleContract (pure handleContract)
 
     handleContract = ClientStNext

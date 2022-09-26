@@ -354,7 +354,7 @@ checkFindTxFailed :: Expectation
 checkFindTxFailed = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx (txId $ unContractId testContractId))
+    $ ExpectQuery (FindTx (txId $ unContractId testContractId) False)
     $ RejectQuery TxNotFound Genesis
     $ ExpectDone ()
   followerError `shouldBe` Just (FindTxFailed TxNotFound)
@@ -364,7 +364,7 @@ checkTxIxNotFound :: Expectation
 checkTxIxNotFound = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx { Chain.outputs = [] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed TxIxNotFound)
@@ -374,7 +374,7 @@ checkByronAddress :: Expectation
 checkByronAddress = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx { Chain.outputs = [creationOutput { address = "" }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed ByronAddress)
@@ -384,7 +384,7 @@ checkNonScriptAddress :: Expectation
 checkNonScriptAddress = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx { Chain.outputs = [creationOutput { address = "6022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6" }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed NonScriptAddress)
@@ -394,7 +394,7 @@ checkInvalidScriptHash :: Expectation
 checkInvalidScriptHash = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx { Chain.outputs = [creationOutput { address = "7022c79fed0291c432b62f585d3f1074bf3a5f1df86f61fcca14a5d6d6" }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed InvalidScriptHash)
@@ -404,7 +404,7 @@ checkNoCreateDatum :: Expectation
 checkNoCreateDatum = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx { Chain.outputs = [creationOutput { Chain.datum = Nothing }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed NoCreateDatum)
@@ -414,7 +414,7 @@ checkInvalidCreateDatum :: Expectation
 checkInvalidCreateDatum = do
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx { Chain.outputs = [creationOutput { Chain.datum = Just $ Chain.I 0 }] } point1 point1
     $ ExpectDone ()
   followerError `shouldBe` Just (ExtractContractFailed InvalidCreateDatum)
@@ -430,7 +430,7 @@ checkNotCreationTransaction = do
   let txIn = Chain.TransactionInput {..}
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx { Chain.inputs = Set.singleton txIn } point1 point1
     $ ExpectDone ()
   -- Not a creation transaction because there is a txIn from the script
@@ -444,7 +444,7 @@ checkCreation = do
   let createOutput = TransactionScriptOutput testScriptAddress mempty createUTxO createDatum
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
-    $ ExpectQuery (FindTx createTxId)
+    $ ExpectQuery (FindTx createTxId False)
     $ RollForward createTx point1 point1
     $ Do
         ( expectChanges MarloweV1 ContractChanges
@@ -1065,7 +1065,7 @@ runFollowerTestPostCreationFrom
   -> IO (FollowerTestResult a)
 runFollowerTestPostCreationFrom point tip = runFollowerTest
   . ConfirmHandshake
-  . ExpectQuery (FindTx createTxId)
+  . ExpectQuery (FindTx createTxId False)
   . RollForward createTx point tip
   . Do readChanges -- to empty them
 

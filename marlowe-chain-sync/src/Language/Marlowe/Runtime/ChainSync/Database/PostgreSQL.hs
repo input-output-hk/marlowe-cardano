@@ -254,7 +254,7 @@ performMove = \case
   Api.AdvanceSlots slots        -> performAdvanceSlots slots
   Api.AdvanceBlocks blocks      -> performAdvanceBlocks blocks
   Api.FindConsumingTx txOutRef  -> performFindConsumingTx txOutRef
-  Api.FindTx txId               -> performFindTx txId
+  Api.FindTx txId wait          -> performFindTx txId wait
   Api.Intersect points          -> performIntersect points
   Api.FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
 
@@ -421,8 +421,8 @@ performFindConsumingTxs utxos point = do
       MoveWait             -> (mempty, 1 :: Sum Int, mempty)
       MoveAbort err        -> (Map.singleton utxo err, mempty, mempty)
 
-performFindTx :: Api.TxId -> Api.ChainPoint -> Transaction (PerformMoveResult Api.TxError Api.Transaction)
-performFindTx txId point = do
+performFindTx :: Api.TxId -> Bool -> Api.ChainPoint -> Transaction (PerformMoveResult Api.TxError Api.Transaction)
+performFindTx txId wait point = do
   initialResult <- HT.statement (Api.unTxId txId) $
     [foldStatement|
       SELECT block.slotNo :: bigint?
@@ -443,7 +443,9 @@ performFindTx txId point = do
           AND tx.id = $1 :: bytea
     |] foldTx
   case initialResult of
-    MoveWait -> pure MoveWait
+    MoveWait
+      | wait -> pure MoveWait
+      | otherwise -> pure $ MoveAbort Api.TxNotFound
     MoveAbort err -> pure $ MoveAbort err
     MoveArrive header@Api.BlockHeader{..} tx ->  do
       txIns <- queryTxIns slotNo txId
@@ -451,16 +453,15 @@ performFindTx txId point = do
       pure $ MoveArrive header tx { Api.inputs = txIns, Api.outputs = txOuts }
   where
     foldTx :: Fold ReadTxRow (PerformMoveResult Api.TxError Api.Transaction)
-    foldTx = Fold foldTx' (MoveAbort Api.TxNotFound) id
+    foldTx = Fold foldTx' MoveWait id
 
     foldTx'
       :: PerformMoveResult Api.TxError Api.Transaction
       -> ReadTxRow
       -> PerformMoveResult Api.TxError Api.Transaction
-    foldTx' (MoveAbort (Api.TxInPast header)) _ = MoveAbort $ Api.TxInPast header
-    foldTx' MoveWait _                          = MoveWait
-    foldTx' (MoveAbort Api.TxNotFound) row      = readFirstTxRow row
+    foldTx' MoveWait row      = readFirstTxRow row
     foldTx' (MoveArrive header tx) row          = MoveArrive header $ mergeTxRow tx row
+    foldTx' x _ = x
 
     readFirstTxRow :: ReadTxRow -> PerformMoveResult Api.TxError Api.Transaction
     readFirstTxRow
