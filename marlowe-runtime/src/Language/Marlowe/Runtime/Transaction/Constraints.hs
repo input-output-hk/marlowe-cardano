@@ -392,7 +392,7 @@ mkInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx cons
       :: (Chain.TxOutRef, Chain.TransactionOutput, Maybe Chain.Redeemer)
       -> Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))
     toCardanoTxInPair (txOutRef, txOut, mredeemer) =
-      (,) <$> (toCardanoTxIn txOutRef) <*> (C.BuildTxWith <$> toCardanoWitness mredeemer txOut)
+      (,) <$> toCardanoTxIn txOutRef <*> (C.BuildTxWith <$> toCardanoWitness mredeemer txOut)
 
     mkTxIns = do
       walletInputs <- getWalletInputs
