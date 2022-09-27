@@ -4,10 +4,10 @@ module Language.Marlowe.Runtime.CLI.Command.Submit
 import Language.Marlowe.Runtime.CLI.Monad (CLI)
 import Options.Applicative
 
-data SubmitCommand
+data SubmitCommand = SubmitCommand
 
 submitCommandParser :: ParserInfo SubmitCommand
-submitCommandParser = info empty $ progDesc "Submit a signed transaction to the Cardano node."
+submitCommandParser = info (pure SubmitCommand) $ progDesc "Submit a signed transaction to the Cardano node."
 
 runSubmitCommand :: SubmitCommand -> CLI ()
 runSubmitCommand = error "not implemented"

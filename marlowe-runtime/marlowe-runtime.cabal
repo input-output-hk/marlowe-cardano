@@ -137,6 +137,7 @@ executable marlowe
     Language.Marlowe.Runtime.CLI.Command.Ls
     Language.Marlowe.Runtime.CLI.Command.Rm
     Language.Marlowe.Runtime.CLI.Command.Submit
+    Language.Marlowe.Runtime.CLI.Command.Tx
     Language.Marlowe.Runtime.CLI.Command.Withdraw
     Language.Marlowe.Runtime.CLI.Env
     Language.Marlowe.Runtime.CLI.Monad
