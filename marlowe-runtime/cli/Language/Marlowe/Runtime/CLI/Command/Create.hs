@@ -7,7 +7,7 @@ import Options.Applicative
 data CreateCommand
 
 createCommandParser :: ParserInfo CreateCommand
-createCommandParser = error "not implemented"
+createCommandParser = info empty $ progDesc "Create a new Marlowe Contract"
 
 runCreateCommand :: CreateCommand -> CLI ()
 runCreateCommand = error "not implemented"

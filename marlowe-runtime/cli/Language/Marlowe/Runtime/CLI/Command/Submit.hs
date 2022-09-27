@@ -7,7 +7,7 @@ import Options.Applicative
 data SubmitCommand
 
 submitCommandParser :: ParserInfo SubmitCommand
-submitCommandParser = error "not implemented"
+submitCommandParser = info empty $ progDesc "Submit a signed transaction to the Cardano node."
 
 runSubmitCommand :: SubmitCommand -> CLI ()
 runSubmitCommand = error "not implemented"

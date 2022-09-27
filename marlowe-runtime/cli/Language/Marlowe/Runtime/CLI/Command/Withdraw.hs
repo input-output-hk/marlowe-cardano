@@ -7,7 +7,7 @@ import Options.Applicative
 data WithdrawCommand
 
 withdrawCommandParser :: ParserInfo WithdrawCommand
-withdrawCommandParser = error "not implemented"
+withdrawCommandParser = info empty $ progDesc "Withdraw funds paid to a role in a contract"
 
 runWithdrawCommand :: WithdrawCommand -> CLI ()
 runWithdrawCommand = error "not implemented"

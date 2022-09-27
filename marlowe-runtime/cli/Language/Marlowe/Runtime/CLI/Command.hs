@@ -3,6 +3,7 @@ module Language.Marlowe.Runtime.CLI.Command
 
 import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Reader (runReaderT)
+import Data.Foldable (asum)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.CLI.Command.Add (AddCommand, addCommandParser, runAddCommand)
@@ -57,18 +58,27 @@ getOptions = do
   txHostParser <- optParserWithEnvDefault O.txHost
   txCommandPortParser <- optParserWithEnvDefault O.txCommandPort
   let
-    commandParser = hsubparser $ mconcat
-      [ command "add" $ Add <$> addCommandParser
-      , command "apply" $ Apply <$> applyCommandParser
-      , command "deposit" $ Apply <$> depositCommandParser
-      , command "choose" $ Apply <$> chooseCommandParser
-      , command "notify" $ Apply <$> notifyCommandParser
-      , command "create" $ Create <$> createCommandParser
-      , command "log" $ Log <$> logCommandParser
-      , command "ls" $ Ls <$> lsCommandParser
-      , command "rm" $ Rm <$> rmCommandParser
-      , command "submit" $ Submit <$> submitCommandParser
-      , command "withdraw" $ Withdraw <$> withdrawCommandParser
+    commandParser = asum
+      [ hsubparser $ mconcat
+          [ commandGroup "Contract history commands"
+          , command "add" $ Add <$> addCommandParser
+          , command "log" $ Log <$> logCommandParser
+          , command "ls" $ Ls <$> lsCommandParser
+          , command "rm" $ Rm <$> rmCommandParser
+          ]
+      , hsubparser $ mconcat
+          [ commandGroup "Contract transaction commands"
+          , command "apply" $ Apply <$> applyCommandParser
+          , command "deposit" $ Apply <$> depositCommandParser
+          , command "choose" $ Apply <$> chooseCommandParser
+          , command "notify" $ Apply <$> notifyCommandParser
+          , command "create" $ Create <$> createCommandParser
+          , command "withdraw" $ Withdraw <$> withdrawCommandParser
+          ]
+      , hsubparser $ mconcat
+          [ commandGroup "Low level commands"
+          , command "submit" $ Submit <$> submitCommandParser
+          ]
       ]
     parser = Options
       <$> historyHostParser

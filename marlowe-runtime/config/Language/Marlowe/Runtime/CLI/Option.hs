@@ -36,16 +36,18 @@ txCommandPort = port "tx-command" "TX_COMMAND" 3720 "The port number of the tran
 
 port :: String -> String -> PortNumber -> String -> CliOption OptionFields PortNumber
 port optPrefix envPrefix defaultValue description = CliOption
-  { env = "MARLOWE_RT_" <> envPrefix <> "_PORT"
+  { env
   , parseEnv = readMaybe
   , parser = option auto . (<>) (mconcat
       [ long $ optPrefix <> "-port"
       , value defaultValue
       , metavar "PORT_NUMBER"
-      , help description
+      , help $ description <> " Can be set as the environment variable " <> env
       , showDefault
       ])
   }
+  where
+    env = "MARLOWE_RT_" <> envPrefix <> "_PORT"
 
 host :: String -> String -> HostName  -> String -> CliOption OptionFields HostName
 host optPrefix envPrefix defaultValue description = CliOption
@@ -55,10 +57,12 @@ host optPrefix envPrefix defaultValue description = CliOption
       [ long $ optPrefix <> "-host"
       , value defaultValue
       , metavar "HOST_NAME"
-      , help description
+      , help $ description <> " Can be set as the environment variable " <> env
       , showDefault
       ])
   }
+  where
+    env = "MARLOWE_RT_" <> envPrefix <> "_HOST"
 
 contractIdArgument :: String -> Parser ContractId
 contractIdArgument description = argument parser $ mconcat

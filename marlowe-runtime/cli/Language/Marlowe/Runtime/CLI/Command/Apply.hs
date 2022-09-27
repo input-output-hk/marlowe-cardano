@@ -7,16 +7,16 @@ import Options.Applicative
 data ApplyCommand
 
 applyCommandParser :: ParserInfo ApplyCommand
-applyCommandParser = error "not implemented"
+applyCommandParser = info empty $ progDesc "Apply inputs to a contract"
 
 depositCommandParser :: ParserInfo ApplyCommand
-depositCommandParser = error "not implemented"
+depositCommandParser = info empty $ progDesc "Deposit funds into a contract"
 
 chooseCommandParser :: ParserInfo ApplyCommand
-chooseCommandParser = error "not implemented"
+chooseCommandParser = info empty $ progDesc "Make a choice in a contract"
 
 notifyCommandParser :: ParserInfo ApplyCommand
-notifyCommandParser = error "not implemented"
+notifyCommandParser = info empty $ progDesc "Notify a contract to proceed"
 
 runApplyCommand :: ApplyCommand -> CLI ()
 runApplyCommand = error "not implemented"
