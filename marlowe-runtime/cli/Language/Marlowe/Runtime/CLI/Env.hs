@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.CLI.Env
   where
 
+import Control.Concurrent.STM (STM)
 import Control.Exception (Exception, bracket, bracketOnError, throwIO)
 import Data.ByteString.Lazy (ByteString)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
@@ -26,6 +27,7 @@ data Env m = Env
   , envRunHistoryQueryClient :: !(RunClient m (QueryClient HistoryQuery))
   , envRunHistorySyncClient :: !(RunClient m MarloweSyncClient)
   , envRunTxJobClient :: !(RunClient m (JobClient MarloweTxCommand))
+  , sigInt :: STM ()
   }
 
 -- | Run a client as a typed protocols peer over a socket.

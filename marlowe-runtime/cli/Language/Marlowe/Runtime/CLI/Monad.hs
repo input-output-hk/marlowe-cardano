@@ -3,7 +3,6 @@
 module Language.Marlowe.Runtime.CLI.Monad
   where
 
-import Control.Exception (Exception(displayException))
 import Control.Monad (MonadPlus, (>=>))
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Fix (MonadFix)

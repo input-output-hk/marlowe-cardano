@@ -162,7 +162,9 @@ executable marlowe
     , typed-protocols
     , optparse-applicative
     , stm
+    , stm-delay
     , text
+    , unix
     , wl-pprint
 
 executable marlowed

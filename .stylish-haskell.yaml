@@ -37,3 +37,4 @@ language_extensions:
   - QuasiQuotes
   - ScopedTypeVariables
   - TemplateHaskell
+  - TypeApplications

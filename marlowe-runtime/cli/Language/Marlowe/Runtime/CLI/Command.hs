@@ -1,6 +1,7 @@
 module Language.Marlowe.Runtime.CLI.Command
   where
 
+import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Reader (runReaderT)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
@@ -96,8 +97,8 @@ runCommand = \case
   Withdraw cmd -> runWithdrawCommand cmd
 
 -- | Interpret a CLI action in IO using the provided options.
-runCLIWithOptions :: Options -> CLI a -> IO a
-runCLIWithOptions Options{..} cli = do
+runCLIWithOptions :: STM () -> Options -> CLI a -> IO a
+runCLIWithOptions sigInt Options{..} cli = do
   historyJobAddr <-  resolve historyHost historyCommandPort
   historyQueryAddr <- resolve historyHost historyQueryPort
   historySyncAddr <- resolve historyHost historySyncPort
@@ -107,6 +108,7 @@ runCLIWithOptions Options{..} cli = do
     , envRunHistoryQueryClient = runClientPeerOverSocket historyQueryAddr codecQuery queryClientPeer
     , envRunHistorySyncClient = runClientPeerOverSocket historySyncAddr codecMarloweSync marloweSyncClientPeer
     , envRunTxJobClient = runClientPeerOverSocket txJobAddr codecJob jobClientPeer
+    , sigInt
     }
   where
     resolve host port =
