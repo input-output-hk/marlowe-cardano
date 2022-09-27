@@ -6,23 +6,24 @@
 module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
-import qualified Cardano.Api as Cardano
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (NetworkId, StakeCredential, protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits)
-import qualified Cardano.Api.Shelley as Cardano
+import qualified Cardano.Api.Shelley as C
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
 import Data.Function (on)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromJust, fromMaybe, maybeToList)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
+import Language.Marlowe.Runtime.Cardano.Api
 import Language.Marlowe.Runtime.Cardano.Feature (castInCardanoEra)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import qualified Language.Marlowe.Runtime.SystemStart as Cardano
+import qualified Language.Marlowe.Runtime.SystemStart as C
 import qualified Plutus.V2.Ledger.Api as P
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
@@ -267,6 +268,7 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
 -- | Errors that can occur when trying to solve the constraints.
 data UnsolvableConstraintsError
   = UnsolvableConstraintsError
+  | ToCardanoError
   deriving (Eq, Show, Generic, Binary)
 
 -- | Data from a wallet needed to solve the constraints.
@@ -282,20 +284,23 @@ data WalletContext = WalletContext
 
 -- | Data from Marlowe Scripts needed to solve the constraints.
 data MarloweContext v = MarloweContext
-  { stakeCredential :: Maybe Chain.StakeCredential
-  -- ^ The stake credential to use when building a new marlowe script address.
-  , scriptOutput :: Maybe (Core.TransactionScriptOutput v)
+  { scriptOutput :: Maybe (Core.TransactionScriptOutput v)
   -- ^ The UTXO at the script address, if any.
   , payoutOutputs :: Map Chain.TxOutRef (Core.Payout v)
   -- ^ The UTXOs at the payout address.
+  , marloweAddress :: Chain.Address
+  , payoutAddress :: Chain.Address
+  , marloweScriptUTxO :: Chain.TxOutRef
+  , payoutScriptUTxO :: Chain.TxOutRef
+  , marloweScriptHash :: Chain.ScriptHash
+  , payoutScriptHash :: Chain.ScriptHash
   }
 
-type SolveConstraints era v
-   = Cardano.ScriptDataSupportedInEra era
-  -> MarloweContext v
+type SolveConstraints v
+  =  MarloweContext v
   -> WalletContext
   -> TxConstraints v
-  -> Either UnsolvableConstraintsError (Cardano.TxBody era)
+  -> Either UnsolvableConstraintsError (C.TxBody C.BabbageEra)
 
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
@@ -305,103 +310,98 @@ type SolveConstraints era v
 -- the result.
 solveConstraints
   :: NetworkId
-  -> Cardano.SystemStart
-  -> Cardano.EraHistory Cardano.CardanoMode
-  -> Cardano.ProtocolParameters
-  -> SolveConstraints era v
-solveConstraints _networkId _start _history protocol _eraInMode _marloweCtx _walletCtx _constraints = do
-  -- let
-  --   protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
-  --   -- Have collateral :: Set Chain.TxOutRef
-  --   -- which is: TxOutRef TxId TxIx
-  --   -- need a [TxIn]
-  --   txInsCollateral = TxInsCollateral (toCollateralSupportedInEra era) $ maybeToList collateral
+  -> C.SystemStart
+  -> C.EraHistory C.CardanoMode
+  -> C.ProtocolParameters
+  -> SolveConstraints v
+solveConstraints networkId start history protocol marloweCtx walletCtx constraints = do
   Left UnsolvableConstraintsError
---   where
---     -- This code is from L.M.CLI.Transaction
---     protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
---     -- Have collateral :: Set Chain.TxOutRef
---     -- which is: TxOutRef TxId TxIx
---     -- need a [TxIn]
---     txInsCollateral = TxInsCollateral (toCollateralSupportedInEra era) $ maybeToList collateral
-    -- txReturnCollateral = TxReturnCollateralNone
-    -- txTotalCollateral  = TxTotalCollateralNone
-    -- txFee              = TxFeeExplicit (toTxFeesExplicitInEra era) 0
-    -- txValidityRange    = (
-    --                        maybe
-    --                          TxValidityNoLowerBound
-    --                          (TxValidityLowerBound (toValidityLowerBoundSupportedInEra era) . fst)
-    --                          slotRange
-    --                      , maybe
-    --                          (TxValidityNoUpperBound (toValidityNoUpperBoundSupportedInEra era))
-    --                          (TxValidityUpperBound (toValidityUpperBoundSupportedInEra era) . snd)
-    --                          slotRange
-    --                      )
-    -- txMetadata         = metadata
-    -- txAuxScripts       = TxAuxScriptsNone
-    -- txExtraKeyWits     = TxExtraKeyWitnesses (toExtraKeyWitnessesSupportedInEra era) extraSigners
-    -- txProtocolParams   = BuildTxWith $ Just protocol'
-    -- txWithdrawals      = TxWithdrawalsNone
-    -- txCertificates     = TxCertificatesNone
-    -- txUpdateProposal   = TxUpdateProposalNone
-    -- txMintValue        = mintValue
-    -- txScriptValidity   = if invalid
-    --                        then TxScriptValidity (toTxScriptValiditySupportedInEra era) ScriptInvalid
-    --                        else TxScriptValidityNone
-    -- txIns = extraInputs <> scriptTxIn <> fmap makeTxIn inputs
-    -- scriptTxOut = maybe [] (payScript era) payToScript
-    -- txOuts = scriptTxOut <> outputs
-
-    -- This code is new
-    -- utxo <- ?
-    -- provisionalTxBody = Cardano.makeTransactionBody
-    --   eraInMode start history protocol Set.empty utxo TxBodyContent{..} (changeAddress walletCtx) Nothing
-    -- content <- mkInitialTxBodyContent
 
 
 mkInitialTxBodyContent
-  :: Cardano.ProtocolParameters
+  :: C.ProtocolParameters
   -> Core.MarloweVersion v
-  -> Cardano.ScriptDataSupportedInEra era
   -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
-  -> Either UnsolvableConstraintsError (Cardano.TxBodyContent Cardano.BuildTx era)
-mkInitialTxBodyContent protocol marloweVersion scriptDataSupported marloweCtx walletCtx constraints = do
-  txIns <- mkTxIns scriptDataSupported constraints
-  txInsReference <- mkTxInsReference scriptDataSupported constraints
-  txOuts <- mkTxOuts scriptDataSupported constraints
-  txValidityRange <- mkTxValidityRange scriptDataSupported constraints
-  txMetadata <- mkTxMetadata scriptDataSupported constraints
-  txExtraKeyWits <- mkTxExtraKeyWits scriptDataSupported constraints
-  txMintValue <- mkTxMintValue scriptDataSupported constraints
-  pure Cardano.TxBodyContent
-    { txIns -- = []  -- needs init
-    , txInsCollateral = Cardano.TxInsCollateralNone
-    , txInsReference -- = Cardano.TxInsReferenceNone  -- needs init
+  -> Either UnsolvableConstraintsError (C.TxBodyContent C.BuildTx C.BabbageEra)
+mkInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx constraints = do
+  txIns <- mkTxIns
+  txInsReference <- mkTxInsReference
+  txOuts <- mkTxOuts
+  txValidityRange <- mkTxValidityRange
+  txMetadata <- mkTxMetadata
+  txExtraKeyWits <- mkTxExtraKeyWits
+  txMintValue <- mkTxMintValue
+  pure C.TxBodyContent
+    { txIns
+    , txInsCollateral = C.TxInsCollateralNone
+    , txInsReference -- = C.TxInsReferenceNone  -- needs init
     , txOuts -- = []  -- needs init
-    , txTotalCollateral = Cardano.TxTotalCollateralNone
-    , txReturnCollateral = Cardano.TxReturnCollateralNone
-    , txFee = Cardano.TxFeeExplicit (fromJust $ castInCardanoEra scriptDataSupported) 3_000_000
+    , txTotalCollateral = C.TxTotalCollateralNone
+    , txReturnCollateral = C.TxReturnCollateralNone
+    , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 3_000_000
     , txValidityRange -- =  -- needs init
-        -- ( Cardano.TxValidityNoLowerBound
-        -- , Cardano.TxValidityNoUpperBound (fromJust $ castInCardanoEra scriptDataSupported)
+        -- ( C.TxValidityNoLowerBound
+        -- , C.TxValidityNoUpperBound (fromJust $ castInCardanoEra scriptDataSupported)
         -- )
-    , txMetadata -- = Cardano.TxMetadataNone  -- needs init
-    , txAuxScripts = Cardano.TxAuxScriptsNone
-    , txExtraKeyWits -- = Cardano.TxExtraKeyWitnessesNone  -- needs init
-    , txProtocolParams = Cardano.BuildTxWith $ Just protocol
-    , txWithdrawals = Cardano.TxWithdrawalsNone
-    , txCertificates = Cardano.TxCertificatesNone
-    , txUpdateProposal = Cardano.TxUpdateProposalNone
-    , txMintValue -- = Cardano.TxMintNone  -- needs init
-    , txScriptValidity = Cardano.TxScriptValidityNone
+    , txMetadata -- = C.TxMetadataNone  -- needs init
+    , txAuxScripts = C.TxAuxScriptsNone
+    , txExtraKeyWits -- = C.TxExtraKeyWitnessesNone  -- needs init
+    , txProtocolParams = C.BuildTxWith $ Just protocol
+    , txWithdrawals = C.TxWithdrawalsNone
+    , txCertificates = C.TxCertificatesNone
+    , txUpdateProposal = C.TxUpdateProposalNone
+    , txMintValue -- = C.TxMintNone  -- needs init
+    , txScriptValidity = C.TxScriptValidityNone
     }
   where
-    mkTxIns scriptDataSupported constraints = undefined
-    mkTxInsReference scriptDataSupported constraints = undefined
-    mkTxOuts scriptDataSupported constraints  = undefined
-    mkTxValidityRange scriptDataSupported constraints = undefined
-    mkTxMetadata scriptDataSupported constraints = undefined
-    mkTxExtraKeyWits scriptDataSupported constraints = undefined
-    mkTxMintValue scriptDataSupported constraints = undefined
+    getWalletInputs = undefined
+    getMarloweInput = undefined
+    getPayoutInputs = undefined
+
+    note :: a -> Maybe b -> Either a b
+    note e = maybe (Left e) Right
+
+    getReferenceScript :: Chain.Address -> Maybe (C.PlutusScriptOrReferenceInput lang)
+    getReferenceScript txOutAddr
+      | txOutAddr == marloweAddress = C.PReferenceScript
+          <$> toCardanoTxIn marloweScriptUTxO <*> (Just <$> toCardanoScriptHash marloweScriptHash)
+      | txOutAddr == payoutAddress = C.PReferenceScript
+          <$> toCardanoTxIn payoutScriptUTxO <*> (Just <$> toCardanoScriptHash payoutScriptHash)
+      | otherwise = Nothing
+
+    toCardanoWitness :: Maybe Chain.Redeemer -> Chain.TransactionOutput -> Maybe (C.Witness C.WitCtxTxIn C.BabbageEra)
+    toCardanoWitness mredeemer Chain.TransactionOutput{..} =
+      case datum of
+        Nothing -> Just $ C.KeyWitness C.KeyWitnessForSpending
+        Just datum' -> do
+          plutusScriptOrRefInput <- getReferenceScript address
+          Chain.Redeemer redeemer <- mredeemer
+          pure
+            $ C.ScriptWitness C.ScriptWitnessForSpending
+            $ C.PlutusScriptWitness
+                C.PlutusScriptV2InBabbage
+                C.PlutusScriptV2
+                plutusScriptOrRefInput
+                (C.ScriptDatumForTxIn $ toCardanoScriptData datum')
+                (toCardanoScriptData redeemer)
+            $ C.ExecutionUnits 0 0
+
+    toCardanoTxInPair
+      :: (Chain.TxOutRef, Chain.TransactionOutput, Maybe Chain.Redeemer)
+      -> Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))
+    toCardanoTxInPair (txOutRef, txOut, mredeemer) =
+      (,) <$> (toCardanoTxIn txOutRef) <*> (C.BuildTxWith <$> toCardanoWitness mredeemer txOut)
+
+    mkTxIns = do
+      walletInputs <- getWalletInputs
+      marloweInputs <- maybeToList <$> getMarloweInput
+      payoutInputs <- getPayoutInputs
+      note ToCardanoError $ mapM toCardanoTxInPair $ walletInputs <> marloweInputs <> payoutInputs
+    mkTxInsReference = undefined
+    mkTxOuts = undefined
+    mkTxValidityRange = undefined
+    mkTxMetadata = undefined
+    mkTxExtraKeyWits = undefined
+    mkTxMintValue = undefined
