@@ -120,9 +120,11 @@ library config
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , marlowe-chain-sync
     , marlowe-runtime
     , network
     , optparse-applicative
+    , split
 
 executable marlowe
   import: lang

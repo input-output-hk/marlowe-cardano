@@ -14,6 +14,7 @@ import Language.Marlowe.Runtime.CLI.Command.Log (LogCommand, logCommandParser, r
 import Language.Marlowe.Runtime.CLI.Command.Ls (LsCommand, lsCommandParser, runLsCommand)
 import Language.Marlowe.Runtime.CLI.Command.Rm (RmCommand, rmCommandParser, runRmCommand)
 import Language.Marlowe.Runtime.CLI.Command.Submit (SubmitCommand, runSubmitCommand, submitCommandParser)
+import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand)
 import Language.Marlowe.Runtime.CLI.Command.Withdraw (WithdrawCommand, runWithdrawCommand, withdrawCommandParser)
 import Language.Marlowe.Runtime.CLI.Env (Env(..), runClientPeerOverSocket)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
@@ -40,13 +41,13 @@ data Options = Options
 -- | A command for the Marlowe Runtime CLI.
 data Command
   = Add AddCommand
-  | Apply ApplyCommand
-  | Create CreateCommand
+  | Apply (TxCommand ApplyCommand)
+  | Create (TxCommand CreateCommand)
   | Log LogCommand
   | Ls LsCommand
   | Rm RmCommand
   | Submit SubmitCommand
-  | Withdraw WithdrawCommand
+  | Withdraw (TxCommand WithdrawCommand)
 
 -- | Read options from the environment and the command line.
 getOptions :: IO Options

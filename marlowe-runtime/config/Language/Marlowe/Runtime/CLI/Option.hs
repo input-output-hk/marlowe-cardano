@@ -1,8 +1,14 @@
+{-# LANGUAGE DataKinds #-}
 module Language.Marlowe.Runtime.CLI.Option
   where
 
 import Control.Arrow ((>>>))
-import Language.Marlowe.Runtime.Core.Api (ContractId, parseContractId)
+import Data.Foldable (asum)
+import Data.List.Split (splitOn)
+import Data.String (fromString)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32)
+import Language.Marlowe.Runtime.Core.Api
+  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..), parseTxOutRef)
 import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 import System.Environment (lookupEnv)
@@ -64,15 +70,39 @@ host optPrefix envPrefix defaultValue description = CliOption
   where
     env = "MARLOWE_RT_" <> envPrefix <> "_HOST"
 
+parseAddress :: String -> Either String Address
+parseAddress = maybe (Left "Invalid Bech 32 address") Right . fromBech32 . fromString
+
+keyValueOption
+  :: (String -> Either String a)
+  -> (String -> Either String b)
+  -> Mod OptionFields (a, b)
+  -> Parser (a, b)
+keyValueOption readKey readValue = option $ eitherReader \val -> case splitOn "=" val of
+  [keyStr, valStr] -> (,) <$> readKey keyStr <*> readValue valStr
+  _ -> Left "Expected format: <key>=<value>"
+
+txOutRefParser :: ReadM TxOutRef
+txOutRefParser = eitherReader $ parseTxOutRef >>> \case
+  Nothing  -> Left "Invalid UTXO - expected format: <hex-tx-id>#<tx-out-ix>"
+  Just cid -> Right cid
+
+marloweVersionParser :: Parser SomeMarloweVersion
+marloweVersionParser = asum
+  [ SomeMarloweVersion <$> marloweV1Parser
+  ]
+
+marloweV1Parser :: Parser (MarloweVersion 'V1)
+marloweV1Parser = flag MarloweV1 MarloweV1 $ mconcat
+  [ long "v1"
+  , help "Run command in Marlowe V1"
+  ]
+
 contractIdArgument :: String -> Parser ContractId
-contractIdArgument description = argument parser $ mconcat
+contractIdArgument description = argument (ContractId <$> txOutRefParser) $ mconcat
   [ metavar "CONTRACT_ID"
   , help description
   ]
-  where
-    parser = eitherReader $ parseContractId >>> \case
-      Nothing  -> Left "Invalid contract ID - expected format: <hex-tx-id>#<tx-out-ix>"
-      Just cid -> Right cid
 
 optParserWithEnvDefault :: HasValue f => CliOption f a -> IO (Parser a)
 optParserWithEnvDefault CliOption{..} = do
