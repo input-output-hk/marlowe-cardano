@@ -326,6 +326,8 @@ data LoadMarloweContextError
   | LoadMarloweContextToCardanoError
   | MarloweScriptNotPublished ScriptHash
   | PayoutScriptNotPublished ScriptHash
+  | InvalidScriptAddress Address
+  | UnknownMarloweScript ScriptHash
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass Binary
 

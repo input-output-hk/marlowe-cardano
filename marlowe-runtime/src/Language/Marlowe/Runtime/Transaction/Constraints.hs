@@ -10,9 +10,11 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (NetworkId, StakeCredential, protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits)
 import qualified Cardano.Api.Shelley as C
+import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
 import Data.Function (on)
+import Data.List (find, nub)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe, maybeToList)
@@ -21,6 +23,7 @@ import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
 import Language.Marlowe.Runtime.Cardano.Feature (castInCardanoEra)
+import Language.Marlowe.Runtime.ChainSync.Api (paymentCredential)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -269,6 +272,8 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
 -- | Errors that can occur when trying to solve the constraints.
 data ConstraintError
   = ConstraintError
+  | MintingUtxoNotFound Chain.TxOutRef
+  | RoleTokenNotFound Chain.AssetId
   | ToCardanoError
   deriving (Eq, Show, Generic, Binary)
 
@@ -307,10 +312,6 @@ type SolveConstraints
 
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
---
--- law: satisfiesConstraints (solveConstraints ... constraints) constraints == True
--- law: makeTransactionBodyAutoBalance should return a balanced transaction on
--- the result.
 solveConstraints
   :: NetworkId
   -> C.SystemStart
@@ -328,7 +329,7 @@ solveInitialTxBodyContent
   -> WalletContext
   -> TxConstraints v
   -> Either ConstraintError (C.TxBodyContent C.BuildTx C.BabbageEra)
-solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx constraints = do
+solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletContext{..} TxConstraints{..} = do
   txIns <- solveTxIns
   txInsReference <- solveTxInsReference
   txOuts <- solveTxOuts
@@ -359,30 +360,46 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx c
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
-    getWalletInputs :: Either ConstraintError [(Chain.TxOutRef, Chain.TransactionOutput)]
-    getWalletInputs = undefined
+    getWalletInputs :: Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))]
+    getWalletInputs = case roleTokenConstraints of
+      RoleTokenConstraintsNone -> pure []
+      MintRoleTokens txOutRef _ -> do
+        txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
+        _ <- note (MintingUtxoNotFound txOutRef) $ Map.lookup txOutRef availableUtxos
+        pure [(txIn, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending)]
+      SpendRoleTokens roleTokens -> do {- a list of txIns, 1 per roleToken -}
+        let availTuples = Map.toList availableUtxos
+        txIns <- nub <$> forM (Set.toList roleTokens) \token -> do
+          -- Find an element from availTuples where 'token' is in the assets.
+          let
+            containsToken :: Chain.TransactionOutput -> Bool
+            containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
+          (txOutRef, _) <- note (RoleTokenNotFound token) $ find (containsToken . snd) availTuples
+          note ToCardanoError $ toCardanoTxIn txOutRef
+        pure $ (, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) <$> txIns
 
-    getMarloweInput :: Either ConstraintError (Maybe (Chain.TxOutRef, Chain.TransactionOutput, Maybe Chain.Redeemer))
+    getMarloweInput :: Either ConstraintError (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)))
     getMarloweInput = undefined
 
-    getPayoutInputs :: Either ConstraintError [(Chain.TxOutRef, Chain.TransactionOutput)]
+    getPayoutInputs :: Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))]
     getPayoutInputs = undefined
 
-    getReferenceScript :: Chain.Address -> Maybe (C.PlutusScriptOrReferenceInput lang)
-    getReferenceScript txOutAddr
-      | txOutAddr == marloweAddress = C.PReferenceScript
+    getReferenceScript :: Chain.ScriptHash -> Maybe (C.PlutusScriptOrReferenceInput lang)
+    getReferenceScript scriptHash
+      | scriptHash == marloweScriptHash = C.PReferenceScript
           <$> toCardanoTxIn marloweScriptUTxO <*> (Just <$> toCardanoScriptHash marloweScriptHash)
-      | txOutAddr == payoutAddress = C.PReferenceScript
+      | scriptHash == payoutScriptHash = C.PReferenceScript
           <$> toCardanoTxIn payoutScriptUTxO <*> (Just <$> toCardanoScriptHash payoutScriptHash)
       | otherwise = Nothing
 
     toCardanoWitness :: Maybe Chain.Redeemer -> Chain.TransactionOutput -> Maybe (C.Witness C.WitCtxTxIn C.BabbageEra)
-    toCardanoWitness mredeemer Chain.TransactionOutput{..} =
-      case datum of
-        Nothing -> Just $ C.KeyWitness C.KeyWitnessForSpending
-        Just datum' -> do
-          plutusScriptOrRefInput <- getReferenceScript address
-          Chain.Redeemer redeemer <- mredeemer
+    toCardanoWitness mredeemer Chain.TransactionOutput{..} = do
+      credential <- paymentCredential address
+      case credential of
+        Chain.PaymentKeyCredential _ -> Just $ C.KeyWitness C.KeyWitnessForSpending
+        Chain.ScriptCredential scriptHash -> do
+          datum' <- datum
+          plutusScriptOrRefInput <- getReferenceScript scriptHash
           pure
             $ C.ScriptWitness C.ScriptWitnessForSpending
             $ C.PlutusScriptWitness
@@ -390,21 +407,14 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx c
                 C.PlutusScriptV2
                 plutusScriptOrRefInput
                 (C.ScriptDatumForTxIn $ toCardanoScriptData datum')
-                (toCardanoScriptData redeemer)
+                (toCardanoScriptData $ maybe (Chain.fromPlutusData $ P.toData ()) Chain.unRedeemer mredeemer)
             $ C.ExecutionUnits 0 0
 
-    toCardanoTxInPair
-      :: (Chain.TxOutRef, Chain.TransactionOutput, Maybe Chain.Redeemer)
-      -> Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))
-    toCardanoTxInPair (txOutRef, txOut, mredeemer) =
-      (,) <$> toCardanoTxIn txOutRef <*> (C.BuildTxWith <$> toCardanoWitness mredeemer txOut)
-
     solveTxIns = do
-      let addNothing3rd (a, b) = (a, b, Nothing)
-      walletInputs <- fmap addNothing3rd <$> getWalletInputs
+      walletInputs <- getWalletInputs
       marloweInputs <- maybeToList <$> getMarloweInput
-      payoutInputs <- fmap addNothing3rd <$> getPayoutInputs
-      note ToCardanoError $ mapM toCardanoTxInPair $ walletInputs <> marloweInputs <> payoutInputs
+      payoutInputs <- getPayoutInputs
+      pure $ walletInputs <> marloweInputs <> payoutInputs
     solveTxInsReference = undefined
     solveTxOuts = undefined
     solveTxValidityRange = undefined
