@@ -12,15 +12,12 @@ import Data.List (scanl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import Language.Marlowe.Protocol.Sync.Client
 import Language.Marlowe.Runtime.Cardano.Api
-import Language.Marlowe.Runtime.ChainSync.Api
-  (Credential(..), StakeReference(..), TxOutRef, paymentCredential, stakeReference)
+import Language.Marlowe.Runtime.ChainSync.Api (Credential(..), TxOutRef, paymentCredential)
 import Language.Marlowe.Runtime.Core.Api
-import Language.Marlowe.Runtime.Core.ScriptRegistry
-  (MarloweScripts(..), NetworkIdWithOrd(NetworkIdWithOrd), getCurrentScripts, getScripts)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo(txOutRef), getScripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -159,10 +156,10 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
 
 lookupMarloweScriptUtxo :: NetworkId -> MarloweScripts -> Either LoadMarloweContextError TxOutRef
 lookupMarloweScriptUtxo networkId MarloweScripts{..} =
-  maybe (Left $ MarloweScriptNotPublished marloweScript) Right
-    $ Map.lookup (NetworkIdWithOrd networkId) marloweScriptUTxOs
+  maybe (Left $ MarloweScriptNotPublished marloweScript) (Right . txOutRef)
+    $ Map.lookup networkId marloweScriptUTxOs
 
 lookupPayoutScriptUtxo :: NetworkId -> MarloweScripts -> Either LoadMarloweContextError TxOutRef
 lookupPayoutScriptUtxo networkId MarloweScripts{..} =
-  maybe (Left $ PayoutScriptNotPublished payoutScript) Right
-    $ Map.lookup (NetworkIdWithOrd networkId) payoutScriptUTxOs
+  maybe (Left $ PayoutScriptNotPublished payoutScript) (Right . txOutRef)
+    $ Map.lookup networkId payoutScriptUTxOs

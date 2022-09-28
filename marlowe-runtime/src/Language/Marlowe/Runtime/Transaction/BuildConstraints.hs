@@ -24,7 +24,7 @@ buildCreateConstraints
   -> Map TokenName Address -- ^ The initial distribution of the role tokens.
   -> Map Int Aeson.Value -- ^ Extra metadata to add to the transaction.
   -> Contract v -- ^ The contract being instantiated.
-  -> Either CreateError (TxConstraints v)
+  -> Either (CreateError v) (TxConstraints v)
 buildCreateConstraints = error "not implemented"
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
@@ -39,7 +39,7 @@ buildApplyInputsConstraints
                    -- If not specified, this is computed from the the timeouts
                    -- in the contract.
   -> Redeemer v -- ^ The inputs to apply to the contract.
-  -> Either ApplyInputsError (TxConstraints v)
+  -> Either (ApplyInputsError v) (TxConstraints v)
 buildApplyInputsConstraints = error "not implemented"
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
@@ -47,7 +47,7 @@ buildApplyInputsConstraints = error "not implemented"
 buildWithdrawConstraints
   :: MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> PayoutDatum v -- ^ The role token from which to withdraw funds.
-  -> Either WithdrawError (TxConstraints v)
+  -> Either (WithdrawError v) (TxConstraints v)
 buildWithdrawConstraints = \case
   MarloweV1 -> Right . buildWithdrawConstraintsV1
   where

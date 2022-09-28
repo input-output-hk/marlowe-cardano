@@ -13,7 +13,6 @@ import Cardano.Api
   , CardanoEra(BabbageEra)
   , NetworkId
   , PaymentCredential(..)
-  , ScriptDataSupportedInEra(..)
   , ShelleyBasedEra(..)
   , StakeAddressReference(..)
   , StakeCredential
@@ -37,22 +36,15 @@ import Data.Bifunctor (first)
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromJust)
 import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
-  ( fromCardanoAddressInEra
-  , fromCardanoStakeCredential
-  , fromCardanoTxId
-  , toCardanoAddressInEra
-  , toCardanoPaymentCredential
-  , toCardanoScriptHash
-  , toCardanoStakeCredential
-  )
+  (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Credential(..), SlotConfig, TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer)
-import Language.Marlowe.Runtime.Core.ScriptRegistry (NetworkIdWithOrd(..), getCurrentScripts, marloweScript)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
@@ -192,7 +184,7 @@ execCreate
   -> Map TokenName Address
   -> Map Int Aeson.Value
   -> Contract v
-  -> IO (ServerStCmd MarloweTxCommand Void CreateError (ContractId, TxBody BabbageEra) IO ())
+  -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) IO ())
 execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata contract = execExceptT do
   constraints <- except $ buildCreateConstraints version roleTokens metadata contract
   walletContext <- lift $ loadWalletContext addresses
@@ -256,7 +248,7 @@ execApplyInputs
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Redeemer v
-  -> IO (ServerStCmd MarloweTxCommand Void ApplyInputsError (TxBody BabbageEra) IO ())
+  -> IO (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra) IO ())
 execApplyInputs
   slotConfig
   solveConstraints
@@ -292,7 +284,7 @@ execWithdraw
   -> WalletAddresses
   -> ContractId
   -> PayoutDatum v
-  -> IO (ServerStCmd MarloweTxCommand Void WithdrawError (TxBody BabbageEra) IO ())
+  -> IO (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) IO ())
 execWithdraw solveConstraints loadWalletContext loadMarloweContext version addresses contractId datum = execExceptT do
   constraints <- except $ buildWithdrawConstraints version datum
   walletContext <- lift $ loadWalletContext addresses

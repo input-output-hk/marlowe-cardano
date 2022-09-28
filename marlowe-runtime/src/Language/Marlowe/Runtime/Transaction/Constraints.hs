@@ -8,27 +8,27 @@ module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (NetworkId, StakeCredential, protocolParamMaxBlockExUnits, protocolParamMaxTxExUnits)
+import Cardano.Api.Shelley (NetworkId)
 import qualified Cardano.Api.Shelley as C
 import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
 import Data.Function (on)
 import Data.List (find, nub)
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, fromMaybe, maybeToList)
+import Data.Maybe (fromMaybe, maybeToList)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
-import Language.Marlowe.Runtime.Cardano.Feature (castInCardanoEra)
-import Language.Marlowe.Runtime.ChainSync.Api (paymentCredential)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.SystemStart as C
 import qualified Plutus.V2.Ledger.Api as P
+import Witherable (wither)
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -270,12 +270,18 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
       }
 
 -- | Errors that can occur when trying to solve the constraints.
-data ConstraintError
+data ConstraintError v
   = ConstraintError
   | MintingUtxoNotFound Chain.TxOutRef
   | RoleTokenNotFound Chain.AssetId
   | ToCardanoError
-  deriving (Eq, Show, Generic, Binary)
+  | MissingMarloweInput
+  | PayoutInputNotFound (Core.PayoutDatum v)
+  deriving (Generic)
+
+deriving instance Eq (ConstraintError 'V1)
+deriving instance Show (ConstraintError 'V1)
+deriving instance Binary (ConstraintError 'V1)
 
 -- | Data from a wallet needed to solve the constraints.
 data WalletContext = WalletContext
@@ -308,7 +314,7 @@ type SolveConstraints
   -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
-  -> Either ConstraintError (C.TxBody C.BabbageEra)
+  -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
 
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
@@ -318,17 +324,18 @@ solveConstraints
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> SolveConstraints
-solveConstraints networkId start history protocol version marloweCtx walletCtx constraints = do
-  txBodyContent <- solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
+solveConstraints _networkId _start _history protocol version marloweCtx walletCtx constraints = do
+  _txBodyContent <- solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
   Left ConstraintError
 
 solveInitialTxBodyContent
-  :: C.ProtocolParameters
+  :: forall v
+   . C.ProtocolParameters
   -> Core.MarloweVersion v
   -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
-  -> Either ConstraintError (C.TxBodyContent C.BuildTx C.BabbageEra)
+  -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
 solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletContext{..} TxConstraints{..} = do
   txIns <- solveTxIns
   txInsReference <- solveTxInsReference
@@ -360,14 +367,14 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
-    getWalletInputs :: Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))]
+    getWalletInputs :: Either (ConstraintError v) [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))]
     getWalletInputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
       MintRoleTokens txOutRef _ -> do
         txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
         _ <- note (MintingUtxoNotFound txOutRef) $ Map.lookup txOutRef availableUtxos
         pure [(txIn, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending)]
-      SpendRoleTokens roleTokens -> do {- a list of txIns, 1 per roleToken -}
+      SpendRoleTokens roleTokens -> do
         let availTuples = Map.toList availableUtxos
         txIns <- nub <$> forM (Set.toList roleTokens) \token -> do
           -- Find an element from availTuples where 'token' is in the assets.
@@ -378,37 +385,58 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
           note ToCardanoError $ toCardanoTxIn txOutRef
         pure $ (, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) <$> txIns
 
-    getMarloweInput :: Either ConstraintError (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)))
-    getMarloweInput = undefined
+    getMarloweInput :: Either (ConstraintError v) (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)))
+    getMarloweInput = case marloweInputConstraints of
+      MarloweInputConstraintsNone -> pure Nothing
+      MarloweInput _ _ redeemer -> fmap Just $ do
+        Core.TransactionScriptOutput{..} <- note MissingMarloweInput scriptOutput
+        txIn <- note ToCardanoError $ toCardanoTxIn utxo
+        plutusScriptOrRefInput <- note ToCardanoError $ C.PReferenceScript
+          <$> toCardanoTxIn marloweScriptUTxO
+          <*> (Just <$> toCardanoScriptHash marloweScriptHash)
+        let
+          scriptWitness = C.PlutusScriptWitness
+            C.PlutusScriptV2InBabbage
+            C.PlutusScriptV2
+            plutusScriptOrRefInput
+            (C.ScriptDatumForTxIn $ toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
+            (toCardanoScriptData $ Chain.unRedeemer $ Core.toChainRedeemer marloweVersion redeemer)
+            (C.ExecutionUnits 0 0)
+        pure (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
 
-    getPayoutInputs :: Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))]
-    getPayoutInputs = undefined
+    getPayoutInputs :: Either (ConstraintError v) [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))]
+    getPayoutInputs = do
+      let availableUtxoList = Map.toList payoutOutputs
+      foldMap NE.toList <$> forM (Set.toList payoutInputConstraints) \payoutDatum ->
+        note (PayoutInputNotFound payoutDatum) . toNonEmpty
+          =<< wither (maybeGetPayoutInput payoutDatum) availableUtxoList
 
-    getReferenceScript :: Chain.ScriptHash -> Maybe (C.PlutusScriptOrReferenceInput lang)
-    getReferenceScript scriptHash
-      | scriptHash == marloweScriptHash = C.PReferenceScript
-          <$> toCardanoTxIn marloweScriptUTxO <*> (Just <$> toCardanoScriptHash marloweScriptHash)
-      | scriptHash == payoutScriptHash = C.PReferenceScript
-          <$> toCardanoTxIn payoutScriptUTxO <*> (Just <$> toCardanoScriptHash payoutScriptHash)
-      | otherwise = Nothing
+    maybeGetPayoutInput
+      :: Core.PayoutDatum v
+      -> (Chain.TxOutRef, Core.Payout v)
+      -> Either
+          (ConstraintError v)
+          (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)))
+    maybeGetPayoutInput payoutDatum (txOutRef, Core.Payout{..})
+      | case marloweVersion of
+          Core.MarloweV1 -> datum == payoutDatum = do
+        txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
+        plutusScriptOrRefInput <- note ToCardanoError $ C.PReferenceScript
+          <$> toCardanoTxIn payoutScriptUTxO
+          <*> (Just <$> toCardanoScriptHash payoutScriptHash)
+        let
+          scriptWitness = C.PlutusScriptWitness
+            C.PlutusScriptV2InBabbage
+            C.PlutusScriptV2
+            plutusScriptOrRefInput
+            (C.ScriptDatumForTxIn $ toCardanoScriptData $ Core.toChainPayoutDatum marloweVersion datum)
+            (C.ScriptDataConstructor 1 [])
+            (C.ExecutionUnits 0 0)
+        pure $ Just (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
+      | otherwise = pure Nothing
 
-    toCardanoWitness :: Maybe Chain.Redeemer -> Chain.TransactionOutput -> Maybe (C.Witness C.WitCtxTxIn C.BabbageEra)
-    toCardanoWitness mredeemer Chain.TransactionOutput{..} = do
-      credential <- paymentCredential address
-      case credential of
-        Chain.PaymentKeyCredential _ -> Just $ C.KeyWitness C.KeyWitnessForSpending
-        Chain.ScriptCredential scriptHash -> do
-          datum' <- datum
-          plutusScriptOrRefInput <- getReferenceScript scriptHash
-          pure
-            $ C.ScriptWitness C.ScriptWitnessForSpending
-            $ C.PlutusScriptWitness
-                C.PlutusScriptV2InBabbage
-                C.PlutusScriptV2
-                plutusScriptOrRefInput
-                (C.ScriptDatumForTxIn $ toCardanoScriptData datum')
-                (toCardanoScriptData $ maybe (Chain.fromPlutusData $ P.toData ()) Chain.unRedeemer mredeemer)
-            $ C.ExecutionUnits 0 0
+    toNonEmpty [] = Nothing
+    toNonEmpty (x: xs) = Just $ x NE.:| xs
 
     solveTxIns = do
       walletInputs <- getWalletInputs

@@ -34,7 +34,6 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Scripts as V1
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
-import Text.Read (readMaybe)
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
 -- the contract.

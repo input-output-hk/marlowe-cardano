@@ -6,9 +6,9 @@ import Control.Arrow ((>>>))
 import Data.Foldable (asum)
 import Data.List.Split (splitOn)
 import Data.String (fromString)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32, parseTxOutRef)
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..), parseTxOutRef)
+  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..))
 import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 import System.Environment (lookupEnv)

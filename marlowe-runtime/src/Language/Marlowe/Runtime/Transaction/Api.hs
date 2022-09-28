@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyDataDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -9,7 +11,6 @@ module Language.Marlowe.Runtime.Transaction.Api
 import Cardano.Api
   ( AsType(..)
   , BabbageEra
-  , ScriptDataSupportedInEra(..)
   , SerialiseAsRawBytes(serialiseToRawBytes)
   , Tx
   , TxBody
@@ -24,7 +25,6 @@ import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.Some (Some(..))
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
@@ -54,7 +54,7 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Contract v
     -- ^ The contract to run
-    -> MarloweTxCommand Void CreateError
+    -> MarloweTxCommand Void (CreateError v)
         ( ContractId -- The ID of the contract (tx output that carries the datum)
         , TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
         )
@@ -78,7 +78,7 @@ data MarloweTxCommand status err result where
     -- is computed from the contract.
     -> Redeemer v
     -- ^ The inputs to apply.
-    -> MarloweTxCommand Void ApplyInputsError
+    -> MarloweTxCommand Void (ApplyInputsError v)
         ( TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
         )
 
@@ -96,7 +96,7 @@ data MarloweTxCommand status err result where
     -- ^ The ID of the contract to apply the inputs to.
     -> PayoutDatum v
     -- ^ The names of the roles whose assets to withdraw.
-    -> MarloweTxCommand Void WithdrawError
+    -> MarloweTxCommand Void (WithdrawError v)
         ( TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
         )
 
@@ -111,45 +111,51 @@ data MarloweTxCommand status err result where
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
-    TagCreate :: Tag MarloweTxCommand Void CreateError (ContractId, TxBody BabbageEra)
-    TagApplyInputs :: Tag MarloweTxCommand Void ApplyInputsError (TxBody BabbageEra)
-    TagWithdraw :: Tag MarloweTxCommand Void WithdrawError (TxBody BabbageEra)
+    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra)
+    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra)
+    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   data JobId MarloweTxCommand stats err result where
     JobIdSubmit :: TxId -> JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   tagFromCommand = \case
-    Create {}        -> TagCreate
-    ApplyInputs {} -> TagApplyInputs
-    Withdraw {}        -> TagWithdraw
+    Create _ version _ _ _ _ -> TagCreate version
+    ApplyInputs version _ _ _ _ _ -> TagApplyInputs version
+    Withdraw version _ _ _        -> TagWithdraw version
     Submit _                -> TagSubmit
 
   tagFromJobId = \case
     JobIdSubmit _ -> TagSubmit
 
   tagEq t1 t2 = case (t1, t2) of
-    (TagCreate, TagCreate) -> pure (Refl, Refl, Refl)
-    (TagCreate, _) -> Nothing
-    (TagApplyInputs, TagApplyInputs) -> pure (Refl, Refl, Refl)
-    (TagApplyInputs, _) -> Nothing
-    (TagWithdraw, TagWithdraw) -> pure (Refl, Refl, Refl)
-    (TagWithdraw, _) -> Nothing
+    (TagCreate MarloweV1, TagCreate MarloweV1) -> pure (Refl, Refl, Refl)
+    (TagCreate _, _) -> Nothing
+    (TagApplyInputs MarloweV1, TagApplyInputs MarloweV1) -> pure (Refl, Refl, Refl)
+    (TagApplyInputs _, _) -> Nothing
+    (TagWithdraw MarloweV1, TagWithdraw MarloweV1) -> pure (Refl, Refl, Refl)
+    (TagWithdraw _, _) -> Nothing
     (TagSubmit, TagSubmit) -> pure (Refl, Refl, Refl)
     (TagSubmit, _) -> Nothing
 
   putTag = \case
-    TagCreate -> putWord8 0x01
-    TagApplyInputs -> putWord8 0x02
-    TagWithdraw -> putWord8 0x03
+    TagCreate version -> putWord8 0x01 *> put (SomeMarloweVersion version)
+    TagApplyInputs version -> putWord8 0x02 *> put (SomeMarloweVersion version)
+    TagWithdraw version -> putWord8 0x03 *> put (SomeMarloweVersion version)
     TagSubmit -> putWord8 0x04
 
   getTag = do
     tag <- getWord8
     case tag of
-      0x01 -> pure $ SomeTag TagCreate
-      0x02 -> pure $ SomeTag TagApplyInputs
-      0x03 -> pure $ SomeTag TagWithdraw
+      0x01 -> do
+        SomeMarloweVersion version <- get
+        pure $ SomeTag $ TagCreate version
+      0x02 -> do
+        SomeMarloweVersion version <- get
+        pure $ SomeTag $ TagApplyInputs version
+      0x03 -> do
+        SomeMarloweVersion version <- get
+        pure $ SomeTag $ TagWithdraw version
       0x04 -> pure $ SomeTag TagSubmit
       _    -> fail $ "Invalid command tag: " <> show tag
 
@@ -157,14 +163,13 @@ instance Command MarloweTxCommand where
     JobIdSubmit txId -> put txId
 
   getJobId = \case
-    TagCreate -> fail "create has no job ID"
-    TagApplyInputs -> fail "apply inputs has no job ID"
-    TagWithdraw -> fail "withdraw has no job ID"
+    TagCreate _ -> fail "create has no job ID"
+    TagApplyInputs _ -> fail "apply inputs has no job ID"
+    TagWithdraw _ -> fail "withdraw has no job ID"
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
     Create mStakeCredential version walletAddresses roles metadata contract -> do
-      put $ SomeMarloweVersion version
       case mStakeCredential of
         Nothing -> putWord8 0x01
         Just credential -> do
@@ -181,22 +186,19 @@ instance Command MarloweTxCommand where
       put $ fmap Aeson.encode metadata
       putContract version contract
     ApplyInputs version walletAddresses contractId invalidBefore invalidHereafter redeemer -> do
-      put $ SomeMarloweVersion version
       put walletAddresses
       put contractId
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidBefore
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidHereafter
       putRedeemer version redeemer
     Withdraw version walletAddresses contractId payoutDatum -> do
-      put $ SomeMarloweVersion version
       put walletAddresses
       put contractId
       putPayoutDatum version payoutDatum
     Submit tx -> put $ serialiseToCBOR tx
 
   getCommand = \case
-    TagCreate -> do
-      SomeMarloweVersion version <- get
+    TagCreate version -> do
       mStakeCredentialTag <- getWord8
       mStakeCredential <- case mStakeCredentialTag of
         0x01 -> pure Nothing
@@ -223,8 +225,8 @@ instance Command MarloweTxCommand where
         Nothing       -> fail "failed to parse metadata JSON"
         Just metadata -> pure metadata
       pure $ Create mStakeCredential version walletAddresses roles metadata contract
-    TagApplyInputs -> do
-      SomeMarloweVersion version <- get
+
+    TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
       invalidBefore <- getWord8 >>= \case
@@ -237,12 +239,13 @@ instance Command MarloweTxCommand where
         t -> fail $ "Invalid Maybe tag: " <> show t
       redeemer <- getRedeemer version
       pure $ ApplyInputs version walletAddresses contractId invalidBefore invalidHereafter redeemer
-    TagWithdraw -> do
-      SomeMarloweVersion version <- get
+
+    TagWithdraw version -> do
       walletAddresses <- get
       contractId <- get
       payoutDatum <- getPayoutDatum version
       pure $ Withdraw version walletAddresses contractId payoutDatum
+
     TagSubmit -> do
       bytes <- get @ByteString
       Submit <$> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
@@ -250,39 +253,39 @@ instance Command MarloweTxCommand where
         Right tx -> pure tx
 
   putStatus = \case
-    TagCreate -> absurd
-    TagApplyInputs -> absurd
-    TagWithdraw -> absurd
+    TagCreate _ -> absurd
+    TagApplyInputs _ -> absurd
+    TagWithdraw _ -> absurd
     TagSubmit -> put
 
   getStatus = \case
-    TagCreate -> fail "create has no status"
-    TagApplyInputs -> fail "apply inputs has no status"
-    TagWithdraw -> fail "withdraw has no status"
+    TagCreate _ -> fail "create has no status"
+    TagApplyInputs _ -> fail "apply inputs has no status"
+    TagWithdraw _ -> fail "withdraw has no status"
     TagSubmit -> get
 
   putErr = \case
-    TagCreate -> put
-    TagApplyInputs -> put
-    TagWithdraw -> put
+    TagCreate MarloweV1 -> put
+    TagApplyInputs MarloweV1 -> put
+    TagWithdraw MarloweV1 -> put
     TagSubmit -> put
 
   getErr = \case
-    TagCreate -> get
-    TagApplyInputs -> get
-    TagWithdraw -> get
+    TagCreate MarloweV1 -> get
+    TagApplyInputs MarloweV1 -> get
+    TagWithdraw MarloweV1 -> get
     TagSubmit -> get
 
   putResult = \case
-    TagCreate -> \(contractId, txBody) -> put contractId *> putTxBody txBody
-    TagApplyInputs -> putTxBody
-    TagWithdraw -> putTxBody
+    TagCreate _ -> \(contractId, txBody) -> put contractId *> putTxBody txBody
+    TagApplyInputs _ -> putTxBody
+    TagWithdraw _ -> putTxBody
     TagSubmit -> put
 
   getResult = \case
-    TagCreate -> (,) <$> get <*> getTxBody
-    TagApplyInputs -> getTxBody
-    TagWithdraw -> getTxBody
+    TagCreate _ -> (,) <$> get <*> getTxBody
+    TagApplyInputs _ -> getTxBody
+    TagWithdraw _ -> getTxBody
     TagSubmit -> get
 
 putTxBody :: TxBody BabbageEra -> Put
@@ -302,23 +305,33 @@ data WalletAddresses = WalletAddresses
   }
   deriving (Eq, Show, Generic, Binary)
 
-data CreateError
-  = CreateConstraintError ConstraintError
+data CreateError v
+  = CreateConstraintError (ConstraintError v)
   | CreateLoadMarloweContextFailed LoadMarloweContextError
-  deriving (Eq, Show, Generic)
-  deriving anyclass Binary
+  deriving (Generic)
 
-data ApplyInputsError
-  = ApplyInputsConstraintError ConstraintError
+deriving instance Eq (CreateError 'V1)
+deriving instance Show (CreateError 'V1)
+instance Binary (CreateError 'V1)
+
+data ApplyInputsError v
+  = ApplyInputsConstraintError (ConstraintError v)
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
-  deriving (Eq, Show, Generic, Binary)
+  deriving (Generic)
 
-data WithdrawError
-  = WithdrawConstraintError ConstraintError
+deriving instance Eq (ApplyInputsError 'V1)
+deriving instance Show (ApplyInputsError 'V1)
+instance Binary (ApplyInputsError 'V1)
+
+data WithdrawError v
+  = WithdrawConstraintError (ConstraintError v)
   | WithdrawLoadMarloweContextFailed LoadMarloweContextError
-  deriving (Eq, Show, Generic)
-  deriving anyclass Binary
+  deriving (Generic)
+
+deriving instance Eq (WithdrawError 'V1)
+deriving instance Show (WithdrawError 'V1)
+instance Binary (WithdrawError 'V1)
 
 data LoadMarloweContextError
   = LoadMarloweContextErrorNotFound

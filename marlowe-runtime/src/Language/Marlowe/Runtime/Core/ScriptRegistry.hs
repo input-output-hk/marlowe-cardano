@@ -1,14 +1,12 @@
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Core.ScriptRegistry
   where
 
-import Cardano.Api
-  (AsType(..), Error(..), NetworkId(..), NetworkMagic(..), PlutusScript, PlutusScriptV2, SerialiseAsCBOR(..))
-import Data.Bifunctor (Bifunctor(first))
+import Cardano.Api (AsType(..), NetworkId(..), NetworkMagic(..), PlutusScript, PlutusScriptV2, SerialiseAsCBOR(..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
-import Data.Either (fromRight)
 import Data.Foldable (asum)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -20,14 +18,11 @@ import Language.Marlowe.Runtime.ChainSync.Api (Assets(..), Datum(..), ScriptHash
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
 
-newtype NetworkIdWithOrd = NetworkIdWithOrd NetworkId
-  deriving (Eq, Show)
-
-instance Ord NetworkIdWithOrd where
-  compare (NetworkIdWithOrd Mainnet) (NetworkIdWithOrd Mainnet) = EQ
-  compare (NetworkIdWithOrd Mainnet) (NetworkIdWithOrd _) = LT
-  compare (NetworkIdWithOrd _) (NetworkIdWithOrd Mainnet) = GT
-  compare (NetworkIdWithOrd (Testnet (NetworkMagic a))) (NetworkIdWithOrd (Testnet (NetworkMagic b))) =
+instance Ord NetworkId where
+  compare Mainnet Mainnet = EQ
+  compare Mainnet _ = LT
+  compare _ Mainnet = GT
+  compare (Testnet (NetworkMagic a)) (Testnet (NetworkMagic b)) =
     compare a b
 
 data ReferenceScriptUtxo = ReferenceScriptUtxo
@@ -40,12 +35,12 @@ data ReferenceScriptUtxo = ReferenceScriptUtxo
 data MarloweScripts = MarloweScripts
   { marloweScript :: ScriptHash
   , payoutScript :: ScriptHash
-  , marloweScriptUTxOs :: Map NetworkIdWithOrd ReferenceScriptUtxo
-  , payoutScriptUTxOs :: Map NetworkIdWithOrd ReferenceScriptUtxo
+  , marloweScriptUTxOs :: Map NetworkId ReferenceScriptUtxo
+  , payoutScriptUTxOs :: Map NetworkId ReferenceScriptUtxo
   } deriving (Show, Eq, Ord)
 
-previewNetworkId :: NetworkIdWithOrd
-previewNetworkId = NetworkIdWithOrd $ Testnet $ NetworkMagic 2
+previewNetworkId :: NetworkId
+previewNetworkId = Testnet $ NetworkMagic 2
 
 -- | The current pair of static script hashes for Marlowe V1 as of the current git
 -- commit. Enforced in the test suite for the Marlowe Runtime.
