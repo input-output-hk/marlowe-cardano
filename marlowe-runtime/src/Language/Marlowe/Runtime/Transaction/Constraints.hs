@@ -13,6 +13,7 @@ import qualified Cardano.Api.Shelley as C
 import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
+import Data.Crosswalk (Crosswalk(crosswalk, sequenceL))
 import Data.Function (on)
 import Data.List (find, nub)
 import qualified Data.List.NonEmpty as NE
@@ -411,6 +412,10 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
         note (PayoutInputNotFound payoutDatum) . toNonEmpty
           =<< wither (maybeGetPayoutInput payoutDatum) availableUtxoList
 
+    -- Because Data.List.NonEmpty.fromList is a partial function(!)
+    toNonEmpty [] = Nothing
+    toNonEmpty (x: xs) = Just $ x NE.:| xs
+
     maybeGetPayoutInput
       :: Core.PayoutDatum v
       -> (Chain.TxOutRef, Core.Payout v)
@@ -435,15 +440,42 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
         pure $ Just (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
       | otherwise = pure Nothing
 
-    toNonEmpty [] = Nothing
-    toNonEmpty (x: xs) = Just $ x NE.:| xs
-
     solveTxIns = do
       walletInputs <- getWalletInputs
       marloweInputs <- maybeToList <$> getMarloweInput
       payoutInputs <- getPayoutInputs
       pure $ walletInputs <> marloweInputs <> payoutInputs
-    solveTxInsReference = undefined
+
+    solveTxInsReference :: Either (ConstraintError v) (C.TxInsReference C.BuildTx C.BabbageEra)
+    solveTxInsReference = maybe (pure C.TxInsReferenceNone) (fmap (C.TxInsReference C.ReferenceTxInsScriptsInlineDatumsInBabbageEra) . sequence)
+      -- sequenceL is from the 'Crosswalk' type class. It behaves similarly to
+      -- 'sequenceA' except that it uses 'Align' semantics instead of
+      -- 'Applicative' semantics for merging results. Here is an example of the
+      -- difference this makes in practice:
+      --
+      -- sequenceL :: (Crosswalk t  , Align f      ) => t (f a) -> f (t a)
+      -- sequenceA :: (Traversable t, Applicative m) => t (f a) -> f (t a)
+      --
+      -- sequenceA [Nothing, Just 2, Just 1] = Nothing
+      -- sequenceA [Nothing, Nothing, Nothing] = Nothing
+      -- sequenceL [Nothing, Just 2, Just 1] = Just [2, 1]
+      -- sequenceL [Nothing, Nothing, Nothing] = Nothing
+     $ sequenceL [marloweTxInReference, payoutTxInReference]
+
+    -- Only include the marlowe reference script if we are consuming a marlowe
+    -- input.
+    marloweTxInReference :: Maybe (Either (ConstraintError v) C.TxIn)
+    marloweTxInReference = case marloweInputConstraints of
+      MarloweInputConstraintsNone -> Nothing
+      _ -> Just $ note ToCardanoError $ toCardanoTxIn marloweScriptUTxO
+
+    -- Only include the payout reference script if we are consuming any payout
+    -- inputs.
+    payoutTxInReference :: Maybe (Either (ConstraintError v) C.TxIn)
+    payoutTxInReference
+      | Set.null payoutInputConstraints = Nothing
+      | otherwise = Just $ note ToCardanoError $ toCardanoTxIn payoutScriptUTxO
+
     solveTxOuts = undefined
     solveTxValidityRange = undefined
     solveTxMetadata = undefined
