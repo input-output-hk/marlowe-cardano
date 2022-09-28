@@ -13,14 +13,11 @@ stScriptOperations:
   - tag: Mint
     soCurrencyNickname: Trivial
     soTokenDistribution:
-      - taAmount: 1
-        taTokenName:
-          unTokenName: Party
-        taWalletNickname: Party
+      - [ Party, Party, 1 ]
 
   - tag: Initialize
     soContractNickname: Trivial
-    soMinAda: 10000000
+    soMinAda: 3000000
     soRoleCurrency: Trivial
     soContractSource:
       template:
@@ -28,7 +25,7 @@ stScriptOperations:
         utDepositLovelace: 15000000
         utParty:
           role_token: Party
-        utWithdrawalLovelace: 15000000
+        utWithdrawalLovelace: 12500000
         utTimeout:
           relative: 1000000
 
@@ -56,6 +53,25 @@ stScriptOperations:
       relative: -1000
     soMaximumTime:
       relative: 8000
+
+  - tag: AutoRun
+    soContractNickname: Trivial
+
+  - tag: CheckBalance
+    soWalletNickname: Party
+    soBalance:
+      - [ADA, 85]
+      - [Trivial, Party, 1]
+
+  - tag: Withdraw
+    soContractNickname: Trivial
+    soWalletNickname: Party
+
+  - tag: CheckBalance
+    soWalletNickname: Party
+    soBalance:
+      - ["ADA", "97.5"]
+      - ["Trivial", "Party", 1]
 
   - tag: Prepare
     soContractNickname: Trivial

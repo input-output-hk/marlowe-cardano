@@ -29,14 +29,16 @@ printSo SoName po = printName po
   where
     printName AutoRun {}      = "AutoRun"
     printName BurnAll {}      = "BurnAll"
+    printName CheckBalance {} = "CheckBalance"
     printName CreateWallet {} = "CreateWallet"
-    printName FundWallet {}   = "FundWallet"
+    printName FundWallets {}  = "FundWallets"
     printName Mint {}         = "Mint"
     printName Initialize {}   = "Initialize"
     printName Prepare {}      = "Prepare"
     printName Fail {}         = "Fail"
     printName Publish {}      = "Publish"
     printName SplitWallet {}  = "SplitWallet"
+    printName Withdraw {}     = "Withdraw"
 
 printSoMsg :: SoFormat -> ScriptOperation -> String -> String
 printSoMsg format po = printTraceMsg (printSo format po)

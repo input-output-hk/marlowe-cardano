@@ -1,6 +1,10 @@
-stTestName: Burning operation with a single party
+stTestName: Single party minting
 
 stScriptOperations:
+
+  - tag: CheckBalance
+    soWalletNickname: Faucet
+    soBalance: []
 
   - tag: Mint
     soCurrencyNickname: Currency
@@ -15,11 +19,3 @@ stScriptOperations:
       - [Currency, Token-1, 1]
       - [Currency, Token-2, 2]
       - [Currency, Token-3, 3]
-
-  - tag: BurnAll
-    soCurrencyNickname: Currency
-
-  - tag: CheckBalance
-    soWalletNickname: Faucet
-    soBalance: []
-

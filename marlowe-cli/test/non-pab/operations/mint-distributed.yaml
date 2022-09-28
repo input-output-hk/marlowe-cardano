@@ -1,4 +1,4 @@
-stTestName: Burning operation which involves multiple parties
+stTestName: Minting with multi party token distribution
 
 stScriptOperations:
 
@@ -15,19 +15,18 @@ stScriptOperations:
       - [Party-2, Token-2, 2]
       - [Faucet, Token-3, 3]
 
-  - tag: BurnAll
-    soCurrencyNickname: Currency
-
   - tag: CheckBalance
     soWalletNickname: Party-1
-    soBalance: []
+    soBalance:
+      - [Currency, Token-1, 1]
 
   - tag: CheckBalance
     soWalletNickname: Party-2
-    soBalance: []
+    soBalance:
+      - [Currency, Token-2, 2]
 
   - tag: CheckBalance
     soWalletNickname: Faucet
-    soBalance: []
-
+    soBalance:
+      - [Currency, Token-3, 3]
 

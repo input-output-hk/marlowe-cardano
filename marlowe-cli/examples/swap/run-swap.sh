@@ -346,42 +346,56 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_B_ADDRESS" | s
 
 echo "## Clean Up"
 
-BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
+echo "Burning tokens issued of PARTY_A:"
 
-TX_CLEANUP_TOKEN_B=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                   \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                        --asset-only "$TOKEN_B" "$PARTY_A_ADDRESS" \
-| sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/'                  \
-)
+marlowe-cli -- util burn --testnet-magic "$MAGIC" \
+                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                         --issuer "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
+                         --expires $MINT_EXPIRES \
+                         --token-provider "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
+                         --token-provider "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
+                         --submit 600 \
+                         --out-file /dev/null
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                            \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"           \
-                               --tx-in "$TX_2"#0                                   \
-                               --tx-in "$TX_CLEANUP_TOKEN_B"                       \
-                               --tx-out "$BURN_ADDRESS+1500000+$AMOUNT_B $TOKEN_B" \
-                               --required-signer "$PARTY_A_PAYMENT_SKEY"           \
-                               --change-address "$FAUCET_ADDRESS"                  \
-                               --out-file /dev/null                                \
-                               --submit 600
+echo "Burning tokens issued by PARTY_B:"
+
+marlowe-cli util burn --testnet-magic "$MAGIC" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --issuer "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
+                      --expires $MINT_EXPIRES \
+                      --token-provider "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
+                      --token-provider "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
+                      --submit 600 \
+                      --out-file /dev/null
+
+
+echo "Sending back funds:"
+
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$PARTY_A_ADDRESS" \
+                           --required-signer "$PARTY_A_PAYMENT_SKEY" \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
+
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$PARTY_B_ADDRESS" \
+                           --required-signer "$PARTY_B_PAYMENT_SKEY" \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
+
+
+echo "Here are the UTxOs at the second party $PARTY_A_NAME's address after the cleanup:"
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_A_ADDRESS"
 
-TX_CLEANUP_TOKEN_A=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                   \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                        --asset-only "$TOKEN_A" "$PARTY_B_ADDRESS" \
-| sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/'                  \
-)
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                            \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"           \
-                               --tx-in "$TX_3"#0                                   \
-                               --tx-in "$TX_CLEANUP_TOKEN_A"                       \
-                               --tx-out "$BURN_ADDRESS+1500000+$AMOUNT_A $TOKEN_A" \
-                               --required-signer "$PARTY_B_PAYMENT_SKEY"           \
-                               --change-address "$FAUCET_ADDRESS"                  \
-                               --out-file /dev/null                                \
-                               --submit 600
+echo "Here are the UTxOs at the second party $PARTY_B_NAME's address after the cleanup:"
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_B_ADDRESS"
+
+

@@ -36,6 +36,7 @@ module Language.Marlowe.CLI.Run
   , runTransactionImpl
     -- * Roles
   , autoWithdrawFunds
+  , autoWithdrawFundsImpl
   , withdrawFunds
     -- * Input
   , makeChoice
@@ -100,7 +101,8 @@ import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction
   (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey, makeTxOut', selectCoins, submitBody)
 import Language.Marlowe.CLI.Types
-  ( CliEnv
+  ( AnUTxO(AnUTxO, unAnUTxO)
+  , CliEnv
   , CliError(..)
   , DatumInfo(..)
   , MarlowePlutusVersion
@@ -975,8 +977,13 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
         signingKeys <- mapM readSigningKey signingKeyFiles
         -- Read any metadata for the transaction.
         metadata <- readMaybeMetadata metadataFile
+        let
+          token = Token (mtRolesCurrency marloweOut') roleName
+          -- Compute the validator information.
+          rolePayoutValidator = mtRoleValidator marloweOut'
+
         -- Write the transaction file.
-        (txBody :: TxBody era) <- autoWithdrawFundsImpl connection marloweOut' roleName changeAddress signingKeys metadata timeout printStats invalid
+        (txBody :: TxBody era) <- autoWithdrawFundsImpl connection token rolePayoutValidator Nothing changeAddress signingKeys Nothing metadata timeout printStats invalid
 
         doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (unTxBodyFile bodyFile) Nothing txBody
         pure $ getTxId txBody
@@ -987,6 +994,7 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
       (ScriptDataInAlonzoEra, ScriptDataInBabbageEra)  -> throwError "Running in Alonzo era, read file in Babbage era"
       (ScriptDataInBabbageEra, ScriptDataInAlonzoEra)  -> throwError "Running in Babbage era, read file in Alonzo era"
 
+type FilterPayouts era = [AnUTxO era] -> [AnUTxO era]
 
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.
 autoWithdrawFundsImpl :: forall era lang m
@@ -995,28 +1003,29 @@ autoWithdrawFundsImpl :: forall era lang m
                   => MonadIO m
                   => IsPlutusScriptLanguage lang
                   => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
-                  -> MarloweTransaction lang era             -- ^ The JSON file with the Marlowe state and contract.
-                  -> TokenName                               -- ^ The role name for the redemption.
+                  -> Token                                   -- ^ The role token.
+                  -> ValidatorInfo lang era                  -- ^ The role payout validator.
+                  -> Maybe (SlotNo, SlotNo)                  -- ^ Transaction validity range.
                   -> AddressInEra era                        -- ^ The change address.
                   -> [SomePaymentSigningKey]                 -- ^ Required signing keys.
+                  -> Maybe (FilterPayouts era)               -- ^ Filtering option so transactoin limits can be imposed.
                   -> TxMetadataInEra era                     -- ^ The file containing JSON metadata, if any.
                   -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                   -> PrintStats                              -- ^ Whether to print statistics about the transaction.
                   -> Bool                                    -- ^ Assertion that the transaction is invalid.
                   -> m (TxBody era)                          -- ^ Action to build the transaction body.
-autoWithdrawFundsImpl connection marloweOut roleName changeAddress signingKeys metadata timeout (PrintStats printStats) invalid =
+autoWithdrawFundsImpl connection token validatorInfo range changeAddress signingKeys possibleFilter metadata timeout (PrintStats printStats) invalid =
   do
     -- Fetch the protocol parameters.
     protocol <- queryInEra connection QueryProtocolParameters
     let
-      roleCurrency = mtRolesCurrency marloweOut
+      Token rolesCurrency roleName = token
+      filterPayoutUtxos = fromMaybe id possibleFilter
       -- Build the datum corresponding to the role name.
-      roleDatum = buildRoleDatum (Token roleCurrency roleName)
+      roleDatum = buildRoleDatum token
     -- Compute the hash of the role name.
     roleHash <- liftCli . toCardanoScriptDataHash . diHash $ roleDatum
     let
-      -- Compute the validator information.
-      validatorInfo = mtRoleValidator marloweOut
       -- Fetch the role-payout validator script.
       roleScript = validatorInfoScriptOrReference validatorInfo
       -- Fetch the role address.
@@ -1030,8 +1039,8 @@ autoWithdrawFundsImpl connection marloweOut roleName changeAddress signingKeys m
           TxOutDatumNone             -> False
           TxOutDatumHash _ datumHash -> datumHash == roleHash
     -- Find the role token.
-    utxos <-
-      fmap (filter (checkRole . snd) . M.toList . unUTxO)
+    allPayouts <-
+      fmap (map AnUTxO . filter (checkRole . snd) . M.toList . unUTxO)
         . queryInEra connection
         . QueryUTxO
         . QueryUTxOByAddress
@@ -1039,15 +1048,17 @@ autoWithdrawFundsImpl connection marloweOut roleName changeAddress signingKeys m
         . toAddressAny'
         $ roleAddress
     -- Set the value of one role token.
-    role <- liftCli $ toCardanoValue $ singleton (mtRolesCurrency marloweOut) roleName 1
+    role <- liftCli $ toCardanoValue $ singleton rolesCurrency roleName 1
     let
+      utxos = filterPayoutUtxos allPayouts
       -- Build the spending from the script.
-      spend = buildPayFromScript roleScript (diDatum roleDatum) roleRedeemer . fst <$> utxos
+      spend = buildPayFromScript roleScript (diDatum roleDatum) roleRedeemer . fst . unAnUTxO <$> utxos
       -- Find how much is being spent from the script.
       -- The output value should include the spending from the script and the role token.
-      withdrawn = mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos]
+      withdrawn = mconcat [txOutValueToValue value | AnUTxO (_, TxOut _ value _ _) <- utxos]
     -- Ensure that the output meets the min-Ada requirement.
     output <- ensureMinUtxo protocol (changeAddress, Nothing, withdrawn <> role) >>= uncurry3 makeTxOut'
+
     -- Select the coins.
     (collateral, extraInputs, revisedOutputs) <-
       selectCoins
@@ -1063,7 +1074,7 @@ autoWithdrawFundsImpl connection marloweOut roleName changeAddress signingKeys m
         spend Nothing
         [] extraInputs revisedOutputs
         (Just collateral) changeAddress
-        (mtRange marloweOut)
+        range
         (hashSigningKey <$> signingKeys)
         TxMintNone
         metadata

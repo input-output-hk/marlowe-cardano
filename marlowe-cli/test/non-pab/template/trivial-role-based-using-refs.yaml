@@ -10,35 +10,28 @@ stScriptOperations:
 
   - tag: FundWallet
     soValues:
-      [ 20000000, 20000000, 20000000, 20000000, 20000000 ]
+      - 100000000
     soWalletNickname: Party
 
   - tag: Mint
     soCurrencyNickname: Trivial
     soTokenDistribution:
-      - taAmount: 1
-        taTokenName:
-          unTokenName: Party
-        taWalletNickname: Party
+      - [ Party, Party, 1 ]
 
   - tag: Initialize
     soContractNickname: Trivial
-    soSubmitter: Party
-    soMinAda: 10000000
+    soMinAda: 3000000
     soRoleCurrency: Trivial
     soContractSource:
       template:
         tag: UseTrivial
         utDepositLovelace: 15000000
         utParty:
-            role_token: Party
-        utWithdrawalLovelace: 15000000
+          role_token: Party
+        # The trivial contract performs a withrdrawal after the first notify
+        utWithdrawalLovelace: 12500000 # 12.5 ADA
         utTimeout:
           relative: 1000000
-
-  - tag: AutoRun
-    soSubmitter: Party
-    soContractNickname: Trivial
 
   - tag: Prepare
     soContractNickname: Trivial
@@ -56,29 +49,59 @@ stScriptOperations:
     soMaximumTime:
       relative: 8000
 
-  - tag: AutoRun
-    soSubmitter: Party
-    soContractNickname: Trivial
-
+  # After this notify input we should have ready to grab payout output.
   - tag: Prepare
     soContractNickname: Trivial
     soInputs:
-      - input_notify
-    soMinimumTime:
-      relative: -1000
-    soMaximumTime:
-      relative: 8000
-
-  - tag: Prepare
-    soContractNickname: Trivial
-    soInputs:
-      - input_notify
+      - "input_notify"
     soMinimumTime:
       relative: -1000
     soMaximumTime:
       relative: 8000
 
   - tag: AutoRun
-    soSubmitter: Party
     soContractNickname: Trivial
+
+  # But the money should be still on the role payout output.
+  - tag: CheckBalance
+    soWalletNickname: Party
+    soBalance:
+      - [ADA, 85]
+      - [Trivial, Party, 1]
+
+  # Now we actually grab this payout and send it to the Party.
+  - tag: Withdraw
+    soContractNickname: Trivial
+    soWalletNickname: Party
+
+  # The withdrawn money should be visible in the wallet.
+  - tag: CheckBalance
+    soWalletNickname: Party
+    soBalance:
+      - [ADA, "97.5"]
+      - [Trivial, Party, 1]
+
+  - tag: Prepare
+    soContractNickname: Trivial
+    soInputs:
+      - "input_notify"
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: AutoRun
+    soContractNickname: Trivial
+
+  # Now we actually grab this payout and send it to the Party.
+  - tag: Withdraw
+    soContractNickname: Trivial
+    soWalletNickname: Party
+
+  # The withdrawn money should be visible in the wallet.
+  - tag: CheckBalance
+    soWalletNickname: Party
+    soBalance:
+      - [ADA, "100"]
+      - [Trivial, Party, 1]
 
