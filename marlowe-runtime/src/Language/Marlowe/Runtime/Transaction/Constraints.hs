@@ -266,8 +266,8 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
       }
 
 -- | Errors that can occur when trying to solve the constraints.
-data UnsolvableConstraintsError
-  = UnsolvableConstraintsError
+data ConstraintError
+  = ConstraintError
   | ToCardanoError
   deriving (Eq, Show, Generic, Binary)
 
@@ -300,7 +300,7 @@ type SolveConstraints v
   =  MarloweContext v
   -> WalletContext
   -> TxConstraints v
-  -> Either UnsolvableConstraintsError (C.TxBody C.BabbageEra)
+  -> Either ConstraintError (C.TxBody C.BabbageEra)
 
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
@@ -315,7 +315,7 @@ solveConstraints
   -> C.ProtocolParameters
   -> SolveConstraints v
 solveConstraints networkId start history protocol marloweCtx walletCtx constraints = do
-  Left UnsolvableConstraintsError
+  Left ConstraintError
 
 
 mkInitialTxBodyContent
@@ -324,7 +324,7 @@ mkInitialTxBodyContent
   -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
-  -> Either UnsolvableConstraintsError (C.TxBodyContent C.BuildTx C.BabbageEra)
+  -> Either ConstraintError (C.TxBodyContent C.BuildTx C.BabbageEra)
 mkInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx constraints = do
   txIns <- mkTxIns
   txInsReference <- mkTxInsReference
@@ -395,9 +395,10 @@ mkInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx cons
       (,) <$> toCardanoTxIn txOutRef <*> (C.BuildTxWith <$> toCardanoWitness mredeemer txOut)
 
     mkTxIns = do
-      walletInputs <- getWalletInputs
+      let addNothing3rd (a, b) = (a, b, Nothing)
+      walletInputs <- fmap addNothing3rd <$> getWalletInputs
       marloweInputs <- maybeToList <$> getMarloweInput
-      payoutInputs <- getPayoutInputs
+      payoutInputs <- fmap addNothing3rd <$> getPayoutInputs
       note ToCardanoError $ mapM toCardanoTxInPair $ walletInputs <> marloweInputs <> payoutInputs
     mkTxInsReference = undefined
     mkTxOuts = undefined

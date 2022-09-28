@@ -32,7 +32,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api
   (Address, BlockHeader, ScriptHash, TokenName, TxId, TxOutRef, getUTCTime, putUTCTime)
 import Language.Marlowe.Runtime.Core.Api
-import Language.Marlowe.Runtime.Transaction.Constraints (UnsolvableConstraintsError)
+import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError)
 import Network.Protocol.Job.Types (Command(..), SomeTag(..))
 
 -- | The low-level runtime API for building and submitting transactions.
@@ -303,19 +303,19 @@ data WalletAddresses = WalletAddresses
   deriving (Eq, Show, Generic, Binary)
 
 data CreateError
-  = CreateUnsolvableConstraints UnsolvableConstraintsError
+  = CreateConstraintError ConstraintError
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   deriving (Eq, Show, Generic)
   deriving anyclass Binary
 
 data ApplyInputsError
-  = ApplyInputsUnsolvableConstraints UnsolvableConstraintsError
+  = ApplyInputsConstraintError ConstraintError
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   deriving (Eq, Show, Generic, Binary)
 
 data WithdrawError
-  = WithdrawUnsolvableConstraints UnsolvableConstraintsError
+  = WithdrawConstraintError ConstraintError
   | WithdrawLoadMarloweContextFailed LoadMarloweContextError
   deriving (Eq, Show, Generic)
   deriving anyclass Binary

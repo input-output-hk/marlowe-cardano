@@ -225,7 +225,7 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
       , payoutScriptHash = payoutScript
       }
   txBody <- except
-    $ first CreateUnsolvableConstraints
+    $ first CreateConstraintError
     $ solveConstraints marloweContext walletContext constraints
   pure (ContractId $ findMarloweOutput txBody, txBody)
   where
@@ -281,7 +281,7 @@ execApplyInputs
         inputs
     walletContext <- lift $ loadWalletContext addresses
     except
-      $ first ApplyInputsUnsolvableConstraints
+      $ first ApplyInputsConstraintError
       $ solveConstraints marloweContext walletContext constraints
 
 execWithdraw
@@ -300,7 +300,7 @@ execWithdraw solveConstraints loadWalletContext loadMarloweContext version addre
     $ ExceptT
     $ loadMarloweContext version contractId
   except
-    $ first WithdrawUnsolvableConstraints
+    $ first WithdrawConstraintError
     $ solveConstraints marloweContext walletContext constraints
 
 execSubmit
