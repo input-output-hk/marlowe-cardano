@@ -7,6 +7,7 @@ module Language.Marlowe.Runtime.Transaction.Query
 
 import Cardano.Api (NetworkId)
 import qualified Cardano.Api as C
+import Data.Foldable (find)
 import Data.List (scanl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
@@ -19,7 +20,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   (Credential(..), StakeReference(..), TxOutRef, paymentCredential, stakeReference)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry
-  (MarloweScripts(..), NetworkIdWithOrd(NetworkIdWithOrd), getCurrentScripts)
+  (MarloweScripts(..), NetworkIdWithOrd(NetworkIdWithOrd), getCurrentScripts, getScripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -72,19 +73,24 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
                         networkId
                         (C.PaymentCredentialByScript payoutScriptHash)
                         C.NoStakeAddress
-                let scripts = getCurrentScripts actualVersion
-                marloweScriptUTxO <- lookupMarloweScriptUtxo networkId scripts
-                payoutScriptUTxO <- lookupPayoutScriptUtxo networkId scripts
+                let scripts = getScripts actualVersion
+                marloweScriptHash <- maybe (Left $ InvalidScriptAddress scriptAddress) Right do
+                  credential <- paymentCredential scriptAddress
+                  case credential of
+                    PaymentKeyCredential _ -> Nothing
+                    ScriptCredential hash -> Just hash
+                let matchesScriptHash MarloweScripts{..} = marloweScript == marloweScriptHash
+                marloweScripts <- case find matchesScriptHash scripts of
+                  Nothing -> Left $ UnknownMarloweScript marloweScriptHash
+                  Just marloweScripts -> Right marloweScripts
+                marloweScriptUTxO <- lookupMarloweScriptUtxo networkId marloweScripts
+                payoutScriptUTxO <- lookupPayoutScriptUtxo networkId marloweScripts
                 pure $ clientIdle $ pure
                   ( blockHeader
                   , MarloweContext
                       { marloweAddress = scriptAddress
                       , payoutScriptHash = payoutValidatorHash
-                      , marloweScriptHash = fromJust do
-                          credential <- paymentCredential scriptAddress
-                          case credential of
-                            PaymentKeyCredential _ -> Nothing
-                            ScriptCredential hash -> Just hash
+                      , marloweScriptHash
                       , payoutAddress
                       -- Get the script output of the create event.
                       , scriptOutput = Just createOutput
