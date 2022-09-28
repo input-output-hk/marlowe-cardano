@@ -318,21 +318,21 @@ solveConstraints networkId start history protocol marloweCtx walletCtx constrain
   Left ConstraintError
 
 
-mkInitialTxBodyContent
+solveInitialTxBodyContent
   :: C.ProtocolParameters
   -> Core.MarloweVersion v
   -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
   -> Either ConstraintError (C.TxBodyContent C.BuildTx C.BabbageEra)
-mkInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx constraints = do
-  txIns <- mkTxIns
-  txInsReference <- mkTxInsReference
-  txOuts <- mkTxOuts
-  txValidityRange <- mkTxValidityRange
-  txMetadata <- mkTxMetadata
-  txExtraKeyWits <- mkTxExtraKeyWits
-  txMintValue <- mkTxMintValue
+solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx constraints = do
+  txIns <- solveTxIns
+  txInsReference <- solveTxInsReference
+  txOuts <- solveTxOuts
+  txValidityRange <- solveTxValidityRange
+  txMetadata <- solveTxMetadata
+  txExtraKeyWits <- solveTxExtraKeyWits
+  txMintValue <- solveTxMintValue
   pure C.TxBodyContent
     { txIns
     , txInsCollateral = C.TxInsCollateralNone
@@ -356,12 +356,14 @@ mkInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx cons
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
+    getWalletInputs :: Either ConstraintError [(Chain.TxOutRef, Chain.TransactionOutput)]
     getWalletInputs = undefined
-    getMarloweInput = undefined
-    getPayoutInputs = undefined
 
-    note :: a -> Maybe b -> Either a b
-    note e = maybe (Left e) Right
+    getMarloweInput :: Either ConstraintError (Maybe (Chain.TxOutRef, Chain.TransactionOutput, Maybe Chain.Redeemer))
+    getMarloweInput = undefined
+
+    getPayoutInputs :: Either ConstraintError [(Chain.TxOutRef, Chain.TransactionOutput)]
+    getPayoutInputs = undefined
 
     getReferenceScript :: Chain.Address -> Maybe (C.PlutusScriptOrReferenceInput lang)
     getReferenceScript txOutAddr
@@ -394,15 +396,18 @@ mkInitialTxBodyContent protocol marloweVersion MarloweContext{..} walletCtx cons
     toCardanoTxInPair (txOutRef, txOut, mredeemer) =
       (,) <$> toCardanoTxIn txOutRef <*> (C.BuildTxWith <$> toCardanoWitness mredeemer txOut)
 
-    mkTxIns = do
+    solveTxIns = do
       let addNothing3rd (a, b) = (a, b, Nothing)
       walletInputs <- fmap addNothing3rd <$> getWalletInputs
       marloweInputs <- maybeToList <$> getMarloweInput
       payoutInputs <- fmap addNothing3rd <$> getPayoutInputs
       note ToCardanoError $ mapM toCardanoTxInPair $ walletInputs <> marloweInputs <> payoutInputs
-    mkTxInsReference = undefined
-    mkTxOuts = undefined
-    mkTxValidityRange = undefined
-    mkTxMetadata = undefined
-    mkTxExtraKeyWits = undefined
-    mkTxMintValue = undefined
+    solveTxInsReference = undefined
+    solveTxOuts = undefined
+    solveTxValidityRange = undefined
+    solveTxMetadata = undefined
+    solveTxExtraKeyWits = undefined
+    solveTxMintValue = undefined
+
+note :: a -> Maybe b -> Either a b
+note e = maybe (Left e) Right
