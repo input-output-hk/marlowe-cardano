@@ -62,6 +62,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , getUTCTime
   , isAfter
   , moveSchema
+  , parseTxOutRef
   , paymentCredential
   , putUTCTime
   , runtimeChainSeekCodec
@@ -103,8 +104,10 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function (on)
+import Data.List.Split (splitOn)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromJust)
 import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text (Text)
@@ -136,6 +139,7 @@ import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
+import Text.Read (readMaybe)
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
@@ -309,6 +313,16 @@ data TxOutRef = TxOutRef
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+instance IsString TxOutRef where
+  fromString = fromJust . parseTxOutRef
+
+parseTxOutRef :: String -> Maybe TxOutRef
+parseTxOutRef val = case splitOn "#" val of
+  [txId, txIx] -> TxOutRef
+    <$> (TxId <$> either (const Nothing) Just (decodeBase16 $ encodeUtf8 $ T.pack txId))
+    <*> (TxIx <$> readMaybe txIx)
+  _ -> Nothing
 
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)

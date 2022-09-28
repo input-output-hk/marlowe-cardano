@@ -103,7 +103,6 @@ library
     , plutus-ledger-api
     , semialign
     , some
-    , split
     , stm
     , text
     , these

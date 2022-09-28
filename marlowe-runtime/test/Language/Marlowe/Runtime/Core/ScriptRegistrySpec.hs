@@ -18,7 +18,11 @@ spec = traverse_ (withSomeMarloweVersion scriptSetSpec) [minBound..maxBound]
 scriptSetSpec :: MarloweVersion v -> Spec
 scriptSetSpec marloweVersion = do
   describe (show marloweVersion) do
-    let currentScripts = getCurrentScripts marloweVersion
+    let
+      currentScripts = (getCurrentScripts marloweVersion)
+        { marloweScriptUTxOs = mempty
+        , payoutScriptUTxOs = mempty
+        }
     let scripts = getScripts marloweVersion
     it "Contains the current scripts in its script set." do
       unless (Set.member currentScripts scripts) do
@@ -30,6 +34,8 @@ scriptSetSpec marloweVersion = do
     it "Should specify the correct current scripts" do
       let payoutScript = fromPlutusValidatorHash rolePayoutValidatorHash
       let marloweScript = fromPlutusValidatorHash marloweValidatorHash
+      let marloweScriptUTxOs = mempty
+      let payoutScriptUTxOs = mempty
       let currentScripts' = MarloweScripts{..}
       currentScripts `shouldBe` currentScripts'
 

@@ -97,6 +97,7 @@ library
     , plutus-ledger-api
     , profunctors
     , serialise
+    , split
     , stm
     , stm-delay
     , text
