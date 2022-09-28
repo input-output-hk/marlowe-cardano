@@ -126,7 +126,7 @@ run Options{..} = withSocketsDo do
     when (networkId == Mainnet) do
       die "Mainnet support is currently disabled."
     let
-      solveConstraints :: forall v. SolveConstraints v
+      solveConstraints :: SolveConstraints
       solveConstraints = Constraints.solveConstraints
         networkId
         systemStart

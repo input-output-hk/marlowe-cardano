@@ -2,6 +2,7 @@
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.Transaction.Constraints
   where
@@ -296,8 +297,10 @@ data MarloweContext v = MarloweContext
   , payoutScriptHash :: Chain.ScriptHash
   }
 
-type SolveConstraints v
-  =  MarloweContext v
+type SolveConstraints
+   = forall v
+   . Core.MarloweVersion v
+  -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
   -> Either ConstraintError (C.TxBody C.BabbageEra)
@@ -313,10 +316,10 @@ solveConstraints
   -> C.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
-  -> SolveConstraints v
-solveConstraints networkId start history protocol marloweCtx walletCtx constraints = do
+  -> SolveConstraints
+solveConstraints networkId start history protocol version marloweCtx walletCtx constraints = do
+  txBodyContent <- solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
   Left ConstraintError
-
 
 solveInitialTxBodyContent
   :: C.ProtocolParameters

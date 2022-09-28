@@ -79,7 +79,7 @@ newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer Marlo
 data TransactionServerDependencies = TransactionServerDependencies
   { acceptRunTransactionServer :: IO (RunTransactionServer IO)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
-  , solveConstraints :: forall v. SolveConstraints v
+  , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
   , slotConfig :: SlotConfig
@@ -111,7 +111,7 @@ data WorkerDependencies = WorkerDependencies
   , getSubmitJob :: TxId -> STM (Maybe SubmitJob)
   , trackSubmitJob :: TxId -> SubmitJob -> STM ()
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
-  , solveConstraints :: forall v. SolveConstraints v
+  , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
   , slotConfig :: SlotConfig
@@ -183,7 +183,7 @@ attachSubmit jobId getSubmitJob =
   atomically $ fmap (hoistAttach atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
 
 execCreate
-  :: SolveConstraints v
+  :: SolveConstraints
   -> LoadWalletContext
   -> NetworkId
   -> Maybe StakeCredential
@@ -226,7 +226,7 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
       }
   txBody <- except
     $ first CreateConstraintError
-    $ solveConstraints marloweContext walletContext constraints
+    $ solveConstraints version marloweContext walletContext constraints
   pure (ContractId $ findMarloweOutput txBody, txBody)
   where
   findMarloweOutput = \case
@@ -247,7 +247,7 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
 
 execApplyInputs
   :: SlotConfig
-  -> SolveConstraints v
+  -> SolveConstraints
   -> LoadWalletContext
   -> LoadMarloweContext
   -> MarloweVersion v
@@ -282,10 +282,10 @@ execApplyInputs
     walletContext <- lift $ loadWalletContext addresses
     except
       $ first ApplyInputsConstraintError
-      $ solveConstraints marloweContext walletContext constraints
+      $ solveConstraints version marloweContext walletContext constraints
 
 execWithdraw
-  :: SolveConstraints v
+  :: SolveConstraints
   -> LoadWalletContext
   -> LoadMarloweContext
   -> MarloweVersion v
@@ -301,7 +301,7 @@ execWithdraw solveConstraints loadWalletContext loadMarloweContext version addre
     $ loadMarloweContext version contractId
   except
     $ first WithdrawConstraintError
-    $ solveConstraints marloweContext walletContext constraints
+    $ solveConstraints version marloweContext walletContext constraints
 
 execSubmit
   :: (Tx BabbageEra -> STM SubmitJob)
