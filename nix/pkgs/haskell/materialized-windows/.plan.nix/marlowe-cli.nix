@@ -36,6 +36,7 @@
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."aeson-pretty" or (errorHandler.buildDepError "aeson-pretty"))
+          (hsPkgs."appendmap" or (errorHandler.buildDepError "appendmap"))
           (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
           (hsPkgs."bech32" or (errorHandler.buildDepError "bech32"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
@@ -82,6 +83,7 @@
           (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
           (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
           (hsPkgs."split" or (errorHandler.buildDepError "split"))
+          (hsPkgs."temporary" or (errorHandler.buildDepError "temporary"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
@@ -96,6 +98,7 @@
           "Language/Marlowe/CLI/Cardano/Api/Address"
           "Language/Marlowe/CLI/Cardano/Api/Address/ProofOfBurn"
           "Language/Marlowe/CLI/Cardano/Api/PlutusScript"
+          "Language/Marlowe/CLI/Cardano/Api/Value"
           "Language/Marlowe/CLI/Plutus/Script/Utils"
           "Language/Marlowe/CLI/Codec"
           "Language/Marlowe/CLI/Command"

@@ -8,10 +8,10 @@ stScriptOperations:
   - tag: CreateWallet
     soWalletNickname: Party
 
-  - tag: FundWallet
+  - tag: FundWallets
     soValues:
       - 100000000
-    soWalletNickname: Party
+    soWalletNicknames: [Party]
 
   - tag: Mint
     soCurrencyNickname: Trivial
