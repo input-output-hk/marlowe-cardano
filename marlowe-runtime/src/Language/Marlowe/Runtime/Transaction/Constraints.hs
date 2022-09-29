@@ -477,7 +477,56 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
       | Set.null payoutInputConstraints = Nothing
       | otherwise = Just $ note ToCardanoError $ toCardanoTxIn payoutScriptUTxO
 
-    solveTxOuts = undefined
+    getMarloweOutput :: Maybe Chain.TransactionOutput
+    getMarloweOutput = case marloweOutputConstraints of
+      MarloweOutputConstraintsNone -> Nothing
+      MarloweOutput assets datum -> Just
+        $ Chain.TransactionOutput marloweAddress assets Nothing
+        $ Just
+        $ Core.toChainDatum marloweVersion datum
+
+    getRoleTokenOutputs :: Either (ConstraintError v) [Chain.TransactionOutput]
+    getRoleTokenOutputs = case roleTokenConstraints of
+      RoleTokenConstraintsNone -> pure []
+      MintRoleTokens _ distribution ->
+        pure . fmap snd . Map.toList $ flip Map.mapWithKey distribution \assetId address ->
+          Chain.TransactionOutput
+            address
+            (Chain.Assets 0 $ Chain.Tokens $ Map.singleton assetId 1)
+            Nothing
+            Nothing
+      SpendRoleTokens roleTokens -> do
+        let availTuples = Map.toList availableUtxos
+        nub <$> forM (Set.toList roleTokens) \token -> do
+          -- Find an element from availTuples where 'token' is in the assets.
+          let
+            containsToken :: Chain.TransactionOutput -> Bool
+            containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
+          note (RoleTokenNotFound token) $ snd <$> find (containsToken . snd) availTuples
+
+
+    getPayoutOutputs :: [Chain.TransactionOutput]
+    getPayoutOutputs = uncurry getPayoutOutput <$> Map.toList payToRoles
+
+    getPayoutOutput :: Core.PayoutDatum v -> Chain.Assets -> Chain.TransactionOutput
+    getPayoutOutput payoutDatum assets = Chain.TransactionOutput payoutAddress assets Nothing $ Just datum
+      where
+        datum = Core.toChainPayoutDatum marloweVersion payoutDatum
+
+    getAddressOutputs :: [Chain.TransactionOutput]
+    getAddressOutputs = uncurry getAddressOutput <$> Map.toList payToAddresses
+
+    getAddressOutput :: Chain.Address -> Chain.Assets -> Chain.TransactionOutput
+    getAddressOutput address assets = Chain.TransactionOutput address assets Nothing Nothing
+
+    solveTxOuts = note ToCardanoError . traverse (toCardanoTxOut C.MultiAssetInBabbageEra) =<< do
+      roleTokenOutputs <- getRoleTokenOutputs
+      pure $ concat
+        [ maybeToList getMarloweOutput
+        , roleTokenOutputs
+        , getPayoutOutputs
+        , getAddressOutputs
+        ]
 
     solveTxValidityRange = case marloweInputConstraints of
       MarloweInputConstraintsNone ->
