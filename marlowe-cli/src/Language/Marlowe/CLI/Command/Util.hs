@@ -205,7 +205,7 @@ runUtilCommand command =
                             buildMinting
                               connection
                               skeyFile
-                              (Right tokenDistribution)
+                              (Right (providers, tokenDistribution))
                               metadataFile
                               expires
                               addr

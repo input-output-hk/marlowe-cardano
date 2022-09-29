@@ -139,9 +139,9 @@ MINT_EXPIRES=$((TIP + 1000000))
 ROLE_CURRENCY=$(
 marlowe-cli util mint --testnet-magic "$MAGIC"                  \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
-                      --required-signer "$ORACLE_PAYMENT_SKEY"          \
-                      --change-address  "$ORACLE_ADDRESS"               \
+                      --issuer "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY" \
                       --expires "$MINT_EXPIRES"                         \
+                      --token-provider "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY" \
                       --out-file /dev/null                              \
                       --submit=600                                      \
                       "$ORACLE_ROLE" "$PARTY_ROLE" "$COUNTERPARTY_ROLE" \

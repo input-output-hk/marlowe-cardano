@@ -769,6 +769,7 @@ data MintingAction era =
     Mint
     {
       maIssuer :: CurrencyIssuer era
+    , maProviders :: L.NonEmpty (AddressInEra era, SomePaymentSigningKey)
     , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era)
     }
   -- ^ The token names, amount and a possible receipient addresses.

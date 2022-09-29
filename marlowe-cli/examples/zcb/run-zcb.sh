@@ -108,9 +108,10 @@ MINT_EXPIRES=$((TIP + 1000000))
 ROLE_CURRENCY=$(
 marlowe-cli util mint --testnet-magic "$MAGIC"                  \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --required-signer "$LENDER_PAYMENT_SKEY"  \
-                      --change-address  "$LENDER_ADDRESS"       \
+                      --issuer "$LENDER_ADDRESS:$LENDER_PAYMENT_SKEY" \
                       --expires "$MINT_EXPIRES"                 \
+                      --token-provider "$LENDER_ADDRESS:$LENDER_PAYMENT_SKEY" \
+                      --token-provider "$BORROWER_ADDRESS:$BORROWER_PAYMENT_SKEY" \
                       --out-file /dev/null                      \
                       --submit=600                              \
                       "$LENDER_ROLE" "$BORROWER_ROLE"           \

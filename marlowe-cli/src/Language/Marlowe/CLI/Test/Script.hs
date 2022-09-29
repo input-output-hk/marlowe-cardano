@@ -265,6 +265,7 @@ interpret so@Mint {..} = do
     issuerNickname = fromMaybe faucetNickname soIssuer
 
   currencies <- use ssCurrencies
+  allWallets <- use ssWallets
   case Map.lookup soCurrencyNickname currencies of
     Just Currency { ccIssuer=ci } -> when (ci /= issuerNickname)  do
       throwError "Currency with a given nickname already exist and is minted by someone else."
@@ -276,11 +277,15 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, destAddress), (owner, tokenName, amount))
 
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
+  let
+    providers = Map.elems allWallets <&> \Wallet { waAddress, waSigningKey } -> (waAddress, waSigningKey)
 
+  providers' <- maybe (throwSoError so "Providers shouldn't be empty") pure $ L.NonEmpty.nonEmpty providers
   tokenDistribution' <- maybe (throwSoError so "Token distribution shouldn't be empty") pure $ L.NonEmpty.nonEmpty tokenDistribution
   let
     mintingAction = T.Mint
       (CurrencyIssuer issuerAddress issuerSigningKey)
+      providers'
       tokenDistribution'
 
   connection <- view seConnection
