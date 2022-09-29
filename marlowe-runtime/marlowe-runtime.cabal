@@ -56,7 +56,7 @@ common lang
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities -threaded
+    -Wredundant-constraints -Widentities
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
@@ -168,8 +168,9 @@ executable marlowe
     , stm
     , stm-delay
     , text
-    , unix
     , wl-pprint
+  if !os(windows)
+    build-depends: unix
 
 executable marlowed
   import: lang
@@ -182,6 +183,7 @@ executable marlowed
   build-depends:
       base >= 4.9 && < 5
     , marlowe-runtime
+  ghc-options: -threaded
 
 executable marlowe-history
   import: lang
@@ -207,6 +209,7 @@ executable marlowe-history
     , stm
     , text
     , wl-pprint
+  ghc-options: -threaded
 
 executable marlowe-tx
   import: lang
@@ -233,6 +236,7 @@ executable marlowe-tx
     , stm
     , text
     , wl-pprint
+  ghc-options: -threaded
 
 test-suite marlowe-runtime-test
   import: lang
@@ -279,3 +283,4 @@ test-suite marlowe-runtime-test
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded
