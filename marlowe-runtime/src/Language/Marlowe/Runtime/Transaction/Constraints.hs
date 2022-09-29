@@ -352,15 +352,12 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
   pure C.TxBodyContent
     { txIns
     , txInsCollateral = C.TxInsCollateralNone
-    , txInsReference -- = C.TxInsReferenceNone  -- needs init
+    , txInsReference
     , txOuts -- = []  -- needs init
     , txTotalCollateral = C.TxTotalCollateralNone
     , txReturnCollateral = C.TxReturnCollateralNone
     , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 3_000_000
-    , txValidityRange -- =  -- needs init
-        -- ( C.TxValidityNoLowerBound
-        -- , C.TxValidityNoUpperBound (fromJust $ castInCardanoEra scriptDataSupported)
-        -- )
+    , txValidityRange
     , txMetadata -- = C.TxMetadataNone  -- needs init
     , txAuxScripts = C.TxAuxScriptsNone
     , txExtraKeyWits -- = C.TxExtraKeyWitnessesNone  -- needs init
