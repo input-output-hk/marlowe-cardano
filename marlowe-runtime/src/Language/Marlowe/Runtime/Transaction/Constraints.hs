@@ -11,7 +11,6 @@ import qualified Cardano.Api as C
 import Cardano.Api.Shelley (NetworkId)
 import qualified Cardano.Api.Shelley as C
 import Control.Monad (forM)
-import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
@@ -24,6 +23,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time.Clock (diffUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -42,7 +42,7 @@ data TxConstraints v = TxConstraints
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
   , marloweOutputConstraints :: MarloweOutputConstraints v
   , signatureConstraints :: Set Chain.PaymentKeyHash
-  , metadataConstraints :: Map Int Aeson.Value
+  , metadataConstraints :: Map Word64 Chain.Metadata
   }
 
 deriving instance Show (TxConstraints 'V1)
@@ -243,7 +243,7 @@ requiresSignature pkh = mempty { signatureConstraints = Set.singleton pkh }
 --
 -- Requires that:
 --   1. The given metadata is present in the given index in the transaction.
-requiresMetadata :: Core.IsMarloweVersion v => Int -> Aeson.Value -> TxConstraints v
+requiresMetadata :: Core.IsMarloweVersion v => Word64 -> Chain.Metadata -> TxConstraints v
 requiresMetadata i value = mempty { metadataConstraints = Map.singleton i value }
 
 instance Core.IsMarloweVersion v => Semigroup (TxConstraints v) where
@@ -346,7 +346,6 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
   txInsReference <- solveTxInsReference
   txOuts <- solveTxOuts
   txValidityRange <- solveTxValidityRange
-  txMetadata <- solveTxMetadata
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
   pure C.TxBodyContent
@@ -542,7 +541,11 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
              , C.TxValidityUpperBound C.ValidityUpperBoundInBabbageEra maxSlotNo
              )
 
-    solveTxMetadata = undefined
+    txMetadata :: C.TxMetadataInEra C.BabbageEra
+    txMetadata
+      | Map.null metadataConstraints = C.TxMetadataNone
+      | otherwise = C.TxMetadataInEra C.TxMetadataInBabbageEra $ C.TxMetadata $ toCardanoMetadata <$> metadataConstraints
+
     solveTxExtraKeyWits = undefined
     solveTxMintValue = undefined
 

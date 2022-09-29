@@ -22,7 +22,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , DatumHash(..)
   , IntersectError(..)
   , Lovelace(..)
-  , Metadata
+  , Metadata(..)
   , Move(..)
   , module Network.Protocol.ChainSeek.Client
   , module Network.Protocol.ChainSeek.Codec
@@ -183,8 +183,12 @@ data ValidityRange
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
--- TODO add content
 data Metadata
+  = MetadataMap [(Metadata, Metadata)]
+  | MetadataList [Metadata]
+  | MetadataNumber Integer
+  | MetadataBytes ByteString
+  | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
