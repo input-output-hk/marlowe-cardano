@@ -51,13 +51,13 @@ deriving instance Eq (TxConstraints 'V1)
 -- | Constraints related to role tokens.
 data RoleTokenConstraints
   = RoleTokenConstraintsNone
-  | MintRoleTokens Chain.TxOutRef (Map Chain.AssetId Chain.Address)
+  | MintRoleTokens Chain.TxOutRef (C.ScriptWitness C.WitCtxMint C.BabbageEra) (Map Chain.AssetId Chain.Address)
   | SpendRoleTokens (Set Chain.AssetId)
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
 
 instance Semigroup RoleTokenConstraints where
   a <> RoleTokenConstraintsNone = a
-  MintRoleTokens _ a <> MintRoleTokens ref b = MintRoleTokens ref $ a <> b
+  MintRoleTokens _ _ a <> MintRoleTokens witness ref b = MintRoleTokens witness ref $ a <> b
   SpendRoleTokens a <> SpendRoleTokens b = SpendRoleTokens $ a <> b
   _ <> b = b
 
@@ -76,11 +76,12 @@ instance Monoid RoleTokenConstraints where
 mustMintRoleToken
   :: Core.IsMarloweVersion v
   => Chain.TxOutRef
+  -> C.ScriptWitness C.WitCtxMint C.BabbageEra
   -> Chain.AssetId
   -> Chain.Address
   -> TxConstraints v
-mustMintRoleToken txOutRef assetId address =
-  mempty { roleTokenConstraints = MintRoleTokens txOutRef $ Map.singleton assetId address }
+mustMintRoleToken txOutRef witness assetId address =
+  mempty { roleTokenConstraints = MintRoleTokens txOutRef witness $ Map.singleton assetId address }
 
 -- | Require the transaction to spend a UTXO with 1 role token of the specified
 -- assetID. It also needs to send an identical output (same assets) to the
@@ -352,26 +353,26 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
     { txIns
     , txInsCollateral = C.TxInsCollateralNone
     , txInsReference
-    , txOuts -- = []  -- needs init
+    , txOuts
     , txTotalCollateral = C.TxTotalCollateralNone
     , txReturnCollateral = C.TxReturnCollateralNone
-    , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 3_000_000
+    , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
     , txValidityRange
-    , txMetadata -- = C.TxMetadataNone  -- needs init
+    , txMetadata
     , txAuxScripts = C.TxAuxScriptsNone
-    , txExtraKeyWits -- = C.TxExtraKeyWitnessesNone  -- needs init
+    , txExtraKeyWits
     , txProtocolParams = C.BuildTxWith $ Just protocol
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    , txMintValue -- = C.TxMintNone  -- needs init
+    , txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
     getWalletInputs :: Either (ConstraintError v) [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))]
     getWalletInputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
-      MintRoleTokens txOutRef _ -> do
+      MintRoleTokens txOutRef _ _ -> do
         txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
         _ <- note (MintingUtxoNotFound txOutRef) $ Map.lookup txOutRef availableUtxos
         pure [(txIn, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending)]
@@ -487,7 +488,7 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
     getRoleTokenOutputs :: Either (ConstraintError v) [Chain.TransactionOutput]
     getRoleTokenOutputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
-      MintRoleTokens _ distribution ->
+      MintRoleTokens _ _ distribution ->
         pure . fmap snd . Map.toList $ flip Map.mapWithKey distribution \assetId address ->
           Chain.TransactionOutput
             address
@@ -546,8 +547,25 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
       | Map.null metadataConstraints = C.TxMetadataNone
       | otherwise = C.TxMetadataInEra C.TxMetadataInBabbageEra $ C.TxMetadata $ toCardanoMetadata <$> metadataConstraints
 
-    solveTxExtraKeyWits = undefined
-    solveTxMintValue = undefined
+    solveTxExtraKeyWits :: Either (ConstraintError v) (C.TxExtraKeyWitnesses C.BabbageEra)
+    solveTxExtraKeyWits
+      | Set.null signatureConstraints = pure C.TxExtraKeyWitnessesNone
+      | otherwise = note ToCardanoError $ C.TxExtraKeyWitnesses C.ExtraKeyWitnessesInBabbageEra
+          <$> traverse toCardanoPaymentKeyHash (Set.toList signatureConstraints)
+
+    solveTxMintValue :: Either (ConstraintError v) (C.TxMintValue C.BuildTx C.BabbageEra)
+    solveTxMintValue = case roleTokenConstraints of
+      MintRoleTokens _ witness distribution -> do
+        let assetIds = Map.keysSet distribution
+        let tokens = Map.fromSet (const 1) assetIds
+        policyIds <- note ToCardanoError $ Set.fromAscList
+          <$> traverse (toCardanoPolicyId . Chain.policyId) (Set.toAscList assetIds)
+        value <- note ToCardanoError $ tokensToCardanoValue $ Chain.Tokens tokens
+        pure
+          $ C.TxMintValue C.MultiAssetInBabbageEra value
+          $ C.BuildTxWith
+          $ Map.fromSet (const witness) policyIds
+      _ -> pure C.TxMintNone
 
 note :: a -> Maybe b -> Either a b
 note e = maybe (Left e) Right
