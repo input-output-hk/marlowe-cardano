@@ -1065,6 +1065,7 @@
     ({ lib, ... }:
       {
         packages = {
+          "marlowe-runtime".components.sublibs."config".planned = lib.mkOverride 900 true;
           "bytestring-builder".components.library.planned = lib.mkOverride 900 true;
           "base16-aeson".components.library.planned = lib.mkOverride 900 true;
           "hspec-core".components.library.planned = lib.mkOverride 900 true;
@@ -1159,7 +1160,6 @@
           "tasty-golden".components.library.planned = lib.mkOverride 900 true;
           "composition-prelude".components.library.planned = lib.mkOverride 900 true;
           "mwc-random".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."marlowe-history-cli".planned = lib.mkOverride 900 true;
           "mono-traversable".components.library.planned = lib.mkOverride 900 true;
           "cardano-ledger-core".components.library.planned = lib.mkOverride 900 true;
           "mintty".components.library.planned = lib.mkOverride 900 true;
@@ -1496,7 +1496,6 @@
           "servant-client".components.library.planned = lib.mkOverride 900 true;
           "natural-transformation".components.library.planned = lib.mkOverride 900 true;
           "wl-pprint-annotated".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."marlowe-follower".planned = lib.mkOverride 900 true;
           "marlowe-cli".components.library.planned = lib.mkOverride 900 true;
           "hasql-pool".components.library.planned = lib.mkOverride 900 true;
           "writer-cps-mtl".components.library.planned = lib.mkOverride 900 true;
@@ -1604,6 +1603,7 @@
           "base".components.library.planned = lib.mkOverride 900 true;
           "headed-megaparsec".components.library.planned = lib.mkOverride 900 true;
           "kan-extensions".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe".planned = lib.mkOverride 900 true;
           "integer-logarithms".components.library.planned = lib.mkOverride 900 true;
           "cryptohash-md5".components.library.planned = lib.mkOverride 900 true;
           "digest".components.library.planned = lib.mkOverride 900 true;
