@@ -15,10 +15,12 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -28,10 +30,12 @@
 
 module Language.Marlowe.CLI.Test.Types
   ( AnyMarloweThread
+  , AssetId(..)
+  , Assets(..)
   , ContractNickname(..)
   , ContractSource(..)
+  , Currency(..)
   , CurrencyNickname(..)
-  , CustomCurrency(..)
   , ExecutionMode(..)
   , Finished
   , MarloweContract(..)
@@ -50,12 +54,14 @@ module Language.Marlowe.CLI.Test.Types
   , UseTemplate(..)
   , Wallet(..)
   , WalletNickname(..)
-  , WalletTransaction(..)
   , anyMarloweThread
+  , buildWallet
+  , emptyWallet
   , faucetNickname
   , foldlMarloweThread
   , foldrMarloweThread
   , getMarloweThreadTransaction
+  , getMarloweThreadTxBody
   , getMarloweThreadTxIn
   , overAnyMarloweThread
   , scriptState
@@ -63,6 +69,7 @@ module Language.Marlowe.CLI.Test.Types
   , seCostModelParams
   , seEra
   , seExecutionMode
+  , sePrintStats
   , seProtocolVersion
   , seSlotConfig
   , ssContracts
@@ -75,20 +82,38 @@ import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
 import qualified Cardano.Api as C
 import Control.Lens (makeLenses)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Reader (MonadReader)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.Aeson.Types as A
+import qualified Data.Fixed as F
+import qualified Data.Fixed as Fixed
+import Data.Foldable (fold)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.String (IsString(fromString))
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
+import Data.Traversable (for)
+import qualified Data.Vector as V
 import GHC.Generics (Generic)
+import GHC.Num (Natural)
+import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue, txOutValueValue)
+import Language.Marlowe.CLI.Transaction (queryUtxos)
 import Language.Marlowe.CLI.Types
-  (MarloweScriptsRefs, MarloweTransaction(MarloweTransaction, mtInputs), SomePaymentSigningKey, SomeTimeout)
+  ( CliEnv
+  , CliError
+  , MarloweScriptsRefs
+  , MarloweTransaction(MarloweTransaction, mtInputs)
+  , PrintStats
+  , SomePaymentSigningKey
+  , SomeTimeout
+  )
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
@@ -96,7 +121,7 @@ import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 import qualified Plutus.V1.Ledger.Value as P
-import qualified Plutus.V2.Ledger.Api as P
+import Text.Read (readMaybe)
 
 
 -- | Configuration for a set of Marlowe tests.
@@ -154,6 +179,9 @@ instance FromJSON ContractSource where
       _ -> fail "Expected object with a single field of either `inline` or `template`"
 
 
+-- In the current setup we use really a unique currency
+-- per issuer. Should we drop this and identify currencies
+-- using `WalletNickname`?
 newtype CurrencyNickname = CurrencyNickname String
     deriving stock (Eq, Ord, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
@@ -161,12 +189,114 @@ instance IsString CurrencyNickname where fromString = CurrencyNickname
 
 
 data TokenAssignment = TokenAssignment
-  { taAmount         :: Integer
+  { taWalletNickname :: WalletNickname  -- ^ Default to the same wallet nickname as a token name.
   , taTokenName      :: TokenName
-  , taWalletNickname :: Maybe WalletNickname  -- ^ Default to the same wallet nickname as a token name.
+  , taAmount         :: Natural
   }
   deriving stock (Eq, Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+
+
+parseTokenNameJSON :: Aeson.Value -> A.Parser P.TokenName
+parseTokenNameJSON json = do
+  parseJSON (A.object [("unTokenName", json)])
+
+
+tokenNameToJSON :: TokenName -> Aeson.Value
+tokenNameToJSON (P.TokenName tokenName) = toJSON tokenName
+
+
+instance FromJSON TokenAssignment where
+  parseJSON = \case
+    A.Array (V.toList -> [walletNicknameJSON, tokenNameJSON, amountJSON]) -> do
+      walletNickname <- parseJSON walletNicknameJSON
+      tokenName <- parseTokenNameJSON tokenNameJSON
+      amount <- parseJSON amountJSON
+      pure $ TokenAssignment walletNickname tokenName amount
+    _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname, TokenName, Integer]`."
+
+
+instance ToJSON TokenAssignment where
+    toJSON (TokenAssignment (WalletNickname walletNickname) tokenName amount) = do
+      toJSON [toJSON walletNickname, tokenNameToJSON tokenName, toJSON amount]
+
+
+data AssetId = AdaAsset | AssetId CurrencyNickname TokenName
+  deriving (Eq, Ord, Show)
+
+
+instance FromJSON AssetId where
+  parseJSON = \case
+    A.String (T.toLower -> "ada") -> pure AdaAsset
+    A.Array (V.toList -> [currencyNicknameJSON, tokenNameJSON]) -> do
+      currencyNickname <- parseJSON currencyNicknameJSON
+      tokenName <- parseTokenNameJSON tokenNameJSON
+      pure $ AssetId currencyNickname tokenName
+    _ -> fail "Expecting an AssetId \"tuple\" or \"ada\"."
+
+
+instance ToJSON AssetId where
+    toJSON AdaAsset = A.String "ADA"
+    toJSON (AssetId currencyNickname tokenName) =
+      toJSON [ toJSON currencyNickname, tokenNameToJSON tokenName ]
+
+
+-- | Yaml friendly representation of assets which we use in balance checking.
+newtype Assets = Assets (Map AssetId Integer)
+  deriving (Eq, Ord, Show)
+  deriving newtype (Semigroup, Monoid)
+
+
+assetsSingleton :: AssetId -> Integer -> Assets
+assetsSingleton assetId = Assets . Map.singleton assetId
+
+
+lovelaceAssets :: Integer -> Assets
+lovelaceAssets = assetsSingleton AdaAsset
+
+
+instance FromJSON Assets where
+  parseJSON json = do
+    (assetsEntries :: [A.Value]) <- parseJSON json
+    assets <- for assetsEntries parseAssetEntry
+    pure $ fold assets
+    where
+      parseAssetEntry = \case
+        lovelaceJSON@(Aeson.Number _) -> do
+          lovelaceAssets <$> parseJSON lovelaceJSON
+        Aeson.String txt -> do
+          let
+            txt' = T.replace "_" "" txt
+          lovelaceAssets <$> parseJSON (A.String txt')
+        A.Array (V.toList -> [assetJSON, amountJSON]) -> do
+          -- Matches ADA asset
+          parseJSON assetJSON >>= \case
+            AdaAsset -> pure ()
+            _ -> fail "Expecting ADA asset"
+          (_ :: AssetId) <- parseJSON assetJSON
+          (amount :: Fixed.Micro) <- case amountJSON of
+            -- Handle decimal as String
+            A.String str -> case readMaybe (T.unpack str) of
+              Just a -> pure a
+              Nothing -> fail "Unable to parse ADA amount"
+            -- Handle plain Integer
+            _ -> parseJSON amountJSON
+          pure $ lovelaceAssets (floor $ 1_000_000 * amount)
+        A.Array (V.toList -> [assetNameJSON, tokenNameJSON, amountJSON]) -> do
+          assetId <- parseJSON $ A.Array $ V.fromList [assetNameJSON, tokenNameJSON]
+          amount <- parseJSON amountJSON
+          pure $ assetsSingleton assetId amount
+        _ -> fail "Expecting an assets map encoding."
+
+
+instance ToJSON Assets where
+    toJSON (Assets (Map.toList -> assetsList)) = toJSON $ map assetToJSON assetsList
+      where
+        assetToJSON (AdaAsset, amount) = toJSON
+          [ toJSON ("ADA" :: String)
+          , toJSON $ show (fromInteger amount :: F.Micro)
+          ]
+        assetToJSON (AssetId currencyNickname tokenName, amount) = toJSON
+          [ toJSON currencyNickname, toJSON tokenName, toJSON amount ]
 
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
@@ -179,6 +309,17 @@ data ScriptOperation =
     , soIssuer            :: Maybe WalletNickname   -- ^ Fallbacks to faucet
     , soMetadata          :: Maybe Aeson.Object
     , soTokenDistribution :: [TokenAssignment]
+    }
+  | BurnAll
+    {
+      soCurrencyNickname    :: CurrencyNickname
+    , soMetadata            :: Maybe Aeson.Object
+    }
+  | CheckBalance
+    { soWalletNickname  :: WalletNickname
+    , soBalance         :: Assets           -- ^ Expected delta of funds in the case of `Faucet` wallet we
+                                            -- subtract the baseline funds so they are not included in this balance.
+                                            -- We also exclude fees from this calculation.
     }
   | Initialize
     {
@@ -207,11 +348,16 @@ data ScriptOperation =
     }
   | CreateWallet
     {
-      soWalletNickname :: WalletNickname
+      soWalletNickname  :: WalletNickname
     }
-  | FundWallet
+  | Withdraw
+   {
+     soContractNickname :: ContractNickname
+   , soWalletNickname   :: WalletNickname
+   }
+  | FundWallets
     {
-      soWalletNickname   :: WalletNickname
+      soWalletNicknames  :: [WalletNickname]
     , soValues           :: [Lovelace]
     , soCreateCollateral :: Maybe Bool
     }
@@ -228,24 +374,38 @@ data ScriptOperation =
     deriving anyclass (FromJSON, ToJSON)
 
 
-data WalletTransaction era = WalletTransaction
-  {
-    wtFees   :: Lovelace
-  , wtTxBody :: TxBody era
-  }
-  deriving stock (Generic, Show)
-
-
 data Wallet era =
   Wallet
   {
-    waAddress         :: AddressInEra era
-  , waSigningKey      :: SomePaymentSigningKey
-  , waTokens          :: P.Value                      -- ^ Custom tokens cache which simplifies
-
-  , waTransactions    :: [WalletTransaction era]
+    waAddress                   :: AddressInEra era
+  , waBalanceCheckBaseline      :: P.Value                  -- ^ This value should reflect all the assets from the wallet which
+                                                            -- were on the chain when we started a particular scenario. Currently
+                                                            -- it is only used in the context of `Faucet` wallet.
+  , waMintedTokens              :: P.Value                  -- ^ Tracks all the minted tokens to simplify auto run flow.
+  , waSigningKey                :: SomePaymentSigningKey
+  , waSubmittedTransactions     :: [TxBody era]             -- ^ We keep track of all the transaction so we can
+                                                            -- discard fees from the balance check calculation.
+  , waMintingDistributionCosts  :: P.Value                  -- ^ Total min ADA costs of all mintings to other parties.
   }
   deriving stock (Generic, Show)
+
+
+emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
+emptyWallet address signignKey = Wallet address mempty mempty signignKey mempty mempty
+
+
+buildWallet :: MonadError CliError m
+            => MonadIO m
+            => MonadReader (CliEnv era) m
+            => C.LocalNodeConnectInfo CardanoMode
+            -> AddressInEra era
+            -> SomePaymentSigningKey
+            -> m (Wallet era)
+buildWallet connection address signignKey = do
+  C.UTxO (Map.elems -> txOuts) <- queryUtxos connection address
+  let
+    total = foldMap (toPlutusValue . txOutValueValue) txOuts
+  pure $ Wallet address total mempty signignKey mempty mempty
 
 
 -- | In many contexts this defaults to the `RoleName` but at some
@@ -275,16 +435,17 @@ instance FromJSON PartyRef where
   parseJSON = \case
     Aeson.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
       pure . WalletRef . WalletNickname . T.unpack $ walletNickname
-    Aeson.Object (KeyMap.toList -> [("role_token", A.String roleToken)]) ->
-      pure . RoleRef . P.tokenName . T.encodeUtf8 $ roleToken
+    Aeson.Object (KeyMap.toList -> [("role_token", roleTokenJSON)]) -> do
+      roleToken <- parseTokenNameJSON roleTokenJSON
+      pure $ RoleRef roleToken
     _ -> fail "Expecting a Party object."
 
 
 instance ToJSON PartyRef where
     toJSON (WalletRef (WalletNickname walletNickname)) = A.object
         [ "address" .= A.String (T.pack walletNickname) ]
-    toJSON (RoleRef (P.TokenName name)) = A.object
-        [ "role_token" .= (A.String $ T.decodeUtf8 $ P.fromBuiltin name) ]
+    toJSON (RoleRef tokenName) = A.object
+        [ "role_token" .= tokenNameToJSON tokenName ]
 
 
 data UseTemplate =
@@ -399,10 +560,17 @@ getMarloweThreadTransaction (Created mt _ _)           = mt
 getMarloweThreadTransaction (InputsApplied mt _ _ _ _) = mt
 getMarloweThreadTransaction (Closed mt _ _ _)          = mt
 
+
 getMarloweThreadTxIn :: MarloweThread lang era status -> Maybe C.TxIn
 getMarloweThreadTxIn (Created _ _ txIn)           = Just txIn
 getMarloweThreadTxIn (InputsApplied _ _ txIn _ _) = Just txIn
 getMarloweThreadTxIn Closed {}                    = Nothing
+
+
+getMarloweThreadTxBody :: MarloweThread lang era status -> C.TxBody era
+getMarloweThreadTxBody (Created _ txBody _)           = txBody
+getMarloweThreadTxBody (InputsApplied _ txBody _ _ _) = txBody
+getMarloweThreadTxBody (Closed _ txBody _ _)          = txBody
 
 
 data AnyMarloweThread lang era where
@@ -446,18 +614,22 @@ overAnyMarloweThread f (AnyMarloweThread th) = f th
 
 data MarloweContract lang era = MarloweContract
   {
-    mcContract  :: M.Contract
-  , mcCurrency  :: Maybe CurrencyNickname
-  , mcPlan      :: List.NonEmpty (MarloweTransaction lang era)
-  , mcThread    :: Maybe (AnyMarloweThread lang era)
-  , mcSubmitter :: WalletNickname
+    mcContract                :: M.Contract
+  , mcCurrency                :: Maybe CurrencyNickname
+  , mcPlan                    :: List.NonEmpty (MarloweTransaction lang era)
+  , mcThread                  :: Maybe (AnyMarloweThread lang era)
+  , mcWithdrawalsCheckPoints  :: Map TokenName C.TxId                           -- ^ Track of last withrawal on chain point.
+                                                                                -- We need this to do a check if there are
+                                                                                -- waiting withdrawals for a party on chain.
+  , mcSubmitter               :: WalletNickname
   }
 
 
-data CustomCurrency = CustomCurrency
+data Currency = Currency
   {
-    ccPolicyId       :: PolicyId
-  , ccCurrencySymbol :: CurrencySymbol
+    ccCurrencySymbol :: CurrencySymbol
+  , ccIssuer         :: WalletNickname
+  , ccPolicyId       :: PolicyId
   }
 
 
@@ -470,7 +642,7 @@ data MarloweReferenceScripts = MarloweReferenceScripts
 data ScriptState lang era = ScriptState
   {
     _ssContracts        :: Map ContractNickname (MarloweContract lang era)
-  , _ssCurrencies       :: Map CurrencyNickname CustomCurrency
+  , _ssCurrencies       :: Map CurrencyNickname Currency
   , _ssReferenceScripts :: Maybe (MarloweScriptsRefs lang era)
   , _ssWallets          :: Map WalletNickname (Wallet era)                    -- ^ Faucet wallet should be included here.
   }
@@ -486,6 +658,7 @@ scriptState faucet = do
     wallets = Map.singleton faucetNickname faucet
   ScriptState mempty mempty Nothing wallets
 
+
 newtype Seconds = Seconds Int
     deriving stock (Eq, Show)
 
@@ -497,6 +670,7 @@ data ScriptEnv era = ScriptEnv
   , _seProtocolVersion    :: ProtocolVersion
   , _seSlotConfig         :: SlotConfig
   , _seExecutionMode      :: ExecutionMode
+  , _sePrintStats         :: PrintStats
   }
 
 

@@ -8,7 +8,9 @@
 
 
 module Language.Marlowe.CLI.Cardano.Api
-  ( adjustMinimumUTxO
+  ( Value.txOutValue
+  , Value.txOutValueValue
+  , adjustMinimumUTxO
   , toMultiAssetSupportedInEra
   , toPlutusProtocolVersion
   , toReferenceTxInsScriptsInlineDatumsSupportedInEra
@@ -41,6 +43,7 @@ import Cardano.Api.Shelley
   )
 import Control.Monad.Except (liftEither)
 import GHC.Natural (Natural, naturalToInteger)
+import qualified Language.Marlowe.CLI.Cardano.Api.Value as Value
 import Language.Marlowe.CLI.Orphans ()
 import Plutus.V1.Ledger.Api (ProtocolVersion(ProtocolVersion))
 import Plutus.V2.Ledger.Api (Datum(..), toData)

@@ -1,0 +1,21 @@
+stTestName: Single party minting
+
+stScriptOperations:
+
+  - tag: CheckBalance
+    soWalletNickname: Faucet
+    soBalance: []
+
+  - tag: Mint
+    soCurrencyNickname: Currency
+    soTokenDistribution:
+      - [Faucet, Token-1, 1]
+      - [Faucet, Token-2, 2]
+      - [Faucet, Token-3, 3]
+
+  - tag: CheckBalance
+    soWalletNickname: Faucet
+    soBalance:
+      - [Currency, Token-1, 1]
+      - [Currency, Token-2, 2]
+      - [Currency, Token-3, 3]

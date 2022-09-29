@@ -50,6 +50,7 @@ import Language.Marlowe.CLI.Command.Parse
   , requiredSignerOpt
   , requiredSignersOpt
   , txBodyFileOpt
+  , walletOpt
   )
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
@@ -57,8 +58,13 @@ import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, 
 import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery, OutputQueryResult, SigningKeyFile, TxBodyFile)
 import Plutus.V1.Ledger.Api (TokenName)
 
+import Control.Applicative ((<|>))
 import Control.Monad.Reader (MonadReader)
+import qualified Data.List.NonEmpty as L
+import Data.Maybe (fromMaybe)
+import GHC.Natural (Natural)
 import qualified Options.Applicative as O
+import qualified Options.Applicative.NonEmpty as O
 
 
 -- | Marlowe CLI commands and options.
@@ -77,24 +83,34 @@ data UtilCommand era =
     -- | Mint tokens.
   | Mint
     {
-      network        :: NetworkId           -- ^ The network ID, if any.
-    , socketPath     :: FilePath            -- ^ The path to the node socket.
-    , signingKeyFile :: SigningKeyFile      -- ^ The files containing the required signing keys.
-    , metadataFile   :: Maybe FilePath      -- ^ The CIP-25 metadata for the minting, with keys for each token name.
-    , count          :: Integer             -- ^ The number of each token to mint.
-    , expires        :: Maybe SlotNo        -- ^ The slot number after which minting is no longer possible.
-    , lovelace       :: Lovelace            -- ^ The lovelace to send with each token.
-    , change         :: AddressInEra era    -- ^ The change address.
-    , bodyFile       :: TxBodyFile          -- ^ The output file for the transaction body.
-    , submitTimeout  :: Maybe Int           -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , tokenNames     :: [TokenName]         -- ^ The token names.
+      network        :: NetworkId             -- ^ The network ID, if any.
+    , socketPath     :: FilePath              -- ^ The path to the node socket.
+    , signingKeyFile :: SigningKeyFile        -- ^ The files containing the required signing keys.
+    , metadataFile   :: Maybe FilePath        -- ^ The CIP-25 metadata for the minting, with keys for each token name.
+    , count          :: Natural               -- ^ The number of each token to mint.
+    , expires        :: Maybe SlotNo          -- ^ The slot number after which minting is no longer possible.
+    , change         :: AddressInEra era      -- ^ The change address.
+    , bodyFile       :: TxBodyFile            -- ^ The output file for the transaction body.
+    , submitTimeout  :: Maybe Int             -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , tokenNames     :: L.NonEmpty TokenName  -- ^ The token names.
+    }
+  | Burn
+    {
+      network               :: NetworkId                                -- ^ The network ID, if any.
+    , socketPath            :: FilePath                                 -- ^ The path to the node socket.
+    , issuer                :: (AddressInEra era, SigningKeyFile)       -- ^ The change address.
+    , providers             :: [(AddressInEra era, SigningKeyFile)]     -- ^ Additional token providers.
+    , metadataFile          :: Maybe FilePath                           -- ^ The CIP-25 metadata for the minting, with keys for each token name.
+    , bodyFile              :: TxBodyFile            -- ^ The output file for the transaction body.
+    , expires               :: Maybe SlotNo                             -- ^ The slot number after which minting is no longer possible.
+    , submitTimeout         :: Maybe Int             -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
     -- | Fund an address from a faucet.
   | Faucet
     {
       network            :: NetworkId           -- ^ The network ID, if any.
     , socketPath         :: FilePath            -- ^ The path to the node socket.
-    , lovelace           :: Lovelace            -- ^ The lovelace to send to the address.
+    , amount             :: Maybe Lovelace      -- ^ The lovelace to send to the address. By default we drain out the faucet.
     , bodyFile           :: TxBodyFile          -- ^ The output file for the transaction body.
     , submitTimeout      :: Maybe Int           -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , fundAddr           :: AddressInEra era    -- ^ The change address.
@@ -184,20 +200,31 @@ runUtilCommand command =
                             >>= printTxId
       Mint{..}         -> do
                             let
-                              tokenDistribution = (, count, Nothing) <$> tokenNames
+                              tokenDistribution = (, count) <$> tokenNames
                             buildMinting
                               connection
                               signingKeyFile
-                              tokenDistribution
+                              (Right tokenDistribution)
                               metadataFile
                               expires
-                              lovelace
                               change
+                              bodyFile
+                              submitTimeout
+      Burn{..}         -> do
+                            let
+                              (addr, skeyFile) = issuer
+                            buildMinting
+                              connection
+                              skeyFile
+                              (Left providers)
+                              metadataFile
+                              expires
+                              addr
                               bodyFile
                               submitTimeout
       Faucet{..}       -> buildFaucet
                             connection
-                            (lovelaceToValue lovelace)
+                            (lovelaceToValue <$> amount)
                             destAddresses
                             fundAddr
                             fundSigningKeyFile
@@ -242,6 +269,7 @@ parseUtilCommand network socket =
     <> faucetCommand network socket
     <> merkleizeCommand
     <> mintCommand network socket
+    <> burnCommand network socket
     <> selectCommand network socket
     <> slottingCommand network socket
     <> watchCommand network socket
@@ -289,12 +317,39 @@ mintOptions network socket =
     <*> (O.optional . O.strOption)           (O.long "metadata-file"   <> O.metavar "JSON_FILE"                          <> O.help "The CIP-25 metadata, with keys for each token name."                                                             )
     <*> O.option O.auto                      (O.long "count"           <> O.metavar "INTEGER"      <> O.value 1          <> O.help "The number of each token to mint."                                                                               )
     <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                     )
-    <*> (O.option $ Lovelace <$> O.auto)     (O.long "lovelace"        <> O.metavar "LOVELACE"     <> O.value 10_000_000 <> O.help "The lovelace to send with each bundle of tokens."                                                                )
     <*> O.option parseAddress                (O.long "change-address"  <> O.metavar "ADDRESS"                            <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> txBodyFileOpt
 
     <*> (O.optional . O.option O.auto)       (O.long "submit"          <> O.metavar "SECONDS"                            <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
-    <*> O.some (O.argument parseTokenName    $                            O.metavar "TOKEN_NAME"                         <> O.help "The name of the token."                                                                                          )
+    <*> O.some1 (O.argument parseTokenName    $                            O.metavar "TOKEN_NAME"                         <> O.help "The name of the token."                                                                                          )
+
+-- | Parser for the "mint" command.
+burnCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
+burnCommand network socket =
+  O.command "burn"
+    $ O.info (burnOptions network socket)
+    $ O.progDesc "Burn native tokens."
+
+
+-- | Parser for the "mint" options.
+burnOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+burnOptions network socket =
+  Burn
+    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network            <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption                          (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> socket             <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> walletOpt                            (O.long "issuer"          <> O.metavar "ADDRESS:SIGNING_FILE"               <> O.help "Issuer wallet info")
+
+    <*> tokenProviderOpt
+
+    <*> (O.optional . O.strOption)           (O.long "metadata-file"   <> O.metavar "JSON_FILE"                          <> O.help "The CIP-25 metadata, with keys for each token name."                                                             )
+    <*> txBodyFileOpt
+
+    <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                     )
+
+    <*> (O.optional . O.option O.auto)       (O.long "submit"          <> O.metavar "SECONDS"                            <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+  where
+    tokenProviderOpt =
+      fmap (fromMaybe []) $ (O.optional . O.some . walletOpt) (O.long "token-provider" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Additional tokens owners info.")
 
 
 -- | Parser for the "faucet" command.
@@ -311,15 +366,20 @@ faucetOptions network socket =
   Faucet
     <$> O.option parseNetworkId            (O.long "testnet-magic"   <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                        (O.long "socket-path"     <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> (O.option $ Lovelace <$> O.auto)   (O.long "lovelace"        <> O.metavar "LOVELACE"    <> O.value 1_000_000_000 <> O.help "The lovelace to send to each address."                                                                           )
+    <*> (lovelaceOpt <|> allMoneyOpt)
     <*> txBodyFileOpt
-
     <*> (O.optional . O.option O.auto)     (O.long "submit"          <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.option parseAddress              (O.long "faucet-address"  <> O.metavar "ADDRESS"                              <> O.help "The faucet addresses to provide funds."                                                                          )
     <*> requiredSignerOpt
-
-    <*> O.some (O.argument parseAddress $                            O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                                )
-
+    <*> O.some                             (O.argument parseAddress $ O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                               )
+  where
+    lovelaceOpt = fmap Just . (O.option $ Lovelace <$> O.auto) $
+      O.long "lovelace"
+      <> O.metavar "LOVELACE"
+      <> O.help "The lovelace to send to each address."
+    allMoneyOpt = O.flag' Nothing $
+      O.long "all-money"
+      <> O.help "Send all available money to the new faucet."
 
 -- | Parser for the "select" command.
 selectCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)

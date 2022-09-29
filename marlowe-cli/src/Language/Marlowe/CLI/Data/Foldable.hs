@@ -9,4 +9,6 @@ tillFirstMatch l match = do
       _            -> acc
   foldr step Nothing l
 
-
+-- | Use `foldMap` in `for` like fashion.
+foldMapFlipped :: Foldable t => Monoid m => t a -> (a -> m) -> m
+foldMapFlipped = flip foldMap

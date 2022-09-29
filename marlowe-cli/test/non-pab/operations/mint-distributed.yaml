@@ -1,0 +1,32 @@
+stTestName: Minting with multi party token distribution
+
+stScriptOperations:
+
+  - tag: CreateWallet
+    soWalletNickname: Party-1
+
+  - tag: CreateWallet
+    soWalletNickname: Party-2
+
+  - tag: Mint
+    soCurrencyNickname: Currency
+    soTokenDistribution:
+      - [Party-1, Token-1, 1]
+      - [Party-2, Token-2, 2]
+      - [Faucet, Token-3, 3]
+
+  - tag: CheckBalance
+    soWalletNickname: Party-1
+    soBalance:
+      - [Currency, Token-1, 1]
+
+  - tag: CheckBalance
+    soWalletNickname: Party-2
+    soBalance:
+      - [Currency, Token-2, 2]
+
+  - tag: CheckBalance
+    soWalletNickname: Faucet
+    soBalance:
+      - [Currency, Token-3, 3]
+

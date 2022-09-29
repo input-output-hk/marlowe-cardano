@@ -558,6 +558,7 @@
         "direct-sqlite".flags.json1 = true;
         "blaze-markup".revision = (((hackage."blaze-markup")."0.8.2.8").revisions).default;
         "ghci".revision = (((hackage."ghci")."8.10.7").revisions).default;
+        "appendmap".revision = (((hackage."appendmap")."0.1.5").revisions).default;
         "optics-extra".revision = (((hackage."optics-extra")."0.4.1").revisions).default;
         "pretty-show".revision = (((hackage."pretty-show")."1.10").revisions).default;
         "tasty-golden".revision = (((hackage."tasty-golden")."2.3.5").revisions).default;
@@ -1475,6 +1476,7 @@
           "async".components.library.planned = lib.mkOverride 900 true;
           "marlowe-contracts".components.tests."marlowe-contracts-test".planned = lib.mkOverride 900 true;
           "plutus-ledger-ada".components.library.planned = lib.mkOverride 900 true;
+          "appendmap".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-network-framework".components.sublibs."testlib".planned = lib.mkOverride 900 true;
           "http-media".components.library.planned = lib.mkOverride 900 true;
           "ghc-boot".components.library.planned = lib.mkOverride 900 true;

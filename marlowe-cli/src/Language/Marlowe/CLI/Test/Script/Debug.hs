@@ -28,14 +28,17 @@ printSo SoShow po = show po
 printSo SoName po = printName po
   where
     printName AutoRun {}      = "AutoRun"
+    printName BurnAll {}      = "BurnAll"
+    printName CheckBalance {} = "CheckBalance"
     printName CreateWallet {} = "CreateWallet"
-    printName FundWallet {}   = "FundWallet"
+    printName FundWallets {}  = "FundWallets"
     printName Mint {}         = "Mint"
     printName Initialize {}   = "Initialize"
     printName Prepare {}      = "Prepare"
     printName Fail {}         = "Fail"
     printName Publish {}      = "Publish"
     printName SplitWallet {}  = "SplitWallet"
+    printName Withdraw {}     = "Withdraw"
 
 printSoMsg :: SoFormat -> ScriptOperation -> String -> String
 printSoMsg format po = printTraceMsg (printSo format po)
@@ -70,3 +73,6 @@ withCliErrorMsg :: MonadError CliError m => (String -> String) -> m a -> m a
 withCliErrorMsg f = withError (\(CliError msg) -> CliError (f msg))
 
 
+liftSoMaybe :: MonadError CliError m => ScriptOperation -> String -> Maybe a -> m a
+liftSoMaybe _ _ (Just a) = pure a
+liftSoMaybe so msg _ = throwSoError so msg

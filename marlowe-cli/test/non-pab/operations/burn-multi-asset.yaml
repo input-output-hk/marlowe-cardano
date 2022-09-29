@@ -1,0 +1,46 @@
+stTestName: Burning operation which involves multiple parties
+
+stScriptOperations:
+
+  - tag: CreateWallet
+    soWalletNickname: Party-1
+
+  - tag: CreateWallet
+    soWalletNickname: Party-2
+
+  - tag: FundWallets
+    soValues:
+      - 25000000
+    soWalletNicknames:
+      - Party-1
+      - Party-2
+
+  - tag: Mint
+    soCurrencyNickname: Currency-1
+    soIssuer: Party-1
+    soTokenDistribution:
+      - [Party-2, A, 1]
+
+  - tag: Mint
+    soCurrencyNickname: Currency-2
+    soIssuer: Party-2
+    soTokenDistribution:
+      - [Party-1, B, 1]
+
+  - tag: BurnAll
+    soCurrencyNickname: Currency-1
+
+  - tag: BurnAll
+    soCurrencyNickname: Currency-2
+
+  - tag: CheckBalance
+    soWalletNickname: Party-1
+    soBalance:
+      - [ADA, 25]
+
+  - tag: CheckBalance
+    soWalletNickname: Party-2
+    soBalance:
+      - [ADA, 25]
+
+

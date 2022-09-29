@@ -12,9 +12,6 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Generics (C, Constructor, D, Generic, K1(K1), M1(M1), Rep, S, U1, conName, from, (:*:)((:*:)), (:+:)(L1, R1))
--- import Ledger.Value
-import Plutus.V1.Ledger.Ada (Ada, getLovelace)
-import Plutus.V1.Ledger.Slot (Slot(Slot))
 import Plutus.V2.Ledger.Api (CurrencySymbol(..), POSIXTime(POSIXTime), PubKeyHash(PubKeyHash), TokenName(..))
 import qualified PlutusTx.Prelude as P
 import Text.PrettyPrint.Leijen
@@ -110,9 +107,6 @@ instance (Pretty a) => Pretty [a] where
 instance Pretty P.Rational where
     prettyFragment = text . show
 
-instance Pretty Slot where
-    prettyFragment (Slot n) = prettyFragment n
-
 instance Pretty POSIXTime where
     prettyFragment (POSIXTime n) = prettyFragment n
 
@@ -125,8 +119,8 @@ instance Pretty BS.ByteString where
 instance Pretty P.BuiltinByteString where
     prettyFragment = text . show . P.fromBuiltin
 
-instance Pretty Ada where
-    prettyFragment x = prettyFragment (getLovelace x)
+-- instance Pretty Ada where
+--     prettyFragment x = prettyFragment (getLovelace x)
 
 instance Pretty CurrencySymbol where
     prettyFragment (CurrencySymbol bs) = text ("\"" ++ show (CurrencySymbol bs) ++ "\"")

@@ -44,6 +44,9 @@ module Language.Marlowe.CLI.Types
   , AnUTxO(..)
   , PayFromScript(..)
   , PayToScript(..)
+    -- * Minting
+  , CurrencyIssuer(..)
+  , MintingAction(..)
     -- * Keys
   , SomePaymentSigningKey
   , SomePaymentVerificationKey
@@ -175,12 +178,14 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Bifunctor as Bifunctor
 import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort, length)
+import qualified Data.List.NonEmpty as L
 import qualified Data.Map.Strict as M (Map)
 import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy(Proxy))
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import GHC.Exts (IsString(fromString))
+import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript
   (IsPlutusScriptLanguage, plutusScriptVersion, withPlutusScriptVersion)
@@ -209,6 +214,7 @@ type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentE
 getVerificationKey :: SomePaymentSigningKey -> SomePaymentVerificationKey
 getVerificationKey (Left skey)  = Left $ C.getVerificationKey skey
 getVerificationKey (Right skey) = Right $ C.getVerificationKey skey
+
 
 -- | Continuations for contracts.
 type Continuations = M.Map DatumHash Contract
@@ -752,3 +758,24 @@ data CoinSelectionStrategy = CoinSelectionStrategy
 
 defaultCoinSelectionStrategy :: CoinSelectionStrategy
 defaultCoinSelectionStrategy = CoinSelectionStrategy True True []
+
+data CurrencyIssuer era = CurrencyIssuer
+  {
+    ciIssuer :: AddressInEra era
+  , ciSigingKey :: SomePaymentSigningKey
+  }
+
+data MintingAction era =
+    Mint
+    {
+      maIssuer :: CurrencyIssuer era
+    , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era)
+    }
+  -- ^ The token names, amount and a possible receipient addresses.
+  | BurnAll
+    {
+      maIssuer :: CurrencyIssuer era
+    , maProviders :: L.NonEmpty (AddressInEra era, SomePaymentSigningKey)
+    }
+  -- ^ Burn all found tokens on the providers UTxOs of a given "private currency".
+

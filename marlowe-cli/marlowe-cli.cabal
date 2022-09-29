@@ -53,6 +53,7 @@ library
     Language.Marlowe.CLI.Cardano.Api.Address
     Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn
     Language.Marlowe.CLI.Cardano.Api.PlutusScript
+    Language.Marlowe.CLI.Cardano.Api.Value
     Language.Marlowe.CLI.Plutus.Script.Utils
     Language.Marlowe.CLI.Codec
     Language.Marlowe.CLI.Command
@@ -86,6 +87,7 @@ library
     base >= 4.9 && < 5,
     aeson,
     aeson-pretty,
+    appendmap -any,
     base16-bytestring,
     bech32,
     bytestring,
@@ -132,6 +134,7 @@ library
     servant,
     servant-client,
     split,
+    temporary,
     text,
     time,
     unordered-containers,

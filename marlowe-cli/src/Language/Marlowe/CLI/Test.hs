@@ -42,7 +42,7 @@ import Control.Monad.Reader (ReaderT(runReaderT), runReader)
 import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
 import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, queryInEra, readSigningKey)
 import Language.Marlowe.CLI.Test.Script (scriptTest)
-import Language.Marlowe.CLI.Test.Types (ExecutionMode, MarloweTests(..), Wallet(Wallet))
+import Language.Marlowe.CLI.Test.Types (ExecutionMode, MarloweTests(..), Wallet(Wallet), buildWallet)
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(..), SigningKeyFile(SigningKeyFile))
 import qualified Language.Marlowe.CLI.Types as T
@@ -72,8 +72,7 @@ runTests era ScriptTests{..} =
     faucetSigningKey <- readSigningKey (SigningKeyFile stFaucetSigningKeyFile)
     let
       protocolVersion = toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
-      faucet = Wallet stFaucetAddress faucetSigningKey mempty mempty
-
+    faucet <- runCli $ buildWallet connection stFaucetAddress faucetSigningKey
     slotConfig <- runCli $ querySlotConfig connection
     tests' <- mapM decodeFileStrict stTests
     mapM_ (scriptTest era protocolVersion costModel connection faucet slotConfig stExecutionMode) tests'
