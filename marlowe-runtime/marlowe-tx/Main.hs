@@ -132,6 +132,7 @@ run Options{..} = withSocketsDo do
         systemStart
         eraHistory
         protocolParameters
+        slotConfig
     let loadWalletContext = Query.loadWalletContext
     let
       loadMarloweContext :: LoadMarloweContext

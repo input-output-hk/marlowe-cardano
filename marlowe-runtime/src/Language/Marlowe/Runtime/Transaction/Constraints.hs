@@ -22,6 +22,8 @@ import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, maybeToList)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Time.Clock (diffUTCTime, secondsToNominalDiffTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -324,20 +326,22 @@ solveConstraints
   -> C.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
+  -> Chain.SlotConfig
   -> SolveConstraints
-solveConstraints _networkId _start _history protocol version marloweCtx walletCtx constraints = do
-  _txBodyContent <- solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
+solveConstraints _networkId _start _history protocol slotConfig version marloweCtx walletCtx constraints = do
+  _txBodyContent <- solveInitialTxBodyContent protocol slotConfig version marloweCtx walletCtx constraints
   Left ConstraintError
 
 solveInitialTxBodyContent
   :: forall v
    . C.ProtocolParameters
+  -> Chain.SlotConfig
   -> Core.MarloweVersion v
   -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletContext{..} TxConstraints{..} = do
+solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} WalletContext{..} TxConstraints{..} = do
   txIns <- solveTxIns
   txInsReference <- solveTxInsReference
   txOuts <- solveTxOuts
@@ -477,7 +481,21 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
       | otherwise = Just $ note ToCardanoError $ toCardanoTxIn payoutScriptUTxO
 
     solveTxOuts = undefined
-    solveTxValidityRange = undefined
+
+    solveTxValidityRange = case marloweInputConstraints of
+      MarloweInputConstraintsNone ->
+        pure ( C.TxValidityNoLowerBound
+             , C.TxValidityNoUpperBound C.ValidityNoUpperBoundInBabbageEra
+             )
+      MarloweInput invalidBefore invalidHereafter _ -> do
+        let utcTimeToSlotNo time = C.SlotNo $ floor $ diffUTCTime time (Chain.slotZeroTime slotConfig) / Chain.slotLength slotConfig
+        let posixTimeToUTCTime (P.POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
+        let minSlotNo = utcTimeToSlotNo $ posixTimeToUTCTime invalidBefore
+        let maxSlotNo = utcTimeToSlotNo $ posixTimeToUTCTime invalidHereafter
+        pure ( C.TxValidityLowerBound C.ValidityLowerBoundInBabbageEra minSlotNo
+             , C.TxValidityUpperBound C.ValidityUpperBoundInBabbageEra maxSlotNo
+             )
+
     solveTxMetadata = undefined
     solveTxExtraKeyWits = undefined
     solveTxMintValue = undefined
