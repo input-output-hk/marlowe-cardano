@@ -378,7 +378,9 @@ data Wallet era =
   Wallet
   {
     waAddress                   :: AddressInEra era
-  , waBalanceCheckBaseline      :: P.Value
+  , waBalanceCheckBaseline      :: P.Value                  -- ^ This value should reflect all the assets from the wallet which
+                                                            -- were on the chain when we started a particular scenario. Currently
+                                                            -- it is only used in the context of `Faucet` wallet.
   , waMintedTokens              :: P.Value                  -- ^ Tracks all the minted tokens to simplify auto run flow.
   , waSigningKey                :: SomePaymentSigningKey
   , waSubmittedTransactions     :: [TxBody era]             -- ^ We keep track of all the transaction so we can

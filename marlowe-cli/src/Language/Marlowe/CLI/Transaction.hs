@@ -733,8 +733,9 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
       Nothing -> pure body
       Just t -> do
         -- We attempt to increase fees by arbitrary amount on submission failure.
-        (submitBody connection body signingKeys t $> body) `catchError` \_ -> do
+        (submitBody connection body signingKeys t $> body) `catchError` \err -> do
           liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
+          liftIO $ hPrint stderr err
           let
             feeBalancingMargin = C.Lovelace 10000
             C.TxBodyContent{..} = bodyContent
@@ -754,7 +755,7 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
             _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
 
           withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..} { txOuts = txOuts', txFee = txFee' }) of
-            Left err -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err
+            Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
             Right body' -> do
               void $ submitBody connection body' signingKeys t
               pure body'
@@ -1333,44 +1334,35 @@ buildBodyWithContent connection payFromScript payToScript extraInputs inputs out
 
       refTxIns = txInsReferencesToTxIns txInsReference
 
-    utxo <-
+      allTxIns = (fst <$> txIns) <> refTxIns
+
+    -- This UTxO set is used for change calcuation.
+    utxos <-
       queryInEra connection
         . QueryUTxO
         . QueryUTxOByTxIn
         . S.fromList
-        $ (fst <$> txIns) <> refTxIns
+        $ allTxIns
     let eraInMode = toEraInMode era
 
     let
-      allTxIns = map fst . M.toList . unUTxO $ utxo
-      missingRefs = [ txIn | txIn <- refTxIns, txIn `notElem` allTxIns ]
-
-    when (notNull missingRefs) do
-      throwError . CliError $ "Reference inputs are missing from the chain: " <> show missingRefs
-
-    BalancedTxBody _ initialChange _ <-
-      liftCli
-        $ withShelleyBasedEra era
-        $ makeTransactionBodyAutoBalance
-            eraInMode
-            start
-            history
-            protocol'
-            S.empty
-            utxo
-            TxBodyContent{..}
-            changeAddress
-            Nothing
+      foundTxIns = map fst . M.toList . unUTxO $ utxos
+      missingTxIns = [ txIn | txIn <- allTxIns, txIn `notElem` foundTxIns ]
+    when (notNull missingTxIns) do
+      throwError . CliError $ "Some inputs are missing from the chain (possibly reference inputs): " <> show missingTxIns
 
     let
-      loop :: Integer -> TxOut C.CtxTx era -> m (C.TxBodyContent C.BuildTx era, BalancedTxBody era)
-      loop counter changeTxOut@(TxOut addr (txOutValueToValue -> changeValue) datum ref) = do
+      mkChangeTxOut value = do
+        let txOutValue = C.TxOutValue (toMultiAssetSupportedInEra era) value
+        C.TxOut changeAddress txOutValue TxOutDatumNone ReferenceScriptNone
+
+      balancingLoop :: Integer -> C.Value -> m (C.TxBodyContent C.BuildTx era, BalancedTxBody era)
+      balancingLoop counter changeValue = do -- changeTxOut@(TxOut addr (txOutValueToValue -> changeValue) datum ref) = do
         when (counter == 0) $ throwError . CliError $ do
           "Uncucessful balancing of the transaction: " <> show (TxBodyContent {..})
         let
-          buildTxBodyContent = TxBodyContent{..} { txOuts = changeTxOut : txOuts }
-
           -- Recompute execution units with full set of UTxOs, including change.
+          buildTxBodyContent = TxBodyContent{..} { txOuts = mkChangeTxOut changeValue : txOuts }
           trial =
             withShelleyBasedEra era $ makeTransactionBodyAutoBalance
               eraInMode
@@ -1378,23 +1370,27 @@ buildBodyWithContent connection payFromScript payToScript extraInputs inputs out
               history
               protocol'
               S.empty
-              utxo
+              utxos
               buildTxBodyContent
               changeAddress
               Nothing
-
         case trial of
           -- Correct for a negative balance in cases where execution units, and hence fees, have increased.
           Left (TxBodyErrorAdaBalanceNegative delta) -> do
-            let
-              changeValue' = C.lovelaceToValue delta <> changeValue
-              changeTxOutValue' = C.TxOutValue (toMultiAssetSupportedInEra era) changeValue'
-            loop (counter - 1) (C.TxOut addr changeTxOutValue' datum ref)
+            balancingLoop (counter - 1) (C.lovelaceToValue delta <> changeValue)
           Left err -> throwError . CliError $ show err
           Right balanced@(BalancedTxBody (TxBody TxBodyContent { txFee = fee }) _ _) -> do
             pure (buildTxBodyContent { txFee = fee }, balanced)
 
-    (txBodyContent, BalancedTxBody txBody _ lovelace) <- loop 10 initialChange
+      totalIn = foldMap txOutValueValue . (M.elems . C.unUTxO) $ utxos
+      totalOut = foldMap txOutValueValue txOuts
+      totalMint = case txMintValue of
+        C.TxMintValue _ value _ -> value
+        _ -> mempty
+      -- Initial setup is `fee = 0` - we output all the difference as a change and expect balancing error ;-)
+      initialChange = totalIn <> totalMint <> C.negateValue totalOut
+
+    (txBodyContent, BalancedTxBody txBody _ lovelace) <- balancingLoop 10 initialChange
 
     when printStats
       . liftIO

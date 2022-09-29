@@ -347,7 +347,8 @@ interpret so@BurnAll {..} = do
     printStats
 
   -- We burn *all* the tokens so we have to drop them from the wallet balance baseline as well.
-  -- They should not counted in this reference of untracked funds from the chain.
+  -- We should not include them in this reference of untracked funds from the chain because they
+  -- are not on chain anymore.
   for_ (Map.toList allWallets) \(walletNickname, Wallet { waBalanceCheckBaseline }) -> do
     let
       balanceCheckBaseline' = do

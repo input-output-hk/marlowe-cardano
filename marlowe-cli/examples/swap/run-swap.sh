@@ -346,7 +346,7 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_B_ADDRESS" | s
 
 echo "## Clean Up"
 
-echo "Burning tokens issued of PARTY_A:"
+echo "Burning tokens issued by PARTY_A:"
 
 marlowe-cli -- util burn --testnet-magic "$MAGIC" \
                          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
