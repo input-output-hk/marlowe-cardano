@@ -13,7 +13,7 @@ import qualified Cardano.Api.Shelley as C
 import Control.Monad (forM)
 import qualified Data.Aeson as Aeson
 import Data.Binary (Binary)
-import Data.Crosswalk (Crosswalk(crosswalk, sequenceL))
+import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
 import Data.List (find, nub)
 import qualified Data.List.NonEmpty as NE
