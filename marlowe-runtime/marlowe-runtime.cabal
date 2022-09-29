@@ -160,6 +160,7 @@ executable marlowe
     , marlowe-runtime:config
     , monad-control
     , network
+    , plutus-ledger-api
     , transformers
     , transformers-base
     , typed-protocols
