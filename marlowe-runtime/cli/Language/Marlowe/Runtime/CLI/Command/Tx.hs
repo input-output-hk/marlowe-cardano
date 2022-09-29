@@ -25,7 +25,10 @@ txCommandParser subCommandParser = TxCommand
       <$> changeAddressParser
       <*> extraAddressesParser
       <*> collateralUtxosParser
-    signingMethodParser = pure Manual
+    signingMethodParser = flag Manual Manual $ mconcat
+      [ long "manual-sign"
+      , help "Sign the transaction manually. Outputs the CBOR bytes of the unsigned transaction to stdout. Use the submit command to submit the signed transaction."
+      ]
     changeAddressParser = option (eitherReader parseAddress) $ mconcat
       [ long "change-address"
       , help "The address to which the change of the transaction should be sent."
