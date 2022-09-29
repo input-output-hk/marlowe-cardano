@@ -97,6 +97,7 @@ import Language.Marlowe.Runtime.ChainSync.Database
   , GetGenesisBlock(..)
   , GetHeaderAtPoint(..)
   , GetIntersectionPoints(..)
+  , GetUTxOs(GetUTxOs)
   , MoveClient(..)
   , MoveResult(..)
   , hoistCommitBlocks
@@ -105,6 +106,7 @@ import Language.Marlowe.Runtime.ChainSync.Database
   , hoistGetGenesisBlock
   , hoistGetHeaderAtPoint
   , hoistGetIntersectionPoints
+  , hoistGetUTxOs
   , hoistMoveClient
   )
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock(..), GenesisTx(..))
@@ -121,7 +123,9 @@ databaseQueries genesisBlock = DatabaseQueries
   (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
   (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
   (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
+  (hoistGetUTxOs (TS.transaction TS.ReadCommitted TS.Read) getUTxOs)
   (hoistMoveClient (TS.transaction TS.ReadCommitted TS.Read) moveClient)
+
 
 -- GetGenesisBlock
 
@@ -744,6 +748,48 @@ queryTxOutsBulk slotNo txIds = HT.statement (V.fromList $ Api.unTxId <$> Set.toL
               { Api.tokens = tokens <> decodeTokens policyId tokenName quantity
               }
           }
+getUTxOs :: GetUTxOs Transaction
+getUTxOs = GetUTxOs \addresses -> do
+    let
+      addresses' = V.fromList $ fmap Api.unAddress. Set.toList $ addresses
+    HT.statement addresses' $
+      [foldStatement|
+        SELECT txOut.txId :: bytea
+             , txOut.txIx :: smallint
+             , txOut.address :: bytea
+             , txOut.lovelace :: bigint
+             , txOut.datumHash :: bytea?
+             , txOut.datumBytes :: bytea?
+             , asset.policyId :: bytea?
+             , asset.name :: bytea?
+             , assetOut.quantity :: bigint?
+          FROM chain.txOut         AS txOut
+          LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+          LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+         WHERE txOut.address = ANY($1 :: bytea[])
+         ORDER BY txIx
+      |] (Fold foldRow mempty id)
+    where
+      -- foldRow :: IntMap Api.TransactionOutput -> ReadTxOutRow -> IntMap Api.TransactionOutput
+      foldRow acc (txId, txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
+        Map.alter (Just . maybe newTxOut mergeTxOut) (Api.TxOutRef (Api.TxId txId) (fromIntegral txIx)) acc
+        where
+          newTxOut = Api.TransactionOutput
+            { address = Api.Address address
+            , assets = Api.Assets
+                { ada = Api.Lovelace $ fromIntegral lovelace
+                , tokens = decodeTokens policyId tokenName quantity
+                }
+            , datumHash = Api.DatumHash <$> datumHash
+            , datum = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
+            }
+
+          mergeTxOut txOut@Api.TransactionOutput{assets = assets@Api.Assets{..}} = txOut
+            { Api.assets = assets
+                { Api.tokens = tokens <> decodeTokens policyId tokenName quantity
+                }
+            }
+
 decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Api.Tokens
 decodeTokens (Just policyId) (Just tokenName) (Just quantity) =
   Api.Tokens $ Map.singleton

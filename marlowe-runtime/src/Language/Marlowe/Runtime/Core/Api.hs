@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Runtime.Core.Api
@@ -74,19 +75,19 @@ deriving instance Show (MarloweVersion v)
 deriving instance Eq (MarloweVersion v)
 deriving instance Ord (MarloweVersion v)
 
+type family Redeemer (v :: MarloweVersionTag) = r | r -> v
 class IsMarloweVersion (v :: MarloweVersionTag) where
   type Contract v :: *
   type TransactionError v :: *
   type Datum v :: *
-  type Redeemer v :: *
   type PayoutDatum v :: *
   marloweVersion :: MarloweVersion v
 
+type instance Redeemer 'V1 = V1.MarloweInput
 instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
   type TransactionError 'V1 = V1.TransactionError
   type Datum 'V1 = V1.MarloweData
-  type Redeemer 'V1 = V1.MarloweInput
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 

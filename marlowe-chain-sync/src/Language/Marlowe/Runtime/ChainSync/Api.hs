@@ -110,6 +110,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -749,6 +750,7 @@ data ChainSyncQuery delimiter err result where
   GetProtocolParameters :: ChainSyncQuery Void () ProtocolParameters
   GetSystemStart :: ChainSyncQuery Void () SystemStart
   GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
+  GetUTxOs :: Set Address -> ChainSyncQuery Void () (Map TxOutRef TransactionOutput)
 
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
@@ -758,6 +760,7 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters :: Query.Tag ChainSyncQuery Void () ProtocolParameters
     TagGetSystemStart :: Query.Tag ChainSyncQuery Void () SystemStart
     TagGetEraHistory :: Query.Tag ChainSyncQuery Void () (EraHistory CardanoMode)
+    TagGetUTxOs :: Query.Tag ChainSyncQuery Void () (Map TxOutRef TransactionOutput)
   tagEq TagGetSlotConfig TagGetSlotConfig               = Just (Refl, Refl, Refl)
   tagEq TagGetSlotConfig _                              = Nothing
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
@@ -770,6 +773,8 @@ instance Query.IsQuery ChainSyncQuery where
   tagEq TagGetEraHistory _                       = Nothing
   tagEq TagGetSystemStart TagGetSystemStart = Just (Refl, Refl, Refl)
   tagEq TagGetSystemStart _                       = Nothing
+  tagEq TagGetUTxOs TagGetUTxOs = Just (Refl, Refl, Refl)
+  tagEq TagGetUTxOs _ = Nothing
   putTag = \case
     TagGetSlotConfig        -> putWord8 0x01
     TagGetSecurityParameter -> putWord8 0x02
@@ -777,6 +782,7 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters -> putWord8 0x04
     TagGetSystemStart -> putWord8 0x05
     TagGetEraHistory -> putWord8 0x06
+    TagGetUTxOs -> putWord8 0x07
   getTag = do
     word <- getWord8
     case word of
@@ -786,6 +792,7 @@ instance Query.IsQuery ChainSyncQuery where
       0x04 -> pure $ Query.SomeTag TagGetProtocolParameters
       0x05 -> pure $ Query.SomeTag TagGetSystemStart
       0x06 -> pure $ Query.SomeTag TagGetEraHistory
+      0x07 -> pure $ Query.SomeTag TagGetUTxOs
       _    -> fail "Invalid ChainSyncQuery tag"
   putQuery = \case
     GetSlotConfig        -> mempty
@@ -794,6 +801,7 @@ instance Query.IsQuery ChainSyncQuery where
     GetProtocolParameters -> mempty
     GetSystemStart -> mempty
     GetEraHistory -> mempty
+    GetUTxOs utxos -> put . fmap unAddress . Set.toList $ utxos
   getQuery = \case
     TagGetSlotConfig        -> pure GetSlotConfig
     TagGetSecurityParameter -> pure GetSecurityParameter
@@ -801,6 +809,9 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters -> pure GetProtocolParameters
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
+    TagGetUTxOs -> do
+      utxos <- get
+      pure . GetUTxOs . Set.fromList . fmap Address $ utxos
   putDelimiter = \case
     TagGetSlotConfig        -> absurd
     TagGetSecurityParameter -> absurd
@@ -808,6 +819,7 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters -> absurd
     TagGetSystemStart -> absurd
     TagGetEraHistory -> absurd
+    TagGetUTxOs -> absurd
   getDelimiter = \case
     TagGetSlotConfig        -> fail "no delimiter defined"
     TagGetSecurityParameter -> fail "no delimiter defined"
@@ -815,6 +827,7 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters -> fail "no delimiter defined"
     TagGetSystemStart -> fail "no delimiter defined"
     TagGetEraHistory -> fail "no delimiter defined"
+    TagGetUTxOs -> fail "no delimiter defined"
   putErr = \case
     TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
@@ -822,6 +835,7 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters -> put
     TagGetSystemStart -> put
     TagGetEraHistory -> put
+    TagGetUTxOs -> put
   getErr = \case
     TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
@@ -829,6 +843,7 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters -> get
     TagGetSystemStart -> get
     TagGetEraHistory -> get
+    TagGetUTxOs -> get
   putResult = \case
     TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
@@ -840,6 +855,7 @@ instance Query.IsQuery ChainSyncQuery where
       EraHistory _ interpreter -> put $ serialise interpreter
     TagGetSystemStart -> \case
       SystemStart start -> putUTCTime start
+    TagGetUTxOs -> put
   getResult = \case
     TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
@@ -855,6 +871,7 @@ instance Query.IsQuery ChainSyncQuery where
         Left err -> fail $ show err
         Right interpreter -> pure $ EraHistory CardanoMode interpreter
     TagGetSystemStart -> SystemStart <$> getUTCTime
+    TagGetUTxOs -> get
   tagFromQuery = \case
     GetSlotConfig        -> TagGetSlotConfig
     GetSecurityParameter -> TagGetSecurityParameter
@@ -862,6 +879,7 @@ instance Query.IsQuery ChainSyncQuery where
     GetProtocolParameters -> TagGetProtocolParameters
     GetEraHistory -> TagGetEraHistory
     GetSystemStart -> TagGetSystemStart
+    GetUTxOs _ -> TagGetUTxOs
 
 data ChainSyncCommand status err result where
   SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
