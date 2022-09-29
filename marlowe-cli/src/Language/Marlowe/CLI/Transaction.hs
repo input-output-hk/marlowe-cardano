@@ -694,7 +694,7 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
                 then Just <$> makeBalancedTxOut era protocol addr Nothing value ReferenceScriptNone
                 else pure Nothing
             when (tokensValue == mempty) $ do
-              throwError . CliError $ "Unable to find currecy " <> show policy <> " tokens."
+              throwError . CliError $ "Unable to find currency " <> show policy <> " tokens."
             pure (inputs', outputs', signingKeys', C.negateValue tokensValue)
 
     let

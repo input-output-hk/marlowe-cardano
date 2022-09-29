@@ -72,27 +72,27 @@ data UtilCommand era =
     -- | Clean UTxOs at an address.
     Clean
     {
-      network         :: NetworkId         -- ^ The network ID, if any.
-    , socketPath      :: FilePath          -- ^ The path to the node socket.
-    , signingKeyFiles :: [SigningKeyFile]  -- ^ The files containing the required signing keys.
-    , lovelace        :: Lovelace          -- ^ The lovelace to send with each bundle of tokens.
-    , change          :: AddressInEra era  -- ^ The change address.
-    , bodyFile        :: TxBodyFile        -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int         -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+      network         :: NetworkId                                      -- ^ The network ID, if any.
+    , socketPath      :: FilePath                                       -- ^ The path to the node socket.
+    , signingKeyFiles :: [SigningKeyFile]                               -- ^ The files containing the required signing keys.
+    , lovelace        :: Lovelace                                       -- ^ The lovelace to send with each bundle of tokens.
+    , change          :: AddressInEra era                               -- ^ The change address.
+    , bodyFile        :: TxBodyFile                                     -- ^ The output file for the transaction body.
+    , submitTimeout   :: Maybe Int                                      -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
     -- | Mint tokens.
   | Mint
     {
-      network        :: NetworkId             -- ^ The network ID, if any.
-    , socketPath     :: FilePath              -- ^ The path to the node socket.
-    , signingKeyFile :: SigningKeyFile        -- ^ The files containing the required signing keys.
-    , metadataFile   :: Maybe FilePath        -- ^ The CIP-25 metadata for the minting, with keys for each token name.
-    , count          :: Natural               -- ^ The number of each token to mint.
-    , expires        :: Maybe SlotNo          -- ^ The slot number after which minting is no longer possible.
-    , change         :: AddressInEra era      -- ^ The change address.
-    , bodyFile       :: TxBodyFile            -- ^ The output file for the transaction body.
-    , submitTimeout  :: Maybe Int             -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , tokenNames     :: L.NonEmpty TokenName  -- ^ The token names.
+      network        :: NetworkId                                       -- ^ The network ID, if any.
+    , socketPath     :: FilePath                                        -- ^ The path to the node socket.
+    , issuer         :: (AddressInEra era, SigningKeyFile)              -- ^ The change address.
+    , providers      :: [(AddressInEra era, SigningKeyFile)]            -- ^ Additional token providers.
+    , metadataFile   :: Maybe FilePath                                  -- ^ The CIP-25 metadata for the minting, with keys for each token name.
+    , count          :: Natural                                         -- ^ The number of each token to mint.
+    , expires        :: Maybe SlotNo                                    -- ^ The slot number after which minting is no longer possible.
+    , bodyFile       :: TxBodyFile                                      -- ^ The output file for the transaction body.
+    , submitTimeout  :: Maybe Int                                       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , tokenNames     :: L.NonEmpty TokenName                            -- ^ The token names.
     }
   | Burn
     {
@@ -201,13 +201,14 @@ runUtilCommand command =
       Mint{..}         -> do
                             let
                               tokenDistribution = (, count) <$> tokenNames
+                              (addr, skeyFile) = issuer
                             buildMinting
                               connection
-                              signingKeyFile
+                              skeyFile
                               (Right tokenDistribution)
                               metadataFile
                               expires
-                              change
+                              addr
                               bodyFile
                               submitTimeout
       Burn{..}         -> do
@@ -312,16 +313,18 @@ mintOptions network socket =
   Mint
     <$> O.option parseNetworkId              (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network            <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                          (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> socket             <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> requiredSignerOpt
-
+    <*> walletOpt                            (O.long "issuer"          <> O.metavar "ADDRESS:SIGNING_FILE"               <> O.help "Issuer wallet info")
+    <*> tokenProviderOpt
     <*> (O.optional . O.strOption)           (O.long "metadata-file"   <> O.metavar "JSON_FILE"                          <> O.help "The CIP-25 metadata, with keys for each token name."                                                             )
     <*> O.option O.auto                      (O.long "count"           <> O.metavar "INTEGER"      <> O.value 1          <> O.help "The number of each token to mint."                                                                               )
     <*> (O.optional . O.option parseSlotNo)  (O.long "expires"         <> O.metavar "SLOT_NO"                            <> O.help "The slot number after which miniting is no longer possible."                                                     )
-    <*> O.option parseAddress                (O.long "change-address"  <> O.metavar "ADDRESS"                            <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> txBodyFileOpt
 
     <*> (O.optional . O.option O.auto)       (O.long "submit"          <> O.metavar "SECONDS"                            <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
-    <*> O.some1 (O.argument parseTokenName    $                            O.metavar "TOKEN_NAME"                         <> O.help "The name of the token."                                                                                          )
+    <*> O.some1 (O.argument parseTokenName    $                            O.metavar "TOKEN_NAME"                         <> O.help "The name of the token." )
+  where
+    tokenProviderOpt =
+      fmap (fromMaybe []) $ (O.optional . O.some . walletOpt) (O.long "token-provider" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Additional tokens owners info.")
 
 -- | Parser for the "mint" command.
 burnCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)

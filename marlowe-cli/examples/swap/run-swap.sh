@@ -79,10 +79,10 @@ AMOUNT_A=300
 CURRENCY_SYMBOL_A=$(
 marlowe-cli util mint --testnet-magic "$MAGIC"                  \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --required-signer "$PARTY_A_PAYMENT_SKEY" \
-                      --change-address  "$PARTY_A_ADDRESS"      \
+                      --issuer "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
                       --count "$AMOUNT_A"                       \
                       --expires "$MINT_EXPIRES"                 \
+                      --token-provider "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
                       --out-file /dev/null                      \
                       --submit=600                              \
                       "$TOKEN_NAME_A"                           \
@@ -154,10 +154,10 @@ AMOUNT_B=500
 CURRENCY_SYMBOL_B=$(
 marlowe-cli util mint --testnet-magic "$MAGIC" \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --required-signer "$PARTY_B_PAYMENT_SKEY" \
-                      --change-address  "$PARTY_B_ADDRESS"      \
+                      --issuer "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
                       --count "$AMOUNT_B"                       \
                       --expires "$MINT_EXPIRES"                 \
+                      --token-provider "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
                       --out-file /dev/null                      \
                       --submit=600                              \
                       "$TOKEN_NAME_B"                           \
