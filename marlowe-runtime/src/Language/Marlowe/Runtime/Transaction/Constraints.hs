@@ -323,15 +323,48 @@ type SolveConstraints
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
 solveConstraints
-  :: NetworkId
-  -> C.SystemStart
+  :: C.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> Chain.SlotConfig
   -> SolveConstraints
-solveConstraints _networkId _start _history protocol slotConfig version marloweCtx walletCtx constraints = do
-  _txBodyContent <- solveInitialTxBodyContent protocol slotConfig version marloweCtx walletCtx constraints
-  Left ConstraintError
+solveConstraints start history protocol slotConfig version marloweCtx walletCtx constraints =
+  solveInitialTxBodyContent protocol slotConfig version marloweCtx walletCtx constraints
+    >>= adjustForMinUtxo protocol marloweCtx
+    >>= selectCoins protocol walletCtx
+    >>= balanceTx C.BabbageEraInCardanoMode start history protocol marloweCtx walletCtx
+
+-- Adjusts all the TxOuts as necessary to comply with Minimum UTXO
+-- requirements. Additionally, ensures that the Value of the marlowe output
+-- does not change (fails with an error if it does).
+adjustForMinUtxo
+  :: C.ProtocolParameters
+  -> MarloweContext v
+  -> C.TxBodyContent C.BuildTx C.BabbageEra
+  -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
+adjustForMinUtxo = error "not implemented"
+
+-- Selects enough additional inputs to cover the excess balance of the
+-- transaction (total outputs - total inputs).
+selectCoins
+  :: C.ProtocolParameters
+  -> WalletContext
+  -> C.TxBodyContent C.BuildTx C.BabbageEra
+  -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
+selectCoins = error "not implemented"
+
+-- Ensure the fee is computed and covered, and that the excess input balance is
+-- returned to the change address.
+balanceTx
+  :: C.EraInMode C.BabbageEra C.CardanoMode
+  -> C.SystemStart
+  -> C.EraHistory C.CardanoMode
+  -> C.ProtocolParameters
+  -> MarloweContext v
+  -> WalletContext
+  -> C.TxBodyContent C.BuildTx C.BabbageEra
+  -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
+balanceTx = error "not implemented"
 
 solveInitialTxBodyContent
   :: forall v
