@@ -9,6 +9,7 @@ import Options.Applicative
 data TxCommand cmd = TxCommand
   { walletAddresses :: WalletAddresses
   , signingMethod :: SigningMethod
+  , metadataFile :: Maybe FilePath
   , subCommand :: cmd
   }
 
@@ -19,6 +20,7 @@ txCommandParser :: Parser cmd -> Parser (TxCommand cmd)
 txCommandParser subCommandParser = TxCommand
   <$> walletAddressesParser
   <*> signingMethodParser
+  <*> metadataFileParser
   <*> subCommandParser
   where
     walletAddressesParser = WalletAddresses
@@ -28,6 +30,12 @@ txCommandParser subCommandParser = TxCommand
     signingMethodParser = flag Manual Manual $ mconcat
       [ long "manual-sign"
       , help "Sign the transaction manually. Outputs the CBOR bytes of the unsigned transaction to stdout. Use the submit command to submit the signed transaction."
+      ]
+    metadataFileParser = optional $ strOption $ mconcat
+      [ long "metadata-file"
+      , short 'm'
+      , help "A JSON file containing a map of integer indexes to arbitrary JSON values that will be added to the transaction's metadata."
+      , metavar "FILE_PATH"
       ]
     changeAddressParser = option (eitherReader parseAddress) $ mconcat
       [ long "change-address"
