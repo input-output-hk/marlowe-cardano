@@ -815,8 +815,24 @@ commitBlocks = CommitBlocks \blocks ->
           ( SELECT * FROM UNNEST ($11 :: bytea[], $12 :: smallint[], $13 :: bigint[], $14 :: bytea[], $15 :: bigint[], $16 :: bytea?[], $17 :: bytea?[], $18 :: boolean[])
           )
         , newTxOuts AS
-          ( INSERT INTO chain.txOut (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral)
-            SELECT txOut.txId, txOut.txIx, txOut.slotNo, txOut.address, txOut.lovelace, txOut.datumHash, txOut.datumBytes, txOut.isCollateral
+          ( INSERT INTO chain.txOut (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral, addressHeader, addressPaymentCredential, addressStakeAddressReference)
+            SELECT txOut.txId
+                 , txOut.txIx
+                 , txOut.slotNo
+                 , txOut.address
+                 , txOut.lovelace
+                 , txOut.datumHash
+                 , txOut.datumBytes
+                 , txOut.isCollateral
+                 , substring(txOut.address from 0 for 2)
+                 , CASE
+                    WHEN length(txOut.address) in (29, 57) THEN substring(txOut.address from 2 for 28)
+                    ELSE NULL
+                   END
+                 , CASE
+                    WHEN length(txOut.address) = 57 THEN substring(txOut.address from 30)
+                    ELSE NULL
+                   END
             FROM   txOutInputs AS txOut
           )
         , txInInputs (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral) AS
