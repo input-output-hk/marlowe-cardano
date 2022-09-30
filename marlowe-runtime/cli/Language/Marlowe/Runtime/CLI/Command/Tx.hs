@@ -13,8 +13,8 @@ data TxCommand cmd = TxCommand
   , subCommand :: cmd
   }
 
-data SigningMethod
-  = Manual
+newtype SigningMethod
+  = Manual FilePath
 
 txCommandParser :: Parser cmd -> Parser (TxCommand cmd)
 txCommandParser subCommandParser = TxCommand
@@ -27,9 +27,11 @@ txCommandParser subCommandParser = TxCommand
       <$> changeAddressParser
       <*> extraAddressesParser
       <*> collateralUtxosParser
-    signingMethodParser = flag Manual Manual $ mconcat
+    -- TODO add other signing methods with <|> here (e.g. CIP-30, cardano-wallet).
+    signingMethodParser = manualSignParser
+    manualSignParser = fmap Manual $ strOption $ mconcat
       [ long "manual-sign"
-      , help "Sign the transaction manually. Outputs the CBOR bytes of the unsigned transaction to stdout. Use the submit command to submit the signed transaction."
+      , help "Sign the transaction manually. Writes the CBOR bytes of the unsigned transaction to the specified file for manual signing. Use the submit command to submit the signed transaction."
       ]
     metadataFileParser = optional $ strOption $ mconcat
       [ long "metadata-file"
