@@ -13,6 +13,7 @@
 
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
@@ -46,7 +47,8 @@ import Language.Marlowe.CLI.Command.Parse
   , parseNetworkId
   , parseOutputQuery
   , parseSlotNo
-  , parseTokenName
+  , readAddressEither
+  , readTokenName
   , requiredSignerOpt
   , requiredSignersOpt
   , txBodyFileOpt
@@ -59,8 +61,10 @@ import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery, OutputQueryRes
 import Plutus.V1.Ledger.Api (TokenName)
 
 import Control.Applicative ((<|>))
+import Control.Category ((>>>))
 import Control.Monad.Reader (MonadReader)
 import qualified Data.List.NonEmpty as L
+import Data.List.Split (splitOn)
 import Data.Maybe (fromMaybe)
 import GHC.Natural (Natural)
 import qualified Options.Applicative as O
@@ -92,7 +96,7 @@ data UtilCommand era =
     , expires        :: Maybe SlotNo                                    -- ^ The slot number after which minting is no longer possible.
     , bodyFile       :: TxBodyFile                                      -- ^ The output file for the transaction body.
     , submitTimeout  :: Maybe Int                                       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , tokenNames     :: L.NonEmpty TokenName                            -- ^ The token names.
+    , tokenDistribution :: L.NonEmpty (TokenName, AddressInEra era)                            -- ^ The token names.
     }
   | Burn
     {
@@ -200,12 +204,13 @@ runUtilCommand command =
                             >>= printTxId
       Mint{..}         -> do
                             let
-                              tokenDistribution = (, count) <$> tokenNames
+                              step (tokenName, address) = (tokenName, count, address)
+                              tokenDistribution' = step <$> tokenDistribution
                               (addr, skeyFile) = issuer
                             buildMinting
                               connection
                               skeyFile
-                              (Right (providers, tokenDistribution))
+                              (Right tokenDistribution')
                               metadataFile
                               expires
                               addr
@@ -321,10 +326,21 @@ mintOptions network socket =
     <*> txBodyFileOpt
 
     <*> (O.optional . O.option O.auto)       (O.long "submit"          <> O.metavar "SECONDS"                            <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
-    <*> O.some1 (O.argument parseTokenName    $                            O.metavar "TOKEN_NAME"                         <> O.help "The name of the token." )
+    -- TODO:  help message and metavar
+    <*> O.some1 (O.argument parseTokenDistribution $                            O.metavar "TOKEN_NAME:ADDRESS"                         <> O.help "The name of the token." )
   where
     tokenProviderOpt =
       fmap (fromMaybe []) $ (O.optional . O.some . walletOpt) (O.long "token-provider" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Additional tokens owners info.")
+    parseTokenDistribution :: IsShelleyBasedEra era => O.ReadM (TokenName, AddressInEra era)
+    parseTokenDistribution =
+      O.eitherReader
+        $ splitOn ":" >>> \case
+            [tokenName, address] -> do
+                address' <- readAddressEither address
+                let
+                  tokenName' = readTokenName tokenName
+                pure (tokenName', address')
+            _  -> Left "Expecting token name and recipient address in the following format: TOKENNAME:ADDRESS"
 
 -- | Parser for the "mint" command.
 burnCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)

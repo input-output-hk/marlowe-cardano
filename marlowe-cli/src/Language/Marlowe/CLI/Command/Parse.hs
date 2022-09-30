@@ -44,6 +44,7 @@ module Language.Marlowe.CLI.Command.Parse
   , parseWallet
   , protocolVersionOpt
   , publishingStrategyOpt
+  , readAddressEither
   , readTokenName
   , requiredSignerOpt
   , requiredSignersOpt

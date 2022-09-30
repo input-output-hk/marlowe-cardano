@@ -552,7 +552,7 @@ buildMinting :: MonadError CliError m
              -> SigningKeyFile                                      -- ^ The file for required signing key.
              -> Either
                 [(AddressInEra era, SigningKeyFile)]
-                ([(AddressInEra era, SigningKeyFile)],NonEmpty (TokenName, Natural))
+                (NonEmpty (TokenName, Natural, AddressInEra era))
                                                                     -- ^ Minting policy related action.
                                                                     -- Pass token providers for burning or token distribution for minting.
              -> Maybe FilePath                                      -- ^ The CIP-25 metadata for the minting, with keys for each token name.
@@ -576,16 +576,8 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
       pure $ BurnAll currencyIssuer (provider' :| providers')
     Left _ -> do
       throwError "Token provider set is empty."
-    Right (provider:providers, tokenDistribution) -> do
-      let
-        loadWallet (addr, skeyFile) = do
-          skey <- readSigningKey skeyFile
-          pure (addr, skey)
-      provider' <- loadWallet provider
-      providers' <- for providers loadWallet
-      pure $ Mint currencyIssuer (provider' :| providers') $ tokenDistribution <&> \(t, c) -> (t, c, changeAddress)
-    Right _ -> do
-      throwError "Token provider set is empty."
+    Right tokenDistribution -> do
+      pure $ Mint currencyIssuer tokenDistribution
   metadataJson <- sequence $ decodeFileStrict <$> metadataFile
   metadata <- forM metadataJson \case
     A.Object metadataProps -> pure metadataProps
@@ -625,25 +617,22 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
       policy = PolicyId scriptHash
 
     (inputs, outputs, signingKeys, mint) <- case mintingAction of
-        Mint _ providers tokenDistribution -> do
+        Mint _ tokenDistribution -> do
             let
-              signingKeys' = signingKey : (NonEmpty.toList . fmap snd $ providers)
-              addresses = NonEmpty.toList . fmap fst $ providers
               tokenDistribution' = tokenDistribution <&> \(TokenName name, count, recipient) -> do
                 let
                   value = valueFromList . pure $
                       (AssetId policy (AssetName $ fromBuiltin name) , C.Quantity $ toInteger count)
                 (recipient, value)
 
-            -- TODO: use sensible coin selection here. Currently coin selection failes in the context of minting.
+            -- TODO: use sensible coin selection here. Currently coin selection fails in the context of minting.
             utxos <-
               fmap (M.toList . unUTxO)
                 . queryInEra connection
                 . QueryUTxO
                 . QueryUTxOByAddress
-                . S.fromList
-                . fmap toAddressAny'
-                $ addresses
+                . S.singleton
+                $ toAddressAny' changeAddress
 
             assetsOutputs <- fmap catMaybes $ for utxos \(_, TxOut addr txOutValue _ _) -> do
               let
@@ -656,7 +645,7 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
             outputs' <- fmap NonEmpty.toList $ for tokenDistribution' \(address, mintedValue) ->
                 makeBalancedTxOut era protocol address Nothing mintedValue ReferenceScriptNone
 
-            pure (map fst utxos, assetsOutputs <> outputs', signingKeys', foldMap snd tokenDistribution')
+            pure (map fst utxos, assetsOutputs <> outputs', [signingKey], foldMap snd tokenDistribution')
 
         BurnAll _ providers -> do
             let
