@@ -1,3 +1,6 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+
 module Language.Marlowe.Runtime.Transaction.BuildConstraints
   ( buildApplyInputsConstraints
   , buildCreateConstraints
@@ -7,10 +10,12 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraints
 import qualified Data.Aeson as Aeson
 import Data.Map (Map)
 import Data.Time (UTCTime)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, SlotConfig, TokenName)
-import Language.Marlowe.Runtime.Core.Api (Contract, MarloweVersion, PayoutDatum, Redeemer, TransactionScriptOutput)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, AssetId, SlotConfig, TokenName)
+import Language.Marlowe.Runtime.Core.Api
+  (Contract, MarloweVersion(MarloweV1), MarloweVersionTag(V1), PayoutDatum, Redeemer, TransactionScriptOutput)
 import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, CreateError, WithdrawError)
-import Language.Marlowe.Runtime.Transaction.Constraints (TxConstraints)
+import Language.Marlowe.Runtime.Transaction.Constraints (TxConstraints(..))
+import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
@@ -43,4 +48,9 @@ buildWithdrawConstraints
   :: MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> PayoutDatum v -- ^ The role token from which to withdraw funds.
   -> Either WithdrawError (TxConstraints v)
-buildWithdrawConstraints = error "not implemented"
+buildWithdrawConstraints = \case
+  MarloweV1 -> Right . buildWithdrawConstraintsV1
+  where
+    buildWithdrawConstraintsV1 :: AssetId -> TxConstraints 'V1
+    buildWithdrawConstraintsV1 =
+      TxConstraints.mustConsumePayouts <> TxConstraints.mustSpendRoleToken
