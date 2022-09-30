@@ -19,11 +19,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 
 module Language.Marlowe.CLI.Analyze
-  ( -- * Analysis
-    analyze
+  ( -- * Types
+    ContractInstance(..)
+    -- * Analysis
+  , analyze
   , measure
   ) where
 
@@ -33,6 +36,9 @@ import Cardano.Api.Shelley (ProtocolParameters(..))
 import Codec.Serialise (serialise)
 import Control.Monad.Except
 import Control.Monad.Reader
+import Data.Aeson (object, (.=))
+import Data.List
+import Data.Yaml (encode)
 import Language.Marlowe.CLI.IO
 import Language.Marlowe.CLI.Types
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
@@ -45,11 +51,13 @@ import Plutus.V1.Ledger.Ada (lovelaceValueOf)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V2.Ledger.Api hiding (evaluateScriptCounting)
 
+import qualified Data.ByteString.Char8 as BS8 (putStrLn)
 import qualified Data.ByteString.Lazy as LBS (toStrict)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
 import qualified Data.Map.Strict as M
 import qualified Language.Marlowe.Core.V1.Semantics.Types as S
 import qualified PlutusTx.AssocMap as AM
+import qualified PlutusTx.Prelude as P
 
 
 -- | Analyze a Marlowe contract for protocol-limit or other violations.
@@ -65,10 +73,60 @@ analyze :: MonadError CliError m
         -> Bool                              -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
         -> Bool                              -- ^ Whether to compute tight estimates of worst-case bounds.
         -> m ()                              -- ^ Print estimates of worst-case bounds.
-analyze _connection marloweFile _preconditions _roles _tokens _maximumValue _minimumUtxo _executionCost _best =
+analyze _connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost _best =
   do
-    SomeMarloweTransaction _language _era MarloweTransaction{} <- decodeFileStrict marloweFile
-    pure ()
+    SomeMarloweTransaction _language _era MarloweTransaction{..} <- decodeFileStrict marloweFile
+    let
+      checkAll = preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
+      ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations
+    when (preconditions || checkAll)
+      $ checkPreconditions ci
+
+
+-- | A bundle of information describing a contract instance.
+data ContractInstance =
+  ContractInstance
+  {
+    ciRolesCurrency :: CurrencySymbol  -- ^ The roles currency.
+  , ciState         :: State           -- ^ The initial state of the contract.
+  , ciContract      :: Contract        -- ^ The initial contract.
+  , ciContinuations :: Continuations   -- ^ The merkleized continuations for the contract.
+  }
+    deriving Show
+
+
+-- | Report invalid properties in the Marlowe state:
+--
+--   * Invalid roles currency.
+--   * Invalid currency symbol or token name in an account.
+--   * Account balances that are not positive.
+--   * Duplicate accounts, choices, or bound values.
+checkPreconditions :: MonadIO m
+                   => ContractInstance
+                   -> m ()
+checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
+  let
+    nonPositiveBalances = filter ((<= 0) . snd) . AM.toList
+    invalidCurrency currency@CurrencySymbol{..} = currency /= adaSymbol && P.lengthOfByteString unCurrencySymbol /= 28
+    invalidToken (Token currency@CurrencySymbol{..} token@TokenName{..}) = not
+                                                                             $  currency == adaSymbol
+                                                                                && token == adaToken
+                                                                             || P.lengthOfByteString unCurrencySymbol == 28
+                                                                                && P.lengthOfByteString unTokenName <= 32
+    duplicates (AM.keys -> x) = x \\ nub x
+  in
+    liftIO
+      . BS8.putStrLn
+      . encode
+      $ object
+      [
+        "Invalid roles currency"        .= invalidCurrency ciRolesCurrency
+      , "Invalid account tokens"        .= filter invalidToken (snd <$> AM.keys accounts)
+      , "Non-positive account balances" .= nonPositiveBalances accounts
+      , "Duplicate accounts"            .= duplicates accounts
+      , "Duplicate choices"             .= duplicates choices
+      , "Duplicate bound values"        .= duplicates boundValues
+      ]
 
 
 -- | Utility for exploring cost modeling of Marlowe contracts.
