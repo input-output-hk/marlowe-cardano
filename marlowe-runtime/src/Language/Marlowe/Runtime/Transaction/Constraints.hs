@@ -18,6 +18,7 @@ import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, maybeToList)
+import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time.Clock (diffUTCTime, secondsToNominalDiffTime)
@@ -350,7 +351,7 @@ ensureAtLeastHalfAnAda origValue =
 --   to the minimum ADA requirement.
 adjustOutputForMinUtxo
   :: forall v
-  .  C.ProtocolParameters
+   .  C.ProtocolParameters
   -> C.TxOut C.CtxTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxOut C.CtxTx C.BabbageEra)
 adjustOutputForMinUtxo protocol txOut@(C.TxOut address origValue datum script) = do
@@ -369,13 +370,27 @@ adjustOutputForMinUtxo protocol txOut@(C.TxOut address origValue datum script) =
 -- does not change (fails with an error if it does).
 adjustTxForMinUtxo
   :: forall v
-  .  C.ProtocolParameters
+   . C.ProtocolParameters
   -> MarloweContext v
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-adjustTxForMinUtxo protocol _marloweCtx txBodyContent = do
-  adjustedTxOuts <- traverse (adjustOutputForMinUtxo protocol) $ C.txOuts txBodyContent
-  Right $ txBodyContent { C.txOuts = adjustedTxOuts }
+adjustTxForMinUtxo protocol MarloweContext{..} txBodyContent = do
+  let
+    getMarloweOutputValue :: [C.TxOut C.CtxTx C.BabbageEra] -> Maybe (C.TxOutValue C.BabbageEra)
+    getMarloweOutputValue = getFirst . mconcat . map First
+      . map (\(C.TxOut addressInEra txOutValue _ _) ->
+          if fromCardanoAddressInEra C.BabbageEra addressInEra == marloweAddress
+            then Just txOutValue
+            else Nothing)
+
+    origTxOuts = C.txOuts txBodyContent
+    origMarloweValue = getMarloweOutputValue origTxOuts
+
+  adjustedTxOuts <- traverse (adjustOutputForMinUtxo protocol) origTxOuts
+
+  if origMarloweValue == getMarloweOutputValue adjustedTxOuts
+    then Right $ txBodyContent { C.txOuts = adjustedTxOuts }
+    else Left $ CalculateMinUtxoFailed "Marlowe output value changed during output adjustment"
 
 -- Selects enough additional inputs to cover the excess balance of the
 -- transaction (total outputs - total inputs).
