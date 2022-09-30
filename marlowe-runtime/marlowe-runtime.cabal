@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name: marlowe-runtime
 version: 0.0.0.0
 synopsis:
@@ -56,7 +56,7 @@ common lang
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities -threaded
+    -Wredundant-constraints -Widentities
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
@@ -112,6 +112,66 @@ library
     , typed-protocols
     , witherable
 
+library config
+  import: lang
+  hs-source-dirs: config
+  exposed-modules:
+    Language.Marlowe.Runtime.CLI.Option
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , marlowe-chain-sync
+    , marlowe-runtime
+    , network
+    , optparse-applicative
+    , split
+
+executable marlowe
+  import: lang
+  hs-source-dirs: cli
+  main-is: Main.hs
+  other-modules:
+    Language.Marlowe.Runtime.CLI.Command
+    Language.Marlowe.Runtime.CLI.Command.Add
+    Language.Marlowe.Runtime.CLI.Command.Apply
+    Language.Marlowe.Runtime.CLI.Command.Create
+    Language.Marlowe.Runtime.CLI.Command.Log
+    Language.Marlowe.Runtime.CLI.Command.Ls
+    Language.Marlowe.Runtime.CLI.Command.Rm
+    Language.Marlowe.Runtime.CLI.Command.Submit
+    Language.Marlowe.Runtime.CLI.Command.Tx
+    Language.Marlowe.Runtime.CLI.Command.Withdraw
+    Language.Marlowe.Runtime.CLI.Env
+    Language.Marlowe.Runtime.CLI.Monad
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , bytestring
+    , containers
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:config
+    , monad-control
+    , network
+    , plutus-ledger-api
+    , transformers
+    , transformers-base
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , stm-delay
+    , text
+    , wl-pprint
+  if !os(windows)
+    build-depends: unix
+
 executable marlowed
   import: lang
   hs-source-dirs:   app
@@ -123,6 +183,7 @@ executable marlowed
   build-depends:
       base >= 4.9 && < 5
     , marlowe-runtime
+  ghc-options: -threaded
 
 executable marlowe-history
   import: lang
@@ -148,57 +209,7 @@ executable marlowe-history
     , stm
     , text
     , wl-pprint
-
-executable marlowe-history-cli
-  import: lang
-  hs-source-dirs:   marlowe-history-cli
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , ansi-terminal
-    , async
-    , base16
-    , containers
-    , marlowe
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime
-    , network
-    , typed-protocols
-    , optparse-applicative
-    , stm
-    , text
-    , wl-pprint
-
-executable marlowe-follower
-  import: lang
-  hs-source-dirs:   marlowe-follower
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_runtime
-    Options
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , ansi-terminal
-    , async
-    , base16
-    , containers
-    , marlowe
-    , marlowe-protocols
-    , marlowe-runtime
-    , marlowe-chain-sync
-    , network
-    , typed-protocols
-    , optparse-applicative
-    , stm
-    , text
-    , wl-pprint
+  ghc-options: -threaded
 
 executable marlowe-tx
   import: lang
@@ -225,6 +236,7 @@ executable marlowe-tx
     , stm
     , text
     , wl-pprint
+  ghc-options: -threaded
 
 test-suite marlowe-runtime-test
   import: lang
@@ -271,3 +283,4 @@ test-suite marlowe-runtime-test
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded
