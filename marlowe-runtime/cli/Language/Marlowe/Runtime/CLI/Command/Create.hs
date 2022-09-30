@@ -8,16 +8,21 @@ import Language.Marlowe (POSIXTime(POSIXTime))
 import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand, txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, TokenName(..))
+import Language.Marlowe.Runtime.ChainSync.Api (Address, PolicyId, TokenName(..))
 import Language.Marlowe.Runtime.Core.Api (SomeMarloweVersion)
 import Options.Applicative
 import Text.Read (readMaybe)
 
 data CreateCommand = CreateCommand
   { marloweVersion :: SomeMarloweVersion
-  , roles :: Map TokenName Address
+  , roles :: RolesConfig
   , contractFiles :: ContractFiles
   }
+
+data RolesConfig
+  = MintSimple (Map TokenName Address)
+  | MintConfig FilePath
+  | UseExistingPolicyId PolicyId
 
 data ContractFiles
   = CoreFile FilePath
@@ -39,7 +44,23 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       <$> marloweVersionParser
       <*> rolesParser
       <*> contractFilesParser
-    rolesParser = Map.fromList <$> many roleParser
+    rolesParser = mintSimpleParser <|> mintConfigParser <|> policyIdParser
+    mintSimpleParser = MintSimple . Map.fromList <$> many roleParser
+    mintConfigParser = fmap MintConfig $ strOption $ mconcat
+      [ long "roles-config-file"
+      , help $ unwords
+          [ "A JSON file containing a map of role token names to a roles configuration object."
+          , "The roles configuration object has two keys, \"address\" and \"metadata\","
+          , "where \"address\" is the address to send the newly minted role token and \"metadata\""
+          , "is the CIP-25 metadata object to associate with the token."
+          ]
+      , metavar "FILE_PATH"
+      ]
+    policyIdParser = fmap UseExistingPolicyId $ strOption $ mconcat
+      [ long "role-token-policy-id"
+      , metavar "POLICY_ID"
+      , help "The hexadecimal-encoded policy ID of the role tokens for this contract. This option is used to support role tokens minted in a separate transaction."
+      ]
     roleParser = keyValueOption (Right . TokenName . fromString) parseAddress $ mconcat
       [ long "role"
       , short 'r'
