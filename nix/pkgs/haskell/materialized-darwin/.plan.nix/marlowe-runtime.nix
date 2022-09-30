@@ -247,6 +247,7 @@
             "Language/Marlowe/Runtime/History/StoreSpec"
             "Language/Marlowe/Runtime/History/Store/ModelSpec"
             "Language/Marlowe/Runtime/HistorySpec"
+            "Language/Marlowe/Runtime/Transaction/BuildConstraintsSpec"
             "Spec/Marlowe/Semantics/Arbitrary"
             "Spec/Marlowe/Semantics/Golden"
             "Spec/Marlowe/Semantics/Golden/Escrow"
