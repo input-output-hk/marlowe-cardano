@@ -178,6 +178,7 @@
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
