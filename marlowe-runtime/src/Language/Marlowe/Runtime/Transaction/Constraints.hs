@@ -280,6 +280,7 @@ data ConstraintError v
   | ToCardanoError
   | MissingMarloweInput
   | PayoutInputNotFound (Core.PayoutDatum v)
+  | CalculateMinUtxoFailed String
   deriving (Generic)
 
 deriving instance Eq (ConstraintError 'V1)
@@ -329,19 +330,52 @@ solveConstraints
   -> SolveConstraints
 solveConstraints start history protocol slotConfig version marloweCtx walletCtx constraints =
   solveInitialTxBodyContent protocol slotConfig version marloweCtx walletCtx constraints
-    >>= adjustForMinUtxo protocol marloweCtx
+    >>= adjustTxForMinUtxo protocol marloweCtx
     >>= selectCoins protocol walletCtx
     >>= balanceTx C.BabbageEraInCardanoMode start history protocol marloweCtx walletCtx
+
+-- | 2022-08 This function was written to compensate for a bug in Cardano's
+--   calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will
+--   eventually be able to remove it.
+ensureAtLeastHalfAnAda :: C.Value -> C.Value
+ensureAtLeastHalfAnAda origValue =
+  if origLovelace < minLovelace
+    then origValue <> C.lovelaceToValue (minLovelace - origLovelace)
+    else origValue
+  where
+    origLovelace = C.selectLovelace origValue
+    minLovelace = C.Lovelace 500_000
+
+-- | Compute the `minAda` and adjust the lovelace in a single output to conform
+--   to the minimum ADA requirement.
+adjustOutputForMinUtxo
+  :: forall v
+  .  C.ProtocolParameters
+  -> C.TxOut C.CtxTx C.BabbageEra
+  -> Either (ConstraintError v) (C.TxOut C.CtxTx C.BabbageEra)
+adjustOutputForMinUtxo protocol txOut@(C.TxOut address origValue datum script) = do
+  minValue <- case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage txOut protocol of
+    Right minValue' -> pure minValue'
+    Left e -> Left (CalculateMinUtxoFailed $ show e)
+  let
+    value = ensureAtLeastHalfAnAda $ C.txOutValueToValue origValue
+    minLovelace = C.selectLovelace minValue
+    deficit = minLovelace <> negate (minimum[C.selectLovelace value, minLovelace])
+    newValue = value <> C.lovelaceToValue deficit
+  pure $ C.TxOut address (C.TxOutValue C.MultiAssetInBabbageEra newValue) datum script
 
 -- Adjusts all the TxOuts as necessary to comply with Minimum UTXO
 -- requirements. Additionally, ensures that the Value of the marlowe output
 -- does not change (fails with an error if it does).
-adjustForMinUtxo
-  :: C.ProtocolParameters
+adjustTxForMinUtxo
+  :: forall v
+  .  C.ProtocolParameters
   -> MarloweContext v
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-adjustForMinUtxo = error "not implemented"
+adjustTxForMinUtxo protocol _marloweCtx txBodyContent = do
+  adjustedTxOuts <- traverse (adjustOutputForMinUtxo protocol) $ C.txOuts txBodyContent
+  Right $ txBodyContent { C.txOuts = adjustedTxOuts }
 
 -- Selects enough additional inputs to cover the excess balance of the
 -- transaction (total outputs - total inputs).
