@@ -128,7 +128,6 @@ run Options{..} = withSocketsDo do
     let
       solveConstraints :: SolveConstraints
       solveConstraints = Constraints.solveConstraints
-        networkId
         systemStart
         eraHistory
         protocolParameters
