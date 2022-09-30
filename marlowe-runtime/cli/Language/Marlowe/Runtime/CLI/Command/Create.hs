@@ -94,10 +94,12 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
     timeoutArgumentParser = keyValueOption Right (fmap POSIXTime . integerParser) $ mconcat
       [ long "timeout-arg"
       , metavar "NAME=POSIX_TIMESTAMP"
+      , help "The name of a timeout parameter in the contract and a value to assign to it (in POSIX milliseconds)."
       ]
     valueArgumentParser = keyValueOption Right integerParser $ mconcat
       [ long "value-arg"
-      , metavar "NAME=INT"
+      , metavar "NAME=INTEGER"
+      , help "The name of a numeric parameter in the contract and a value to assign to it."
       ]
     integerParser = maybe (Left "Invalid Integer value") Right . readMaybe
 

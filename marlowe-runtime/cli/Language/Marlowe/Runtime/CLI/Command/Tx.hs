@@ -31,6 +31,7 @@ txCommandParser subCommandParser = TxCommand
     signingMethodParser = manualSignParser
     manualSignParser = fmap Manual $ strOption $ mconcat
       [ long "manual-sign"
+      , metavar "FILE_PATH"
       , help "Sign the transaction manually. Writes the CBOR bytes of the unsigned transaction to the specified file for manual signing. Use the submit command to submit the signed transaction."
       ]
     metadataFileParser = optional $ strOption $ mconcat
@@ -52,6 +53,6 @@ txCommandParser subCommandParser = TxCommand
       ]
     collateralUtxosParser = fmap Set.fromList $ many $ option txOutRefParser $ mconcat
       [ long "collateral-utxo"
-      , help "An UTXO which may be used for collateral"
+      , help "A UTXO which may be used as a collateral input"
       , metavar "UTXO"
       ]
