@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+
 module Language.Marlowe.Runtime.Discovery.Chain
   where
 

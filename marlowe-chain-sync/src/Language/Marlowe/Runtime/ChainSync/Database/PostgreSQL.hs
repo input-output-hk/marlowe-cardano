@@ -80,7 +80,7 @@ import qualified Data.Text as T
 import Data.These (These(..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Data.Void (Void, absurd)
+import Data.Void (Void)
 import Hasql.Session (Session)
 import Hasql.Statement (refineResult)
 import Hasql.TH (foldStatement, maybeStatement, resultlessStatement, singletonStatement, vectorStatement)
@@ -425,7 +425,7 @@ performFindConsumingTxs utxos point = do
 
 performFindTxsTo :: Set Api.Credential -> Api.ChainPoint -> Transaction (PerformMoveResult Api.FindTxsToError (Set Api.Transaction))
 performFindTxsTo credentials point = do
-  initialResult <- HT.statement (V.fromList $ fmap _ $ Set.toList credentials, pointSlot point) $
+  initialResult <- HT.statement (V.fromList $ fmap credentialBytes $ Set.toList credentials, pointSlot point) $
     [foldStatement|
       WITH credentials (addressPaymentCredential) as
         ( SELECT * FROM UNNEST ($1 :: bytea[])
@@ -463,8 +463,9 @@ performFindTxsTo credentials point = do
   case initialResult of
     (Nothing, _) -> pure MoveWait
     (Just header@Api.BlockHeader{..}, txs) -> do
-      txIns <- traverse (\Api.Transaction{..} -> queryTxIns slotNo txId) txs
-      txOuts <- traverse (\Api.Transaction{..} -> queryTxOuts slotNo txId) txs
+      let txIds = Map.keysSet txs
+      txIns <- queryTxInsBulk slotNo txIds
+      txOuts <- queryTxOutsBulk slotNo txIds
       let insOuts = Map.intersectionWith (,) txIns txOuts
       pure
         $ MoveArrive header
@@ -473,16 +474,19 @@ performFindTxsTo credentials point = do
         $ Map.toList
         $ Map.intersectionWith (\(ins, outs) tx -> tx { Api.inputs = ins, Api.outputs = outs }) insOuts txs
   where
-    foldTxs :: Fold ReadTxRow (Maybe Api.BlockHeader, Map ByteString Api.Transaction)
+    credentialBytes = \case
+      Api.PaymentKeyCredential pkh -> Api.unPaymentKeyHash pkh
+      Api.ScriptCredential sh -> Api.unScriptHash sh
+    foldTxs :: Fold ReadTxRow (Maybe Api.BlockHeader, Map Api.TxId Api.Transaction)
     foldTxs = Fold foldTxs' (Nothing, mempty) id
 
     foldTxs'
-      :: (Maybe Api.BlockHeader, Map ByteString Api.Transaction)
+      :: (Maybe Api.BlockHeader, Map Api.TxId Api.Transaction)
       -> ReadTxRow
-      -> (Maybe Api.BlockHeader, Map ByteString Api.Transaction)
+      -> (Maybe Api.BlockHeader, Map Api.TxId Api.Transaction)
     foldTxs' (blockHeader, txs) row@(Just slotNo, Just hash, Just blockNo, _, _, _, Just txId, _, _, _) =
       ( blockHeader <|> Just (Api.BlockHeader (decodeSlotNo slotNo) (Api.BlockHeaderHash hash) (decodeBlockNo blockNo))
-      , Map.alter (mergeRow row) txId txs
+      , Map.alter (mergeRow row) (Api.TxId txId) txs
       )
     foldTxs' x _ = x
 
@@ -648,6 +652,91 @@ queryTxOuts slotNo txId = HT.statement (Api.unTxId txId, fromIntegral slotNo) $
               }
           }
 
+queryTxInsBulk :: Api.SlotNo -> Set Api.TxId -> Transaction (Map Api.TxId (Set.Set Api.TransactionInput))
+queryTxInsBulk slotNo txInIds = HT.statement (V.fromList $ Api.unTxId <$> Set.toList txInIds, fromIntegral slotNo) $
+  [foldStatement|
+    WITH ids (txInId) AS
+      ( SELECT * FROM UNNEST ($1 :: bytea[])
+      )
+    SELECT txIn.txInId :: bytea
+         , txIn.txOutId :: bytea
+         , txIn.txOutIx :: smallint
+         , txOut.address :: bytea
+         , txOut.datumBytes :: bytea?
+         , txIn.redeemerDatumBytes :: bytea?
+      FROM chain.txIn  as txIn
+      JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
+      JOIN ids USING (txInId)
+     WHERE txIn.slotNo = $2 :: bigint
+  |] foldTxIns
+  where
+    foldTxIns :: Fold ReadTxInBulkRow (Map Api.TxId (Set.Set Api.TransactionInput))
+    foldTxIns = Fold foldTxIns' mempty id
+
+    foldTxIns' :: Map Api.TxId (Set Api.TransactionInput) -> ReadTxInBulkRow -> Map Api.TxId (Set Api.TransactionInput)
+    foldTxIns' txIns row@(txId, _, _, _, _, _) = Map.alter (Just . ($ decodeTxIn row) . maybe Set.singleton (flip Set.insert)) (Api.TxId txId) txIns
+
+    decodeTxIn :: ReadTxInBulkRow -> Api.TransactionInput
+    decodeTxIn (_, txId, txIx, address, datumBytes, redeemerDatumBytes) = Api.TransactionInput
+      { txId = Api.TxId txId
+      , txIx = fromIntegral txIx
+      , address = Api.Address address
+      , datumBytes = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
+      , redeemer = Api.Redeemer . Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
+      }
+
+queryTxOutsBulk :: Api.SlotNo -> Set Api.TxId -> Transaction (Map Api.TxId [Api.TransactionOutput])
+queryTxOutsBulk slotNo txIds = HT.statement (V.fromList $ Api.unTxId <$> Set.toList txIds, fromIntegral slotNo) $
+  [foldStatement|
+    WITH ids (txId) AS
+      ( SELECT * FROM UNNEST ($1 :: bytea[])
+      )
+    SELECT txOut.txId :: bytea
+         , txOut.txIx :: smallint
+         , txOut.address :: bytea
+         , txOut.lovelace :: bigint
+         , txOut.datumHash :: bytea?
+         , txOut.datumBytes :: bytea?
+         , asset.policyId :: bytea?
+         , asset.name :: bytea?
+         , assetOut.quantity :: bigint?
+      FROM chain.txOut         AS txOut
+      JOIN ids USING (txId)
+      LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+      LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+     WHERE txOut.slotNo = $2 :: bigint
+     ORDER BY txIx
+  |] (Fold foldRow mempty (fmap $ fmap snd . IntMap.toAscList))
+  where
+    foldRow
+      :: Map Api.TxId (IntMap Api.TransactionOutput)
+      -> ReadTxOutBulkRow
+      -> Map Api.TxId (IntMap Api.TransactionOutput)
+    foldRow acc (txId, txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
+      Map.alter
+        (Just
+        . maybe
+            (IntMap.singleton (fromIntegral txIx) newTxOut)
+            (IntMap.alter (Just . maybe newTxOut mergeTxOut) (fromIntegral txIx))
+        )
+        (Api.TxId txId)
+        acc
+      where
+        newTxOut = Api.TransactionOutput
+          { address = Api.Address address
+          , assets = Api.Assets
+              { ada = Api.Lovelace $ fromIntegral lovelace
+              , tokens = decodeTokens policyId tokenName quantity
+              }
+          , datumHash = Api.DatumHash <$> datumHash
+          , datum = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
+          }
+
+        mergeTxOut txOut@Api.TransactionOutput{assets = assets@Api.Assets{..}} = txOut
+          { Api.assets = assets
+              { Api.tokens = tokens <> decodeTokens policyId tokenName quantity
+              }
+          }
 decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Api.Tokens
 decodeTokens (Just policyId) (Just tokenName) (Just quantity) =
   Api.Tokens $ Map.singleton
@@ -678,8 +767,29 @@ type ReadTxInRow =
   , Maybe ByteString -- TxIn's redeemerDatumBytes
   )
 
+type ReadTxInBulkRow =
+  ( ByteString       -- TxIn's Tx' TxId
+  , ByteString       -- TxIn's TxId
+  , Int16            -- TxIn's TxIx
+  , ByteString       -- TxIn's Address
+  , Maybe ByteString -- TxIn's datumBytes
+  , Maybe ByteString -- TxIn's redeemerDatumBytes
+  )
+
 type ReadTxOutRow =
   ( Int16            -- TxOut's TxIx
+  , ByteString       -- TxOut's Address
+  , Int64            -- TxOut's Lovelace
+  , Maybe ByteString -- TxOut's DatumHash
+  , Maybe ByteString -- TxOut's datumBytes
+  , Maybe ByteString -- TxOut's Token's PolicyId
+  , Maybe ByteString -- TxOut's Token's TokenName
+  , Maybe Int64      -- TxOut's Token's Quantity
+  )
+
+type ReadTxOutBulkRow =
+  ( ByteString       -- TxOut's TxId
+  , Int16            -- TxOut's TxIx
   , ByteString       -- TxOut's Address
   , Int64            -- TxOut's Lovelace
   , Maybe ByteString -- TxOut's DatumHash
