@@ -38,6 +38,7 @@ import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Foldable (asum)
 import Data.Maybe (fromMaybe)
+import Language.Marlowe.CLI.Analyze
 import Language.Marlowe.CLI.Command.Parse
   ( parseAddress
   , parseCurrencySymbol
@@ -156,6 +157,20 @@ data RunCommand era =
     , printStats      :: Bool              -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool              -- ^ Assertion that the transaction is invalid.
     }
+    -- | Analyze a contract.
+  | Analyze
+    {
+      network       :: NetworkId  -- ^ The network ID, if any.
+    , socketPath    :: FilePath   -- ^ The path to the node socket.
+    , marloweOut    :: FilePath   -- ^ The JSON file with Marlowe state and contract.
+    , preconditions :: Bool       -- ^ Whether to check preconditions for Marlowe state.
+    , roles         :: Bool       -- ^ Whether to check lengths of role names.
+    , tokens        :: Bool       -- ^ Whether to check lengths of token names.
+    , maximumValue  :: Bool       -- ^ Whether to check the `maxValueSize` protocol limit.
+    , minimumUtxo   :: Bool       -- ^ Whether to check the `utxoCostPerWord` protocol limit.
+    , executionCost :: Bool       -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
+    , best          :: Bool       -- ^ Whether to compute tight estimates of worst-case bounds.
+    }
 
 
 -- | Run a contract-related command.
@@ -262,6 +277,11 @@ runRunCommand command =
                             (PrintStats printStats)
                             invalid
                           >>= printTxId
+      Analyze{..}      -> analyze
+                            connection
+                            marloweOut
+                            preconditions roles tokens maximumValue minimumUtxo executionCost
+                            best
 
 
 -- | Parser for contract commands.
@@ -277,6 +297,7 @@ parseRunCommand network socket =
         <> initializeCommand network socket
         <> prepareCommand
         <> withdrawCommand network socket
+        <> analyzeCommand network socket
     , O.hsubparser
         $ O.commandGroup "Experimental commands for running contracts, with automatic balancing."
         <> autoRunCommand network socket
@@ -469,3 +490,31 @@ autoWithdrawOptions network socket =
     <*> (O.optional . O.option O.auto) (O.long "submit"           <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                       (O.long "print-stats"                                              <> O.help "Print statistics."                                                                                               )
     <*> O.switch                       (O.long "script-invalid"                                           <> O.help "Assert that the transaction is invalid."                                                                         )
+
+
+-- | Parser for the "analyze" command.
+analyzeCommand :: O.Mod O.OptionFields NetworkId
+                -> O.Mod O.OptionFields FilePath
+                -> O.Mod O.CommandFields (RunCommand era)
+analyzeCommand network socket =
+  O.command "analyze"
+    $ O.info (analyzeOptions network socket)
+    $ O.progDesc "[EXPERIMENTAL] Analyze a Marlowe contract."
+
+
+-- | Parser for the "analyze" options.
+analyzeOptions :: O.Mod O.OptionFields NetworkId
+                -> O.Mod O.OptionFields FilePath
+                -> O.Parser (RunCommand era)
+analyzeOptions network socket =
+  Analyze
+    <$> O.option parseNetworkId (O.long "testnet-magic" <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <*> O.strOption             (O.long "socket-path"   <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.strOption             (O.long "marlowe-file"  <> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the state and contract."                                                                          )
+    <*> O.switch                (O.long "preconditions"                                         <> O.help "Whether to check preconditions for valid Marlowe state."                                                         )
+    <*> O.switch                (O.long "roles"                                                 <> O.help "Whether to check lengths of role names."                                                                         )
+    <*> O.switch                (O.long "tokens"                                                <> O.help "Whether to check lengths of token names."                                                                        )
+    <*> O.switch                (O.long "maximum-value"                                         <> O.help "Whether to check the `maxValueSize` protocol limit."                                                             )
+    <*> O.switch                (O.long "minimum-utxo"                                          <> O.help "Whether to check the `utxoCostPerWord` protocol limit."                                                          )
+    <*> O.switch                (O.long "execution-cost"                                        <> O.help "Whether to check the `maxTxExecutionUnits` protocol limit."                                                      )
+    <*> O.switch                (O.long "best"                                                  <> O.help "Whether to compute tight estimates of worst-case bounds, instead of generous estimates of those bounds."         )
