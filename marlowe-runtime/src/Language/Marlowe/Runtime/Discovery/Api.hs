@@ -29,8 +29,6 @@ data ContractHeader = ContractHeader
   , marloweScriptAddress :: Address
   -- ^ The address of the validator script.
   , payoutScriptHash :: ScriptHash
-  -- ^ The hash of the payout validator script.
-  , payoutScriptAddress :: Address
   -- ^ The address of the payout validator script.
   , marloweVersion :: SomeMarloweVersion
   -- ^ The version of the contract.

@@ -75,6 +75,7 @@ library
     Language.Marlowe.Runtime.Core.Api
     Language.Marlowe.Runtime.Core.ScriptRegistry
     Language.Marlowe.Runtime.Discovery.Api
+    Language.Marlowe.Runtime.Discovery.Chain
     Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Api
     Language.Marlowe.Runtime.History.Follower

@@ -59,6 +59,7 @@ import Cardano.Binary (ToCBOR(toCBOR), toStrictByteString, unsafeDeserialize')
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
+import Control.Applicative ((<|>))
 import Control.Foldl (Fold(Fold))
 import qualified Control.Foldl as Fold
 import Data.ByteString (ByteString)
@@ -79,7 +80,7 @@ import qualified Data.Text as T
 import Data.These (These(..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Data.Void (Void)
+import Data.Void (Void, absurd)
 import Hasql.Session (Session)
 import Hasql.Statement (refineResult)
 import Hasql.TH (foldStatement, maybeStatement, resultlessStatement, singletonStatement, vectorStatement)
@@ -257,6 +258,7 @@ performMove = \case
   Api.FindTx txId wait          -> performFindTx txId wait
   Api.Intersect points          -> performIntersect points
   Api.FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
+  Api.FindTxsTo credentials     -> performFindTxsTo credentials
 
 performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
 performFork left right point = do
@@ -420,6 +422,97 @@ performFindConsumingTxs utxos point = do
       MoveArrive header tx -> (mempty, mempty, Map.singleton utxo (header, tx))
       MoveWait             -> (mempty, 1 :: Sum Int, mempty)
       MoveAbort err        -> (Map.singleton utxo err, mempty, mempty)
+
+performFindTxsTo :: Set Api.Credential -> Api.ChainPoint -> Transaction (PerformMoveResult Api.FindTxsToError (Set Api.Transaction))
+performFindTxsTo credentials point = do
+  initialResult <- HT.statement (V.fromList $ fmap _ $ Set.toList credentials, pointSlot point) $
+    [foldStatement|
+      WITH credentials (addressPaymentCredential) as
+        ( SELECT * FROM UNNEST ($1 :: bytea[])
+        )
+      , txIds (id) AS
+        ( SELECT DISTINCT txOut.txId
+            FROM chain.txOut
+            JOIN credentials USING (addressPaymentCredential)
+        )
+      , nextSlot (slotNo) AS
+        ( SELECT MIN(block.slotNo)
+            FROM chain.tx    AS tx
+            JOIN txIds                USING (id)
+            JOIN chain.block AS block ON block.id = tx.blockId AND block.slotNo = tx.slotNo
+           WHERE block.slotNo > $2 :: bigint
+             AND block.rollbackToBlock IS NULL
+        )
+      SELECT block.slotNo :: bigint?
+           , block.id :: bytea?
+           , block.blockNo :: bigint?
+           , tx.id :: bytea?
+           , tx.validityLowerBound :: bigint?
+           , tx.validityUpperBound :: bigint?
+           , tx.metadataKey1564 :: bytea?
+           , asset.policyId :: bytea?
+           , asset.name :: bytea?
+           , assetMint.quantity :: bigint?
+        FROM chain.tx             AS tx
+        JOIN txIds                             USING (id)
+        JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
+        LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
+        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
+       WHERE block.rollbackToBlock IS NULL
+    |] foldTxs
+  case initialResult of
+    (Nothing, _) -> pure MoveWait
+    (Just header@Api.BlockHeader{..}, txs) -> do
+      txIns <- traverse (\Api.Transaction{..} -> queryTxIns slotNo txId) txs
+      txOuts <- traverse (\Api.Transaction{..} -> queryTxOuts slotNo txId) txs
+      let insOuts = Map.intersectionWith (,) txIns txOuts
+      pure
+        $ MoveArrive header
+        $ Set.fromList
+        $ fmap snd
+        $ Map.toList
+        $ Map.intersectionWith (\(ins, outs) tx -> tx { Api.inputs = ins, Api.outputs = outs }) insOuts txs
+  where
+    foldTxs :: Fold ReadTxRow (Maybe Api.BlockHeader, Map ByteString Api.Transaction)
+    foldTxs = Fold foldTxs' (Nothing, mempty) id
+
+    foldTxs'
+      :: (Maybe Api.BlockHeader, Map ByteString Api.Transaction)
+      -> ReadTxRow
+      -> (Maybe Api.BlockHeader, Map ByteString Api.Transaction)
+    foldTxs' (blockHeader, txs) row@(Just slotNo, Just hash, Just blockNo, _, _, _, Just txId, _, _, _) =
+      ( blockHeader <|> Just (Api.BlockHeader (decodeSlotNo slotNo) (Api.BlockHeaderHash hash) (decodeBlockNo blockNo))
+      , Map.alter (mergeRow row) txId txs
+      )
+    foldTxs' x _ = x
+
+    mergeRow :: ReadTxRow -> Maybe Api.Transaction -> Maybe Api.Transaction
+    mergeRow row@
+      ( _
+      , _
+      , _
+      , Just txId
+      , validityLowerBound
+      , validityUpperBound
+      , _
+      , policyId
+      , tokenName
+      , quantity
+      ) = Just . \case
+        Nothing -> Api.Transaction
+          { txId = Api.TxId txId
+          , validityRange = case (validityLowerBound, validityUpperBound) of
+              (Nothing, Nothing) -> Api.Unbounded
+              (Just lb, Nothing) -> Api.MinBound $ decodeSlotNo lb
+              (Nothing, Just ub) -> Api.MaxBound $ decodeSlotNo ub
+              (Just lb, Just ub) -> Api.MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+          , metadata = Nothing
+          , inputs = Set.empty
+          , outputs = []
+          , mintedTokens = decodeTokens policyId tokenName quantity
+          }
+        Just tx -> mergeTxRow tx row
+    mergeRow _ = const Nothing
 
 performFindTx :: Api.TxId -> Bool -> Api.ChainPoint -> Transaction (PerformMoveResult Api.TxError Api.Transaction)
 performFindTx txId wait point = do
