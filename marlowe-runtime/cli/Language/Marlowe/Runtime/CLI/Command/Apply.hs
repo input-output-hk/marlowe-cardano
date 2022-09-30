@@ -51,31 +51,19 @@ depositCommandParser = singleInputParser "deposit funds into" contentParser $ pr
   where
     contentParser = do
       accountId <- accountIdParser
-      party <- partyParser
+      party <- senderPartyParser
       (token, quantity) <- tokenParser <|> lovelaceParser
       pure $ V1.IDeposit accountId party token quantity
 
-    accountIdParser = toRoleParser <|> toAddressParser
-    toRoleParser = roleOption $ mconcat
-      [ long "to-role"
-      , metavar "ROLE_NAME"
-      , help "The name of the role into whose account to deposit the funds."
+    accountIdParser = partyParser $ mconcat
+      [ long "to-party"
+      , metavar "ROLE_NAME|ADDRESS"
+      , help "The party into whose account to deposit the funds."
       ]
-    toAddressParser = addressOption $ mconcat
-      [ long "to-address"
-      , metavar "ADDRESS"
-      , help "The address into whose account to deposit the funds."
-      ]
-    partyParser = fromRoleParser <|> fromAddressParser
-    fromRoleParser = roleOption $ mconcat
-      [ long "from-role"
-      , metavar "ROLE_NAME"
-      , help "The name of the role depositing the funds."
-      ]
-    fromAddressParser = addressOption $ mconcat
-      [ long "from-address"
-      , metavar "ADDRESS"
-      , help "The address depositing the funds."
+    senderPartyParser = partyParser $ mconcat
+      [ long "from-party"
+      , metavar "ROLE_NAME|ADDRESS"
+      , help "The party depositing the funds."
       ]
     lovelaceParser = option ((V1.ada,) <$> auto) $ mconcat
       [ long "lovelace"
@@ -116,16 +104,10 @@ chooseCommandParser = singleInputParser "make a choice in." contentParser $ prog
       , metavar "CHOICE_NAME"
       , help "The name of the choice being made."
       ]
-    choiceIdPartyParser = choiceIdPartyRoleParser <|> choiceIdPartyAddressParser
-    choiceIdPartyRoleParser = roleOption $ mconcat
-      [ long "as-role"
-      , metavar "ROLE_NAME"
-      , help "Make the choice as the specified role."
-      ]
-    choiceIdPartyAddressParser = addressOption $ mconcat
-      [ long "as-address"
-      , metavar "ADDRESS"
-      , help "Make the choice as the specified address."
+    choiceIdPartyParser = partyParser $ mconcat
+      [ long "party"
+      , metavar "ROLE_NAME|ADDRESS"
+      , help "Make the choice as the specified party."
       ]
     chosenNumParser = option auto $ mconcat
       [ long "value"
@@ -193,14 +175,17 @@ validityUpperBoundParser = optional $ option readPOSIXTime $ mconcat
   , help "The upper bound of the transaction validity interval in POSIX milliseconds. If not specified, the next timeout in the contract will be used (bounded by the maximum value allowed by the Cardano node)."
   ]
 
-roleOption :: Mod OptionFields P.BuiltinByteString -> Parser V1.Party
-roleOption = fmap (V1.Role . P.TokenName) . strOption
+partyParser :: Mod OptionFields V1.Party -> Parser V1.Party
+partyParser = option readParty
 
-addressOption :: Mod OptionFields V1.Party -> Parser V1.Party
-addressOption = option readAddress
+readParty :: ReadM V1.Party
+readParty = readAddress <|> readRole
 
 readAddress :: ReadM V1.Party
 readAddress = maybeReader $ fmap (uncurry V1.Address) . V1.deserialiseAddressBech32 . T.pack
+
+readRole :: ReadM V1.Party
+readRole = V1.Role . P.TokenName <$> str
 
 runApplyCommand :: TxCommand ApplyCommand -> CLI ()
 runApplyCommand = error "not implemented"
