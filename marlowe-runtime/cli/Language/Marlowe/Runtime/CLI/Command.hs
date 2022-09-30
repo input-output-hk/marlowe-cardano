@@ -8,7 +8,14 @@ import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.CLI.Command.Add (AddCommand, addCommandParser, runAddCommand)
 import Language.Marlowe.Runtime.CLI.Command.Apply
-  (ApplyCommand, applyCommandParser, chooseCommandParser, depositCommandParser, notifyCommandParser, runApplyCommand)
+  ( ApplyCommand
+  , advanceCommandParser
+  , applyCommandParser
+  , chooseCommandParser
+  , depositCommandParser
+  , notifyCommandParser
+  , runApplyCommand
+  )
 import Language.Marlowe.Runtime.CLI.Command.Create (CreateCommand, createCommandParser, runCreateCommand)
 import Language.Marlowe.Runtime.CLI.Command.Log (LogCommand, logCommandParser, runLogCommand)
 import Language.Marlowe.Runtime.CLI.Command.Ls (LsCommand, lsCommandParser, runLsCommand)
@@ -70,6 +77,7 @@ getOptions = do
       , hsubparser $ mconcat
           [ commandGroup "Contract transaction commands"
           , command "apply" $ Apply <$> applyCommandParser
+          , command "advance" $ Apply <$> advanceCommandParser
           , command "deposit" $ Apply <$> depositCommandParser
           , command "choose" $ Apply <$> chooseCommandParser
           , command "notify" $ Apply <$> notifyCommandParser

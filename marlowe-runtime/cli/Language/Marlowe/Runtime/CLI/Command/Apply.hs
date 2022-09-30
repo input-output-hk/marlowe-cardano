@@ -156,6 +156,15 @@ singleInputParser verb contentParser = info (txCommandParser parser)
       , metavar "FILE_PATH"
       ]
 
+advanceCommandParser :: ParserInfo (TxCommand ApplyCommand)
+advanceCommandParser = info (txCommandParser parser) $ progDesc "Advance a timed-out contract by applying an empty set of inputs."
+  where
+    parser = V1ApplyCommand
+      <$> contractIdParser "advance."
+      <*> pure (ContractInputsByValue [])
+      <*> validityLowerBoundParser
+      <*> validityUpperBoundParser
+
 contractIdParser :: String -> Parser ContractId
 contractIdParser verb = option (ContractId <$> txOutRefParser) $ mconcat
   [ long "contract"
