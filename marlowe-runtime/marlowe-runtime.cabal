@@ -213,6 +213,7 @@ executable marlowe-tx
     , ansi-terminal
     , async
     , base16
+    , cardano-api
     , containers
     , marlowe
     , marlowe-protocols
