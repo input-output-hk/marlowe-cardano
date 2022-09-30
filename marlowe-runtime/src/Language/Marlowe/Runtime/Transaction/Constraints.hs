@@ -8,7 +8,6 @@ module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (NetworkId)
 import qualified Cardano.Api.Shelley as C
 import Control.Monad (forM)
 import Data.Binary (Binary)
