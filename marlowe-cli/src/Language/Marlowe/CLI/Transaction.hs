@@ -198,7 +198,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS (length)
-import qualified Data.ByteString.Char8 as BS8 (unpack)
+import qualified Data.ByteString.Char8 as BS8 (pack, putStrLn, unpack)
 import Data.Fixed (div')
 import Data.Foldable (Foldable(fold), for_)
 import Data.Function (on)
@@ -584,7 +584,7 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
     _                      -> throwError "Metadata should file should contain a json object"
   (body, policy) <- buildMintingImpl connection mintingAction' metadata expires timeout (PrintStats True)
   doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-  liftIO . putStrLn $ "PolicyID " <> show policy
+  liftIO . BS8.putStrLn $ serialiseToRawBytesHex policy
 
 nonAdaValue :: Value -> Value
 nonAdaValue value = value <> C.negateValue (C.lovelaceToValue (fromMaybe 0 $ C.valueToLovelace value))
@@ -1679,7 +1679,7 @@ selectUtxos connection address query =
       Nothing     -> queryUtxos connection address
       Just query' -> oqrMatching <$> selectUtxosImpl connection address query'
     liftIO
-      . mapM_ (print . fst)
+      . mapM_ (\(TxIn txId txIx, _) -> BS8.putStrLn $ serialiseToRawBytesHex txId <> "#" <> BS8.pack (show $ fromEnum txIx))
       . M.toList
       . C.unUTxO
       $ matching

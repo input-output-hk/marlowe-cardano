@@ -35,8 +35,10 @@ import Cardano.Api
   , NetworkId(..)
   , SlotNo
   , TxIn
+  , serialiseToRawBytesHex
   )
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Reader.Class (MonadReader)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse
   ( parseAddress
@@ -56,7 +58,7 @@ import Language.Marlowe.CLI.Types
   (CliEnv, CliError, PrintStats(PrintStats), PublishingStrategy, SigningKeyFile, TxBodyFile(TxBodyFile))
 
 import qualified Cardano.Api as Api (Value)
-import Control.Monad.Reader.Class (MonadReader)
+import qualified Data.ByteString.Char8 as BS8
 import qualified Options.Applicative as O
 
 
@@ -188,7 +190,7 @@ runTransactionCommand command =
         , localNodeNetworkId       = network'
         , localNodeSocketPath      = socketPath command
         }
-      printTxId = liftIO . putStrLn . ("TxId " <>) . show
+      printTxId = liftIO . BS8.putStrLn . serialiseToRawBytesHex
       padTxOut (address, value) = (address, Nothing, value)
       outputs' = padTxOut <$> outputs command
     case command of
