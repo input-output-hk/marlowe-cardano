@@ -74,9 +74,11 @@ library
     Language.Marlowe.Protocol.Sync.Types
     Language.Marlowe.Runtime.Core.Api
     Language.Marlowe.Runtime.Core.ScriptRegistry
+    Language.Marlowe.Runtime.Discovery
     Language.Marlowe.Runtime.Discovery.Api
     Language.Marlowe.Runtime.Discovery.Chain
     Language.Marlowe.Runtime.Discovery.Store
+    Language.Marlowe.Runtime.Discovery.QueryServer
     Language.Marlowe.Runtime.Discovery.SyncServer
     Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Api
@@ -195,6 +197,32 @@ executable marlowed
 executable marlowe-history
   import: lang
   hs-source-dirs:   marlowe-history
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , ansi-terminal
+    , async
+    , base16
+    , containers
+    , marlowe
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
+    , network
+    , typed-protocols
+    , optparse-applicative
+    , stm
+    , text
+    , wl-pprint
+  ghc-options: -threaded
+
+executable marlowe-discovery
+  import: lang
+  hs-source-dirs:   marlowe-discovery
   main-is: Main.hs
   other-modules:
     Paths_marlowe_runtime

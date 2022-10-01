@@ -138,4 +138,4 @@ extractHeaders blockHeader Chain.Transaction{..} =
         }
 
 marloweScriptHashes :: Set Chain.ScriptHash
-marloweScriptHashes = Set.map marloweScript $ foldMap (withSomeMarloweVersion getScripts) [minBound..]
+marloweScriptHashes = Set.map marloweScript $ foldMap (withSomeMarloweVersion getScripts) [minBound..maxBound]

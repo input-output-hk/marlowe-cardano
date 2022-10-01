@@ -224,6 +224,6 @@ getOptions = execParser $ info (helper <*> parser) infoMod
 
     infoMod = mconcat
       [ fullDesc
-      , progDesc "Contract follower for Marlowe Runtime"
-      , header "marlowe-follower : a contract follower for the Marlowe Runtime."
+      , progDesc "Contract history service for Marlowe Runtime"
+      , header "marlowe-history : a contract history service for the Marlowe Runtime."
       ]
