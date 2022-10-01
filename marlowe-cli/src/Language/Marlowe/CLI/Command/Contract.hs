@@ -155,7 +155,7 @@ exportMarloweOptions :: O.Mod O.OptionFields NetworkId
                      -> O.Parser ContractCommand
 exportMarloweOptions network =
   Export
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <$> parseNetworkId network
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                            )
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                            )
     <*> protocolVersionOpt
@@ -180,7 +180,7 @@ exportAddressOptions :: O.Mod O.OptionFields NetworkId
                      -> O.Parser ContractCommand
 exportAddressOptions network =
   ExportAddress
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER" <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <$> parseNetworkId network
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"            <> O.help "Stake address, if any."                                                            )
 
 
@@ -198,7 +198,7 @@ exportValidatorOptions :: O.Mod O.OptionFields NetworkId
                        -> O.Parser ContractCommand
 exportValidatorOptions network =
   ExportValidator
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <$> parseNetworkId network
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                <> O.help "Stake address, if any."                                                            )
     <*> protocolVersionOpt
     <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"            <> O.help "JSON output file for validator."                                                   )

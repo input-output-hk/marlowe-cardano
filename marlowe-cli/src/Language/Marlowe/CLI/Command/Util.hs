@@ -287,7 +287,7 @@ cleanCommand network socket =
 cleanOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 cleanOptions network socket =
   Clean
-    <$> O.option parseNetworkId           (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                       (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> requiredSignersOpt
 
@@ -310,7 +310,7 @@ mintCommand network socket =
 mintOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 mintOptions network socket =
   Mint
-    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network            <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                          (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> socket             <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> requiredSignerOpt
 
@@ -335,7 +335,7 @@ burnCommand network socket =
 burnOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 burnOptions network socket =
   Burn
-    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network            <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                          (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> socket             <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> walletOpt                            (O.long "issuer"          <> O.metavar "ADDRESS:SIGNING_FILE"               <> O.help "Issuer wallet info")
 
@@ -364,7 +364,7 @@ faucetCommand network socket =
 faucetOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 faucetOptions network socket =
   Faucet
-    <$> O.option parseNetworkId            (O.long "testnet-magic"   <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                        (O.long "socket-path"     <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> (lovelaceOpt <|> allMoneyOpt)
     <*> txBodyFileOpt
@@ -393,7 +393,7 @@ selectCommand network socket =
 selectOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 selectOptions network socket =
   Output
-    <$> O.option parseNetworkId    (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                               )
+    <$> parseNetworkId network
     <*> O.strOption                (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value." )
     <*> parseOutputQuery
     <*> O.argument parseAddress    (                          O.metavar "ADDRESS"                <> O.help "The address."                                                                                                     )
@@ -442,7 +442,7 @@ slottingCommand network socket =
 slottingOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 slottingOptions network socket =
   Slotting
-    <$> O.option parseNetworkId   (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption               (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> (O.optional .O.strOption) (O.long "out-file"      <> O.metavar "FILE"                   <> O.help "Output file for slot configuration."                                                                             )
 
@@ -459,7 +459,7 @@ watchCommand network socket =
 watchOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 watchOptions network socket =
   Watch
-    <$> O.option parseNetworkId    (O.long "testnet-magic" <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.switch                   (O.long "all"                                                 <> O.help "Whether to also output non-Marlowe transactions."                                                                )
     <*> O.switch                   (O.long "cbor"                                                <> O.help "Whether to output CBOR instead of JSON."                                                                         )

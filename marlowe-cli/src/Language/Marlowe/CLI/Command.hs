@@ -159,5 +159,5 @@ versionOption :: String            -- ^ The tool version.
               -> O.Parser (a -> a) -- ^ The option parseCommand.
 versionOption version =
   O.infoOption
-    ("marlowe-cli " <> version)
+    ("marlowe-cli " <> version <> " «mainnet»")
     (O.long "version" <> O.help "Show version.")
