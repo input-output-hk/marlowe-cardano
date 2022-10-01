@@ -9,13 +9,10 @@ module Language.Marlowe.Runtime.Discovery.SyncServer
   where
 
 import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
-import Control.Concurrent.STM (STM, atomically, retry)
+import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
-import Data.Map (Map)
-import qualified Data.Map as Map
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
-import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api
 import System.IO (hPutStrLn, stderr)
 

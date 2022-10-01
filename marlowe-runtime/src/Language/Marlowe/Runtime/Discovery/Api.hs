@@ -13,7 +13,6 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Metadata, PolicyId, ScriptHash)
 import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
 import Network.Protocol.Query.Types (IsQuery(..), SomeTag(..))
-import Numeric.Natural (Natural)
 
 -- | A Marlowe contract header is a compact structure that contains all the
 -- significant metadata related to a Marlowe Contract on chain.

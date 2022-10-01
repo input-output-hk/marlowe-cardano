@@ -11,13 +11,8 @@ module Language.Marlowe.Runtime.Discovery.QueryServer
 import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
-import Data.Bifunctor (bimap)
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Maybe (listToMaybe)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (PolicyId)
-import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api
 import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
@@ -34,7 +29,7 @@ data DiscoveryQueryServerDependencies = DiscoveryQueryServerDependencies
   }
 
 newtype DiscoveryQueryServer = DiscoveryQueryServer
-  { runDiscoveryQueryServer :: IO ()
+  { runDiscoveryQueryServer :: IO Void
   }
 
 mkDiscoveryQueryServer :: DiscoveryQueryServerDependencies -> STM DiscoveryQueryServer
