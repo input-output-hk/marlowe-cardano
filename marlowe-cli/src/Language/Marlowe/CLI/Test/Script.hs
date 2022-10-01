@@ -414,6 +414,7 @@ interpret so@Initialize {..} = do
         NoStakeAddress
         marloweContract
         marloweState
+        Nothing
         False
         True
 
