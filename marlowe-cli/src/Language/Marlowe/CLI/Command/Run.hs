@@ -33,8 +33,10 @@ import Cardano.Api
   , NetworkId(..)
   , StakeAddressReference(..)
   , TxIn
+  , serialiseToRawBytesHex
   )
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Reader (MonadReader)
 import Data.Foldable (asum)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Analyze (analyze)
@@ -52,6 +54,7 @@ import Language.Marlowe.CLI.Command.Parse
   , requiredSignersOpt
   , txBodyFileOpt
   )
+import Language.Marlowe.CLI.IO (getDefaultCostModel, getProtocolVersion)
 import Language.Marlowe.CLI.Run
   (autoRunTransaction, autoWithdrawFunds, initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
@@ -63,8 +66,7 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
 
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
-import Control.Monad.Reader (MonadReader)
-import Language.Marlowe.CLI.IO (getDefaultCostModel, getProtocolVersion)
+import qualified Data.ByteString.Char8 as BS8
 import qualified Options.Applicative as O
 
 
@@ -197,7 +199,7 @@ runRunCommand command =
         }
       marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
       stake'         = fromMaybe NoStakeAddress $ stake command
-      printTxId = liftIO . putStrLn . ("TxId " <>) . show
+      printTxId = liftIO . BS8.putStrLn . serialiseToRawBytesHex
       padTxOut (address, value) = (address, Nothing, value)
       outputs' = padTxOut <$> outputs command
     case command of

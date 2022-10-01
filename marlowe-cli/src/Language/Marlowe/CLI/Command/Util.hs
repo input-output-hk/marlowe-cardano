@@ -39,8 +39,15 @@ import Cardano.Api
   , TxMetadataInEra(TxMetadataNone)
   , TxMintValue(TxMintNone)
   , lovelaceToValue
+  , serialiseToRawBytesHex
   )
+import Control.Applicative ((<|>))
+import Control.Category ((>>>))
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Reader (MonadReader)
+import Data.List.Split (splitOn)
+import Data.Maybe (fromMaybe)
+import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
 import Language.Marlowe.CLI.Command.Parse
   ( parseAddress
@@ -59,13 +66,8 @@ import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, 
 import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery, OutputQueryResult, SigningKeyFile, TxBodyFile)
 import Plutus.V1.Ledger.Api (TokenName)
 
-import Control.Applicative ((<|>))
-import Control.Category ((>>>))
-import Control.Monad.Reader (MonadReader)
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.List.NonEmpty as L
-import Data.List.Split (splitOn)
-import Data.Maybe (fromMaybe)
-import GHC.Natural (Natural)
 import qualified Options.Applicative as O
 import qualified Options.Applicative.NonEmpty as O
 
@@ -187,7 +189,7 @@ runUtilCommand command =
         , localNodeNetworkId       = network'
         , localNodeSocketPath      = socketPath command
         }
-      printTxId = liftIO . putStrLn . ("TxId " <>) . show
+      printTxId = liftIO . BS8.putStrLn . serialiseToRawBytesHex
     case command of
       Clean{..}        -> buildClean
                             connection
