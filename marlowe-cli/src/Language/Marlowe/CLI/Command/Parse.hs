@@ -111,8 +111,12 @@ import Plutus.V1.Ledger.ProtocolVersions (alonzoPV, vasilPV)
 
 
 -- | Parser for network ID.
-parseNetworkId :: O.ReadM NetworkId
-parseNetworkId = Testnet . NetworkMagic . toEnum <$> O.auto
+parseNetworkId :: O.Mod O.OptionFields NetworkId -> O.Parser NetworkId
+parseNetworkId network =
+  parseMainnet <|> parseTestnet
+    where
+      parseMainnet = O.flag' Mainnet (O.long "mainnet" <> O.help "Execute on mainnet.")
+      parseTestnet = O.option (Testnet . NetworkMagic . toEnum <$> O.auto) (O.long "testnet-magic" <> O.metavar "INTEGER" <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
 
 
 -- | Parser for stake address reference.
