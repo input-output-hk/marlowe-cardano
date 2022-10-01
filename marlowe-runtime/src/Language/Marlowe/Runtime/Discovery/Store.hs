@@ -23,6 +23,7 @@ data DiscoveryStore = DiscoveryStore
   , getHeaders :: IO [ContractHeader]
   , getHeadersByRoleTokenCurrency :: PolicyId -> IO [ContractHeader]
   , getNextHeaders :: ChainPoint -> IO (Maybe (Either ChainPoint (BlockHeader, [ContractHeader])))
+  , getIntersect :: [BlockHeader] -> IO (Maybe BlockHeader)
   }
 
 data BlockData
@@ -77,17 +78,26 @@ mkDiscoveryStore DiscoveryStoreDependencies{..} = do
             pure case blockData of
               Rollback point' -> Left point'
               Block headers -> Right (blockHeader, headers)
-          At blockHeader -> do
-            blockData <- Map.lookup blockHeader blocks
-            case blockData of
-              Rollback point' -> pure $ Left point'
-              _ -> Right <$> do
-                let (_, blocks') = Map.split blockHeader blocks
-                let
-                  filtered = flip Map.mapMaybe blocks' \case
-                    Block hs -> Just hs
-                    _ -> Nothing
-                fst <$> Map.minViewWithKey filtered
+          At blockHeader -> case Map.lookup blockHeader blocks of
+            Nothing -> Just $ Left Genesis
+            Just blockData ->
+              case blockData of
+                Rollback point' -> pure $ Left point'
+                _ -> Right <$> do
+                  let (_, blocks') = Map.split blockHeader blocks
+                  let
+                    filtered = flip Map.mapMaybe blocks' \case
+                      Block hs -> Just hs
+                      _ -> Nothing
+                  fst <$> Map.minViewWithKey filtered
+    , getIntersect = \headers -> fmap fst
+        . Set.maxView
+        . Set.intersection (Set.fromList headers)
+        . Map.keysSet
+        . Map.filter \case
+            Block _ -> True
+            _ -> False
+        <$> readTVarIO blocksVar
     }
 
 for_ :: Maybe ChainPoint -> (WithGenesis a0 -> t0) -> STM a1

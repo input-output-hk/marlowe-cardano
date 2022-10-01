@@ -5,7 +5,7 @@
 module Language.Marlowe.Protocol.HeaderSync.Types
   where
 
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.TypedProtocol (Protocol(..))
 
@@ -30,7 +30,7 @@ instance Protocol MarloweHeaderSync where
     MsgNewHeaders :: BlockHeader -> [ContractHeader] -> Message MarloweHeaderSync
       'StNext
       'StIdle
-    MsgRollBackward :: BlockHeader -> Message MarloweHeaderSync
+    MsgRollBackward :: ChainPoint -> Message MarloweHeaderSync
       'StNext
       'StIdle
     MsgWait :: Message MarloweHeaderSync

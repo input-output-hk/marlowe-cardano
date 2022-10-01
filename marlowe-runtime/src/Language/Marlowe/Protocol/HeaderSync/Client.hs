@@ -6,7 +6,7 @@ module Language.Marlowe.Protocol.HeaderSync.Client
   where
 
 import Language.Marlowe.Protocol.HeaderSync.Types
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.TypedProtocol
 
@@ -26,7 +26,7 @@ data ClientStIntersect m a = ClientStIntersect
 
 data ClientStNext m a = ClientStNext
   { recvMsgNewHeaders :: BlockHeader -> [ContractHeader] -> m (ClientStIdle m a)
-  , recvMsgRollBackward :: BlockHeader -> m (ClientStIdle m a)
+  , recvMsgRollBackward :: ChainPoint -> m (ClientStIdle m a)
   , recvMsgWait :: m (ClientStWait m a)
   } deriving Functor
 
