@@ -39,15 +39,15 @@ data ContractHeader = ContractHeader
 -- | The queries supported by the discovery service.
 data DiscoveryQuery delimiter err result where
   -- | Query the full list of contract headers. Results are delivered in pages
-  -- and use a page number as a delimiter.
-  GetContractHeaders :: DiscoveryQuery Natural Void [ContractHeader]
+  -- and use a unit value to mark the next page.
+  GetContractHeaders :: DiscoveryQuery () Void [ContractHeader]
   -- | Query all contract headers that use the given minting policy ID for role
   -- tokens.
   GetContractHeadersByRoleTokenCurrency :: PolicyId -> DiscoveryQuery Void Void [ContractHeader]
 
 instance IsQuery DiscoveryQuery where
   data Tag DiscoveryQuery delimiter err result where
-    TagGetContractHeaders :: Tag DiscoveryQuery Natural Void [ContractHeader]
+    TagGetContractHeaders :: Tag DiscoveryQuery () Void [ContractHeader]
     TagGetContractHeadersByRoleTokenCurrency :: Tag DiscoveryQuery Void Void [ContractHeader]
   tagFromQuery = \case
     GetContractHeaders -> TagGetContractHeaders

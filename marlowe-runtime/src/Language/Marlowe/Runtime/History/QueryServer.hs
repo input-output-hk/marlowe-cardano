@@ -23,7 +23,7 @@ import Network.Protocol.Query.Types
 import Numeric.Natural (Natural)
 import System.IO (hPutStrLn, stderr)
 
-newtype RunQueryServer m = RunQueryServer (forall a. RuntimeHistoryQueryServer m a -> IO a)
+newtype RunQueryServer m = RunQueryServer (forall a. RuntimeHistoryQueryServer m a -> m a)
 
 data HistoryQueryServerDependencies = HistoryQueryServerDependencies
   { acceptRunQueryServer :: IO (RunQueryServer IO)
