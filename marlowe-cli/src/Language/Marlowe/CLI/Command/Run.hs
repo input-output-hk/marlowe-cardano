@@ -34,8 +34,7 @@ import Cardano.Api
   , StakeAddressReference(..)
   , TxIn
   )
-import Control.Monad (when)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
+import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Data.Foldable (asum)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Analyze (analyze)
@@ -199,7 +198,6 @@ runRunCommand command =
       marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
       stake'         = fromMaybe NoStakeAddress $ stake command
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
-      guardMainnet = when (network' == Mainnet) $ throwError "Mainnet usage is not supported."
       padTxOut (address, value) = (address, Nothing, value)
       outputs' = padTxOut <$> outputs command
     case command of
@@ -227,8 +225,7 @@ runRunCommand command =
                           maximumTime
                           outputFile
                           printStats
-      Run{..}        -> guardMainnet
-                          >> runTransaction
+      Run{..}        -> runTransaction
                             connection
                             marloweIn
                             marloweOut
@@ -242,8 +239,7 @@ runRunCommand command =
                             printStats
                             invalid
                           >>= printTxId
-      Withdraw{..}   -> guardMainnet
-                          >> withdrawFunds
+      Withdraw{..}   -> withdrawFunds
                             connection
                             marloweOut
                             roleName
@@ -258,8 +254,7 @@ runRunCommand command =
                             printStats
                             invalid
                           >>= printTxId
-      AutoRun{..}      -> guardMainnet
-                          >> autoRunTransaction
+      AutoRun{..}      -> autoRunTransaction
                             connection
                             marloweIn'
                             marloweOut
@@ -271,8 +266,7 @@ runRunCommand command =
                             printStats
                             invalid
                           >>= printTxId
-      AutoWithdraw{..} -> guardMainnet
-                          >> autoWithdrawFunds
+      AutoWithdraw{..} -> autoWithdrawFunds
                             connection
                             marloweOut
                             roleName
@@ -330,7 +324,7 @@ initializeOptions :: IsShelleyBasedEra era
                   -> O.Parser (RunCommand era)
 initializeOptions network socket =
   Initialize
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                                        (O.long "socket-path"    <> O.metavar "SOCKET_FILE"     <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                    <> O.help "Stake address, if any."                                                                                          )
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                                                          )
@@ -379,7 +373,7 @@ runOptions :: IsShelleyBasedEra era
            -> O.Parser (RunCommand era)
 runOptions network socket =
   Run
-    <$> O.option parseNetworkId                (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.optional parseMarloweIn
     <*> O.strOption                            (O.long "marlowe-out-file"<> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the Marlowe inputs, final state, and final contract."                                             )
@@ -418,7 +412,7 @@ withdrawOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                 -> O.Parser (RunCommand era)
 withdrawOptions network socket =
   Withdraw
-    <$> O.option parseNetworkId                (O.long "testnet-magic"    <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                            (O.long "socket-path"      <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption                            (O.long "marlowe-file"     <> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the Marlowe inputs, final state, and final contract."                                             )
     <*> O.option parseTokenName                (O.long "role-name"        <> O.metavar "TOKEN_NAME"               <> O.help "The role name for the withdrawal."                                                                               )
@@ -453,7 +447,7 @@ autoRunOptions :: IsShelleyBasedEra era
            -> O.Parser (RunCommand era)
 autoRunOptions network socket =
   AutoRun
-    <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"        <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                    (O.long "socket-path"     <> O.metavar "SOCKET_FILE"    <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.optional parseMarloweIn
     <*> O.strOption                    (O.long "marlowe-out-file"<> O.metavar "MARLOWE_FILE"              <> O.help "JSON file with the Marlowe inputs, final state, and final contract."                                             )
@@ -488,7 +482,7 @@ autoWithdrawOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                 -> O.Parser (RunCommand era)
 autoWithdrawOptions network socket =
   AutoWithdraw
-    <$> O.option parseNetworkId        (O.long "testnet-magic"    <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                    (O.long "socket-path"      <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption                    (O.long "marlowe-file"     <> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the Marlowe inputs, final state, and final contract."                                             )
     <*> O.option parseTokenName        (O.long "role-name"        <> O.metavar "TOKEN_NAME"               <> O.help "The role name for the withdrawal."                                                                               )
@@ -517,7 +511,7 @@ analyzeOptions :: O.Mod O.OptionFields NetworkId
                 -> O.Parser (RunCommand era)
 analyzeOptions network socket =
   Analyze
-    <$> O.option parseNetworkId (O.long "testnet-magic" <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption             (O.long "socket-path"   <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption             (O.long "marlowe-file"  <> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the state and contract."                                                                          )
     <*> O.switch                (O.long "preconditions"                                         <> O.help "Whether to check preconditions for valid Marlowe state."                                                         )

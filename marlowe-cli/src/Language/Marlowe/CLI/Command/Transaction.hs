@@ -36,8 +36,7 @@ import Cardano.Api
   , SlotNo
   , TxIn
   )
-import Control.Monad (when)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
+import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse
   ( parseAddress
@@ -190,7 +189,6 @@ runTransactionCommand command =
         , localNodeSocketPath      = socketPath command
         }
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
-      guardMainnet = when (network' == Mainnet) $ throwError "Mainnet usage is not supported."
       padTxOut (address, value) = (address, Nothing, value)
       outputs' = padTxOut <$> outputs command
     case command of
@@ -204,8 +202,7 @@ runTransactionCommand command =
                                       printStats
                                       invalid
                                       >>= printTxId
-      BuildCreate{..}            -> guardMainnet
-                                      >> buildIncoming
+      BuildCreate{..}            -> buildIncoming
                                         connection
                                         scriptAddress
                                         signingKeyFiles
@@ -218,8 +215,7 @@ runTransactionCommand command =
                                         printStats
                                         invalid
                                       >>= printTxId
-      BuildAdvance{..}           -> guardMainnet
-                                      >> buildContinuing
+      BuildAdvance{..}           -> buildContinuing
                                         connection
                                         scriptAddress
                                         validatorFile
@@ -237,8 +233,7 @@ runTransactionCommand command =
                                         printStats
                                         invalid
                                       >>= printTxId
-      BuildClose{..}             -> guardMainnet
-                                      >> buildOutgoing
+      BuildClose{..}             -> buildOutgoing
                                         connection
                                         validatorFile
                                         redeemerFile
@@ -309,7 +304,7 @@ buildSimpleOptions :: IsShelleyBasedEra era
                    -> O.Parser (TransactionCommand era)
 buildSimpleOptions network socket =
   BuildTransact
-    <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                    (O.long "socket-path"     <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> requiredSignersOpt
     <*> (O.some . O.option parseTxIn)  (O.long "tx-in"           <> O.metavar "TXID#TXIX"                <> O.help "Transaction input in TxId#TxIx format."                                                                          )
@@ -338,7 +333,7 @@ buildIncomingOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                      -> O.Parser (TransactionCommand era)
 buildIncomingOptions network socket =
   BuildCreate
-    <$> O.option parseNetworkId        (O.long "testnet-magic"     <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                    (O.long "socket-path"       <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.option parseAddress       (O.long "script-address"    <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
     <*> requiredSignersOpt
@@ -370,7 +365,7 @@ buildContinuingOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkI
                        -> O.Parser (TransactionCommand era)
 buildContinuingOptions network socket =
   BuildAdvance
-    <$> O.option parseNetworkId        (O.long "testnet-magic"       <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                    (O.long "socket-path"         <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.option parseAddress       (O.long "script-address"      <> O.metavar "ADDRESS"                  <> O.help "Address of the Marlowe contract."                                                                                )
     <*> O.strOption                    (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"              <> O.help "Plutus file for Marlowe contract."                                                                               )
@@ -411,7 +406,7 @@ buildOutgoingOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                      -> O.Parser (TransactionCommand era)
 buildOutgoingOptions network socket =
   BuildClose
-    <$> O.option parseNetworkId        (O.long "testnet-magic"       <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                    (O.long "socket-path"         <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption                    (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"              <> O.help "Plutus file for Marlowe contract."                                                                               )
     <*> O.strOption                    (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"            <> O.help "Redeemer JSON file spent from Marlowe contract."                                                                 )
@@ -449,7 +444,7 @@ submitOptions :: O.Mod O.OptionFields NetworkId
               -> O.Parser (TransactionCommand era)
 submitOptions network socket =
   Submit
-    <$> O.option parseNetworkId        (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                    (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> (TxBodyFile <$> O.strOption    (O.long "tx-body-file"    <> O.metavar "BODY_FILE"               <> O.help "File containing the transaction body."                                                                           ))
     <*> requiredSignersOpt
@@ -468,7 +463,7 @@ publishCommand network socket =
 publishOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (TransactionCommand era)
 publishOptions network socket =
   Publish
-    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                          (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> requiredSignerOpt
 
@@ -494,7 +489,7 @@ findPublishedCommand network socket =
 findPublishedOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (TransactionCommand era)
 findPublishedOptions network socket =
   FindPublished
-    <$> O.option parseNetworkId              (O.long "testnet-magic"   <> network           <> O.metavar "INTEGER"      <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption                          (O.long "socket-path"     <> socket            <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.optional publishingStrategyOpt
 

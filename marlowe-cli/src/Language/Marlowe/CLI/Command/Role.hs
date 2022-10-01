@@ -124,7 +124,7 @@ exportAddressOptions :: O.Mod O.OptionFields NetworkId
                      -> O.Parser RoleCommand
 exportAddressOptions network =
   ExportAddress
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"  <> O.metavar "INTEGER" <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <$> parseNetworkId network
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"            <> O.help "Stake address, if any."                                                            )
 
 
@@ -142,7 +142,7 @@ exportValidatorOptions :: O.Mod O.OptionFields NetworkId
                        -> O.Parser RoleCommand
 exportValidatorOptions network =
   ExportValidator
-    <$> O.option parseNetworkId                            (O.long "testnet-magic"    <> O.metavar "INTEGER"     <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value.")
+    <$> parseNetworkId network
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"    <> O.metavar "ADDRESS"                <> O.help "Stake address, if any."                                                            )
     <*> protocolVersionOpt
     <*> (O.optional . O.strOption)                         (O.long "out-file"         <> O.metavar "OUTPUT_FILE"            <> O.help "JSON output file for validator."                                                   )
