@@ -3,10 +3,11 @@ node.socket
 *.skey
 *.vkey
 *.address
-english-auction*
-revenue-based-loan*
-guessing-game*
 collective-loan*
+coupon-bond-guaranteed*
+english-auction*
+guessing-game*
+revenue-based-loan*
 simple-babbage*
 stabilized-collective-loan*
 token-drop*
