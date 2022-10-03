@@ -1,0 +1,178 @@
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+
+module Language.Marlowe.Runtime.CLI.Command.Log
+  where
+
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.Delay (newDelay, waitDelay)
+import Control.Monad (guard)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT(..))
+import Data.ByteString.Base16
+import Data.Foldable (asum, for_, traverse_)
+import qualified Data.Text as T
+import Language.Marlowe (pretty)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
+import Language.Marlowe.Protocol.Sync.Client
+import Language.Marlowe.Runtime.CLI.Env (Env(..))
+import Language.Marlowe.Runtime.CLI.Monad (CLI, askEnv, runCLIExceptT, runHistorySyncClient)
+import Language.Marlowe.Runtime.CLI.Option (contractIdArgument)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (BlockHeader(..), BlockNo(..), SlotNo(..), TxId(..), TxOutRef(..), toBech32, unBlockHeaderHash)
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  , renderContractId
+  )
+import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..), RedeemStep(..))
+import Options.Applicative
+import Prelude hiding (tail)
+import System.Console.ANSI
+import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
+
+data LogCommand = LogCommand
+  { tail :: Bool
+  , contractId :: ContractId
+  }
+
+logCommandParser :: ParserInfo LogCommand
+logCommandParser = info parser $ progDesc "Display the history of a contract"
+  where
+    parser = LogCommand
+      <$> tailOption
+      <*> contractIdArgument "The ID of the contract to log"
+    tailOption = flag False True $ mconcat
+      [ long "tail"
+      , short 't'
+      , help "Await new events from the contract and print them as they occur"
+      ]
+
+runLogCommand :: LogCommand -> CLI ()
+runLogCommand LogCommand{..} = runCLIExceptT
+  $ ExceptT
+  $ runHistorySyncClient
+  $ MarloweSyncClient
+  $ pure
+  $ SendMsgFollowContract contractId ClientStFollow
+      { recvMsgContractNotFound = pure $ Left @String "Contract not found"
+      , recvMsgContractFound = \block version create -> do
+          liftIO $ showCreateStep contractId block version create
+          pure $ requestNext version
+      }
+  where
+    requestNext :: MarloweVersion v -> ClientStIdle v CLI (Either String ())
+    requestNext = SendMsgRequestNext . next
+
+    next :: MarloweVersion v -> ClientStNext v CLI (Either String ())
+    next version = ClientStNext
+      { recvMsgRollBackCreation = pure $ Left "Creation transaction was rolled back"
+      , recvMsgRollBackward = \block -> do
+          liftIO $ showRollback block
+          pure $ requestNext version
+      , recvMsgRollForward = \block steps -> do
+          liftIO $ traverse_ (showStep contractId block version) steps
+          pure $ requestNext version
+      , recvMsgWait = wait version
+      }
+
+    wait :: MarloweVersion v -> CLI (ClientStWait v CLI (Either String ()))
+    wait version = do
+      delay <- liftIO $ newDelay 500_000 -- poll every 500 ms
+      Env{..} <- askEnv
+      keepGoing <- liftIO $ atomically do
+        guard tail
+        asum
+          [ False <$ sigInt
+          , True <$ waitDelay delay
+          ]
+      pure if keepGoing
+        then SendMsgPoll $ next version
+        else SendMsgCancel $ SendMsgDone $ Right ()
+
+-- TODO allow output format to be specified via command line argument (e.g.
+-- JSON)
+showStep :: ContractId -> BlockHeader -> MarloweVersion v -> ContractStep v -> IO ()
+showStep contractId BlockHeader{..} version step= do
+  setSGR [SetColor Foreground Vivid Yellow]
+  putStr "transaction "
+  case step of
+    ApplyTransaction Transaction{transactionId} -> do
+      putStrLn $ T.unpack $ encodeBase16 $ unTxId transactionId
+    RedeemPayout RedeemStep{..}-> do
+      putStr $ T.unpack $ encodeBase16 $ unTxId redeemingTx
+      putStrLn " (redeem)"
+  setSGR [Reset]
+  case step of
+    ApplyTransaction Transaction{redeemer, output} -> do
+      putStr "ContractId: "
+      putStrLn $ T.unpack $ renderContractId contractId
+      putStr "SlotNo:     "
+      print $ unSlotNo slotNo
+      putStr "BlockNo:    "
+      print $ unBlockNo blockNo
+      putStr "BlockId:    "
+      putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+      putStr "Inputs:     "
+      putStrLn case version of
+        MarloweV1 -> show redeemer
+      putStrLn ""
+      let TransactionOutput{..} = output
+      case scriptOutput of
+        Nothing -> putStrLn "    <contract closed>"
+        Just TransactionScriptOutput{..} -> do
+          let
+            contractDoc :: Doc
+            contractDoc = indent 4 case version of
+              MarloweV1 -> pretty $ V1.marloweContract datum
+          putDoc contractDoc
+      putStrLn ""
+      putStrLn ""
+
+    RedeemPayout _ -> error "not implemented"
+
+showCreateStep :: ContractId -> BlockHeader -> MarloweVersion v -> CreateStep v -> IO ()
+showCreateStep contractId BlockHeader{..} version CreateStep{..} = do
+  let TransactionScriptOutput scriptAddress _ _ datum = createOutput
+  setSGR [SetColor Foreground Vivid Yellow]
+  putStr "transaction "
+  putStr $ T.unpack $ encodeBase16 $ unTxId $ txId $ unContractId contractId
+  putStrLn " (creation)"
+  setSGR [Reset]
+  putStr "ContractId:      "
+  putStrLn $ T.unpack $ renderContractId contractId
+  putStr "SlotNo:          "
+  print $ unSlotNo slotNo
+  putStr "BlockNo:         "
+  print $ unBlockNo blockNo
+  putStr "BlockId:         "
+  putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
+  for_ (toBech32 scriptAddress) \addr -> do
+    putStr "ScriptAddress:   "
+    putStrLn $ T.unpack addr
+  putStr "Marlowe Version: "
+  putStrLn case version of
+    MarloweV1 -> "1"
+  let
+    contractDoc :: Doc
+    contractDoc = indent 4 case version of
+      MarloweV1 -> pretty $ V1.marloweContract datum
+  putStrLn ""
+  putDoc contractDoc
+  putStrLn ""
+  putStrLn ""
+
+showRollback :: BlockHeader -> IO ()
+showRollback BlockHeader{..} = do
+  setSGR [SetColor Foreground Vivid Yellow]
+  putStr "rollback"
+  setSGR [Reset]
+  putStr "SlotNo:     "
+  print $ unSlotNo slotNo
+  putStr "BlockNo:    "
+  print $ unBlockNo blockNo
+  putStr "BlockId:    "
+  putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
