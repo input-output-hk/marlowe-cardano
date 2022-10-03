@@ -15,7 +15,8 @@ import Data.Bifunctor (bimap)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (listToMaybe)
-import Data.Void (Void)
+import Data.Set (Set)
+import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Query.Server
@@ -69,6 +70,7 @@ mkWorker WorkerDependencies{..} =
     server :: RuntimeHistoryQueryServer IO ()
     server = QueryServer $ pure $ ServerStInit \case
       GetFollowedContracts  -> getFollowedContractsServer followerPageSize followerStatuses
+      GetStatuses contractIds -> getStatusesServer contractIds followerStatuses
 
 getFollowedContractsServer
   :: Natural
@@ -96,3 +98,14 @@ getFollowedContractsServer followerPageSize followerStatuses = do
             $ Map.fromDistinctAscList
             $ dropWhile ((/= delimiter) . fst) remaining
         }
+
+getStatusesServer
+  :: Set ContractId
+  -> STM (Map ContractId FollowerStatus)
+  -> IO (ServerStNext HistoryQuery 'CanReject Void Void (Map ContractId FollowerStatus) IO ())
+getStatusesServer contractIds followerStatuses = do
+  followers <- atomically followerStatuses
+  pure $ SendMsgNextPage (Map.restrictKeys followers contractIds) Nothing ServerStPage
+    { recvMsgDone = pure ()
+    , recvMsgRequestNext = absurd
+    }

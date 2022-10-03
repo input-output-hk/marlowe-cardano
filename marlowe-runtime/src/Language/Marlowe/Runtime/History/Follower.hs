@@ -36,6 +36,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Traversable (for)
 import Data.Void (Void, absurd)
+import Debug.Trace (traceShow)
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( BlockHeader
@@ -496,7 +497,7 @@ extractMarloweTransaction version slotConfig contractId scriptAddress payoutVali
   Chain.TransactionInput { redeemer = mRedeemer } <-
     note TxInNotFound $ find (consumesUTxO consumedUTxO) inputs
   rawRedeemer <- note NoRedeemer mRedeemer
-  redeemer <- note InvalidRedeemer $ fromChainRedeemer version rawRedeemer
+  redeemer <- note (traceShow rawRedeemer InvalidRedeemer) $ fromChainRedeemer version rawRedeemer
   (minSlot, maxSlot) <- case validityRange of
     Chain.MinMaxBound minSlot maxSlot -> pure (minSlot, maxSlot)
     _                                 -> Left InvalidValidityRange
