@@ -70,7 +70,7 @@ runLsCommand LsCommand{..}
     handleNextPageAll headers nextPage = do
       let ids = Set.fromList $ contractId <$> headers
       statuses <- fmap (either absurd id) $ runHistoryQueryClient $ liftQuery $ GetStatuses ids
-      void $ Map.traverseWithKey printResult $ Map.union (Map.fromSet (const Nothing) ids) $ Just <$> statuses
+      void $ Map.traverseWithKey printResult $ Map.union (Just <$> statuses) $ Map.fromSet (const Nothing) ids
       pure $ maybe
         (SendMsgDone ())
         (flip SendMsgRequestNext $ ClientStNext handleNextPageAll)
