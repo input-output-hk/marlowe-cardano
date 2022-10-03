@@ -92,6 +92,7 @@ import Test.Tasty.QuickCheck
   (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat, vectorOf)
 
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
+import Data.ByteString.Builder (byteString)
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
@@ -489,39 +490,39 @@ choiceNotInBounds bounds =
 
 
 -- | Generate relevant Input content for a given input action
--- interestingInput :: Bool -> Action -> [InputContent]
--- interestingInput validity (Choice choiceId bounds) =
---   map (IChoice choiceId) (interestingChoiceNum bounds)
---   ++ map (\choiceId -> IChoice choiceId bounds) (interestingChoiceId choiceId)
--- interestingInput validity (Choice choiceId bounds) = IChoice choiceId <$> interestingChoiceNum' validity bounds
+interestingInput :: Bool -> Action -> [InputContent]
+interestingInput validity (Choice choiceId bounds) =
+  IChoice <$> interestingChoiceId validity choiceId <*> interestingChoiceNum validity bounds
+-- interestingInput validity (Deposit fromAcct toAcct   ) = IChoice choiceId <$> interestingChoiceNum' validity bounds
+interestingInput True (Notify _) = [INotify]
+interestingInput False (Notify _) = []
+
+-- Note: We're going to need the functions below to get the values that's needed for the contract
+-- evalValue :: Environment -> State -> Value Observation -> Integer
+-- evalObservation :: Environment -> State -> Observation -> Bool # when we do notify - only give a notify back if the argument in notify evaluates to true. And return an empty list if it doesn't evaluate to true.
+interestingInput' :: Environment -> State -> Bool -> Action -> [InputContent]
+interestingInput' :: env -> state -> validity -> (Choice choiceId bounds)
 
 -- ChoiceId is a choice name and a party making the choice. Then we want to generate a list of choiceIds that are either invalid or valid
--- interestingChoiceId :: ChoiceId -> [ChoiceId]
--- interestingChoiceId _ = error "not implemented yet"
+interestingChoiceId :: ChoiceId -> Bool -> [ChoiceId]
+interestingChoiceId (ChoiceId byteString party) validity = fmap (\party -> ChoiceId bytestring party) $ interestingParties party validity
 
--- Write interestingChoiceName function that takes the name of the valid choice and returns a list of interesting choices that are either valid or invalid
--- interestingChoiceNum :: [Bound] -> [ChosenNum]
--- interestingChoiceNum bounds = concatMap (interestingChoiceNum' True bounds)
+interestingChoiceNum :: Bool -> Bound -> [ChosenNum]
+interestingChoiceNum True (Bound lower upper)  = validValues lower upper
+interestingChoiceNum False (Bound lower upper) = invalidValues lower upper
 
--- rewrite interestingParties to return a list of valid or invalid
--- rewrite to make it work with public key hashes
+-- TODO: `interestingParties` is missing a case for PK which is currently being replaced with Address.
+-- We will need to update the PK case with and address case when it's ready.
 interestingParties :: Party -> Bool -> [Party]
 interestingParties validRole True = [validRole]
 interestingParties (Role roleName) False = [
     Role (removeFirstLetter roleName)
   , Role (TokenName $ unTokenName roleName `appendByteString` "s")
   ]
-
--- removeFirstLetter :: TokenName -> TokenName
--- removeFirstLetter "" = ""
--- removeFirstLetter (_:remaining) = remaining
+interestingParties (PK _) _ = []
 
 removeFirstLetter :: TokenName -> TokenName
 removeFirstLetter (TokenName tokenName) = TokenName $ sliceByteString 1 (lengthOfByteString tokenName) tokenName
-
-interestingChoiceNum' :: Bool -> Bound -> [ChosenNum]
-interestingChoiceNum' True (Bound lower upper)  = validValues lower upper
-interestingChoiceNum' False (Bound lower upper) = invalidValues lower upper
 
 validValues :: Integer -> Integer -> [Integer]
 validValues lower upper = [x | x <- testValueRange, x >= lower  && x <= upper]
