@@ -78,16 +78,15 @@ MINT_EXPIRES=$((TIP + 1000000))
 TOKEN_NAME_A=Globe
 AMOUNT_A=300
 CURRENCY_SYMBOL_A=$(
-marlowe-cli util mint --testnet-magic "$MAGIC"                  \
-                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --required-signer "$ISSUER_PAYMENT_SKEY"  \
-                      --change-address  "$ISSUER_ADDRESS"       \
-                      --count "$AMOUNT_A"                       \
-                      --expires "$MINT_EXPIRES"                 \
-                      --out-file /dev/null                      \
-                      --submit=600                              \
-                      "$TOKEN_NAME_A"                           \
-| sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
+marlowe-cli util mint --testnet-magic "$MAGIC"                          \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
+                      --issuer "$ISSUER_ADDRESS:$ISSUER_PAYMENT_SKEY"   \
+                      --count "$AMOUNT_A"                               \
+                      --expires "$MINT_EXPIRES"                         \
+                      --out-file /dev/null                              \
+                      --submit=600                                      \
+                      "$TOKEN_NAME_A:$ISSUER_ADDRESS"                   \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                                    \
 )
 TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
 
@@ -155,13 +154,12 @@ AMOUNT_B=500
 CURRENCY_SYMBOL_B=$(
 marlowe-cli util mint --testnet-magic "$MAGIC"                       \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
-                      --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
-                      --change-address  "$COUNTERPARTY_ADDRESS"      \
+                      --issuer "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
                       --count "$AMOUNT_B"                            \
                       --expires "$MINT_EXPIRES"                      \
                       --out-file /dev/null                           \
                       --submit=600                                   \
-                      "$TOKEN_NAME_B"                                \
+                      "$TOKEN_NAME_B:$COUNTERPARTY_ADDRESS"          \
 | sed -e 's/^PolicyID "\(.*\)"$/\1/'                                 \
 )
 TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"

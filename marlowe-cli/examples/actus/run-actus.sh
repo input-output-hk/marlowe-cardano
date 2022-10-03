@@ -108,12 +108,12 @@ MINT_EXPIRES=$((TIP + 1000000))
 ROLE_CURRENCY=$(
 marlowe-cli util mint --testnet-magic "$MAGIC" \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --required-signer "$LENDER_PAYMENT_SKEY"  \
-                      --change-address  "$LENDER_ADDRESS"       \
+                      --issuer "$LENDER_ADDRESS:$LENDER_PAYMENT_SKEY" \
                       --expires "$MINT_EXPIRES"                 \
                       --out-file /dev/null                      \
                       --submit=600                              \
-                      "$LENDER_ROLE" "$BORROWER_ROLE"           \
+                      "$LENDER_ROLE:$LENDER_ADDRESS"            \
+                      "$BORROWER_ROLE:$BORROWER_ADDRESS"        \
 | sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
 )
 
@@ -121,25 +121,6 @@ LENDER_TOKEN="$ROLE_CURRENCY.$LENDER_ROLE"
 BORROWER_TOKEN="$ROLE_CURRENCY.$BORROWER_ROLE"
 
 echo "Find the transaction output with the borrower's role token."
-
-TX_MINT_BORROWER=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --asset-only "$BORROWER_TOKEN"            \
-                        "$LENDER_ADDRESS"                         \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
-)
-
-echo "Send the borrower their role token."
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                               \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"              \
-                               --tx-in "$TX_MINT_BORROWER"                            \
-                               --tx-out "$BORROWER_ADDRESS+2000000+1 $BORROWER_TOKEN" \
-                               --required-signer "$LENDER_PAYMENT_SKEY"               \
-                               --change-address "$LENDER_ADDRESS"                     \
-                               --out-file /dev/null                                   \
-                               --submit 600
 
 echo "### Available UTxOs"
 

@@ -85,7 +85,7 @@ marlowe-cli util mint --testnet-magic "$MAGIC"                  \
                       --token-provider "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
                       --out-file /dev/null                      \
                       --submit=600                              \
-                      "$TOKEN_NAME_A"                           \
+                      "$TOKEN_NAME_A:$PARTY_A_ADDRESS"                           \
 | sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
 )
 TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
@@ -160,7 +160,7 @@ marlowe-cli util mint --testnet-magic "$MAGIC" \
                       --token-provider "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
                       --out-file /dev/null                      \
                       --submit=600                              \
-                      "$TOKEN_NAME_B"                           \
+                      "$TOKEN_NAME_B:$PARTY_B_ADDRESS"          \
 | sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
 )
 TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"

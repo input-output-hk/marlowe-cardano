@@ -121,7 +121,7 @@ ORACLE_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ve
 
 echo "Fund the oracle's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"          \
+marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
@@ -136,65 +136,28 @@ echo "The oracle mints the role tokens."
 
 MINT_EXPIRES=$((TIP + 1000000))
 
+echo "***********START*******"
+echo "ORACLE_ADDRESS: $ORACLE_ADDRESS"
+echo "PARTY_ADDRESS: $PARTY_ADDRESS"
+echo "CP_ADDRESS: $COUNTERPARTY_ADDRESS"
+
+
 ROLE_CURRENCY=$(
-marlowe-cli util mint --testnet-magic "$MAGIC"                  \
+marlowe-cli util mint --testnet-magic "$MAGIC"                          \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
-                      --issuer "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY" \
+                      --issuer "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY"   \
                       --expires "$MINT_EXPIRES"                         \
-                      --token-provider "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY" \
                       --out-file /dev/null                              \
                       --submit=600                                      \
-                      "$ORACLE_ROLE" "$PARTY_ROLE" "$COUNTERPARTY_ROLE" \
-| sed -e 's/^PolicyID "\(.*\)"$/\1/'                       \
+                      "$ORACLE_ROLE:$ORACLE_ADDRESS"                    \
+                      "$PARTY_ROLE:$PARTY_ADDRESSS"                     \
+                      "$COUNTERPARTY_ROLE:$COUNTERPARTY_ADDRESS"        \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                                    \
 )
 
 ORACLE_TOKEN="$ROLE_CURRENCY.$ORACLE_ROLE"
 PARTY_TOKEN="$ROLE_CURRENCY.$PARTY_ROLE"
 COUNTERPARTY_TOKEN="$ROLE_CURRENCY.$COUNTERPARTY_ROLE"
-
-echo "Find the transaction output with the party's role token."
-
-TX_MINT_PARTY=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"       \
-                        --asset-only "$PARTY_TOKEN"                     \
-                        "$ORACLE_ADDRESS"                               \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'  \
-)
-
-echo "Send the party their role token."
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                 \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"        \
-                               --tx-in "$TX_MINT_PARTY"                         \
-                               --tx-out "$PARTY_ADDRESS+2000000+1 $PARTY_TOKEN" \
-                               --required-signer "$ORACLE_PAYMENT_SKEY"         \
-                               --change-address "$ORACLE_ADDRESS"               \
-                               --out-file /dev/null                             \
-                               --submit 600
-
-echo "Find the transaction output with the counterparty's role token."
-
-TX_MINT_COUNTERPARTY=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"       \
-                        --asset-only "$COUNTERPARTY_TOKEN"              \
-                        "$ORACLE_ADDRESS"                               \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'  \
-)
-
-echo "Send the counterparty their role token."
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                               \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                      \
-                               --tx-in "$TX_MINT_COUNTERPARTY"                                \
-                               --tx-out "$COUNTERPARTY_ADDRESS+2000000+1 $COUNTERPARTY_TOKEN" \
-                               --required-signer "$ORACLE_PAYMENT_SKEY"                       \
-                               --change-address "$ORACLE_ADDRESS"                             \
-                               --out-file /dev/null                                           \
-                               --submit 600
-
-echo "### Available UTxOs"
 
 echo "The oracle $ORACLE_NAME is the minimum-ADA provider and has the address "'`'"$ORACLE_ADDRESS"'`'" and role token named "'`'"$ORACLE_ROLE"'`'". They have the following UTxOs in their wallet:"
 

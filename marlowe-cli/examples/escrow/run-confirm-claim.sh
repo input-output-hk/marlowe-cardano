@@ -140,60 +140,19 @@ MINT_EXPIRES=$((TIP + 1000000))
 ROLE_CURRENCY=$(
 marlowe-cli util mint --testnet-magic "$MAGIC"                      \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"     \
-                      --required-signer "$MEDIATOR_PAYMENT_SKEY"    \
-                      --change-address  "$MEDIATOR_ADDRESS"         \
+                      --issuer "$MEDIATOR_ADDRESS:$MEDIATOR_PAYMENT_SKEY" \
                       --expires "$MINT_EXPIRES"                     \
                       --out-file /dev/null                          \
                       --submit=600                                  \
-                      "$MEDIATOR_ROLE" "$SELLER_ROLE" "$BUYER_ROLE" \
+                      "$MEDIATOR_ROLE:$MEDIATOR_ADDRESS" \
+                      "$SELLER_ROLE:$SELLER_ADDRESS" \
+                      "$BUYER_ROLE:$BUYER_ADDRESS" \
 | sed -e 's/^PolicyID "\(.*\)"$/\1/'                                \
 )
 
 MEDIATOR_TOKEN="$ROLE_CURRENCY.$MEDIATOR_ROLE"
 SELLER_TOKEN="$ROLE_CURRENCY.$SELLER_ROLE"
 BUYER_TOKEN="$ROLE_CURRENCY.$BUYER_ROLE"
-
-echo "Find the transaction output with the seller's role token."
-
-TX_MINT_SELLER=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --asset-only "$SELLER_TOKEN"              \
-                        "$MEDIATOR_ADDRESS"                       \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
-)
-
-echo "Send the seller their role token."
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                           \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"          \
-                               --tx-in "$TX_MINT_SELLER"                          \
-                               --tx-out "$SELLER_ADDRESS+2000000+1 $SELLER_TOKEN" \
-                               --required-signer "$MEDIATOR_PAYMENT_SKEY"         \
-                               --change-address "$MEDIATOR_ADDRESS"               \
-                               --out-file /dev/null                               \
-                               --submit 600
-
-echo "Find the transaction output with the buyer's role token."
-
-TX_MINT_BUYER=$(
-marlowe-cli util select --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --asset-only "$BUYER_TOKEN"               \
-                        "$MEDIATOR_ADDRESS"                       \
-| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
-)
-
-echo "Send the buyer their role token."
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                         \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"        \
-                               --tx-in "$TX_MINT_BUYER"                         \
-                               --tx-out "$BUYER_ADDRESS+2000000+1 $BUYER_TOKEN" \
-                               --required-signer "$MEDIATOR_PAYMENT_SKEY"       \
-                               --change-address "$MEDIATOR_ADDRESS"             \
-                               --out-file /dev/null                             \
-                               --submit 600
 
 echo "### Available UTxOs"
 
