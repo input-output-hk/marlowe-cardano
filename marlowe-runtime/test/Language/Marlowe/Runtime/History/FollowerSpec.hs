@@ -54,6 +54,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), currentV1Scripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
+import qualified Language.Marlowe.Scripts as V1
 import qualified Plutus.V1.Ledger.Value as Plutus
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)
@@ -177,8 +178,8 @@ closeTxIn =
   in
     Chain.TransactionInput createTxId 0 testScriptAddress (Just $ toDatum createDatum) redeemer
 
-closeRedeemer :: [V1.Input]
-closeRedeemer = [ V1.NormalInput V1.INotify ]
+closeRedeemer :: V1.MarloweInput
+closeRedeemer = [ V1.Input V1.INotify ]
 
 closeTxId :: TxId
 closeTxId = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -195,7 +196,7 @@ closeTx =
   in
     Chain.Transaction{..}
 
-applyInputsRedeemer :: [V1.Input]
+applyInputsRedeemer :: V1.MarloweInput
 applyInputsRedeemer = []
 
 applyInputsTxIn :: Chain.TransactionInput
