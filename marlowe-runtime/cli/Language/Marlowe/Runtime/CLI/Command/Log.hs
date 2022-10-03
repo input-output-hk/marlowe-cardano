@@ -6,7 +6,7 @@ module Language.Marlowe.Runtime.CLI.Command.Log
 
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
-import Control.Monad (guard)
+import Control.Monad (guard, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(..))
 import Data.ByteString.Base16
@@ -36,6 +36,7 @@ import Text.PrettyPrint.Leijen (Doc, indent, putDoc)
 
 data LogCommand = LogCommand
   { tail :: Bool
+  , showContract :: Bool
   , contractId :: ContractId
   }
 
@@ -44,7 +45,13 @@ logCommandParser = info parser $ progDesc "Display the history of a contract"
   where
     parser = LogCommand
       <$> tailOption
+      <*> showContractOption
       <*> contractIdArgument "The ID of the contract to log"
+    showContractOption = flag False True $ mconcat
+      [ long "show-contract"
+      , short 'c'
+      , help "Show the contract at each step"
+      ]
     tailOption = flag False True $ mconcat
       [ long "tail"
       , short 't'
@@ -60,7 +67,7 @@ runLogCommand LogCommand{..} = runCLIExceptT
   $ SendMsgFollowContract contractId ClientStFollow
       { recvMsgContractNotFound = pure $ Left @String "Contract not found"
       , recvMsgContractFound = \block version create -> do
-          liftIO $ showCreateStep contractId block version create
+          liftIO $ showCreateStep showContract contractId block version create
           pure $ requestNext version
       }
   where
@@ -74,7 +81,7 @@ runLogCommand LogCommand{..} = runCLIExceptT
           liftIO $ showRollback block
           pure $ requestNext version
       , recvMsgRollForward = \block steps -> do
-          liftIO $ traverse_ (showStep contractId block version) steps
+          liftIO $ traverse_ (showStep showContract contractId block version) steps
           pure $ requestNext version
       , recvMsgWait = wait version
       }
@@ -94,13 +101,16 @@ runLogCommand LogCommand{..} = runCLIExceptT
 
 -- TODO allow output format to be specified via command line argument (e.g.
 -- JSON)
-showStep :: ContractId -> BlockHeader -> MarloweVersion v -> ContractStep v -> IO ()
-showStep contractId BlockHeader{..} version step= do
+showStep :: Bool -> ContractId -> BlockHeader -> MarloweVersion v -> ContractStep v -> IO ()
+showStep showContract contractId BlockHeader{..} version step= do
   setSGR [SetColor Foreground Vivid Yellow]
   putStr "transaction "
   case step of
-    ApplyTransaction Transaction{transactionId} -> do
-      putStrLn $ T.unpack $ encodeBase16 $ unTxId transactionId
+    ApplyTransaction Transaction{transactionId, output = TransactionOutput{..}} -> do
+      putStr $ T.unpack $ encodeBase16 $ unTxId transactionId
+      putStrLn case scriptOutput of
+        Nothing -> " (close)"
+        _ -> ""
     RedeemPayout RedeemStep{..}-> do
       putStr $ T.unpack $ encodeBase16 $ unTxId redeemingTx
       putStrLn " (redeem)"
@@ -119,22 +129,23 @@ showStep contractId BlockHeader{..} version step= do
       putStrLn case version of
         MarloweV1 -> show redeemer
       putStrLn ""
-      let TransactionOutput{..} = output
-      case scriptOutput of
-        Nothing -> putStrLn "    <contract closed>"
-        Just TransactionScriptOutput{..} -> do
-          let
-            contractDoc :: Doc
-            contractDoc = indent 4 case version of
-              MarloweV1 -> pretty $ V1.marloweContract datum
-          putDoc contractDoc
-      putStrLn ""
+      when showContract do
+        let TransactionOutput{..} = output
+        case scriptOutput of
+          Just TransactionScriptOutput{..} -> do
+            let
+              contractDoc :: Doc
+              contractDoc = indent 4 case version of
+                MarloweV1 -> pretty $ V1.marloweContract datum
+            putDoc contractDoc
+            putStrLn ""
+          _ -> pure ()
       putStrLn ""
 
     RedeemPayout _ -> error "not implemented"
 
-showCreateStep :: ContractId -> BlockHeader -> MarloweVersion v -> CreateStep v -> IO ()
-showCreateStep contractId BlockHeader{..} version CreateStep{..} = do
+showCreateStep :: Bool -> ContractId -> BlockHeader -> MarloweVersion v -> CreateStep v -> IO ()
+showCreateStep showContract contractId BlockHeader{..} version CreateStep{..} = do
   let TransactionScriptOutput scriptAddress _ _ datum = createOutput
   setSGR [SetColor Foreground Vivid Yellow]
   putStr "transaction "
@@ -160,7 +171,8 @@ showCreateStep contractId BlockHeader{..} version CreateStep{..} = do
     contractDoc = indent 4 case version of
       MarloweV1 -> pretty $ V1.marloweContract datum
   putStrLn ""
-  putDoc contractDoc
+  when showContract do
+    putDoc contractDoc
   putStrLn ""
   putStrLn ""
 
