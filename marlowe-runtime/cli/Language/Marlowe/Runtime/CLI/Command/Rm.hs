@@ -21,6 +21,6 @@ rmCommandParser = info parser $ progDesc "Stop managing a contract"
 
 runRmCommand :: RmCommand -> CLI ()
 runRmCommand RmCommand{..} = runCLIExceptT do
-  removed <- ExceptT $ runHistoryCommand $ FollowContract contractId
+  removed <- ExceptT $ runHistoryCommand $ StopFollowingContract contractId
   when removed do
     liftIO $ T.putStrLn $ renderContractId contractId
