@@ -425,22 +425,22 @@ performFindConsumingTxs utxos point = do
 
 performFindTxsTo :: Set Api.Credential -> Api.ChainPoint -> Transaction (PerformMoveResult Api.FindTxsToError (Set Api.Transaction))
 performFindTxsTo credentials point = do
-  initialResult <- HT.statement (V.fromList $ fmap credentialBytes $ Set.toList credentials, pointSlot point) $
+  initialResult <- HT.statement params $
     [foldStatement|
-      WITH credentials (addressPaymentCredential) as
-        ( SELECT * FROM UNNEST ($1 :: bytea[])
+      WITH credentials (addressHeader,  addressPaymentCredential) as
+        ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
         )
       , txIds (id) AS
         ( SELECT DISTINCT txOut.txId
             FROM chain.txOut
-            JOIN credentials USING (addressPaymentCredential)
+            JOIN credentials USING (addressHeader, addressPaymentCredential)
         )
       , nextSlot (slotNo) AS
         ( SELECT MIN(block.slotNo)
             FROM chain.tx    AS tx
             JOIN txIds                USING (id)
             JOIN chain.block AS block ON block.id = tx.blockId AND block.slotNo = tx.slotNo
-           WHERE block.slotNo > $2 :: bigint
+           WHERE block.slotNo > $3 :: bigint
              AND block.rollbackToBlock IS NULL
         )
       SELECT block.slotNo :: bigint?
@@ -454,11 +454,11 @@ performFindTxsTo credentials point = do
            , asset.name :: bytea?
            , assetMint.quantity :: bigint?
         FROM chain.tx             AS tx
+        JOIN nextSlot                          USING (slotNo)
         JOIN txIds                             USING (id)
         JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
         LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
         LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
-       WHERE block.rollbackToBlock IS NULL
     |] foldTxs
   case initialResult of
     (Nothing, _) -> pure MoveWait
@@ -474,9 +474,16 @@ performFindTxsTo credentials point = do
         $ Map.toList
         $ Map.intersectionWith (\(ins, outs) tx -> tx { Api.inputs = ins, Api.outputs = outs }) insOuts txs
   where
-    credentialBytes = \case
-      Api.PaymentKeyCredential pkh -> Api.unPaymentKeyHash pkh
-      Api.ScriptCredential sh -> Api.unScriptHash sh
+    params =
+      ( V.fromList $ fst <$> addressParts
+      , V.fromList $ snd <$> addressParts
+      , pointSlot point
+      )
+    addressParts = Set.toList credentials >>= \case
+      Api.PaymentKeyCredential pkh ->
+        (,Api.unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60]
+      Api.ScriptCredential sh ->
+        (,Api.unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70]
     foldTxs :: Fold ReadTxRow (Maybe Api.BlockHeader, Map Api.TxId Api.Transaction)
     foldTxs = Fold foldTxs' (Nothing, mempty) id
 
@@ -484,7 +491,7 @@ performFindTxsTo credentials point = do
       :: (Maybe Api.BlockHeader, Map Api.TxId Api.Transaction)
       -> ReadTxRow
       -> (Maybe Api.BlockHeader, Map Api.TxId Api.Transaction)
-    foldTxs' (blockHeader, txs) row@(Just slotNo, Just hash, Just blockNo, _, _, _, Just txId, _, _, _) =
+    foldTxs' (blockHeader, txs) row@(Just slotNo, Just hash, Just blockNo, Just txId, _, _, _, _, _, _) =
       ( blockHeader <|> Just (Api.BlockHeader (decodeSlotNo slotNo) (Api.BlockHeaderHash hash) (decodeBlockNo blockNo))
       , Map.alter (mergeRow row) (Api.TxId txId) txs
       )
