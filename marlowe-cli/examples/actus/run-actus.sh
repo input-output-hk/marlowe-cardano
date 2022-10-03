@@ -502,8 +502,6 @@ marlowe-cli transaction simple --testnet-magic "$MAGIC"                         
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS"
 
-
-
 echo "## Clean Up"
 
 echo "Burning tokens issued by BORROWER:"

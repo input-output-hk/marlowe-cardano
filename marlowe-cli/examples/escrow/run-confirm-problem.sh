@@ -516,70 +516,44 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$MEDIATOR_ADDRESS" | 
 
 echo "## Clean Up"
 
-BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
+echo "Burning tokens issued by MEDIATOR:"
 
-TX=$(
-marlowe-cli util clean --testnet-magic "$MAGIC"                  \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --required-signer "$MEDIATOR_PAYMENT_SKEY"\
-                       --change-address "$MEDIATOR_ADDRESS"      \
-                       --out-file /dev/null                      \
-                       --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                 \
-)
+marlowe-cli util burn --testnet-magic "$MAGIC" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --issuer "$MEDIATOR_ADDRESS:$MEDIATOR_PAYMENT_SKEY" \
+                      --expires $MINT_EXPIRES \
+                      --token-provider "$MEDIATOR_ADDRESS:$MEDIATOR_PAYMENT_SKEY" \
+                      --token-provider "$SELLER_ADDRESS:$SELLER_PAYMENT_SKEY" \
+                      --token-provider "$BUYER_ADDRESS:$BUYER_PAYMENT_SKEY" \
+                      --submit 600 \
+                      --out-file /dev/null
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                   \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                               --tx-in "$TX#0"                              \
-                               --tx-in "$TX#1"                              \
-                               --required-signer "$MEDIATOR_PAYMENT_SKEY" \
-                               --change-address "$FAUCET_ADDRESS"         \
-                               --tx-out "$BURN_ADDRESS+1400000+1 $MEDIATOR_TOKEN" \
-                               --out-file /dev/null                       \
-                               --submit 600
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$MEDIATOR_ADDRESS"
+echo "Sending back funds:"
 
-TX=$(
-marlowe-cli util clean --testnet-magic "$MAGIC"                  \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --required-signer "$SELLER_PAYMENT_SKEY"\
-                       --change-address "$SELLER_ADDRESS"      \
-                       --out-file /dev/null                      \
-                       --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                 \
-)
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$MEDIATOR_ADDRESS"        \
+                           --required-signer "$MEDIATOR_PAYMENT_SKEY"     \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                   \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                               --tx-in "$TX#0"                              \
-                               --tx-in "$TX#1"                              \
-                               --required-signer "$SELLER_PAYMENT_SKEY" \
-                               --change-address "$FAUCET_ADDRESS"         \
-                               --tx-out "$BURN_ADDRESS+1400000+1 $SELLER_TOKEN" \
-                               --out-file /dev/null                       \
-                               --submit 600
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$SELLER_ADDRESS" \
+                           --required-signer "$SELLER_PAYMENT_SKEY" \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$SELLER_ADDRESS"
-
-TX=$(
-marlowe-cli util clean --testnet-magic "$MAGIC"                  \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --required-signer "$BUYER_PAYMENT_SKEY"\
-                       --change-address "$BUYER_ADDRESS"      \
-                       --out-file /dev/null                      \
-                       --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                 \
-)
-
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                   \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                               --tx-in "$TX#0"                              \
-                               --tx-in "$TX#1"                              \
-                               --required-signer "$BUYER_PAYMENT_SKEY" \
-                               --change-address "$FAUCET_ADDRESS"         \
-                               --tx-out "$BURN_ADDRESS+1400000+1 $BUYER_TOKEN" \
-                               --out-file /dev/null                       \
-                               --submit 600
-
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BUYER_ADDRESS"
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$BUYER_ADDRESS" \
+                           --required-signer "$BUYER_PAYMENT_SKEY" \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
