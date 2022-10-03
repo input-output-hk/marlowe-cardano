@@ -501,3 +501,40 @@ marlowe-cli transaction simple --testnet-magic "$MAGIC"                         
                                --submit 600
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS"
+
+
+
+echo "## Clean Up"
+
+echo "Burning tokens issued by BORROWER:"
+
+marlowe-cli util burn --testnet-magic "$MAGIC" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --issuer "$BORROWER_ADDRESS:$BORROWER_PAYMENT_SKEY" \
+                      --expires $MINT_EXPIRES \
+                      --token-provider "$LENDER_ADDRESS:$LENDER_PAYMENT_SKEY" \
+                      --token-provider "$BORROWER_ADDRESS:$BORROWER_PAYMENT_SKEY" \
+                      --submit 600 \
+                      --out-file /dev/null
+
+
+echo "Sending back funds:"
+
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$LENDER_ADDRESS"        \
+                           --required-signer "$LENDER_PAYMENT_SKEY"     \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
+
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$BORROWER_ADDRESS" \
+                           --required-signer "$BORROWER_PAYMENT_SKEY" \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
+
