@@ -150,7 +150,7 @@ marlowe-cli util mint --testnet-magic "$MAGIC"                          \
                       --out-file /dev/null                              \
                       --submit=600                                      \
                       "$ORACLE_ROLE:$ORACLE_ADDRESS"                    \
-                      "$PARTY_ROLE:$PARTY_ADDRESSS"                     \
+                      "$PARTY_ROLE:$PARTY_ADDRESS"                     \
                       "$COUNTERPARTY_ROLE:$COUNTERPARTY_ADDRESS"        \
 | sed -e 's/^PolicyID "\(.*\)"$/\1/'                                    \
 )
@@ -778,43 +778,45 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ORACLE_ADDRESS" | se
 
 echo "## Clean Up"
 
-BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
+echo "Burning tokens issued by ORACLE:"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                  \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
-                               --tx-in "$TX_6"#0                                 \
-                               --tx-in "$TX_6"#1                                 \
-                               --tx-in "$TX_6"#2                                 \
-                               --tx-out "$BURN_ADDRESS+1400000+1 $PARTY_TOKEN" \
-                               --required-signer "$PARTY_PAYMENT_SKEY"           \
-                               --change-address "$FAUCET_ADDRESS"                \
-                               --out-file /dev/null                              \
-                               --submit 600
+marlowe-cli util burn --testnet-magic "$MAGIC" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --issuer "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY" \
+                      --expires $MINT_EXPIRES \
+                      --token-provider "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY" \
+                      --token-provider "$PARTY_ADDRESS:$PARTY_PAYMENT_SKEY" \
+                      --token-provider "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
+                      --submit 600 \
+                      --out-file /dev/null
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_ADDRESS"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                         \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                \
-                               --tx-in "$TX_7"#0                                        \
-                               --tx-in "$TX_7"#1                                        \
-                               --tx-in "$TX_7"#2                                        \
-                               --tx-out "$BURN_ADDRESS+1400000+1 $COUNTERPARTY_TOKEN" \
-                               --required-signer "$COUNTERPARTY_PAYMENT_SKEY"           \
-                               --change-address "$FAUCET_ADDRESS"                       \
-                               --out-file /dev/null                                     \
-                               --submit 600
+echo "Sending back funds:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$COUNTERPARTY_ADDRESS"
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$ORACLE_ADDRESS"        \
+                           --required-signer "$ORACLE_PAYMENT_SKEY"     \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                         \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                \
-                               --tx-in "$TX_8"#0                                        \
-                               --tx-in "$TX_8"#1                                        \
-                               --tx-in "$TX_8"#2                                        \
-                               --tx-out "$BURN_ADDRESS+1400000+1 $ORACLE_TOKEN" \
-                               --required-signer "$ORACLE_PAYMENT_SKEY"           \
-                               --change-address "$FAUCET_ADDRESS"                       \
-                               --out-file /dev/null                                     \
-                               --submit 600
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$PARTY_ADDRESS" \
+                           --required-signer "$PARTY_PAYMENT_SKEY" \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ORACLE_ADDRESS"
+marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                           --all-money \
+                           --faucet-address "$COUNTERPARTY_ADDRESS" \
+                           --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
+                           --submit 600 \
+                           --out-file /dev/null \
+                           "$FAUCET_ADDRESS"
+
