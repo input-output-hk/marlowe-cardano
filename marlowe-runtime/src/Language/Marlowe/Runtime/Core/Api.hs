@@ -31,6 +31,7 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import qualified Language.Marlowe.Scripts as V1
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
 import Text.Read (readMaybe)
@@ -90,7 +91,7 @@ class IsMarloweVersion (v :: MarloweVersionTag) where
 instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
   type Datum 'V1 = V1.MarloweData
-  type Redeemer 'V1 = [V1.Input]
+  type Redeemer 'V1 = V1.MarloweInput
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 
@@ -230,28 +231,24 @@ getContract v = do
       Success c -> pure c
 
 putRedeemer :: MarloweVersion v -> Redeemer v -> Put
-putRedeemer v = put . encode . redeemerToJSON v
+putRedeemer v = put . toChainRedeemer v
 
 getRedeemer :: MarloweVersion v -> Get (Redeemer v)
 getRedeemer v = do
-  bytes <- get
-  case eitherDecode bytes of
-    Left err -> fail err
-    Right json -> case parse (redeemerFromJSON v) json of
-      Error err -> fail err
-      Success r -> pure r
+  raw <- get
+  case fromChainRedeemer v raw of
+    Nothing -> fail "failed to decode redeemer"
+    Just r -> pure r
 
 putDatum :: MarloweVersion v -> Datum v -> Put
-putDatum v = put . encode . datumToJSON v
+putDatum v = put . toChainDatum v
 
 getDatum :: MarloweVersion v -> Get (Datum v)
 getDatum v = do
-  bytes <- get
-  case eitherDecode bytes of
-    Left err -> fail err
-    Right json -> case parse (datumFromJSON v) json of
-      Error err -> fail err
-      Success d -> pure d
+  raw <- get
+  case fromChainDatum v raw of
+    Nothing -> fail "failed to decode datum"
+    Just d -> pure d
 
 putPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Put
 putPayoutDatum MarloweV1 = put
@@ -265,14 +262,6 @@ contractToJSON = \case
 
 contractFromJSON :: MarloweVersion v -> Value -> Parser (Contract v)
 contractFromJSON = \case
-  MarloweV1 -> parseJSON
-
-redeemerToJSON :: MarloweVersion v -> Redeemer v -> Value
-redeemerToJSON = \case
-  MarloweV1 -> toJSON
-
-redeemerFromJSON :: MarloweVersion v -> Value -> Parser (Redeemer v)
-redeemerFromJSON = \case
   MarloweV1 -> parseJSON
 
 payoutDatumToJSON :: MarloweVersion v -> PayoutDatum v -> Value

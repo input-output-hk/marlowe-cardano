@@ -15,6 +15,7 @@ import Language.Marlowe.Runtime.CLI.Monad (CLI)
 import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (unPolicyId)
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), IsMarloweVersion(..), MarloweVersionTag(..))
+import qualified Language.Marlowe.Scripts as V1
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
 import qualified Plutus.V1.Ledger.Api as P
@@ -127,7 +128,7 @@ singleInputParser verb contentParser = info (txCommandParser parser)
       <*> validityLowerBoundParser
       <*> validityUpperBoundParser
     inputParser = do
-      content <- V1.NormalInput <$> contentParser
+      content <- V1.Input <$> contentParser
       mContinuation <- optional continuationParser
       pure case mContinuation of
         Nothing -> ContractInputsByValue [content]
