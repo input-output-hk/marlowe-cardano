@@ -81,14 +81,13 @@ runLogCommand LogCommand{..} = runCLIExceptT
 
     wait :: MarloweVersion v -> CLI (ClientStWait v CLI (Either String ()))
     wait version = do
-      delay <- liftIO $ newDelay 500_000 -- poll every 500 ms
       Env{..} <- askEnv
-      keepGoing <- liftIO $ atomically do
-        guard tail
-        asum
-          [ False <$ sigInt
-          , True <$ waitDelay delay
-          ]
+      delay <- liftIO $ newDelay 500_000 -- poll every 500 ms
+      keepGoing <- liftIO $ atomically $ asum
+        [ False <$ guard (not tail)
+        , False <$ sigInt
+        , True <$ waitDelay delay
+        ]
       pure if keepGoing
         then SendMsgPoll $ next version
         else SendMsgCancel $ SendMsgDone $ Right ()
