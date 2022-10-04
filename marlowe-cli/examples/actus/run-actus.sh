@@ -503,3 +503,11 @@ marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
                                   --out-file /dev/null \
                                   "$FAUCET_ADDRESS"
 
+echo "Here are the UTxOs at the lender $LENDER_NAME's address after cleanup:"
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
+
+echo "Here are the UTxOs at the borrower $BORROWER_NAME's address after cleanup:"
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BORROWER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p"
+

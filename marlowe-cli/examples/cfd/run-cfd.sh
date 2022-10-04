@@ -133,11 +133,6 @@ echo "The oracle mints the role tokens."
 
 MINT_EXPIRES=$((TIP + 1000000))
 
-echo "***********START*******"
-echo "ORACLE_ADDRESS: $ORACLE_ADDRESS"
-echo "PARTY_ADDRESS: $PARTY_ADDRESS"
-echo "CP_ADDRESS: $COUNTERPARTY_ADDRESS"
-
 
 ROLE_CURRENCY=$(
 marlowe-cli util mint --testnet-magic "$MAGIC"                          \
@@ -787,7 +782,6 @@ marlowe-cli util burn --testnet-magic "$MAGIC" \
                       --submit 600 \
                       --out-file /dev/null
 
-
 echo "Sending back funds:"
 
 marlowe-cli util fund-address --testnet-magic "$MAGIC" \
@@ -813,4 +807,17 @@ marlowe-cli util fund-address --testnet-magic "$MAGIC" \
                               --submit 600 \
                               --out-file /dev/null \
                               "$FAUCET_ADDRESS"
+
+echo "Here are the UTxOs at the party $PARTY_NAME's address after cleanup:"
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
+
+echo "Here are the UTxOs at the counterparty $COUNTERPARTY_NAME's addres after cleanups:"
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$COUNTERPARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
+
+echo "Here are the UTxOs at the oracle $ORACLE_NAME's address after cleanup:"
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ORACLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p;/$TX_8/p"
+
 

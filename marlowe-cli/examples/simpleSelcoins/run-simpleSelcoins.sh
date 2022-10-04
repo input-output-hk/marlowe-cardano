@@ -86,7 +86,7 @@ BYSTANDER_ADDRESS=$(
                             --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY" \
 )
 
-marlowe-cli util fund-adress --testnet-magic "$MAGIC"                  \
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
                             --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                             --out-file /dev/null                      \
                             --submit 600                              \
@@ -382,3 +382,13 @@ cleanup() {
 cleanup "$BYSTANDER_PAYMENT_SKEY" "$BYSTANDER_ADDRESS" "$FAUCET_ADDRESS"
 
 cleanup "$PARTY_PAYMENT_SKEY" "$PARTY_ADDRESS" "$FAUCET_ADDRESS"
+
+echo "## After Clean Up"
+
+echo "Here is the UTxO at the bystander $BYSTANDER_NAME's address:"
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BYSTANDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
+
+echo "Here is the UTxO at the party $PARTY_NAME's address:"
+
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
