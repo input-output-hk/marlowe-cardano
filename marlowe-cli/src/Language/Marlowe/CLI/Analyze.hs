@@ -49,6 +49,7 @@ import Data.Generics.Multiplate
 import Data.List
 import Data.String (IsString(..))
 import Data.Yaml (encode)
+import Debug.Trace
 import Language.Marlowe.CLI.IO
 import Language.Marlowe.CLI.Types
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
@@ -56,6 +57,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), State(..), Tok
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 import Language.Marlowe.Scripts (MarloweInput, marloweValidator, marloweValidatorHash)
 import Ledger.Typed.Scripts (validatorScript)
+import Numeric.Natural
 import Plutus.ApiCommon
 import Plutus.V1.Ledger.Ada (lovelaceValueOf)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
@@ -86,6 +88,7 @@ data ContractInstance =
 -- | Analyze a Marlowe contract for protocol-limit or other violations.
 analyze :: MonadError CliError m
         => MonadIO m
+        => MonadReader (CliEnv era) m
         => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
         -> FilePath                          -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
         -> Bool                              -- ^ Whether to check preconditions for Marlowe state.
@@ -96,9 +99,10 @@ analyze :: MonadError CliError m
         -> Bool                              -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
         -> Bool                              -- ^ Whether to compute tight estimates of worst-case bounds.
         -> m ()                              -- ^ Print estimates of worst-case bounds.
-analyze _connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost _best =
+analyze connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost best =
   do
     SomeMarloweTransaction _language _era MarloweTransaction{..} <- decodeFileStrict marloweFile
+    ProtocolParameters{protocolParamMaxValueSize} <- queryInEra connection QueryProtocolParameters
     let
       checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations
@@ -108,6 +112,8 @@ analyze _connection marloweFile preconditions roles tokens maximumValue minimumU
       $ checkRoles ci
     when (tokens || checkAll)
       $ checkTokens ci
+    when (maximumValue || checkAll)
+      $ checkMaximumValue protocolParamMaxValueSize best ci
 
 
 -- | Report invalid properties in the Marlowe state:
@@ -166,13 +172,45 @@ checkRoles :: MonadIO m
            -> m ()
 checkRoles ci =
   let
-    roles = S.toList $ extractFromContract ci
+    roles = extractFromContract ci
   in
     putYaml "Role names"
       [
-        "Invalid role names" .= filter invalidRole roles
-      , "Blank role names" .= any (== adaToken) roles
+        "Invalid role names" .= invalidRole `S.filter` roles
+      , "Blank role names" .= adaToken `S.member` roles
       ]
+
+
+checkMaximumValue :: MonadIO m
+                  => Maybe Natural
+                  -> Bool
+                  -> ContractInstance
+                  -> m ()
+checkMaximumValue (Just maxValue) False ci =
+  let
+    size = computeValueSize $ extractFromContract ci
+  in
+    putYaml "Maximum value"
+      [
+        "Size" .= size
+      , "Maximum" .= maxValue
+      , "Units" .= ("byte" :: String)
+      , "Invalid" .= (size > fromEnum maxValue)
+      ]
+checkMaximumValue (Just _) True _ = error "Not implemented."
+checkMaximumValue _ _ _ = pure ()
+
+
+computeValueSize :: S.Set C.Token
+                 -> Int
+computeValueSize tokens =
+  let
+    nTokens = S.size tokens
+    nPolicies = S.size $ S.map (\(Token c _) -> c) tokens
+    nNames = sum . fmap P.lengthOfByteString . S.toList $ S.map (\(Token _ (TokenName n)) -> n) tokens
+    padWords x = (x + 7) `div` 8
+  in
+    trace (show (nTokens, nPolicies, nNames)) $ 8 * (6 + padWords (12 * nTokens + 28 * nPolicies + fromInteger nNames))
 
 
 data MarlowePlate f =
@@ -181,7 +219,7 @@ data MarlowePlate f =
     contractPlate :: C.Contract -> f C.Contract
   , casePlate :: C.Case C.Contract -> f (C.Case C.Contract)
   , actionPlate :: C.Action -> f C.Action
-  , valuePlate :: (C.Value C.Observation) -> f (C.Value C.Observation)
+  , valuePlate :: C.Value C.Observation -> f (C.Value C.Observation)
   , observationPlate :: C.Observation -> f C.Observation
   }
 
