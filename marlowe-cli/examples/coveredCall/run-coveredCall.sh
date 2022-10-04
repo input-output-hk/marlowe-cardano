@@ -62,14 +62,13 @@ ISSUER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ve
 
 echo "Fund the issuer's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 150000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$ISSUER_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                --out-file /dev/null                      \
+                                --submit 600                              \
+                                --lovelace 150000000                      \
+                                --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                                "$ISSUER_ADDRESS"
 
 echo "The issuer mints their tokens for the contract."
 
@@ -138,13 +137,12 @@ COUNTERPARTY_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --paym
 
 echo "Fund the counterparty's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 150000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
+                        --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
                         "$COUNTERPARTY_ADDRESS"
 
 echo "The counterparty mints their tokens for the swap."
@@ -403,23 +401,21 @@ marlowe-cli util burn --testnet-magic "$MAGIC" \
 
 echo "Sending back funds:"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$ISSUER_ADDRESS"        \
-                           --required-signer "$ISSUER_PAYMENT_SKEY"     \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC" \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --send-all \
+                              --source-wallet-credentials "$ISSUER_ADDRESS:$ISSUER_PAYMENT_SKEY" \
+                              --submit 600 \
+                              --out-file /dev/null \
+                              "$FAUCET_ADDRESS"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$COUNTERPARTY_ADDRESS" \
-                           --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC" \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --send-all \
+                              --source-wallet-credentials "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
+                              --submit 600 \
+                              --out-file /dev/null \
+                              "$FAUCET_ADDRESS"
 
 echo "Here are the UTxOs at the second party $ISSUER_NAME's address after the cleanup:"
 

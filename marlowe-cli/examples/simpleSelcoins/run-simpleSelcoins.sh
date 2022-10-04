@@ -86,14 +86,13 @@ BYSTANDER_ADDRESS=$(
                             --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY" \
 )
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 50000000                       \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$BYSTANDER_ADDRESS"
+marlowe-cli util fund-adress --testnet-magic "$MAGIC"                  \
+                            --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                            --out-file /dev/null                      \
+                            --submit 600                              \
+                            --lovelace 50000000                       \
+                            --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                            "$BYSTANDER_ADDRESS"
 
 echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'". They have the following UTxOs in their wallet:"
 
@@ -137,14 +136,13 @@ PARTY_ADDRESS=$(
                             --payment-verification-key-file "$PARTY_PAYMENT_VKEY" \
 )
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 50000000                       \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$PARTY_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 50000000                       \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$PARTY_ADDRESS"
 
 echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'". They have the following UTxOs in their wallet:"
 
@@ -367,33 +365,16 @@ cleanup() {
   SRC_ADDR="$2"
   DEST_ADDR="$3"
 
-  # Combine all ADA together in the source address
-  marlowe-cli util clean \
-    --testnet-magic "$MAGIC" \
-    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-    --required-signer "$SRC_SKEY" \
-    --change-address "$SRC_ADDR" \
-    --out-file /dev/null \
-    --submit 600
+  echo "Sending back funds:"
 
-  # Get the TxHash#TxIx of these combined funds in a variable we can use as a
-  # --tx-in argument
-  TX_CLEANUP=$(
-  marlowe-cli util select \
-    --testnet-magic "$MAGIC" \
-    --all "$SRC_ADDR" \
-  | sed -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/' \
-  )
+  marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                    --send-all \
+                                    --source-wallet-credentials "$SRC_ADDR:$SRC_SKEY" \
+                                    --submit 600 \
+                                    --out-file /dev/null \
+                                    "$DEST_ADDR"
 
-  # Send the funds back to the dest address
-  marlowe-cli transaction simple \
-    --testnet-magic "$MAGIC" \
-    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-    --tx-in "$TX_CLEANUP" \
-    --required-signer "$SRC_SKEY" \
-    --change-address "$DEST_ADDR" \
-    --out-file /dev/null \
-    --submit 600
 
   cardano-cli query utxo --testnet-magic "$MAGIC" --address "$SRC_ADDR"
 }

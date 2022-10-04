@@ -65,13 +65,12 @@ PARTY_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ver
 
 echo "Fund the party's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"          \
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 50000000                       \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
+                        --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
                         "$PARTY_ADDRESS"
 
 echo "#### The Counterparty"
@@ -93,14 +92,13 @@ COUNTERPARTY_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --paym
 
 echo "Fund the counterparty's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"          \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 50000000                       \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$COUNTERPARTY_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 50000000                       \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$COUNTERPARTY_ADDRESS"
 
 echo "#### The Oracle"
 
@@ -121,14 +119,13 @@ ORACLE_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ve
 
 echo "Fund the oracle's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 100000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$ORACLE_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 100000000                      \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$ORACLE_ADDRESS"
 
 echo "### Role Tokens"
 
@@ -793,30 +790,27 @@ marlowe-cli util burn --testnet-magic "$MAGIC" \
 
 echo "Sending back funds:"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
+marlowe-cli util fund-address --testnet-magic "$MAGIC" \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --send-all \
+                              --source-wallet-credentials "$ORACLE_ADDRESS:$ORACLE_PAYMENT_SKEY" \
+                              --submit 600 \
+                              --out-file /dev/null \
+                              "$FAUCET_ADDRESS"
+
+marlowe-cli util fund-address --testnet-magic "$MAGIC" \
                            --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$ORACLE_ADDRESS"        \
-                           --required-signer "$ORACLE_PAYMENT_SKEY"     \
+                           --send-all \
+                           --source-wallet-credentials "$PARTY_ADDRESS:$PARTY_PAYMENT_SKEY" \
                            --submit 600 \
                            --out-file /dev/null \
                            "$FAUCET_ADDRESS"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$PARTY_ADDRESS" \
-                           --required-signer "$PARTY_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
-
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$COUNTERPARTY_ADDRESS" \
-                           --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC" \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --send-all \
+                              --source-wallet-credentials "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
+                              --submit 600 \
+                              --out-file /dev/null \
+                              "$FAUCET_ADDRESS"
 

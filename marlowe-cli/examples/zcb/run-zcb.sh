@@ -62,14 +62,13 @@ LENDER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ve
 
 echo "Fund the lender's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 150000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$LENDER_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 150000000                      \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$LENDER_ADDRESS"
 
 echo "#### The Borrower"
 
@@ -90,14 +89,13 @@ BORROWER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-
 
 echo "Fund the borrower's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 50000000                       \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$BORROWER_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 50000000                       \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$BORROWER_ADDRESS"
 
 echo "### Role Tokens"
 
@@ -433,20 +431,18 @@ marlowe-cli util burn --testnet-magic "$MAGIC" \
 
 echo "Sending back funds:"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$LENDER_ADDRESS"        \
-                           --required-signer "$LENDER_PAYMENT_SKEY"     \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                  --send-all \
+                                  --source-wallet-credentials "$LENDER_ADDRESS:$LENDER_PAYMENT_SKEY" \
+                                  --submit 600 \
+                                  --out-file /dev/null \
+                                  "$FAUCET_ADDRESS"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$BORROWER_ADDRESS" \
-                           --required-signer "$BORROWER_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                  --send-all \
+                                  --source-wallet-credentials "$BORROWER_ADDRESS:$BORROWER_PAYMENT_SKEY" \
+                                  --submit 600 \
+                                  --out-file /dev/null \
+                                  "$FAUCET_ADDRESS"

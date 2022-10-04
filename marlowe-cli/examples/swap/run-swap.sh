@@ -61,13 +61,12 @@ PARTY_A_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-v
 
 echo "Fund the first party's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 100000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                                  \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH"                 \
+                        --out-file /dev/null                                      \
+                        --submit 600                                              \
+                        --lovelace 100000000                                      \
+                        --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
                         "$PARTY_A_ADDRESS"
 
 echo "The first party mints their tokens for the swap."
@@ -77,16 +76,15 @@ MINT_EXPIRES=$((TIP + 1000000))
 TOKEN_NAME_A=Globe
 AMOUNT_A=300
 CURRENCY_SYMBOL_A=$(
-marlowe-cli util mint --testnet-magic "$MAGIC"                  \
-                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+marlowe-cli util mint --testnet-magic "$MAGIC"                          \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
                       --issuer "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
-                      --count "$AMOUNT_A"                       \
-                      --expires "$MINT_EXPIRES"                 \
-                      --token-provider "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
-                      --out-file /dev/null                      \
-                      --submit=600                              \
-                      "$TOKEN_NAME_A:$PARTY_A_ADDRESS"                           \
-| sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
+                      --count "$AMOUNT_A"                               \
+                      --expires "$MINT_EXPIRES"                         \
+                      --out-file /dev/null                              \
+                      --submit=600                                      \
+                      "$TOKEN_NAME_A:$PARTY_A_ADDRESS"                  \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                                    \
 )
 TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
 
@@ -138,14 +136,13 @@ PARTY_B_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-v
 
 echo "Fund the second party's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 100000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$PARTY_B_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 100000000                      \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$PARTY_B_ADDRESS"
 
 echo "The second party mints their tokens for the swap."
 
@@ -157,7 +154,6 @@ marlowe-cli util mint --testnet-magic "$MAGIC" \
                       --issuer "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
                       --count "$AMOUNT_B"                       \
                       --expires "$MINT_EXPIRES"                 \
-                      --token-provider "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
                       --out-file /dev/null                      \
                       --submit=600                              \
                       "$TOKEN_NAME_B:$PARTY_B_ADDRESS"                           \
@@ -371,23 +367,21 @@ marlowe-cli util burn --testnet-magic "$MAGIC" \
 
 echo "Sending back funds:"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$PARTY_A_ADDRESS" \
-                           --required-signer "$PARTY_A_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                  --send-all \
+                                  --source-wallet-credentials "$PARTY_A_ADDRESS:$PARTY_A_PAYMENT_SKEY" \
+                                  --submit 600 \
+                                  --out-file /dev/null \
+                                  "$FAUCET_ADDRESS"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$PARTY_B_ADDRESS" \
-                           --required-signer "$PARTY_B_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                  --send-all \
+                                  --source-wallet-credentials "$PARTY_B_ADDRESS:$PARTY_B_PAYMENT_SKEY" \
+                                  --submit 600 \
+                                  --out-file /dev/null \
+                                  "$FAUCET_ADDRESS"
 
 
 echo "Here are the UTxOs at the second party $PARTY_A_NAME's address after the cleanup:"

@@ -66,14 +66,13 @@ SELLER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ve
 
 echo "Fund the seller's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 50000000                       \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$SELLER_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 50000000                       \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$SELLER_ADDRESS"
 
 echo "#### The Buyer"
 
@@ -94,14 +93,13 @@ BUYER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ver
 
 echo "Fund the buyer's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 350000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$BUYER_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --submit 600                              \
+                              --lovelace 350000000                      \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              "$BUYER_ADDRESS"
 
 echo "#### The Mediator"
 
@@ -122,14 +120,13 @@ MEDIATOR_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-
 
 echo "Fund the mediator's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 120000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$MEDIATOR_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --out-file /dev/null                      \
+                              --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                              --submit 600                              \
+                              --lovelace 120000000                      \
+                              "$MEDIATOR_ADDRESS"
 
 echo "### Role Tokens"
 
@@ -570,29 +567,26 @@ marlowe-cli util burn --testnet-magic "$MAGIC" \
 
 echo "Sending back funds:"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$MEDIATOR_ADDRESS"        \
-                           --required-signer "$MEDIATOR_PAYMENT_SKEY"     \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                  --send-all \
+                                  --source-wallet-credentials "$MEDIATOR_ADDRESS:$MEDIATOR_PAYMENT_SKEY" \
+                                  --submit 600 \
+                                  --out-file /dev/null \
+                                  "$FAUCET_ADDRESS"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$SELLER_ADDRESS" \
-                           --required-signer "$SELLER_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                  --send-all \
+                                  --source-wallet-credentials "$SELLER_ADDRESS:$SELLER_PAYMENT_SKEY" \
+                                  --submit 600 \
+                                  --out-file /dev/null \
+                                  "$FAUCET_ADDRESS"
 
-marlowe-cli -- util faucet --testnet-magic "$MAGIC" \
-                           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                           --all-money \
-                           --faucet-address "$BUYER_ADDRESS" \
-                           --required-signer "$BUYER_PAYMENT_SKEY" \
-                           --submit 600 \
-                           --out-file /dev/null \
-                           "$FAUCET_ADDRESS"
+marlowe-cli -- util fund-address  --testnet-magic "$MAGIC" \
+                                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                  --send-all \
+                                  --source-wallet-credentials "$BUYER_ADDRESS:$BUYER_PAYMENT_SKEY" \
+                                  --submit 600 \
+                                  --out-file /dev/null \
+                                  "$FAUCET_ADDRESS"

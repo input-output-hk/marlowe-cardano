@@ -112,14 +112,13 @@ data UtilCommand era =
     -- | Fund an address from a faucet.
   | Faucet
     {
-      network            :: NetworkId           -- ^ The network ID, if any.
-    , socketPath         :: FilePath            -- ^ The path to the node socket.
-    , amount             :: Maybe Lovelace      -- ^ The lovelace to send to the address. By default we drain out the faucet.
-    , bodyFile           :: TxBodyFile          -- ^ The output file for the transaction body.
-    , submitTimeout      :: Maybe Int           -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
-    , fundAddr           :: AddressInEra era    -- ^ The change address.
-    , fundSigningKeyFile :: SigningKeyFile      -- ^ The files containing the required signing keys.
-    , destAddresses      :: [AddressInEra era]  -- ^ The addresses.
+      network            :: NetworkId                                     -- ^ The network ID, if any.
+    , socketPath         :: FilePath                                      -- ^ The path to the node socket.
+    , amount             :: Maybe Lovelace                                -- ^ The lovelace to send to the address. By default we drain out the faucet.
+    , bodyFile           :: TxBodyFile                                    -- ^ The output file for the transaction body.
+    , submitTimeout      :: Maybe Int                                     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , faucetCredentials  :: (AddressInEra era, SigningKeyFile)            -- ^ The change address.
+    , destAddresses      :: [AddressInEra era]                            -- ^ The addresses.
     }
     -- | Select UTxO by asset.
   | Output
@@ -228,14 +227,17 @@ runUtilCommand command =
                               addr
                               bodyFile
                               submitTimeout
-      Faucet{..}       -> buildFaucet
-                            connection
-                            (lovelaceToValue <$> amount)
-                            destAddresses
-                            fundAddr
-                            fundSigningKeyFile
-                            submitTimeout
-                            >>= printTxId
+      Faucet{..}       -> do
+                            let
+                              (addr, skeyFile) = faucetCredentials
+                            buildFaucet
+                              connection
+                              (lovelaceToValue <$> amount)
+                              destAddresses
+                              addr
+                              skeyFile
+                              submitTimeout
+                              >>= printTxId
       Output{..}       -> selectUtxos
                             connection
                             address
@@ -272,7 +274,7 @@ parseUtilCommand network socket =
     <> decodeBechCommand
     <> demerkleizeCommand
     <> encodeBechCommand
-    <> faucetCommand network socket
+    <> fundAddressCommand network socket
     <> merkleizeCommand
     <> mintCommand network socket
     <> burnCommand network socket
@@ -371,34 +373,33 @@ burnOptions network socket =
       fmap (fromMaybe []) $ (O.optional . O.some . walletOpt) (O.long "token-provider" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Additional tokens owners info.")
 
 
--- | Parser for the "faucet" command.
-faucetCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
-faucetCommand network socket =
-  O.command "faucet"
-    $ O.info (faucetOptions network socket)
-    $ O.progDesc "Fund an address from a faucet. Note that the faucet is only funded on the private developer testnet for Marlowe, and that this command will not supply funds on public networks."
+-- | Parser for the "fund-address" command.
+fundAddressCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
+fundAddressCommand network socket =
+  O.command "fund-address"
+    $ O.info (fundAddressOptions network socket)
+    $ O.progDesc "Fund an address from a source wallet. If the source wallet is a faucet, note that the faucet is only funded on the private developer testnet for Marlowe, and that this command will not supply funds on public networks."
 
 
--- | Parser for the "faucet" options.
-faucetOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-faucetOptions network socket =
+-- | Parser for the "fund-address" options.
+fundAddressOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+fundAddressOptions network socket =
   Faucet
     <$> O.option parseNetworkId            (O.long "testnet-magic"   <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                        (O.long "socket-path"     <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> (lovelaceOpt <|> allMoneyOpt)
+    <*> (lovelaceOpt <|> sendAllOpt)
     <*> txBodyFileOpt
     <*> (O.optional . O.option O.auto)     (O.long "submit"          <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
-    <*> O.option parseAddress              (O.long "faucet-address"  <> O.metavar "ADDRESS"                              <> O.help "The faucet addresses to provide funds."                                                                          )
-    <*> requiredSignerOpt
-    <*> O.some                             (O.argument parseAddress $ O.metavar "ADDRESS"                              <> O.help "The addresses to receive the funds."                                                                               )
+    <*> walletOpt                          (O.long "source-wallet-credentials" <> O.metavar "ADDRESS:SIGNING_FILE"       <> O.help "Credentials for the source wallet that will send the funds")
+    <*> O.some                             (O.argument parseAddress $ O.metavar "ADDRESS"                                <> O.help "The addresses to receive the funds."                                                                               )
   where
     lovelaceOpt = fmap Just . (O.option $ Lovelace <$> O.auto) $
       O.long "lovelace"
       <> O.metavar "LOVELACE"
       <> O.help "The lovelace to send to each address."
-    allMoneyOpt = O.flag' Nothing $
-      O.long "all-money"
-      <> O.help "Send all available money to the new faucet."
+    sendAllOpt = O.flag' Nothing $
+      O.long "send-all"
+      <> O.help "Send all available funds to the new faucet."
 
 -- | Parser for the "select" command.
 selectCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
