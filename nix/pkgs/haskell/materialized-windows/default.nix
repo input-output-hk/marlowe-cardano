@@ -431,6 +431,7 @@
         "vector-th-unbox".revision = (((hackage."vector-th-unbox")."0.2.2").revisions).default;
         "megaparsec".revision = (((hackage."megaparsec")."9.2.0").revisions).default;
         "megaparsec".flags.dev = false;
+        "multiplate".revision = (((hackage."multiplate")."0.0.3").revisions).default;
         "base16-bytestring".revision = (((hackage."base16-bytestring")."1.0.2.0").revisions).default;
         "conduit".revision = (((hackage."conduit")."1.3.4.2").revisions).default;
         "transformers-base".revision = (((hackage."transformers-base")."0.4.6").revisions).default;
@@ -1566,6 +1567,7 @@
           "parsers".components.library.planned = lib.mkOverride 900 true;
           "random-shuffle".components.library.planned = lib.mkOverride 900 true;
           "cassava".components.library.planned = lib.mkOverride 900 true;
+          "multiplate".components.library.planned = lib.mkOverride 900 true;
           "pretty-simple".components.exes."pretty-simple".planned = lib.mkOverride 900 true;
           "transformers".components.library.planned = lib.mkOverride 900 true;
           "prettyprinter-configurable".components.library.planned = lib.mkOverride 900 true;

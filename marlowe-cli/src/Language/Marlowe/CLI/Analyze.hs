@@ -12,14 +12,20 @@
 
 
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
 module Language.Marlowe.CLI.Analyze
@@ -37,7 +43,11 @@ import Codec.Serialise (serialise)
 import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Aeson (object, (.=))
+import Data.Aeson.Types (Pair)
+import Data.Functor.Constant (Constant(..))
+import Data.Generics.Multiplate
 import Data.List
+import Data.String (IsString(..))
 import Data.Yaml (encode)
 import Language.Marlowe.CLI.IO
 import Language.Marlowe.CLI.Types
@@ -51,13 +61,26 @@ import Plutus.V1.Ledger.Ada (lovelaceValueOf)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V2.Ledger.Api hiding (evaluateScriptCounting)
 
-import qualified Data.ByteString.Char8 as BS8 (putStrLn)
+import qualified Data.ByteString.Char8 as BS8 (putStr)
 import qualified Data.ByteString.Lazy as LBS (toStrict)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
 import qualified Data.Map.Strict as M
-import qualified Language.Marlowe.Core.V1.Semantics.Types as S
+import qualified Data.Set as S
+import qualified Language.Marlowe.Core.V1.Semantics.Types as C
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Prelude as P
+
+
+-- | A bundle of information describing a contract instance.
+data ContractInstance =
+  ContractInstance
+  {
+    ciRolesCurrency :: CurrencySymbol  -- ^ The roles currency.
+  , ciState         :: State           -- ^ The initial state of the contract.
+  , ciContract      :: Contract        -- ^ The initial contract.
+  , ciContinuations :: Continuations   -- ^ The merkleized continuations for the contract.
+  }
+    deriving Show
 
 
 -- | Analyze a Marlowe contract for protocol-limit or other violations.
@@ -77,22 +100,12 @@ analyze _connection marloweFile preconditions roles tokens maximumValue minimumU
   do
     SomeMarloweTransaction _language _era MarloweTransaction{..} <- decodeFileStrict marloweFile
     let
-      checkAll = preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
+      checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations
     when (preconditions || checkAll)
       $ checkPreconditions ci
-
-
--- | A bundle of information describing a contract instance.
-data ContractInstance =
-  ContractInstance
-  {
-    ciRolesCurrency :: CurrencySymbol  -- ^ The roles currency.
-  , ciState         :: State           -- ^ The initial state of the contract.
-  , ciContract      :: Contract        -- ^ The initial contract.
-  , ciContinuations :: Continuations   -- ^ The merkleized continuations for the contract.
-  }
-    deriving Show
+    when (tokens || checkAll)
+      $ checkTokens ci
 
 
 -- | Report invalid properties in the Marlowe state:
@@ -107,18 +120,9 @@ checkPreconditions :: MonadIO m
 checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
   let
     nonPositiveBalances = filter ((<= 0) . snd) . AM.toList
-    invalidCurrency currency@CurrencySymbol{..} = currency /= adaSymbol && P.lengthOfByteString unCurrencySymbol /= 28
-    invalidToken (Token currency@CurrencySymbol{..} token@TokenName{..}) = not
-                                                                             $  currency == adaSymbol
-                                                                                && token == adaToken
-                                                                             || P.lengthOfByteString unCurrencySymbol == 28
-                                                                                && P.lengthOfByteString unTokenName <= 32
     duplicates (AM.keys -> x) = x \\ nub x
   in
-    liftIO
-      . BS8.putStrLn
-      . encode
-      $ object
+    putYaml "Preconditions"
       [
         "Invalid roles currency"        .= invalidCurrency ciRolesCurrency
       , "Invalid account tokens"        .= filter invalidToken (snd <$> AM.keys accounts)
@@ -127,6 +131,123 @@ checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
       , "Duplicate choices"             .= duplicates choices
       , "Duplicate bound values"        .= duplicates boundValues
       ]
+
+
+invalidCurrency :: CurrencySymbol -> Bool
+invalidCurrency currency@CurrencySymbol{..} = currency /= adaSymbol && P.lengthOfByteString unCurrencySymbol /= 28
+
+
+invalidToken :: C.Token -> Bool
+invalidToken (Token currency@CurrencySymbol{..} token@TokenName{..}) =
+  not $  currency == adaSymbol
+         && token == adaToken
+      || P.lengthOfByteString unCurrencySymbol == 28
+         && P.lengthOfByteString unTokenName <= 32
+
+
+data MarlowePlate f =
+  MarlowePlate
+  {
+    contractPlate :: C.Contract -> f C.Contract
+  , casePlate :: C.Case C.Contract -> f (C.Case C.Contract)
+  , actionPlate :: C.Action -> f C.Action
+  , valuePlate :: (C.Value C.Observation) -> f (C.Value C.Observation)
+  , observationPlate :: C.Observation -> f C.Observation
+  }
+
+instance Multiplate MarlowePlate where
+  multiplate child =
+    let
+      buildContract C.Close = pure C.Close
+      buildContract (C.Pay a p t v c) = C.Pay a p t <$> valuePlate child v <*> contractPlate child c
+      buildContract (C.If o c c') = C.If <$> observationPlate child o <*> contractPlate child c <*> contractPlate child c'
+      buildContract (C.When cs t c) = C.When <$> sequenceA (casePlate child <$> cs) <*> pure t <*> contractPlate child c
+      buildContract (C.Let i v c) = C.Let i <$> valuePlate child v <*> contractPlate child c
+      buildContract (C.Assert o c) = C.Assert <$> observationPlate child o <*> contractPlate child c
+      buildCase (C.Case a c) = C.Case <$> actionPlate child a <*> contractPlate child c
+      buildCase (C.MerkleizedCase a h) = C.MerkleizedCase <$> actionPlate child a <*> pure h
+      buildAction (C.Deposit a p t v) = C.Deposit a p t <$> valuePlate child v
+      buildAction (C.Notify o) = C.Notify <$> observationPlate child o
+      buildAction x = pure x
+      buildValue (C.NegValue x) = C.NegValue <$> valuePlate child x
+      buildValue (C.AddValue x y) = C.AddValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (C.SubValue x y) = C.SubValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (C.MulValue x y) = C.MulValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (C.DivValue x y) = C.DivValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (C.Cond o x y) = C.Cond <$> observationPlate child o <*> valuePlate child x <*> valuePlate child y
+      buildValue x = pure x
+      buildObservation (C.AndObs x y) = C.AndObs <$> observationPlate child x <*> observationPlate child y
+      buildObservation (C.OrObs x y) = C.OrObs <$> observationPlate child x <*> observationPlate child y
+      buildObservation (C.NotObs x) = C.NotObs <$> observationPlate child x
+      buildObservation (C.ValueGE x y) = C.ValueGE <$> valuePlate child x <*> valuePlate child y
+      buildObservation (C.ValueGT x y) = C.ValueGT <$> valuePlate child x <*> valuePlate child y
+      buildObservation (C.ValueLT x y) = C.ValueLT <$> valuePlate child x <*> valuePlate child y
+      buildObservation (C.ValueLE x y) = C.ValueLE <$> valuePlate child x <*> valuePlate child y
+      buildObservation (C.ValueEQ x y) = C.ValueEQ <$> valuePlate child x <*> valuePlate child y
+      buildObservation x = pure x
+    in
+      MarlowePlate
+        buildContract
+        buildCase
+        buildAction
+        buildValue
+        buildObservation
+  mkPlate build =
+    MarlowePlate
+      (build contractPlate)
+      (build casePlate)
+      (build actionPlate)
+      (build valuePlate)
+      (build observationPlate)
+
+
+class Extract a where
+  extractor :: MarlowePlate (Constant (S.Set a))
+  extractAll :: Ord a => C.Contract -> S.Set a
+  extractAll = foldFor contractPlate $ preorderFold extractor
+
+instance Extract C.Token where
+  extractor =
+    let
+      contractPlate' (C.Pay _ _ t _ _) = Constant $ S.singleton t
+      contractPlate' x = pure x
+      actionPlate' (C.Deposit _ _ t _) = Constant $ S.singleton t
+      actionPlate' x = pure x
+      valuePlate' (C.AvailableMoney _ t) = Constant $ S.singleton t
+      valuePlate' x = pure x
+    in
+      purePlate
+      {
+        contractPlate = contractPlate'
+      , actionPlate = actionPlate'
+      , valuePlate = valuePlate'
+      }
+
+
+extractFromContract :: Extract a
+                    => Ord a
+                    => ContractInstance
+                    -> S.Set a
+extractFromContract ContractInstance{..} =
+  M.foldr (S.union . extractAll) (extractAll ciContract) ciContinuations
+
+
+checkTokens :: MonadIO m
+           => ContractInstance
+           -> m ()
+checkTokens ci =
+  putYaml "Token"
+    [
+      "Invalid tokens" .= S.filter invalidToken (extractFromContract ci)
+    ]
+
+
+-- | Format results of checking as YAML.
+putYaml :: MonadIO m
+        => String     -- ^ The section name.
+        -> [Pair]     -- ^ The results.
+        -> m ()       -- ^ Action to print the results as YAML.
+putYaml section = liftIO . BS8.putStr . encode . object . (: []) . (fromString section .=) . object
 
 
 -- | Utility for exploring cost modeling of Marlowe contracts.
@@ -148,22 +269,22 @@ measure connection =
       accounts =
         AM.fromList
           [
-            ((S.Address True creatorAddress, Token adaSymbol adaToken), marloweInLovelace)
+            ((C.Address True creatorAddress, Token adaSymbol adaToken), marloweInLovelace)
           ]
       choices = AM.empty
       boundValues =
         AM.fromList
           [
-            (S.ValueId "a", 0)
-          , (S.ValueId "b", 0)
-          , (S.ValueId "c", 0)
-          , (S.ValueId "d", 0)
-          , (S.ValueId "e", 0)
-          , (S.ValueId "f", 0)
-          , (S.ValueId "g", 0)
-          , (S.ValueId "h", 0)
-          , (S.ValueId "i", 0)
-          , (S.ValueId "j", 0)
+            (C.ValueId "a", 0)
+          , (C.ValueId "b", 0)
+          , (C.ValueId "c", 0)
+          , (C.ValueId "d", 0)
+          , (C.ValueId "e", 0)
+          , (C.ValueId "f", 0)
+          , (C.ValueId "g", 0)
+          , (C.ValueId "h", 0)
+          , (C.ValueId "i", 0)
+          , (C.ValueId "j", 0)
           ]
       minTime = POSIXTime 0
       marloweState = State{..}
