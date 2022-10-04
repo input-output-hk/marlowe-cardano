@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -38,7 +39,7 @@ module Language.Marlowe.CLI.Analyze
 
 
 import Cardano.Api hiding (Address, ScriptHash, TxOut)
-import Cardano.Api.Shelley (ProtocolParameters(..))
+import Cardano.Api.Shelley (ProtocolParameters(..), StakeCredential(..))
 import Codec.Serialise (serialise)
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -49,13 +50,13 @@ import Data.Generics.Multiplate
 import Data.List
 import Data.String (IsString(..))
 import Data.Yaml (encode)
-import Debug.Trace
 import Language.Marlowe.CLI.IO
 import Language.Marlowe.CLI.Types
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), State(..), Token(..))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 import Language.Marlowe.Scripts (MarloweInput, marloweValidator, marloweValidatorHash)
+import Ledger.Tx.CardanoAPI (toCardanoValue)
 import Ledger.Typed.Scripts (validatorScript)
 import Numeric.Natural
 import Plutus.ApiCommon
@@ -63,6 +64,8 @@ import Plutus.V1.Ledger.Ada (lovelaceValueOf)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V2.Ledger.Api hiding (evaluateScriptCounting)
 
+import qualified Cardano.Api as Api
+import qualified Cardano.Api.Shelley as Api
 import qualified Data.ByteString.Char8 as BS8 (putStr)
 import qualified Data.ByteString.Lazy as LBS (toStrict)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
@@ -102,7 +105,8 @@ analyze :: MonadError CliError m
 analyze connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost best =
   do
     SomeMarloweTransaction _language _era MarloweTransaction{..} <- decodeFileStrict marloweFile
-    ProtocolParameters{protocolParamMaxValueSize} <- queryInEra connection QueryProtocolParameters
+    era <- askEra
+    protocol@ProtocolParameters{protocolParamMaxValueSize} <- queryInEra connection QueryProtocolParameters
     let
       checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations
@@ -114,6 +118,9 @@ analyze connection marloweFile preconditions roles tokens maximumValue minimumUt
       $ checkTokens ci
     when (maximumValue || checkAll)
       $ checkMaximumValue protocolParamMaxValueSize best ci
+    when (minimumUtxo || checkAll)
+      $ withShelleyBasedEra era
+      $ checkMinimumUtxo era protocol best ci
 
 
 -- | Report invalid properties in the Marlowe state:
@@ -194,11 +201,51 @@ checkMaximumValue (Just maxValue) False ci =
       [
         "Size" .= size
       , "Maximum" .= maxValue
-      , "Units" .= ("byte" :: String)
+      , "Unit" .= ("byte" :: String)
       , "Invalid" .= (size > fromEnum maxValue)
       ]
 checkMaximumValue (Just _) True _ = error "Not implemented."
 checkMaximumValue _ _ _ = pure ()
+
+
+checkMinimumUtxo :: forall era m
+                 .  IsShelleyBasedEra era
+                 => MonadError CliError m
+                 => MonadIO m
+                 => ScriptDataSupportedInEra era
+                 -> ProtocolParameters
+                 -> Bool
+                 -> ContractInstance
+                 -> m ()
+checkMinimumUtxo era protocol False ci =
+  do
+    tokens <-
+      liftCli
+        . toCardanoValue
+        $ mconcat
+        [
+          singleton cs tn 1
+        |
+          C.Token cs tn <- S.toList $ extractFromContract ci
+        ]
+    let
+      address =
+        makeShelleyAddressInEra
+            Mainnet
+            (PaymentCredentialByKey "00000000000000000000000000000000000000000000000000000000")
+            (StakeAddressByValue $ StakeCredentialByKey "00000000000000000000000000000000000000000000000000000000")
+      out =
+        Api.TxOut
+          address
+          (Api.TxOutValue (toMultiAssetSupportedInEra era) tokens)
+          (TxOutDatumHash era "0000000000000000000000000000000000000000000000000000000000000000")
+          Api.ReferenceScriptNone
+    value <- liftCli $ calculateMinimumUTxO shelleyBasedEra out protocol
+    putYaml "Minimum UTxO"
+      [
+        "Value" .= value
+      ]
+checkMinimumUtxo _ _ True _ = error "Not implemented."
 
 
 computeValueSize :: S.Set C.Token
@@ -210,7 +257,7 @@ computeValueSize tokens =
     nNames = sum . fmap P.lengthOfByteString . S.toList $ S.map (\(Token _ (TokenName n)) -> n) tokens
     padWords x = (x + 7) `div` 8
   in
-    trace (show (nTokens, nPolicies, nNames)) $ 8 * (6 + padWords (12 * nTokens + 28 * nPolicies + fromInteger nNames))
+    8 * (6 + padWords (12 * nTokens + 28 * nPolicies + fromInteger nNames))
 
 
 data MarlowePlate f =
