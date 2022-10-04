@@ -104,6 +104,8 @@ analyze _connection marloweFile preconditions roles tokens maximumValue minimumU
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations
     when (preconditions || checkAll)
       $ checkPreconditions ci
+    when (roles || checkAll)
+      $ checkRoles ci
     when (tokens || checkAll)
       $ checkTokens ci
 
@@ -143,6 +145,34 @@ invalidToken (Token currency@CurrencySymbol{..} token@TokenName{..}) =
          && token == adaToken
       || P.lengthOfByteString unCurrencySymbol == 28
          && P.lengthOfByteString unTokenName <= 32
+
+
+invalidRole :: TokenName -> Bool
+invalidRole TokenName{..} = P.lengthOfByteString unTokenName > 32
+
+
+checkTokens :: MonadIO m
+           => ContractInstance
+           -> m ()
+checkTokens ci =
+  putYaml "Tokens"
+    [
+      "Invalid tokens" .= invalidToken `S.filter` extractFromContract ci
+    ]
+
+
+checkRoles :: MonadIO m
+           => ContractInstance
+           -> m ()
+checkRoles ci =
+  let
+    roles = S.toList $ extractFromContract ci
+  in
+    putYaml "Role names"
+      [
+        "Invalid role names" .= filter invalidRole roles
+      , "Blank role names" .= any (== adaToken) roles
+      ]
 
 
 data MarlowePlate f =
@@ -209,11 +239,12 @@ class Extract a where
 instance Extract C.Token where
   extractor =
     let
-      contractPlate' (C.Pay _ _ t _ _) = Constant $ S.singleton t
+      single = Constant . S.singleton
+      contractPlate' (C.Pay _ _ t _ _) = single t
       contractPlate' x = pure x
-      actionPlate' (C.Deposit _ _ t _) = Constant $ S.singleton t
+      actionPlate' (C.Deposit _ _ t _) = single t
       actionPlate' x = pure x
-      valuePlate' (C.AvailableMoney _ t) = Constant $ S.singleton t
+      valuePlate' (C.AvailableMoney _ t) = single t
       valuePlate' x = pure x
     in
       purePlate
@@ -223,6 +254,30 @@ instance Extract C.Token where
       , valuePlate = valuePlate'
       }
 
+instance Extract TokenName where
+  extractor =
+    let
+      role (C.Role r) = S.singleton r
+      role _ = S.empty
+      contractPlate' (C.Pay a (C.Account p) _ _ _) = Constant $ role a <> role p
+      contractPlate' (C.Pay a (C.Party p) _ _ _) = Constant $ role a <> role p
+      contractPlate' x = pure x
+      actionPlate' (C.Deposit a p _ _) = Constant $ role a <> role p
+      actionPlate' x = pure x
+      valuePlate' (C.AvailableMoney a _) = Constant $ role a
+      valuePlate' (C.ChoiceValue (C.ChoiceId _ p)) = Constant $ role p
+      valuePlate' x = pure x
+      observationPlate' (C.ChoseSomething (C.ChoiceId _ p)) = Constant $ role p
+      observationPlate' x = pure x
+    in
+      purePlate
+      {
+        contractPlate = contractPlate'
+      , actionPlate = actionPlate'
+      , valuePlate = valuePlate'
+      , observationPlate = observationPlate'
+      }
+
 
 extractFromContract :: Extract a
                     => Ord a
@@ -230,16 +285,6 @@ extractFromContract :: Extract a
                     -> S.Set a
 extractFromContract ContractInstance{..} =
   M.foldr (S.union . extractAll) (extractAll ciContract) ciContinuations
-
-
-checkTokens :: MonadIO m
-           => ContractInstance
-           -> m ()
-checkTokens ci =
-  putYaml "Token"
-    [
-      "Invalid tokens" .= S.filter invalidToken (extractFromContract ci)
-    ]
 
 
 -- | Format results of checking as YAML.
