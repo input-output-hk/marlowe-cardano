@@ -515,13 +515,12 @@ echo "## AFTER CLEANUP"
 
 echo "Here are the UTxOs at the seller $SELLER_NAME's address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$SELLER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$SELLER_ADDRESS"
 
 echo "Here are the UTxOs at the buyer $BUYER_NAME's address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BUYER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p"
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$BUYER_ADDRESS"
 
 echo "Here are the UTxOs at the mediator $MEDIATOR_NAME's address:"
 
-cardano-cli query utxo --testnet-magic "$MAGIC" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p;/$TX_6/p;/$TX_7/p"
-
+cardano-cli query utxo --testnet-magic "$MAGIC" --address "$MEDIATOR_ADDRESS"
