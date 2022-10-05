@@ -28,14 +28,14 @@ module Language.Marlowe.CLI.Analyze
 
 
 import Codec.Serialise (serialise)
+import Control.Monad (guard)
 import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, unless, when)
 import Control.Monad.Reader (MonadReader, ReaderT(runReaderT))
 import Data.Aeson (object, (.=))
 import Data.Aeson.Types (Pair)
-import Data.Bifunctor (second)
 import Data.Foldable (toList)
 import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold, purePlate)
-import Data.List (nub, (\\))
+import Data.List (nub, nubBy, (\\))
 import Data.String (IsString(..))
 import Data.Yaml (encode)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe, queryInEra)
@@ -133,10 +133,12 @@ analyze connection marloweFile preconditions roles tokens maximumValue minimumUt
     let
       checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations
-    paths <-
+    transactions <-
       if checkAll || executionCost || best && (maximumValue || minimumUtxo)
-        then findPaths ci
+        then findTransactions ci
         else pure mempty
+    let
+      maybeTransactions = guard best >> pure transactions
     when (preconditions || checkAll)
       $ checkPreconditions ci
     when (roles || checkAll)
@@ -144,12 +146,12 @@ analyze connection marloweFile preconditions roles tokens maximumValue minimumUt
     when (tokens || checkAll)
       $ checkTokens ci
     when (maximumValue || checkAll)
-      $ checkMaximumValue protocolParamMaxValueSize best ci
+      $ checkMaximumValue protocolParamMaxValueSize maybeTransactions ci
     when (minimumUtxo || checkAll)
       $ withShelleyBasedEra era
-      $ checkMinimumUtxo era protocol best ci
+      $ checkMinimumUtxo era protocol maybeTransactions ci
     when (executionCost || checkAll)
-      $ checkExecutionCost protocol ci paths
+      $ checkExecutionCost protocol ci transactions
 
 
 -- | Report invalid properties in the Marlowe state:
@@ -225,13 +227,19 @@ checkRoles ci =
 -- | Check that the protocol limit on maximum value in a UTxO is not violated.
 checkMaximumValue :: MonadError CliError m
                   => MonadIO m
-                  => Maybe Natural     -- ^ The `maxValue` protocol parameter.
-                  -> Bool              -- ^ Whether to use tight worst-case bounds.
-                  -> ContractInstance  -- ^ The bundle of contract information.
-                  -> m ()              -- ^ Action to print a report on `maxValue` validity.
-checkMaximumValue (Just maxValue) _ {- TODO: Use execution paths in case where `best == True`. -} ci =
+                  => Maybe Natural        -- ^ The `maxValue` protocol parameter.
+                  -> Maybe [Transaction]  -- ^ The transactions to traverse.
+                  -> ContractInstance     -- ^ The bundle of contract information.
+                  -> m ()                 -- ^ Action to print a report on `maxValue` validity.
+checkMaximumValue (Just maxValue) maybeTransactions ci =
   let
-    size = computeValueSize $ extractFromContract ci
+    size =
+      case maybeTransactions of
+        Just transactions -> let
+                               measure (_, contract, _, _) = [computeValueSize $ extractAll contract]
+                             in
+                               maximum $ foldMap measure transactions
+        Nothing           -> computeValueSize $ extractFromContract ci
   in
     putYaml "Maximum value"
       [
@@ -251,33 +259,35 @@ checkMinimumUtxo :: forall era m
                  => MonadIO m
                  => Api.ScriptDataSupportedInEra era  -- ^ The era.
                  -> Api.ProtocolParameters            -- ^ The protocol parameters.
-                 -> Bool                              -- ^ Whether to use tight worst-case bounds.
+                 -> Maybe [Transaction]               -- ^ The transactions to traverse.
                  -> ContractInstance                  -- ^ The bundle of contract information.
                  -> m ()                              -- ^ Action to print a report on the `minimumUTxO` validity.
-checkMinimumUtxo era protocol _ {- TODO: Use execution paths in case where `best == True`. -} ci =
+checkMinimumUtxo era protocol maybeTransactions ci =
   do
-    tokens <-
-      liftCli
-        . P.toCardanoValue
-        $ mconcat
-        [
-          P.singleton cs tn 1
-        |
-          Token cs tn <- toList $ extractFromContract ci
-        ]
     let
-      address =
-        Api.makeShelleyAddressInEra
-            Api.Mainnet
-            (Api.PaymentCredentialByScript "88888888888888888888888888888888888888888888888888888888")
-            (Api.StakeAddressByValue $ Api.StakeCredentialByKey "99999999999999999999999999999999999999999999999999999999")
-      out =
-        Api.TxOut
-          address
-          (Api.TxOutValue (toMultiAssetSupportedInEra era) tokens)
-          (Api.TxOutDatumHash era "5555555555555555555555555555555555555555555555555555555555555555")
-          Api.ReferenceScriptNone
-    value <- liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out protocol
+      compute tokens =
+        do
+          value <- liftCli (P.toCardanoValue $ mconcat [P.singleton cs tn 1 | Token cs tn <- toList tokens])
+          let
+            address =
+              Api.makeShelleyAddressInEra
+                  Api.Mainnet
+                  (Api.PaymentCredentialByScript "88888888888888888888888888888888888888888888888888888888")
+                  (Api.StakeAddressByValue $ Api.StakeCredentialByKey "99999999999999999999999999999999999999999999999999999999")
+            out =
+              Api.TxOut
+                address
+                (Api.TxOutValue (toMultiAssetSupportedInEra era) value)
+                (Api.TxOutDatumHash era "5555555555555555555555555555555555555555555555555555555555555555")
+                Api.ReferenceScriptNone
+          liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out protocol
+    value <-
+      case maybeTransactions of
+        Just transactions -> let
+                               measure (_, contract, _, _) = (: []) <$> compute (extractAll contract)
+                             in
+                               Api.lovelaceToValue . maximum . fmap Api.selectLovelace <$> foldTransactionsM measure transactions
+        Nothing           -> compute $ extractFromContract ci
     putYaml "Minimum UTxO"
       [
         "Requirement" .= value
@@ -287,11 +297,11 @@ checkMinimumUtxo era protocol _ {- TODO: Use execution paths in case where `best
 -- | Check that transactions satisfy the execution-cost protocol limits.
 checkExecutionCost :: MonadError CliError m
                    => MonadIO m
-                   => Api.ProtocolParameters               -- ^ The protocol parameters.
-                   -> ContractInstance                     -- ^ The bundle of contract information.
-                   -> [(P.POSIXTime, [TransactionInput])]  -- ^ The transaction-paths through the contract.
-                   -> m ()                                 -- ^ Action to print a report on validity of transaction execution costs.
-checkExecutionCost protocol ContractInstance{..} paths =
+                   => Api.ProtocolParameters  -- ^ The protocol parameters.
+                   -> ContractInstance        -- ^ The bundle of contract information.
+                   -> [Transaction]           -- ^ The transaction-paths through the contract.
+                   -> m ()                    -- ^ Action to print a report on validity of transaction execution costs.
+checkExecutionCost protocol ContractInstance{..} transactions =
   do
     Api.CostModel costModel <-
       liftCliMaybe "Plutus cost model not found."
@@ -314,14 +324,7 @@ checkExecutionCost protocol ContractInstance{..} paths =
     (steps, memory) <-
       unzip
         . fmap (\P.ExBudget{..} -> (exBudgetCPU, exBudgetMemory))
-        . concat
-        <$> sequence
-        [
-          executePath executor state ciContract ciContinuations inputs
-        |
-          (minTime, inputs) <- paths
-        , let state = State (AM.singleton (Address True creatorAddress, Token P.adaSymbol P.adaToken) 1) AM.empty AM.empty minTime
-        ]
+        <$> mapM executor transactions
     let
       P.ExCPU actualSteps = maximum steps
       maximumSteps = maybe 0 fromEnum $ Api.executionSteps <$> Api.protocolParamMaxTxExUnits protocol
@@ -346,38 +349,18 @@ checkExecutionCost protocol ContractInstance{..} paths =
       ]
 
 
--- | Execute all transactions on a path through a contract.
-executePath :: MonadError CliError m
-            => (Continuations -> State -> Contract -> TransactionInput -> m ((State, Contract), P.ExBudget))  -- ^ The function for executing a transaction.
-            -> State                                                                                          -- ^ The initial state.
-            -> Contract                                                                                       -- ^ The initial contract.
-            -> Continuations                                                                                  -- ^ The merkleized continuations of the contract.
-            -> [TransactionInput]                                                                             -- ^ The transaction to execute.
-            -> m [P.ExBudget]                                                                                 -- ^ Action to compute the execution cost for each transaction.
-executePath executor state contract continuations inputs =
-  snd
-    <$> foldM
-        (\((state', contract'), budgets) -> fmap (second (: budgets)) . executor continuations state' contract')
-        ((state, contract), [])
-        inputs
-
-
 -- | Execute a Marlowe transaction.
 executeTransaction :: MonadError CliError m
-                   => P.EvaluationContext                -- ^ The Plutus evaluation context.
-                   -> P.TxInInfo                         -- ^ The reference-script input, if any.
-                   -> P.Address                          -- ^ The public-key address executing the transaction.
-                   -> MarloweParams                      -- ^ The parameters for the Marlowe contract instance.
-                   -> Continuations                      -- ^ The merkleized contuations of the contract.
-                   -> State                              -- ^ The initial state.
-                   -> Contract                           -- ^ The initial contract.
-                   -> TransactionInput                   -- ^ The input to be applied to the contract.
-                   -> m ((State, Contract), P.ExBudget)  -- ^ Action to execute the transaction and to return the new state and contract along with the execution cost.
-executeTransaction evaluationContext referenceInput creatorAddress marloweParams@MarloweParams{..} continuations marloweState marloweContract TransactionInput{..} =
+                   => P.EvaluationContext  -- ^ The Plutus evaluation context.
+                   -> P.TxInInfo           -- ^ The reference-script input, if any.
+                   -> P.Address            -- ^ The public-key address executing the transaction.
+                   -> MarloweParams        -- ^ The parameters for the Marlowe contract instance.
+                   -> Transaction          -- ^ The transaction to be executed.
+                   -> m P.ExBudget         -- ^ Action to execute the transaction and to return the new state and contract along with the execution cost.
+executeTransaction evaluationContext referenceInput creatorAddress marloweParams@MarloweParams{..} (marloweState, marloweContract, TransactionInput{..}, output) =
   do
-    (_, inputs) <- foldM (merkleizeInput txInterval continuations) ((marloweState, marloweContract), []) txInputs
     (txOutState, txOutContract, txOutPayments) <-
-      case computeTransaction (TransactionInput txInterval inputs) marloweState marloweContract of
+      case output of
         TransactionOutput{..} -> pure (txOutState, txOutContract, txOutPayments)
         Error e               -> throwError . CliError $ show e
     let
@@ -394,7 +377,7 @@ executeTransaction evaluationContext referenceInput creatorAddress marloweParams
       outDatumHash = P.datumHash <$> outDatum
       outValue = totalBalance $ accounts txOutState
       outScriptTx = flip (P.TxOut semanticsAddress outValue) Nothing . P.OutputDatumHash <$> outDatumHash
-      redeemer = P.Redeemer . P.toBuiltinData $ marloweTxInputsFromInputs inputs
+      redeemer = P.Redeemer . P.toBuiltinData $ marloweTxInputsFromInputs txInputs
       makePayment (Payment _ (Party (Address _ address)) (Token currency name) amount) =
         pure $ P.TxOut address (P.singleton currency name amount) P.NoOutputDatum Nothing
       makePayment (Payment _ (Party (Role role)) (Token currency name) amount) =
@@ -426,7 +409,7 @@ executeTransaction evaluationContext referenceInput creatorAddress marloweParams
               MerkleizedInput _ _ contract -> pure . P.Datum $ P.toBuiltinData contract
               _                              -> mempty
           |
-            input <- inputs
+            input <- txInputs
           ]
       outMerkle =
         [
@@ -466,7 +449,7 @@ executeTransaction evaluationContext referenceInput creatorAddress marloweParams
       scriptContextPurpose = P.Spending inScriptTxRef
       scriptContext = P.ScriptContext{..}
     case evaluateSemantics evaluationContext (P.toData inDatum) (P.toData redeemer) (P.toData scriptContext) of
-      (_, Right budget) -> pure ((txOutState, txOutContract), budget)
+      (_, Right budget) -> pure budget
       (msg, Left err)   -> throwError . CliError $ "Plutus execution failed: " <> show err <> " with log " <> show msg <> "."
 
 
@@ -607,6 +590,77 @@ putYaml :: MonadIO m
         -> [Pair]     -- ^ The results.
         -> m ()       -- ^ Action to print the results as YAML.
 putYaml section = liftIO . BS8.putStr . encode . object . (: []) . (fromString section .=) . object
+
+
+-- | Visit transactions along all execution paths of a a contract.
+foldTransactionsM :: Monad m
+                  => Monoid a
+                  => (Transaction -> m a)  -- ^ Function to collect results.
+                  -> [Transaction]         -- ^ The transactions.
+                  -> m a                   -- ^ The collected results.
+foldTransactionsM f =
+  (foldM $ (. f) . fmap . (<>)) mempty
+
+
+-- | Complete information about a Marlowe semantics transaction.
+type Transaction = (State, Contract, TransactionInput, TransactionOutput)
+
+
+-- | Find transactions along all execution paths of a contract.
+findTransactions :: MonadError CliError m
+                 => MonadIO m
+                 => ContractInstance                                            -- ^ The bundle of contract information.
+                 -> m [Transaction]  -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
+findTransactions ci@ContractInstance{..} =
+  do
+    let
+      creatorAddress =
+        P.Address
+          (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
+          (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
+      prune (s, c, i, _) (s', c', i', _) = s == s' && c == c' && i == i'
+    paths <- findPaths ci
+    nubBy prune
+      . concat
+      <$> sequence
+      [
+         findTransactionPath ciContinuations state ciContract inputs
+      |
+        (minTime, inputs) <- paths
+      , let state = State (AM.singleton (Address True creatorAddress, Token P.adaSymbol P.adaToken) 1) AM.empty AM.empty minTime
+      ]
+
+
+-- | Find the transactions corresponding to a path of demerkleized inputs.
+findTransactionPath :: MonadError CliError m
+                    => Continuations                                               -- ^ The continuations of the contact.
+                    -> State                                                       -- ^ The initial contract.
+                    -> Contract                                                    -- ^ The initial state.
+                    -> [TransactionInput]                                          -- ^ The path of demerkleized inputs.
+                    -> m [(State, Contract, TransactionInput, TransactionOutput)]  -- ^ Action for computing the perhaps-merkleized input and the output for the transaction.
+findTransactionPath continuations state contract =
+  let
+    go ((state', contract'), previous) input =
+      do
+        (input', output) <- findTransaction continuations state' contract' input
+        case output of
+          TransactionOutput{..} -> pure ((txOutState, txOutContract), (state', contract', input', output) : previous)
+          Error e               -> throwError . CliError $ show e
+  in
+    fmap snd . foldM go ((state, contract), [])
+
+
+-- | Find the transaction corresponding to demerkleized input.
+findTransaction :: MonadError CliError m
+                => Continuations                            -- ^ The continuations of the contact.
+                -> State                                    -- ^ The initial contract.
+                -> Contract                                 -- ^ The initial state.
+                -> TransactionInput                         -- ^ The demerkleized input to the contract.
+                -> m (TransactionInput, TransactionOutput)  -- ^ Action for computing the perhaps-merkleized input and the output for the transaction.
+findTransaction continuations state contract TransactionInput{..} =
+  do
+    input <- TransactionInput txInterval . snd <$> foldM (merkleizeInput txInterval continuations) ((state, contract), []) txInputs
+    pure (input, computeTransaction input state contract)
 
 
 -- | Find all of the paths through a Marlowe contract.
