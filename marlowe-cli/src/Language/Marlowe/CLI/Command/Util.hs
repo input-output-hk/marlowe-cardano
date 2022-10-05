@@ -109,12 +109,12 @@ data UtilCommand era =
     , expires               :: Maybe SlotNo                             -- ^ The slot number after which minting is no longer possible.
     , submitTimeout         :: Maybe Int             -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
-    -- | Fund an address from a faucet.
-  | Faucet
+    -- | Fund an address from a source wallet.
+  | Fund
     {
       network            :: NetworkId                                     -- ^ The network ID, if any.
     , socketPath         :: FilePath                                      -- ^ The path to the node socket.
-    , amount             :: Maybe Lovelace                                -- ^ The lovelace to send to the address. By default we drain out the faucet.
+    , amount             :: Maybe Lovelace                                -- ^ The lovelace to send to the address. By default we drain out the address.
     , bodyFile           :: TxBodyFile                                    -- ^ The output file for the transaction body.
     , submitTimeout      :: Maybe Int                                     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , faucetCredentials  :: (AddressInEra era, SigningKeyFile)            -- ^ The change address.
@@ -227,7 +227,7 @@ runUtilCommand command =
                               addr
                               bodyFile
                               submitTimeout
-      Faucet{..}       -> do
+      Fund{..}       -> do
                             let
                               (addr, skeyFile) = faucetCredentials
                             buildFaucet
@@ -384,7 +384,7 @@ fundAddressCommand network socket =
 -- | Parser for the "fund-address" options.
 fundAddressOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
 fundAddressOptions network socket =
-  Faucet
+  Fund
     <$> O.option parseNetworkId            (O.long "testnet-magic"   <> O.metavar "INTEGER"     <> network               <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption                        (O.long "socket-path"     <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> (lovelaceOpt <|> sendAllOpt)
@@ -399,7 +399,7 @@ fundAddressOptions network socket =
       <> O.help "The lovelace to send to each address."
     sendAllOpt = O.flag' Nothing $
       O.long "send-all"
-      <> O.help "Send all available funds to the new faucet."
+      <> O.help "Send all available funds to the address."
 
 -- | Parser for the "select" command.
 selectCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
