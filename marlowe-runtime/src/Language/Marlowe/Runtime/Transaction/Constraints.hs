@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
+import Control.Arrow ((***))
 import Control.Monad (forM)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
@@ -17,7 +18,7 @@ import Data.List (find, nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe, maybeToList)
+import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -27,7 +28,7 @@ import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
+import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.SystemStart as C
 import qualified Plutus.V2.Ledger.Api as P
@@ -282,6 +283,7 @@ data ConstraintError v
   | MissingMarloweInput
   | PayoutInputNotFound (Core.PayoutDatum v)
   | CalculateMinUtxoFailed String
+  | CoinSelectionFailed String
   deriving (Generic)
 
 deriving instance Eq (ConstraintError 'V1)
@@ -377,11 +379,11 @@ adjustTxForMinUtxo
 adjustTxForMinUtxo protocol MarloweContext{..} txBodyContent = do
   let
     getMarloweOutputValue :: [C.TxOut C.CtxTx C.BabbageEra] -> Maybe (C.TxOutValue C.BabbageEra)
-    getMarloweOutputValue = getFirst . mconcat . map First
-      . map (\(C.TxOut addressInEra txOutValue _ _) ->
+    getMarloweOutputValue = getFirst . mconcat . map (First
+      . (\(C.TxOut addressInEra txOutValue _ _) ->
           if fromCardanoAddressInEra C.BabbageEra addressInEra == marloweAddress
             then Just txOutValue
-            else Nothing)
+            else Nothing))
 
     origTxOuts = C.txOuts txBodyContent
     origMarloweValue = getMarloweOutputValue origTxOuts
@@ -392,6 +394,51 @@ adjustTxForMinUtxo protocol MarloweContext{..} txBodyContent = do
     then Right $ txBodyContent { C.txOuts = adjustedTxOuts }
     else Left $ CalculateMinUtxoFailed "Marlowe output value changed during output adjustment"
 
+-- | Compute the maximum fee for any transaction.
+maximumFee :: C.ProtocolParameters -> C.Lovelace
+maximumFee C.ProtocolParameters{..} =
+  let
+    txFee :: C.Lovelace
+    txFee = fromIntegral $ protocolParamTxFeeFixed + protocolParamTxFeePerByte * protocolParamMaxTxSize
+    executionFee :: Rational
+    executionFee =
+      case (protocolParamPrices, protocolParamMaxTxExUnits) of
+        (Just C.ExecutionUnitPrices{..}, Just C.ExecutionUnits{..})
+          -> priceExecutionSteps  * fromIntegral executionSteps + priceExecutionMemory * fromIntegral executionMemory
+        _ -> 0
+  in
+    txFee + round executionFee
+
+-- | Calculate the minimum UTxO requirement for a value.
+--   We must pack the address, datum and value into a dummy TxOut along with
+--   the "none" reference script in order to use it with C.calculateMinimumUTxO
+--   in a subsequent call
+findMinUtxo
+  :: forall v
+   . C.ProtocolParameters
+  -> (Chain.Address, Maybe Chain.Datum, C.Value)
+  -> Either (ConstraintError v) C.Value
+findMinUtxo protocol (address, mbDatum, value) = do
+  cardanoAddress <- note
+    (CalculateMinUtxoFailed $ "Unable to convert address: " <> show address)
+    $ C.anyAddressInShelleyBasedEra <$> Chain.toCardanoAddress address
+
+  let
+    datum = maybe C.TxOutDatumNone
+      (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . P.toData)
+      $ Core.fromChainDatum Core.MarloweV1 =<< mbDatum
+
+    dummyTxOut :: C.TxOut C.CtxTx C.BabbageEra
+    dummyTxOut = C.TxOut
+      cardanoAddress
+      (C.TxOutValue C.MultiAssetInBabbageEra value)
+      datum
+      C.ReferenceScriptNone
+
+  case adjustOutputForMinUtxo protocol dummyTxOut of
+     Right (C.TxOut _ adjustedValue _ _) -> pure $ C.txOutValueToValue adjustedValue
+     Left e -> Left e
+
 -- Selects enough additional inputs to cover the excess balance of the
 -- transaction (total outputs - total inputs).
 selectCoins
@@ -399,7 +446,44 @@ selectCoins
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-selectCoins = error "not implemented"
+selectCoins protocol WalletContext{..} txBodyContent = do
+  let
+    -- Only "succeed" if both halves of the pair aren't Nothing
+    maybePair :: (Maybe a,  Maybe b) -> Maybe (a, b)
+    maybePair    (Just  a , Just  b) =  Just  (a, b)
+    maybePair    _                   =  Nothing
+
+    utxos :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
+    utxos =
+      mapMaybe (maybePair . (toCardanoTxIn *** toCardanoTxOut C.MultiAssetInBabbageEra))
+      . Map.toList $ availableUtxos
+
+    -- Extract the value of a UTxO
+    txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
+    txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
+
+    -- Compute the value of all available UTxOs
+    universe :: C.Value
+    universe = foldMap (txOutToValue . snd) utxos
+
+    fee :: C.Value
+    fee = C.lovelaceToValue $ 2 * maximumFee protocol
+
+    -- Test whether value only contains lovelace.
+    onlyLovelace :: C.Value -> Bool
+    onlyLovelace value = C.lovelaceToValue (C.selectLovelace value) == value
+
+  collateral <-
+    case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) utxos of
+      utxo : _ -> pure utxo
+      []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
+
+  -- Bound the lovelace that must be included with change
+  minUtxo <-
+    (<>) <$> findMinUtxo protocol (changeAddress, Nothing, universe)  -- Output to native tokens.
+         <*> findMinUtxo protocol (changeAddress, Nothing, mempty  )  -- Pure lovelace to change address.
+
+  Left $ CoinSelectionFailed "Unknown problem"
 
 -- Ensure the fee is computed and covered, and that the excess input balance is
 -- returned to the change address.
