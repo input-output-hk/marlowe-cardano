@@ -11,22 +11,12 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
 module Language.Marlowe.CLI.Analyze
@@ -34,51 +24,77 @@ module Language.Marlowe.CLI.Analyze
     ContractInstance(..)
     -- * Analysis
   , analyze
-  , measure
   ) where
 
 
-import Cardano.Api hiding (Address, ScriptHash, TxOut)
-import Cardano.Api.Shelley (ProtocolParameters(..), StakeCredential(..))
 import Codec.Serialise (serialise)
-import Control.Monad.Except
-import Control.Monad.Reader
+import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, unless, when)
+import Control.Monad.Reader (MonadReader, ReaderT(runReaderT))
 import Data.Aeson (object, (.=))
 import Data.Aeson.Types (Pair)
 import Data.Bifunctor (second)
-import Data.Functor.Constant (Constant(..))
-import Data.Generics.Multiplate
-import Data.List
+import Data.Foldable (toList)
+import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold, purePlate)
+import Data.List (nub, (\\))
 import Data.String (IsString(..))
 import Data.Yaml (encode)
-import Language.Marlowe.CLI.IO
-import Language.Marlowe.CLI.Merkle
-import Language.Marlowe.CLI.Types hiding (datumHash)
-import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
-import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), State(..), Token(..))
-import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
+import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe, queryInEra)
+import Language.Marlowe.CLI.Merkle (deepDemerkleize, merkleizeInput)
+import Language.Marlowe.CLI.Types
+  ( CliEnv
+  , CliError(CliError)
+  , Continuations
+  , MarloweTransaction(MarloweTransaction, mtContinuations, mtContract, mtInputs, mtPayments, mtRange, mtRoleValidator, mtRolesCurrency, mtSlotConfig, mtState, mtValidator)
+  , SomeMarloweTransaction(SomeMarloweTransaction)
+  , askEra
+  , toMultiAssetSupportedInEra
+  , withShelleyBasedEra
+  )
+import Language.Marlowe.Core.V1.Semantics
+  ( MarloweData(MarloweData, marloweContract, marloweParams, marloweState)
+  , MarloweParams(..)
+  , Payment(Payment)
+  , TransactionInput(..)
+  , TransactionOutput(Error, TransactionOutput, txOutContract, txOutPayments, txOutState, txOutWarnings)
+  , computeTransaction
+  , totalBalance
+  )
+import Language.Marlowe.Core.V1.Semantics.Types
+  ( Action(Deposit, Notify)
+  , Case(..)
+  , ChoiceId(ChoiceId)
+  , Contract(..)
+  , Input(MerkleizedInput)
+  , InputContent(IChoice, IDeposit)
+  , Observation(AndObs, ChoseSomething, NotObs, OrObs, ValueEQ, ValueGE, ValueGT, ValueLE, ValueLT)
+  , Party(Address, Role)
+  , Payee(Account, Party)
+  , State(..)
+  , Token(..)
+  , Value(AddValue, AvailableMoney, ChoiceValue, Cond, DivValue, MulValue, NegValue, SubValue)
+  , getInputContent
+  )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Language.Marlowe.Scripts (MarloweInput, marloweValidator, marloweValidatorHash)
-import Ledger.Tx.CardanoAPI (toCardanoValue)
-import Ledger.Typed.Scripts (validatorScript)
-import Numeric.Natural
-import Plutus.ApiCommon
-import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V1.Ledger.Ada (lovelaceValueOf)
-import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V2.Ledger.Api hiding (evaluateScriptCounting)
-import System.IO
+import Language.Marlowe.Scripts
+  (marloweTxInputsFromInputs, marloweValidator, marloweValidatorHash, rolePayoutValidatorHash)
+import Numeric.Natural (Natural)
+import System.IO (hPutStrLn, stderr)
 
 import qualified Cardano.Api as Api
 import qualified Cardano.Api.Shelley as Api
 import qualified Data.ByteString.Char8 as BS8 (putStr)
 import qualified Data.ByteString.Lazy as LBS (toStrict)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
-import qualified Data.Map.Strict as M
-import qualified Data.Set as S
-import qualified Language.Marlowe.Core.V1.Semantics as C
-import qualified Language.Marlowe.Core.V1.Semantics.Types as C
-import qualified Language.Marlowe.Scripts as C
+import qualified Data.Functor.Constant as F (Constant(..))
+import qualified Data.Map.Strict as M (foldr, lookup, null)
+import qualified Data.Set as S (Set, empty, filter, map, member, singleton, size, union)
+import qualified Ledger.Tx.CardanoAPI as P (toCardanoValue)
+import qualified Ledger.Typed.Scripts as P (validatorScript)
+import qualified Plutus.ApiCommon as P (LedgerPlutusVersion(PlutusV2), evaluateScriptCounting)
+import qualified Plutus.Script.Utils.Scripts as P (datumHash)
+import qualified Plutus.V1.Ledger.Ada as P (lovelaceValueOf)
+import qualified Plutus.V1.Ledger.Address as P (scriptHashAddress)
+import qualified Plutus.V2.Ledger.Api as P hiding (evaluateScriptCounting)
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Prelude as P
 
@@ -87,10 +103,10 @@ import qualified PlutusTx.Prelude as P
 data ContractInstance =
   ContractInstance
   {
-    ciRolesCurrency :: CurrencySymbol  -- ^ The roles currency.
-  , ciState         :: State           -- ^ The initial state of the contract.
-  , ciContract      :: Contract        -- ^ The initial contract.
-  , ciContinuations :: Continuations   -- ^ The merkleized continuations for the contract.
+    ciRolesCurrency :: P.CurrencySymbol  -- ^ The roles currency.
+  , ciState         :: State             -- ^ The initial state of the contract.
+  , ciContract      :: Contract          -- ^ The initial contract.
+  , ciContinuations :: Continuations     -- ^ The merkleized continuations for the contract.
   }
     deriving Show
 
@@ -99,21 +115,21 @@ data ContractInstance =
 analyze :: MonadError CliError m
         => MonadIO m
         => MonadReader (CliEnv era) m
-        => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-        -> FilePath                          -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
-        -> Bool                              -- ^ Whether to check preconditions for Marlowe state.
-        -> Bool                              -- ^ Whether to check lengths of role names.
-        -> Bool                              -- ^ Whether to check lengths of token names.
-        -> Bool                              -- ^ Whether to check the `maxValueSize` protocol limit.
-        -> Bool                              -- ^ Whether to check the `utxoCostPerWord` protocol limit.
-        -> Bool                              -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
-        -> Bool                              -- ^ Whether to compute tight estimates of worst-case bounds.
-        -> m ()                              -- ^ Print estimates of worst-case bounds.
+        => Api.LocalNodeConnectInfo Api.CardanoMode  -- ^ The connection info for the local node.
+        -> FilePath                                  -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+        -> Bool                                      -- ^ Whether to check preconditions for Marlowe state.
+        -> Bool                                      -- ^ Whether to check lengths of role names.
+        -> Bool                                      -- ^ Whether to check lengths of token names.
+        -> Bool                                      -- ^ Whether to check the `maxValueSize` protocol limit.
+        -> Bool                                      -- ^ Whether to check the `utxoCostPerWord` protocol limit.
+        -> Bool                                      -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
+        -> Bool                                      -- ^ Whether to compute tight estimates of worst-case bounds.
+        -> m ()                                      -- ^ Print estimates of worst-case bounds.
 analyze connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost best =
   do
     SomeMarloweTransaction _language _era MarloweTransaction{..} <- decodeFileStrict marloweFile
     era <- askEra
-    protocol@ProtocolParameters{protocolParamMaxValueSize} <- queryInEra connection QueryProtocolParameters
+    protocol@Api.ProtocolParameters{protocolParamMaxValueSize} <- queryInEra connection Api.QueryProtocolParameters
     let
       checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations
@@ -143,8 +159,8 @@ analyze connection marloweFile preconditions roles tokens maximumValue minimumUt
 --   * Account balances that are not positive.
 --   * Duplicate accounts, choices, or bound values.
 checkPreconditions :: MonadIO m
-                   => ContractInstance
-                   -> m ()
+                   => ContractInstance  -- ^ The bundle of contract information.
+                   -> m ()              -- ^ Action to print a report on preconditions.
 checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
   let
     nonPositiveBalances = filter ((<= 0) . snd) . AM.toList
@@ -161,25 +177,29 @@ checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
       ]
 
 
-invalidCurrency :: CurrencySymbol -> Bool
-invalidCurrency currency@CurrencySymbol{..} = currency /= adaSymbol && P.lengthOfByteString unCurrencySymbol /= 28
+-- | Detect an invalid currency symbol.
+invalidCurrency :: P.CurrencySymbol -> Bool
+invalidCurrency currency@P.CurrencySymbol{..} = currency /= P.adaSymbol && P.lengthOfByteString unCurrencySymbol /= 28
 
 
-invalidToken :: C.Token -> Bool
-invalidToken (Token currency@CurrencySymbol{..} token@TokenName{..}) =
-  not $  currency == adaSymbol
-         && token == adaToken
+-- | Detect an invalid token.
+invalidToken :: Token -> Bool
+invalidToken (Token currency@P.CurrencySymbol{..} token@P.TokenName{..}) =
+  not $  currency == P.adaSymbol
+         && token == P.adaToken
       || P.lengthOfByteString unCurrencySymbol == 28
          && P.lengthOfByteString unTokenName <= 32
 
 
-invalidRole :: TokenName -> Bool
-invalidRole TokenName{..} = P.lengthOfByteString unTokenName > 32
+-- | Detect an invalid role name.
+invalidRole :: P.TokenName -> Bool
+invalidRole P.TokenName{..} = P.lengthOfByteString unTokenName > 32
 
 
+-- | Check that all tokens are valid.
 checkTokens :: MonadIO m
-           => ContractInstance
-           -> m ()
+            => ContractInstance  -- ^ The bundle of contract information.
+            -> m ()              -- ^ Action to print a report on token validity.
 checkTokens ci =
   putYaml "Tokens"
     [
@@ -187,9 +207,10 @@ checkTokens ci =
     ]
 
 
+-- | Check that all roles are valid.
 checkRoles :: MonadIO m
-           => ContractInstance
-           -> m ()
+           => ContractInstance  -- ^ The bundle of contract information.
+           -> m ()              -- ^ Action to print a report on role-name validity.
 checkRoles ci =
   let
     roles = extractFromContract ci
@@ -197,16 +218,17 @@ checkRoles ci =
     putYaml "Role names"
       [
         "Invalid role names" .= invalidRole `S.filter` roles
-      , "Blank role names" .= adaToken `S.member` roles
+      , "Blank role names" .= P.adaToken `S.member` roles
       ]
 
 
+-- | Check that the protocol limit on maximum value in a UTxO is not violated.
 checkMaximumValue :: MonadError CliError m
                   => MonadIO m
-                  => Maybe Natural
-                  -> Bool
-                  -> ContractInstance
-                  -> m ()
+                  => Maybe Natural     -- ^ The `maxValue` protocol parameter.
+                  -> Bool              -- ^ Whether to use tight worst-case bounds.
+                  -> ContractInstance  -- ^ The bundle of contract information.
+                  -> m ()              -- ^ Action to print a report on `maxValue` validity.
 checkMaximumValue (Just maxValue) _ {- TODO: Use execution paths in case where `best == True`. -} ci =
   let
     size = computeValueSize $ extractFromContract ci
@@ -222,79 +244,89 @@ checkMaximumValue (Just maxValue) _ {- TODO: Use execution paths in case where `
 checkMaximumValue _ _ _ = throwError $ CliError "Missing `maxValue` protocol parameter."
 
 
+-- | Check that the protocol limit on minimum UTxO is not violated.
 checkMinimumUtxo :: forall era m
-                 .  IsShelleyBasedEra era
+                 .  Api.IsShelleyBasedEra era
                  => MonadError CliError m
                  => MonadIO m
-                 => ScriptDataSupportedInEra era
-                 -> ProtocolParameters
-                 -> Bool
-                 -> ContractInstance
-                 -> m ()
+                 => Api.ScriptDataSupportedInEra era  -- ^ The era.
+                 -> Api.ProtocolParameters            -- ^ The protocol parameters.
+                 -> Bool                              -- ^ Whether to use tight worst-case bounds.
+                 -> ContractInstance                  -- ^ The bundle of contract information.
+                 -> m ()                              -- ^ Action to print a report on the `minimumUTxO` validity.
 checkMinimumUtxo era protocol _ {- TODO: Use execution paths in case where `best == True`. -} ci =
   do
     tokens <-
       liftCli
-        . toCardanoValue
+        . P.toCardanoValue
         $ mconcat
         [
-          singleton cs tn 1
+          P.singleton cs tn 1
         |
-          C.Token cs tn <- S.toList $ extractFromContract ci
+          Token cs tn <- toList $ extractFromContract ci
         ]
     let
       address =
-        makeShelleyAddressInEra
-            Mainnet
-            (PaymentCredentialByScript "11111111111111111111111111111111111111111111111111111111")
-            (StakeAddressByValue $ StakeCredentialByKey "22222222222222222222222222222222222222222222222222222222")
+        Api.makeShelleyAddressInEra
+            Api.Mainnet
+            (Api.PaymentCredentialByScript "88888888888888888888888888888888888888888888888888888888")
+            (Api.StakeAddressByValue $ Api.StakeCredentialByKey "99999999999999999999999999999999999999999999999999999999")
       out =
         Api.TxOut
           address
           (Api.TxOutValue (toMultiAssetSupportedInEra era) tokens)
-          (TxOutDatumHash era "3333333333333333333333333333333333333333333333333333333333333333")
+          (Api.TxOutDatumHash era "5555555555555555555555555555555555555555555555555555555555555555")
           Api.ReferenceScriptNone
-    value <- liftCli $ calculateMinimumUTxO shelleyBasedEra out protocol
+    value <- liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out protocol
     putYaml "Minimum UTxO"
       [
         "Requirement" .= value
       ]
 
 
+-- | Check that transactions satisfy the execution-cost protocol limits.
 checkExecutionCost :: MonadError CliError m
                    => MonadIO m
-                   => ProtocolParameters
-                   -> ContractInstance
-                   -> [(POSIXTime, [C.TransactionInput])]
-                   -> m ()
+                   => Api.ProtocolParameters               -- ^ The protocol parameters.
+                   -> ContractInstance                     -- ^ The bundle of contract information.
+                   -> [(P.POSIXTime, [TransactionInput])]  -- ^ The transaction-paths through the contract.
+                   -> m ()                                 -- ^ Action to print a report on validity of transaction execution costs.
 checkExecutionCost protocol ContractInstance{..} paths =
   do
-    (_, referenceAddress) <- liftCliMaybe "Failed to parse reference script address." $ deserialiseAddressBech32 "addr1qypn5mwucvjm0pkfwemjus8n7glep8927sj76dv9a3xnq4j7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqfk0yl3"
-    (_, creatorAddress) <- liftCliMaybe "Failed to parse reference script address." $ deserialiseAddressBech32 "addr1v90p3rn8zx3funlx4yqjx772dc7n9gwgahqm5f8myl69mugru44dx"
-    CostModel costModel <- liftCliMaybe "Plutus cost model not found." $ AnyPlutusScriptVersion PlutusScriptV2 `M.lookup` protocolParamCostModels protocol
-    evaluationContext <- liftCli $ mkEvaluationContext costModel
+    Api.CostModel costModel <-
+      liftCliMaybe "Plutus cost model not found."
+        $ Api.AnyPlutusScriptVersion Api.PlutusScriptV2 `M.lookup` Api.protocolParamCostModels protocol
+    evaluationContext <- liftCli $ P.mkEvaluationContext costModel
     let
+      referenceAddress =
+        P.Address
+          (P.PubKeyCredential "77777777777777777777777777777777777777777777777777777777")
+          (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
+      creatorAddress =
+        P.Address
+          (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
+          (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
       referenceInput =
-        TxInInfo
-          (TxOutRef "9dc19f70488336dbf3d68388fcfb2e3f7a3d7ed6358422f37b10aa6625246c71" 1)
-          (TxOut referenceAddress (lovelaceValueOf 55_000_000) NoOutputDatum (Just semanticsScriptHash))
+        P.TxInInfo
+          (P.TxOutRef "6666666666666666666666666666666666666666666666666666666666666666" 1)
+          (P.TxOut referenceAddress (P.lovelaceValueOf 1) P.NoOutputDatum (Just semanticsScriptHash))
       executor = executeTransaction evaluationContext referenceInput creatorAddress $ MarloweParams ciRolesCurrency
     (steps, memory) <-
       unzip
-        . fmap (\ExBudget{..} -> (exBudgetCPU, exBudgetMemory))
+        . fmap (\P.ExBudget{..} -> (exBudgetCPU, exBudgetMemory))
         . concat
         <$> sequence
         [
           executePath executor state ciContract ciContinuations inputs
         |
           (minTime, inputs) <- paths
-        , let state = C.State (AM.singleton (C.Address True creatorAddress, Token adaSymbol adaToken) 30_000_000) AM.empty AM.empty minTime
+        , let state = State (AM.singleton (Address True creatorAddress, Token P.adaSymbol P.adaToken) 1) AM.empty AM.empty minTime
         ]
     let
-      ExCPU actualSteps = maximum steps
-      maximumSteps = maybe 0 fromEnum $ executionSteps <$> protocolParamMaxTxExUnits protocol
-      ExMemory actualMemory = maximum memory
-      maximumMemory = maybe 0 fromEnum $ executionMemory <$> protocolParamMaxTxExUnits protocol
+      P.ExCPU actualSteps = maximum steps
+      maximumSteps = maybe 0 fromEnum $ Api.executionSteps <$> Api.protocolParamMaxTxExUnits protocol
+      P.ExMemory actualMemory = maximum memory
+      maximumMemory = maybe 0 fromEnum $ Api.executionMemory <$> Api.protocolParamMaxTxExUnits protocol
     putYaml "Execution Cost"
       [
         "Steps" .= object
@@ -314,153 +346,183 @@ checkExecutionCost protocol ContractInstance{..} paths =
       ]
 
 
+-- | Execute all transactions on a path through a contract.
 executePath :: MonadError CliError m
-            => (C.State -> C.Contract -> C.TransactionInput -> m ((C.State, C.Contract), ExBudget))
-            -> C.State
-            -> C.Contract
-            -> Continuations
-            -> [C.TransactionInput]
-            -> m [ExBudget]
-executePath executor state contract _continuations inputs =
+            => (Continuations -> State -> Contract -> TransactionInput -> m ((State, Contract), P.ExBudget))  -- ^ The function for executing a transaction.
+            -> State                                                                                          -- ^ The initial state.
+            -> Contract                                                                                       -- ^ The initial contract.
+            -> Continuations                                                                                  -- ^ The merkleized continuations of the contract.
+            -> [TransactionInput]                                                                             -- ^ The transaction to execute.
+            -> m [P.ExBudget]                                                                                 -- ^ Action to compute the execution cost for each transaction.
+executePath executor state contract continuations inputs =
   snd
     <$> foldM
-        (\((state', contract'), budgets) -> fmap (second (: budgets)) . executor state' contract')
+        (\((state', contract'), budgets) -> fmap (second (: budgets)) . executor continuations state' contract')
         ((state, contract), [])
         inputs
 
 
+-- | Execute a Marlowe transaction.
 executeTransaction :: MonadError CliError m
-                   => EvaluationContext
-                   -> TxInInfo
-                   -> Address
-                   -> MarloweParams
-                   -> C.State
-                   -> C.Contract
-                   -> C.TransactionInput
-                   -> m ((C.State, C.Contract), ExBudget)
-executeTransaction evaluationContext referenceInput creatorAddress marloweParams@MarloweParams{..} marloweState marloweContract input@C.TransactionInput{..} =
+                   => P.EvaluationContext                -- ^ The Plutus evaluation context.
+                   -> P.TxInInfo                         -- ^ The reference-script input, if any.
+                   -> P.Address                          -- ^ The public-key address executing the transaction.
+                   -> MarloweParams                      -- ^ The parameters for the Marlowe contract instance.
+                   -> Continuations                      -- ^ The merkleized contuations of the contract.
+                   -> State                              -- ^ The initial state.
+                   -> Contract                           -- ^ The initial contract.
+                   -> TransactionInput                   -- ^ The input to be applied to the contract.
+                   -> m ((State, Contract), P.ExBudget)  -- ^ Action to execute the transaction and to return the new state and contract along with the execution cost.
+executeTransaction evaluationContext referenceInput creatorAddress marloweParams@MarloweParams{..} continuations marloweState marloweContract TransactionInput{..} =
   do
+    (_, inputs) <- foldM (merkleizeInput txInterval continuations) ((marloweState, marloweContract), []) txInputs
     (txOutState, txOutContract, txOutPayments) <-
-      case C.computeTransaction input marloweState marloweContract of
-        C.TransactionOutput{..} -> pure (txOutState, txOutContract, txOutPayments)
-        C.Error e               -> throwError . CliError $ show e
+      case computeTransaction (TransactionInput txInterval inputs) marloweState marloweContract of
+        TransactionOutput{..} -> pure (txOutState, txOutContract, txOutPayments)
+        Error e               -> throwError . CliError $ show e
     let
-      inDatum = Datum $ toBuiltinData MarloweData{..}
-      inDatumHash = datumHash inDatum
-      inValue = C.totalBalance $ accounts marloweState
-      inScriptTxRef = TxOutRef "1111111111111111111111111111111111111111111111111111111111111111" 0
-      inScriptTx = TxInInfo inScriptTxRef $ TxOut semanticsAddress inValue (OutputDatumHash inDatumHash) Nothing
+      oneLovelace = P.lovelaceValueOf 1
+      inDatum = P.Datum $ P.toBuiltinData MarloweData{..}
+      inDatumHash = P.datumHash inDatum
+      inValue = totalBalance $ accounts marloweState
+      inScriptTxRef = P.TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 0
+      inScriptTx = P.TxInInfo inScriptTxRef $ P.TxOut semanticsAddress inValue (P.OutputDatumHash inDatumHash) Nothing
       outDatum =
-        if txOutContract == C.Close
+        if txOutContract == Close
           then mempty
-          else pure . Datum . toBuiltinData $ MarloweData marloweParams txOutState txOutContract
-      outDatumHash = datumHash <$> outDatum
-      outValue = C.totalBalance $ accounts txOutState
-      outScriptTx = flip (TxOut semanticsAddress outValue) Nothing . OutputDatumHash <$> outDatumHash
-      redeemer = Redeemer . toBuiltinData $ C.marloweTxInputsFromInputs txInputs
-      makePayment (C.Payment _ (C.Party (C.Address _ address)) (C.Token currency name) amount) =
-        pure $ TxOut address (singleton currency name amount) NoOutputDatum Nothing
-      makePayment (C.Payment _ (C.Party (C.Role role)) (C.Token currency name) amount) =
+          else pure . P.Datum . P.toBuiltinData $ MarloweData marloweParams txOutState txOutContract
+      outDatumHash = P.datumHash <$> outDatum
+      outValue = totalBalance $ accounts txOutState
+      outScriptTx = flip (P.TxOut semanticsAddress outValue) Nothing . P.OutputDatumHash <$> outDatumHash
+      redeemer = P.Redeemer . P.toBuiltinData $ marloweTxInputsFromInputs inputs
+      makePayment (Payment _ (Party (Address _ address)) (Token currency name) amount) =
+        pure $ P.TxOut address (P.singleton currency name amount) P.NoOutputDatum Nothing
+      makePayment (Payment _ (Party (Role role)) (Token currency name) amount) =
         pure
-          $ TxOut
+          $ P.TxOut
             payoutAddress
-            (singleton currency name amount)
-            (OutputDatumHash . datumHash . Datum $ toBuiltinData (rolesCurrency, role))
+            (P.singleton currency name amount)
+            (P.OutputDatumHash . P.datumHash . P.Datum $ P.toBuiltinData (rolesCurrency, role))
             Nothing
       makePayment _ = mempty
-      makePaymentDatum (C.Payment _ (C.Party (C.Role role)) _ _) =
-        pure . Datum $ toBuiltinData (rolesCurrency, role)
+      makePaymentDatum (Payment _ (Party (Role role)) _ _) =
+        pure . P.Datum $ P.toBuiltinData (rolesCurrency, role)
       makePaymentDatum _ = mempty
       outPayments = concatMap makePayment txOutPayments
       outPaymentDatums = concatMap makePaymentDatum txOutPayments
-      findRole :: C.InputContent -> [TokenName]
-      findRole (C.IDeposit _ (C.Role role) _ _) = pure role
-      findRole (C.IChoice (C.ChoiceId _ (C.Role role)) _) = pure role
+      findRole :: InputContent -> [P.TokenName]
+      findRole (IDeposit _ (Role role) _ _) = pure role
+      findRole (IChoice (ChoiceId _ (Role role)) _) = pure role
       findRole _ = mempty
-      roles = fmap (flip (singleton rolesCurrency) 1) . foldMap findRole $ C.getInputContent <$> txInputs
+      roles = fmap (flip (P.singleton rolesCurrency) 1) . foldMap findRole $ getInputContent <$> txInputs
       inRoles =
+        uncurry (P.TxInInfo . P.TxOutRef "1111111111111111111111111111111111111111111111111111111111111111")
+          <$> zip [1..] outRoles
+      outRoles = [P.TxOut creatorAddress role P.NoOutputDatum Nothing | role <- roles]
+      merkleDatums =
+        concat
+          [
+            case input of
+              MerkleizedInput _ _ contract -> pure . P.Datum $ P.toBuiltinData contract
+              _                              -> mempty
+          |
+            input <- inputs
+          ]
+      outMerkle =
         [
-          TxInInfo (TxOutRef "1111111111111111111111111111111111111111111111111111111111111111" i) outRole
+          P.TxOut creatorAddress oneLovelace (P.OutputDatumHash $ P.datumHash datum) Nothing
         |
-          (i, outRole) <- zip [0..] outRoles
+          datum <- merkleDatums
         ]
-      outRoles = [TxOut creatorAddress role NoOutputDatum Nothing | role <- roles]
--- FIXME: add change, merkleization, and signatures; lengthen script addresses.
-      txInfoInputs = inScriptTx : inRoles
+      inFunds =
+        P.TxInInfo
+          (P.TxOutRef "1111111111111111111111111111111111111111111111111111111111111111" 0)
+          (P.TxOut creatorAddress oneLovelace P.NoOutputDatum Nothing)
+      outChange = P.TxOut creatorAddress oneLovelace P.NoOutputDatum Nothing
+      txInfoInputs =
+          inFunds
+        : inScriptTx
+        : inRoles
       txInfoReferenceInputs = [referenceInput]
       txInfoOutputs =
-        TxOut creatorAddress txInfoFee NoOutputDatum Nothing
-          : outScriptTx
-          <> outPayments
-          <> outRoles
-      txInfoFee = singleton adaSymbol adaToken 1
+           outChange
+        :  outScriptTx
+        <> outPayments
+        <> outRoles
+        <> outMerkle
+      txInfoFee = oneLovelace
       txInfoMint = mempty
       txInfoDCert = mempty
       txInfoWdrl = AM.empty
-      txInfoValidRange = Interval (LowerBound (Finite $ fst txInterval) True) (UpperBound (Finite $ snd txInterval) True)
-      txInfoSignatories = []
+      txInfoValidRange = P.Interval (P.LowerBound (P.Finite $ fst txInterval) True) (P.UpperBound (P.Finite $ snd txInterval) True)
+      txInfoSignatories =
+        case creatorAddress of
+          P.Address (P.PubKeyCredential pkh) _ -> pure pkh
+          _                                    -> mempty
       txInfoRedeemers = AM.singleton scriptContextPurpose redeemer
-      txInfoData = AM.fromList $ ((,) =<< datumHash) <$> inDatum : outDatum <> outPaymentDatums
+      txInfoData = AM.fromList $ ((,) =<< P.datumHash) <$> inDatum : outDatum <> outPaymentDatums <> merkleDatums
       txInfoId = "2222222222222222222222222222222222222222222222222222222222222222"
-      scriptContextTxInfo = TxInfo{..}
-      scriptContextPurpose = Spending inScriptTxRef
-      scriptContext = ScriptContext{..}
-    case evaluateSemantics evaluationContext (toData inDatum) (toData redeemer) (toData scriptContext) of
+      scriptContextTxInfo = P.TxInfo{..}
+      scriptContextPurpose = P.Spending inScriptTxRef
+      scriptContext = P.ScriptContext{..}
+    case evaluateSemantics evaluationContext (P.toData inDatum) (P.toData redeemer) (P.toData scriptContext) of
       (_, Right budget) -> pure ((txOutState, txOutContract), budget)
       (msg, Left err)   -> throwError . CliError $ "Plutus execution failed: " <> show err <> " with log " <> show msg <> "."
 
 
-computeValueSize :: S.Set C.Token
-                 -> Int
+-- | Compute the size of a multi-asset value.
+computeValueSize :: S.Set Token  -- ^ The tokens present.
+                 -> Int          -- ^ The number of bytes on the ledger.
 computeValueSize tokens =
   let
     nTokens = S.size tokens
     nPolicies = S.size $ S.map (\(Token c _) -> c) tokens
-    nNames = sum . fmap P.lengthOfByteString . S.toList $ S.map (\(Token _ (TokenName n)) -> n) tokens
+    nNames = sum . fmap P.lengthOfByteString . toList $ S.map (\(Token _ (P.TokenName n)) -> n) tokens
     padWords x = (x + 7) `div` 8
   in
     8 * (6 + padWords (12 * nTokens + 28 * nPolicies + fromInteger nNames))
 
 
+-- | A mutltiplate for a Marlowe contract.
 data MarlowePlate f =
   MarlowePlate
   {
-    contractPlate :: C.Contract -> f C.Contract
-  , casePlate :: C.Case C.Contract -> f (C.Case C.Contract)
-  , actionPlate :: C.Action -> f C.Action
-  , valuePlate :: C.Value C.Observation -> f (C.Value C.Observation)
-  , observationPlate :: C.Observation -> f C.Observation
+    contractPlate :: Contract -> f Contract
+  , casePlate :: Case Contract -> f (Case Contract)
+  , actionPlate :: Action -> f Action
+  , valuePlate :: Value Observation -> f (Value Observation)
+  , observationPlate :: Observation -> f Observation
   }
 
 instance Multiplate MarlowePlate where
   multiplate child =
     let
-      buildContract C.Close = pure C.Close
-      buildContract (C.Pay a p t v c) = C.Pay a p t <$> valuePlate child v <*> contractPlate child c
-      buildContract (C.If o c c') = C.If <$> observationPlate child o <*> contractPlate child c <*> contractPlate child c'
-      buildContract (C.When cs t c) = C.When <$> sequenceA (casePlate child <$> cs) <*> pure t <*> contractPlate child c
-      buildContract (C.Let i v c) = C.Let i <$> valuePlate child v <*> contractPlate child c
-      buildContract (C.Assert o c) = C.Assert <$> observationPlate child o <*> contractPlate child c
-      buildCase (C.Case a c) = C.Case <$> actionPlate child a <*> contractPlate child c
-      buildCase (C.MerkleizedCase a h) = C.MerkleizedCase <$> actionPlate child a <*> pure h
-      buildAction (C.Deposit a p t v) = C.Deposit a p t <$> valuePlate child v
-      buildAction (C.Notify o) = C.Notify <$> observationPlate child o
+      buildContract Close = pure Close
+      buildContract (Pay a p t v c) = Pay a p t <$> valuePlate child v <*> contractPlate child c
+      buildContract (If o c c') = If <$> observationPlate child o <*> contractPlate child c <*> contractPlate child c'
+      buildContract (When cs t c) = When <$> sequenceA (casePlate child <$> cs) <*> pure t <*> contractPlate child c
+      buildContract (Let i v c) = Let i <$> valuePlate child v <*> contractPlate child c
+      buildContract (Assert o c) = Assert <$> observationPlate child o <*> contractPlate child c
+      buildCase (Case a c) = Case <$> actionPlate child a <*> contractPlate child c
+      buildCase (MerkleizedCase a h) = MerkleizedCase <$> actionPlate child a <*> pure h
+      buildAction (Deposit a p t v) = Deposit a p t <$> valuePlate child v
+      buildAction (Notify o) = Notify <$> observationPlate child o
       buildAction x = pure x
-      buildValue (C.NegValue x) = C.NegValue <$> valuePlate child x
-      buildValue (C.AddValue x y) = C.AddValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (C.SubValue x y) = C.SubValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (C.MulValue x y) = C.MulValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (C.DivValue x y) = C.DivValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (C.Cond o x y) = C.Cond <$> observationPlate child o <*> valuePlate child x <*> valuePlate child y
+      buildValue (NegValue x) = NegValue <$> valuePlate child x
+      buildValue (AddValue x y) = AddValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (SubValue x y) = SubValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (MulValue x y) = MulValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (DivValue x y) = DivValue <$> valuePlate child x <*> valuePlate child y
+      buildValue (Cond o x y) = Cond <$> observationPlate child o <*> valuePlate child x <*> valuePlate child y
       buildValue x = pure x
-      buildObservation (C.AndObs x y) = C.AndObs <$> observationPlate child x <*> observationPlate child y
-      buildObservation (C.OrObs x y) = C.OrObs <$> observationPlate child x <*> observationPlate child y
-      buildObservation (C.NotObs x) = C.NotObs <$> observationPlate child x
-      buildObservation (C.ValueGE x y) = C.ValueGE <$> valuePlate child x <*> valuePlate child y
-      buildObservation (C.ValueGT x y) = C.ValueGT <$> valuePlate child x <*> valuePlate child y
-      buildObservation (C.ValueLT x y) = C.ValueLT <$> valuePlate child x <*> valuePlate child y
-      buildObservation (C.ValueLE x y) = C.ValueLE <$> valuePlate child x <*> valuePlate child y
-      buildObservation (C.ValueEQ x y) = C.ValueEQ <$> valuePlate child x <*> valuePlate child y
+      buildObservation (AndObs x y) = AndObs <$> observationPlate child x <*> observationPlate child y
+      buildObservation (OrObs x y) = OrObs <$> observationPlate child x <*> observationPlate child y
+      buildObservation (NotObs x) = NotObs <$> observationPlate child x
+      buildObservation (ValueGE x y) = ValueGE <$> valuePlate child x <*> valuePlate child y
+      buildObservation (ValueGT x y) = ValueGT <$> valuePlate child x <*> valuePlate child y
+      buildObservation (ValueLT x y) = ValueLT <$> valuePlate child x <*> valuePlate child y
+      buildObservation (ValueLE x y) = ValueLE <$> valuePlate child x <*> valuePlate child y
+      buildObservation (ValueEQ x y) = ValueEQ <$> valuePlate child x <*> valuePlate child y
       buildObservation x = pure x
     in
       MarlowePlate
@@ -478,20 +540,23 @@ instance Multiplate MarlowePlate where
       (build observationPlate)
 
 
+-- | Extract something using the Marlowe multiplate.
 class Extract a where
-  extractor :: MarlowePlate (Constant (S.Set a))
-  extractAll :: Ord a => C.Contract -> S.Set a
+  -- | Shallow extraction.
+  extractor :: MarlowePlate (F.Constant (S.Set a))
+  -- | Deep extraction.
+  extractAll :: Ord a => Contract -> S.Set a
   extractAll = foldFor contractPlate $ preorderFold extractor
 
-instance Extract C.Token where
+instance Extract Token where
   extractor =
     let
-      single = Constant . S.singleton
-      contractPlate' (C.Pay _ _ t _ _) = single t
+      single = F.Constant . S.singleton
+      contractPlate' (Pay _ _ t _ _) = single t
       contractPlate' x = pure x
-      actionPlate' (C.Deposit _ _ t _) = single t
+      actionPlate' (Deposit _ _ t _) = single t
       actionPlate' x = pure x
-      valuePlate' (C.AvailableMoney _ t) = single t
+      valuePlate' (AvailableMoney _ t) = single t
       valuePlate' x = pure x
     in
       purePlate
@@ -501,20 +566,20 @@ instance Extract C.Token where
       , valuePlate = valuePlate'
       }
 
-instance Extract TokenName where
+instance Extract P.TokenName where
   extractor =
     let
-      role (C.Role r) = S.singleton r
+      role (Role r) = S.singleton r
       role _ = S.empty
-      contractPlate' (C.Pay a (C.Account p) _ _ _) = Constant $ role a <> role p
-      contractPlate' (C.Pay a (C.Party p) _ _ _) = Constant $ role a <> role p
+      contractPlate' (Pay a (Account p) _ _ _) = F.Constant $ role a <> role p
+      contractPlate' (Pay a (Party p) _ _ _) = F.Constant $ role a <> role p
       contractPlate' x = pure x
-      actionPlate' (C.Deposit a p _ _) = Constant $ role a <> role p
+      actionPlate' (Deposit a p _ _) = F.Constant $ role a <> role p
       actionPlate' x = pure x
-      valuePlate' (C.AvailableMoney a _) = Constant $ role a
-      valuePlate' (C.ChoiceValue (C.ChoiceId _ p)) = Constant $ role p
+      valuePlate' (AvailableMoney a _) = F.Constant $ role a
+      valuePlate' (ChoiceValue (ChoiceId _ p)) = F.Constant $ role p
       valuePlate' x = pure x
-      observationPlate' (C.ChoseSomething (C.ChoiceId _ p)) = Constant $ role p
+      observationPlate' (ChoseSomething (ChoiceId _ p)) = F.Constant $ role p
       observationPlate' x = pure x
     in
       purePlate
@@ -526,10 +591,12 @@ instance Extract TokenName where
       }
 
 
+
+-- | Extract something from a Marlowe contract.
 extractFromContract :: Extract a
                     => Ord a
-                    => ContractInstance
-                    -> S.Set a
+                    => ContractInstance  -- ^ The bundle of contract information.
+                    -> S.Set a           -- ^ The extract.
 extractFromContract ContractInstance{..} =
   M.foldr (S.union . extractAll) (extractAll ciContract) ciContinuations
 
@@ -542,10 +609,11 @@ putYaml :: MonadIO m
 putYaml section = liftIO . BS8.putStr . encode . object . (: []) . (fromString section .=) . object
 
 
+-- | Find all of the paths through a Marlowe contract.
 findPaths :: MonadError CliError m
           => MonadIO m
-          => ContractInstance
-          -> m [(POSIXTime, [C.TransactionInput])]
+          => ContractInstance                       -- ^ The bundle of contract information.
+          -> m [(P.POSIXTime, [TransactionInput])]  -- ^ The paths throught the Marlowe contract.
 findPaths ContractInstance{..} =
   do
     unless (M.null ciContinuations)
@@ -557,91 +625,16 @@ findPaths ContractInstance{..} =
     pure paths
 
 
--- | Utility for exploring cost modeling of Marlowe contracts.
-measure :: forall era m
-         . MonadError CliError m
-        => MonadIO m
-        => MonadReader (CliEnv era) m
-        => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-        -> m ()                              -- ^ Explore cost of execution.
-measure connection =
-  do
-    (_, referenceAddress) <- liftCliMaybe "Failed to parse reference script address." $ deserialiseAddressBech32 "addr1qypn5mwucvjm0pkfwemjus8n7glep8927sj76dv9a3xnq4j7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqfk0yl3"
-    (_, creatorAddress) <- liftCliMaybe "Failed to parse reference script address." $ deserialiseAddressBech32 "addr1v90p3rn8zx3funlx4yqjx772dc7n9gwgahqm5f8myl69mugru44dx"
-    let
-      rolesCurrency = ""
-      marloweParams = MarloweParams{..}
-      marloweInLovelace = 1_000_000
-      marloweInValue = lovelaceValueOf marloweInLovelace
-      accounts =
-        AM.fromList
-          [
-            ((C.Address True creatorAddress, Token adaSymbol adaToken), marloweInLovelace)
-          ]
-      choices = AM.empty
-      boundValues =
-        AM.fromList
-          [
-            (C.ValueId "a", 0)
-          , (C.ValueId "b", 0)
-          , (C.ValueId "c", 0)
-          , (C.ValueId "d", 0)
-          , (C.ValueId "e", 0)
-          , (C.ValueId "f", 0)
-          , (C.ValueId "g", 0)
-          , (C.ValueId "h", 0)
-          , (C.ValueId "i", 0)
-          , (C.ValueId "j", 0)
-          ]
-      minTime = POSIXTime 0
-      marloweState = State{..}
-      marloweContract = Close
-      datum = Datum $ toBuiltinData MarloweData{..}
-      redeemer = Redeemer $ toBuiltinData ([] :: MarloweInput)
-      marloweTxInRef = TxOutRef "7cf52c6dcf4e244ff017579ca2ddc0271cdf4ffb276f7dea218772887c817258" 0
-      marloweTxIn = TxInInfo marloweTxInRef $ TxOut semanticsAddress marloweInValue (OutputDatum datum) Nothing
-      txInfoInputs =
-        [
-          marloweTxIn
-        ]
-      txInfoReferenceInputs =
-        [
-          TxInInfo
-            (TxOutRef "9dc19f70488336dbf3d68388fcfb2e3f7a3d7ed6358422f37b10aa6625246c71" 1)
-            (TxOut referenceAddress (lovelaceValueOf 55_000_000) NoOutputDatum (Just semanticsScriptHash))
-        ]
-      txInfoOutputs =
-        [
-          TxOut creatorAddress marloweInValue NoOutputDatum Nothing
-        ]
-      txInfoFee = mempty
-      txInfoMint = mempty
-      txInfoDCert = mempty
-      txInfoWdrl = AM.empty
-      txInfoValidRange = Interval (LowerBound (Finite 0) True) (UpperBound (Finite 1) False)
-      txInfoSignatories = []
-      txInfoRedeemers = AM.empty
-      txInfoData = AM.empty
-      txInfoId = "52591b598b1e07551def0aecbfcb92db0c413c2d67ee337667ee30e65a3c651b"
-      scriptContextTxInfo = TxInfo{..}
-      scriptContextPurpose = Spending marloweTxInRef
-      scriptContext = ScriptContext{..}
-    ProtocolParameters{protocolParamCostModels} <- queryInEra connection QueryProtocolParameters
-    CostModel costModel <- liftCliMaybe "Plutus cost model not found." $ AnyPlutusScriptVersion PlutusScriptV2 `M.lookup` protocolParamCostModels
-    evaluationContext <- liftCli $ mkEvaluationContext costModel
-    liftIO . print $ evaluateSemantics evaluationContext (toData datum) (toData redeemer) (toData scriptContext)
-
-
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
-evaluateSemantics :: EvaluationContext                             -- ^ The evaluation context.
-                  -> Data                                          -- ^ The datum.
-                  -> Data                                          -- ^ The redeemer.
-                  -> Data                                          -- ^ The script context.
-                  -> (LogOutput, Either EvaluationError ExBudget)  -- ^ The result.
+evaluateSemantics :: P.EvaluationContext                                 -- ^ The evaluation context.
+                  -> P.Data                                              -- ^ The datum.
+                  -> P.Data                                              -- ^ The redeemer.
+                  -> P.Data                                              -- ^ The script context.
+                  -> (P.LogOutput, Either P.EvaluationError P.ExBudget)  -- ^ The result.
 evaluateSemantics evaluationContext datum redeemer context =
-  evaluateScriptCounting
-    PlutusV2 (ProtocolVersion 7 0)
-    Verbose evaluationContext
+  P.evaluateScriptCounting
+    P.PlutusV2 (P.ProtocolVersion 7 0)
+    P.Verbose evaluationContext
     serialiseSemanticsValidator [datum, redeemer, context]
 
 
@@ -651,30 +644,33 @@ serialiseSemanticsValidator =
     SBS.toShort
   . LBS.toStrict
   . serialise
-  . getValidator
-  . validatorScript
+  . P.getValidator
+  . P.validatorScript
   $ marloweValidator
 
 
 -- | Compute the address of the Marlowe semantics validator.
-semanticsAddress :: Address
-semanticsAddress = scriptHashAddress semanticsValidatorHash
+semanticsAddress :: P.Address
+semanticsAddress =
+  P.Address
+    (P.ScriptCredential semanticsValidatorHash)
+    (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
 
 
 -- | Compute the hash of the Marlowe semantics validator.
-semanticsScriptHash :: ScriptHash
+semanticsScriptHash :: P.ScriptHash
 semanticsScriptHash =
   let
-    ValidatorHash bytes = marloweValidatorHash
+    P.ValidatorHash bytes = marloweValidatorHash
   in
-    ScriptHash bytes
+    P.ScriptHash bytes
 
 
 -- | Compute the hash of the Marlowe semantics validator.
-semanticsValidatorHash :: ValidatorHash
+semanticsValidatorHash :: P.ValidatorHash
 semanticsValidatorHash = marloweValidatorHash
 
 
 -- | Compute the address of the Marlowe payout validator.
-payoutAddress :: Address
-payoutAddress = scriptHashAddress C.rolePayoutValidatorHash
+payoutAddress :: P.Address
+payoutAddress = P.scriptHashAddress rolePayoutValidatorHash
