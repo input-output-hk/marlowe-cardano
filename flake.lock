@@ -515,11 +515,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1660761733,
-        "narHash": "sha256-Xqf6yRnjJXJ8jbwL9rlci8Z91tVDVwk3lorD6SnZuIg=",
+        "lastModified": 1664891417,
+        "narHash": "sha256-Nck99OyUKpCcnOYVRkpdKaH+8E8qdqhMIzI1DhLzENc=",
         "owner": "input-output-hk",
         "repo": "bitte-cells",
-        "rev": "433bbca40bf461a86d55f202d26f87c9f5206377",
+        "rev": "0e4a072db766efbbfd0d532c1c64ad31d6ae2756",
         "type": "github"
       },
       "original": {
@@ -1179,11 +1179,11 @@
         "tullia": "tullia"
       },
       "locked": {
-        "lastModified": 1664818659,
-        "narHash": "sha256-rKFzQIKRM8BIBMRFpnMpYfqQAnqYDTpTzWUmsfRHQPM=",
+        "lastModified": 1664891558,
+        "narHash": "sha256-1u8XIbqjZW1ffdJ9gD+2l/VbHj6AukQHXh3YsbUyL6k=",
         "owner": "input-output-hk",
         "repo": "cardano-world",
-        "rev": "9d4bfa0990f59979101e413ea927a8b5ea2fbf2d",
+        "rev": "d22f50fc77d23e2612ca2b313a098dd0b48834d4",
         "type": "github"
       },
       "original": {
