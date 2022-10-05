@@ -29,7 +29,16 @@ let
       # needed for cardano-api wich uses a patched libsodium
       ++ iohkNixMain.overlays.crypto
       ++ iohkNixMain.overlays.iohkNix
-      ++ [ (final: prev: { cardano = inputs.cardano-world.${system}.cardano; }) ]
+      ++ [
+        (final: prev: {
+          cardano = let c = inputs.cardano-world.${system}.cardano; in
+            c // {
+              entrypoints = c.entrypoints.override {
+                inherit evalSystem;
+              };
+            };
+        })
+      ]
       ++ ownOverlays;
     inherit (haskell-nix) config;
     inherit crossSystem;
