@@ -446,7 +446,7 @@ selectCoins
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-selectCoins protocol WalletContext{..} txBodyContent = do
+selectCoins protocol WalletContext{..} _txBodyContent = do
   let
     -- Only "succeed" if both halves of the pair aren't Nothing
     maybePair :: (Maybe a,  Maybe b) -> Maybe (a, b)
@@ -473,13 +473,13 @@ selectCoins protocol WalletContext{..} txBodyContent = do
     onlyLovelace :: C.Value -> Bool
     onlyLovelace value = C.lovelaceToValue (C.selectLovelace value) == value
 
-  collateral <-
+  _collateral <-
     case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) utxos of
       utxo : _ -> pure utxo
       []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
 
   -- Bound the lovelace that must be included with change
-  minUtxo <-
+  _minUtxo <-
     (<>) <$> findMinUtxo protocol (changeAddress, Nothing, universe)  -- Output to native tokens.
          <*> findMinUtxo protocol (changeAddress, Nothing, mempty  )  -- Pure lovelace to change address.
 
