@@ -25,7 +25,7 @@ scriptSetSpec marloweVersion = do
         }
     let scripts = getScripts marloweVersion
     it "Contains the current scripts in its script set." do
-      unless (Set.member currentScripts scripts) do
+      unless (Set.member (getCurrentScripts marloweVersion) scripts) do
         expectationFailure $ unwords
           ["Expected the script set to contain"
           , show currentScripts
