@@ -102,7 +102,6 @@
           "Language/Marlowe/CLI/Cardano/Api/Address/ProofOfBurn"
           "Language/Marlowe/CLI/Cardano/Api/PlutusScript"
           "Language/Marlowe/CLI/Cardano/Api/Value"
-          "Language/Marlowe/CLI/Plutus/Script/Utils"
           "Language/Marlowe/CLI/Codec"
           "Language/Marlowe/CLI/Command"
           "Language/Marlowe/CLI/Command/Contract"
