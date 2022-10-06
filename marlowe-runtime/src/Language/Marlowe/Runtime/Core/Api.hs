@@ -17,9 +17,9 @@ import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
-import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
+import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
@@ -29,25 +29,18 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, putUTCTime, unPolicyId)
+  (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, parseTxOutRef, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Scripts as V1
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
-import Text.Read (readMaybe)
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
 -- the contract.
 newtype ContractId = ContractId { unContractId :: TxOutRef }
   deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (IsString)
   deriving anyclass (Binary)
-
-parseTxOutRef :: String -> Maybe TxOutRef
-parseTxOutRef val = case splitOn "#" val of
-  [txId, txIx] -> TxOutRef
-    <$> (TxId <$> either (const Nothing) Just (decodeBase16 $ encodeUtf8 $ T.pack txId))
-    <*> (TxIx <$> readMaybe txIx)
-  _ -> Nothing
 
 renderTxOutRef :: TxOutRef -> Text
 renderTxOutRef TxOutRef{..} = mconcat

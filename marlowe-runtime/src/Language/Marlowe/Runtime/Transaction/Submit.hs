@@ -2,7 +2,7 @@
 module Language.Marlowe.Runtime.Transaction.Submit
   where
 
-import Cardano.Api (ScriptDataSupportedInEra, Tx)
+import Cardano.Api (BabbageEra, ScriptDataSupportedInEra(..), Tx)
 import qualified Cardano.Api as C
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
@@ -28,13 +28,11 @@ data SubmitJob = SubmitJob
 
 mkSubmitJob
   :: SubmitJobDependencies
-  -> forall era
-   . ScriptDataSupportedInEra era
-  -> Tx era
+  -> Tx BabbageEra
   -> STM SubmitJob
-mkSubmitJob deps era tx = do
+mkSubmitJob deps tx = do
   statusVar <- newTVar $ Running Submitting
-  pure $ SubmitJob (readTVar statusVar) $ doSubmit deps (atomically . writeTVar statusVar) era tx
+  pure $ SubmitJob (readTVar statusVar) $ doSubmit deps (atomically . writeTVar statusVar) ScriptDataInBabbageEra tx
 
 doSubmit
   :: SubmitJobDependencies

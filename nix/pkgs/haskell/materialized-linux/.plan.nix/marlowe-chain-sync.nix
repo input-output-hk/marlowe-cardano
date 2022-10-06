@@ -60,6 +60,7 @@
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."profunctors" or (errorHandler.buildDepError "profunctors"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
+          (hsPkgs."split" or (errorHandler.buildDepError "split"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."stm-delay" or (errorHandler.buildDepError "stm-delay"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
