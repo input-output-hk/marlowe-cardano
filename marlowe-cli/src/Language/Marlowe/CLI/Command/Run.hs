@@ -38,7 +38,7 @@ import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Foldable (asum)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Analyze
+import Language.Marlowe.CLI.Analyze (analyze)
 import Language.Marlowe.CLI.Command.Parse
   ( parseAddress
   , parseCurrencySymbol
@@ -160,16 +160,17 @@ data RunCommand era =
     -- | Analyze a contract.
   | Analyze
     {
-      network       :: NetworkId  -- ^ The network ID, if any.
-    , socketPath    :: FilePath   -- ^ The path to the node socket.
-    , marloweOut    :: FilePath   -- ^ The JSON file with Marlowe state and contract.
-    , preconditions :: Bool       -- ^ Whether to check preconditions for Marlowe state.
-    , roles         :: Bool       -- ^ Whether to check lengths of role names.
-    , tokens        :: Bool       -- ^ Whether to check lengths of token names.
-    , maximumValue  :: Bool       -- ^ Whether to check the `maxValueSize` protocol limit.
-    , minimumUtxo   :: Bool       -- ^ Whether to check the `utxoCostPerWord` protocol limit.
-    , executionCost :: Bool       -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
-    , best          :: Bool       -- ^ Whether to compute tight estimates of worst-case bounds.
+      network         :: NetworkId  -- ^ The network ID, if any.
+    , socketPath      :: FilePath   -- ^ The path to the node socket.
+    , marloweOut      :: FilePath   -- ^ The JSON file with Marlowe state and contract.
+    , preconditions   :: Bool       -- ^ Whether to check preconditions for Marlowe state.
+    , roles           :: Bool       -- ^ Whether to check lengths of role names.
+    , tokens          :: Bool       -- ^ Whether to check lengths of token names.
+    , maximumValue    :: Bool       -- ^ Whether to check the `maxValueSize` protocol limit.
+    , minimumUtxo     :: Bool       -- ^ Whether to check the `utxoCostPerWord` protocol limit.
+    , executionCost   :: Bool       -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
+    , transactionSize :: Bool       -- ^ Whether to check the `maxTxSize` protocol limits.
+    , best            :: Bool       -- ^ Whether to compute tight estimates of worst-case bounds.
     }
 
 
@@ -280,7 +281,7 @@ runRunCommand command =
       Analyze{..}      -> analyze
                             connection
                             marloweOut
-                            preconditions roles tokens maximumValue minimumUtxo executionCost
+                            preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize
                             best
 
 
@@ -517,4 +518,5 @@ analyzeOptions network socket =
     <*> O.switch                (O.long "maximum-value"                                         <> O.help "Whether to check the `maxValueSize` protocol limit."                                                             )
     <*> O.switch                (O.long "minimum-utxo"                                          <> O.help "Whether to check the `utxoCostPerWord` protocol limit."                                                          )
     <*> O.switch                (O.long "execution-cost"                                        <> O.help "Whether to check the `maxTxExecutionUnits` protocol limit."                                                      )
+    <*> O.switch                (O.long "transaction-size"                                      <> O.help "Whether to check the `maxTxSize` protocol limit."                                                                )
     <*> O.switch                (O.long "best"                                                  <> O.help "Whether to compute tight estimates of worst-case bounds, instead of generous estimates of those bounds."         )
