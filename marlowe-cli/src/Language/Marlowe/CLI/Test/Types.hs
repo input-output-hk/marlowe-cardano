@@ -472,12 +472,12 @@ data UseTemplate =
     -- | Use for swap contract.
   | UseSwap
     {
-      utAParty            :: PartyRef    -- ^ First party.
+      utAParty            :: Maybe PartyRef    -- ^ First party.
     , utACurrencyNickname :: CurrencyNickname
     , utATokenName        :: TokenName
     , utAAmount           :: Integer    -- ^ Amount of first party's token.
     , utATimeout          :: SomeTimeout -- ^ Timeout for first party's deposit.
-    , utBParty            :: PartyRef    -- ^ Second party.
+    , utBParty            :: Maybe PartyRef    -- ^ Second party.
     , utBCurrencyNickname :: CurrencyNickname
     , utBTokenName        :: TokenName
     , utBAmount           :: Integer    -- ^ Amount of second party's token.

@@ -61,7 +61,8 @@ import Language.Marlowe.CLI.Types
   , toPOSIXTime
   , unAnUTxO
   )
-import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Party)
+
+import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Contract(Close), Party, Value(Constant))
 import Marlowe.Contracts (swap, trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
 
@@ -110,7 +111,7 @@ import Language.Marlowe.CLI.Test.Types
   , ContractNickname
   , ContractSource(..)
   , Currency(Currency, ccCurrencySymbol, ccIssuer)
-  , CurrencyNickname
+  , CurrencyNickname(..)
   , ExecutionMode(..)
   , MarloweContract(..)
   , PartyRef(RoleRef, WalletRef)
@@ -150,7 +151,6 @@ import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics as M
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
-import qualified Language.Marlowe.Extended.V1 as EM
 import Language.Marlowe.Pretty (pretty)
 import Ledger.Tx.CardanoAPI (fromCardanoPolicyId)
 import Plutus.ApiCommon (ProtocolVersion)
@@ -237,27 +237,30 @@ interpret SplitWallet {..} = do
     timeout
 
 interpret so@CheckBalance {..} = do
-  wallet@Wallet {..} <- findWallet soWalletNickname
-  utxos <- getWalletUTxO $ Right wallet
-  let
-    onChainTotal = CV.toPlutusValue $ foldMap txOutValueValue . Map.elems . C.unUTxO $ utxos
+  timeoutForOnChainMode >>= \case
+    Nothing -> logSoMsg' so "Execution Mode set to 'Simulation' - Balance Checking is not available in simulation mode"
+    (Just _) -> do
+      wallet@Wallet {..} <- findWallet soWalletNickname
+      utxos <- getWalletUTxO $ Right wallet
+      let
+        onChainTotal = CV.toPlutusValue $ foldMap txOutValueValue . Map.elems . C.unUTxO $ utxos
 
-    fees = waSubmittedTransactions `foldMapFlipped` \(C.TxBody txBodyContent) -> do
-      case C.txFee txBodyContent of
-        C.TxFeeExplicit _ lovelace -> lovelace
-        C.TxFeeImplicit _ -> C.Lovelace 0
+        fees = waSubmittedTransactions `foldMapFlipped` \(C.TxBody txBodyContent) -> do
+          case C.txFee txBodyContent of
+            C.TxFeeExplicit _ lovelace -> lovelace
+            C.TxFeeImplicit _ -> C.Lovelace 0
 
-    actualBalance = onChainTotal <> lovelaceToPlutusValue fees <> waMintingDistributionCosts <> inv waBalanceCheckBaseline
+        actualBalance = onChainTotal <> lovelaceToPlutusValue fees <> waMintingDistributionCosts <> inv waBalanceCheckBaseline
 
-  logSoMsg' so $ "Number of already submitted transactions: " <> show (length waSubmittedTransactions)
-  logSoMsg' so $ "Total transaction fees amount: " <> do
-    let
-      C.Lovelace amount = fees
-    show ((fromInteger amount / 1_000_000) :: F.Micro) <> " ADA"
+      logSoMsg' so $ "Number of already submitted transactions: " <> show (length waSubmittedTransactions)
+      logSoMsg' so $ "Total transaction fees amount: " <> do
+        let
+          C.Lovelace amount = fees
+        show ((fromInteger amount / 1_000_000) :: F.Micro) <> " ADA"
 
-  expectedBalance <- assetsToPlutusValue soBalance
-  when (expectedBalance /= actualBalance) do
-    throwSoError so $ "Balance check difference: expectedBalance - actualBalance = " <> show (expectedBalance <> inv actualBalance)
+      expectedBalance <- assetsToPlutusValue soBalance
+      when (expectedBalance /= actualBalance) do
+        throwSoError so $ "Balance check difference: expectedBalance - actualBalance = " <> show (expectedBalance <> inv actualBalance)
 
 interpret so@Mint {..} = do
   let
@@ -524,7 +527,7 @@ interpret so@Withdraw {..} = do
       paymentRole (M.Payment _ (M.Party (M.Role r)) _ _) = Just r
       paymentRole _ = Nothing
 
-      -- Sometimes we reuse the same currency accross multiple tests (when Faucet is an issuer) so we
+      -- Sometimes we reuse the same currency across multiple tests (when Faucet is an issuer) so we
       -- need to filter out payouts which are really associated with this particular test
       -- case. We can identify them by matching them against a set of submitted transaction ids.
       filterPayoutsUTxOs utxos = do
@@ -720,30 +723,26 @@ useTemplate currency = do
         utDepositLovelace
         utWithdrawalLovelace
         timeout'
-    UseSwap{..} -> do utATimeout' <- toMarloweTimeout utATimeout (TruncateMilliseconds True)
-                      utBTimeout' <- toMarloweTimeout utBTimeout (TruncateMilliseconds True)
-                      let
-                        aPartyRef = fromMaybe (WalletRef faucetNickname) (Just utAParty)
-                        bPartyRef = fromMaybe (WalletRef faucetNickname) (Just utBParty)
-                      aParty <- buildParty currency aPartyRef
-                      bParty <- buildParty currency bPartyRef
-                      CustomCurrency {ccCurrencySymbol=aCurrencySymbol} <- findCurrency utACurrencyNickname
-                      CustomCurrency {ccCurrencySymbol=bCurrencySymbol} <- findCurrency utBCurrencyNickname
-
-                      let
-                        aToken = M.Token aCurrencySymbol utATokenName
-                        bToken = M.Token bCurrencySymbol utBTokenName
-
-                      makeContract $ swap
-                          aParty
-                          aToken
-                          (EM.Constant utAAmount)
-                          utATimeout'
-                          bParty
-                          bToken
-                          (EM.Constant utBAmount)
-                          utBTimeout'
-                          EM.Close
+    UseSwap{..} -> do
+      aTimeout' <- toMarloweTimeout utATimeout (TruncateMilliseconds True)
+      bTimeout' <- toMarloweTimeout utBTimeout (TruncateMilliseconds True)
+      Currency { ccCurrencySymbol=aCurrencySymbol } <- findCurrency utACurrencyNickname
+      Currency { ccCurrencySymbol=bCurrencySymbol } <- findCurrency utBCurrencyNickname
+      let
+        aPartyRef = fromMaybe (WalletRef faucetNickname) utAParty
+        bPartyRef = fromMaybe (WalletRef faucetNickname) utBParty
+      aParty <- buildParty currency aPartyRef
+      bParty <- buildParty currency bPartyRef
+      makeContract $ swap
+          aParty
+          (M.Token aCurrencySymbol utATokenName)
+          (Constant utAAmount)
+          aTimeout'
+          bParty
+          (M.Token bCurrencySymbol utBTokenName)
+          (Constant utBAmount)
+          bTimeout'
+          Close
     --UseEscrow{..} -> do paymentDeadline' <- toMarloweTimeout paymentDeadline
     --                    complaintDeadline' <- toMarloweTimeout complaintDeadline
     --                    disputeDeadline' <- toMarloweTimeout disputeDeadline
@@ -757,7 +756,6 @@ useTemplate currency = do
     --                       complaintDeadline'
     --                       disputeDeadline'
     --                       mediationDeadline'
-
     --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
     --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
     --                             makeContract $
@@ -899,13 +897,13 @@ getCurrency = do
   currencies <- use ssCurrencies
   case Map.toList currencies of
     [c] -> pure c
-    _   -> throwError "Ambiguous currency lookup."
+    _   -> throwError "Ambigious currency lookup."
 
 
 findCurrency :: (MonadState (ScriptState lang era) m, MonadError CliError m) => CurrencyNickname -> m Currency
 findCurrency nickname = do
   currencies <- use ssCurrencies
-  liftCliMaybe ("[findCurrency] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
+  liftCliMaybe ("[findWallet] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
 
 
 selectWalletUTxOs :: MonadIO m
@@ -968,6 +966,30 @@ scriptTest era protocolVersion costModel connection faucet slotConfig executionM
         throwError (e :: CliError)
     liftIO $ putStrLn "***** PASSED *****"
 
+rewriteCurrencyRefs :: MonadIO m
+                  => MonadState (ScriptState lang era) m
+                  => MonadError CliError m
+                  => A.Value
+                  -> m A.Value
+rewriteCurrencyRefs = A.rewriteBottomUp rewrite
+  where
+    rewrite = \case
+      obj@(A.Object (KeyMap.toAscList -> props)) -> do
+        -- above is view patter version of below
+        -- let props = KeyMap.toAscList propsMap
+        case props of
+          [("currency_symbol", A.String currencyNickname) , ("token_name", tokenName)] -> do
+              let
+                nickname = CurrencyNickname $ Text.unpack currencyNickname
+              Currency { ccCurrencySymbol=P.CurrencySymbol cs } <- findCurrency nickname
+              pure $ A.object
+                [
+                  ("currency_symbol", A.toJSON cs)
+                , ("token_name", tokenName)
+                ]
+          _ -> pure obj
+      v -> do
+        pure v
 
 rewritePartyRefs :: MonadIO m
                  => MonadState (ScriptState lang era) m
@@ -981,29 +1003,6 @@ rewritePartyRefs = A.rewriteBottomUp rewrite
         wallet <- findWallet (WalletNickname $ Text.unpack walletNickname)
         (network, address) <- marloweAddressFromCardanoAddress $ waAddress wallet
         pure $ A.toJSON (M.Address network address)
-      v -> do
-        pure v
-
-rewriteCurrencyRefs :: MonadIO m
-                 => MonadState (ScriptState lang era) m
-                 => MonadError CliError m
-                 => A.Value
-                 -> m A.Value
-rewriteCurrencyRefs = A.rewriteBottomUp rewrite
-  where
-    rewrite = \case
-      obj@(A.Object (KeyMap.toAscList -> props)) -> do
-        case props of
-          [ ("currency_symbol", A.String currencyNickname) , ("token_name", tokenName)] -> do
-              let
-                nickname = CurrencyNickname $ Text.unpack currencyNickname
-              CustomCurrency { ccCurrencySymbol=P.CurrencySymbol cs } <- findCurrency nickname
-              pure $ A.object
-                [
-                  ("currency_symbol", A.toJSON cs)
-                , ("token_name", tokenName)
-                ]
-          _ -> pure obj
       v -> do
         pure v
 
@@ -1082,4 +1081,3 @@ foldMapMFlipped = flip foldMapM
 
 anyFlipped :: [a] -> (a -> Bool) -> Bool
 anyFlipped = flip any
-
