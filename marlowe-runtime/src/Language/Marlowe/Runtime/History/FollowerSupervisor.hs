@@ -7,7 +7,6 @@ import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard, mfilter, when, (<=<))
 import Data.Foldable (sequenceA_)
-import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -95,11 +94,9 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
         (Nothing, _)                     -> pure False
         -- Follower failed previously and there is a pending activation
         (Just (Failed _), Just Activate) -> cancelActivate
-        -- Follower failed previously and there is no pending activation
-        (Just (Failed _), _)             -> pure False
         -- Follower is running and there is a pending deactivation
         (_, Just Deactivate)             -> pure False
-        -- Follower is running and there is no pending deactivation
+        -- There is no pending deactivation
         (_, _)                           -> doDeactivate
 
     followerStatuses = traverse (status <=< readTVar) =<< readTVar followersVar
@@ -122,6 +119,12 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
       writeTVar followerActivationsVar Map.empty
       pure $ Map.toList activations
 
+    runFollowerWithCleanup contractId follower = do
+      result <- runFollower follower
+      case result of
+        Left _ -> atomically $ modifyTVar removalsVar $ Set.insert contractId
+        _ -> pure ()
+
     runFollowerSupervisor = do
       newFollowers <- atomically do
         activations <- awaitActivations
@@ -132,11 +135,11 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
               follower <- mkFollower FollowerDependencies{..}
               followerVar <- newTVar follower
               writeTVar followersVar $ Map.insert contractId followerVar followers
-              pure $ Just follower
+              pure $ Just (contractId, follower)
             (Activate, Just followerVar) -> do
               follower <- mkFollower FollowerDependencies{..}
               writeTVar followerVar follower
-              pure $ Just follower
+              pure $ Just (contractId, follower)
             (Deactivate, Nothing) -> pure Nothing
             (Deactivate, Just followerVar) -> do
               writeTVar followersVar $ Map.delete contractId followers
@@ -148,6 +151,6 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
               pure Nothing
       runConcurrently
         $ sequenceA_
-        $ Concurrently <$> (runFollowerSupervisor : (void . runFollower <$> newFollowers))
+        $ Concurrently <$> (runFollowerSupervisor : (uncurry runFollowerWithCleanup <$> newFollowers))
 
   pure FollowerSupervisor {..}

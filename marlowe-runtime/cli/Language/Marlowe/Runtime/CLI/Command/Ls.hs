@@ -4,10 +4,12 @@ module Language.Marlowe.Runtime.CLI.Command.Ls
 import Control.Monad.IO.Class (liftIO)
 import Data.Functor (void)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import qualified Data.Text.IO as T
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runHistoryQueryClient)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runDiscoveryQueryClient, runHistoryQueryClient)
 import Language.Marlowe.Runtime.Core.Api (renderContractId)
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..), DiscoveryQuery(..))
 import Language.Marlowe.Runtime.History.Api (FollowerStatus(..), HistoryQuery(..))
 import Network.Protocol.Query.Client
 import Options.Applicative
@@ -25,12 +27,18 @@ data LsFailedFlag
 data LsCommand = LsCommand
   { statusFlag:: LsStatusFlag
   , failedFlag :: LsFailedFlag
+  , allFlag :: Bool
   } deriving (Show, Eq)
 
 lsCommandParser :: ParserInfo LsCommand
 lsCommandParser = info parser $ progDesc "List managed contracts"
   where
-    parser = LsCommand <$> statusFlagParser <*> failedFlagParser
+    parser = LsCommand <$> statusFlagParser <*> failedFlagParser <*> allFlagParser
+    allFlagParser = flag False True $ mconcat
+      [ long "all"
+      , short 'a'
+      , help "Show all Marlowe contracts on chain."
+      ]
     statusFlagParser = flag LsHideStatus LsShowStatus $ mconcat
       [ long "show-status"
       , short 's'
@@ -43,16 +51,32 @@ lsCommandParser = info parser $ progDesc "List managed contracts"
       ]
 
 runLsCommand :: LsCommand -> CLI ()
-runLsCommand LsCommand{..} = runHistoryQueryClient
-  $ QueryClient
-  $ pure
-  $ SendMsgRequest GetFollowedContracts ClientStNextCanReject
-      { recvMsgReject = absurd
-      , recvMsgNextPage = handleNextPage
-      }
+runLsCommand LsCommand{..}
+  | allFlag = runDiscoveryQueryClient
+    $ QueryClient
+    $ pure
+    $ SendMsgRequest GetContractHeaders ClientStNextCanReject
+        { recvMsgReject = absurd
+        , recvMsgNextPage = handleNextPageAll
+        }
+  | otherwise = runHistoryQueryClient
+    $ QueryClient
+    $ pure
+    $ SendMsgRequest GetFollowedContracts ClientStNextCanReject
+        { recvMsgReject = absurd
+        , recvMsgNextPage = handleNextPage
+        }
   where
+    handleNextPageAll headers nextPage = do
+      let ids = Set.fromList $ contractId <$> headers
+      statuses <- fmap (either absurd id) $ runHistoryQueryClient $ liftQuery $ GetStatuses ids
+      void $ Map.traverseWithKey printResult $ Map.union (Just <$> statuses) $ Map.fromSet (const Nothing) ids
+      pure $ maybe
+        (SendMsgDone ())
+        (flip SendMsgRequestNext $ ClientStNext handleNextPageAll)
+        nextPage
     handleNextPage results nextPage = do
-      void $ Map.traverseWithKey printResult $ Map.filter filterResult results
+      void $ Map.traverseWithKey printResult $ Just <$> Map.filter filterResult results
       pure $ maybe
         (SendMsgDone ())
         (flip SendMsgRequestNext $ ClientStNext handleNextPage)
@@ -69,4 +93,4 @@ runLsCommand LsCommand{..} = runHistoryQueryClient
     printStatus contractId status = liftIO do
       T.putStr $ renderContractId contractId
       putStr " Status: "
-      print status
+      maybe (putStrLn "not added") print status

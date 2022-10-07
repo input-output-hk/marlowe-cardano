@@ -40,6 +40,8 @@ data Options = Options
   , historyCommandPort :: !PortNumber
   , historyQueryPort :: !PortNumber
   , historySyncPort :: !PortNumber
+  , discoveryHost :: !HostName
+  , discoveryQueryPort :: !PortNumber
   , txHost :: !HostName
   , txCommandPort :: !PortNumber
   , cmd :: !Command
@@ -63,6 +65,8 @@ getOptions = do
   historyCommandPortParser <- optParserWithEnvDefault O.historyCommandPort
   historyQueryPortParser <- optParserWithEnvDefault O.historyQueryPort
   historySyncPortParser <- optParserWithEnvDefault O.historySyncPort
+  discoveryHostParser <- optParserWithEnvDefault O.discoveryHost
+  discoveryQueryPortParser <- optParserWithEnvDefault O.discoveryQueryPort
   txHostParser <- optParserWithEnvDefault O.txHost
   txCommandPortParser <- optParserWithEnvDefault O.txCommandPort
   let
@@ -94,6 +98,8 @@ getOptions = do
       <*> historyCommandPortParser
       <*> historyQueryPortParser
       <*> historySyncPortParser
+      <*> discoveryHostParser
+      <*> discoveryQueryPortParser
       <*> txHostParser
       <*> txCommandPortParser
       <*> commandParser
@@ -121,12 +127,14 @@ runCLIWithOptions sigInt Options{..} cli = do
   historyJobAddr <-  resolve historyHost historyCommandPort
   historyQueryAddr <- resolve historyHost historyQueryPort
   historySyncAddr <- resolve historyHost historySyncPort
+  discoveryQueryAddr <- resolve discoveryHost discoveryQueryPort
   txJobAddr <- resolve txHost txCommandPort
   runReaderT (runCLI cli) Env
     { envRunHistoryJobClient = runClientPeerOverSocket historyJobAddr codecJob jobClientPeer
     , envRunHistoryQueryClient = runClientPeerOverSocket historyQueryAddr codecQuery queryClientPeer
     , envRunHistorySyncClient = runClientPeerOverSocket historySyncAddr codecMarloweSync marloweSyncClientPeer
     , envRunTxJobClient = runClientPeerOverSocket txJobAddr codecJob jobClientPeer
+    , envRunDiscoveryQueryClient = runClientPeerOverSocket discoveryQueryAddr codecQuery queryClientPeer
     , sigInt
     }
   where

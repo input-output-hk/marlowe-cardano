@@ -1434,6 +1434,7 @@
           "entropy".components.library.planned = lib.mkOverride 900 true;
           "assoc".components.library.planned = lib.mkOverride 900 true;
           "process".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe-discovery".planned = lib.mkOverride 900 true;
           "binary-parser".components.library.planned = lib.mkOverride 900 true;
           "http-date".components.library.planned = lib.mkOverride 900 true;
           "hspec-discover".components.library.planned = lib.mkOverride 900 true;
