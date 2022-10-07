@@ -10,11 +10,11 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Arrow ((***))
-import Control.Monad (forM)
+import Control.Monad (forM, unless)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
-import Data.List (find, nub)
+import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -439,6 +439,37 @@ findMinUtxo protocol (address, mbDatum, value) = do
      Right (C.TxOut _ adjustedValue _ _) -> pure $ C.txOutValueToValue adjustedValue
      Left e -> Left e
 
+ensureMinUtxo
+  :: forall v
+   . C.ProtocolParameters
+  -> (Chain.Address, C.Value)
+  -> Either (ConstraintError v) (Chain.Address, C.Value)
+ensureMinUtxo protocol (address, origValue) = do
+  adjValue <- findMinUtxo protocol (address, Nothing, origValue)
+  pure ( address
+       , origValue <>
+          ( C.lovelaceToValue $ maximum [C.selectLovelace adjValue, C.selectLovelace origValue]
+              - C.selectLovelace origValue )
+       )
+
+-- | Compute transaction output for building a transaction.
+-- FIXME Clean up unused/no-op arguments?
+makeTxOut
+  :: Chain.Address
+  -> C.TxOutDatum C.CtxTx C.BabbageEra
+  -> C.Value
+  -> C.ReferenceScript C.BabbageEra
+  -> Either (ConstraintError v) (C.TxOut C.CtxTx C.BabbageEra)
+makeTxOut address datum value referenceScript = do
+  cardanoAddress <- note
+    (CalculateMinUtxoFailed $ "Unable to convert address: " <> show address)
+    $ C.anyAddressInShelleyBasedEra <$> Chain.toCardanoAddress address
+  Right $ C.TxOut
+    cardanoAddress
+    (C.TxOutValue C.MultiAssetInBabbageEra value)
+    datum
+    referenceScript
+
 -- Selects enough additional inputs to cover the excess balance of the
 -- transaction (total outputs - total inputs).
 selectCoins
@@ -446,7 +477,7 @@ selectCoins
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-selectCoins protocol WalletContext{..} _txBodyContent = do
+selectCoins protocol WalletContext{..} txBodyContent = do
   let
     -- Only "succeed" if both halves of the pair aren't Nothing
     maybePair :: (Maybe a,  Maybe b) -> Maybe (a, b)
@@ -473,17 +504,152 @@ selectCoins protocol WalletContext{..} _txBodyContent = do
     onlyLovelace :: C.Value -> Bool
     onlyLovelace value = C.lovelaceToValue (C.selectLovelace value) == value
 
-  _collateral <-
+  collateral <-
     case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) utxos of
       utxo : _ -> pure utxo
       []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
 
   -- Bound the lovelace that must be included with change
-  _minUtxo <-
+  minUtxo <-
     (<>) <$> findMinUtxo protocol (changeAddress, Nothing, universe)  -- Output to native tokens.
          <*> findMinUtxo protocol (changeAddress, Nothing, mempty  )  -- Pure lovelace to change address.
 
-  Left $ CoinSelectionFailed "Unknown problem"
+  let
+    -- Compute the value of the outputs.
+    outgoing :: C.Value
+    -- FIXME Code from CLI is combining "Otherwise unlisted outputs to the script address", do we need this too? Orig code:
+    -- outgoing = foldMap txOutToValue outputs <> maybe mempty PayToScript.value pay
+    -- But, barring thawt, I believe the equivilent to `outputs` in that code is the TxOutS in our provisional tx body
+    outgoing = foldMap txOutToValue $ C.txOuts txBodyContent
+
+    -- FIXME Not sure if we have these inputs in our constraints or the tx body
+    inputs = mempty
+
+    -- Find the net additional input that is needed
+    incoming :: C.Value
+    incoming = outgoing <> fee <> minUtxo <> C.negateValue inputs
+
+    -- Remove the lovelace from a value.
+    deleteLovelace :: C.Value -> C.Value
+    deleteLovelace value = value <> C.negateValue (C.lovelaceToValue $ C.selectLovelace value)
+
+    -- Compute the excess and missing tokens in a value.
+    matchingCoins :: C.Value -> C.Value -> (Int, Int)
+    matchingCoins required candidate =
+      let
+        delta :: [C.Quantity]
+        delta =
+          fmap snd
+            . C.valueToList
+            . deleteLovelace
+            $ candidate <> C.negateValue required
+        excess :: Int
+        excess  = length $ filter (> 0) delta
+        deficit :: Int
+        deficit = length $ filter (< 0) delta
+      in
+        (excess, deficit)
+
+  -- Ensure that coin selection for tokens is possible.
+  unless (snd (matchingCoins incoming universe) == 0)
+    . Left
+    . CoinSelectionFailed
+    $ "Insufficient tokens available for coin selection: "
+    <> show incoming <> " required, but " <> show universe <> " available."
+
+  -- Ensure that coin selection for lovelace is possible.
+  unless (C.selectLovelace incoming <= C.selectLovelace universe)
+    . Left
+    . CoinSelectionFailed
+    $ "Insufficient lovelace available for coin selection: "
+    <> show incoming <> " required, but " <> show universe <> " available."
+
+  -- Satisfy the native-token requirements.
+  let
+    -- Sort the UTxOs by their deficit, excess, and lovelace in priority order.
+    priority :: C.Value -> (C.TxIn, C.TxOut C.CtxTx C.BabbageEra) -> (Int, Int, Bool, Bool)
+    priority required candidate =
+      let
+        candidate' :: C.Value
+        candidate' = txOutToValue $ snd candidate
+        excess :: Int
+        deficit :: Int
+        (excess, deficit) = matchingCoins required candidate'
+        notOnlyLovelace :: Bool
+        notOnlyLovelace = not $ onlyLovelace candidate'
+        insufficientLovelace :: Bool
+        insufficientLovelace = C.selectLovelace candidate' < C.selectLovelace required
+      in
+        (
+          deficit               -- It's most important to not miss any required coins,
+        , excess                -- but we don't want extra coins;
+        , notOnlyLovelace       -- prefer lovelace-only UTxOs if there is no deficit,
+        , insufficientLovelace  -- and prefer UTxOs with sufficient lovelace.
+        )
+
+    -- Use a simple greedy algorithm to select coins.
+    select
+      :: C.Value
+      -> [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
+      -> [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
+    select _ [] = []
+    select required candidates =
+      let
+        -- Choose the best UTxO from the candidates.
+        next :: (C.TxIn, C.TxOut C.CtxTx C.BabbageEra)
+        next = minimumBy (compare `on` priority required) candidates
+        -- Determine the remaining candidates.
+        candidates' :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
+        candidates' = delete next candidates
+        -- Ignore negative quantities.
+        filterPositive :: C.Value -> C.Value
+        filterPositive = C.valueFromList . filter ((> 0) . snd) . C.valueToList
+        -- Compute the remaining requirement.
+        required' :: C.Value
+        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd next)
+      in
+        -- Decide whether to continue.
+        if required' == mempty
+          -- The requirements have been met.
+          then pure next
+          -- The requirements have not been met.
+          else next : select required' candidates'
+
+    -- Select the coins.
+    selection :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
+    selection = select incoming utxos
+
+    -- Compute the native token change, if any.
+    change :: C.Value
+    change =                                            -- This is the change required to balance native tokens.
+      deleteLovelace                                    -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
+        $ (mconcat $ txOutToValue . snd <$> selection)  -- The inputs selected by the algorithm for spending many include native tokens that weren't in the required `outputs`.
+        <> C.negateValue incoming                         -- The tokens required by `outputs` (as represented in the `incoming` requirement) shouldn't be included as change.
+  -- Compute the change that contains native tokens used for balancing, omitting ones explicitly specified in the outputs.
+
+    outputs = C.txOuts txBodyContent
+
+  output <-
+    if change == mempty
+      then pure []
+      else do
+        (a, v) <- ensureMinUtxo protocol (changeAddress, change)
+        (: []) <$> makeTxOut a C.TxOutDatumNone v C.ReferenceScriptNone
+
+  let
+    -- FIXME Generalize to include script witnesses
+    addWitness
+      :: (C.TxIn, C.TxOut C.CtxTx C.BabbageEra)
+      -> (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra))
+    addWitness (txIn, _txOut) = (txIn, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending)
+
+  -- Return the transaction with coin selection added
+  pure $ txBodyContent
+    { C.txInsCollateral = C.TxInsCollateral C.CollateralInBabbageEra [fst collateral]
+    , C.txIns = C.txIns txBodyContent <> fmap addWitness selection
+    , C.txOuts = outputs <> (output :: [C.TxOut C.CtxTx C.BabbageEra])
+    }
+  -- FIXME: There are pathological failures that could happen if there are very many native tokens.
 
 -- Ensure the fee is computed and covered, and that the excess input balance is
 -- returned to the change address.
