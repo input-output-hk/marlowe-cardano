@@ -30,7 +30,6 @@ module Language.Marlowe.CLI.Analyze
   ) where
 
 
-import Codec.Serialise (serialise)
 import Control.Monad (guard, (<=<))
 import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, unless, when)
 import Control.Monad.Reader (ReaderT(runReaderT))
@@ -45,6 +44,7 @@ import Data.Yaml (encode)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage(..), toScriptLanguageInEra)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.Merkle (deepDemerkleize, merkleizeInput)
+import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Types
   ( CliError(CliError)
   , Continuations
@@ -70,7 +70,7 @@ import Language.Marlowe.Core.V1.Semantics
   , totalBalance
   )
 import Language.Marlowe.Core.V1.Semantics.Types
-  ( Action(Deposit, Notify)
+  ( Action(..)
   , Case(..)
   , ChoiceId(ChoiceId)
   , Contract(..)
@@ -86,8 +86,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (mainnet)
 import Language.Marlowe.FindInputs (getAllInputs)
-import Language.Marlowe.Scripts
-  (marloweTxInputsFromInputs, marloweValidator, marloweValidatorHash, rolePayoutValidatorHash)
+import Language.Marlowe.Scripts (marloweTxInputsFromInputs)
 import Numeric.Natural (Natural)
 import System.IO (hPutStrLn, stderr)
 
@@ -96,17 +95,14 @@ import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Ledger.Credential as Shelley
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (putStr)
-import qualified Data.ByteString.Lazy as LBS (toStrict)
-import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
+import qualified Data.ByteString.Short as SBS (ShortByteString)
 import qualified Data.Functor.Constant as F (Constant(..))
 import qualified Data.Map.Strict as M (foldr, lookup, null)
 import qualified Data.Set as S (Set, empty, filter, map, member, singleton, size, union)
 import qualified Ledger.Tx.CardanoAPI as P (toCardanoAddressInEra, toCardanoValue)
-import qualified Ledger.Typed.Scripts as P (validatorScript)
 import qualified Plutus.ApiCommon as P (LedgerPlutusVersion(PlutusV2), evaluateScriptCounting)
 import qualified Plutus.Script.Utils.Scripts as P (datumHash)
 import qualified Plutus.V1.Ledger.Ada as P (lovelaceValueOf)
-import qualified Plutus.V1.Ledger.Address as P (scriptHashAddress)
 import qualified Plutus.V1.Ledger.SlotConfig as P (SlotConfig, posixTimeToEnclosingSlot)
 import qualified Plutus.V2.Ledger.Api as P hiding (evaluateScriptCounting)
 import qualified PlutusTx.AssocMap as AM
@@ -270,7 +266,7 @@ checkRoles ci =
     putYaml "Role names"
       [
         "Invalid role names" .= invalidRole `S.filter` roles
-      , "Blank role names" .= P.adaToken `S.member` roles
+      , "Blank role names"   .= P.adaToken `S.member` roles
       ]
 
 
@@ -293,10 +289,10 @@ checkMaximumValue (Just maxValue) maybeTransactions ci =
   in
     putYaml "Maximum value"
       [
-        "Actual" .= size
-      , "Maximum" .= maxValue
-      , "Unit" .= ("byte" :: String)
-      , "Invalid" .= (size > fromEnum maxValue)
+        "Actual"     .= size
+      , "Maximum"    .= maxValue
+      , "Unit"       .= ("byte" :: String)
+      , "Invalid"    .= (size > fromEnum maxValue)
       , "Percentage" .= (100 * fromIntegral size / fromIntegral maxValue :: Double)
       ]
 checkMaximumValue _ _ _ = throwError $ CliError "Missing `maxValue` protocol parameter."
@@ -379,14 +375,26 @@ checkExecutionCost protocol ContractInstance{..} transactions =
         P.Address
           (P.PubKeyCredential "77777777777777777777777777777777777777777777777777777777")
           (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
+      semanticsHash = P.ScriptHash . P.toBuiltin $ Api.serialiseToRawBytes $ viHash ciSemanticsValidator
       referenceInput =
         case viTxIn ciSemanticsValidator of
           Nothing -> mempty
           Just _ -> pure
                       $ P.TxInInfo
                         (P.TxOutRef "6666666666666666666666666666666666666666666666666666666666666666" 1)
-                        (P.TxOut referenceAddress (P.lovelaceValueOf 1) P.NoOutputDatum (Just semanticsScriptHash))
-      executor = executeTransaction evaluationContext referenceInput creatorAddress $ MarloweParams ciRolesCurrency
+                        (P.TxOut referenceAddress (P.lovelaceValueOf 1) P.NoOutputDatum (Just semanticsHash))
+    semanticsAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciSemanticsValidator
+    payoutAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciPayoutValidator
+    let
+      executor =
+        executeTransaction
+          evaluationContext
+          (viBytes ciSemanticsValidator)
+          semanticsAddress
+          payoutAddress
+          referenceInput
+          creatorAddress
+          (MarloweParams ciRolesCurrency)
     (steps, memory) <-
       unzip
         . fmap (\P.ExBudget{..} -> (exBudgetCPU, exBudgetMemory))
@@ -418,15 +426,18 @@ checkExecutionCost protocol ContractInstance{..} transactions =
 -- | Execute a Marlowe transaction.
 executeTransaction :: MonadError CliError m
                    => P.EvaluationContext  -- ^ The Plutus evaluation context.
+                   -> SBS.ShortByteString  -- ^ The validator.
+                   -> P.Address            -- ^ The semantics validator address.
+                   -> P.Address            -- ^ The payout validator address.
                    -> [P.TxInInfo]         -- ^ The reference-script input, if any.
                    -> P.Address            -- ^ The public-key address executing the transaction.
                    -> MarloweParams        -- ^ The parameters for the Marlowe contract instance.
                    -> Transaction          -- ^ The transaction to be executed.
                    -> m P.ExBudget         -- ^ Action to execute the transaction and to return the new state and contract along with the execution cost.
-executeTransaction evaluationContext referenceInputs creatorAddress marloweParams@MarloweParams{..} (marloweState, marloweContract, TransactionInput{..}, output) =
+executeTransaction evaluationContext semanticsValidator semanticsAddress payoutAddress referenceInputs creatorAddress marloweParams@MarloweParams{..} (marloweState, marloweContract, TransactionInput{..}, output) =
   do
     -- We only attend to details that make affect the *execution cost* of the script context,
-    -- so the corresponding transaction itself does not need to be valid.
+    -- so the corresponding transaction does not actually need to be valid.
     (txOutState, txOutContract, txOutPayments) <-
       case output of
         TransactionOutput{..} -> pure (txOutState, txOutContract, txOutPayments)
@@ -516,7 +527,7 @@ executeTransaction evaluationContext referenceInputs creatorAddress marloweParam
       scriptContextTxInfo = P.TxInfo{..}
       scriptContextPurpose = P.Spending inScriptTxRef
       scriptContext = P.ScriptContext{..}
-    case evaluateSemantics evaluationContext (P.toData inDatum) (P.toData redeemer) (P.toData scriptContext) of
+    case evaluateSemantics evaluationContext semanticsValidator (P.toData inDatum) (P.toData redeemer) (P.toData scriptContext) of
       (_, Right budget) -> pure budget
       (msg, Left err)   -> throwError . CliError $ "Plutus execution failed: " <> show err <> " with log " <> show msg <> "."
 
@@ -540,10 +551,10 @@ checkTransactionSizes era protocol ci transactions =
       limit = Api.protocolParamMaxTxSize protocol
     putYaml "Transaction size"
       [
-          "Actual" .= actual
-        , "Maximum" .= limit
+          "Actual"     .= actual
+        , "Maximum"    .= limit
         , "Percentage" .= (100 * fromIntegral actual / fromIntegral limit :: Double)
-        , "Invalid" .= (actual > fromEnum limit)
+        , "Invalid"    .= (actual > fromEnum limit)
       ]
 
 
@@ -556,12 +567,12 @@ checkTransactionSize :: forall lang era m
                      => Api.ScriptDataSupportedInEra era  -- ^ The era.
                      -> Api.ProtocolParameters            -- ^ The protocol parameters.
                      -> ContractInstance lang era         -- ^ The bundle of contract information.
-                     -> Transaction                     -- ^ The transaction-paths through the contract.
-                     -> m Int                             -- ^ Action to print a report on validity of transaction size.
+                     -> Transaction                       -- ^ The transaction-paths through the contract.
+                     -> m Int                             -- ^ Action to measure the transaction size.
 checkTransactionSize era protocol ContractInstance{..} (marloweState, marloweContract, TransactionInput{..}, output) =
   do
     -- We only attend to details that make affect the *size* of the transaction, so
-    -- the transaction itself does not need to be valid.
+    -- the transaction itself does not actually need to be valid.
     scriptInEra <- liftCliMaybe "Script language not supported in era" $ toScriptLanguageInEra era
     (txOutState, txOutContract, txOutPayments) <-
       case output of
@@ -839,6 +850,7 @@ instance Extract P.TokenName where
       contractPlate' (Pay a (Party p) _ _ _) = F.Constant $ role a <> role p
       contractPlate' x = pure x
       actionPlate' (Deposit a p _ _) = F.Constant $ role a <> role p
+      actionPlate' (Choice (ChoiceId _ p) _) = F.Constant $ role p
       actionPlate' x = pure x
       valuePlate' (AvailableMoney a _) = F.Constant $ role a
       valuePlate' (ChoiceValue (ChoiceId _ p)) = F.Constant $ role p
@@ -962,50 +974,13 @@ findPaths ContractInstance{..} =
 
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
 evaluateSemantics :: P.EvaluationContext                                 -- ^ The evaluation context.
+                  -> SBS.ShortByteString                                 -- ^ The validator script.
                   -> P.Data                                              -- ^ The datum.
                   -> P.Data                                              -- ^ The redeemer.
                   -> P.Data                                              -- ^ The script context.
                   -> (P.LogOutput, Either P.EvaluationError P.ExBudget)  -- ^ The result.
-evaluateSemantics evaluationContext datum redeemer context =
+evaluateSemantics evaluationContext validator datum redeemer context =
   P.evaluateScriptCounting
     P.PlutusV2 (P.ProtocolVersion 7 0)
     P.Verbose evaluationContext
-    serialiseSemanticsValidator [datum, redeemer, context]
-
-
--- | Serialize the Marlowe semantics validator.
-serialiseSemanticsValidator :: SBS.ShortByteString
-serialiseSemanticsValidator =
-    SBS.toShort
-  . LBS.toStrict
-  . serialise
-  . P.getValidator
-  . P.validatorScript
-  $ marloweValidator
-
-
--- | Compute the address of the Marlowe semantics validator.
-semanticsAddress :: P.Address
-semanticsAddress =
-  P.Address
-    (P.ScriptCredential semanticsValidatorHash)
-    (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
-
-
--- | Compute the hash of the Marlowe semantics validator.
-semanticsScriptHash :: P.ScriptHash
-semanticsScriptHash =
-  let
-    P.ValidatorHash bytes = marloweValidatorHash
-  in
-    P.ScriptHash bytes
-
-
--- | Compute the hash of the Marlowe semantics validator.
-semanticsValidatorHash :: P.ValidatorHash
-semanticsValidatorHash = marloweValidatorHash
-
-
--- | Compute the address of the Marlowe payout validator.
-payoutAddress :: P.Address
-payoutAddress = P.scriptHashAddress rolePayoutValidatorHash
+    validator [datum, redeemer, context]
