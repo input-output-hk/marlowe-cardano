@@ -171,6 +171,7 @@ data RunCommand era =
     , executionCost   :: Bool       -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
     , transactionSize :: Bool       -- ^ Whether to check the `maxTxSize` protocol limits.
     , best            :: Bool       -- ^ Whether to compute tight estimates of worst-case bounds.
+    , verbose         :: Bool       -- ^ Whether to include worst-case example in output.
     }
 
 
@@ -282,7 +283,7 @@ runRunCommand command =
                             connection
                             marloweOut
                             preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize
-                            best
+                            best verbose
 
 
 -- | Parser for contract commands.
@@ -520,3 +521,4 @@ analyzeOptions network socket =
     <*> O.switch                (O.long "execution-cost"                                        <> O.help "Whether to check the `maxTxExecutionUnits` protocol limit."                                                      )
     <*> O.switch                (O.long "transaction-size"                                      <> O.help "Whether to check the `maxTxSize` protocol limit."                                                                )
     <*> O.switch                (O.long "best"                                                  <> O.help "Whether to compute tight estimates of worst-case bounds, instead of generous estimates of those bounds."         )
+    <*> O.switch                (O.long "verbose"                                               <> O.help "Whether to include worst-case example in output."                                                                )
