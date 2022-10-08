@@ -87,7 +87,6 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Core.V1.Semantics.Types.Address (mainnet)
 import Language.Marlowe.FindInputs (getAllInputs)
 import Language.Marlowe.Scripts (marloweTxInputsFromInputs)
-import Numeric.Natural (Natural)
 import System.IO (hPutStrLn, stderr)
 
 import qualified Cardano.Api as Api
@@ -178,7 +177,7 @@ analyzeImpl :: forall m lang era
             -> Bool                                      -- ^ Whether to compute tight estimates of worst-case bounds.
             -> Bool                                      -- ^ Whether to include worst-case example in output.
             -> m A.Value                                 -- ^ Action for finding estimates of worst-case bounds.
-analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
+analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
   do
     let
       checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
@@ -207,7 +206,7 @@ analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} Marlo
          . pure
          $ checkTokens ci
      , guardValue (maximumValue || checkAll)
-         $ checkMaximumValue protocolParamMaxValueSize maybeTransactions ci verbose
+         $ checkMaximumValue protocol maybeTransactions ci verbose
      , guardValue (minimumUtxo || checkAll)
          . withShelleyBasedEra era
          $ checkMinimumUtxo era protocol maybeTransactions ci verbose
@@ -287,12 +286,12 @@ checkRoles ci =
 
 -- | Check that the protocol limit on maximum value in a UTxO is not violated.
 checkMaximumValue :: MonadError CliError m
-                  => Maybe Natural              -- ^ The `maxValue` protocol parameter.
+                  => Api.ProtocolParameters     -- ^ The `maxValue` protocol parameter.
                   -> Maybe [Transaction]        -- ^ The transactions to traverse.
                   -> ContractInstance lang era  -- ^ The bundle of contract information.
                   -> Bool                       -- ^ Whether to include worst-case example in output.
                   -> m A.Value                  -- ^ Action to print a report on `maxValue` validity.
-checkMaximumValue (Just maxValue) maybeTransactions ci verbose =
+checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize=Just maxValue} maybeTransactions ci verbose =
   let
     (size, worst) =
       case maybeTransactions of
