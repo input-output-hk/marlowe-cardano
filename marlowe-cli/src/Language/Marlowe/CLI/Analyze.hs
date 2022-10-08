@@ -31,16 +31,15 @@ module Language.Marlowe.CLI.Analyze
 
 
 import Control.Monad (guard, (<=<))
-import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, unless, when)
+import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, unless)
 import Control.Monad.Reader (ReaderT(runReaderT))
 import Data.Aeson (object, (.=))
-import Data.Aeson.Types (Pair)
 import Data.Bifunctor (bimap)
 import Data.Foldable (toList)
 import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold, purePlate)
 import Data.List (nub, nubBy, (\\))
+import Data.Maybe (catMaybes)
 import Data.String (IsString(..))
-import Data.Yaml (encode)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage(..), toScriptLanguageInEra)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.Merkle (deepDemerkleize, merkleizeInput)
@@ -93,12 +92,15 @@ import System.IO (hPutStrLn, stderr)
 import qualified Cardano.Api as Api
 import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Ledger.Credential as Shelley
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Types as A (Pair)
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (putStr)
 import qualified Data.ByteString.Short as SBS (ShortByteString)
 import qualified Data.Functor.Constant as F (Constant(..))
 import qualified Data.Map.Strict as M (foldr, lookup, null)
 import qualified Data.Set as S (Set, empty, filter, map, member, singleton, size, union)
+import qualified Data.Yaml as Y (encode)
 import qualified Ledger.Tx.CardanoAPI as P (toCardanoAddressInEra, toCardanoValue)
 import qualified Plutus.ApiCommon as P (LedgerPlutusVersion(PlutusV2), evaluateScriptCounting)
 import qualified Plutus.Script.Utils.Scripts as P (datumHash)
@@ -123,8 +125,9 @@ analyze :: forall m
         -> Bool                                      -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
         -> Bool                                      -- ^ Whether to check the `maxTxSize` protocol limits.
         -> Bool                                      -- ^ Whether to compute tight estimates of worst-case bounds.
+        -> Bool                                      -- ^ Whether to include worst-case example in output.
         -> m ()                                      -- ^ Print estimates of worst-case bounds.
-analyze connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best =
+analyze connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
   do
     SomeMarloweTransaction _ era marlowe <- decodeFileStrict marloweFile
     case era of
@@ -135,7 +138,8 @@ analyze connection marloweFile preconditions roles tokens maximumValue minimumUt
               . Api.queryNodeLocalState connection Nothing
               . Api.QueryInEra Api.BabbageEraInCardanoMode
               $ Api.QueryInShelleyBasedEra Api.ShelleyBasedEraBabbage Api.QueryProtocolParameters
-          analyzeImpl era protocol marlowe preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best
+          result <- analyzeImpl era protocol marlowe preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose
+          liftIO . BS8.putStr $ Y.encode result
       _ -> throwError . CliError $ "Analysis not supported for " <> show era <> " era."
 
 
@@ -171,8 +175,9 @@ analyzeImpl :: forall m lang era
             -> Bool                                      -- ^ Whether to check the `maxTxExecutionUnits` protocol limits.
             -> Bool                                      -- ^ Whether to check the `maxTxSize` protocol limits.
             -> Bool                                      -- ^ Whether to compute tight estimates of worst-case bounds.
-            -> m ()                                      -- ^ Print estimates of worst-case bounds.
-analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best =
+            -> Bool                                      -- ^ Whether to include worst-case example in output.
+            -> m A.Value                                 -- ^ Action for finding estimates of worst-case bounds.
+analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best _verbose =
   do
     let
       checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
@@ -183,21 +188,33 @@ analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} Marlo
         else pure mempty
     let
       maybeTransactions = guard best >> pure transactions
-    when (preconditions || checkAll)
-      $ checkPreconditions ci
-    when (roles || checkAll)
-      $ checkRoles ci
-    when (tokens || checkAll)
-      $ checkTokens ci
-    when (maximumValue || checkAll)
-      $ checkMaximumValue protocolParamMaxValueSize maybeTransactions ci
-    when (minimumUtxo || checkAll)
-      $ withShelleyBasedEra era
-      $ checkMinimumUtxo era protocol maybeTransactions ci
-    when (executionCost || checkAll)
-      $ checkExecutionCost protocol ci transactions
-    when (transactionSize || checkAll)
-      $ checkTransactionSizes era protocol ci transactions
+      guardValue condition x =
+        if condition
+          then Just <$> x
+          else pure Nothing
+    A.toJSON
+      . catMaybes
+      <$> sequence
+     [
+       guardValue (preconditions || checkAll)
+         . pure
+         $ checkPreconditions ci
+     , guardValue (roles || checkAll)
+         . pure
+         $ checkRoles ci
+     , guardValue (tokens || checkAll)
+         . pure
+         $ checkTokens ci
+     , guardValue (maximumValue || checkAll)
+         $ checkMaximumValue protocolParamMaxValueSize maybeTransactions ci
+     , guardValue (minimumUtxo || checkAll)
+         $ withShelleyBasedEra era
+         $ checkMinimumUtxo era protocol maybeTransactions ci
+     , guardValue (executionCost || checkAll)
+         $ checkExecutionCost protocol ci transactions
+     , guardValue (transactionSize || checkAll)
+         $ checkTransactionSizes era protocol ci transactions
+     ]
 
 
 -- | Report invalid properties in the Marlowe state:
@@ -206,15 +223,14 @@ analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} Marlo
 --   * Invalid currency symbol or token name in an account.
 --   * Account balances that are not positive.
 --   * Duplicate accounts, choices, or bound values.
-checkPreconditions :: MonadIO m
-                   => ContractInstance lang era  -- ^ The bundle of contract information.
-                   -> m ()                       -- ^ Action to print a report on preconditions.
+checkPreconditions :: ContractInstance lang era  -- ^ The bundle of contract information.
+                   -> A.Value                    -- ^ A report on preconditions.
 checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
   let
     nonPositiveBalances = filter ((<= 0) . snd) . AM.toList
     duplicates (AM.keys -> x) = x \\ nub x
   in
-    putYaml "Preconditions"
+    putJson "Preconditions"
       [
         "Invalid roles currency"        .= invalidCurrency ciRolesCurrency
       , "Invalid account tokens"        .= filter invalidToken (snd <$> AM.keys accounts)
@@ -245,25 +261,23 @@ invalidRole P.TokenName{..} = P.lengthOfByteString unTokenName > 32
 
 
 -- | Check that all tokens are valid.
-checkTokens :: MonadIO m
-            => ContractInstance lang era  -- ^ The bundle of contract information.
-            -> m ()                       -- ^ Action to print a report on token validity.
+checkTokens :: ContractInstance lang era  -- ^ The bundle of contract information.
+            -> A.Value                    -- ^ A report on token validity.
 checkTokens ci =
-  putYaml "Tokens"
+  putJson "Tokens"
     [
       "Invalid tokens" .= invalidToken `S.filter` extractFromContract ci
     ]
 
 
 -- | Check that all roles are valid.
-checkRoles :: MonadIO m
-           => ContractInstance lang era  -- ^ The bundle of contract information.
-           -> m ()                       -- ^ Action to print a report on role-name validity.
+checkRoles :: ContractInstance lang era  -- ^ The bundle of contract information.
+           -> A.Value                    -- ^ Action to print a report on role-name validity.
 checkRoles ci =
   let
     roles = extractFromContract ci
   in
-    putYaml "Role names"
+    putJson "Role names"
       [
         "Invalid role names" .= invalidRole `S.filter` roles
       , "Blank role names"   .= P.adaToken `S.member` roles
@@ -272,11 +286,10 @@ checkRoles ci =
 
 -- | Check that the protocol limit on maximum value in a UTxO is not violated.
 checkMaximumValue :: MonadError CliError m
-                  => MonadIO m
                   => Maybe Natural              -- ^ The `maxValue` protocol parameter.
                   -> Maybe [Transaction]        -- ^ The transactions to traverse.
                   -> ContractInstance lang era  -- ^ The bundle of contract information.
-                  -> m ()                       -- ^ Action to print a report on `maxValue` validity.
+                  -> m A.Value                  -- ^ Action to print a report on `maxValue` validity.
 checkMaximumValue (Just maxValue) maybeTransactions ci =
   let
     size =
@@ -287,7 +300,8 @@ checkMaximumValue (Just maxValue) maybeTransactions ci =
                                maximum $ foldMap measure transactions
         Nothing           -> computeValueSize $ extractFromContract ci
   in
-    putYaml "Maximum value"
+    pure
+      $ putJson "Maximum value"
       [
         "Actual"     .= size
       , "Maximum"    .= maxValue
@@ -315,12 +329,11 @@ computeValueSize tokens =
 checkMinimumUtxo :: forall lang era m
                  .  Api.IsShelleyBasedEra era
                  => MonadError CliError m
-                 => MonadIO m
                  => Api.ScriptDataSupportedInEra era  -- ^ The era.
                  -> Api.ProtocolParameters            -- ^ The protocol parameters.
                  -> Maybe [Transaction]               -- ^ The transactions to traverse.
                  -> ContractInstance lang era         -- ^ The bundle of contract information.
-                 -> m ()                              -- ^ Action to print a report on the `minimumUTxO` validity.
+                 -> m A.Value                         -- ^ Action to print a report on the `minimumUTxO` validity.
 checkMinimumUtxo era protocol maybeTransactions ci =
   do
     let
@@ -347,7 +360,8 @@ checkMinimumUtxo era protocol maybeTransactions ci =
                              in
                                Api.lovelaceToValue . maximum . fmap Api.selectLovelace <$> foldTransactionsM measure transactions
         Nothing           -> compute $ extractFromContract ci
-    putYaml "Minimum UTxO"
+    pure
+      $ putJson "Minimum UTxO"
       [
         "Requirement" .= value
       ]
@@ -355,11 +369,10 @@ checkMinimumUtxo era protocol maybeTransactions ci =
 
 -- | Check that transactions satisfy the execution-cost protocol limits.
 checkExecutionCost :: MonadError CliError m
-                   => MonadIO m
                    => Api.ProtocolParameters     -- ^ The protocol parameters.
                    -> ContractInstance lang era  -- ^ The bundle of contract information.
                    -> [Transaction]              -- ^ The transaction-paths through the contract.
-                   -> m ()                       -- ^ Action to print a report on validity of transaction execution costs.
+                   -> m A.Value                  -- ^ Action to print a report on validity of transaction execution costs.
 checkExecutionCost protocol ContractInstance{..} transactions =
   do
     Api.CostModel costModel <-
@@ -404,7 +417,8 @@ checkExecutionCost protocol ContractInstance{..} transactions =
       maximumSteps = maybe 0 fromEnum $ Api.executionSteps <$> Api.protocolParamMaxTxExUnits protocol
       P.ExMemory actualMemory = maximum memory
       maximumMemory = maybe 0 fromEnum $ Api.executionMemory <$> Api.protocolParamMaxTxExUnits protocol
-    putYaml "Execution cost"
+    pure
+      $ putJson "Execution cost"
       [
         "Steps" .= object
                    [
@@ -542,14 +556,15 @@ checkTransactionSizes :: forall lang era m
                       -> Api.ProtocolParameters            -- ^ The protocol parameters.
                       -> ContractInstance lang era         -- ^ The bundle of contract information.
                       -> [Transaction]                     -- ^ The transaction-paths through the contract.
-                      -> m ()                              -- ^ Action to print a report on validity of transaction size.
+                      -> m A.Value                         -- ^ Action to print a report on validity of transaction size.
 checkTransactionSizes era protocol ci transactions =
   do
     sizes <- mapM (checkTransactionSize era protocol ci) transactions
     let
       actual = maximum sizes
       limit = Api.protocolParamMaxTxSize protocol
-    putYaml "Transaction size"
+    pure
+      $ putJson "Transaction size"
       [
           "Actual"     .= actual
         , "Maximum"    .= limit
@@ -877,12 +892,11 @@ extractFromContract ContractInstance{..} =
   M.foldr (S.union . extractAll) (extractAll ciContract) ciContinuations
 
 
--- | Format results of checking as YAML.
-putYaml :: MonadIO m
-        => String     -- ^ The section name.
-        -> [Pair]     -- ^ The results.
-        -> m ()       -- ^ Action to print the results as YAML.
-putYaml section = liftIO . BS8.putStr . encode . object . (: []) . (fromString section .=) . object
+-- | Format results of checking as JSON.
+putJson :: String    -- ^ The section name.
+        -> [A.Pair]  -- ^ The results.
+        -> A.Value   -- ^ Action to print the results as YAML.
+putJson section = object . (: []) . (fromString section .=) . object
 
 
 -- | Complete information about a Marlowe semantics transaction.
