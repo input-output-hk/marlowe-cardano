@@ -513,7 +513,7 @@ analyzeOptions :: O.Mod O.OptionFields NetworkId
                 -> O.Parser (RunCommand era)
 analyzeOptions network socket =
   Analyze
-    <$> O.option parseNetworkId (O.long "testnet-magic" <> O.metavar "INTEGER"       <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
+    <$> parseNetworkId network
     <*> O.strOption             (O.long "socket-path"   <> O.metavar "SOCKET_FILE"   <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption             (O.long "marlowe-file"  <> O.metavar "MARLOWE_FILE"             <> O.help "JSON file with the state and contract."                                                                          )
     <*> O.switch                (O.long "preconditions"                                         <> O.help "Whether to check preconditions for valid Marlowe state."                                                         )
