@@ -30,14 +30,15 @@ module Language.Marlowe.CLI.Analyze
   ) where
 
 
-import Control.Monad (guard, (<=<))
+import Control.Monad (guard, liftM2, (<=<))
 import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, unless)
 import Control.Monad.Reader (ReaderT(runReaderT))
 import Data.Aeson (object, (.=))
 import Data.Bifunctor (bimap)
 import Data.Foldable (toList)
+import Data.Function (on)
 import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold, purePlate)
-import Data.List (nub, nubBy, (\\))
+import Data.List (maximumBy, nub, nubBy, (\\))
 import Data.Maybe (catMaybes)
 import Data.String (IsString(..))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage(..), toScriptLanguageInEra)
@@ -177,7 +178,7 @@ analyzeImpl :: forall m lang era
             -> Bool                                      -- ^ Whether to compute tight estimates of worst-case bounds.
             -> Bool                                      -- ^ Whether to include worst-case example in output.
             -> m A.Value                                 -- ^ Action for finding estimates of worst-case bounds.
-analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best _verbose =
+analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
   do
     let
       checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
@@ -206,14 +207,14 @@ analyzeImpl era protocol@Api.ProtocolParameters{protocolParamMaxValueSize} Marlo
          . pure
          $ checkTokens ci
      , guardValue (maximumValue || checkAll)
-         $ checkMaximumValue protocolParamMaxValueSize maybeTransactions ci
+         $ checkMaximumValue protocolParamMaxValueSize maybeTransactions ci verbose
      , guardValue (minimumUtxo || checkAll)
-         $ withShelleyBasedEra era
-         $ checkMinimumUtxo era protocol maybeTransactions ci
+         . withShelleyBasedEra era
+         $ checkMinimumUtxo era protocol maybeTransactions ci verbose
      , guardValue (executionCost || checkAll)
-         $ checkExecutionCost protocol ci transactions
+         $ checkExecutionCost protocol ci transactions verbose
      , guardValue (transactionSize || checkAll)
-         $ checkTransactionSizes era protocol ci transactions
+         $ checkTransactionSizes era protocol ci transactions verbose
      ]
 
 
@@ -289,27 +290,29 @@ checkMaximumValue :: MonadError CliError m
                   => Maybe Natural              -- ^ The `maxValue` protocol parameter.
                   -> Maybe [Transaction]        -- ^ The transactions to traverse.
                   -> ContractInstance lang era  -- ^ The bundle of contract information.
+                  -> Bool                       -- ^ Whether to include worst-case example in output.
                   -> m A.Value                  -- ^ Action to print a report on `maxValue` validity.
-checkMaximumValue (Just maxValue) maybeTransactions ci =
+checkMaximumValue (Just maxValue) maybeTransactions ci verbose =
   let
-    size =
+    (size, worst) =
       case maybeTransactions of
         Just transactions -> let
-                               measure (_, contract, _, _) = [computeValueSize $ extractAll contract]
+                               measure tx@(Transaction _ contract _ _) = [(computeValueSize $ extractAll contract, Just tx)]
                              in
-                               maximum $ foldMap measure transactions
-        Nothing           -> computeValueSize $ extractFromContract ci
+                               maximumBy (compare `on` fst) $ foldMap measure transactions
+        Nothing           -> (computeValueSize $ extractFromContract ci, Nothing)
   in
     pure
       $ putJson "Maximum value"
-      [
-        "Actual"     .= size
-      , "Maximum"    .= maxValue
-      , "Unit"       .= ("byte" :: String)
-      , "Invalid"    .= (size > fromEnum maxValue)
-      , "Percentage" .= (100 * fromIntegral size / fromIntegral maxValue :: Double)
-      ]
-checkMaximumValue _ _ _ = throwError $ CliError "Missing `maxValue` protocol parameter."
+      $ [
+          "Actual"     .= size
+        , "Maximum"    .= maxValue
+        , "Unit"       .= ("byte" :: String)
+        , "Invalid"    .= (size > fromEnum maxValue)
+        , "Percentage" .= (100 * fromIntegral size / fromIntegral maxValue :: Double)
+        ]
+      <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> worst)
+checkMaximumValue _ _ _ _ = throwError $ CliError "Missing `maxValue` protocol parameter."
 
 
 -- | Compute the size of a multi-asset value.
@@ -333,8 +336,9 @@ checkMinimumUtxo :: forall lang era m
                  -> Api.ProtocolParameters            -- ^ The protocol parameters.
                  -> Maybe [Transaction]               -- ^ The transactions to traverse.
                  -> ContractInstance lang era         -- ^ The bundle of contract information.
+                 -> Bool                              -- ^ Whether to include worst-case example in output.
                  -> m A.Value                         -- ^ Action to print a report on the `minimumUTxO` validity.
-checkMinimumUtxo era protocol maybeTransactions ci =
+checkMinimumUtxo era protocol maybeTransactions ci verbose =
   do
     let
       compute tokens =
@@ -353,18 +357,20 @@ checkMinimumUtxo era protocol maybeTransactions ci =
                 (Api.TxOutDatumHash era "5555555555555555555555555555555555555555555555555555555555555555")
                 Api.ReferenceScriptNone
           liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out protocol
-    value <-
+    (value, worst) <-
       case maybeTransactions of
         Just transactions -> let
-                               measure (_, contract, _, _) = (: []) <$> compute (extractAll contract)
+                               measure tx@(Transaction _ contract _ _) = pure . (, Just tx) <$> compute (extractAll contract)
                              in
-                               Api.lovelaceToValue . maximum . fmap Api.selectLovelace <$> foldTransactionsM measure transactions
-        Nothing           -> compute $ extractFromContract ci
+                               (maximumBy (compare `on` (Api.selectLovelace . fst)) :: [(Api.Value, Maybe Transaction)] -> (Api.Value, Maybe Transaction))
+                                 <$> foldTransactionsM measure transactions
+        Nothing           -> fmap (, Nothing) . compute $ extractFromContract ci
     pure
       $ putJson "Minimum UTxO"
-      [
+      $ [
         "Requirement" .= value
-      ]
+        ]
+      <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> worst)
 
 
 -- | Check that transactions satisfy the execution-cost protocol limits.
@@ -372,8 +378,9 @@ checkExecutionCost :: MonadError CliError m
                    => Api.ProtocolParameters     -- ^ The protocol parameters.
                    -> ContractInstance lang era  -- ^ The bundle of contract information.
                    -> [Transaction]              -- ^ The transaction-paths through the contract.
+                   -> Bool                       -- ^ Whether to include worst-case example in output.
                    -> m A.Value                  -- ^ Action to print a report on validity of transaction execution costs.
-checkExecutionCost protocol ContractInstance{..} transactions =
+checkExecutionCost protocol ContractInstance{..} transactions verbose =
   do
     Api.CostModel costModel <-
       liftCliMaybe "Plutus cost model not found."
@@ -408,32 +415,38 @@ checkExecutionCost protocol ContractInstance{..} transactions =
           referenceInput
           creatorAddress
           (MarloweParams ciRolesCurrency)
-    (steps, memory) <-
+    (steps, memories) <-
       unzip
-        . fmap (\P.ExBudget{..} -> (exBudgetCPU, exBudgetMemory))
-        <$> mapM executor transactions
+        . fmap (\(tx, P.ExBudget{..}) -> ((tx, exBudgetCPU), (tx, exBudgetMemory)))
+        <$> mapM (liftM2 (<$>) (,) executor) transactions
     let
-      P.ExCPU actualSteps = maximum steps
+      (worstSteps, P.ExCPU actualSteps) = maximumBy (compare `on` snd) steps
       maximumSteps = maybe 0 fromEnum $ Api.executionSteps <$> Api.protocolParamMaxTxExUnits protocol
-      P.ExMemory actualMemory = maximum memory
+      (worstMemory, P.ExMemory actualMemory) = maximumBy (compare `on` snd) memories
       maximumMemory = maybe 0 fromEnum $ Api.executionMemory <$> Api.protocolParamMaxTxExUnits protocol
     pure
       $ putJson "Execution cost"
       [
         "Steps" .= object
-                   [
-                     "Actual" .= actualSteps
-                   , "Maximum" .= maximumSteps
-                   , "Percentage" .= (100 * fromIntegral actualSteps / fromIntegral maximumSteps :: Double)
-                   , "Invalid" .= (fromEnum actualSteps > maximumSteps)
-                   ]
+                   (
+                     [
+                       "Actual" .= actualSteps
+                     , "Maximum" .= maximumSteps
+                     , "Percentage" .= (100 * fromIntegral actualSteps / fromIntegral maximumSteps :: Double)
+                     , "Invalid" .= (fromEnum actualSteps > maximumSteps)
+                     ]
+                       <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> Just worstSteps)
+                   )
       , "Memory" .= object
-                    [
-                      "Actual" .= actualMemory
-                    , "Maximum" .= maximumMemory
-                    , "Percentage" .= (100 * fromIntegral actualMemory / fromIntegral maximumMemory :: Double)
-                    , "Invalid" .= (fromEnum actualMemory > maximumMemory)
-                    ]
+                    (
+                      [
+                        "Actual" .= actualMemory
+                      , "Maximum" .= maximumMemory
+                      , "Percentage" .= (100 * fromIntegral actualMemory / fromIntegral maximumMemory :: Double)
+                      , "Invalid" .= (fromEnum actualMemory > maximumMemory)
+                      ]
+                       <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> Just worstMemory)
+                    )
       ]
 
 
@@ -448,7 +461,7 @@ executeTransaction :: MonadError CliError m
                    -> MarloweParams        -- ^ The parameters for the Marlowe contract instance.
                    -> Transaction          -- ^ The transaction to be executed.
                    -> m P.ExBudget         -- ^ Action to execute the transaction and to return the new state and contract along with the execution cost.
-executeTransaction evaluationContext semanticsValidator semanticsAddress payoutAddress referenceInputs creatorAddress marloweParams@MarloweParams{..} (marloweState, marloweContract, TransactionInput{..}, output) =
+executeTransaction evaluationContext semanticsValidator semanticsAddress payoutAddress referenceInputs creatorAddress marloweParams@MarloweParams{..} (Transaction marloweState marloweContract TransactionInput{..} output) =
   do
     -- We only attend to details that make affect the *execution cost* of the script context,
     -- so the corresponding transaction does not actually need to be valid.
@@ -556,21 +569,23 @@ checkTransactionSizes :: forall lang era m
                       -> Api.ProtocolParameters            -- ^ The protocol parameters.
                       -> ContractInstance lang era         -- ^ The bundle of contract information.
                       -> [Transaction]                     -- ^ The transaction-paths through the contract.
+                      -> Bool                              -- ^ Whether to include worst-case example in output.
                       -> m A.Value                         -- ^ Action to print a report on validity of transaction size.
-checkTransactionSizes era protocol ci transactions =
+checkTransactionSizes era protocol ci transactions verbose =
   do
-    sizes <- mapM (checkTransactionSize era protocol ci) transactions
+    sizes <- mapM (liftM2 (<$>) (,) $ checkTransactionSize era protocol ci) transactions
     let
-      actual = maximum sizes
+      (worst, actual) = maximumBy (compare `on` snd) sizes
       limit = Api.protocolParamMaxTxSize protocol
     pure
       $ putJson "Transaction size"
-      [
-          "Actual"     .= actual
-        , "Maximum"    .= limit
-        , "Percentage" .= (100 * fromIntegral actual / fromIntegral limit :: Double)
-        , "Invalid"    .= (actual > fromEnum limit)
-      ]
+      $ [
+            "Actual"     .= actual
+          , "Maximum"    .= limit
+          , "Percentage" .= (100 * fromIntegral actual / fromIntegral limit :: Double)
+          , "Invalid"    .= (actual > fromEnum limit)
+        ]
+      <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> pure worst)
 
 
 -- | Check that transactions satisfy the transaction-size protocol limit.
@@ -584,7 +599,7 @@ checkTransactionSize :: forall lang era m
                      -> ContractInstance lang era         -- ^ The bundle of contract information.
                      -> Transaction                       -- ^ The transaction-paths through the contract.
                      -> m Int                             -- ^ Action to measure the transaction size.
-checkTransactionSize era protocol ContractInstance{..} (marloweState, marloweContract, TransactionInput{..}, output) =
+checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState marloweContract TransactionInput{..} output) =
   do
     -- We only attend to details that make affect the *size* of the transaction, so
     -- the transaction itself does not actually need to be valid.
@@ -896,11 +911,29 @@ extractFromContract ContractInstance{..} =
 putJson :: String    -- ^ The section name.
         -> [A.Pair]  -- ^ The results.
         -> A.Value   -- ^ Action to print the results as YAML.
-putJson section = object . (: []) . (fromString section .=) . object
+putJson section = object . pure . (fromString section .=) . object
 
 
 -- | Complete information about a Marlowe semantics transaction.
-type Transaction = (State, Contract, TransactionInput, TransactionOutput)
+data Transaction =
+  Transaction
+  {
+    txState    :: State
+  , txContract :: Contract
+  , txInput    :: TransactionInput
+  , txOutput   :: TransactionOutput
+  }
+    deriving (Show)
+
+instance A.ToJSON Transaction where
+  toJSON Transaction{..} =
+    object
+      [
+        "state"    .= txState
+      , "contract" .= txContract
+      , "input"    .= txInput
+      , "output"   .= txOutput
+      ]
 
 
 -- | Visit transactions along all execution paths of a a contract.
@@ -925,7 +958,7 @@ findTransactions ci@ContractInstance{..} =
         P.Address
           (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
           (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
-      prune (s, c, i, _) (s', c', i', _) = s == s' && c == c' && i == i'
+      prune (Transaction s c i _) (Transaction s' c' i' _) = s == s' && c == c' && i == i'
     paths <- findPaths ci
     nubBy prune
       . concat
@@ -940,18 +973,18 @@ findTransactions ci@ContractInstance{..} =
 
 -- | Find the transactions corresponding to a path of demerkleized inputs.
 findTransactionPath :: MonadError CliError m
-                    => Continuations                                               -- ^ The continuations of the contact.
-                    -> State                                                       -- ^ The initial contract.
-                    -> Contract                                                    -- ^ The initial state.
-                    -> [TransactionInput]                                          -- ^ The path of demerkleized inputs.
-                    -> m [(State, Contract, TransactionInput, TransactionOutput)]  -- ^ Action for computing the perhaps-merkleized input and the output for the transaction.
+                    => Continuations       -- ^ The continuations of the contact.
+                    -> State               -- ^ The initial contract.
+                    -> Contract            -- ^ The initial state.
+                    -> [TransactionInput]  -- ^ The path of demerkleized inputs.
+                    -> m [Transaction]     -- ^ Action for computing the perhaps-merkleized input and the output for the transaction.
 findTransactionPath continuations state contract =
   let
     go ((state', contract'), previous) input =
       do
         (input', output) <- findTransaction continuations state' contract' input
         case output of
-          TransactionOutput{..} -> pure ((txOutState, txOutContract), (state', contract', input', output) : previous)
+          TransactionOutput{..} -> pure ((txOutState, txOutContract), Transaction state' contract' input' output : previous)
           Error e               -> throwError . CliError $ show e
   in
     fmap snd . foldM go ((state, contract), [])
