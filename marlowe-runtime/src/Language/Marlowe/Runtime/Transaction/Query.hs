@@ -18,11 +18,7 @@ import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import Language.Marlowe.Protocol.Sync.Client
 import Language.Marlowe.Runtime.Cardano.Api
 import Language.Marlowe.Runtime.ChainSync.Api
-    ( Credential(..),
-      TxOutRef,
-      paymentCredential,
-      GetUTxOsQuery(..),
-      UTxOs(..) )
+  (Credential(..), GetUTxOsQuery(..), TxOutRef, UTxOs(..), paymentCredential)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo(txOutRef), getScripts)
 import Language.Marlowe.Runtime.History.Api

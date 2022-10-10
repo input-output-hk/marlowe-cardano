@@ -14,6 +14,7 @@ import Control.Monad (forM, unless)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
+import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
@@ -25,14 +26,13 @@ import qualified Data.Set as Set
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
+import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.SystemStart as C
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
-import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toUTxOsList, toUTxOTuple)
-import Data.Functor ((<&>))
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -832,7 +832,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
         $ Core.toChainDatum marloweVersion datum
 
     getMerkleizedContinuationOutputs :: [Chain.TransactionOutput]
-    getMerkleizedContinuationOutputs = Set.toList merkleizedContinuationsConstraints <&> \contract -> 
+    getMerkleizedContinuationOutputs = Set.toList merkleizedContinuationsConstraints <&> \contract ->
       Chain.TransactionOutput
         changeAddress
         mempty

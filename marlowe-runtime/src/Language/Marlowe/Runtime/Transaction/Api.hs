@@ -28,13 +28,24 @@ import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
+import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, BlockHeader, Lovelace, ScriptHash, TokenName, TxId, TxOutRef, getUTCTime, putUTCTime, PlutusScript, Metadata)
+  ( Address
+  , BlockHeader
+  , Lovelace
+  , Metadata
+  , PlutusScript
+  , ScriptHash
+  , TokenName
+  , TxId
+  , TxOutRef
+  , getUTCTime
+  , putUTCTime
+  )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError)
 import Network.Protocol.Job.Types (Command(..), SomeTag(..))
-import Data.Word (Word64)
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where

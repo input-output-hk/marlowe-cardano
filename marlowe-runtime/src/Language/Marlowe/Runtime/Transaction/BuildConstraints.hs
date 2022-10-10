@@ -17,6 +17,7 @@ import Control.Monad ((<=<), (>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT, execWriterT, tell)
 import Data.Bifunctor (bimap)
+import Data.Binary (Word64)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (find, sortBy)
@@ -24,92 +25,7 @@ import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (maybeToList)
 import qualified Data.Set as Set
-import Data.Time
-    ( UTCTime,
-      NominalDiffTime,
-      UTCTime,
-      addUTCTime,
-      diffUTCTime,
-      nominalDiffTimeToSeconds,
-      secondsToNominalDiffTime )
-import Language.Marlowe.Runtime.ChainSync.Api
-    ( Address,
-      AssetId,
-      SlotConfig,
-      Address,
-      SlotConfig,
-      Address(Address),
-      Assets(Assets),
-      Lovelace(Lovelace),
-      PaymentKeyHash(PaymentKeyHash),
-      PolicyId(PolicyId),
-      SlotConfig,
-      Address(Address),
-      AssetId(AssetId),
-      Assets(Assets),
-      Lovelace(Lovelace),
-      PaymentKeyHash(PaymentKeyHash),
-      PolicyId(PolicyId),
-      ScriptHash(unScriptHash),
-      SlotConfig(slotLength, slotZeroTime),
-      TransactionOutput(TransactionOutput),
-      UTxO(UTxO),
-      toUTxOTuple,
-      toUTxOsList, Metadata, TokenName)
-import Language.Marlowe.Runtime.Core.Api
-    ( Contract,
-      MarloweVersion(MarloweV1),
-      MarloweVersionTag(V1),
-      PayoutDatum,
-      Redeemer,
-      TransactionScriptOutput,
-      Contract,
-      MarloweVersion,
-      PayoutDatum,
-      Redeemer,
-      TransactionScriptOutput,
-      Contract,
-      MarloweVersion(MarloweV1),
-      MarloweVersionTag(V1),
-      PayoutDatum,
-      Redeemer,
-      TransactionScriptOutput(TransactionScriptOutput),
-      Contract,
-      IsMarloweVersion(Datum),
-      MarloweVersion(MarloweV1),
-      MarloweVersionTag(V1),
-      PayoutDatum,
-      Redeemer,
-      TransactionScriptOutput(TransactionScriptOutput),
-      withMarloweVersion )
-import Language.Marlowe.Runtime.Transaction.Api
-    ( ApplyInputsError,
-      CreateError,
-      WithdrawError,
-      ApplyInputsError,
-      CreateError,
-      WithdrawError,
-      ApplyInputsConstraintsBuildupError(MarloweComputeTransactionFailed),
-      ApplyInputsError(ApplyInputsConstraintsBuildupFailed),
-      CreateError,
-      WithdrawError,
-      ApplyInputsConstraintsBuildupError(..),
-      ApplyInputsError(..),
-      CreateBuildupError(AddressDecodingFailed,
-                         CollateralSelectionFailed, MintingScriptDecodingFailed),
-      CreateError(..),
-      WithdrawError )
-import Language.Marlowe.Runtime.Transaction.Constraints
-    ( TxConstraints(..),
-      TxConstraints,
-      TxConstraints,
-      mustConsumeMarloweOutput,
-      mustPayToAddress,
-      mustSendMarloweOutput,
-      mustPayToRole,
-      mustSpendRoleToken,
-      requiresSignature, WalletContext (WalletContext), requiresMetadata, mustMintRoleToken, mustSendMerkleizedContinuationOutput )
-import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
+import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import GHC.Base (Alternative((<|>)))
@@ -117,7 +33,33 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import Language.Marlowe.Runtime.Cardano.Api (plutusScriptHash, toCardanoAddressAny, toCardanoPlutusScript)
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( Address(Address)
+  , AssetId(AssetId)
+  , Assets(Assets)
+  , Lovelace(Lovelace)
+  , Metadata
+  , PaymentKeyHash(PaymentKeyHash)
+  , PolicyId(PolicyId)
+  , ScriptHash(unScriptHash)
+  , SlotConfig(slotLength, slotZeroTime)
+  , TokenName
+  , TransactionOutput(TransactionOutput)
+  , UTxO(UTxO)
+  , toUTxOTuple
+  , toUTxOsList
+  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
+import Language.Marlowe.Runtime.Core.Api
+  ( Contract
+  , IsMarloweVersion(Datum)
+  , MarloweVersion(MarloweV1)
+  , MarloweVersionTag(V1)
+  , PayoutDatum
+  , Redeemer
+  , TransactionScriptOutput(TransactionScriptOutput)
+  , withMarloweVersion
+  )
 import Language.Marlowe.Runtime.Plutus.V2.Api
   ( fromPlutusCurrencySymbol
   , fromPlutusScript
@@ -128,10 +70,30 @@ import Language.Marlowe.Runtime.Plutus.V2.Api
   , toPlutusTxOutRef
   )
 import qualified Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy as RoleTokensPolicy
+import Language.Marlowe.Runtime.Transaction.Api
+  ( ApplyInputsConstraintsBuildupError(..)
+  , ApplyInputsError(..)
+  , CreateBuildupError(AddressDecodingFailed, CollateralSelectionFailed, MintingScriptDecodingFailed)
+  , CreateError(..)
+  , WithdrawError
+  )
+import Language.Marlowe.Runtime.Transaction.Constraints
+  ( TxConstraints(..)
+  , WalletContext(WalletContext)
+  , mustConsumeMarloweOutput
+  , mustMintRoleToken
+  , mustPayToAddress
+  , mustPayToRole
+  , mustSendMarloweOutput
+  , mustSendMerkleizedContinuationOutput
+  , mustSpendRoleToken
+  , requiresMetadata
+  , requiresSignature
+  )
+import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import qualified Plutus.V2.Ledger.Api as P
 import qualified Plutus.V2.Ledger.Api as PV2
 import qualified PlutusTx.AssocMap as AM
-import Data.Binary (Word64)
 
 maxFees :: Lovelace
 maxFees = Lovelace 2_170_000
