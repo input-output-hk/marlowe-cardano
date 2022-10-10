@@ -726,8 +726,8 @@ useTemplate currency = do
         utWithdrawalLovelace
         timeout'
     UseSwap{..} -> do
-      aTimeout' <- toMarloweTimeout utATimeout (TruncateMilliseconds True)
-      bTimeout' <- toMarloweTimeout utBTimeout (TruncateMilliseconds True)
+      aTimeout' <- toMarloweTimeout utATimeout
+      bTimeout' <- toMarloweTimeout utBTimeout
       Currency { ccCurrencySymbol=aCurrencySymbol } <- findCurrency utACurrencyNickname
       Currency { ccCurrencySymbol=bCurrencySymbol } <- findCurrency utBCurrencyNickname
       let
