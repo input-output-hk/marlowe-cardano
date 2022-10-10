@@ -172,7 +172,9 @@ echo "$PARTY_NAME will spend the UTxO "'`'"$TX_0_PARTY"'`.'
 echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip --testnet-magic "$MAGIC" | jq '.slot')
-NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+# Add 1 millisecond so in the case of slot resolution larger than
+# millisecond we test whether Marlowe time range is precomputed correctly.
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET+5))"
 HOUR="$((3600*1000))"
 
 echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(((1000 * $(date -u +%s) - SLOT_OFFSET) / SLOT_LENGTH)). Tests may fail if this is not the case."

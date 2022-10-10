@@ -61,8 +61,6 @@ module Spec.Marlowe.Common
     -- * Instances
   , alicePk
   , pangramContract
-    -- * Functions
-  , secondsSinceShelley
   ) where
 
 
@@ -84,7 +82,6 @@ import Language.Marlowe.Core.V1.Semantics.Types
   )
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Util (merkleizedCase)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig(..))
 import Test.QuickCheck (Gen, choose, frequency, oneof, shrinkList, sized, vectorOf)
 
 import qualified Language.Marlowe.Extended.V1 as Extended
@@ -495,7 +492,3 @@ pangramContract = let
         ] (Ledger.POSIXTime 100) Close
 
 
--- | The given number of seconds after the Shelley era as POSIX time (miliseconds).
-secondsSinceShelley :: SlotConfig -> Integer -> Ledger.POSIXTime
-secondsSinceShelley SlotConfig {scSlotZeroTime} seconds =
-    scSlotZeroTime + Ledger.POSIXTime (seconds * 1000)
