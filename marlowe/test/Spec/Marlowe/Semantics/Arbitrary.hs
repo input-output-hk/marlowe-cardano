@@ -87,12 +87,11 @@ import Plutus.V2.Ledger.Api
   , adaSymbol
   , adaToken
   )
-import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
+import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck
   (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat, vectorOf)
 
-import Data.ByteString.Builder (byteString)
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
@@ -542,7 +541,7 @@ interestingParties (Role roleName) False = [
     Role (removeFirstLetter roleName)
   , Role (TokenName $ unTokenName roleName `appendByteString` "s")
   ]
--- interestingParties (PK _) _ = []
+interestingParties _ _ = []
 
 removeFirstLetter :: TokenName -> TokenName
 removeFirstLetter (TokenName tokenName) = TokenName $ sliceByteString 1 (lengthOfByteString tokenName) tokenName
