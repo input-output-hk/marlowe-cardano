@@ -3,6 +3,7 @@ node.socket
 *.skey
 *.vkey
 *.address
+beamer*
 collective-loan*
 coupon-bond-guaranteed*
 english-auction*
