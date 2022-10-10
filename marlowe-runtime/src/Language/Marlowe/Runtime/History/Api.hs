@@ -10,6 +10,7 @@ module Language.Marlowe.Runtime.History.Api
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
+import Data.Set (Set)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
@@ -213,48 +214,64 @@ data SomeHistory = forall v. SomeHistory (MarloweVersion v) (History v)
 
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
+  GetStatuses :: Set ContractId -> HistoryQuery Void Void (Map ContractId FollowerStatus)
 
 instance Query.IsQuery HistoryQuery where
   data Tag HistoryQuery delimiter err result where
     TagGetFollowedContracts :: Query.Tag HistoryQuery ContractId Void (Map ContractId FollowerStatus)
+    TagGetStatuses :: Query.Tag HistoryQuery Void Void (Map ContractId FollowerStatus)
 
   tagFromQuery = \case
     GetFollowedContracts -> TagGetFollowedContracts
+    GetStatuses _ -> TagGetStatuses
 
   tagEq TagGetFollowedContracts TagGetFollowedContracts = Just (Refl, Refl, Refl)
+  tagEq TagGetFollowedContracts _ = Nothing
+  tagEq TagGetStatuses TagGetStatuses = Just (Refl, Refl, Refl)
+  tagEq TagGetStatuses _ = Nothing
 
   putTag = \case
     TagGetFollowedContracts -> putWord8 0x01
+    TagGetStatuses -> putWord8 0x02
 
   getTag = do
     tagWord <- getWord8
     case tagWord of
       0x01 -> pure $ Query.SomeTag TagGetFollowedContracts
+      0x02 -> pure $ Query.SomeTag TagGetStatuses
       _    -> fail "invalid tag bytes"
 
   putQuery = \case
     GetFollowedContracts  -> mempty
+    GetStatuses contractIds  -> put contractIds
 
   getQuery = \case
     TagGetFollowedContracts -> pure GetFollowedContracts
+    TagGetStatuses -> GetStatuses <$> get
 
   putDelimiter = \case
     TagGetFollowedContracts -> put
+    TagGetStatuses -> put
 
   getDelimiter = \case
     TagGetFollowedContracts -> get
+    TagGetStatuses -> get
 
   putErr = \case
     TagGetFollowedContracts -> put
+    TagGetStatuses -> put
 
   getErr = \case
     TagGetFollowedContracts -> get
+    TagGetStatuses -> get
 
   putResult = \case
     TagGetFollowedContracts -> put
+    TagGetStatuses -> put
 
   getResult = \case
     TagGetFollowedContracts -> get
+    TagGetStatuses -> get
 
 type RuntimeHistoryQuery = Query.Query HistoryQuery
 

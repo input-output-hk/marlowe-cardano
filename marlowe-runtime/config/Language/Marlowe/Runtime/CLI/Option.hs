@@ -6,9 +6,9 @@ import Control.Arrow ((>>>))
 import Data.Foldable (asum)
 import Data.List.Split (splitOn)
 import Data.String (fromString)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32, parseTxOutRef)
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..), parseTxOutRef)
+  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..))
 import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 import System.Environment (lookupEnv)
@@ -34,6 +34,11 @@ historyQueryPort = port "history-query" "HISTORY_QUERY" 3718 "The port number of
 historySyncPort :: CliOption OptionFields PortNumber
 historySyncPort = port "history-sync" "HISTORY_SYNC" 3719 "The port number of the history server's synchronization API."
 
+discoveryHost :: CliOption OptionFields HostName
+discoveryHost = host "discovery" "DISCOVERY" "127.0.0.1" "The hostname of the Marlowe Runtime discovery server."
+
+discoveryQueryPort :: CliOption OptionFields PortNumber
+discoveryQueryPort = port "discovery-query" "DISCOVERY_QUERY" 3721 "The port number of the discovery server's query API."
 txHost :: CliOption OptionFields HostName
 txHost = host "tx" "TX" "127.0.0.1" "The hostname of the Marlowe Runtime transaction server."
 

@@ -21,6 +21,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
+import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server
   (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
@@ -125,14 +126,16 @@ run Options{..} = withSocketsDo do
     when (networkId == Mainnet) do
       die "Mainnet support is currently disabled."
     let
-      solveConstraints :: forall era v. SolveConstraints era v
+      solveConstraints :: SolveConstraints
       solveConstraints = Constraints.solveConstraints
-        networkId
         systemStart
         eraHistory
         protocolParameters
+        slotConfig
     let loadWalletContext = Query.loadWalletContext
-    let loadMarloweContext = Query.loadMarloweContext runHistorySyncClient
+    let
+      loadMarloweContext :: LoadMarloweContext
+      loadMarloweContext = Query.loadMarloweContext networkId runHistorySyncClient
     TransactionServer{..} <- atomically do
       mkTransactionServer TransactionServerDependencies{..}
 

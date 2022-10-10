@@ -20,9 +20,10 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , Credential(..)
   , Datum(..)
   , DatumHash(..)
+  , FindTxsToError(..)
   , IntersectError(..)
   , Lovelace(..)
-  , Metadata
+  , Metadata(..)
   , Move(..)
   , module Network.Protocol.ChainSeek.Client
   , module Network.Protocol.ChainSeek.Codec
@@ -62,6 +63,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , getUTCTime
   , isAfter
   , moveSchema
+  , parseTxOutRef
   , paymentCredential
   , putUTCTime
   , runtimeChainSeekCodec
@@ -103,8 +105,10 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function (on)
+import Data.List.Split (splitOn)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromJust)
 import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text (Text)
@@ -136,6 +140,7 @@ import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
+import Text.Read (readMaybe)
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
@@ -179,8 +184,12 @@ data ValidityRange
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
--- TODO add content
 data Metadata
+  = MetadataMap [(Metadata, Metadata)]
+  | MetadataList [Metadata]
+  | MetadataNumber Integer
+  | MetadataBytes ByteString
+  | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
@@ -310,6 +319,16 @@ data TxOutRef = TxOutRef
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+instance IsString TxOutRef where
+  fromString = fromJust . parseTxOutRef
+
+parseTxOutRef :: String -> Maybe TxOutRef
+parseTxOutRef val = case splitOn "#" val of
+  [txId, txIx] -> TxOutRef
+    <$> (TxId <$> either (const Nothing) Just (decodeBase16 $ encodeUtf8 $ T.pack txId))
+    <*> (TxIx <$> readMaybe txIx)
+  _ -> Nothing
+
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
@@ -383,11 +402,13 @@ data Credential
   = PaymentKeyCredential PaymentKeyHash
   | ScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass Binary
 
 data StakeCredential
   = StakeKeyCredential StakeKeyHash
   | StakeScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass Binary
 
 fromCardanoPaymentCredential :: Cardano.PaymentCredential -> Credential
 fromCardanoPaymentCredential = \case
@@ -447,6 +468,12 @@ data TxError
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+-- | Reasons a 'FindTxsTo' request can be rejected.
+data FindTxsToError
+  = NoAddresses
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
+
 -- | Reasons a 'FindConsumingTx' request can be rejected.
 data UTxOError
   = UTxONotFound
@@ -491,6 +518,10 @@ data Move err result where
   -- indicates whether or not to wait for the transaction to be produced.
   FindTx :: TxId -> Bool -> Move TxError Transaction
 
+  -- | Advance to the block containing transactions that send outputs to any
+  -- addresses with the requested credentials.
+  FindTxsTo :: Set Credential -> Move FindTxsToError (Set Transaction)
+
 mkSchemaVersion "moveSchema" ''Move
 
 deriving instance Show (Move err result)
@@ -520,6 +551,7 @@ instance Query Move where
     TagFindConsumingTx :: Tag Move UTxOError Transaction
     TagFindTx :: Tag Move TxError Transaction
     TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
+    TagFindTxsTo :: Tag Move FindTxsToError (Set Transaction)
 
   tagFromQuery = \case
     Fork m1 m2         -> TagFork (tagFromQuery m1) (tagFromQuery m2)
@@ -529,6 +561,7 @@ instance Query Move where
     FindConsumingTx _  -> TagFindConsumingTx
     FindTx _ _         -> TagFindTx
     FindConsumingTxs _ -> TagFindConsumingTxs
+    FindTxsTo _        -> TagFindTxsTo
 
   tagEq = curry \case
     (TagFork m1 m2, TagFork m3 m4)           ->
@@ -551,6 +584,8 @@ instance Query Move where
     (TagFindTx, _)                           -> Nothing
     (TagFindConsumingTxs, TagFindConsumingTxs) -> Just (Refl, Refl)
     (TagFindConsumingTxs, _)                  -> Nothing
+    (TagFindTxsTo, TagFindTxsTo)                   -> Just (Refl, Refl)
+    (TagFindTxsTo, _)                           -> Nothing
 
   putTag = \case
     TagFork t1 t2 -> do
@@ -563,6 +598,7 @@ instance Query Move where
     TagIntersect -> putWord8 0x05
     TagFindTx -> putWord8 0x06
     TagFindConsumingTxs -> putWord8 0x07
+    TagFindTxsTo -> putWord8 0x08
 
   putQuery = \case
     Fork m1 m2 -> do
@@ -574,6 +610,7 @@ instance Query Move where
     Intersect points -> put points
     FindTx txId wait -> put txId *> put wait
     FindConsumingTxs utxos -> put utxos
+    FindTxsTo credentials -> put credentials
 
   getTag = do
     tag <- getWord8
@@ -588,6 +625,7 @@ instance Query Move where
       0x05 -> pure $ SomeTag TagIntersect
       0x06 -> pure $ SomeTag TagFindTx
       0x07 -> pure $ SomeTag TagFindConsumingTxs
+      0x08 -> pure $ SomeTag TagFindTxsTo
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case
@@ -598,6 +636,7 @@ instance Query Move where
     TagIntersect        -> Intersect <$> get
     TagFindTx           -> FindTx <$> get <*> get
     TagFindConsumingTxs -> FindConsumingTxs <$> get
+    TagFindTxsTo        -> FindTxsTo <$> get
 
   putResult = \case
     TagFork t1 t2 -> \case
@@ -617,6 +656,7 @@ instance Query Move where
     TagFindTx -> put
     TagIntersect -> mempty
     TagFindConsumingTxs -> put
+    TagFindTxsTo -> put
 
   getResult = \case
     TagFork t1 t2    -> do
@@ -632,6 +672,7 @@ instance Query Move where
     TagFindTx -> get
     TagIntersect -> get
     TagFindConsumingTxs -> get
+    TagFindTxsTo -> get
 
   putErr = \case
     TagFork t1 t2 -> \case
@@ -651,6 +692,7 @@ instance Query Move where
     TagFindTx -> put
     TagIntersect -> put
     TagFindConsumingTxs -> put
+    TagFindTxsTo -> put
 
   getErr = \case
     TagFork t1 t2    -> do
@@ -666,6 +708,7 @@ instance Query Move where
     TagFindTx -> get
     TagIntersect -> get
     TagFindConsumingTxs -> get
+    TagFindTxsTo -> get
 
 slotToUTCTime :: SlotConfig -> SlotNo -> UTCTime
 slotToUTCTime SlotConfig{..} slot = addUTCTime (slotLength * fromIntegral slot) slotZeroTime

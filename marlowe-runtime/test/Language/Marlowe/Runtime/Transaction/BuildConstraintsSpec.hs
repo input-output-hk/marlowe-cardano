@@ -31,10 +31,10 @@ spec = Hspec.describe "buildWithdrawConstraints" do
     let assetId :: Chain.AssetId
         assetId = Chain.AssetId policyId tokenName
 
-        actual :: Either Transaction.Api.WithdrawError (TxConstraints 'Core.Api.V1)
+        actual :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints 'Core.Api.V1)
         actual = BuildConstraints.buildWithdrawConstraints Core.Api.MarloweV1 assetId
 
-        expected :: Either Transaction.Api.WithdrawError (TxConstraints 'Core.Api.V1)
+        expected :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints 'Core.Api.V1)
         expected = Right $ TxConstraints
           { marloweInputConstraints = TxConstraints.MarloweInputConstraintsNone
           , payoutInputConstraints = Set.singleton assetId

@@ -13,6 +13,7 @@ import Control.Monad.Trans.Reader (ReaderT, ask, asks, local)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
+import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
 import Language.Marlowe.Runtime.History.Api (HistoryCommand, HistoryQuery)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand)
@@ -74,6 +75,13 @@ runTxJobClient client = do
   Env{..} <- askEnv
   liftBaseWith \runInBase ->
     envRunTxJobClient $ hoistJobClient runInBase client
+
+-- | Run a Discovery Query client.
+runDiscoveryQueryClient :: QueryClient DiscoveryQuery CLI a -> CLI a
+runDiscoveryQueryClient client = do
+  Env{..} <- askEnv
+  liftBaseWith \runInBase ->
+    envRunDiscoveryQueryClient $ hoistQueryClient runInBase client
 
 -- | Run a simple History command.
 runHistoryCommand :: HistoryCommand Void err result -> CLI (Either err result)
