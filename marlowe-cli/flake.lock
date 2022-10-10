@@ -3118,12 +3118,12 @@
       },
       "locked": {
         "lastModified": 0,
-        "narHash": "sha256-OorVqTmxwHQJw44Haxm1g4FdQFbrhdNIcLeqzUZ4H5E=",
-        "path": "/nix/store/zxbsr5znyr9zw8j0csz0r71jcrnbsc3d-source",
+        "narHash": "sha256-5I+AmFJsq83M6uGUga50l1Yd34Ug01HMdO3Smnmma7k=",
+        "path": "/nix/store/k21lkwzxyi1g430f6ijcjds0xjjyg6kc-source",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/zxbsr5znyr9zw8j0csz0r71jcrnbsc3d-source",
+        "path": "/nix/store/k21lkwzxyi1g430f6ijcjds0xjjyg6kc-source",
         "type": "path"
       }
     },
