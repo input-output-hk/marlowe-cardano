@@ -32,7 +32,6 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, parseTxOutRef, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
--- import qualified Language.Marlowe.Scripts as V1
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
 

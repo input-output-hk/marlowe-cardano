@@ -98,6 +98,7 @@ import qualified PlutusTx.AssocMap as AM
 maxFees :: Lovelace
 maxFees = Lovelace 2_170_000
 
+-- FIXME: This is arbitrary value - adjust this better.
 minAdaPerTokenOutput :: Lovelace
 minAdaPerTokenOutput  = Lovelace 10_000
 
@@ -130,7 +131,7 @@ buildCreateConstraintsV1
   -> Contract 'V1 -- ^ The contract being instantiated.
   -> TxConstraintsBuilderM (CreateError 'V1) 'V1 ()
 buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
-  -- Tx body constratint.
+  -- Tx body constraints.
   for_ (Map.toList metadata) \(label, meta) -> do
     tell . requiresMetadata label $ meta
 
@@ -140,7 +141,6 @@ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
 
   -- Marlowe script output.
   sendMarloweOutput policyId
-
   where
     liftMaybe err = lift . note (CreateBuildupFailed err)
 
@@ -185,29 +185,24 @@ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
       then do
         let
           WalletContext { collateralUtxos, availableUtxos } = walletCtx
-
           txLovelaceRequirementEstimate = adaAsset $
             minAda
             + maxFees
             + Lovelace (fromInteger . toInteger . length $ distribution) * minAdaPerTokenOutput
-
           utxoAssets UTxO {transactionOutput = TransactionOutput { assets }} = assets
-
           collateralUtxos' = filter (flip Set.member collateralUtxos . fst . toUTxOTuple) . toUTxOsList $ availableUtxos
           possibleInput = find ((<) txLovelaceRequirementEstimate . utxoAssets) . sortBy (compare `on` utxoAssets) $ collateralUtxos'
-        UTxO txOutRef _ <- liftMaybe CollateralSelectionFailed possibleInput
 
+        UTxO txOutRef _ <- liftMaybe CollateralSelectionFailed possibleInput
         let
           txOutRef' = toPlutusTxOutRef txOutRef
           roleTokens = RoleTokensPolicy.mkRoleTokens (map (toPlutusTokenName &&& const 1) . Map.keys $ distribution)
-
           plutusScript = fromPlutusScript . PV2.getMintingPolicy . RoleTokensPolicy.policy roleTokens $ txOutRef'
 
         (script, scriptHash) <- liftMaybe (MintingScriptDecodingFailed plutusScript) do
           script <- toCardanoPlutusScript plutusScript
           scriptHash <- plutusScriptHash plutusScript
           pure (script, scriptHash)
-
         let
           witness = C.PlutusScriptWitness
             C.PlutusScriptV2InBabbage
@@ -300,13 +295,11 @@ buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHere
 
   -- Construct outputs constraints.
   -- Require Marlowe output if the contract is not closed.
-  case possibleContinuation of
-    Just (state'@V1.State { accounts }, contract') -> do
+  for_ possibleContinuation \(state'@V1.State { accounts }, contract') -> do
       let
         datum' = V1.MarloweData params state' contract'
         assets = moneyToAssets $ V1.totalBalance accounts
       tell $ mustSendMarloweOutput assets datum'
-    Nothing -> pure ()
 
   -- For every payment require an output either to the role
   -- payout script or directly to the party address.
@@ -317,7 +310,7 @@ buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHere
         V1.Token cs tn -> do
           let
             assetId = toAssetId cs tn
-            quantity' = CS.Quantity $ fromInteger quantity
+            quantity' = fromInteger quantity
           Assets (Lovelace 0) (CS.Tokens $ Map.singleton assetId quantity')
     case payee of
       V1.Party (V1.Address net addr) -> do
