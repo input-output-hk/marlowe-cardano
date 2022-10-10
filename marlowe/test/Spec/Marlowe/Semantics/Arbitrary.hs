@@ -52,8 +52,8 @@ module Spec.Marlowe.Semantics.Arbitrary
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
-<<<<<<< HEAD
-import Language.Marlowe.Core.V1.Semantics (TransactionInput(..), TransactionOutput(..), computeTransaction, evalValue)
+import Language.Marlowe.Core.V1.Semantics
+  (TransactionInput(..), TransactionOutput(..), computeTransaction, evalObservation, evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types
   ( Accounts
   , Action(..)
@@ -92,23 +92,8 @@ import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, golden
 import Test.Tasty.QuickCheck
   (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat, vectorOf)
 
-import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import Data.ByteString.Builder (byteString)
-=======
-import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), TransactionOutput (..), computeTransaction,
-                                           evalObservation, evalValue)
-import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (..), Case (..), ChoiceId (..),
-                                                 ChoiceName, ChosenNum, Contract (..), Environment (..), Input (..),
-                                                 InputContent (..), Observation (..), Party (..), Payee (..),
-                                                 State (..), TimeInterval, Token (..), Value (..), ValueId (..),
-                                                 getAction)
-import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
-import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
-import Spec.Marlowe.Semantics.Golden (goldenContracts)
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
-                              vectorOf)
-
->>>>>>> f1df9d4e1 (SCP-4416 implement interesting inputs)
+import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
