@@ -37,7 +37,7 @@ module Spec.Marlowe.Semantics.Arbitrary
   , choiceInBoundsIfNonempty
   , choiceNotInBounds
   , goldenContract
-  , interestingChoiceNum'
+  , interestingInput
     -- * Weighting factors for arbitrary contracts
   , assertContractWeights
   , closeContractWeights
@@ -52,6 +52,7 @@ module Spec.Marlowe.Semantics.Arbitrary
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
+<<<<<<< HEAD
 import Language.Marlowe.Core.V1.Semantics (TransactionInput(..), TransactionOutput(..), computeTransaction, evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types
   ( Accounts
@@ -93,6 +94,21 @@ import Test.Tasty.QuickCheck
 
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import Data.ByteString.Builder (byteString)
+=======
+import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), TransactionOutput (..), computeTransaction,
+                                           evalObservation, evalValue)
+import Language.Marlowe.Core.V1.Semantics.Types (Accounts, Action (..), Bound (..), Case (..), ChoiceId (..),
+                                                 ChoiceName, ChosenNum, Contract (..), Environment (..), Input (..),
+                                                 InputContent (..), Observation (..), Party (..), Payee (..),
+                                                 State (..), TimeInterval, Token (..), Value (..), ValueId (..),
+                                                 getAction)
+import Plutus.V1.Ledger.Api (CurrencySymbol (..), POSIXTime (..), PubKeyHash (..), TokenName (..), adaSymbol, adaToken)
+import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
+import Spec.Marlowe.Semantics.Golden (goldenContracts)
+import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat,
+                              vectorOf)
+
+>>>>>>> f1df9d4e1 (SCP-4416 implement interesting inputs)
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
@@ -490,22 +506,44 @@ choiceNotInBounds bounds =
 
 
 -- | Generate relevant Input content for a given input action
-interestingInput :: Bool -> Action -> [InputContent]
-interestingInput validity (Choice choiceId bounds) =
-  IChoice <$> interestingChoiceId validity choiceId <*> interestingChoiceNum validity bounds
--- interestingInput validity (Deposit fromAcct toAcct   ) = IChoice choiceId <$> interestingChoiceNum' validity bounds
-interestingInput True (Notify _) = [INotify]
-interestingInput False (Notify _) = []
-
--- Note: We're going to need the functions below to get the values that's needed for the contract
--- evalValue :: Environment -> State -> Value Observation -> Integer
--- evalObservation :: Environment -> State -> Observation -> Bool # when we do notify - only give a notify back if the argument in notify evaluates to true. And return an empty list if it doesn't evaluate to true.
-interestingInput' :: Environment -> State -> Bool -> Action -> [InputContent]
-interestingInput' :: env -> state -> validity -> (Choice choiceId bounds)
+interestingInput :: Environment -> State -> Bool -> Action -> [InputContent]
+interestingInput env state validity (Notify value) =
+  let
+    validNotification = evalObservation env state value :: Bool
+  in
+    [INotify | validity == validNotification]
+interestingInput env state validity (Deposit account party token value) =
+  let
+    expectedDepositAmount = evalValue env state value :: Integer
+  in
+    if validity
+    then [IDeposit account party token expectedDepositAmount]
+    else [
+      IDeposit account party token (expectedDepositAmount - 1)
+    , IDeposit account party token (expectedDepositAmount + 1)
+    ] <>
+    [ IDeposit account party' token expectedDepositAmount | party' <- interestingParties party validity ]
+    <>
+    [ IDeposit account' party token expectedDepositAmount | account' <- interestingParties account validity ]
+interestingInput _ _ validity (Choice choiceId bounds) =  IChoice <$> interestingChoiceId choiceId validity <*> interestingChoiceNums validity bounds
 
 -- ChoiceId is a choice name and a party making the choice. Then we want to generate a list of choiceIds that are either invalid or valid
 interestingChoiceId :: ChoiceId -> Bool -> [ChoiceId]
-interestingChoiceId (ChoiceId byteString party) validity = fmap (\party -> ChoiceId bytestring party) $ interestingParties party validity
+interestingChoiceId (ChoiceId byteString party) validity = fmap (\party' -> ChoiceId byteString party') $ interestingParties party validity
+
+interestingChoiceNums :: Bool -> [Bound] -> [ChosenNum]
+interestingChoiceNums True bounds  = concatMap (interestingChoiceNum True) bounds
+interestingChoiceNums False bounds =
+  let
+    candidates = concatMap (interestingChoiceNum False ) bounds
+  in
+    [
+    candidate
+    | candidate <- candidates
+    , let
+        outside (Bound lower upper) = candidate < lower && candidate > upper
+    , all outside bounds
+    ]
 
 interestingChoiceNum :: Bool -> Bound -> [ChosenNum]
 interestingChoiceNum True (Bound lower upper)  = validValues lower upper
@@ -525,13 +563,13 @@ removeFirstLetter :: TokenName -> TokenName
 removeFirstLetter (TokenName tokenName) = TokenName $ sliceByteString 1 (lengthOfByteString tokenName) tokenName
 
 validValues :: Integer -> Integer -> [Integer]
-validValues lower upper = [x | x <- testValueRange, x >= lower  && x <= upper]
+validValues lower upper = [x | x <- availableValues, x >= lower  && x <= upper]
 
 invalidValues :: Integer -> Integer -> [Integer]
-invalidValues lower upper = [x | x <- testValueRange, x < lower  || x > upper]
+invalidValues lower upper = [x | x <- availableValues, x < lower  || x > upper]
 
-testValueRange :: [Integer]
-testValueRange = tail $ [0..] >>= \x -> [x, -x]
+availableValues :: [Integer]
+availableValues = tail $ [0..] >>= \x -> [x, -x]
 
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
