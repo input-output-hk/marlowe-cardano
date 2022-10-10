@@ -49,7 +49,6 @@ import Language.Marlowe.CLI.Command.Parse
   , parseSlotNo
   , readAddressEither
   , readTokenName
-  , requiredSignerOpt
   , requiredSignersOpt
   , txBodyFileOpt
   , walletOpt
