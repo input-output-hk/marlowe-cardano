@@ -10,15 +10,18 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Arrow ((***))
-import Control.Monad (forM, unless)
+import Control.Monad (forM, unless, when)
+import Data.Bifunctor (bimap)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
+import Data.Foldable (toList)
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.Strict as SMap (Map, elems, empty, fromList, keysSet, lookup, singleton, toList)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
@@ -301,6 +304,7 @@ data ConstraintError v
   | PayoutInputNotFound (Core.PayoutDatum v)
   | CalculateMinUtxoFailed String
   | CoinSelectionFailed String
+  | BalancingError String
   deriving (Generic)
 
 deriving instance Eq (ConstraintError 'V1)
@@ -495,6 +499,10 @@ selectCoins
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
 selectCoins protocol WalletContext{..} txBodyContent = do
   let
+    -- Extract the value of a UTxO
+    txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
+    txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
+
     -- Only "succeed" if both halves of the pair aren't Nothing
     maybePair :: (Maybe a,  Maybe b) -> Maybe (a, b)
     maybePair    (Just  a , Just  b) =  Just  (a, b)
@@ -504,10 +512,6 @@ selectCoins protocol WalletContext{..} txBodyContent = do
     utxos =
       mapMaybe (maybePair . (toCardanoTxIn *** toCardanoTxOut C.MultiAssetInBabbageEra) . toUTxOTuple)
       . toUTxOsList $ availableUtxos
-
-    -- Extract the value of a UTxO
-    txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
-    txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
 
     -- Compute the value of all available UTxOs
     universe :: C.Value
@@ -678,7 +682,83 @@ balanceTx
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
-balanceTx = error "not implemented"
+balanceTx _era _systemStart _eraHistory _protocol _marloweCtx WalletContext{..} C.TxBodyContent{..} = do
+  let
+    -- Extract the value of a UTxO
+    txOutToValue :: C.TxOut ctx C.BabbageEra -> C.Value
+    txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
+
+    -- convert :: BuildTxWith build (Witness WitCtxTxIn era) -> Maybe (TxOut CtxUtxOO era)
+    -- TxOutRef -> TransactionOutput
+    -- For each TxIn in TxBodyContent TxIns
+    -- Look up in WalletContect available
+
+    fromTxOutRefToTxIn :: Chain.TxOutRef -> C.TxIn
+    fromTxOutRefToTxIn (Chain.TxOutRef (Chain.TxId txIn) (Chain.TxIx txIx)) = C.TxIn (C.TxId txIn) txIx
+
+    fromTrOutToTxOut :: Chain.TransactionOutput -> C.TxOut C.CtxUTxO C.BabbageEra
+    fromTrOutToTxOut = undefined
+
+    mkChangeTxOut value = do
+      let txOutValue = C.TxOutValue C.BabbageEra value
+      C.TxOut changeAddress txOutValue TxOutDatumNone ReferenceScriptNone
+
+    -- Chain.UTxOs
+    -- newtype UTxOs = UTxOs { unUTxOs :: Map TxOutRef TransactionOutput }
+    balancingLoop :: Integer -> C.Value -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
+    balancingLoop counter changeValue = do -- changeTxOut@(TxOut addr (txOutValueToValue -> changeValue) datum ref) = do
+      when (counter == 0) $ Left . BalancingError $
+        "Uncucessful balancing of the transaction: " <> show (C.TxBodyContent {..})
+      let
+        -- Recompute execution units with full set of UTxOs, including change.
+        buildTxBodyContent = C.TxBodyContent{..} { C.txOuts = mkChangeTxOut changeValue : txOuts }
+        trial =
+          withShelleyBasedEra era $ makeTransactionBodyAutoBalance
+            eraInMode
+            start
+            history
+            protocol'
+            SMap.empty
+            utxos
+            buildTxBodyContent
+            changeAddress
+            Nothing
+      case trial of
+        -- Correct for a negative balance in cases where execution units, and hence fees, have increased.
+        Left (C.TxBodyErrorAdaBalanceNegative delta) -> do
+          balancingLoop (counter - 1) (C.lovelaceToValue delta <> changeValue)
+        Left err -> Left . BalancingError $ show err
+        Right balanced@(C.BalancedTxBody (C.TxBody C.TxBodyContent { txFee = fee }) _ _) -> do
+          pure (buildTxBodyContent { C.txFee = fee }, balanced)
+
+
+    f :: (Chain.TxOutRef, Chain.TransactionOutput) -> (C.TxIn, C.TxOut C.CtxUTxO C.BabbageEra)
+    f = bimap fromTxOutRefToTxIn fromTrOutToTxOut
+
+    -- utxos :: SMap.Map C.TxIn (C.TxOut C.CtxUTxO C.BabbageEra)
+    utxos :: C.UTxO C.BabbageEra
+    utxos = C.UTxO . SMap.fromList . map f . SMap.toList . Chain.unUTxOs $ availableUtxos
+
+    -- from WalletContext or TxBodyContent
+    -- utxos = undefined
+
+    -- totalIn = foldMap txOutToValue . (SMap.elems . C.unUTxO) $ utxos
+
+-- UTxO
+-- unUTxO :: Map TxIn (TxOut CtxUTxO era)
+-- type TxIns build era = [(TxIn, BuildTxWith build (Witness WitCtxTxIn era))]
+-- BuildTxWith build (Witness WitCtxTxIn era)) -> Maybe (TxOut CtxUtxOO era)
+
+    totalIn = foldMap txOutToValue . (SMap.elems . C.unUTxO) $ utxos
+    totalOut = foldMap txOutToValue txOuts
+    totalMint = case txMintValue of
+      C.TxMintValue _ value _ -> value
+      _ -> mempty
+
+    -- Initial setup is `fee = 0` - we output all the difference as a change and expect balancing error ;-)
+    initialChange = totalIn <> totalMint <> C.negateValue totalOut
+
+  balancingLoop 10 initialChange
 
 solveInitialTxBodyContent
   :: forall v
