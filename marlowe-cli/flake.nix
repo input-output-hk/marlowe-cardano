@@ -35,6 +35,7 @@
           ];
           extraPackages = p: [
             local.marlowe-cli
+            local.marlowe-rt
             local.marlowe.cardano-address
             local.marlowe.cardano-node
             local.marlowe.cardano-cli
