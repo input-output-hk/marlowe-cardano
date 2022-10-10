@@ -187,7 +187,7 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
         then findTransactions ci
         else pure mempty
     let
-      maybeTransactions = guard best >> pure transactions
+      perhapsTransactions = if best then Right transactions else Left ci
       guardValue condition x =
         if condition
           then Just <$> x
@@ -206,10 +206,10 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
          . pure
          $ checkTokens ci
      , guardValue (maximumValue || checkAll)
-         $ checkMaximumValue protocol maybeTransactions ci verbose
+         $ checkMaximumValue protocol perhapsTransactions verbose
      , guardValue (minimumUtxo || checkAll)
          . withShelleyBasedEra era
-         $ checkMinimumUtxo era protocol maybeTransactions ci verbose
+         $ checkMinimumUtxo era protocol perhapsTransactions verbose
      , guardValue (executionCost || checkAll)
          $ checkExecutionCost protocol ci transactions verbose
      , guardValue (transactionSize || checkAll)
@@ -286,20 +286,19 @@ checkRoles ci =
 
 -- | Check that the protocol limit on maximum value in a UTxO is not violated.
 checkMaximumValue :: MonadError CliError m
-                  => Api.ProtocolParameters     -- ^ The `maxValue` protocol parameter.
-                  -> Maybe [Transaction]        -- ^ The transactions to traverse.
-                  -> ContractInstance lang era  -- ^ The bundle of contract information.
-                  -> Bool                       -- ^ Whether to include worst-case example in output.
-                  -> m A.Value                  -- ^ Action to print a report on `maxValue` validity.
-checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize=Just maxValue} maybeTransactions ci verbose =
+                  => Api.ProtocolParameters                           -- ^ The `maxValue` protocol parameter.
+                  -> Either (ContractInstance lang era) [Transaction] -- ^ The bundle of contract information, or the transactions to traverse.
+                  -> Bool                                             -- ^ Whether to include worst-case example in output.
+                  -> m A.Value                                        -- ^ Action to print a report on `maxValue` validity.
+checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize=Just maxValue} info verbose =
   let
     (size, worst) =
-      case maybeTransactions of
-        Just transactions -> let
-                               measure tx@(Transaction _ contract _ _) = [(computeValueSize $ extractAll contract, Just tx)]
-                             in
-                               maximumBy (compare `on` fst) $ foldMap measure transactions
-        Nothing           -> (computeValueSize $ extractFromContract ci, Nothing)
+      case info of
+        Right transactions -> let
+                                measure tx@(Transaction _ contract _ _) = [(computeValueSize $ extractAll contract, Just tx)]
+                              in
+                                maximumBy (compare `on` fst) $ foldMap measure transactions
+        Left ci            -> (computeValueSize $ extractFromContract ci, Nothing)
   in
     pure
       $ putJson "Maximum value"
@@ -311,7 +310,7 @@ checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize=Just maxValue
         , "Percentage" .= (100 * fromIntegral size / fromIntegral maxValue :: Double)
         ]
       <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> worst)
-checkMaximumValue _ _ _ _ = throwError $ CliError "Missing `maxValue` protocol parameter."
+checkMaximumValue _ _ _ = throwError $ CliError "Missing `maxValue` protocol parameter."
 
 
 -- | Compute the size of a multi-asset value.
@@ -319,11 +318,17 @@ computeValueSize :: S.Set Token  -- ^ The tokens present.
                  -> Int          -- ^ The number of bytes on the ledger.
 computeValueSize tokens =
   let
+    -- Number of tokens.
     nTokens = S.size tokens
+    -- Number of bytes needed to store the policy IDs.
     nPolicies = S.size $ S.map (\(Token c _) -> c) tokens
+    -- Number of bytes needed to store the token names.
     nNames = sum . fmap P.lengthOfByteString . toList $ S.map (\(Token _ (P.TokenName n)) -> n) tokens
+    -- Round bytes up to whole words.
     padWords x = (x + 7) `div` 8
   in
+    -- This is the ledger formula for computing the size of a token bundle.
+    -- See <https://github.com/input-output-hk/cardano-ledger/blob/863f1d2f53852369802f070e16509ba3c896b47a/doc/explanations/min-utxo-alonzo.rst>.
     8 * (6 + padWords (12 * nTokens + 28 * nPolicies + fromInteger nNames))
 
 
@@ -331,13 +336,12 @@ computeValueSize tokens =
 checkMinimumUtxo :: forall lang era m
                  .  Api.IsShelleyBasedEra era
                  => MonadError CliError m
-                 => Api.ScriptDataSupportedInEra era  -- ^ The era.
-                 -> Api.ProtocolParameters            -- ^ The protocol parameters.
-                 -> Maybe [Transaction]               -- ^ The transactions to traverse.
-                 -> ContractInstance lang era         -- ^ The bundle of contract information.
-                 -> Bool                              -- ^ Whether to include worst-case example in output.
-                 -> m A.Value                         -- ^ Action to print a report on the `minimumUTxO` validity.
-checkMinimumUtxo era protocol maybeTransactions ci verbose =
+                 => Api.ScriptDataSupportedInEra era                 -- ^ The era.
+                 -> Api.ProtocolParameters                           -- ^ The protocol parameters.
+                 -> Either (ContractInstance lang era) [Transaction] -- ^ The bundle of contract information, or the transactions to traverse.
+                 -> Bool                                             -- ^ Whether to include worst-case example in output.
+                 -> m A.Value                                        -- ^ Action to print a report on the `minimumUTxO` validity.
+checkMinimumUtxo era protocol info verbose =
   do
     let
       compute tokens =
@@ -357,13 +361,13 @@ checkMinimumUtxo era protocol maybeTransactions ci verbose =
                 Api.ReferenceScriptNone
           liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out protocol
     (value, worst) <-
-      case maybeTransactions of
-        Just transactions -> let
+      case info of
+        Right transactions -> let
                                measure tx@(Transaction _ contract _ _) = pure . (, Just tx) <$> compute (extractAll contract)
                              in
                                (maximumBy (compare `on` (Api.selectLovelace . fst)) :: [(Api.Value, Maybe Transaction)] -> (Api.Value, Maybe Transaction))
                                  <$> foldTransactionsM measure transactions
-        Nothing           -> fmap (, Nothing) . compute $ extractFromContract ci
+        Left ci           -> fmap (, Nothing) . compute $ extractFromContract ci
     pure
       $ putJson "Minimum UTxO"
       $ [
