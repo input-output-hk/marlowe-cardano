@@ -552,7 +552,7 @@ buildMinting :: MonadError CliError m
              -> SigningKeyFile                                      -- ^ The file for required signing key.
              -> Either
                 [(AddressInEra era, SigningKeyFile)]
-                (NonEmpty (TokenName, Natural))
+                (NonEmpty (TokenName, Natural, AddressInEra era))
                                                                     -- ^ Minting policy related action.
                                                                     -- Pass token providers for burning or token distribution for minting.
              -> Maybe FilePath                                      -- ^ The CIP-25 metadata for the minting, with keys for each token name.
@@ -576,8 +576,8 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
       pure $ BurnAll currencyIssuer (provider' :| providers')
     Left _ -> do
       throwError "Token provider set is empty."
-    Right tokenDistribution ->
-      pure $ Mint currencyIssuer $ tokenDistribution <&> \(t, c) -> (t, c, changeAddress)
+    Right tokenDistribution -> do
+      pure $ Mint currencyIssuer tokenDistribution
   metadataJson <- sequence $ decodeFileStrict <$> metadataFile
   metadata <- forM metadataJson \case
     A.Object metadataProps -> pure metadataProps
@@ -625,7 +625,7 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
                       (AssetId policy (AssetName $ fromBuiltin name) , C.Quantity $ toInteger count)
                 (recipient, value)
 
-            -- TODO: use sensible coin selection here. Currently coin selection failes in the context of minting.
+            -- TODO: use sensible coin selection here. Currently coin selection fails in the context of minting.
             utxos <-
               fmap (M.toList . unUTxO)
                 . queryInEra connection
@@ -694,7 +694,7 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
                 then Just <$> makeBalancedTxOut era protocol addr Nothing value ReferenceScriptNone
                 else pure Nothing
             when (tokensValue == mempty) $ do
-              throwError . CliError $ "Unable to find currecy " <> show policy <> " tokens."
+              throwError . CliError $ "Unable to find currency " <> show policy <> " tokens."
             pure (inputs', outputs', signingKeys', C.negateValue tokensValue)
 
     let

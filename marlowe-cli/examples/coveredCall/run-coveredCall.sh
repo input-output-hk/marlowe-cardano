@@ -62,14 +62,13 @@ ISSUER_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-ve
 
 echo "Fund the issuer's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                        --out-file /dev/null                      \
-                        --submit 600                              \
-                        --lovelace 150000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
-                        "$ISSUER_ADDRESS"
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
+                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                --out-file /dev/null                      \
+                                --submit 600                              \
+                                --lovelace 150000000                      \
+                                --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
+                                "$ISSUER_ADDRESS"
 
 echo "The issuer mints their tokens for the contract."
 
@@ -78,16 +77,15 @@ MINT_EXPIRES=$((TIP + 1000000))
 TOKEN_NAME_A=Globe
 AMOUNT_A=300
 CURRENCY_SYMBOL_A=$(
-marlowe-cli util mint --testnet-magic "$MAGIC"                  \
-                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --required-signer "$ISSUER_PAYMENT_SKEY"  \
-                      --change-address  "$ISSUER_ADDRESS"       \
-                      --count "$AMOUNT_A"                       \
-                      --expires "$MINT_EXPIRES"                 \
-                      --out-file /dev/null                      \
-                      --submit=600                              \
-                      "$TOKEN_NAME_A"                           \
-| sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
+marlowe-cli util mint --testnet-magic "$MAGIC"                          \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH"         \
+                      --issuer "$ISSUER_ADDRESS:$ISSUER_PAYMENT_SKEY"   \
+                      --count "$AMOUNT_A"                               \
+                      --expires "$MINT_EXPIRES"                         \
+                      --out-file /dev/null                              \
+                      --submit=600                                      \
+                      "$TOKEN_NAME_A:$ISSUER_ADDRESS"                   \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                                    \
 )
 TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
 
@@ -139,13 +137,12 @@ COUNTERPARTY_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --paym
 
 echo "Fund the counterparty's address."
 
-marlowe-cli util faucet --testnet-magic "$MAGIC"                  \
+marlowe-cli util fund-address --testnet-magic "$MAGIC"                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                         --out-file /dev/null                      \
                         --submit 600                              \
                         --lovelace 150000000                      \
-                        --faucet-address "$FAUCET_ADDRESS"        \
-                        --required-signer "$FAUCET_SKEY_FILE"     \
+                        --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
                         "$COUNTERPARTY_ADDRESS"
 
 echo "The counterparty mints their tokens for the swap."
@@ -155,13 +152,12 @@ AMOUNT_B=500
 CURRENCY_SYMBOL_B=$(
 marlowe-cli util mint --testnet-magic "$MAGIC"                       \
                       --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
-                      --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
-                      --change-address  "$COUNTERPARTY_ADDRESS"      \
+                      --issuer "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
                       --count "$AMOUNT_B"                            \
                       --expires "$MINT_EXPIRES"                      \
                       --out-file /dev/null                           \
                       --submit=600                                   \
-                      "$TOKEN_NAME_B"                                \
+                      "$TOKEN_NAME_B:$COUNTERPARTY_ADDRESS"          \
 | sed -e 's/^PolicyID "\(.*\)"$/\1/'                                 \
 )
 TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"
@@ -380,28 +376,51 @@ cardano-cli query utxo --testnet-magic "$MAGIC" --address "$COUNTERPARTY_ADDRESS
 
 echo "## Clean Up"
 
-BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
+echo "Burning tokens issued by ISSUER:"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                            \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"           \
-                               --tx-in "$TX_2#0"                                   \
-			       --tx-in "$TX_4#1"                                   \
-                               --tx-out "$BURN_ADDRESS+1400000+$AMOUNT_B $TOKEN_B" \
-                               --required-signer "$ISSUER_PAYMENT_SKEY"            \
-                               --change-address "$FAUCET_ADDRESS"                  \
-                               --out-file /dev/null                                \
-                               --submit 600
+marlowe-cli -- util burn --testnet-magic "$MAGIC" \
+                         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                         --issuer "$ISSUER_ADDRESS:$ISSUER_PAYMENT_SKEY"   \
+                         --expires $MINT_EXPIRES \
+                         --token-provider "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
+                          --token-provider "$ISSUER_ADDRESS:$ISSUER_PAYMENT_SKEY" \
+                         --submit 600 \
+                         --out-file /dev/null
+
+echo "Burning tokens issued by COUNTERPARTY:"
+
+marlowe-cli util burn --testnet-magic "$MAGIC" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --issuer "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
+                      --expires $MINT_EXPIRES \
+                      --token-provider "$ISSUER_ADDRESS:$ISSUER_PAYMENT_SKEY" \
+                      --token-provider "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
+                      --submit 600 \
+                      --out-file /dev/null
+
+
+echo "Sending back funds:"
+
+marlowe-cli util fund-address --testnet-magic "$MAGIC" \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --send-all \
+                              --source-wallet-credentials "$ISSUER_ADDRESS:$ISSUER_PAYMENT_SKEY" \
+                              --submit 600 \
+                              --out-file /dev/null \
+                              "$FAUCET_ADDRESS"
+
+marlowe-cli util fund-address --testnet-magic "$MAGIC" \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --send-all \
+                              --source-wallet-credentials "$COUNTERPARTY_ADDRESS:$COUNTERPARTY_PAYMENT_SKEY" \
+                              --submit 600 \
+                              --out-file /dev/null \
+                              "$FAUCET_ADDRESS"
+
+echo "Here are the UTxOs at the second party $ISSUER_NAME's address after the cleanup:"
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$ISSUER_ADDRESS"
 
-marlowe-cli transaction simple --testnet-magic "$MAGIC"                            \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"           \
-                               --tx-in "$TX_4#0"                                   \
-			       --tx-in "$TX_4#2"                                   \
-                               --tx-out "$BURN_ADDRESS+1400000+$AMOUNT_A $TOKEN_A" \
-                               --required-signer "$COUNTERPARTY_PAYMENT_SKEY"      \
-                               --change-address "$FAUCET_ADDRESS"                  \
-                               --out-file /dev/null                                \
-                               --submit 600
+echo "Here are the UTxOs at the second party $COUNTERPARTY_NAME's address after the cleanup:"
 
 cardano-cli query utxo --testnet-magic "$MAGIC" --address "$COUNTERPARTY_ADDRESS"

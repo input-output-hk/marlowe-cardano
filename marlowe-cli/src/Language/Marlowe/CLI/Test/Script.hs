@@ -276,7 +276,6 @@ interpret so@Mint {..} = do
     pure ((tokenName, amount, destAddress), (owner, tokenName, amount))
 
   logSoMsg' so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
-
   tokenDistribution' <- maybe (throwSoError so "Token distribution shouldn't be empty") pure $ L.NonEmpty.nonEmpty tokenDistribution
   let
     mintingAction = T.Mint

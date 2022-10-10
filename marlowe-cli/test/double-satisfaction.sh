@@ -47,14 +47,13 @@ PARTY_A_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-v
 
 # Fund the first party's address.
 
-marlowe-cli util faucet \
+marlowe-cli util fund-address \
   --testnet-magic "$MAGIC" \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --out-file /dev/null \
   --submit 600 \
   --lovelace 100000000 \
-  --faucet-address "$FAUCET_ADDRESS" \
-  --required-signer "$FAUCET_SKEY_FILE" \
+  --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
   "$PARTY_A_ADDRESS"
 
 marlowe-cli util clean --testnet-magic "$MAGIC"                  \
@@ -98,14 +97,13 @@ PARTY_B_ADDRESS=$(cardano-cli address build --testnet-magic "$MAGIC" --payment-v
 
 # Fund the second party's address.
 
-marlowe-cli util faucet \
+marlowe-cli util fund-address \
   --testnet-magic "$MAGIC" \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --out-file /dev/null \
   --submit 600 \
   --lovelace 100000000 \
-  --faucet-address "$FAUCET_ADDRESS" \
-  --required-signer "$FAUCET_SKEY_FILE" \
+  --source-wallet-credentials  "$FAUCET_ADDRESS:$FAUCET_SKEY_FILE" \
   "$PARTY_B_ADDRESS"
 
 marlowe-cli util clean --testnet-magic "$MAGIC"                  \
