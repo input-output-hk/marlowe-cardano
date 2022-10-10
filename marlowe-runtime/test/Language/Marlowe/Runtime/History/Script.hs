@@ -41,7 +41,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
-import Language.Marlowe.Scripts (marloweTxInputsFromInputs)
 import Numeric.Natural (Natural)
 import qualified Plutus.V1.Ledger.Api as P
 import qualified PlutusTx.AssocMap as AM
@@ -349,7 +348,7 @@ genApplyInputsV1 payoutAddress blockHeader contractId TransactionScriptOutput{..
       , blockHeader
       , validityLowerBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow / 1000
       , validityUpperBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow / 1000
-      , redeemer = marloweTxInputsFromInputs inputs
+      , redeemer = inputs
       , output
       }
 
