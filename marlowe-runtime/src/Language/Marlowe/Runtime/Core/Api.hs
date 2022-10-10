@@ -32,7 +32,7 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, parseTxOutRef, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import qualified Language.Marlowe.Scripts as V1
+-- import qualified Language.Marlowe.Scripts as V1
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
 
@@ -75,19 +75,19 @@ deriving instance Show (MarloweVersion v)
 deriving instance Eq (MarloweVersion v)
 deriving instance Ord (MarloweVersion v)
 
-type family Redeemer (v :: MarloweVersionTag) = r | r -> v
 class IsMarloweVersion (v :: MarloweVersionTag) where
   type Contract v :: *
   type TransactionError v :: *
   type Datum v :: *
+  type Redeemer (v :: MarloweVersionTag) :: *
   type PayoutDatum v :: *
   marloweVersion :: MarloweVersion v
 
-type instance Redeemer 'V1 = V1.MarloweInput
 instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
   type TransactionError 'V1 = V1.TransactionError
   type Datum 'V1 = V1.MarloweData
+  type Redeemer 'V1 = [V1.Input]
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 
@@ -287,6 +287,14 @@ datumToJSON = \case
 datumFromJSON :: MarloweVersion v -> Value -> Parser (Datum v)
 datumFromJSON = \case
   MarloweV1 -> parseJSON
+
+toChainMerkleizedContinuationDatum :: MarloweVersion v -> Contract v -> Chain.Datum
+toChainMerkleizedContinuationDatum = \case
+  MarloweV1 -> Chain.toDatum
+
+fromChainMerkleizedContinuationDatum :: MarloweVersion v -> Chain.Datum -> Maybe (Contract v)
+fromChainMerkleizedContinuationDatum = \case
+  MarloweV1 -> Chain.fromDatum
 
 toChainPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Chain.Datum
 toChainPayoutDatum = \case

@@ -4,8 +4,7 @@ module Language.Marlowe.Runtime.ChainSync.Database
   where
 
 import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint(..), TxInMode)
-import Data.Map.Strict (Map)
-import Data.Set (Set)
+import Language.Marlowe.Runtime.ChainSync.Api (GetUTxOsQuery)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock(..))
 import Ouroboros.Network.Point (WithOrigin)
@@ -49,7 +48,7 @@ newtype GetGenesisBlock m = GetGenesisBlock
   { runGetGenesisBlock :: m (Maybe GenesisBlock) }
 
 newtype GetUTxOs m = GetUTxOs
-  { runGetUTxOs :: Set Api.Address -> m (Map Api.TxOutRef Api.TransactionOutput) }
+  { runGetUTxOs :: GetUTxOsQuery -> m Api.UTxOs }
 
 data MoveResult err result
   = RollForward result Api.BlockHeader Api.ChainPoint

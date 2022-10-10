@@ -97,8 +97,8 @@ mkWorker WorkerDependencies{..} =
         toServerStNext . bimap (const ()) unsafeCoerce <$> queryLocalNodeState Nothing QuerySystemStart
       GetEraHistory ->
         toServerStNext . first (const ()) <$> queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
-      GetUTxOs addresses -> do
-        utxos <- Database.runGetUTxOs getUTxOs addresses
+      GetUTxOs utxosQuery -> do
+        utxos <- Database.runGetUTxOs getUTxOs utxosQuery
         pure $ toServerStNext $ Right utxos
 
     toServerStNext :: Either () a -> ServerStNext ChainSyncQuery 'CanReject Void () a IO ()

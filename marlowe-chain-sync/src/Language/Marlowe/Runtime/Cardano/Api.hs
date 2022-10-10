@@ -17,8 +17,10 @@ import qualified Cardano.Ledger.BaseTypes as L
 import Cardano.Ledger.Credential (Ptr(Ptr))
 import Data.Bifunctor (Bifunctor(bimap))
 import Data.ByteString.Short (fromShort, toShort)
+import Data.Data (Proxy(Proxy))
 import Data.Foldable (fold)
 import qualified Data.Map as Map
+import GHC.Base (Alternative((<|>)))
 import Language.Marlowe.Runtime.Cardano.Feature
 import Language.Marlowe.Runtime.ChainSync.Api
 import Witherable (mapMaybe)
@@ -60,6 +62,20 @@ toCardanoScriptHash = C.deserialiseFromRawBytes C.AsScriptHash . unScriptHash
 
 fromCardanoScriptHash :: C.ScriptHash -> ScriptHash
 fromCardanoScriptHash = ScriptHash . C.serialiseToRawBytes
+
+toCardanoPlutusScript :: forall lang. C.HasTypeProxy lang => PlutusScript -> Maybe (C.PlutusScript lang)
+toCardanoPlutusScript = C.deserialiseFromRawBytes (C.proxyToAsType (Proxy :: Proxy (C.PlutusScript lang))) . unPlutusScript
+
+fromCardanoPlutusScript :: forall lang. C.HasTypeProxy lang => C.PlutusScript lang -> PlutusScript
+fromCardanoPlutusScript = PlutusScript . C.serialiseToRawBytes
+
+plutusScriptHash :: PlutusScript -> Maybe ScriptHash
+plutusScriptHash ps = hashPlutusScript C.PlutusScriptV2 <|> hashPlutusScript C.PlutusScriptV1
+  where
+    hashPlutusScript :: C.HasTypeProxy lang => C.PlutusScriptVersion lang -> Maybe ScriptHash
+    hashPlutusScript pv = do
+      script <- C.PlutusScript pv <$> toCardanoPlutusScript ps
+      pure . fromCardanoScriptHash . C.hashScript $ script
 
 toCardanoDatumHash :: DatumHash -> Maybe (C.Hash C.ScriptData)
 toCardanoDatumHash = C.deserialiseFromRawBytes (C.AsHash C.AsScriptData) . unDatumHash
@@ -190,6 +206,12 @@ toCardanoTxIn TxOutRef{..} = C.TxIn <$> toCardanoTxId txId <*> pure (toCardanoTx
 
 fromCardanoTxIn :: C.TxIn -> TxOutRef
 fromCardanoTxIn (C.TxIn txId txIx) = TxOutRef (fromCardanoTxId txId) (fromCardanoTxIx txIx)
+
+toCardanoAddressAny :: Address -> Maybe C.AddressAny
+toCardanoAddressAny = C.deserialiseFromRawBytes C.AsAddressAny . unAddress
+
+fromCardanoAddressAny :: C.AddressAny -> Address
+fromCardanoAddressAny = Address . C.serialiseToRawBytes
 
 toCardanoAddressInEra :: C.CardanoEra era -> Address -> Maybe (C.AddressInEra era)
 toCardanoAddressInEra era = withCardanoEra era

@@ -94,8 +94,8 @@ package marlowe-contracts
 package marlowe-protocols
   ghc-options: -Werror
 
-package marlowe-runtime
-  ghc-options: -Werror
+-- package marlowe-runtime
+--   ghc-options: -Werror
 
 -- You have to copy ghc-options manually to `nix/pkgs/haskell/haskell.nix`
 package plutus-core

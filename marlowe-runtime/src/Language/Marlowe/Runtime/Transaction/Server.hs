@@ -32,31 +32,19 @@ import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTV
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
-import qualified Data.Aeson as Aeson
 import Data.Bifunctor (first)
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import Data.Time (UTCTime)
+import Data.Time (UTCTime, getCurrentTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Credential(..), SlotConfig, TokenName, TxId(..))
+import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Credential(..), SlotConfig, TokenName, TxId(..), Metadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
-    ( Contract,
-      ContractId(..),
-      MarloweVersion,
-      PayoutDatum,
-      Redeemer,
-      Contract,
-      ContractId(..),
-      IsMarloweVersion(marloweVersion),
-      MarloweVersion,
-      PayoutDatum,
-      Redeemer,
-      withMarloweVersion )
+  (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, withMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
@@ -78,6 +66,7 @@ import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStat
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import System.IO (hPutStrLn, stderr)
+import Data.Binary (Word64)
 
 newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
 
@@ -141,7 +130,7 @@ mkWorker WorkerDependencies{..} =
     serverInit :: ServerStInit MarloweTxCommand IO ()
     serverInit = ServerStInit
       { recvMsgExec = \case
-          Create mStakeCredential version addresses roles metadata contract ->
+          Create mStakeCredential version addresses roles metadata minAda contract ->
             execCreate
               solveConstraints
               loadWalletContext
@@ -151,14 +140,15 @@ mkWorker WorkerDependencies{..} =
               addresses
               roles
               metadata
+              minAda
               contract
-          ApplyInputs era version addresses contractId invalidBefore invalidHereafter redeemer ->
+          ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
             withMarloweVersion version $ execApplyInputs
               slotConfig
               solveConstraints
               loadWalletContext
               loadMarloweContext
-              era
+              version
               addresses
               contractId
               invalidBefore
@@ -195,12 +185,13 @@ execCreate
   -> MarloweVersion v
   -> WalletAddresses
   -> Map TokenName Address
-  -> Map Int Aeson.Value
+  -> Map Word64 Metadata
+  -> Chain.Lovelace
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) IO ())
-execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata contract = execExceptT do
-  constraints <- except $ buildCreateConstraints version roleTokens metadata contract
+execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- lift $ loadWalletContext addresses
+  constraints <- except $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
   let
     scripts@Registry.MarloweScripts{..} = Registry.getCurrentScripts version
     stakeReference = maybe NoStakeAddress StakeAddressByValue mStakeCredential
@@ -251,12 +242,11 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
       isToCurrentScriptAddress _ = False
 
 execApplyInputs
-  :: IsMarloweVersion v
-  => SlotConfig
+  :: SlotConfig
   -> SolveConstraints
   -> LoadWalletContext
   -> LoadMarloweContext
-  -> ScriptDataSupportedInEra era
+  -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
   -> Maybe UTCTime
@@ -268,7 +258,7 @@ execApplyInputs
   solveConstraints
   loadWalletContext
   loadMarloweContext
-  era
+  version
   addresses
   contractId
   invalidBefore
@@ -276,13 +266,14 @@ execApplyInputs
   inputs = execExceptT do
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
-      $ loadMarloweContext marloweVersion contractId
+      $ loadMarloweContext version contractId
+    invalidBefore' <- lift $ maybe getCurrentTime pure invalidBefore
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     constraints <- except $ buildApplyInputsConstraints
         slotConfig
-        marloweVersion
+        version
         scriptOutput'
-        invalidBefore
+        invalidBefore'
         invalidHereafter
         inputs
     walletContext <- lift $ loadWalletContext addresses
@@ -357,3 +348,4 @@ execExceptT
   => ExceptT e m a
   -> m (ServerStCmd cmd status e a m ())
 execExceptT = fmap (either (flip SendMsgFail ()) (flip SendMsgSucceed ())) . runExceptT
+

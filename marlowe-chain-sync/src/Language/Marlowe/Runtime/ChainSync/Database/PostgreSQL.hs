@@ -60,6 +60,7 @@ import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import Control.Applicative ((<|>))
+import Control.Arrow ((***))
 import Control.Foldl (Fold(Fold))
 import qualified Control.Foldl as Fold
 import Data.ByteString (ByteString)
@@ -87,6 +88,7 @@ import Hasql.TH (foldStatement, maybeStatement, resultlessStatement, singletonSt
 import Hasql.Transaction (Transaction)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
+import Language.Marlowe.Runtime.ChainSync.Api (GetUTxOsQuery(GetUTxOsAtAddresses, GetUTxOsForTxOutRefs))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.ChainSync.Database
   ( CardanoBlock
@@ -749,7 +751,31 @@ queryTxOutsBulk slotNo txIds = HT.statement (V.fromList $ Api.unTxId <$> Set.toL
               }
           }
 getUTxOs :: GetUTxOs Transaction
-getUTxOs = GetUTxOs \addresses -> do
+getUTxOs = GetUTxOs $ fmap Api.UTxOs . \case
+  GetUTxOsForTxOutRefs txOutRefs -> do
+    let
+      -- Passing an array of anonymous composite types by zipping it through `unnest`:
+      -- https://github.com/nikita-volkov/hasql/issues/25#issuecomment-286053459
+      txOutRefTuple (Api.TxOutRef (Api.TxId txId) (Api.TxIx txIx)) = (txId, fromIntegral txIx)
+      txOutRefs' = (V.fromList *** V.fromList) . unzip . fmap txOutRefTuple . Set.toList $ txOutRefs
+    HT.statement txOutRefs' $
+      [foldStatement|
+        SELECT txOut.txId :: bytea
+             , txOut.txIx :: smallint
+             , txOut.address :: bytea
+             , txOut.lovelace :: bigint
+             , txOut.datumHash :: bytea?
+             , txOut.datumBytes :: bytea?
+             , asset.policyId :: bytea?
+             , asset.name :: bytea?
+             , assetOut.quantity :: bigint?
+          FROM chain.txOut         AS txOut
+          LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+          LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+         WHERE (txOut.txId, txOut.txTx) = ANY(unnest ($1 :: bytea[], $2 :: smallint[]))
+         ORDER BY txIx
+      |] (Fold foldRow mempty id)
+  GetUTxOsAtAddresses addresses -> do
     let
       addresses' = V.fromList $ fmap Api.unAddress. Set.toList $ addresses
     HT.statement addresses' $
@@ -769,26 +795,25 @@ getUTxOs = GetUTxOs \addresses -> do
          WHERE txOut.address = ANY($1 :: bytea[])
          ORDER BY txIx
       |] (Fold foldRow mempty id)
-    where
-      -- foldRow :: IntMap Api.TransactionOutput -> ReadTxOutRow -> IntMap Api.TransactionOutput
-      foldRow acc (txId, txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
-        Map.alter (Just . maybe newTxOut mergeTxOut) (Api.TxOutRef (Api.TxId txId) (fromIntegral txIx)) acc
-        where
-          newTxOut = Api.TransactionOutput
-            { address = Api.Address address
-            , assets = Api.Assets
-                { ada = Api.Lovelace $ fromIntegral lovelace
-                , tokens = decodeTokens policyId tokenName quantity
-                }
-            , datumHash = Api.DatumHash <$> datumHash
-            , datum = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
-            }
+  where
+    foldRow acc (txId, txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
+      Map.alter (Just . maybe newTxOut mergeTxOut) (Api.TxOutRef (Api.TxId txId) (fromIntegral txIx)) acc
+      where
+        newTxOut = Api.TransactionOutput
+          { address = Api.Address address
+          , assets = Api.Assets
+              { ada = Api.Lovelace $ fromIntegral lovelace
+              , tokens = decodeTokens policyId tokenName quantity
+              }
+          , datumHash = Api.DatumHash <$> datumHash
+          , datum = Api.fromPlutusData . toPlutusData . unsafeDeserialize' <$> datumBytes
+          }
 
-          mergeTxOut txOut@Api.TransactionOutput{assets = assets@Api.Assets{..}} = txOut
-            { Api.assets = assets
-                { Api.tokens = tokens <> decodeTokens policyId tokenName quantity
-                }
-            }
+        mergeTxOut txOut@Api.TransactionOutput{assets = assets@Api.Assets{..}} = txOut
+          { Api.assets = assets
+              { Api.tokens = tokens <> decodeTokens policyId tokenName quantity
+              }
+          }
 
 decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Api.Tokens
 decodeTokens (Just policyId) (Just tokenName) (Just quantity) =

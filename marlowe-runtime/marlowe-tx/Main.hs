@@ -14,14 +14,16 @@ import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( ChainSyncCommand
   , ChainSyncQuery(..)
+  , GetUTxOsQuery
   , RuntimeChainSeekClient
+  , UTxOs
   , WithGenesis(..)
   , chainSeekClientPeer
   , runtimeChainSeekCodec
   )
 import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
-import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext)
+import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server
   (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
@@ -131,11 +133,14 @@ run Options{..} = withSocketsDo do
         systemStart
         eraHistory
         protocolParameters
-        slotConfig
-    let loadWalletContext = Query.loadWalletContext
+
     let
       loadMarloweContext :: LoadMarloweContext
       loadMarloweContext = Query.loadMarloweContext networkId runHistorySyncClient
+
+      loadWalletContext :: LoadWalletContext
+      loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
+
     TransactionServer{..} <- atomically do
       mkTransactionServer TransactionServerDependencies{..}
 
@@ -162,6 +167,9 @@ run Options{..} = withSocketsDo do
         let peer = queryClientPeer client
         result <- fst <$> runPeerWithDriver driver peer (startDState driver)
         pure $ fromRight (error "failed to query chain seek server") result
+
+    runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
+    runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
 
     openClient addr = bracketOnError (openSocket addr) close \sock -> do
       connect sock $ addrAddress addr

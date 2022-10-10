@@ -5,6 +5,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api
   ( Address(..)
@@ -21,6 +22,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , Datum(..)
   , DatumHash(..)
   , FindTxsToError(..)
+  , GetUTxOsQuery(..)
   , IntersectError(..)
   , Lovelace(..)
   , Metadata(..)
@@ -30,6 +32,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , module Network.Protocol.ChainSeek.Server
   , module Network.Protocol.ChainSeek.Types
   , PaymentKeyHash(..)
+  , PlutusScript(..)
   , PolicyId(..)
   , Quantity(..)
   , Redeemer(..)
@@ -52,7 +55,9 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , TxId(..)
   , TxIx(..)
   , TxOutRef(..)
+  , UTxO(..)
   , UTxOError(..)
+  , UTxOs(..)
   , ValidityRange(..)
   , WithGenesis(..)
   , fromBech32
@@ -62,9 +67,11 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , fromRedeemer
   , getUTCTime
   , isAfter
+  , lookupUTxO
   , moveSchema
   , parseTxOutRef
   , paymentCredential
+  , policyIdToScriptHash
   , putUTCTime
   , runtimeChainSeekCodec
   , slotToUTCTime
@@ -74,6 +81,8 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , toDatum
   , toPlutusData
   , toRedeemer
+  , toUTxOTuple
+  , toUTxOsList
   ) where
 
 import Cardano.Api
@@ -110,7 +119,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Set (Set)
-import qualified Data.Set as Set
 import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -184,6 +192,7 @@ data ValidityRange
   | MinMaxBound SlotNo SlotNo -- ^ The transaction is only valid between two slots.
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
 
 data Metadata
   = MetadataMap [(Metadata, Metadata)]
@@ -263,8 +272,12 @@ data Assets = Assets
   { ada    :: !Lovelace -- ^ The ADA sent by the tx output.
   , tokens :: !Tokens   -- ^ Additional tokens sent by the tx output.
   }
-  deriving stock (Show, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Generic)
   deriving anyclass (Binary)
+
+-- | Let's make the instance explicit so we can assume "some" semantics.
+instance Ord Assets where
+  compare (Assets a1 t1) (Assets a2 t2) = compare (a1, t1) (a2, t2)
 
 instance Semigroup Assets where
   a <> b = Assets
@@ -437,8 +450,16 @@ newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving (IsString, Show) via Base16
   deriving anyclass (Binary)
 
+policyIdToScriptHash :: PolicyId -> ScriptHash
+policyIdToScriptHash (PolicyId h) = ScriptHash h
+
 fromCardanoScriptHash :: Cardano.ScriptHash -> ScriptHash
 fromCardanoScriptHash = ScriptHash . Cardano.serialiseToRawBytes
+
+newtype PlutusScript = PlutusScript { unPlutusScript :: ByteString }
+  deriving stock (Eq, Ord, Generic)
+  deriving (IsString, Show) via Base16
+  deriving anyclass (Binary)
 
 data StakeReference
   = StakeCredential StakeCredential
@@ -743,6 +764,31 @@ instance Binary SlotConfig where
     put $ nominalDiffTimeToSeconds slotLength
   get = SlotConfig <$> getUTCTime <*> (secondsToNominalDiffTime <$> get)
 
+data GetUTxOsQuery
+  = GetUTxOsAtAddresses (Set Address)
+  | GetUTxOsForTxOutRefs (Set TxOutRef)
+
+-- Semigroup and Monoid seem to be safe - we cover here a subset of a partial function.
+newtype UTxOs = UTxOs { unUTxOs :: Map TxOutRef TransactionOutput }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (Semigroup, Monoid)
+  deriving anyclass (Binary)
+
+lookupUTxO :: TxOutRef -> UTxOs -> Maybe TransactionOutput
+lookupUTxO txOutRef (UTxOs utxos) = Map.lookup txOutRef utxos
+
+toUTxOsList :: UTxOs -> [UTxO]
+toUTxOsList (UTxOs (Map.toList -> utxos)) = fmap (uncurry UTxO) utxos
+
+data UTxO = UTxO
+  { txOutRef :: TxOutRef
+  , transactionOutput ::  TransactionOutput
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+
+toUTxOTuple :: UTxO -> (TxOutRef, TransactionOutput)
+toUTxOTuple (UTxO txOutRef transactionOutput) = (txOutRef, transactionOutput)
+
 data ChainSyncQuery delimiter err result where
   GetSlotConfig :: ChainSyncQuery Void () SlotConfig
   GetSecurityParameter :: ChainSyncQuery Void () Int
@@ -750,7 +796,7 @@ data ChainSyncQuery delimiter err result where
   GetProtocolParameters :: ChainSyncQuery Void () ProtocolParameters
   GetSystemStart :: ChainSyncQuery Void () SystemStart
   GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
-  GetUTxOs :: Set Address -> ChainSyncQuery Void () (Map TxOutRef TransactionOutput)
+  GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery Void () UTxOs
 
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
@@ -760,7 +806,7 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetProtocolParameters :: Query.Tag ChainSyncQuery Void () ProtocolParameters
     TagGetSystemStart :: Query.Tag ChainSyncQuery Void () SystemStart
     TagGetEraHistory :: Query.Tag ChainSyncQuery Void () (EraHistory CardanoMode)
-    TagGetUTxOs :: Query.Tag ChainSyncQuery Void () (Map TxOutRef TransactionOutput)
+    TagGetUTxOs :: Query.Tag ChainSyncQuery Void () UTxOs
   tagEq TagGetSlotConfig TagGetSlotConfig               = Just (Refl, Refl, Refl)
   tagEq TagGetSlotConfig _                              = Nothing
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
@@ -801,7 +847,12 @@ instance Query.IsQuery ChainSyncQuery where
     GetProtocolParameters -> mempty
     GetSystemStart -> mempty
     GetEraHistory -> mempty
-    GetUTxOs utxos -> put . fmap unAddress . Set.toList $ utxos
+    GetUTxOs (GetUTxOsAtAddresses addresses) -> do
+      putWord8 0x01
+      put addresses
+    GetUTxOs (GetUTxOsForTxOutRefs txOutRefs) -> do
+      putWord8 0x02
+      put txOutRefs
   getQuery = \case
     TagGetSlotConfig        -> pure GetSlotConfig
     TagGetSecurityParameter -> pure GetSecurityParameter
@@ -810,8 +861,15 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> do
-      utxos <- get
-      pure . GetUTxOs . Set.fromList . fmap Address $ utxos
+      word <- getWord8
+      GetUTxOs <$> case word of
+        0x01 -> do
+          addresses <- get
+          pure $ GetUTxOsAtAddresses addresses
+        0x02 -> do
+          txOutRefs <- get
+          pure $ GetUTxOsForTxOutRefs txOutRefs
+        _    -> fail "Invalid GetUTxOsQuery tag"
   putDelimiter = \case
     TagGetSlotConfig        -> absurd
     TagGetSecurityParameter -> absurd
