@@ -542,7 +542,7 @@ interestingParties (Role roleName) False = [
     Role (removeFirstLetter roleName)
   , Role (TokenName $ unTokenName roleName `appendByteString` "s")
   ]
-interestingParties (PK _) _ = []
+-- interestingParties (PK _) _ = []
 
 removeFirstLetter :: TokenName -> TokenName
 removeFirstLetter (TokenName tokenName) = TokenName $ sliceByteString 1 (lengthOfByteString tokenName) tokenName
