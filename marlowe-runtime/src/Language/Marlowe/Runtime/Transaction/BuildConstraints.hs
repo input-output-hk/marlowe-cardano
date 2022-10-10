@@ -180,8 +180,6 @@ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
     adaAsset amount = Assets amount mempty
 
     -- Role token distribution constraints
-    -- TODO: token threaded based minting policy make probably sens
-    -- even in the context of roles contract because we gain uniqness.
     mintRoleTokens :: TxConstraintsBuilderM (CreateError 'V1) 'V1 PolicyId
     mintRoleTokens = if distribution /= mempty
       then do
