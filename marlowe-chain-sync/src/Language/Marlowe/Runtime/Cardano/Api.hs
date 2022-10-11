@@ -276,6 +276,16 @@ toCardanoTxOutDatum era = curry case featureInCardanoEra era of
     (Just hash, Nothing) -> C.TxOutDatumHash scriptDataSupported <$> toCardanoDatumHash hash
     (_, Just datum) -> Just $ C.TxOutDatumInTx scriptDataSupported $ toCardanoScriptData datum
 
+toCardanoTxOutDatum'
+  :: C.CardanoEra era
+  -> Maybe DatumHash
+  -> Maybe (C.TxOutDatum ctx era)
+toCardanoTxOutDatum' era = case featureInCardanoEra era of
+  Nothing -> const $ Just C.TxOutDatumNone
+  Just scriptDataSupported -> \case
+    Nothing -> Just C.TxOutDatumNone
+    Just hash -> C.TxOutDatumHash scriptDataSupported <$> toCardanoDatumHash hash
+
 fromCardanoTxOutDatum :: C.TxOutDatum C.CtxTx era -> (Maybe DatumHash, Maybe Datum)
 fromCardanoTxOutDatum = \case
   C.TxOutDatumNone -> (Nothing, Nothing)
@@ -288,6 +298,13 @@ toCardanoTxOut era TransactionOutput{..} = C.TxOut
   <$> toCardanoAddressInEra (cardanoEraOfFeature era) address
   <*> toCardanoTxOutValue era assets
   <*> toCardanoTxOutDatum (cardanoEraOfFeature era) datumHash datum
+  <*> pure C.ReferenceScriptNone
+
+toCardanoTxOut' :: C.MultiAssetSupportedInEra era -> TransactionOutput -> Maybe (C.TxOut ctx era)
+toCardanoTxOut' era TransactionOutput{..} = C.TxOut
+  <$> toCardanoAddressInEra (cardanoEraOfFeature era) address
+  <*> toCardanoTxOutValue era assets
+  <*> toCardanoTxOutDatum' (cardanoEraOfFeature era) datumHash
   <*> pure C.ReferenceScriptNone
 
 fromCardanoTxOut

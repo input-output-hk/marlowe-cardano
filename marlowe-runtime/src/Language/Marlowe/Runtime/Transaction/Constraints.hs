@@ -10,27 +10,40 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Arrow ((***))
-import Control.Monad (forM, unless)
+import Control.Monad (forM, unless, when)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
-import qualified Data.List.NonEmpty as NE
+import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import Data.Map (Map)
-import qualified Data.Map as Map
+import qualified Data.Map as Map (fromSet, keysSet, lookup, mapWithKey, member, null, singleton, toList, unionWith)
+import qualified Data.Map.Strict as SMap (elems, fromList, toList)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
-import qualified Data.Set as Set
+import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
+  ( fromCardanoAddressInEra
+  , toCardanoAddressInEra
+  , toCardanoMetadata
+  , toCardanoPaymentKeyHash
+  , toCardanoPolicyId
+  , toCardanoScriptData
+  , toCardanoScriptHash
+  , toCardanoTxIn
+  , toCardanoTxOut
+  , toCardanoTxOut'
+  , tokensToCardanoValue
+  )
 import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import qualified Language.Marlowe.Runtime.SystemStart as C
+import qualified Language.Marlowe.Runtime.SystemStart as Cx (SystemStart, makeTransactionBodyAutoBalance)
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
 
@@ -301,6 +314,7 @@ data ConstraintError v
   | PayoutInputNotFound (Core.PayoutDatum v)
   | CalculateMinUtxoFailed String
   | CoinSelectionFailed String
+  | BalancingError String
   deriving (Generic)
 
 deriving instance Eq (ConstraintError 'V1)
@@ -343,7 +357,7 @@ type SolveConstraints
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
 solveConstraints
-  :: C.SystemStart
+  :: Cx.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> SolveConstraints
@@ -351,7 +365,7 @@ solveConstraints start history protocol version marloweCtx walletCtx constraints
   solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
     >>= adjustTxForMinUtxo protocol marloweCtx
     >>= selectCoins protocol walletCtx
-    >>= balanceTx C.BabbageEraInCardanoMode start history protocol marloweCtx walletCtx
+    >>= balanceTx C.BabbageEraInCardanoMode start history protocol walletCtx
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's
 --   calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will
@@ -495,6 +509,10 @@ selectCoins
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
 selectCoins protocol WalletContext{..} txBodyContent = do
   let
+    -- Extract the value of a UTxO
+    txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
+    txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
+
     -- Only "succeed" if both halves of the pair aren't Nothing
     maybePair :: (Maybe a,  Maybe b) -> Maybe (a, b)
     maybePair    (Just  a , Just  b) =  Just  (a, b)
@@ -504,10 +522,6 @@ selectCoins protocol WalletContext{..} txBodyContent = do
     utxos =
       mapMaybe (maybePair . (toCardanoTxIn *** toCardanoTxOut C.MultiAssetInBabbageEra) . toUTxOTuple)
       . toUTxOsList $ availableUtxos
-
-    -- Extract the value of a UTxO
-    txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
-    txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
 
     -- Compute the value of all available UTxOs
     universe :: C.Value
@@ -671,14 +685,82 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 -- returned to the change address.
 balanceTx
   :: C.EraInMode C.BabbageEra C.CardanoMode
-  -> C.SystemStart
+  -> Cx.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
-  -> MarloweContext v
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
-balanceTx = error "not implemented"
+balanceTx era systemStart eraHistory protocol WalletContext{..} C.TxBodyContent{..} = do
+  changeAddress' <- maybe
+    (Left $ BalancingError "Failed to convert change address.")
+    Right
+    $ toCardanoAddressInEra C.cardanoEra changeAddress
+
+  let
+    -- Extract the value of a UTxO
+    txOutToValue :: C.TxOut ctx C.BabbageEra -> C.Value
+    txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
+
+    -- Make the change output.
+    mkChangeTxOut value = do
+      let txOutValue = C.TxOutValue C.MultiAssetInBabbageEra value
+      C.TxOut changeAddress' txOutValue C.TxOutDatumNone C.ReferenceScriptNone
+
+    -- Repeatedly try to balance the transaction.
+    balancingLoop
+      :: Integer -> C.Value
+      -> Either
+          (ConstraintError v)
+          (C.TxBodyContent C.BuildTx C.BabbageEra, C.BalancedTxBody C.BabbageEra)
+    balancingLoop counter changeValue = do
+      when (counter == 0) $ Left . BalancingError $
+        "Unsuccessful transaction balancing: " <> show (C.TxBodyContent {..})
+      let
+        -- Recompute execution units with full set of UTxOs, including change.
+        buildTxBodyContent = C.TxBodyContent{..} { C.txOuts = mkChangeTxOut changeValue : txOuts }
+        trial =
+          Cx.makeTransactionBodyAutoBalance
+            era
+            systemStart
+            eraHistory
+            protocol
+            mempty
+            utxos
+            buildTxBodyContent
+            changeAddress'
+            Nothing
+      case trial of
+        -- Correct for a negative balance in cases where execution units, and hence fees, have increased.
+        Left (C.TxBodyErrorAdaBalanceNegative delta) -> do
+          balancingLoop (counter - 1) (C.lovelaceToValue delta <> changeValue)
+        Left err -> Left . BalancingError $ show err
+        Right balanced@(C.BalancedTxBody (C.TxBody C.TxBodyContent { txFee = fee }) _ _) -> do
+          pure (buildTxBodyContent { C.txFee = fee }, balanced)
+
+    -- Convert chain UTxOs to Cardano API ones.
+    convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
+    convertUtxo (txOutRef, transactionOutput) =
+      (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' C.MultiAssetInBabbageEra transactionOutput
+
+    -- The available UTxOs.
+    -- FIXME: This only needs to be the subset of available UTxOs that are actually `TxIns`, but including extras should be harmless.
+    utxos :: C.UTxO C.BabbageEra
+    utxos = C.UTxO . SMap.fromList . mapMaybe convertUtxo . SMap.toList . Chain.unUTxOs $ availableUtxos
+
+    -- Compute net of inputs and outputs, accounting for minting.
+    totalIn = foldMap txOutToValue . (SMap.elems . C.unUTxO) $ utxos
+    totalOut = foldMap txOutToValue txOuts
+    totalMint = case txMintValue of
+      C.TxMintValue _ value _ -> value
+      _ -> mempty
+
+    -- Initial setup is `fee = 0` - we output all the difference as a change and expect balancing error ;-)
+    initialChange = totalIn <> totalMint <> C.negateValue totalOut
+
+  -- Return the transaction body.
+  (_, C.BalancedTxBody txBody _ _) <- balancingLoop 10 initialChange
+  pure txBody
 
 solveInitialTxBodyContent
   :: forall v
