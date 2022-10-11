@@ -90,6 +90,10 @@ library
     Language.Marlowe.Runtime.History.Store.Memory
     Language.Marlowe.Runtime.History.Store.Model
     Language.Marlowe.Runtime.History.SyncServer
+    Language.Marlowe.Runtime.Plutus.V2.Contexts
+    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
+    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
+    Language.Marlowe.Runtime.Plutus.V2.Scripts
     Language.Marlowe.Runtime.Transaction.Api
     Language.Marlowe.Runtime.Transaction.BuildConstraints
     Language.Marlowe.Runtime.Transaction.Constraints
@@ -103,14 +107,18 @@ library
     , base16
     , binary
     , cardano-api
+    , cardano-ledger-core
     , bytestring
-    , cardano-api
     , containers
+    , errors
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
+    , newtype-generics
     , ouroboros-network
     , plutus-ledger-api
+    , plutus-tx
+    , plutus-tx-plugin
     , semialign
     , some
     , stm
@@ -266,10 +274,10 @@ executable marlowe-tx
     , marlowe-runtime
     , marlowe-chain-sync
     , network
-    , typed-protocols
     , optparse-applicative
     , stm
     , text
+    , typed-protocols
     , wl-pprint
   ghc-options: -threaded
 

@@ -31,19 +31,21 @@ import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTV
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
-import qualified Data.Aeson as Aeson
 import Data.Bifunctor (first)
+import Data.Binary (Word64)
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import Data.Time (UTCTime)
+import Data.Time (UTCTime, getCurrentTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Credential(..), SlotConfig, TokenName, TxId(..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  (Address, BlockHeader, Credential(..), Metadata, SlotConfig, TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer)
+import Language.Marlowe.Runtime.Core.Api
+  (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, withMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
@@ -128,7 +130,7 @@ mkWorker WorkerDependencies{..} =
     serverInit :: ServerStInit MarloweTxCommand IO ()
     serverInit = ServerStInit
       { recvMsgExec = \case
-          Create mStakeCredential version addresses roles metadata contract ->
+          Create mStakeCredential version addresses roles metadata minAda contract ->
             execCreate
               solveConstraints
               loadWalletContext
@@ -138,9 +140,10 @@ mkWorker WorkerDependencies{..} =
               addresses
               roles
               metadata
+              minAda
               contract
           ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
-            execApplyInputs
+            withMarloweVersion version $ execApplyInputs
               slotConfig
               solveConstraints
               loadWalletContext
@@ -182,12 +185,13 @@ execCreate
   -> MarloweVersion v
   -> WalletAddresses
   -> Map TokenName Address
-  -> Map Int Aeson.Value
+  -> Map Word64 Metadata
+  -> Chain.Lovelace
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) IO ())
-execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata contract = execExceptT do
-  constraints <- except $ buildCreateConstraints version roleTokens metadata contract
+execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- lift $ loadWalletContext addresses
+  constraints <- except $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
   let
     scripts@Registry.MarloweScripts{..} = Registry.getCurrentScripts version
     stakeReference = maybe NoStakeAddress StakeAddressByValue mStakeCredential
@@ -263,12 +267,13 @@ execApplyInputs
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
       $ loadMarloweContext version contractId
+    invalidBefore' <- lift $ maybe getCurrentTime pure invalidBefore
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     constraints <- except $ buildApplyInputsConstraints
         slotConfig
         version
         scriptOutput'
-        invalidBefore
+        invalidBefore'
         invalidHereafter
         inputs
     walletContext <- lift $ loadWalletContext addresses
@@ -343,3 +348,4 @@ execExceptT
   => ExceptT e m a
   -> m (ServerStCmd cmd status e a m ())
 execExceptT = fmap (either (flip SendMsgFail ()) (flip SendMsgSucceed ())) . runExceptT
+

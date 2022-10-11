@@ -14,6 +14,7 @@ import Control.Monad (forM, unless)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
+import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
@@ -22,11 +23,10 @@ import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Time.Clock (diffUTCTime, secondsToNominalDiffTime)
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
+import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -42,6 +42,7 @@ data TxConstraints v = TxConstraints
   , payToAddresses :: Map Chain.Address Chain.Assets
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
   , marloweOutputConstraints :: MarloweOutputConstraints v
+  , merkleizedContinuationsConstraints :: Set (Core.Contract v)
   , signatureConstraints :: Set Chain.PaymentKeyHash
   , metadataConstraints :: Map Word64 Chain.Metadata
   }
@@ -56,9 +57,10 @@ data RoleTokenConstraints
   | SpendRoleTokens (Set Chain.AssetId)
   deriving (Eq, Show)
 
+
 instance Semigroup RoleTokenConstraints where
   a <> RoleTokenConstraintsNone = a
-  MintRoleTokens _ _ a <> MintRoleTokens witness ref b = MintRoleTokens witness ref $ a <> b
+  MintRoleTokens _ _ a <> MintRoleTokens ref witness b = MintRoleTokens ref witness $ a <> b
   SpendRoleTokens a <> SpendRoleTokens b = SpendRoleTokens $ a <> b
   _ <> b = b
 
@@ -140,6 +142,18 @@ mustSendMarloweOutput :: Core.IsMarloweVersion v => Chain.Assets -> Core.Datum v
 mustSendMarloweOutput assets datum =
   mempty { marloweOutputConstraints = MarloweOutput assets datum }
 
+-- | Require the transaction to send an output which contains datum with
+-- the merkleized continuation. `MarloweTxInput` redeemer only references the continuation
+-- through hash but the actual continuation is embeded in the datum of other dedicated for that
+-- purpose output.
+--
+-- Requires that:
+--  1. Transaction sends an output to a given address containing the continuation contract in the datum.
+--  2. The contract in the rule 1 contains a contract for an appropriate Marlowe version.
+mustSendMerkleizedContinuationOutput :: Core.IsMarloweVersion v => Core.Contract v -> TxConstraints v
+mustSendMerkleizedContinuationOutput contract =
+  mempty { merkleizedContinuationsConstraints = Set.singleton contract }
+
 -- | Require the transaction to send an output to the payout script address
 -- with the given assets and the given datum.
 --
@@ -181,7 +195,7 @@ getTotalForRole role = case Core.marloweVersion @v of
 
 data MarloweInputConstraints v
   = MarloweInputConstraintsNone
-  | MarloweInput P.POSIXTime P.POSIXTime (Core.Redeemer v)
+  | MarloweInput C.SlotNo C.SlotNo (Core.Redeemer v)
 
 deriving instance Show (MarloweInputConstraints 'V1)
 deriving instance Eq (MarloweInputConstraints 'V1)
@@ -209,7 +223,7 @@ instance Monoid (MarloweInputConstraints v) where
 --      there are no outputs to any Marlowe script address.
 --   7. Otherwise, there is an output to the same address as the input with the
 --      correct datum and assets.
-mustConsumeMarloweOutput :: Core.IsMarloweVersion v => P.POSIXTime -> P.POSIXTime -> Core.Redeemer v -> TxConstraints v
+mustConsumeMarloweOutput :: Core.IsMarloweVersion v => C.SlotNo -> C.SlotNo -> Core.Redeemer v -> TxConstraints v
 mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
   mempty { marloweInputConstraints = MarloweInput invalidBefore invalidHereafter inputs }
 
@@ -246,7 +260,8 @@ requiresSignature pkh = mempty { signatureConstraints = Set.singleton pkh }
 -- Requires that:
 --   1. The given metadata is present in the given index in the transaction.
 requiresMetadata :: Core.IsMarloweVersion v => Word64 -> Chain.Metadata -> TxConstraints v
-requiresMetadata i value = mempty { metadataConstraints = Map.singleton i value }
+requiresMetadata idx value = do
+  mempty { metadataConstraints = Map.singleton idx value }
 
 instance Core.IsMarloweVersion v => Semigroup (TxConstraints v) where
   a <> b = case Core.marloweVersion @v of
@@ -257,6 +272,7 @@ instance Core.IsMarloweVersion v => Semigroup (TxConstraints v) where
       , payToAddresses = on (Map.unionWith (<>)) payToAddresses a b
       , payToRoles = on (Map.unionWith (<>)) payToRoles a b
       , marloweOutputConstraints = on (<>) marloweOutputConstraints a b
+      , merkleizedContinuationsConstraints = on (<>) merkleizedContinuationsConstraints a b
       , signatureConstraints = on (<>) signatureConstraints a b
       , metadataConstraints = on (<>) metadataConstraints a b
       }
@@ -270,6 +286,7 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
       , payToAddresses = mempty
       , payToRoles = mempty
       , marloweOutputConstraints = mempty
+      , merkleizedContinuationsConstraints = mempty
       , signatureConstraints = mempty
       , metadataConstraints = mempty
       }
@@ -292,7 +309,7 @@ deriving instance Binary (ConstraintError 'V1)
 
 -- | Data from a wallet needed to solve the constraints.
 data WalletContext = WalletContext
-  { availableUtxos :: Map Chain.TxOutRef Chain.TransactionOutput
+  { availableUtxos :: Chain.UTxOs
   -- ^ The UTXO set of the wallet that can be used for coin selection and
   -- satisfying constraints.
   , collateralUtxos :: Set Chain.TxOutRef
@@ -329,10 +346,9 @@ solveConstraints
   :: C.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
-  -> Chain.SlotConfig
   -> SolveConstraints
-solveConstraints start history protocol slotConfig version marloweCtx walletCtx constraints =
-  solveInitialTxBodyContent protocol slotConfig version marloweCtx walletCtx constraints
+solveConstraints start history protocol version marloweCtx walletCtx constraints =
+  solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
     >>= adjustTxForMinUtxo protocol marloweCtx
     >>= selectCoins protocol walletCtx
     >>= balanceTx C.BabbageEraInCardanoMode start history protocol marloweCtx walletCtx
@@ -486,8 +502,8 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 
     utxos :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
     utxos =
-      mapMaybe (maybePair . (toCardanoTxIn *** toCardanoTxOut C.MultiAssetInBabbageEra))
-      . Map.toList $ availableUtxos
+      mapMaybe (maybePair . (toCardanoTxIn *** toCardanoTxOut C.MultiAssetInBabbageEra) . toUTxOTuple)
+      . toUTxOsList $ availableUtxos
 
     -- Extract the value of a UTxO
     txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
@@ -667,13 +683,12 @@ balanceTx = error "not implemented"
 solveInitialTxBodyContent
   :: forall v
    . C.ProtocolParameters
-  -> Chain.SlotConfig
   -> Core.MarloweVersion v
   -> MarloweContext v
   -> WalletContext
   -> TxConstraints v
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} WalletContext{..} TxConstraints{..} = do
+solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletContext{..} TxConstraints{..} = do
   txIns <- solveTxIns
   txInsReference <- solveTxInsReference
   txOuts <- solveTxOuts
@@ -705,10 +720,10 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
       RoleTokenConstraintsNone -> pure []
       MintRoleTokens txOutRef _ _ -> do
         txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
-        _ <- note (MintingUtxoNotFound txOutRef) $ Map.lookup txOutRef availableUtxos
+        _ <- note (MintingUtxoNotFound txOutRef) $ lookupUTxO txOutRef availableUtxos
         pure [(txIn, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending)]
       SpendRoleTokens roleTokens -> do
-        let availTuples = Map.toList availableUtxos
+        let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
         txIns <- nub <$> forM (Set.toList roleTokens) \token -> do
           -- Find an element from availTuples where 'token' is in the assets.
           let
@@ -816,6 +831,14 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
         $ Just
         $ Core.toChainDatum marloweVersion datum
 
+    getMerkleizedContinuationOutputs :: [Chain.TransactionOutput]
+    getMerkleizedContinuationOutputs = Set.toList merkleizedContinuationsConstraints <&> \contract ->
+      Chain.TransactionOutput
+        changeAddress
+        mempty
+        Nothing
+        $ Just (Core.toChainMerkleizedContinuationDatum marloweVersion contract)
+
     getRoleTokenOutputs :: Either (ConstraintError v) [Chain.TransactionOutput]
     getRoleTokenOutputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
@@ -827,14 +850,13 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
             Nothing
             Nothing
       SpendRoleTokens roleTokens -> do
-        let availTuples = Map.toList availableUtxos
+        let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
         nub <$> forM (Set.toList roleTokens) \token -> do
           -- Find an element from availTuples where 'token' is in the assets.
           let
             containsToken :: Chain.TransactionOutput -> Bool
             containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
           note (RoleTokenNotFound token) $ snd <$> find (containsToken . snd) availTuples
-
 
     getPayoutOutputs :: [Chain.TransactionOutput]
     getPayoutOutputs = uncurry getPayoutOutput <$> Map.toList payToRoles
@@ -854,6 +876,7 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
       roleTokenOutputs <- getRoleTokenOutputs
       pure $ concat
         [ maybeToList getMarloweOutput
+        , getMerkleizedContinuationOutputs
         , roleTokenOutputs
         , getPayoutOutputs
         , getAddressOutputs
@@ -864,11 +887,7 @@ solveInitialTxBodyContent protocol slotConfig marloweVersion MarloweContext{..} 
         pure ( C.TxValidityNoLowerBound
              , C.TxValidityNoUpperBound C.ValidityNoUpperBoundInBabbageEra
              )
-      MarloweInput invalidBefore invalidHereafter _ -> do
-        let utcTimeToSlotNo time = C.SlotNo $ floor $ diffUTCTime time (Chain.slotZeroTime slotConfig) / Chain.slotLength slotConfig
-        let posixTimeToUTCTime (P.POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
-        let minSlotNo = utcTimeToSlotNo $ posixTimeToUTCTime invalidBefore
-        let maxSlotNo = utcTimeToSlotNo $ posixTimeToUTCTime invalidHereafter
+      MarloweInput minSlotNo maxSlotNo _ -> do
         pure ( C.TxValidityLowerBound C.ValidityLowerBoundInBabbageEra minSlotNo
              , C.TxValidityUpperBound C.ValidityUpperBoundInBabbageEra maxSlotNo
              )

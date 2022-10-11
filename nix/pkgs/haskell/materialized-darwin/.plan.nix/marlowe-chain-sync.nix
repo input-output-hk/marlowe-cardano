@@ -85,6 +85,7 @@
           "Language/Marlowe/Runtime/ChainSync/QueryServer"
           "Language/Marlowe/Runtime/ChainSync/Store"
           "Language/Marlowe/Runtime/ChainSync/Api"
+          "Language/Marlowe/Runtime/Plutus/V2/Api"
           "Language/Marlowe/Runtime/SystemStart"
           ];
         hsSourceDirs = [ "src" ];

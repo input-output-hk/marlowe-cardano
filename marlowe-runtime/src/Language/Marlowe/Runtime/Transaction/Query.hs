@@ -1,6 +1,7 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Query
   where
@@ -12,10 +13,12 @@ import Data.List (scanl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import Language.Marlowe.Protocol.Sync.Client
 import Language.Marlowe.Runtime.Cardano.Api
-import Language.Marlowe.Runtime.ChainSync.Api (Credential(..), TxOutRef, paymentCredential)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (Credential(..), GetUTxOsQuery(..), TxOutRef, UTxOs(..), paymentCredential)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo(txOutRef), getScripts)
 import Language.Marlowe.Runtime.History.Api
@@ -30,8 +33,16 @@ type LoadMarloweContext = forall v
   -> ContractId
   -> IO (Either LoadMarloweContextError (MarloweContext v))
 
-loadWalletContext :: LoadWalletContext
-loadWalletContext = error "not implemented"
+loadWalletContext :: (GetUTxOsQuery -> IO UTxOs) -> LoadWalletContext
+loadWalletContext runQuery WalletAddresses{..} = do
+  availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses (Set.insert changeAddress extraAddresses)
+  let
+    collateralUtxos' = Set.filter (flip elem txOutRefs) collateralUtxos
+  pure $ WalletContext
+    { availableUtxos=availableUtxos
+    , collateralUtxos=collateralUtxos'
+    , changeAddress=changeAddress
+    }
 
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext

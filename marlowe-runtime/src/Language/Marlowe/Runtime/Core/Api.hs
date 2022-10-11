@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Runtime.Core.Api
@@ -31,7 +32,6 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, parseTxOutRef, putUTCTime, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import qualified Language.Marlowe.Scripts as V1
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
 
@@ -76,15 +76,17 @@ deriving instance Ord (MarloweVersion v)
 
 class IsMarloweVersion (v :: MarloweVersionTag) where
   type Contract v :: *
+  type TransactionError v :: *
   type Datum v :: *
-  type Redeemer v :: *
+  type Redeemer (v :: MarloweVersionTag) :: *
   type PayoutDatum v :: *
   marloweVersion :: MarloweVersion v
 
 instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
+  type TransactionError 'V1 = V1.TransactionError
   type Datum 'V1 = V1.MarloweData
-  type Redeemer 'V1 = V1.MarloweInput
+  type Redeemer 'V1 = [V1.Input]
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 
@@ -193,6 +195,10 @@ instance Show SomeMarloweVersion where
 withSomeMarloweVersion :: (forall v. MarloweVersion v -> r) -> SomeMarloweVersion -> r
 withSomeMarloweVersion f (SomeMarloweVersion v) = f v
 
+withMarloweVersion :: MarloweVersion v -> (IsMarloweVersion v => a) -> a
+withMarloweVersion = \case
+  MarloweV1 -> id
+
 instance ToJSON (MarloweVersion v) where
   toJSON = String . \case
     MarloweV1 -> "v1"
@@ -280,6 +286,14 @@ datumToJSON = \case
 datumFromJSON :: MarloweVersion v -> Value -> Parser (Datum v)
 datumFromJSON = \case
   MarloweV1 -> parseJSON
+
+toChainMerkleizedContinuationDatum :: MarloweVersion v -> Contract v -> Chain.Datum
+toChainMerkleizedContinuationDatum = \case
+  MarloweV1 -> Chain.toDatum
+
+fromChainMerkleizedContinuationDatum :: MarloweVersion v -> Chain.Datum -> Maybe (Contract v)
+fromChainMerkleizedContinuationDatum = \case
+  MarloweV1 -> Chain.fromDatum
 
 toChainPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Chain.Datum
 toChainPayoutDatum = \case

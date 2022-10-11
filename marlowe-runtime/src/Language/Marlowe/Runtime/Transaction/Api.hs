@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -19,7 +20,6 @@ import Cardano.Api
   , serialiseToCBOR
   )
 import Cardano.Api.Shelley (StakeCredential(..))
-import qualified Data.Aeson as Aeson
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
@@ -28,9 +28,21 @@ import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
+import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, BlockHeader, ScriptHash, TokenName, TxId, TxOutRef, getUTCTime, putUTCTime)
+  ( Address
+  , BlockHeader
+  , Lovelace
+  , Metadata
+  , PlutusScript
+  , ScriptHash
+  , TokenName
+  , TxId
+  , TxOutRef
+  , getUTCTime
+  , putUTCTime
+  )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError)
 import Network.Protocol.Job.Types (Command(..), SomeTag(..))
@@ -50,8 +62,10 @@ data MarloweTxCommand status err result where
     -- ^ The wallet addresses to use when constructing the transaction
     -> Map TokenName Address
     -- ^ The initial distribution of role tokens
-    -> Map Int Aeson.Value
+    -> Map Word64 Metadata
     -- ^ Optional metadata to attach to the transaction
+    -> Lovelace
+    -- ^ Min Lovelace which should be used for the contract output.
     -> Contract v
     -- ^ The contract to run
     -> MarloweTxCommand Void (CreateError v)
@@ -120,7 +134,7 @@ instance Command MarloweTxCommand where
     JobIdSubmit :: TxId -> JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   tagFromCommand = \case
-    Create _ version _ _ _ _ -> TagCreate version
+    Create _ version _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ _        -> TagWithdraw version
     Submit _                -> TagSubmit
@@ -169,7 +183,7 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential version walletAddresses roles metadata contract -> do
+    Create mStakeCredential version walletAddresses roles metadata minAda contract -> do
       case mStakeCredential of
         Nothing -> putWord8 0x01
         Just credential -> do
@@ -183,7 +197,8 @@ instance Command MarloweTxCommand where
               put $ serialiseToRawBytes scriptHash
       put walletAddresses
       put roles
-      put $ fmap Aeson.encode metadata
+      put metadata
+      put minAda
       putContract version contract
     ApplyInputs version walletAddresses contractId invalidBefore invalidHereafter redeemer -> do
       put walletAddresses
@@ -219,12 +234,10 @@ instance Command MarloweTxCommand where
         _ -> fail $ "Invalid Maybe tag " <> show mStakeCredentialTag
       walletAddresses <- get
       roles <- get
-      metadataRaw <- get
+      metadata <- get
+      minAda <- get
       contract <- getContract version
-      metadata <- case traverse Aeson.decode metadataRaw of
-        Nothing       -> fail "failed to parse metadata JSON"
-        Just metadata -> pure metadata
-      pure $ Create mStakeCredential version walletAddresses roles metadata contract
+      pure $ Create mStakeCredential version walletAddresses roles metadata minAda contract
 
     TagApplyInputs version -> do
       walletAddresses <- get
@@ -308,7 +321,15 @@ data WalletAddresses = WalletAddresses
 data CreateError v
   = CreateConstraintError (ConstraintError v)
   | CreateLoadMarloweContextFailed LoadMarloweContextError
+  | CreateBuildupFailed CreateBuildupError
   deriving (Generic)
+
+data CreateBuildupError
+  = CollateralSelectionFailed
+  | AddressDecodingFailed Address
+  | MintingScriptDecodingFailed PlutusScript
+  deriving (Eq, Show, Generic)
+  deriving anyclass Binary
 
 deriving instance Eq (CreateError 'V1)
 deriving instance Show (CreateError 'V1)
@@ -318,11 +339,18 @@ data ApplyInputsError v
   = ApplyInputsConstraintError (ConstraintError v)
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
-  deriving (Generic)
+  | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
 
 deriving instance Eq (ApplyInputsError 'V1)
 deriving instance Show (ApplyInputsError 'V1)
+deriving instance Generic (ApplyInputsError 'V1)
 instance Binary (ApplyInputsError 'V1)
+
+data ApplyInputsConstraintsBuildupError
+  = MarloweComputeTransactionFailed String
+  | UnableToDetermineTransactionTimeout
+  deriving (Eq, Show, Generic)
+  deriving anyclass Binary
 
 data WithdrawError v
   = WithdrawConstraintError (ConstraintError v)

@@ -39,13 +39,18 @@
           (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+          (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+          (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+          (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+          (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
+          (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"))
           (hsPkgs."semialign" or (errorHandler.buildDepError "semialign"))
           (hsPkgs."some" or (errorHandler.buildDepError "some"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
@@ -84,6 +89,10 @@
           "Language/Marlowe/Runtime/History/Store/Memory"
           "Language/Marlowe/Runtime/History/Store/Model"
           "Language/Marlowe/Runtime/History/SyncServer"
+          "Language/Marlowe/Runtime/Plutus/V2/Contexts"
+          "Language/Marlowe/Runtime/Plutus/V2/Scripts/MarloweV1/RoleTokensPolicy"
+          "Language/Marlowe/Runtime/Plutus/V2/Scripts/MarloweV1/RoleTokensPolicy/Types"
+          "Language/Marlowe/Runtime/Plutus/V2/Scripts"
           "Language/Marlowe/Runtime/Transaction/Api"
           "Language/Marlowe/Runtime/Transaction/BuildConstraints"
           "Language/Marlowe/Runtime/Transaction/Constraints"
@@ -231,10 +240,10 @@
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
-            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
             ];
           buildable = true;
