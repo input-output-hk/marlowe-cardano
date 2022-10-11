@@ -958,6 +958,7 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
       , V.fromList $ serialiseToRawBytes . genesisTxId <$> genesisBlockTxsList
       , V.fromList $ serialiseToRawBytes . genesisTxAddress <$> genesisBlockTxsList
       , V.fromList $ lovelaceToParam . genesisTxLovelace <$> genesisBlockTxsList
+      , V.fromList $ BS.take 2 . serialiseToRawBytes . genesisTxAddress <$> genesisBlockTxsList
       )
   in
     HT.statement params
@@ -972,8 +973,8 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
             FROM   (SELECT * FROM UNNEST ($2 :: bytea[])) AS tx
             JOIN   newBlock AS block ON true
           )
-        INSERT INTO chain.txOut (txId, address, lovelace, slotNo, txIx, isCollateral)
-        SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[])
+        INSERT INTO chain.txOut (txId, address, lovelace, addressHeader, slotNo, txIx, isCollateral)
+        SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea[])
       |]
 
 -- CommitBlocks
