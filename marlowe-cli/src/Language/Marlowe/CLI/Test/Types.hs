@@ -460,10 +460,10 @@ data UseTemplate =
     -- | Use for escrow contract.
   | UseEscrow
     {
-      utPrice             :: Lovelace    -- ^ Price of the item for sale, in lovelace.
-    , utSeller            :: PartyRef   -- ^ Defaults to a wallet with the "Buyer" nickname.
-    , utBuyer             :: PartyRef    -- ^ Defaults to a wallet with the "Seller" ncikname.
-    , utMediator          :: PartyRef   -- ^ The mediator.
+      utPrice             :: Integer          -- ^ Price of the item for sale, in lovelace.
+    , utSeller            :: Maybe PartyRef   -- ^ Defaults to a wallet with the "Buyer" nickname.
+    , utBuyer             :: Maybe PartyRef    -- ^ Defaults to a wallet with the "Seller" ncikname.
+    , utMediator          :: Maybe PartyRef   -- ^ The mediator.
     , utPaymentDeadline   :: SomeTimeout -- ^ The deadline for the buyer to pay.
     , utComplaintDeadline :: SomeTimeout -- ^ The deadline for the buyer to complain.
     , utDisputeDeadline   :: SomeTimeout -- ^ The deadline for the seller to dispute a complaint.

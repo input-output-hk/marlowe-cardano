@@ -112,4 +112,21 @@ stScriptOperations:
   - tag: AutoRun
     soContractNickname: Swap
 
+  - tag: CheckBalance
+    soWalletNickname: aParty
+    soBalance:
+      - [aPartyCurrency, aParty, 50]
+
+  - tag: CheckBalance
+    soWalletNickname: bParty
+    soBalance:
+      - [ADA, 85]
+      - [Trivial, aPartyTokenName, 1]
+
+  - tag: BurnAll
+    soCurrencyNickname: aPartyCurrency
+
+  - tag: BurnAll
+    soCurrencyNickname: bPartyCurrency
+
 
