@@ -365,7 +365,7 @@ solveConstraints start history protocol version marloweCtx walletCtx constraints
   solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
     >>= adjustTxForMinUtxo protocol marloweCtx
     >>= selectCoins protocol walletCtx
-    >>= balanceTx C.BabbageEraInCardanoMode start history protocol marloweCtx walletCtx
+    >>= balanceTx C.BabbageEraInCardanoMode start history protocol walletCtx
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's
 --   calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will
@@ -688,13 +688,14 @@ balanceTx
   -> Cx.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
-  -> MarloweContext v
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
-balanceTx era systemStart eraHistory protocol _marloweCtx WalletContext{..} C.TxBodyContent{..} = do
-
-  changeAddress' <- maybe (Left $ BalancingError "Failed to convert change address.") Right $ toCardanoAddressInEra C.cardanoEra changeAddress
+balanceTx era systemStart eraHistory protocol WalletContext{..} C.TxBodyContent{..} = do
+  changeAddress' <- maybe
+    (Left $ BalancingError "Failed to convert change address.")
+    Right
+    $ toCardanoAddressInEra C.cardanoEra changeAddress
 
   let
     -- Extract the value of a UTxO
@@ -707,10 +708,14 @@ balanceTx era systemStart eraHistory protocol _marloweCtx WalletContext{..} C.Tx
       C.TxOut changeAddress' txOutValue C.TxOutDatumNone C.ReferenceScriptNone
 
     -- Repeatedly try to balance the transaction.
-    balancingLoop :: Integer -> C.Value -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra, C.BalancedTxBody C.BabbageEra)
-    balancingLoop counter changeValue = do -- changeTxOut@(TxOut addr (txOutValueToValue -> changeValue) datum ref) = do
+    balancingLoop
+      :: Integer -> C.Value
+      -> Either
+          (ConstraintError v)
+          (C.TxBodyContent C.BuildTx C.BabbageEra, C.BalancedTxBody C.BabbageEra)
+    balancingLoop counter changeValue = do
       when (counter == 0) $ Left . BalancingError $
-        "Uncucessful balancing of the transaction: " <> show (C.TxBodyContent {..})
+        "Unsuccessful transaction balancing: " <> show (C.TxBodyContent {..})
       let
         -- Recompute execution units with full set of UTxOs, including change.
         buildTxBodyContent = C.TxBodyContent{..} { C.txOuts = mkChangeTxOut changeValue : txOuts }
@@ -735,7 +740,8 @@ balanceTx era systemStart eraHistory protocol _marloweCtx WalletContext{..} C.Tx
 
     -- Convert chain UTxOs to Cardano API ones.
     convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
-    convertUtxo (txOutRef, transactionOutput) = (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' C.MultiAssetInBabbageEra transactionOutput
+    convertUtxo (txOutRef, transactionOutput) =
+      (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' C.MultiAssetInBabbageEra transactionOutput
 
     -- The available UTxOs.
     -- FIXME: This only needs to be the subset of available UTxOs that are actually `TxIns`, but including extras should be harmless.
