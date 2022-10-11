@@ -7,21 +7,19 @@
 module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
-import qualified Cardano.Api as C
-import qualified Cardano.Api.Shelley as C
+import qualified Cardano.Api as C hiding (makeTransactionBodyAutoBalance)
+import qualified Cardano.Api.Shelley as C hiding (makeTransactionBodyAutoBalance)
 import Control.Arrow ((***))
 import Control.Monad (forM, unless, when)
-import Data.Bifunctor (bimap)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
-import Data.Foldable (toList)
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.Map.Strict as SMap (Map, elems, empty, fromList, keysSet, lookup, singleton, toList)
+import qualified Data.Map.Strict as SMap
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
@@ -682,30 +680,22 @@ balanceTx
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
-balanceTx _era _systemStart _eraHistory _protocol _marloweCtx WalletContext{..} C.TxBodyContent{..} = do
+balanceTx era systemStart eraHistory protocol _marloweCtx WalletContext{..} C.TxBodyContent{..} = do
+
+  changeAddress' <- maybe (Left $ BalancingError "Failed to convert change address.") Right $ toCardanoAddressInEra C.cardanoEra changeAddress
+
   let
     -- Extract the value of a UTxO
     txOutToValue :: C.TxOut ctx C.BabbageEra -> C.Value
     txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
 
-    -- convert :: BuildTxWith build (Witness WitCtxTxIn era) -> Maybe (TxOut CtxUtxOO era)
-    -- TxOutRef -> TransactionOutput
-    -- For each TxIn in TxBodyContent TxIns
-    -- Look up in WalletContect available
-
-    fromTxOutRefToTxIn :: Chain.TxOutRef -> C.TxIn
-    fromTxOutRefToTxIn (Chain.TxOutRef (Chain.TxId txIn) (Chain.TxIx txIx)) = C.TxIn (C.TxId txIn) txIx
-
-    fromTrOutToTxOut :: Chain.TransactionOutput -> C.TxOut C.CtxUTxO C.BabbageEra
-    fromTrOutToTxOut = undefined
-
+    -- Make the change output.
     mkChangeTxOut value = do
-      let txOutValue = C.TxOutValue C.BabbageEra value
-      C.TxOut changeAddress txOutValue TxOutDatumNone ReferenceScriptNone
+      let txOutValue = C.TxOutValue C.MultiAssetInBabbageEra value
+      C.TxOut changeAddress' txOutValue C.TxOutDatumNone C.ReferenceScriptNone
 
-    -- Chain.UTxOs
-    -- newtype UTxOs = UTxOs { unUTxOs :: Map TxOutRef TransactionOutput }
-    balancingLoop :: Integer -> C.Value -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
+    -- Repeatedly try to balance the transaction.
+    balancingLoop :: Integer -> C.Value -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra, C.BalancedTxBody C.BabbageEra)
     balancingLoop counter changeValue = do -- changeTxOut@(TxOut addr (txOutValueToValue -> changeValue) datum ref) = do
       when (counter == 0) $ Left . BalancingError $
         "Uncucessful balancing of the transaction: " <> show (C.TxBodyContent {..})
@@ -713,15 +703,15 @@ balanceTx _era _systemStart _eraHistory _protocol _marloweCtx WalletContext{..} 
         -- Recompute execution units with full set of UTxOs, including change.
         buildTxBodyContent = C.TxBodyContent{..} { C.txOuts = mkChangeTxOut changeValue : txOuts }
         trial =
-          withShelleyBasedEra era $ makeTransactionBodyAutoBalance
-            eraInMode
-            start
-            history
-            protocol'
-            SMap.empty
+          C.makeTransactionBodyAutoBalance
+            era
+            systemStart
+            eraHistory
+            protocol
+            mempty
             utxos
             buildTxBodyContent
-            changeAddress
+            changeAddress'
             Nothing
       case trial of
         -- Correct for a negative balance in cases where execution units, and hence fees, have increased.
@@ -731,24 +721,16 @@ balanceTx _era _systemStart _eraHistory _protocol _marloweCtx WalletContext{..} 
         Right balanced@(C.BalancedTxBody (C.TxBody C.TxBodyContent { txFee = fee }) _ _) -> do
           pure (buildTxBodyContent { C.txFee = fee }, balanced)
 
+    -- Convert chain UTxOs to Cardano API ones.
+    convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
+    convertUtxo (txOutRef, transactionOutput) = (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' C.MultiAssetInBabbageEra transactionOutput
 
-    f :: (Chain.TxOutRef, Chain.TransactionOutput) -> (C.TxIn, C.TxOut C.CtxUTxO C.BabbageEra)
-    f = bimap fromTxOutRefToTxIn fromTrOutToTxOut
-
-    -- utxos :: SMap.Map C.TxIn (C.TxOut C.CtxUTxO C.BabbageEra)
+    -- The available UTxOs.
+    -- FIXME: This only needs to be the subset of available UTxOs that are actually `TxIns`, but including extras should be harmless.
     utxos :: C.UTxO C.BabbageEra
-    utxos = C.UTxO . SMap.fromList . map f . SMap.toList . Chain.unUTxOs $ availableUtxos
+    utxos = C.UTxO . SMap.fromList . mapMaybe convertUtxo . SMap.toList . Chain.unUTxOs $ availableUtxos
 
-    -- from WalletContext or TxBodyContent
-    -- utxos = undefined
-
-    -- totalIn = foldMap txOutToValue . (SMap.elems . C.unUTxO) $ utxos
-
--- UTxO
--- unUTxO :: Map TxIn (TxOut CtxUTxO era)
--- type TxIns build era = [(TxIn, BuildTxWith build (Witness WitCtxTxIn era))]
--- BuildTxWith build (Witness WitCtxTxIn era)) -> Maybe (TxOut CtxUtxOO era)
-
+    -- Compute net of inputs and outputs, accounting for minting.
     totalIn = foldMap txOutToValue . (SMap.elems . C.unUTxO) $ utxos
     totalOut = foldMap txOutToValue txOuts
     totalMint = case txMintValue of
@@ -758,7 +740,9 @@ balanceTx _era _systemStart _eraHistory _protocol _marloweCtx WalletContext{..} 
     -- Initial setup is `fee = 0` - we output all the difference as a change and expect balancing error ;-)
     initialChange = totalIn <> totalMint <> C.negateValue totalOut
 
-  balancingLoop 10 initialChange
+  -- Return the transaction body.
+  (_, C.BalancedTxBody txBody _ _) <- balancingLoop 10 initialChange
+  pure txBody
 
 solveInitialTxBodyContent
   :: forall v
