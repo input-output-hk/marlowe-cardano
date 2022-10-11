@@ -119,9 +119,6 @@ instance Pretty BS.ByteString where
 instance Pretty P.BuiltinByteString where
     prettyFragment = text . show . P.fromBuiltin
 
--- instance Pretty Ada where
---     prettyFragment x = prettyFragment (getLovelace x)
-
 instance Pretty CurrencySymbol where
     prettyFragment (CurrencySymbol bs) = text ("\"" ++ show (CurrencySymbol bs) ++ "\"")
 

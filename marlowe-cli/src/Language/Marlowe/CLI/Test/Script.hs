@@ -55,14 +55,12 @@ import Language.Marlowe.CLI.Types
   , OutputQueryResult
   , PrintStats(PrintStats)
   , PublishingStrategy(PublishAtAddress, PublishPermanently)
-  , TruncateMilliseconds(TruncateMilliseconds)
   , ValidatorInfo(ValidatorInfo)
   , defaultCoinSelectionStrategy
   , toMarloweTimeout
   , toPOSIXTime
   , unAnUTxO
   )
-
 import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Party)
 import Marlowe.Contracts (trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
@@ -435,8 +433,8 @@ interpret Prepare {..} = do
   let
     curr = NE.head mcPlan
   inputs <- for soInputs \input -> decodeInputJSON input
-  minimumTime <- toPOSIXTime soMinimumTime (TruncateMilliseconds True)
-  maximumTime <- toPOSIXTime soMaximumTime (TruncateMilliseconds True)
+  minimumTime <- toPOSIXTime soMinimumTime
+  maximumTime <- toPOSIXTime soMaximumTime
   new <- runCli "[Prepare] " $ prepareTransactionImpl
     curr
     inputs
@@ -713,7 +711,7 @@ useTemplate :: MonadError CliError m
 useTemplate currency = do
   \case
     UseTrivial{..} -> do
-      timeout' <- toMarloweTimeout utTimeout (TruncateMilliseconds True)
+      timeout' <- toMarloweTimeout utTimeout
       let
         partyRef = fromMaybe (WalletRef faucetNickname) utParty
       party <- buildParty currency partyRef
@@ -943,7 +941,7 @@ scriptTest era protocolVersion costModel connection faucet slotConfig executionM
 
     let
       interpretLoop = for_ stScriptOperations \operation -> do
-        logSoMsg SoName operation "..."
+        logSoMsg SoName operation ""
         interpret operation
       printStats = PrintStats True
       scriptEnv = ScriptEnv connection costModel era protocolVersion slotConfig executionMode printStats

@@ -152,7 +152,7 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testn
 import Ledger.Tx.CardanoAPI (fromCardanoAddressInEra, toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
 import Plutus.V1.Ledger.Value (AssetClass(..), Value(..), assetClassValue, singleton)
 import Plutus.V2.Ledger.Api
   (Address, CostModelParams, Datum(..), POSIXTime, TokenName, adaSymbol, adaToken, toBuiltinData)
@@ -392,16 +392,34 @@ prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats =
 
 -- | Prepare the next step in a Marlowe contract.
 makeMarlowe :: MonadError CliError m
+            => MonadIO m
             => MarloweTransaction lang era                            -- ^ The Marlowe initial state and initial contract.
             -> TransactionInput                                       -- ^ The transaction input.
             -> m ([TransactionWarning], MarloweTransaction lang era)  -- ^ Action to compute the next step in the contract.
 makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
   do
-    transactionInput'@TransactionInput{..} <-
-      merkleizeInputs marloweIn transactionInput
-        `catchError` (const $ pure transactionInput)  -- TODO: Consider not catching errors here.
+    let
+      toSlot = posixTimeToEnclosingSlot mtSlotConfig
+      toSlotNo = SlotNo . fromIntegral . toSlot
 
-    case computeTransaction transactionInput' mtState mtContract of
+      roundTxInterval ti@TransactionInput{txInterval=txInterval@(minimumTime, maximumTime)} = do
+        let
+          txInterval' =
+            ( slotToBeginPOSIXTime mtSlotConfig . toSlot $ minimumTime
+            , slotToEndPOSIXTime mtSlotConfig . toSlot $ maximumTime
+            )
+        when (txInterval' /= txInterval) $ do
+          liftIO $ hPutStrLn stderr $
+            "Rounding  `TransactionInput` txInterval boundries to:" <> show txInterval'
+        pure ti { txInterval = txInterval' }
+
+    transactionInput' <- roundTxInterval transactionInput
+    liftIO $ print transactionInput'
+    transactionInput''@TransactionInput{..} <-
+      merkleizeInputs marloweIn transactionInput'
+        `catchError` (const $ pure transactionInput')  -- TODO: Consider not catching errors here.
+
+    case computeTransaction transactionInput'' mtState mtContract of
       Error message          -> throwError . CliError . show $ message
       TransactionOutput{..} -> pure
                                  (
@@ -410,13 +428,11 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
                                    {
                                      mtState    = txOutState
                                    , mtContract = txOutContract
-                                   , mtRange    = Just $ bimap convertSlot convertSlot txInterval
+                                   , mtRange    = Just $ bimap toSlotNo toSlotNo txInterval
                                    , mtInputs   = txInputs
                                    , mtPayments = txOutPayments
                                    }
                                  )
-                                   where
-                                     convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot mtSlotConfig
 
 readMarloweTransactionFile :: forall era lang m
                             . MonadError CliError m

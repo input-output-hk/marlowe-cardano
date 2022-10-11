@@ -38,7 +38,6 @@ module Language.Marlowe.CLI.Types
   , RedeemerInfo(..)
   , SomeMarloweTransaction(..)
   , SomeTimeout(..)
-  , TruncateMilliseconds(..)
   , ValidatorInfo(..)
     -- * eUTxOs
   , AnUTxO(..)
@@ -664,37 +663,22 @@ instance FromJSON SomeTimeout where
     _ -> fail "Expected object with a single field of either `absolute` or `relative`"
 
 
--- | We provide a special truncating versions of timeout conversions so we initialize
--- | Marlowe timeouts values. It seems that cardano-node truncates truncates the
--- | milliseconds from time range.
--- | https://github.com/input-output-hk/marlowe-cardano/issues/236
-newtype TruncateMilliseconds = TruncateMilliseconds Bool
-
-utcToMilliseconds :: UTCTime -> Integer
-utcToMilliseconds = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
-
-
-utcToSeconds :: UTCTime -> Integer
-utcToSeconds = floor . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
-
-
-someTimeoutToMilliseconds :: MonadIO m => SomeTimeout -> TruncateMilliseconds -> m Integer
-someTimeoutToMilliseconds (AbsoluteTimeout t) (TruncateMilliseconds r) = if r
-  then pure (1000 * (t `quot` 1000))
-  else pure t
-someTimeoutToMilliseconds (RelativeTimeout seconds) (TruncateMilliseconds r) = do
+someTimeoutToMilliseconds :: MonadIO m => SomeTimeout -> m Integer
+someTimeoutToMilliseconds (AbsoluteTimeout t) = pure t
+someTimeoutToMilliseconds (RelativeTimeout seconds) = do
   t <- liftIO $ addUTCTime seconds <$> getCurrentTime
-  pure if r
-    then (1000 *) . utcToSeconds $ t
-    else utcToMilliseconds t
+  pure $ utcToMilliseconds t
+  where
+    utcToMilliseconds :: UTCTime -> Integer
+    utcToMilliseconds = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
 
 
-toMarloweTimeout :: MonadIO m => SomeTimeout -> TruncateMilliseconds -> m E.Timeout
-toMarloweTimeout t r = POSIXTime <$> someTimeoutToMilliseconds t r
+toMarloweTimeout :: MonadIO m => SomeTimeout -> m E.Timeout
+toMarloweTimeout t = POSIXTime <$> someTimeoutToMilliseconds t
 
 
-toPOSIXTime :: MonadIO m => SomeTimeout -> TruncateMilliseconds -> m P.POSIXTime
-toPOSIXTime t r = P.POSIXTime <$> someTimeoutToMilliseconds t r
+toPOSIXTime :: MonadIO m => SomeTimeout -> m P.POSIXTime
+toPOSIXTime t = P.POSIXTime <$> someTimeoutToMilliseconds t
 
 
 data PublishingStrategy era =

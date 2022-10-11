@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-cli"; version = "0.0.8.1"; };
+      identifier = { name = "marlowe-cli"; version = "0.0.9.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "brian.bush@iohk.io";
@@ -62,6 +62,7 @@
           (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+          (hsPkgs."multiplate" or (errorHandler.buildDepError "multiplate"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
           (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
@@ -86,6 +87,7 @@
           (hsPkgs."temporary" or (errorHandler.buildDepError "temporary"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
+          (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
           (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
           (hsPkgs."websockets" or (errorHandler.buildDepError "websockets"))
@@ -94,12 +96,12 @@
           ];
         buildable = true;
         modules = [
+          "Language/Marlowe/CLI/Analyze"
           "Language/Marlowe/CLI/Cardano/Api"
           "Language/Marlowe/CLI/Cardano/Api/Address"
           "Language/Marlowe/CLI/Cardano/Api/Address/ProofOfBurn"
           "Language/Marlowe/CLI/Cardano/Api/PlutusScript"
           "Language/Marlowe/CLI/Cardano/Api/Value"
-          "Language/Marlowe/CLI/Plutus/Script/Utils"
           "Language/Marlowe/CLI/Codec"
           "Language/Marlowe/CLI/Command"
           "Language/Marlowe/CLI/Command/Contract"
@@ -115,17 +117,18 @@
           "Language/Marlowe/CLI/Data/Foldable"
           "Language/Marlowe/CLI/Examples"
           "Language/Marlowe/CLI/Export"
-          "Language/Marlowe/CLI/Merkle"
           "Language/Marlowe/CLI/IO"
+          "Language/Marlowe/CLI/Merkle"
           "Language/Marlowe/CLI/Orphans"
+          "Language/Marlowe/CLI/Plutus/Script/Utils"
           "Language/Marlowe/CLI/Run"
           "Language/Marlowe/CLI/Sync"
           "Language/Marlowe/CLI/Sync/Types"
-          "Language/Marlowe/CLI/Transaction"
           "Language/Marlowe/CLI/Test"
           "Language/Marlowe/CLI/Test/Script"
           "Language/Marlowe/CLI/Test/Script/Debug"
           "Language/Marlowe/CLI/Test/Types"
+          "Language/Marlowe/CLI/Transaction"
           "Language/Marlowe/CLI/Types"
           "Paths_marlowe_cli"
           ];

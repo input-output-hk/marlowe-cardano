@@ -106,4 +106,3 @@ adjustMinimumUTxO era protocol address datum origValue mRefScript =
       deficit = minLovelace <> negate (minimum[selectLovelace value, minLovelace])
     pure (minLovelace, value <> lovelaceToValue deficit)
 
-
