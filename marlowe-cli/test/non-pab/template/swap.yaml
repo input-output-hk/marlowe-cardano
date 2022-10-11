@@ -20,11 +20,13 @@ stScriptOperations:
       - 100000000
     soWalletNicknames: [bParty]
 
+  # Minting tokens aParty will use in the swap
   - tag: Mint
     soCurrencyNickname: aPartyCurrency
     soTokenDistribution:
       - [aParty, aPartyTokenName, 100]
 
+  # Minting tokens bParty will use in the swap
   - tag: Mint
     soCurrencyNickname: bPartyCurrency
     soTokenDistribution:
@@ -32,12 +34,12 @@ stScriptOperations:
 
   - tag: Initialize
     soContractNickname: Swap
-    soMinAda: 1000000
+    soMinAda: 3000000
     soContractSource:
       template:
         tag: UseSwap
         utAParty:
-          pk_hash: aParty
+          address: aParty
         utACurrencyNickname: aPartyCurrency
         utATokenName:
           unTokenName: aPartyTokenName
@@ -47,7 +49,7 @@ stScriptOperations:
         utATimeout:
           relative: 1000000
         utBParty:
-          pk_hash: bParty
+          address: bParty
         utBCurrencyNickname: bPartyCurrency
         utBTokenName:
           unTokenName: bPartyTokenName
@@ -61,13 +63,13 @@ stScriptOperations:
     soContractNickname: Swap
     soInputs:
       - input_from_party:
-          pk_hash: aParty
+          address: aParty
         that_deposits: 50
         of_token:
           currency_symbol: aPartyCurrency
           token_name: aPartyTokenName
         into_account:
-          pk_hash: aParty
+          address: aParty
     soMinimumTime:
       relative: -1000
     soMaximumTime:
@@ -77,13 +79,13 @@ stScriptOperations:
     soContractNickname: Swap
     soInputs:
       - input_from_party:
-          pk_hash: bParty
+          address: bParty
         that_deposits: 40
         of_token:
           currency_symbol: bPartyCurrency
           token_name: bPartyTokenName
         into_account:
-          pk_hash: bParty
+          address: bParty
     soMinimumTime:
       relative: -1000
     soMaximumTime:

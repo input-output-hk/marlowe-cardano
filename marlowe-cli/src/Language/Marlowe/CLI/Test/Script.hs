@@ -63,7 +63,7 @@ import Language.Marlowe.CLI.Types
   )
 
 import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Contract(Close), Party, Value(Constant))
-import Marlowe.Contracts (swap, trivial)
+import Marlowe.Contracts (escrow, swap, trivial)
 import Plutus.V1.Ledger.Api (CostModelParams, TokenName)
 
 import qualified Cardano.Api as C
@@ -437,7 +437,9 @@ interpret Prepare {..} = do
 
   let
     curr = NE.head mcPlan
+  liftIO $ putStrLn "BEFORE decode"
   inputs <- for soInputs \input -> decodeInputJSON input
+  liftIO $ putStrLn "AFTER decode"
   minimumTime <- toPOSIXTime soMinimumTime
   maximumTime <- toPOSIXTime soMaximumTime
   new <- runCli "[Prepare] " $ prepareTransactionImpl
@@ -745,19 +747,28 @@ useTemplate currency = do
           (Constant utBAmount)
           bTimeout'
           Close
-    --UseEscrow{..} -> do paymentDeadline' <- toMarloweTimeout paymentDeadline
-    --                    complaintDeadline' <- toMarloweTimeout complaintDeadline
-    --                    disputeDeadline' <- toMarloweTimeout disputeDeadline
-    --                    mediationDeadline' <- toMarloweTimeout mediationDeadline
-    --                    makeContract $ escrow
-    --                       (E.Constant price)
-    --                       seller
-    --                       buyer
-    --                       mediator
-    --                       paymentDeadline'
-    --                       complaintDeadline'
-    --                       disputeDeadline'
-    --                       mediationDeadline'
+    UseEscrow{..} -> do
+      paymentDeadline' <- toMarloweTimeout utPaymentDeadline
+      complaintDeadline' <- toMarloweTimeout utComplaintDeadline
+      disputeDeadline' <- toMarloweTimeout utDisputeDeadline
+      mediationDeadline' <- toMarloweTimeout utMediationDeadline
+      let
+        sellerRef = fromMaybe (WalletRef faucetNickname) utSeller
+        buyerRef = fromMaybe (WalletRef faucetNickname) utBuyer
+        mediatorRef = fromMaybe (WalletRef faucetNickname) utMediator
+      seller <- buildParty currency sellerRef
+      buyer <- buildParty currency buyerRef
+      mediator <- buildParty currency mediatorRef
+
+      makeContract $ escrow
+        (Constant utPrice)
+        seller
+        buyer
+        mediator
+        paymentDeadline'
+        complaintDeadline'
+        disputeDeadline'
+        mediationDeadline'
     --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
     --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
     --                             makeContract $
@@ -977,9 +988,8 @@ rewriteCurrencyRefs = A.rewriteBottomUp rewrite
   where
     rewrite = \case
       obj@(A.Object (KeyMap.toAscList -> props)) -> do
-        -- above is view patter version of below
-        -- let props = KeyMap.toAscList propsMap
         case props of
+          [("currency_symbol", A.String "") , ("token_name", A.String "")] -> pure obj
           [("currency_symbol", A.String currencyNickname) , ("token_name", tokenName)] -> do
               let
                 nickname = CurrencyNickname $ Text.unpack currencyNickname
