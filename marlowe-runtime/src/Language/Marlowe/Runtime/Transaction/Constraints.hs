@@ -7,8 +7,8 @@
 module Language.Marlowe.Runtime.Transaction.Constraints
   where
 
-import qualified Cardano.Api as C hiding (makeTransactionBodyAutoBalance)
-import qualified Cardano.Api.Shelley as C hiding (makeTransactionBodyAutoBalance)
+import qualified Cardano.Api as C
+import qualified Cardano.Api.Shelley as C
 import Control.Arrow ((***))
 import Control.Monad (forM, unless, when)
 import Data.Binary (Binary)
@@ -16,22 +16,34 @@ import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
-import qualified Data.List.NonEmpty as NE
+import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import Data.Map (Map)
-import qualified Data.Map as Map
-import qualified Data.Map.Strict as SMap
+import qualified Data.Map as Map (fromSet, keysSet, lookup, mapWithKey, member, null, singleton, toList, unionWith)
+import qualified Data.Map.Strict as SMap (elems, fromList, toList)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
-import qualified Data.Set as Set
+import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
+  ( fromCardanoAddressInEra
+  , toCardanoAddressInEra
+  , toCardanoMetadata
+  , toCardanoPaymentKeyHash
+  , toCardanoPolicyId
+  , toCardanoScriptData
+  , toCardanoScriptHash
+  , toCardanoTxIn
+  , toCardanoTxOut
+  , toCardanoTxOut'
+  , tokensToCardanoValue
+  )
 import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import qualified Language.Marlowe.Runtime.SystemStart as C
+import qualified Language.Marlowe.Runtime.SystemStart as Cx (SystemStart, makeTransactionBodyAutoBalance)
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
 
@@ -345,7 +357,7 @@ type SolveConstraints
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
 solveConstraints
-  :: C.SystemStart
+  :: Cx.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> SolveConstraints
@@ -673,7 +685,7 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 -- returned to the change address.
 balanceTx
   :: C.EraInMode C.BabbageEra C.CardanoMode
-  -> C.SystemStart
+  -> Cx.SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> MarloweContext v
@@ -703,7 +715,7 @@ balanceTx era systemStart eraHistory protocol _marloweCtx WalletContext{..} C.Tx
         -- Recompute execution units with full set of UTxOs, including change.
         buildTxBodyContent = C.TxBodyContent{..} { C.txOuts = mkChangeTxOut changeValue : txOuts }
         trial =
-          C.makeTransactionBodyAutoBalance
+          Cx.makeTransactionBodyAutoBalance
             era
             systemStart
             eraHistory
