@@ -43,7 +43,7 @@ txHost :: CliOption OptionFields HostName
 txHost = host "tx" "TX" "127.0.0.1" "The hostname of the Marlowe Runtime transaction server."
 
 txCommandPort :: CliOption OptionFields PortNumber
-txCommandPort = port "tx-command" "TX_COMMAND" 3720 "The port number of the transaction server's job API."
+txCommandPort = port "tx-command" "TX_COMMAND" 3723 "The port number of the transaction server's job API."
 
 port :: String -> String -> PortNumber -> String -> CliOption OptionFields PortNumber
 port optPrefix envPrefix defaultValue description = CliOption

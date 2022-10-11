@@ -225,7 +225,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
 
     portParser = option auto $ mconcat
       [ long "command-port"
-      , value 3720
+      , value 3723
       , metavar "PORT_NUMBER"
       , help "The port number to run the job server on."
       , showDefault
