@@ -203,9 +203,17 @@ On Linux, `compose.yaml` will be automatically set up for the user when entering
 
 Running `nix run .#re-up` will refresh `compose.yaml` if need be and then restart any services which have changed.
 
+Services currently included:
+
+* `chainseekd-preview`: `chainseekd` for the `preview` network
+* `node-preview`: A node for the `preview` network
+* `node-preprod`: A node for the `preprod` network
+* `postgres`: A postgres instance, for chainseekd state.
+
 The following commands may be useful:
 
 * `docker compose exec postgres /exec/run-sqitch`: Run the sqitch migrations for the chain-sync database.
+* `docker compose port`, e.g. `docker compose port chainseekd-preview 3715` will show the local port that maps to port `3715` for the `chainseekd-preview` service
 
 == Licensing
 
