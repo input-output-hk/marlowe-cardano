@@ -1,4 +1,17 @@
+{ sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, postgresql }:
 let
+  run-sqitch = writeShellScriptBin "run-sqitch" ''
+    export PATH="PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
+    export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
+    cd /src/marlowe-chain-sync
+    exec sqitch deploy
+  '';
+
+  symlinks = runCommand "symlinks" { } ''
+    mkdir -p $out
+    ln -sv ${run-sqitch}/bin/run-sqitch $out
+  '';
+
   spec = {
     services.postgres = {
       image = "postgres:11.5-alpine";
@@ -8,6 +21,7 @@ let
         "POSTGRES_LOGGING=true"
         "POSTGRES_USER=postgres"
         "POSTGRES_HOST_AUTH_METHOD=trust"
+        "TZ=UTC"
       ];
 
       # TODO dynamic port alloc
@@ -20,8 +34,10 @@ let
       # TODO Connect volumes here to top-level volumes
       volumes = [
         "postgres:/var/lib/postgresql/data"
-        # Intentionally leave relative to root for picking up local changes
         "./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql"
+        "./:/src"
+        "/nix:/nix"
+        "${symlinks}:/exec"
       ];
 
       # TODO enum
@@ -49,4 +65,4 @@ let
     volumes.postgres = null;
   };
 in
-builtins.toFile "compose.yaml" (builtins.toJSON spec)
+writeText "compose.yaml" (builtins.toJSON spec)

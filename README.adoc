@@ -192,6 +192,21 @@ nix build .#docs.site
 
 There are other attributes defined in link:./packages.nix[`packages.nix`].
 
+== Docker compose
+
+There is a `docker compose` setup designed to give a local developer mode of the marlowe runtime components,
+configured in link:./nix/dev/compose.nix[`compose.nix`].
+
+On Linux, `compose.yaml` will be automatically set up for the user when entering `nix develop`. On any system,
+`nix run .#refresh-compose` will update `compose.yaml`, but a Linux builder will be required if any changes to
+`compose.nix` are not yet cached in Hydra.
+
+Running `nix run .#re-up` will refresh `compose.yaml` if need be and then restart any services which have changed.
+
+The following commands may be useful:
+
+* `docker compose exec postgres /exec/run-sqitch`: Run the sqitch migrations for the chain-sync database.
+
 == Licensing
 
 You are free to copy, modify, and distribute Marlowe under the terms

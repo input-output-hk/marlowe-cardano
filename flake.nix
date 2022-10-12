@@ -49,12 +49,13 @@
     (flake-utils.lib.eachSystem systems (system:
       let
         packages = self.internal.packagesFun { inherit system; };
+        packagesLinux = self.internal.packagesFun { system = "x86_64-linux"; };
         packagesProf = self.internal.packagesFun { inherit system; enableHaskellProfiling = true; };
       in
       {
         inherit packages;
 
-        apps = {
+        apps = rec {
           updateMaterialized = {
             type = "app";
             program =
@@ -70,13 +71,19 @@
           refresh-compose = {
             type = "app";
             program = (packages.pkgs.writeShellScript "refresh-compose" ''
-              if ! grep --quiet --no-messages --fixed-strings 4d17cf8c-7077-4aa3-88e2-c6b8147dfa26 flake.nix
-              then
-                echo "You must run this in the root of the repo" >&2
-                exit 1
-              fi
+              cd $(git rev-parse --show-toplevel)
 
-              nix-store --realise ${packages.compose-spec} --add-root compose.yaml --indirect
+              nix-store --realise ${packagesLinux.compose-spec} --add-root compose.yaml --indirect
+            '').outPath;
+          };
+
+          re-up = {
+            type = "app";
+            program = (packages.pkgs.writeShellScript "re-up" ''
+              cd $(git rev-parse --show-toplevel)
+
+              ${refresh-compose.program}
+              docker compose up --detach
             '').outPath;
           };
         };
