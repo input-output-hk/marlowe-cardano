@@ -39,6 +39,7 @@ discoveryHost = host "discovery" "DISCOVERY" "127.0.0.1" "The hostname of the Ma
 
 discoveryQueryPort :: CliOption OptionFields PortNumber
 discoveryQueryPort = port "discovery-query" "DISCOVERY_QUERY" 3721 "The port number of the discovery server's query API."
+
 txHost :: CliOption OptionFields HostName
 txHost = host "tx" "TX" "127.0.0.1" "The hostname of the Marlowe Runtime transaction server."
 

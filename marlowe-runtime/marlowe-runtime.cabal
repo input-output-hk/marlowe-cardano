@@ -169,6 +169,7 @@ executable marlowe
     , async
     , base16
     , bytestring
+    , cardano-api
     , containers
     , marlowe
     , marlowe-chain-sync
