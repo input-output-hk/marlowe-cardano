@@ -22,6 +22,8 @@ rec {
 
   network = pkgs.networks.${networkNixName};
 
+  compose-spec = import ./nix/dev/compose.nix;
+
   dev-scripts = import ./nix/dev/scripts.nix {
     inherit pkgs packagesBySystem marlowe network cardano-cli cardano-node;
   };

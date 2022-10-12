@@ -66,6 +66,19 @@
             program =
               "${packages.pkgs.nixpkgs-fmt}/bin/nixpkgs-fmt";
           };
+
+          refresh-compose = {
+            type = "app";
+            program = (packages.pkgs.writeShellScript "refresh-compose" ''
+              if ! grep --quiet --no-messages --fixed-strings 4d17cf8c-7077-4aa3-88e2-c6b8147dfa26 flake.nix
+              then
+                echo "You must run this in the root of the repo" >&2
+                exit 1
+              fi
+
+              nix-store --realise ${packages.compose-spec} --add-root compose.yaml --indirect
+            '').outPath;
+          };
         };
 
         devShells.default = import ./dev-shell.nix {
