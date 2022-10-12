@@ -12,6 +12,20 @@ let
     ln -sv ${run-sqitch}/bin/run-sqitch $out
   '';
 
+  node-service = network: {
+    image = "inputoutput/cardano-node:1.35.3-configs";
+
+    environment = [
+      "NETWORK=${network}"
+    ];
+
+    volumes = [
+      # TODO should be possible to do this with one shared volume, alas the image doesn't let you override the socket path
+      "shared-${network}:/ipc"
+      "node-${network}-db:/opt/cardano/data"
+    ];
+  };
+
   spec = {
     services.postgres = {
       image = "postgres:11.5-alpine";
@@ -63,6 +77,18 @@ let
     };
 
     volumes.postgres = null;
+
+    services.node-testnet = node-service "testnet";
+    volumes.shared-testnet = null;
+    volumes.node-testnet-db = null;
+
+    services.node-preprod = node-service "preprod";
+    volumes.shared-preprod = null;
+    volumes.node-preprod-db = null;
+
+    services.node-preview = node-service "preview";
+    volumes.shared-preview = null;
+    volumes.node-preview-db = null;
   };
 in
 writeText "compose.yaml" (builtins.toJSON spec)
