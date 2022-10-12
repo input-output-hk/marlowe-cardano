@@ -187,6 +187,7 @@ executable marlowe
     , stm-delay
     , text
     , wl-pprint
+    , yaml
   if !os(windows)
     build-depends: unix
 

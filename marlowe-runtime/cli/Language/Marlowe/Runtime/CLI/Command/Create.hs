@@ -1,15 +1,26 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 module Language.Marlowe.Runtime.CLI.Command.Create
   where
 
+import Control.Monad (void)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT(ExceptT))
+import Data.Bifunctor (Bifunctor(first))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
+import qualified Data.Yaml as Yaml
+import Data.Yaml.Aeson (decodeFileEither)
 import Language.Marlowe (POSIXTime(POSIXTime))
-import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand, txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI)
+import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, PolicyId, TokenName(..))
-import Language.Marlowe.Runtime.Core.Api (SomeMarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(Lovelace), PolicyId, TokenName(..))
+import Language.Marlowe.Runtime.Core.Api
+  (MarloweVersion(MarloweV1), MarloweVersionTag(V1), SomeMarloweVersion(SomeMarloweVersion))
+import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create))
 import Options.Applicative
 import Text.Read (readMaybe)
 
@@ -17,6 +28,7 @@ data CreateCommand = CreateCommand
   { marloweVersion :: SomeMarloweVersion
   , roles :: RolesConfig
   , contractFiles :: ContractFiles
+  , minUTxO :: Lovelace
   }
 
 data RolesConfig
@@ -37,6 +49,12 @@ data ContractArgsValue = ContractArgsValue
   , valueArguments :: Map String Integer
   }
 
+data CreateCommandError v
+  = CreateFailed (CreateError v)
+  | ContractFileDecodingError Yaml.ParseException
+
+deriving instance Show (CreateCommandError 'V1)
+
 createCommandParser :: ParserInfo (TxCommand CreateCommand)
 createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Marlowe Contract"
   where
@@ -44,6 +62,7 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       <$> marloweVersionParser
       <*> rolesParser
       <*> contractFilesParser
+      <*> minUTxOParser
     rolesParser = mintSimpleParser <|> mintConfigParser <|> policyIdParser
     mintSimpleParser = MintSimple . Map.fromList <$> many roleParser
     mintConfigParser = fmap MintConfig $ strOption $ mconcat
@@ -102,6 +121,26 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       , help "The name of a numeric parameter in the contract and a value to assign to it."
       ]
     integerParser = maybe (Left "Invalid Integer value") Right . readMaybe
+    minUTxOParser = option (Lovelace <$> auto) $ mconcat
+      [ long "min-utxo"
+      , help "An amount which should be used as min ADA requirement for the Contract UTxO."
+      , metavar "LOVELACE"
+      ]
 
 runCreateCommand :: TxCommand CreateCommand -> CLI ()
-runCreateCommand = error "not implemented"
+runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=CreateCommand{..}} = case (marloweVersion, roles, contractFiles) of
+  (SomeMarloweVersion MarloweV1, MintSimple distribution, CoreFile contractFile) -> runCLIExceptT do
+    contract <- ExceptT $ liftIO $ first ContractFileDecodingError <$> decodeFileEither contractFile
+    -- FIXME: Use signing method
+    liftIO $ print signingMethod
+    liftIO $ print metadataFile
+    -- FIXME: read metadata file
+    -- metadata <- read... metadataFile
+    let
+      metadata = mempty
+      -- FIXME: ask for stake credentials
+      cmd = Create Nothing MarloweV1 walletAddresses distribution metadata minUTxO contract
+    -- FIXME: sing the result or output the unsigned transaction body to the stdout
+    void $ ExceptT $ first CreateFailed <$> runTxCommand cmd
+  (_, _, _) -> pure ()
+
