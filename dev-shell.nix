@@ -110,6 +110,10 @@ let
   # affinity APIs!
   + lib.optionalString stdenv.isLinux ''
     ${utillinux}/bin/taskset -pc 0-1000 $$
+
+    # Set up the compose file.
+    # Can't run on darwin without Linux builds set up or if it's in hydra...
+    nix run .#refresh-compose
   '';
 
   defaultShell = haskell.project.shellFor {

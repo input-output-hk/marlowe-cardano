@@ -49,12 +49,13 @@
     (flake-utils.lib.eachSystem systems (system:
       let
         packages = self.internal.packagesFun { inherit system; };
+        packagesLinux = self.internal.packagesFun { system = "x86_64-linux"; };
         packagesProf = self.internal.packagesFun { inherit system; enableHaskellProfiling = true; };
       in
       {
         inherit packages;
 
-        apps = {
+        apps = rec {
           updateMaterialized = {
             type = "app";
             program =
@@ -65,6 +66,25 @@
             type = "app";
             program =
               "${packages.pkgs.nixpkgs-fmt}/bin/nixpkgs-fmt";
+          };
+
+          refresh-compose = {
+            type = "app";
+            program = (packages.pkgs.writeShellScript "refresh-compose" ''
+              cd $(git rev-parse --show-toplevel)
+
+              nix-store --realise ${packagesLinux.compose-spec} --add-root compose.yaml --indirect
+            '').outPath;
+          };
+
+          re-up = {
+            type = "app";
+            program = (packages.pkgs.writeShellScript "re-up" ''
+              cd $(git rev-parse --show-toplevel)
+
+              ${refresh-compose.program}
+              docker compose up --detach
+            '').outPath;
           };
         };
 
