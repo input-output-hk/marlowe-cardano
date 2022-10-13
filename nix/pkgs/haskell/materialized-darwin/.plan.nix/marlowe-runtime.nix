@@ -111,6 +111,7 @@
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."split" or (errorHandler.buildDepError "split"))
             ];
           buildable = true;
@@ -121,6 +122,7 @@
       exes = {
         "marlowe" = {
           depends = [
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))

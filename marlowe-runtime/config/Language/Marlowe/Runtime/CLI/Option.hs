@@ -6,6 +6,7 @@ import Control.Arrow ((>>>))
 import Data.Foldable (asum)
 import Data.List.Split (splitOn)
 import Data.String (fromString)
+import qualified Data.Text as T
 import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32, parseTxOutRef)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..))
@@ -89,7 +90,7 @@ keyValueOption readKey readValue = option $ eitherReader \val -> case splitOn "=
   _ -> Left "Expected format: <key>=<value>"
 
 txOutRefParser :: ReadM TxOutRef
-txOutRefParser = eitherReader $ parseTxOutRef >>> \case
+txOutRefParser = eitherReader $ T.pack >>> parseTxOutRef >>> \case
   Nothing  -> Left "Invalid UTXO - expected format: <hex-tx-id>#<tx-out-ix>"
   Just cid -> Right cid
 

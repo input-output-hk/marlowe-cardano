@@ -9,6 +9,8 @@ import Control.Error (MaybeT(MaybeT, runMaybeT))
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
+import Data.Aeson (toJSON)
+import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor(first, second))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
@@ -21,9 +23,21 @@ import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, Lovelace(Lovelace), PolicyId, TokenName(..), TransactionMetadata, fromJSONEncodedTransactionMetadata)
+  ( Address
+  , Lovelace(Lovelace)
+  , PolicyId
+  , TokenName(..)
+  , TransactionMetadata
+  , fromJSONEncodedTransactionMetadata
+  , renderTxOutRef
+  )
 import Language.Marlowe.Runtime.Core.Api
-  (IsMarloweVersion(Contract), MarloweVersion(MarloweV1), MarloweVersionTag(V1), SomeMarloweVersion(SomeMarloweVersion))
+  ( ContractId(ContractId)
+  , IsMarloweVersion(Contract)
+  , MarloweVersion(MarloweV1)
+  , MarloweVersionTag(V1)
+  , SomeMarloweVersion(SomeMarloweVersion)
+  )
 import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create), Mint, mkMint)
 import Options.Applicative
 import Options.Applicative.NonEmpty (some1)
@@ -149,7 +163,8 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
           pure $ Right . mkMint . fmap (second toNFT) $ tokens
         UseExistingPolicyId policyId -> pure . Left $ policyId
         MintConfig _ -> MaybeT $ throwE (RolesConfigNotSupportedYet roles')
-    run MarloweV1 minting'
+    ContractId contractId <- run MarloweV1 minting'
+    liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
   where
     readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Contract v)
     readContract = \case
@@ -166,14 +181,15 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
         noteT (MetadataDecodingFailed Nothing) $ hoistMaybe (fromJSONEncodedTransactionMetadata metadataJSON)
       Nothing -> pure mempty
 
-    run :: MarloweVersion v -> Maybe (Either PolicyId Mint) -> ExceptT (CreateCommandError v) CLI ()
+    run :: MarloweVersion v -> Maybe (Either PolicyId Mint) -> ExceptT (CreateCommandError v) CLI ContractId
     run version rolesDistribution  = do
       contract <- readContract version
       metadata <- readMetadata
       let
         cmd = Create Nothing version walletAddresses rolesDistribution metadata minUTxO contract
+      (contractId, transaction) <- ExceptT $ first CreateFailed <$> runTxCommand cmd
       case signingMethod of
         Manual outputFile -> do
-          (_, transaction) <- ExceptT $ first CreateFailed <$> runTxCommand cmd
           ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing transaction
+          pure contractId
 

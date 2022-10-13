@@ -141,6 +141,7 @@ library config
     , marlowe-runtime
     , network
     , optparse-applicative
+    , text
     , split
 
 executable marlowe
@@ -164,7 +165,8 @@ executable marlowe
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-      base >= 4.9 && < 5
+      aeson
+    , base >= 4.9 && < 5
     , ansi-terminal
     , async
     , base16

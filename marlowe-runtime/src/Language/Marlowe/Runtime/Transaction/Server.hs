@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE ViewPatterns #-}
 
 
 module Language.Marlowe.Runtime.Transaction.Server
@@ -29,6 +30,7 @@ import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
+import Control.Error.Util (hoistMaybe, noteT)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
@@ -41,10 +43,10 @@ import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, Credential(..), PolicyId, SlotConfig, TransactionMetadata, TxId(..))
+  (BlockHeader, Credential(..), PolicyId, SlotConfig, TokenName, TransactionMetadata, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
-  (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, withMarloweVersion)
+  (Contract, ContractId(..), MarloweVersion(MarloweV1), Payout(Payout, datum), Redeemer, withMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
@@ -154,7 +156,7 @@ mkWorker WorkerDependencies{..} =
               invalidBefore
               invalidHereafter
               redeemer
-          Withdraw version addresses contractId payoutDatum ->
+          Withdraw version addresses contractId roleToken ->
             execWithdraw
               solveConstraints
               loadWalletContext
@@ -162,7 +164,7 @@ mkWorker WorkerDependencies{..} =
               version
               addresses
               contractId
-              payoutDatum
+              roleToken
           Submit tx ->
             execSubmit mkSubmitJob trackSubmitJob tx
       , recvMsgAttach = \case
@@ -288,17 +290,23 @@ execWithdraw
   -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
-  -> PayoutDatum v
+  -> TokenName
   -> IO (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) IO ())
-execWithdraw solveConstraints loadWalletContext loadMarloweContext version addresses contractId datum = execExceptT do
-  constraints <- except $ buildWithdrawConstraints version datum
-  walletContext <- lift $ loadWalletContext addresses
-  marloweContext <- withExceptT WithdrawLoadMarloweContextFailed
-    $ ExceptT
-    $ loadMarloweContext version contractId
-  except
-    $ first WithdrawConstraintError
-    $ solveConstraints version marloweContext walletContext constraints
+execWithdraw solveConstraints loadWalletContext loadMarloweContext version addresses contractId roleToken = execExceptT $ case version of
+  MarloweV1 -> do
+    marloweContext@MarloweContext{payoutOutputs=Map.elems -> payouts} <- withExceptT WithdrawLoadMarloweContextFailed
+      $ ExceptT
+      $ loadMarloweContext version contractId
+    let
+      payoutAssetId Payout {datum = assetId } = assetId
+      isRolePayout (Chain.AssetId _ roleName) = roleName == roleToken
+      possibleDatum = find isRolePayout . map payoutAssetId $ payouts
+    datum <- noteT (UnableToFindPayoutForAGivenRole roleToken) $ hoistMaybe possibleDatum
+    constraints <- except $ buildWithdrawConstraints version datum
+    walletContext <- lift $ loadWalletContext addresses
+    except
+      $ first WithdrawConstraintError
+      $ solveConstraints version marloweContext walletContext constraints
 
 execSubmit
   :: (Tx BabbageEra -> STM SubmitJob)

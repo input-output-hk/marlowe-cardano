@@ -76,6 +76,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , paymentCredential
   , policyIdToScriptHash
   , putUTCTime
+  , renderTxOutRef
   , runtimeChainSeekCodec
   , slotToUTCTime
   , stakeReference
@@ -120,7 +121,6 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function (on)
 import Data.Functor (($>))
-import Data.List.Split (splitOn)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
@@ -213,8 +213,9 @@ data Metadata
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
--- Convenient `JSON` based encoding for a subset of `Metadata`
--- values. It is not a possible implementation of `fromJSON` method.
+-- Handle convenient `JSON` based encoding for a subset of `Metadata`
+-- type domain.
+-- It is not an implementation of a possible `fromJSON` method.
 fromJSONEncodedMetadata :: A.Value -> Maybe Metadata
 fromJSONEncodedMetadata = \case
   A.Number n ->
@@ -373,14 +374,21 @@ data TxOutRef = TxOutRef
   deriving anyclass (Binary)
 
 instance IsString TxOutRef where
-  fromString = fromJust . parseTxOutRef
+  fromString = fromJust . parseTxOutRef . T.pack
 
-parseTxOutRef :: String -> Maybe TxOutRef
-parseTxOutRef val = case splitOn "#" val of
+parseTxOutRef :: Text -> Maybe TxOutRef
+parseTxOutRef val = case T.splitOn "#" val of
   [txId, txIx] -> TxOutRef
-    <$> (TxId <$> either (const Nothing) Just (decodeBase16 $ encodeUtf8 $ T.pack txId))
-    <*> (TxIx <$> readMaybe txIx)
+    <$> (TxId <$> either (const Nothing) Just (decodeBase16 . encodeUtf8 $ txId))
+    <*> (TxIx <$> readMaybe (T.unpack txIx))
   _ -> Nothing
+
+renderTxOutRef :: TxOutRef -> Text
+renderTxOutRef TxOutRef{..} = mconcat
+  [ encodeBase16 $ unTxId txId
+  , "#"
+  , T.pack $ show $ unTxIx txIx
+  ]
 
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)

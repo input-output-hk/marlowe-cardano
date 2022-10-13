@@ -145,7 +145,7 @@ data MarloweTxCommand status err result where
     -- ^ The wallet addresses to use when constructing the transaction
     -> ContractId
     -- ^ The ID of the contract to apply the inputs to.
-    -> PayoutDatum v
+    -> TokenName
     -- ^ The names of the roles whose assets to withdraw.
     -> MarloweTxCommand Void (WithdrawError v)
         ( TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
@@ -243,10 +243,10 @@ instance Command MarloweTxCommand where
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidBefore
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidHereafter
       putRedeemer version redeemer
-    Withdraw version walletAddresses contractId payoutDatum -> do
+    Withdraw _ walletAddresses contractId tokenName -> do
       put walletAddresses
       put contractId
-      putPayoutDatum version payoutDatum
+      put tokenName
     Submit tx -> put $ serialiseToCBOR tx
 
   getCommand = \case
@@ -293,8 +293,8 @@ instance Command MarloweTxCommand where
     TagWithdraw version -> do
       walletAddresses <- get
       contractId <- get
-      payoutDatum <- getPayoutDatum version
-      pure $ Withdraw version walletAddresses contractId payoutDatum
+      tokenName <- get
+      pure $ Withdraw version walletAddresses contractId tokenName
 
     TagSubmit -> do
       bytes <- get @ByteString
@@ -392,6 +392,7 @@ data ApplyInputsConstraintsBuildupError
 data WithdrawError v
   = WithdrawConstraintError (ConstraintError v)
   | WithdrawLoadMarloweContextFailed LoadMarloweContextError
+  | UnableToFindPayoutForAGivenRole TokenName
   deriving (Generic)
 
 deriving instance Eq (WithdrawError 'V1)

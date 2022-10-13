@@ -30,7 +30,16 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, TokenName(..), TxId(..), TxIx(..), TxOutRef(..), getUTCTime, parseTxOutRef, putUTCTime, unPolicyId)
+  ( BlockHeader
+  , TokenName(..)
+  , TxId(..)
+  , TxOutRef(..)
+  , getUTCTime
+  , parseTxOutRef
+  , putUTCTime
+  , renderTxOutRef
+  , unPolicyId
+  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
@@ -42,15 +51,8 @@ newtype ContractId = ContractId { unContractId :: TxOutRef }
   deriving newtype (IsString)
   deriving anyclass (Binary)
 
-renderTxOutRef :: TxOutRef -> Text
-renderTxOutRef TxOutRef{..} = mconcat
-  [ encodeBase16 $ unTxId txId
-  , "#"
-  , T.pack $ show $ unTxIx txIx
-  ]
-
 parseContractId :: String -> Maybe ContractId
-parseContractId = fmap ContractId . parseTxOutRef
+parseContractId = fmap ContractId . parseTxOutRef . T.pack
 
 renderContractId :: ContractId -> Text
 renderContractId = renderTxOutRef . unContractId
