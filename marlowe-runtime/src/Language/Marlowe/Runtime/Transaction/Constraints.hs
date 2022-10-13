@@ -795,23 +795,42 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
   txValidityRange <- solveTxValidityRange
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
+  -- pure C.TxBodyContent
+  --   { txIns
+  --   , txInsCollateral = C.TxInsCollateralNone
+  --   , txInsReference
+  --   , txOuts
+  --   , txTotalCollateral = C.TxTotalCollateralNone
+  --   , txReturnCollateral = C.TxReturnCollateralNone
+  --   , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
+  --   , txValidityRange
+  --   , txMetadata
+  --   , txAuxScripts = C.TxAuxScriptsNone
+  --   , txExtraKeyWits
+  --   , txProtocolParams = C.BuildTxWith $ Just protocol
+  --   , txWithdrawals = C.TxWithdrawalsNone
+  --   , txCertificates = C.TxCertificatesNone
+  --   , txUpdateProposal = C.TxUpdateProposalNone
+  --   , txMintValue
+  --   , txScriptValidity = C.TxScriptValidityNone
+  --   }
   pure C.TxBodyContent
-    { txIns
+    { txIns = log ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
     , txInsCollateral = C.TxInsCollateralNone
-    , txInsReference
-    , txOuts
+    , txInsReference = log ("solveInitialTxBodyContent txInsReference: " <> show txInsReference) txInsReference
+    , txOuts = log ("solveInitialTxBodyContent txOuts: " <> show txOuts) txOuts
     , txTotalCollateral = C.TxTotalCollateralNone
     , txReturnCollateral = C.TxReturnCollateralNone
     , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-    , txValidityRange
-    , txMetadata
+    , txValidityRange = log ("solveInitialTxBodyContent txValidityRange: " <> show txValidityRange) txValidityRange
+    , txMetadata = log ("solveInitialTxBodyContent txMetadata: " <> show txMetadata) txMetadata
     , txAuxScripts = C.TxAuxScriptsNone
-    , txExtraKeyWits
+    , txExtraKeyWits = log ("solveInitialTxBodyContent txExtraKeyWits: " <> show txExtraKeyWits) txExtraKeyWits
     , txProtocolParams = C.BuildTxWith $ Just protocol
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    , txMintValue
+    , txMintValue = log ("END values for the new tx body\nsolveInitialTxBodyContent txMintValue: " <> show txMintValue) txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
