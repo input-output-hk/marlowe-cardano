@@ -15,6 +15,7 @@ data TxCommand cmd = TxCommand
 
 newtype SigningMethod
   = Manual FilePath
+  deriving (Show)
 
 txCommandParser :: Parser cmd -> Parser (TxCommand cmd)
 txCommandParser subCommandParser = TxCommand

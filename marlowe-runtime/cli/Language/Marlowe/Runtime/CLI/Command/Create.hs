@@ -1,28 +1,60 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 module Language.Marlowe.Runtime.CLI.Command.Create
   where
 
+import qualified Cardano.Api as C
+import Control.Error (MaybeT(MaybeT, runMaybeT))
+import Control.Error.Util (hoistMaybe, noteT)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
+import Data.Aeson (toJSON)
+import qualified Data.Aeson as A
+import Data.Bifunctor (Bifunctor(first, second))
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
+import qualified Data.Yaml as Yaml
+import Data.Yaml.Aeson (decodeFileEither)
 import Language.Marlowe (POSIXTime(POSIXTime))
-import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand, txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI)
+import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, PolicyId, TokenName(..))
-import Language.Marlowe.Runtime.Core.Api (SomeMarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api
+  ( Address
+  , Lovelace(Lovelace)
+  , PolicyId
+  , TokenName(..)
+  , TransactionMetadata
+  , fromJSONEncodedTransactionMetadata
+  , renderTxOutRef
+  )
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(ContractId)
+  , IsMarloweVersion(Contract)
+  , MarloweVersion(MarloweV1)
+  , MarloweVersionTag(V1)
+  , SomeMarloweVersion(SomeMarloweVersion)
+  )
+import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create), Mint, mkMint)
 import Options.Applicative
+import Options.Applicative.NonEmpty (some1)
 import Text.Read (readMaybe)
 
 data CreateCommand = CreateCommand
   { marloweVersion :: SomeMarloweVersion
-  , roles :: RolesConfig
+  , roles :: Maybe RolesConfig
   , contractFiles :: ContractFiles
+  , minUTxO :: Lovelace
   }
 
 data RolesConfig
-  = MintSimple (Map TokenName Address)
+  = MintSimple (NonEmpty (TokenName, Address))
   | MintConfig FilePath
   | UseExistingPolicyId PolicyId
+  deriving (Show)
 
 data ContractFiles
   = CoreFile FilePath
@@ -37,6 +69,16 @@ data ContractArgsValue = ContractArgsValue
   , valueArguments :: Map String Integer
   }
 
+data CreateCommandError v
+  = CreateFailed (CreateError v)
+  | ContractFileDecodingError Yaml.ParseException
+  | TransactionFileWriteFailed (C.FileError ())
+  | RolesConfigNotSupportedYet RolesConfig
+  | MetadataDecodingFailed (Maybe Yaml.ParseException)
+  | ExtendedContractsAreNotSupportedYet
+
+deriving instance Show (CreateCommandError 'V1)
+
 createCommandParser :: ParserInfo (TxCommand CreateCommand)
 createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Marlowe Contract"
   where
@@ -44,8 +86,9 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       <$> marloweVersionParser
       <*> rolesParser
       <*> contractFilesParser
-    rolesParser = mintSimpleParser <|> mintConfigParser <|> policyIdParser
-    mintSimpleParser = MintSimple . Map.fromList <$> many roleParser
+      <*> minUTxOParser
+    rolesParser = optional (mintSimpleParser <|> mintConfigParser <|> policyIdParser)
+    mintSimpleParser = MintSimple <$> some1 roleParser
     mintConfigParser = fmap MintConfig $ strOption $ mconcat
       [ long "roles-config-file"
       , help $ unwords
@@ -102,6 +145,51 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       , help "The name of a numeric parameter in the contract and a value to assign to it."
       ]
     integerParser = maybe (Left "Invalid Integer value") Right . readMaybe
+    minUTxOParser = option (Lovelace <$> auto) $ mconcat
+      [ long "min-utxo"
+      , help "An amount which should be used as min ADA requirement for the Contract UTxO."
+      , metavar "LOVELACE"
+      ]
 
 runCreateCommand :: TxCommand CreateCommand -> CLI ()
-runCreateCommand = error "not implemented"
+runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=CreateCommand{..}} = case marloweVersion of
+  SomeMarloweVersion MarloweV1 -> runCLIExceptT do
+    minting' <- runMaybeT do
+      roles' <- MaybeT $ pure roles
+      case roles' of
+        MintSimple tokens -> do
+          let
+            toNFT addr = (addr, Left 1)
+          pure $ Right . mkMint . fmap (second toNFT) $ tokens
+        UseExistingPolicyId policyId -> pure . Left $ policyId
+        MintConfig _ -> MaybeT $ throwE (RolesConfigNotSupportedYet roles')
+    ContractId contractId <- run MarloweV1 minting'
+    liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
+  where
+    readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Contract v)
+    readContract = \case
+      MarloweV1 -> case contractFiles of
+        CoreFile filePath -> ExceptT $ liftIO $ first ContractFileDecodingError <$> decodeFileEither filePath
+        ExtendedFiles _ _ -> do
+          -- extendedContract <- ExceptT $ liftIO $ first (ContractFileDecodingError . Just) <$> decodeFileEither filePath
+          throwE ExtendedContractsAreNotSupportedYet
+
+    readMetadata :: ExceptT (CreateCommandError v) CLI TransactionMetadata
+    readMetadata = case metadataFile of
+      Just filePath -> do
+        metadataJSON <- ExceptT $ liftIO $ first (MetadataDecodingFailed . Just) <$> decodeFileEither filePath
+        noteT (MetadataDecodingFailed Nothing) $ hoistMaybe (fromJSONEncodedTransactionMetadata metadataJSON)
+      Nothing -> pure mempty
+
+    run :: MarloweVersion v -> Maybe (Either PolicyId Mint) -> ExceptT (CreateCommandError v) CLI ContractId
+    run version rolesDistribution  = do
+      contract <- readContract version
+      metadata <- readMetadata
+      let
+        cmd = Create Nothing version walletAddresses rolesDistribution metadata minUTxO contract
+      (contractId, transaction) <- ExceptT $ first CreateFailed <$> runTxCommand cmd
+      case signingMethod of
+        Manual outputFile -> do
+          ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing transaction
+          pure contractId
+

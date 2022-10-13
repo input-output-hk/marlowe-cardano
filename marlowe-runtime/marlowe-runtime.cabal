@@ -141,6 +141,7 @@ library config
     , marlowe-runtime
     , network
     , optparse-applicative
+    , text
     , split
 
 executable marlowe
@@ -164,12 +165,15 @@ executable marlowe
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-      base >= 4.9 && < 5
+      aeson
+    , base >= 4.9 && < 5
     , ansi-terminal
     , async
     , base16
     , bytestring
+    , cardano-api
     , containers
+    , errors
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
@@ -186,6 +190,7 @@ executable marlowe
     , stm-delay
     , text
     , wl-pprint
+    , yaml
   if !os(windows)
     build-depends: unix
 

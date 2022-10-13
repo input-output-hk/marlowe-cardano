@@ -1,8 +1,12 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 module Language.Marlowe.Runtime.CLI.Command
   where
 
 import Control.Concurrent.STM (STM)
+import Control.Exception (Exception, SomeException, catch, throw)
 import Control.Monad.Trans.Reader (runReaderT)
+import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
@@ -23,7 +27,7 @@ import Language.Marlowe.Runtime.CLI.Command.Rm (RmCommand, rmCommandParser, runR
 import Language.Marlowe.Runtime.CLI.Command.Submit (SubmitCommand, runSubmitCommand, submitCommandParser)
 import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand)
 import Language.Marlowe.Runtime.CLI.Command.Withdraw (WithdrawCommand, runWithdrawCommand, withdrawCommandParser)
-import Language.Marlowe.Runtime.CLI.Env (Env(..), runClientPeerOverSocket)
+import Language.Marlowe.Runtime.CLI.Env (Env(..), RunClient, runClientPeerOverSocket)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
@@ -31,8 +35,11 @@ import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Query.Client (queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
-import Network.Socket (HostName, PortNumber, SocketType(..), addrSocketType, defaultHints, getAddrInfo)
+import Network.Socket (AddrInfo, HostName, PortNumber, SocketType(..), addrSocketType, defaultHints, getAddrInfo)
+import Network.TypedProtocol (Peer, PeerRole(AsClient))
+import Network.TypedProtocol.Codec (Codec)
 import Options.Applicative
+import System.IO (hPutStrLn, stderr)
 
 -- | Top-level options for running a command in the Marlowe Runtime CLI.
 data Options = Options
@@ -130,13 +137,27 @@ runCLIWithOptions sigInt Options{..} cli = do
   discoveryQueryAddr <- resolve discoveryHost discoveryQueryPort
   txJobAddr <- resolve txHost txCommandPort
   runReaderT (runCLI cli) Env
-    { envRunHistoryJobClient = runClientPeerOverSocket historyJobAddr codecJob jobClientPeer
-    , envRunHistoryQueryClient = runClientPeerOverSocket historyQueryAddr codecQuery queryClientPeer
-    , envRunHistorySyncClient = runClientPeerOverSocket historySyncAddr codecMarloweSync marloweSyncClientPeer
-    , envRunTxJobClient = runClientPeerOverSocket txJobAddr codecJob jobClientPeer
-    , envRunDiscoveryQueryClient = runClientPeerOverSocket discoveryQueryAddr codecQuery queryClientPeer
+    { envRunHistoryJobClient = runClientPeerOverSocket' "History job client failure" historyJobAddr codecJob jobClientPeer
+    , envRunHistoryQueryClient = runClientPeerOverSocket' "History query client failure" historyQueryAddr codecQuery queryClientPeer
+    , envRunHistorySyncClient = runClientPeerOverSocket' "History sync client failure" historySyncAddr codecMarloweSync marloweSyncClientPeer
+    , envRunTxJobClient = runClientPeerOverSocket' "Tx client client failure" txJobAddr codecJob jobClientPeer
+    , envRunDiscoveryQueryClient = runClientPeerOverSocket' "Marlowe discovery query client failure" discoveryQueryAddr codecQuery queryClientPeer
     , sigInt
     }
   where
     resolve host port =
       head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
+
+runClientPeerOverSocket'
+  :: Exception ex
+  => String -- ^ Client failure stderr extra message
+  -> AddrInfo -- ^ Socket address to connect to
+  -> Codec protocol ex IO LB.ByteString -- ^ A codec for the protocol
+  -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
+  -> RunClient IO client
+runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
+  let
+    run = runClientPeerOverSocket addr codec clientToPeer client
+  run `catch` \(err :: SomeException)-> do
+    hPutStrLn stderr errMsg
+    throw err

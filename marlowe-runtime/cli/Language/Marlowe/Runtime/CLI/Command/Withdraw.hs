@@ -1,22 +1,39 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 module Language.Marlowe.Runtime.CLI.Command.Withdraw
   where
 
-import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand, txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI)
-import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
+import qualified Cardano.Api as C
+import Control.Monad (void)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT(ExceptT))
+import Data.Bifunctor (first)
+import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.CLI.Option (marloweVersionParser, txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (TokenName(TokenName))
-import Language.Marlowe.Runtime.Core.Api (ContractId(ContractId))
+import Language.Marlowe.Runtime.Core.Api
+  (ContractId(ContractId), MarloweVersion(MarloweV1), MarloweVersionTag(V1), SomeMarloweVersion(SomeMarloweVersion))
+import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(Withdraw), WithdrawError)
 import Options.Applicative
 
 data WithdrawCommand = WithdrawCommand
   { contractId :: ContractId
+  , marloweVersion :: SomeMarloweVersion
   , role :: TokenName
   }
+
+data WithdrawCommandError v
+  = WithdrawFailed (WithdrawError v)
+  | TransactionFileWriteFailed (C.FileError ())
+
+deriving instance Show (WithdrawCommandError 'V1)
 
 withdrawCommandParser :: ParserInfo (TxCommand WithdrawCommand)
 withdrawCommandParser = info (txCommandParser parser) $ progDesc "Withdraw funds paid to a role in a contract"
   where
-    parser = WithdrawCommand <$> contractIdParser <*> roleParser
+    parser = WithdrawCommand <$> contractIdParser <*> marloweVersionParser <*> roleParser
     contractIdParser = option (ContractId <$> txOutRefParser) $ mconcat
       [ long "contract"
       , short 'c'
@@ -31,4 +48,12 @@ withdrawCommandParser = info (txCommandParser parser) $ progDesc "Withdraw funds
 
 
 runWithdrawCommand :: TxCommand WithdrawCommand -> CLI ()
-runWithdrawCommand = error "not implemented"
+runWithdrawCommand TxCommand { walletAddresses, signingMethod, subCommand=WithdrawCommand{..}} = case marloweVersion of
+  SomeMarloweVersion MarloweV1 -> runCLIExceptT do
+    let
+      cmd = Withdraw MarloweV1 walletAddresses contractId role
+    transaction <- ExceptT $ first WithdrawFailed <$> runTxCommand cmd
+    case signingMethod of
+      Manual outputFile -> do
+        void $ ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing transaction
+
