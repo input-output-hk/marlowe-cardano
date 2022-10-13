@@ -61,6 +61,7 @@ data CreateCommandError v
   | TransactionFileWriteFailed (C.FileError ())
   | RolesConfigNotSupportedYet RolesConfig
   | MetadataDecodingFailed (Maybe Yaml.ParseException)
+  | ExtendedContractsAreNotSupportedYet
 
 deriving instance Show (CreateCommandError 'V1)
 
@@ -154,7 +155,9 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
     readContract = \case
       MarloweV1 -> case contractFiles of
         CoreFile filePath -> ExceptT $ liftIO $ first ContractFileDecodingError <$> decodeFileEither filePath
-        ExtendedFiles _ _ -> error "not implemented"
+        ExtendedFiles _ _ -> do
+          -- extendedContract <- ExceptT $ liftIO $ first (ContractFileDecodingError . Just) <$> decodeFileEither filePath
+          throwE ExtendedContractsAreNotSupportedYet
 
     readMetadata :: ExceptT (CreateCommandError v) CLI TransactionMetadata
     readMetadata = case metadataFile of
