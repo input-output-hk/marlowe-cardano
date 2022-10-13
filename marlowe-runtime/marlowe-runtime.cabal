@@ -171,6 +171,7 @@ executable marlowe
     , bytestring
     , cardano-api
     , containers
+    , errors
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols

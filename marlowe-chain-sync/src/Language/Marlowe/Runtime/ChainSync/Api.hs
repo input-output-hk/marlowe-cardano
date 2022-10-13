@@ -50,6 +50,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , Tokens(..)
   , Transaction(..)
   , TransactionInput(..)
+  , TransactionMetadata(..)
   , TransactionOutput(..)
   , TxError(..)
   , TxId(..)
@@ -63,6 +64,8 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , fromBech32
   , fromCardanoStakeAddressPointer
   , fromDatum
+  , fromJSONEncodedMetadata
+  , fromJSONEncodedTransactionMetadata
   , fromPlutusData
   , fromRedeemer
   , getUTCTime
@@ -106,14 +109,17 @@ import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Codec.Serialise (deserialiseOrFail, serialise)
-import Control.Monad ((>=>))
+import Control.Monad (guard, (>=>))
+import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function (on)
+import Data.Functor (($>))
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -134,7 +140,9 @@ import Data.Time
   , secondsToNominalDiffTime
   )
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
+import Data.Traversable (for)
 import Data.Type.Equality (type (:~:)(Refl))
+import qualified Data.Vector as Vector
 import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
@@ -194,6 +202,8 @@ data ValidityRange
   deriving anyclass (Binary)
 
 
+-- Encodes `transaction_metadatum`:
+-- https://github.com/input-output-hk/cardano-ledger/blob/node/1.35.3/eras/shelley/test-suite/cddl-files/shelley.cddl#L203
 data Metadata
   = MetadataMap [(Metadata, Metadata)]
   | MetadataList [Metadata]
@@ -202,6 +212,35 @@ data Metadata
   | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+-- Convenient `JSON` based encoding for a subset of `Metadata`
+-- values. It is not a possible implementation of `fromJSON` method.
+fromJSONEncodedMetadata :: A.Value -> Maybe Metadata
+fromJSONEncodedMetadata = \case
+  A.Number n ->
+    guard (fromInteger (floor n) == n) $> MetadataNumber (floor n)
+  A.String t -> Just $ MetadataText t
+  A.Array (Vector.toList -> elems) -> MetadataList <$> traverse fromJSONEncodedMetadata elems
+  A.Object (Map.toList . KeyMap.toMapText -> props) -> MetadataMap <$> for props \(key, value) -> do
+    value' <- fromJSONEncodedMetadata value
+    pure (MetadataText key, value')
+  A.Bool _ -> Nothing
+  A.Null -> Nothing
+
+-- Encodes `transaction_metadata`:
+-- https://github.com/input-output-hk/cardano-ledger/blob/node/1.35.3/eras/shelley/test-suite/cddl-files/shelley.cddl#L212
+newtype TransactionMetadata = TransactionMetadata { unTransactionMetadata :: Map Word64 Metadata }
+  deriving (Show, Eq, Ord, Generic)
+  deriving newtype (Semigroup, Monoid)
+  deriving anyclass (Binary)
+
+fromJSONEncodedTransactionMetadata :: A.Value -> Maybe TransactionMetadata
+fromJSONEncodedTransactionMetadata = \case
+  A.Object (Map.toList . KeyMap.toMapText -> props) -> TransactionMetadata . Map.fromList <$> for props \(key, value) -> do
+    label <- fmap fromInteger $ readMaybe . T.unpack $ key
+    value' <- fromJSONEncodedMetadata value
+    pure (label, value')
+  _ -> Nothing
 
 -- | An input of a transaction.
 data TransactionInput = TransactionInput

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.BuildConstraints
   ( buildApplyInputsConstraints
@@ -10,25 +11,25 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraints
 import qualified Cardano.Api.Byron as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as CL (Network(..))
-import Control.Arrow ((&&&))
+import Control.Arrow (Arrow((***)))
 import Control.Category ((>>>))
 import Control.Error (note)
 import Control.Monad ((<=<), (>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT, execWriterT, tell)
 import Data.Bifunctor (bimap)
-import Data.Binary (Word64)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
+import Data.Functor ((<&>))
 import Data.List (find, sortBy)
-import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (maybeToList)
+import Data.Maybe (catMaybes, maybeToList)
 import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import GHC.Base (Alternative((<|>)))
+import GHC.Natural (Natural)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
@@ -38,12 +39,13 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , AssetId(AssetId)
   , Assets(Assets)
   , Lovelace(Lovelace)
-  , Metadata
+  , Metadata(MetadataBytes, MetadataMap)
   , PaymentKeyHash(PaymentKeyHash)
   , PolicyId(PolicyId)
   , ScriptHash(unScriptHash)
   , SlotConfig(slotLength, slotZeroTime)
-  , TokenName
+  , TokenName(unTokenName)
+  , TransactionMetadata(TransactionMetadata, unTransactionMetadata)
   , TransactionOutput(TransactionOutput)
   , UTxO(UTxO)
   , toUTxOTuple
@@ -75,6 +77,8 @@ import Language.Marlowe.Runtime.Transaction.Api
   , ApplyInputsError(..)
   , CreateBuildupError(AddressDecodingFailed, CollateralSelectionFailed, MintingScriptDecodingFailed)
   , CreateError(..)
+  , Mint(unMint)
+  , NFTMetadata(unNFTMetadata)
   , WithdrawError
   )
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -113,26 +117,28 @@ buildCreateConstraints
   :: forall v
    . MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> WalletContext  -- ^ The wallet used to mint tokens.
-  -> Map TokenName Address -- ^ The initial distribution of the role tokens.
-  -> Map Word64 Metadata -- ^ Extra metadata to add to the transaction.
+  -> Maybe (Either PolicyId Mint) -- ^ The initial distribution of the role tokens.
+  -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract v -- ^ The contract being instantiated.
   -> Either (CreateError v) (TxConstraints v)
-buildCreateConstraints version walletCtx distribution metadata minAda contract = case version of
-  MarloweV1 -> execTxConstraintsBuilder version $ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract
+buildCreateConstraints version walletCtx roles metadata minAda contract = case version of
+  MarloweV1 -> execTxConstraintsBuilder version $ buildCreateConstraintsV1 walletCtx roles metadata minAda contract
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
 buildCreateConstraintsV1
   :: WalletContext  -- ^ The wallet used to mint tokens.
-  -> Map TokenName Address -- ^ The initial distribution of the role tokens.
-  -> Map Word64 Metadata -- ^ Extra metadata to add to the transaction.
+  -> Maybe (Either PolicyId Mint) -- ^ The initial distribution of the role tokens.
+  -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract 'V1 -- ^ The contract being instantiated.
   -> TxConstraintsBuilderM (CreateError 'V1) 'V1 ()
-buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
+buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
   -- Tx body constraints.
-  for_ (Map.toList metadata) \(label, meta) -> do
+  let
+    metadata' = metadata <> nftsMetadata
+  for_ (Map.toList . unTransactionMetadata $ metadata') \(label, meta) -> do
     tell . requiresMetadata label $ meta
 
   -- Output constraints.
@@ -142,6 +148,21 @@ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
   -- Marlowe script output.
   sendMarloweOutput policyId
   where
+    nftsMetadata = case roles of
+      Just (Right (Map.toList . unMint -> minting)) -> do
+        let
+          tokensMetadata = catMaybes $ minting <&> \case
+            (tokenName, (_, Right (Just (unNFTMetadata -> nftMetadata)))) -> do
+              let
+                tokenName' = unTokenName tokenName
+              -- From CIP-25: In version 2 the the raw bytes of the asset_name are used.
+              Just (MetadataBytes tokenName', nftMetadata)
+            _ -> Nothing
+        case tokensMetadata of
+          [] -> mempty
+          metadata' -> TransactionMetadata (Map.singleton 721 (MetadataMap metadata'))
+      _ -> mempty
+
     liftMaybe err = lift . note (CreateBuildupFailed err)
 
     sendMarloweOutput policyId = do
@@ -181,14 +202,15 @@ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
 
     -- Role token distribution constraints
     mintRoleTokens :: TxConstraintsBuilderM (CreateError 'V1) 'V1 PolicyId
-    mintRoleTokens = if distribution /= mempty
-      then do
+    mintRoleTokens = case roles of
+      Just (Left policyId) -> pure policyId
+      Just (Right (unMint -> minting)) -> do
         let
           WalletContext { collateralUtxos, availableUtxos } = walletCtx
           txLovelaceRequirementEstimate = adaAsset $
             minAda
             + maxFees
-            + Lovelace (fromInteger . toInteger . length $ distribution) * minAdaPerTokenOutput
+            + Lovelace (fromInteger . toInteger . length $ minting) * minAdaPerTokenOutput
           utxoAssets UTxO {transactionOutput = TransactionOutput { assets }} = assets
           collateralUtxos' = filter (flip Set.member collateralUtxos . fst . toUTxOTuple) . toUTxOsList $ availableUtxos
           possibleInput = find ((<) txLovelaceRequirementEstimate . utxoAssets) . sortBy (compare `on` utxoAssets) $ collateralUtxos'
@@ -196,7 +218,12 @@ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
         UTxO txOutRef _ <- liftMaybe CollateralSelectionFailed possibleInput
         let
           txOutRef' = toPlutusTxOutRef txOutRef
-          roleTokens = RoleTokensPolicy.mkRoleTokens (map (toPlutusTokenName &&& const 1) . Map.keys $ distribution)
+
+          tokenAmount :: (Address, Either Natural (Maybe NFTMetadata)) -> Integer
+          tokenAmount (_, Left amount) = toInteger amount
+          tokenAmount (_, Right _) = 1
+
+          roleTokens = RoleTokensPolicy.mkRoleTokens (map (toPlutusTokenName *** tokenAmount) . Map.toList $ minting)
           plutusScript = fromPlutusScript . PV2.getMintingPolicy . RoleTokensPolicy.policy roleTokens $ txOutRef'
 
         (script, scriptHash) <- liftMaybe (MintingScriptDecodingFailed plutusScript) do
@@ -213,10 +240,10 @@ buildCreateConstraintsV1 walletCtx distribution metadata minAda contract = do
             (C.ExecutionUnits 0 0)
           policyId = PolicyId . unScriptHash $ scriptHash
 
-        for_ (Map.toList distribution) \(tokenName, address) ->
+        for_ (Map.toList minting) \(tokenName, (address, _)) ->
           tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) address
         pure policyId
-      else do
+      Nothing -> do
         let
           -- We use ADA currency symbol as a placeholder which
           -- carries really no semantics in this context.

@@ -33,9 +33,7 @@ import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
 import Data.Bifunctor (first)
-import Data.Binary (Word64)
 import Data.List (find)
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (UTCTime, getCurrentTime)
@@ -43,7 +41,7 @@ import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, BlockHeader, Credential(..), Metadata, SlotConfig, TokenName, TxId(..))
+  (BlockHeader, Credential(..), PolicyId, SlotConfig, TransactionMetadata, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (Contract, ContractId(..), MarloweVersion, PayoutDatum, Redeemer, withMarloweVersion)
@@ -54,6 +52,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , CreateError(..)
   , JobId(..)
   , MarloweTxCommand(..)
+  , Mint
   , SubmitError(..)
   , SubmitStatus(..)
   , WalletAddresses(..)
@@ -185,8 +184,8 @@ execCreate
   -> Maybe StakeCredential
   -> MarloweVersion v
   -> WalletAddresses
-  -> Map TokenName Address
-  -> Map Word64 Metadata
+  -> Maybe (Either PolicyId Mint)
+  -> TransactionMetadata
   -> Chain.Lovelace
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) IO ())

@@ -7,7 +7,22 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Runtime.Transaction.Api
-  where
+  ( ApplyInputsConstraintsBuildupError(..)
+  , ApplyInputsError(..)
+  , CreateBuildupError(..)
+  , CreateError(..)
+  , JobId(..)
+  , LoadMarloweContextError(..)
+  , MarloweTxCommand(..)
+  , Mint(unMint)
+  , NFTMetadata(unNFTMetadata)
+  , SubmitError(..)
+  , SubmitStatus(..)
+  , WalletAddresses(..)
+  , WithdrawError(..)
+  , mkMint
+  , mkNFTMetadata
+  ) where
 
 import Cardano.Api
   ( AsType(..)
@@ -23,21 +38,26 @@ import Cardano.Api.Shelley (StakeCredential(..))
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
+import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
-import Data.Word (Word64)
 import GHC.Generics (Generic)
+import GHC.Natural (Natural)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
   , BlockHeader
   , Lovelace
   , Metadata
   , PlutusScript
+  , PolicyId
   , ScriptHash
   , TokenName
+  , TransactionMetadata
   , TxId
   , TxOutRef
   , getUTCTime
@@ -46,6 +66,23 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError)
 import Network.Protocol.Job.Types (Command(..), SomeTag(..))
+
+-- CIP-25 metadata
+newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
+  deriving stock (Eq, Ord, Generic)
+  deriving newtype (Binary)
+
+-- FIXME: Validate the metadata format
+mkNFTMetadata :: Metadata -> Maybe NFTMetadata
+mkNFTMetadata = Just . NFTMetadata
+
+-- | Non empty mint request.
+newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
+  deriving stock (Eq, Ord, Generic)
+  deriving newtype (Binary, Semigroup, Monoid)
+
+mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
+mkMint = Mint . Map.fromList . NonEmpty.toList
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -60,9 +97,9 @@ data MarloweTxCommand status err result where
     -- ^ The Marlowe version to use
     -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
-    -> Map TokenName Address
+    -> Maybe (Either PolicyId Mint)
     -- ^ The initial distribution of role tokens
-    -> Map Word64 Metadata
+    -> TransactionMetadata
     -- ^ Optional metadata to attach to the transaction
     -> Lovelace
     -- ^ Min Lovelace which should be used for the contract output.

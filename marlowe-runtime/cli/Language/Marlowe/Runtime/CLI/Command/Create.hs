@@ -4,37 +4,43 @@
 module Language.Marlowe.Runtime.CLI.Command.Create
   where
 
-import Control.Monad (void)
+import qualified Cardano.Api as C
+import Control.Error (MaybeT(MaybeT, runMaybeT))
+import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Except (ExceptT(ExceptT))
-import Data.Bifunctor (Bifunctor(first))
+import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
+import Data.Bifunctor (Bifunctor(first, second))
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
 import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
 import Language.Marlowe (POSIXTime(POSIXTime))
-import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(Lovelace), PolicyId, TokenName(..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  (Address, Lovelace(Lovelace), PolicyId, TokenName(..), TransactionMetadata, fromJSONEncodedTransactionMetadata)
 import Language.Marlowe.Runtime.Core.Api
-  (MarloweVersion(MarloweV1), MarloweVersionTag(V1), SomeMarloweVersion(SomeMarloweVersion))
-import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create))
+  (IsMarloweVersion(Contract), MarloweVersion(MarloweV1), MarloweVersionTag(V1), SomeMarloweVersion(SomeMarloweVersion))
+import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create), Mint, mkMint)
 import Options.Applicative
+import Options.Applicative.NonEmpty (some1)
 import Text.Read (readMaybe)
 
 data CreateCommand = CreateCommand
   { marloweVersion :: SomeMarloweVersion
-  , roles :: RolesConfig
+  , roles :: Maybe RolesConfig
   , contractFiles :: ContractFiles
   , minUTxO :: Lovelace
   }
 
 data RolesConfig
-  = MintSimple (Map TokenName Address)
+  = MintSimple (NonEmpty (TokenName, Address))
   | MintConfig FilePath
   | UseExistingPolicyId PolicyId
+  deriving (Show)
 
 data ContractFiles
   = CoreFile FilePath
@@ -52,6 +58,9 @@ data ContractArgsValue = ContractArgsValue
 data CreateCommandError v
   = CreateFailed (CreateError v)
   | ContractFileDecodingError Yaml.ParseException
+  | TransactionFileWriteFailed (C.FileError ())
+  | RolesConfigNotSupportedYet RolesConfig
+  | MetadataDecodingFailed (Maybe Yaml.ParseException)
 
 deriving instance Show (CreateCommandError 'V1)
 
@@ -63,8 +72,8 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       <*> rolesParser
       <*> contractFilesParser
       <*> minUTxOParser
-    rolesParser = mintSimpleParser <|> mintConfigParser <|> policyIdParser
-    mintSimpleParser = MintSimple . Map.fromList <$> many roleParser
+    rolesParser = optional (mintSimpleParser <|> mintConfigParser <|> policyIdParser)
+    mintSimpleParser = MintSimple <$> some1 roleParser
     mintConfigParser = fmap MintConfig $ strOption $ mconcat
       [ long "roles-config-file"
       , help $ unwords
@@ -128,19 +137,40 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       ]
 
 runCreateCommand :: TxCommand CreateCommand -> CLI ()
-runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=CreateCommand{..}} = case (marloweVersion, roles, contractFiles) of
-  (SomeMarloweVersion MarloweV1, MintSimple distribution, CoreFile contractFile) -> runCLIExceptT do
-    contract <- ExceptT $ liftIO $ first ContractFileDecodingError <$> decodeFileEither contractFile
-    -- FIXME: Use signing method
-    liftIO $ print signingMethod
-    liftIO $ print metadataFile
-    -- FIXME: read metadata file
-    -- metadata <- read... metadataFile
-    let
-      metadata = mempty
-      -- FIXME: ask for stake credentials
-      cmd = Create Nothing MarloweV1 walletAddresses distribution metadata minUTxO contract
-    -- FIXME: sing the result or output the unsigned transaction body to the stdout
-    void $ ExceptT $ first CreateFailed <$> runTxCommand cmd
-  (_, _, _) -> pure ()
+runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=CreateCommand{..}} = case marloweVersion of
+  SomeMarloweVersion MarloweV1 -> runCLIExceptT do
+    minting' <- runMaybeT do
+      roles' <- MaybeT $ pure roles
+      case roles' of
+        MintSimple tokens -> do
+          let
+            toNFT addr = (addr, Left 1)
+          pure $ Right . mkMint . fmap (second toNFT) $ tokens
+        UseExistingPolicyId policyId -> pure . Left $ policyId
+        MintConfig _ -> MaybeT $ throwE (RolesConfigNotSupportedYet roles')
+    run MarloweV1 minting'
+  where
+    readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Contract v)
+    readContract = \case
+      MarloweV1 -> case contractFiles of
+        CoreFile filePath -> ExceptT $ liftIO $ first ContractFileDecodingError <$> decodeFileEither filePath
+        ExtendedFiles _ _ -> error "not implemented"
+
+    readMetadata :: ExceptT (CreateCommandError v) CLI TransactionMetadata
+    readMetadata = case metadataFile of
+      Just filePath -> do
+        metadataJSON <- ExceptT $ liftIO $ first (MetadataDecodingFailed . Just) <$> decodeFileEither filePath
+        noteT (MetadataDecodingFailed Nothing) $ hoistMaybe (fromJSONEncodedTransactionMetadata metadataJSON)
+      Nothing -> pure mempty
+
+    run :: MarloweVersion v -> Maybe (Either PolicyId Mint) -> ExceptT (CreateCommandError v) CLI ()
+    run version rolesDistribution  = do
+      contract <- readContract version
+      metadata <- readMetadata
+      let
+        cmd = Create Nothing version walletAddresses rolesDistribution metadata minUTxO contract
+      case signingMethod of
+        Manual outputFile -> do
+          (_, transaction) <- ExceptT $ first CreateFailed <$> runTxCommand cmd
+          ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing transaction
 
