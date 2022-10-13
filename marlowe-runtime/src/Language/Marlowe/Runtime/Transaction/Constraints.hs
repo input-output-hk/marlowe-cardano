@@ -48,6 +48,19 @@ import qualified Language.Marlowe.Runtime.SystemStart as Cx (SystemStart, makeTr
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
 
+-- For debug logging
+import Debug.Trace (trace)
+import Prelude hiding (log)
+
+-- | Quick-and-dirty logging for the pure code in this module
+--   examples, before: foo bar baz
+--             after:  foo (log ("bar: " <> show bar) bar) baz
+--             or:     foo (log "some message" bar) baz
+--   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
+log :: String -> a -> a
+log = trace  -- Logging "active"
+-- log = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
   { marloweInputConstraints :: MarloweInputConstraints v
@@ -560,7 +573,8 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 
     -- Find the net additional input that is needed
     incoming :: C.Value
-    incoming = outgoing <> fee <> minUtxo <> C.negateValue inputs
+    -- incoming = outgoing <> fee <> minUtxo <> C.negateValue inputs
+    incoming = log ("selectCoins outgoing: " <> show outgoing) outgoing <> log ("selectCoins fee: " <> show fee) fee <> log ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> log ("selectCoins inputs (subtracted): " <> show inputs) C.negateValue inputs
 
     -- Remove the lovelace from a value.
     deleteLovelace :: C.Value -> C.Value
@@ -591,7 +605,8 @@ selectCoins protocol WalletContext{..} txBodyContent = do
     <> show incoming <> " required, but " <> show universe <> " available."
 
   -- Ensure that coin selection for lovelace is possible.
-  unless (C.selectLovelace incoming <= C.selectLovelace universe)
+  -- unless (C.selectLovelace incoming <= C.selectLovelace universe)
+  unless (C.selectLovelace (log ("selectCoins incoming: " <> show incoming) incoming) <= C.selectLovelace (log ("selectCoins universe: " <> show universe) universe))
     . Left
     . CoinSelectionFailed
     $ "Insufficient lovelace available for coin selection: "
