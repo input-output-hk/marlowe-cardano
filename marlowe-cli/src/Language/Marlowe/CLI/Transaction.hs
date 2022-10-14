@@ -945,7 +945,7 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
       <> show (viHash (psReferenceValidator pm))
     hPutStrLn stderr ""
     hPutStrLn stderr $
-      "Marlowe ref script UTxO min ADA: " <> show (psMinAda pp)
+      "Marlowe ref script UTxO min ADA: " <> show (psMinAda pm)
     hPutStrLn stderr ""
     hPutStrLn stderr $
       "Payout script published at address: " <> serialiseAddress (psPublisher pp)
