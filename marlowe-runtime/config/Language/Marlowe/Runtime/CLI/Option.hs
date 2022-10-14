@@ -122,8 +122,8 @@ optParserWithEnvDefault CliOption{..} = do
 
 data Verbosity = LogLevel Colog.Severity | Silent
 
-verbosity :: Verbosity -> Parser Verbosity
-verbosity defaultVerbosity = fromMaybe defaultVerbosity <$> (fmap LogLevel <$> optional logLevel <|> optional silent)
+verbosityParser :: Verbosity -> Parser Verbosity
+verbosityParser defaultVerbosity = fromMaybe defaultVerbosity <$> (fmap LogLevel <$> optional logLevel <|> optional silent)
   where
     silent :: Parser Verbosity
     silent = flag' Silent $ mconcat

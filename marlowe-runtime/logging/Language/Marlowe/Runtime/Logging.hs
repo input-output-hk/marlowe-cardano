@@ -13,3 +13,4 @@ mkLogger (Just sev) = do
     messageActionStdErr = formatWith fmtMessage logTextStderr
   cfilter (\(Msg msgSev _ _) -> sev <= msgSev) messageActionStdErr
 
+

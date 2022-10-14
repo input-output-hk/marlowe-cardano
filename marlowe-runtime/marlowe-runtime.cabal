@@ -108,6 +108,8 @@ library
     , binary
     , cardano-api
     , cardano-ledger-core
+    , co-log
+    , co-log-core
     , bytestring
     , containers
     , errors
@@ -115,6 +117,7 @@ library
     , marlowe-chain-sync
     , marlowe-protocols
     , newtype-generics
+    , one-line-aeson-text
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx
@@ -284,10 +287,11 @@ executable marlowe-tx
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-      base >= 4.9 && < 5
-    , ansi-terminal
+      ansi-terminal
     , async
+    , base >= 4.9 && < 5
     , base16
+    , bytestring
     , cardano-api
     , containers
     , co-log
@@ -300,6 +304,7 @@ executable marlowe-tx
     , marlowe-chain-sync
     , network
     , optparse-applicative
+    , one-line-aeson-text
     , stm
     , text
     , typed-protocols

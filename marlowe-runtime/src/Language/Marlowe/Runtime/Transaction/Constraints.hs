@@ -11,6 +11,7 @@ import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Arrow ((***))
 import Control.Monad (forM, unless, when)
+import Data.Aeson (ToJSON)
 import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
@@ -331,6 +332,8 @@ data WalletContext = WalletContext
   , changeAddress :: Chain.Address
   -- ^ The change address of the wallet.
   }
+  deriving (Show, Generic, ToJSON)
+
 
 -- | Data from Marlowe Scripts needed to solve the constraints.
 data MarloweContext v = MarloweContext
