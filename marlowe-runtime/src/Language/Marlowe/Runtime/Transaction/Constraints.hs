@@ -48,6 +48,19 @@ import qualified Language.Marlowe.Runtime.SystemStart as Cx (SystemStart, makeTr
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
 
+-- For debug logging
+-- import Debug.Trace (trace)
+import Prelude hiding (log)
+
+-- | Quick-and-dirty logging for the pure code in this module
+--   examples, before: foo bar baz
+--             after:  foo (log ("bar: " <> show bar) bar) baz
+--             or:     foo (log "some message" bar) baz
+--   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
+log :: String -> a -> a
+-- log = trace  -- Logging "active"
+log = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
   { marloweInputConstraints :: MarloweInputConstraints v
@@ -451,42 +464,32 @@ findMinUtxo
    . C.ProtocolParameters
   -> (Chain.Address, Maybe Chain.Datum, C.Value)
   -> Either (ConstraintError v) C.Value
-findMinUtxo protocol (address, mbDatum, value) = do
-  cardanoAddress <- note
-    (CalculateMinUtxoFailed $ "Unable to convert address: " <> show address)
-    $ C.anyAddressInShelleyBasedEra <$> Chain.toCardanoAddress address
+findMinUtxo protocol (chAddress, mbDatum, origValue) =
+  do
+    let
+      atLeastHalfAnAda :: C.Value
+      atLeastHalfAnAda = origValue <> C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue] - C.selectLovelace origValue)
+      datum = maybe C.TxOutDatumNone
+        (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . P.toData)
+        $ Core.fromChainDatum Core.MarloweV1 =<< mbDatum
 
-  let
-    datum = maybe C.TxOutDatumNone
-      (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . P.toData)
-      $ Core.fromChainDatum Core.MarloweV1 =<< mbDatum
+    dummyTxOut <- makeTxOut chAddress datum atLeastHalfAnAda C.ReferenceScriptNone
+    case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage dummyTxOut protocol of
+       Right minValue -> pure minValue
+       Left e -> Left . CoinSelectionFailed $ show e
 
-    dummyTxOut :: C.TxOut C.CtxTx C.BabbageEra
-    dummyTxOut = C.TxOut
-      cardanoAddress
-      (C.TxOutValue C.MultiAssetInBabbageEra value)
-      datum
-      C.ReferenceScriptNone
-
-  case adjustOutputForMinUtxo protocol dummyTxOut of
-     Right (C.TxOut _ adjustedValue _ _) -> pure $ C.txOutValueToValue adjustedValue
-     Left e -> Left e
-
+-- | Ensure that the minimum UTxO requirement is satisfied for outputs.
 ensureMinUtxo
   :: forall v
    . C.ProtocolParameters
   -> (Chain.Address, C.Value)
   -> Either (ConstraintError v) (Chain.Address, C.Value)
-ensureMinUtxo protocol (address, origValue) = do
-  adjValue <- findMinUtxo protocol (address, Nothing, origValue)
-  pure ( address
-       , origValue <>
-          ( C.lovelaceToValue $ maximum [C.selectLovelace adjValue, C.selectLovelace origValue]
-              - C.selectLovelace origValue )
-       )
+ensureMinUtxo protocol (chAddress, origValue) =
+  case findMinUtxo protocol (chAddress, Nothing, origValue) of
+    Right minValue -> pure (chAddress, origValue <> (C.lovelaceToValue $ maximum [C.selectLovelace minValue, C.selectLovelace origValue] - C.selectLovelace origValue))
+    Left e -> Left e
 
 -- | Compute transaction output for building a transaction.
--- FIXME Clean up unused/no-op arguments?
 makeTxOut
   :: Chain.Address
   -> C.TxOutDatum C.CtxTx C.BabbageEra
@@ -549,18 +552,17 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 
   let
     -- Compute the value of the outputs.
-    outgoing :: C.Value
-    -- FIXME Code from CLI is combining "Otherwise unlisted outputs to the script address", do we need this too? Orig code:
-    -- outgoing = foldMap txOutToValue outputs <> maybe mempty PayToScript.value pay
-    -- But, barring thawt, I believe the equivilent to `outputs` in that code is the TxOutS in our provisional tx body
-    outgoing = foldMap txOutToValue $ C.txOuts txBodyContent
+    outputsFromBody :: C.Value
+    outputsFromBody = foldMap txOutToValue $ C.txOuts txBodyContent
 
-    -- FIXME Not sure if we have these inputs in our constraints or the tx body
-    inputs = mempty
+    -- Sum of value that's been placed in the tx body
+    inputTxIns = map fst $ C.txIns txBodyContent
+    inputsFromBody = foldMap (txOutToValue . snd) $ filter (flip elem inputTxIns . fst) utxos
 
     -- Find the net additional input that is needed
-    incoming :: C.Value
-    incoming = outgoing <> fee <> minUtxo <> C.negateValue inputs
+    targetSelectionValue :: C.Value
+    -- targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody
+    targetSelectionValue = log ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> log ("selectCoins fee: " <> show fee) fee <> log ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> log ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) C.negateValue inputsFromBody
 
     -- Remove the lovelace from a value.
     deleteLovelace :: C.Value -> C.Value
@@ -584,18 +586,19 @@ selectCoins protocol WalletContext{..} txBodyContent = do
         (excess, deficit)
 
   -- Ensure that coin selection for tokens is possible.
-  unless (snd (matchingCoins incoming universe) == 0)
+  unless (snd (matchingCoins targetSelectionValue universe) == 0)
     . Left
     . CoinSelectionFailed
     $ "Insufficient tokens available for coin selection: "
-    <> show incoming <> " required, but " <> show universe <> " available."
+    <> show targetSelectionValue <> " required, but " <> show universe <> " available."
 
   -- Ensure that coin selection for lovelace is possible.
-  unless (C.selectLovelace incoming <= C.selectLovelace universe)
+  -- unless (C.selectLovelace targetSelectionValue <= C.selectLovelace universe)
+  unless (C.selectLovelace (log ("selectCoins targetSelectionValue: " <> show targetSelectionValue) targetSelectionValue) <= C.selectLovelace (log ("selectCoins universe: " <> show universe) universe))
     . Left
     . CoinSelectionFailed
     $ "Insufficient lovelace available for coin selection: "
-    <> show incoming <> " required, but " <> show universe <> " available."
+    <> show targetSelectionValue <> " required, but " <> show universe <> " available."
 
   -- Satisfy the native-token requirements.
   let
@@ -650,14 +653,14 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 
     -- Select the coins.
     selection :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
-    selection = select incoming utxos
+    selection = select targetSelectionValue $ filter (flip notElem inputTxIns . fst) utxos
 
     -- Compute the native token change, if any.
     change :: C.Value
     change =                                            -- This is the change required to balance native tokens.
       deleteLovelace                                    -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
         $ (mconcat $ txOutToValue . snd <$> selection)  -- The inputs selected by the algorithm for spending many include native tokens that weren't in the required `outputs`.
-        <> C.negateValue incoming                         -- The tokens required by `outputs` (as represented in the `incoming` requirement) shouldn't be included as change.
+        <> C.negateValue targetSelectionValue           -- The tokens required by `outputs` (as represented in the `targetSelectionValue` requirement) shouldn't be included as change.
   -- Compute the change that contains native tokens used for balancing, omitting ones explicitly specified in the outputs.
 
     outputs = C.txOuts txBodyContent
@@ -722,7 +725,7 @@ balanceTx era systemStart eraHistory protocol WalletContext{..} C.TxBodyContent{
       let
         -- Recompute execution units with full set of UTxOs, including change.
         buildTxBodyContent = C.TxBodyContent{..} { C.txOuts = mkChangeTxOut changeValue : txOuts }
-        trial =
+        dummyTxOut =
           Cx.makeTransactionBodyAutoBalance
             era
             systemStart
@@ -733,7 +736,7 @@ balanceTx era systemStart eraHistory protocol WalletContext{..} C.TxBodyContent{
             buildTxBodyContent
             changeAddress'
             Nothing
-      case trial of
+      case dummyTxOut of
         -- Correct for a negative balance in cases where execution units, and hence fees, have increased.
         Left (C.TxBodyErrorAdaBalanceNegative delta) -> do
           balancingLoop (counter - 1) (C.lovelaceToValue delta <> changeValue)
@@ -780,23 +783,42 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
   txValidityRange <- solveTxValidityRange
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
+  -- pure C.TxBodyContent
+  --   { txIns
+  --   , txInsCollateral = C.TxInsCollateralNone
+  --   , txInsReference
+  --   , txOuts
+  --   , txTotalCollateral = C.TxTotalCollateralNone
+  --   , txReturnCollateral = C.TxReturnCollateralNone
+  --   , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
+  --   , txValidityRange
+  --   , txMetadata
+  --   , txAuxScripts = C.TxAuxScriptsNone
+  --   , txExtraKeyWits
+  --   , txProtocolParams = C.BuildTxWith $ Just protocol
+  --   , txWithdrawals = C.TxWithdrawalsNone
+  --   , txCertificates = C.TxCertificatesNone
+  --   , txUpdateProposal = C.TxUpdateProposalNone
+  --   , txMintValue
+  --   , txScriptValidity = C.TxScriptValidityNone
+  --   }
   pure C.TxBodyContent
-    { txIns
+    { txIns = log ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
     , txInsCollateral = C.TxInsCollateralNone
-    , txInsReference
+    , txInsReference = log ("solveInitialTxBodyContent txInsReference: " <> show txInsReference) txInsReference
     , txOuts
     , txTotalCollateral = C.TxTotalCollateralNone
     , txReturnCollateral = C.TxReturnCollateralNone
     , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-    , txValidityRange
-    , txMetadata
+    , txValidityRange = log ("solveInitialTxBodyContent txValidityRange: " <> show txValidityRange) txValidityRange
+    , txMetadata = log ("solveInitialTxBodyContent txMetadata: " <> show txMetadata) txMetadata
     , txAuxScripts = C.TxAuxScriptsNone
-    , txExtraKeyWits
+    , txExtraKeyWits = log ("solveInitialTxBodyContent txExtraKeyWits: " <> show txExtraKeyWits) txExtraKeyWits
     , txProtocolParams = C.BuildTxWith $ Just protocol
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    , txMintValue
+    , txMintValue = log ("END values for the new tx body\nsolveInitialTxBodyContent txMintValue: " <> show txMintValue) txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
