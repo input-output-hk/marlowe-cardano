@@ -49,7 +49,7 @@ import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
 
 -- For debug logging
-import Debug.Trace (trace)
+-- import Debug.Trace (trace)
 import Prelude hiding (log)
 
 -- | Quick-and-dirty logging for the pure code in this module
@@ -58,8 +58,8 @@ import Prelude hiding (log)
 --             or:     foo (log "some message" bar) baz
 --   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
 log :: String -> a -> a
-log = trace  -- Logging "active"
--- log = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+-- log = trace  -- Logging "active"
+log = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
