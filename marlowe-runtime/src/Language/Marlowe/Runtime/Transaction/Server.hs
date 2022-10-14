@@ -78,6 +78,7 @@ data TransactionServerDependencies = TransactionServerDependencies
   , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
+  -- , logAction :: LogAction IO Colog.Message
   , slotConfig :: SlotConfig
   , networkId :: NetworkId
   }
@@ -114,8 +115,11 @@ data WorkerDependencies = WorkerDependencies
   , networkId :: NetworkId
   }
 
+-- type WorkerM a = LoggerT Colog.Message IO a
+type WorkerM a = IO a
+
 newtype Worker = Worker
-  { runWorker :: IO ()
+  { runWorker :: WorkerM ()
   }
 
 mkWorker :: WorkerDependencies -> STM Worker

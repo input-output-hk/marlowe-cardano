@@ -129,6 +129,17 @@ library
     , typed-protocols
     , witherable
 
+library logging
+  import: lang
+  hs-source-dirs: logging
+  exposed-modules:
+    Language.Marlowe.Runtime.Logging
+  build-depends:
+      base >= 4.9 && < 5
+    , co-log
+    , co-log-core
+    , text
+
 library config
   import: lang
   hs-source-dirs: config
@@ -137,10 +148,13 @@ library config
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , co-log
     , marlowe-chain-sync
     , marlowe-runtime
     , network
+    , marlowe-runtime:logging
     , optparse-applicative
+    , prelude-safeenum
     , text
     , split
 
@@ -179,6 +193,7 @@ executable marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
+    , marlowe-runtime:logging
     , monad-control
     , network
     , plutus-ledger-api
@@ -189,6 +204,7 @@ executable marlowe
     , stm
     , stm-delay
     , text
+    , time
     , wl-pprint
     , yaml
   if !os(windows)
@@ -274,9 +290,13 @@ executable marlowe-tx
     , base16
     , cardano-api
     , containers
+    , co-log
+    , co-log-core
     , marlowe
     , marlowe-protocols
     , marlowe-runtime
+    , marlowe-runtime:config
+    , marlowe-runtime:logging
     , marlowe-chain-sync
     , network
     , optparse-applicative

@@ -5,9 +5,10 @@ module Language.Marlowe.Runtime.CLI.Command.Withdraw
   where
 
 import qualified Cardano.Api as C
-import Control.Monad (void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT))
+import Data.Aeson (toJSON)
+import qualified Data.Aeson as A
 import Data.Bifunctor (first)
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
@@ -52,8 +53,14 @@ runWithdrawCommand TxCommand { walletAddresses, signingMethod, subCommand=Withdr
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
     let
       cmd = Withdraw MarloweV1 walletAddresses contractId role
-    transaction <- ExceptT $ first WithdrawFailed <$> runTxCommand cmd
+    txBody <- ExceptT $ first WithdrawFailed <$> runTxCommand cmd
     case signingMethod of
       Manual outputFile -> do
-        void $ ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing transaction
+        ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
+        let
+          txId = C.getTxId txBody
+          res = A.object
+            [ ("txId", toJSON txId) ]
+        liftIO . print $ A.encode res
+
 
