@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 marlowe-cli --version
 
 cardano-cli --version
@@ -18,7 +20,7 @@ echo "${MAGIC[@]}"
 SECOND=1000
 MINUTE=$((60 * SECOND))
 HOUR=$((60 * MINUTE))
-DAY=$((24 * HOUR))
+#DAY=$((24 * HOUR))
 
 NOW="$(($(date -u +%s) * SECOND))"
 echo "$NOW"
@@ -70,8 +72,8 @@ STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
 INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
 MATURITY_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 2 year" +"%Y-01-01T00:00:00")
 
-LENDING_DEADLINE=$((NOW+12*HOUR))
-REPAYMENT_DEADLINE=$((NOW+24*HOUR))
+#LENDING_DEADLINE=$((NOW+12*HOUR))
+#REPAYMENT_DEADLINE=$((NOW+24*HOUR))
 
 yaml2json << EOI > history.actus
 scheduleConfig:
@@ -117,12 +119,15 @@ marlowe-cli run initialize \
   --out-file      create-1.marlowe  \
   --print-stats
 
+marlowe create --help
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
 
 marlowe create \
   --core-file create-1.contract \
   --min-utxo "$MINIMUM_ADA" \
   --change-address "$PARTY_ADDR" \
+  --address "$PARTY_ADDR" \
   --manual-sign create-1.txbody
 
 cardano-cli transaction sign \
@@ -180,8 +185,8 @@ marlowe-cli util clean \
   --submit 600
 
 marlowe-cli transaction simple \
-  --tx-in "$(marlowe-cli util select --lovelace-only 1 $PARTY_ADDR | sed -n -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;1p')" \
-  --tx-in "$(marlowe-cli util select --lovelace-only 1 $COUNTERPARTY_ADDR | sed -n -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;1p')" \
+  --tx-in "$(marlowe-cli util select --lovelace-only 1 "$PARTY_ADDR" | sed -n -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;1p')" \
+  --tx-in "$(marlowe-cli util select --lovelace-only 1 "$COUNTERPARTY_ADDR" | sed -n -e 's/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;1p')" \
   --required-signer "$PARTY_SKEY" \
   --required-signer "$COUNTERPARTY_SKEY" \
   --change-address "$FAUCET_ADDR" \

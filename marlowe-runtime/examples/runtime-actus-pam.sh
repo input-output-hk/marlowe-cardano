@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 marlowe-cli --version
 
 marlowe --version
@@ -12,13 +14,13 @@ FAUCET_SKEY=$TREASURY/payment.skey
 FAUCET_ADDR=$(cat $TREASURY/payment.testnet.address)
 echo "$FAUCET_ADDR"
 
-source /extra/iohk/networks/preview/configure.env
+#source configure.env
 echo "${MAGIC[@]}"
 
 SECOND=1000
 MINUTE=$((60 * SECOND))
 HOUR=$((60 * MINUTE))
-DAY=$((24 * HOUR))
+#DAY=$((24 * HOUR))
 
 NOW="$(($(date -u +%s) * SECOND))"
 echo "$NOW"
@@ -76,8 +78,8 @@ STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
 INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
 MATURITY_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 2 year" +"%Y-01-01T00:00:00")
 
-LENDING_DEADLINE=$((NOW+12*HOUR))
-REPAYMENT_DEADLINE=$((NOW+24*HOUR))
+#LENDING_DEADLINE=$((NOW+12*HOUR))
+#REPAYMENT_DEADLINE=$((NOW+24*HOUR))
 
 yaml2json << EOI > runtime-actus-pam.actus
 scheduleConfig:
@@ -158,7 +160,7 @@ marlowe-cli run auto-execute --tx-in-marlowe "$TX_1#1" \
 echo "TX_2 = $TX_2"
 
 cardano-cli transaction sign --tx-body-file  runtime-actus-pam-2.raw \
-  --signing-key-file $PARTY_SKEY --out-file runtime-actus-pam-2.signed
+  --signing-key-file "$PARTY_SKEY" --out-file runtime-actus-pam-2.signed
 
 marlowe submit runtime-actus-pam-2.signed
 
@@ -230,7 +232,7 @@ marlowe-cli run auto-execute --tx-in-marlowe "$TX_3#1" \
 echo "TX_4 = $TX_4"
 
 cardano-cli transaction sign --tx-body-file  runtime-actus-pam-4.raw \
-  --signing-key-file $COUNTERPARTY_SKEY --out-file runtime-actus-pam-4.signed
+  --signing-key-file "$COUNTERPARTY_SKEY" --out-file runtime-actus-pam-4.signed
 
 marlowe submit runtime-actus-pam-4.signed
 
@@ -255,9 +257,9 @@ marlowe create --core-file runtime-actus-pam-1.contract \
 
 marlowe create --help
 
-cardano-cli query utxo ${MAGIC[@]} --address $PARTY_ADDR
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
 
-marlowe-cli util clean --required-signer $PARTY_SKEY --change-address $PARTY_ADDR --out-file /dev/null --submit 600
+marlowe-cli util clean --required-signer "$PARTY_SKEY" --change-address "$PARTY_ADDR" --out-file /dev/null --submit 600
 
 echo -n Marlowe | basenc --base16
 
@@ -265,9 +267,9 @@ echo -n 4D61726C6F7765 | tr '[:upper:]' '[:lower:]'
 
 echo -n 4D61726C6F7765 | tr '[:upper:]' '[:lower:]' | basenc --decode --base16
 
-cardano-cli query utxo ${MAGIC[@]} --address $PARTY_ADDR
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
 
-marlowe-cli util select --lovelace-only 1000000 $PARTY_ADDR
+marlowe-cli util select --lovelace-only 1000000 "$PARTY_ADDR"
 
 marlowe-cli util select
 
