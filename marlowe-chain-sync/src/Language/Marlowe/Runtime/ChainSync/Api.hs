@@ -111,6 +111,7 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Monad (guard, (>=>))
+import Data.Aeson (ToJSON, ToJSONKey, toJSON)
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -262,7 +263,7 @@ data TransactionOutput = TransactionOutput
   , datum     :: !(Maybe Datum)     -- ^ The script datum associated with this output.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | A script datum that is used to spend the output of a script tx.
 newtype Redeemer = Redeemer { unRedeemer :: Datum }
@@ -278,6 +279,24 @@ data Datum
   | B ByteString
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+instance ToJSON Datum where
+  toJSON = \case
+    B bs -> toJSON (encodeBase16 bs)
+    I i -> toJSON i
+    List elems -> A.object
+      [ ("tag", "list")
+      , ("value", toJSON . map toJSON $ elems)
+      ]
+    Constr i attrs -> A.object
+      [ ("tag", "constr")
+      , ("idx", toJSON i)
+      , ("value", toJSON . map toJSON $ attrs)
+      ]
+    Map props -> A.object
+      [ ("tag", "map")
+      , ("value", toJSON . map toJSON $ props)
+      ]
 
 fromDatum :: Plutus.FromData a => Datum -> Maybe a
 fromDatum = Plutus.fromData . toPlutusData
@@ -313,7 +332,7 @@ data Assets = Assets
   , tokens :: !Tokens   -- ^ Additional tokens sent by the tx output.
   }
   deriving stock (Show, Eq, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | Let's make the instance explicit so we can assume "some" semantics.
 instance Ord Assets where
@@ -331,7 +350,7 @@ instance Monoid Assets where
 -- | A collection of token quantities by their asset ID.
 newtype Tokens = Tokens { unTokens :: Map AssetId Quantity }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, ToJSON)
 
 instance Semigroup Tokens where
   (<>) = fmap Tokens . on (Map.unionWith (+)) unTokens
@@ -348,19 +367,22 @@ instance Show Base16 where
 instance IsString Base16 where
   fromString = either (error . T.unpack) Base16 . decodeBase16 . encodeUtf8 . T.pack
 
+instance ToJSON Base16 where
+  toJSON = toJSON . encodeBase16 . unBase16
+
 newtype DatumHash = DatumHash { unDatumHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 newtype TxId = TxId { unTxId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 newtype TxIx = TxIx { unTxIx :: Word16 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
 
 newtype CertIx = CertIx { unCertIx :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
@@ -371,7 +393,7 @@ data TxOutRef = TxOutRef
   , txIx :: !TxIx
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON, ToJSONKey)
 
 instance IsString TxOutRef where
   fromString = fromJust . parseTxOutRef . T.pack
@@ -408,30 +430,30 @@ data AssetId = AssetId
   , tokenName :: !TokenName
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON, ToJSONKey)
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 newtype Quantity = Quantity { unQuantity :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
 
 newtype Lovelace = Lovelace { unLovelace :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
 
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 toBech32 :: Address -> Maybe Text
 toBech32 = toCardanoAddress >=> \case
@@ -819,7 +841,7 @@ data GetUTxOsQuery
 newtype UTxOs = UTxOs { unUTxOs :: Map TxOutRef TransactionOutput }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Semigroup, Monoid)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 lookupUTxO :: TxOutRef -> UTxOs -> Maybe TransactionOutput
 lookupUTxO txOutRef (UTxOs utxos) = Map.lookup txOutRef utxos

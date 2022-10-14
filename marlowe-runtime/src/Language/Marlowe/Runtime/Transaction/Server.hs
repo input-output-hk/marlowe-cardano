@@ -1,7 +1,11 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 
@@ -26,14 +30,18 @@ import Cardano.Api
   , getTxId
   , makeShelleyAddress
   )
+import qualified Colog
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Exception (SomeException, catch)
+import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
+import qualified Data.Aeson as A
+import qualified Data.Aeson.OneLine as O
 import Data.Bifunctor (first)
 import Data.List (find)
 import qualified Data.Map as Map
@@ -73,11 +81,12 @@ import System.IO (hPutStrLn, stderr)
 newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
 
 data TransactionServerDependencies = TransactionServerDependencies
-  { acceptRunTransactionServer :: IO (RunTransactionServer IO)
+  { acceptRunTransactionServer :: IO (RunTransactionServer WorkerM)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
+  , logAction :: AppLogAction
   , slotConfig :: SlotConfig
   , networkId :: NetworkId
   }
@@ -96,26 +105,31 @@ mkTransactionServer TransactionServerDependencies{..} = do
       runServer <- acceptRunTransactionServer
       Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
       runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runTransactionServer
+        Concurrently (Colog.usingLoggerT logAction runWorker `catch` catchWorker) *> Concurrently runTransactionServer
   pure $ TransactionServer { runTransactionServer }
 
 catchWorker :: SomeException -> IO ()
 catchWorker = hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show
 
 data WorkerDependencies = WorkerDependencies
-  { runServer :: RunTransactionServer IO
+  { runServer :: RunTransactionServer WorkerM
   , getSubmitJob :: TxId -> STM (Maybe SubmitJob)
   , trackSubmitJob :: TxId -> SubmitJob -> STM ()
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
+  , logAction :: AppLogAction
   , slotConfig :: SlotConfig
   , networkId :: NetworkId
   }
 
+type AppLogAction = Colog.LogAction IO Colog.Message
+
+type WorkerM = Colog.LoggerT Colog.Message IO
+
 newtype Worker = Worker
-  { runWorker :: IO ()
+  { runWorker :: WorkerM ()
   }
 
 mkWorker :: WorkerDependencies -> STM Worker
@@ -126,10 +140,10 @@ mkWorker WorkerDependencies{..} =
     pure Worker { runWorker = run server }
 
   where
-    server :: JobServer MarloweTxCommand IO ()
+    server :: JobServer MarloweTxCommand WorkerM ()
     server = JobServer $ pure serverInit
 
-    serverInit :: ServerStInit MarloweTxCommand IO ()
+    serverInit :: ServerStInit MarloweTxCommand WorkerM ()
     serverInit = ServerStInit
       { recvMsgExec = \case
           Create mStakeCredential version addresses roles metadata minAda contract ->
@@ -175,9 +189,9 @@ mkWorker WorkerDependencies{..} =
 attachSubmit
   :: JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
   -> STM (Maybe SubmitJob)
-  -> IO (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
+  -> WorkerM (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader WorkerM ())
 attachSubmit jobId getSubmitJob =
-  atomically $ fmap (hoistAttach atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
+  liftIO $ atomically $ fmap (hoistAttach $ liftIO . atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
 
 execCreate
   :: SolveConstraints
@@ -190,9 +204,10 @@ execCreate
   -> TransactionMetadata
   -> Chain.Lovelace
   -> Contract v
-  -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) IO ())
+  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) WorkerM ())
 execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
-  walletContext <- lift $ loadWalletContext addresses
+  walletContext <- liftIO $ loadWalletContext addresses
+  lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
   constraints <- except $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
   let
     scripts@Registry.MarloweScripts{..} = Registry.getCurrentScripts version
@@ -254,7 +269,7 @@ execApplyInputs
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Redeemer v
-  -> IO (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra) IO ())
+  -> WorkerM (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra) WorkerM ())
 execApplyInputs
   slotConfig
   solveConstraints
@@ -268,8 +283,8 @@ execApplyInputs
   inputs = execExceptT do
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
-      $ loadMarloweContext version contractId
-    invalidBefore' <- lift $ maybe getCurrentTime pure invalidBefore
+      $ liftIO $ loadMarloweContext version contractId
+    invalidBefore' <- liftIO $ maybe getCurrentTime pure invalidBefore
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     constraints <- except $ buildApplyInputsConstraints
         slotConfig
@@ -278,7 +293,8 @@ execApplyInputs
         invalidBefore'
         invalidHereafter
         inputs
-    walletContext <- lift $ loadWalletContext addresses
+    walletContext <- liftIO $ loadWalletContext addresses
+    lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
     except
       $ first ApplyInputsConstraintError
       $ solveConstraints version marloweContext walletContext constraints
@@ -291,8 +307,8 @@ execWithdraw
   -> WalletAddresses
   -> ContractId
   -> TokenName
-  -> IO (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) IO ())
-execWithdraw solveConstraints loadWalletContext loadMarloweContext version addresses contractId roleToken = execExceptT $ case version of
+  -> WorkerM (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) WorkerM ())
+execWithdraw solveConstraints loadWalletContext loadMarloweContext version addresses contractId roleToken = liftIO $ execExceptT $ case version of
   MarloweV1 -> do
     marloweContext@MarloweContext{payoutOutputs=Map.elems -> payouts} <- withExceptT WithdrawLoadMarloweContextFailed
       $ ExceptT
@@ -312,8 +328,8 @@ execSubmit
   :: (Tx BabbageEra -> STM SubmitJob)
   -> (TxId -> SubmitJob -> STM ())
   -> Tx BabbageEra
-  -> IO (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
-execSubmit mkSubmitJob trackSubmitJob tx = do
+  -> WorkerM (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader WorkerM ())
+execSubmit mkSubmitJob trackSubmitJob tx = liftIO do
   let txId = fromCardanoTxId $ getTxId $ getTxBody tx
   (submitJob, exVar) <- atomically do
     exVar <- newEmptyTMVar
@@ -327,7 +343,7 @@ execSubmit mkSubmitJob trackSubmitJob tx = do
     Left ex -> atomically $ putTMVar exVar ex
     _ -> pure ()
   -- Make a new server and run it in IO.
-  hoistCmd atomically <$> atomically (submitJobServerCmd (JobIdSubmit txId) submitJob)
+  hoistCmd (liftIO . atomically) <$> atomically (submitJobServerCmd (JobIdSubmit txId) submitJob)
 
 submitJobServerAttach
   :: JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
@@ -354,6 +370,6 @@ submitJobServerCmd jobId submitJob = do
 execExceptT
   :: Functor m
   => ExceptT e m a
-  -> m (ServerStCmd cmd status e a m ())
+  -> m (ServerStCmd cmd status e a n ())
 execExceptT = fmap (either (flip SendMsgFail ()) (flip SendMsgSucceed ())) . runExceptT
 

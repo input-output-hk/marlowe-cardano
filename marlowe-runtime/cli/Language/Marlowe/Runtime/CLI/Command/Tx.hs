@@ -57,3 +57,4 @@ txCommandParser subCommandParser = TxCommand
       , help "A UTXO which may be used as a collateral input"
       , metavar "UTXO"
       ]
+

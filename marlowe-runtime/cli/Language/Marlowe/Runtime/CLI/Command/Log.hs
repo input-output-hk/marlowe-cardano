@@ -19,7 +19,17 @@ import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, askEnv, runCLIExceptT, runHistorySyncClient)
 import Language.Marlowe.Runtime.CLI.Option (contractIdArgument)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader(..), BlockNo(..), SlotNo(..), TxId(..), TxOutRef(..), toBech32, unBlockHeaderHash)
+  ( AssetId(AssetId)
+  , BlockHeader(..)
+  , BlockNo(..)
+  , PolicyId(PolicyId)
+  , SlotNo(..)
+  , TokenName(TokenName)
+  , TxId(..)
+  , TxOutRef(..)
+  , toBech32
+  , unBlockHeaderHash
+  )
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -115,16 +125,16 @@ showStep showContract contractId BlockHeader{..} version step= do
       putStr $ T.unpack $ encodeBase16 $ unTxId redeemingTx
       putStrLn " (redeem)"
   setSGR [Reset]
+  putStr "ContractId: "
+  putStrLn $ T.unpack $ renderContractId contractId
+  putStr "SlotNo:     "
+  print $ unSlotNo slotNo
+  putStr "BlockNo:    "
+  print $ unBlockNo blockNo
+  putStr "BlockId:    "
+  putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
   case step of
     ApplyTransaction Transaction{redeemer, output} -> do
-      putStr "ContractId: "
-      putStrLn $ T.unpack $ renderContractId contractId
-      putStr "SlotNo:     "
-      print $ unSlotNo slotNo
-      putStr "BlockNo:    "
-      print $ unBlockNo blockNo
-      putStr "BlockId:    "
-      putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
       putStr "Inputs:     "
       putStrLn case version of
         MarloweV1 -> show redeemer
@@ -142,7 +152,14 @@ showStep showContract contractId BlockHeader{..} version step= do
           _ -> pure ()
       putStrLn ""
 
-    RedeemPayout _ -> error "not implemented"
+    RedeemPayout RedeemStep {..} -> case version of
+      MarloweV1 -> do
+        let
+          AssetId (PolicyId policyId) (TokenName tokenName) = datum
+        putStr "PolicyId:    "
+        putStrLn . T.unpack . encodeBase16 $ policyId
+        putStr "RoleToken:    "
+        putStrLn . T.unpack . encodeBase16 $ tokenName
 
 showCreateStep :: Bool -> ContractId -> BlockHeader -> MarloweVersion v -> CreateStep v -> IO ()
 showCreateStep showContract contractId BlockHeader{..} version CreateStep{..} = do

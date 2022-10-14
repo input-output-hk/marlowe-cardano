@@ -40,6 +40,8 @@
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
+          (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
+          (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
@@ -47,6 +49,7 @@
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
+          (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
@@ -103,14 +106,28 @@
         hsSourceDirs = [ "src" ];
         };
       sublibs = {
+        "logging" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
+            (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            ];
+          buildable = true;
+          modules = [ "Language/Marlowe/Runtime/Logging" ];
+          hsSourceDirs = [ "logging" ];
+          };
         "config" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
+            (hsPkgs."marlowe-runtime".components.sublibs.logging or (errorHandler.buildDepError "marlowe-runtime:logging"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."prelude-safeenum" or (errorHandler.buildDepError "prelude-safeenum"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."split" or (errorHandler.buildDepError "split"))
             ];
@@ -136,6 +153,7 @@
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))
+            (hsPkgs."marlowe-runtime".components.sublibs.logging or (errorHandler.buildDepError "marlowe-runtime:logging"))
             (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
@@ -146,6 +164,7 @@
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."stm-delay" or (errorHandler.buildDepError "stm-delay"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
             (hsPkgs."yaml" or (errorHandler.buildDepError "yaml"))
             ] ++ (pkgs.lib).optional (!system.isWindows) (hsPkgs."unix" or (errorHandler.buildDepError "unix"));
@@ -234,18 +253,24 @@
           };
         "marlowe-tx" = {
           depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
+            (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))
+            (hsPkgs."marlowe-runtime".components.sublibs.logging or (errorHandler.buildDepError "marlowe-runtime:logging"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))

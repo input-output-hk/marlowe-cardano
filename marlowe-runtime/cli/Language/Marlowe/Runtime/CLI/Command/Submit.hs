@@ -1,14 +1,19 @@
 module Language.Marlowe.Runtime.CLI.Command.Submit
   where
 
-import Cardano.Api as C
+import qualified Cardano.Api as C
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT))
+import Data.Aeson (toJSON)
+import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor(first))
+import Data.ByteString.Base16 (encodeBase16)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, asksEnv, runCLIExceptT, runTxJobClient)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (BlockHeader(BlockHeader), BlockHeaderHash(unBlockHeaderHash), BlockNo(unBlockNo), SlotNo(unSlotNo))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(Submit), SubmitError)
 import Network.Protocol.Job.Client
   (ClientStAwait(SendMsgDetach, SendMsgPoll), ClientStCmd(..), ClientStInit(SendMsgExec), JobClient(JobClient))
@@ -55,6 +60,12 @@ runSubmitCommand SubmitCommand{txFile} = runCLIExceptT do
       , recvMsgSucceed = pure . Right
       }
     jobClient = JobClient . pure . SendMsgExec cmd $ next
-  blockHeader <- ExceptT $ runTxJobClient jobClient
-  liftIO $ print blockHeader
+  BlockHeader slotNo hash blockNo <- ExceptT $ runTxJobClient jobClient
+  let
+    res = A.object
+      [ ("slotNo", toJSON $ unSlotNo slotNo)
+      , ("blockHeaderHash", toJSON . encodeBase16 $ unBlockHeaderHash hash)
+      , ("blockNo", toJSON $ unBlockNo blockNo)
+      ]
+  liftIO . print $ A.encode res
 
