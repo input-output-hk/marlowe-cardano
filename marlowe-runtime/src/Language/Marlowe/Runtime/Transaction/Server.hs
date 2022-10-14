@@ -294,7 +294,7 @@ execApplyInputs
         invalidHereafter
         inputs
     walletContext <- liftIO $ loadWalletContext addresses
-    lift . Colog.logError . O.renderValue . A.toJSON $ walletContext
+    lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
     except
       $ first ApplyInputsConstraintError
       $ solveConstraints version marloweContext walletContext constraints

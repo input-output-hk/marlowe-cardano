@@ -40,6 +40,8 @@
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
+          (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
+          (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
@@ -47,6 +49,7 @@
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
+          (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
@@ -250,10 +253,11 @@
           };
         "marlowe-tx" = {
           depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
@@ -266,6 +270,7 @@
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
