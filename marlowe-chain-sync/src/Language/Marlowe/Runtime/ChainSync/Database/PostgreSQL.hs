@@ -770,9 +770,11 @@ getUTxOs = GetUTxOs $ fmap Api.UTxOs . \case
              , asset.name :: bytea?
              , assetOut.quantity :: bigint?
           FROM chain.txOut         AS txOut
+          LEFT JOIN chain.txIn     AS txIn     ON txIn.txoutid = txOut.txId AND txIn.txoutix = txOut.txIx
           LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
           LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
          WHERE (txOut.txId, txOut.txTx) = ANY(unnest ($1 :: bytea[], $2 :: smallint[]))
+           AND txIn.txinid IS NULL
          ORDER BY txIx
       |] (Fold foldRow mempty id)
   GetUTxOsAtAddresses addresses -> do
@@ -790,9 +792,11 @@ getUTxOs = GetUTxOs $ fmap Api.UTxOs . \case
              , asset.name :: bytea?
              , assetOut.quantity :: bigint?
           FROM chain.txOut         AS txOut
+          LEFT JOIN chain.txIn     AS txIn     ON txIn.txoutid = txOut.txId AND txIn.txoutix = txOut.txIx
           LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
           LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
          WHERE txOut.address = ANY($1 :: bytea[])
+           AND txIn.txinid IS NULL
          ORDER BY txIx
       |] (Fold foldRow mempty id)
   where
