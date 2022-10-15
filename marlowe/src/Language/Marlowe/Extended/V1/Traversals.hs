@@ -9,176 +9,169 @@ module Language.Marlowe.Extended.V1.Traversals
   where
 
 import Control.Monad ((>=>))
-import Control.Monad.Identity (runIdentity)
+import Control.Monad.Identity (Identity, runIdentity)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Traversable (for)
 import Language.Marlowe.Extended.V1 (Case(..), Contract(..), Module(..), Observation(..), Timeout(TimeParam), Value(..))
 
-newtype Rewrite f node = Rewrite { runRewrite :: node -> f node }
-
 data Visitor f = Visitor
-  { onCase :: f Case
-  , onContract :: f Contract
-  , onObservation :: f Observation
-  , onValue :: f Value
+  { onCase :: Case -> f Case
+  , onContract :: Contract -> f Contract
+  , onObservation :: Observation -> f Observation
+  , onValue :: Value -> f Value
   }
 
-defaultVisitor :: Applicative f => Visitor (Rewrite f)
-defaultVisitor =
-  Visitor rewrite rewrite rewrite rewrite
-  where
-    rewrite = Rewrite pure
+defaultVisitor :: Applicative f => Visitor f
+defaultVisitor = Visitor pure pure pure pure
 
 -- | All the below `traverse*` functions perform
--- a non recursive rewrite pass.
-traverseModule :: forall f. Functor f => Visitor (Rewrite f) -> Rewrite f Module
-traverseModule Visitor { onContract } = Rewrite $ \Module {..} ->
-  Module metadata <$> runRewrite onContract contract
+-- a non recursive rewrite pass over the *attributes*
+-- of a given constructor.
+traverseModule :: forall f. Functor f => Visitor f -> Module -> f Module
+traverseModule Visitor { onContract } Module {..} =
+  Module metadata <$> onContract contract
 
-traverseContract :: forall f. Applicative f => Visitor (Rewrite f) -> Rewrite f Contract
+traverseContract :: forall f. Applicative f => Visitor f -> Contract -> f Contract
 traverseContract Visitor {..} = do
-  let
-    rewriteContract = runRewrite onContract
-    rewriteObservation = runRewrite onObservation
-    rewriteValue = runRewrite onValue
-  Rewrite \case
-    Close -> rewriteContract Close
+  \case
+    Close -> onContract Close
     Pay accId payee token value contract -> Pay accId payee token
-      <$> rewriteValue value
-      <*> rewriteContract contract
+      <$> onValue value
+      <*> onContract contract
     If obs contract1 contract2 -> If
-      <$> rewriteObservation obs
-      <*> rewriteContract contract1
-      <*> rewriteContract contract2
+      <$> onObservation obs
+      <*> onContract contract1
+      <*> onContract contract2
     When cases timeout contract -> When
-      <$> for cases (runRewrite onCase)
+      <$> for cases onCase
       <*> pure timeout
-      <*> rewriteContract contract
+      <*> onContract contract
     Let valId value contract -> Let valId
-      <$> rewriteValue value
-      <*> rewriteContract contract
+      <$> onValue value
+      <*> onContract contract
     Assert obs contract -> Assert
-      <$> rewriteObservation obs
-      <*> rewriteContract contract
+      <$> onObservation obs
+      <*> onContract contract
 
-traverseCase :: forall f. Functor f => Visitor (Rewrite f) -> Rewrite f Case
-traverseCase Visitor {..} = Rewrite \(Case action contract) ->
-  Case action <$> runRewrite onContract contract
+traverseCase :: forall f. Functor f => Visitor f -> Case -> f Case
+traverseCase Visitor {..} (Case action contract) =
+  Case action <$> onContract contract
 
-traverseObservation :: forall f. Applicative f => Visitor (Rewrite f) -> Rewrite f Observation
-traverseObservation Visitor {..} = Rewrite \case
+traverseObservation :: forall f. Applicative f => Visitor f -> Observation -> f Observation
+traverseObservation Visitor {..} = \case
   AndObs obs1 obs2 -> AndObs
-    <$> runRewrite onObservation obs1
-    <*> runRewrite onObservation obs2
+    <$> onObservation obs1
+    <*> onObservation obs2
   OrObs obs1 obs2 -> OrObs
-    <$> runRewrite onObservation obs1
-    <*> runRewrite onObservation obs2
-  NotObs obs -> NotObs <$> runRewrite onObservation obs
+    <$> onObservation obs1
+    <*> onObservation obs2
+  NotObs obs -> NotObs <$> onObservation obs
   ValueGE val1 val2 -> ValueGE
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   ValueGT val1 val2 -> ValueGT
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   ValueLE val1 val2 -> ValueLE
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   ValueLT val1 val2 -> ValueLT
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   ValueEQ val1 val2 -> ValueEQ
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   TrueObs -> pure TrueObs
   FalseObs -> pure FalseObs
   chose@ChoseSomething {} -> pure chose
 
-traverseValue :: forall f. Applicative f => Visitor (Rewrite f) -> Rewrite f Value
-traverseValue Visitor {..} = Rewrite \case
+traverseValue :: forall f. Applicative f => Visitor f -> Value -> f Value
+traverseValue Visitor {..} = \case
   a@(AvailableMoney _ _) -> pure a
   c@(Constant _) -> pure c
   c@(ConstantParam _) -> pure c
-  NegValue value -> NegValue <$> runRewrite onValue value
+  NegValue value -> NegValue <$> onValue value
   AddValue val1 val2 -> AddValue
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   SubValue val1 val2 -> SubValue
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   MulValue val1 val2 -> MulValue
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   DivValue val1 val2 -> DivValue
-    <$> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onValue val1
+    <*> onValue val2
   c@(ChoiceValue _) -> pure c
   t@TimeIntervalStart -> pure t
   t@TimeIntervalEnd -> pure t
   u@(UseValue _) -> pure u
   Cond obs val1 val2 -> Cond
-    <$> runRewrite onObservation obs
-    <*> runRewrite onValue val1
-    <*> runRewrite onValue val2
+    <$> onObservation obs
+    <*> onValue val1
+    <*> onValue val2
 
 -- | Given non recursive vistor create a recursive top to bottom one.
-topDownVisitor :: Monad f => Visitor (Rewrite f) -> Visitor (Rewrite f)
-topDownVisitor Visitor{..} = do
+topDownVisitor :: Monad f => Visitor f -> Visitor f
+topDownVisitor Visitor {..} = do
   let
     visitor' = Visitor
-      { onContract = Rewrite $ runRewrite onContract >=> runRewrite (traverseContract visitor')
-      , onValue = Rewrite $ runRewrite onValue >=> runRewrite (traverseValue visitor')
-      , onCase = Rewrite $ runRewrite onCase >=> runRewrite (traverseCase visitor')
-      , onObservation = Rewrite $ runRewrite onObservation >=> runRewrite (traverseObservation visitor')
+      { onContract = onContract >=> traverseContract visitor'
+      , onValue = onValue >=> traverseValue visitor'
+      , onCase = onCase >=> traverseCase visitor'
+      , onObservation = onObservation >=> traverseObservation visitor'
       }
   visitor'
 
-rewriteContractTopDown :: Monad f => Visitor (Rewrite f) -> Contract -> f Contract
+rewriteContractTopDown :: Monad f => Visitor f -> Contract -> f Contract
 rewriteContractTopDown visitor contract = do
   let
     Visitor {..} = topDownVisitor visitor
-  runRewrite onContract contract
+  onContract contract
 
--- | Flipped version which allows traversing using `for` like syntax.
-forContractTopDown :: Monad f => Contract -> Visitor (Rewrite f) -> f Contract
+-- | Flipped version which allows traversing using `for` like infix syntax.
+forContractTopDown :: Monad f => Contract -> Visitor f -> f Contract
 forContractTopDown = flip rewriteContractTopDown
 
 -- | Given non recursive vistor create a recursive bottom to top one.
-bottomUpVisitor :: Monad f => Visitor (Rewrite f) -> Visitor (Rewrite f)
+bottomUpVisitor :: Monad f => Visitor f -> Visitor f
 bottomUpVisitor Visitor{..} = do
   let
     visitor' = Visitor
-      { onContract = Rewrite $ runRewrite onContract >=> runRewrite (traverseContract visitor')
-      , onValue = Rewrite $ runRewrite onValue >=> runRewrite (traverseValue visitor')
-      , onCase = Rewrite $ runRewrite onCase >=> runRewrite (traverseCase visitor')
-      , onObservation = Rewrite $ runRewrite onObservation >=> runRewrite (traverseObservation visitor')
+      { onContract = onContract >=> traverseContract visitor'
+      , onValue = onValue >=> traverseValue visitor'
+      , onCase = onCase >=> traverseCase visitor'
+      , onObservation = onObservation >=> traverseObservation visitor'
       }
   visitor'
 
-rewriteContractBottomUp :: Monad f => Visitor (Rewrite f) -> Contract -> f Contract
+rewriteContractBottomUp :: Monad f => Visitor f -> Contract -> f Contract
 rewriteContractBottomUp visitor contract = do
   let
     Visitor {..} = bottomUpVisitor visitor
-  runRewrite onContract contract
+  onContract contract
 
--- | Flipped version which allows traversing using `for` like syntax.
-forContractBottomUp :: Monad f => Contract -> Visitor (Rewrite f) -> f Contract
+-- | Flipped version which allows traversing using `for` like or infix syntax.
+forContractBottomUp :: Monad f => Contract -> Visitor f -> f Contract
 forContractBottomUp = flip rewriteContractBottomUp
 
-fillContract :: Map String Value -> Map String Timeout -> Contract -> Contract
-fillContract paramEnv timeoutEnv = do
+substitute :: Map String Value -> Map String Timeout -> Contract -> Contract
+substitute paramEnv timeoutEnv = do
   let
     timeParamName (TimeParam name) = Just name
     timeParamName _ = Nothing
+
+    visitor :: Visitor Identity
     visitor = defaultVisitor
-      { onContract = Rewrite \case
+      { onContract = \case
           (When cs (timeParamName >=> flip Map.lookup timeoutEnv -> Just timeout) contract) ->
             pure $ When cs timeout contract
           contract -> pure contract
-      , onValue = Rewrite \case
+      , onValue = \case
           ConstantParam (flip Map.lookup paramEnv -> Just value) -> pure value
           contract -> pure contract
       }
   runIdentity . rewriteContractBottomUp visitor
-
 

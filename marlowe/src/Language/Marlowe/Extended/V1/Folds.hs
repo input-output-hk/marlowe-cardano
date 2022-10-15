@@ -8,8 +8,7 @@ module Language.Marlowe.Extended.V1.Folds
 import Control.Monad.State (State, execState, modify)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.Extended.V1 (Case(..), Contract(..), Observation(..), Value(..))
-import Language.Marlowe.Extended.V1.Traversals
-  (Rewrite(Rewrite), Visitor(..), rewriteContractBottomUp, rewriteContractTopDown)
+import Language.Marlowe.Extended.V1.Traversals (Visitor(..), rewriteContractBottomUp, rewriteContractTopDown)
 
 -- To avoid confusion with the order of arguments in the step
 -- function let's provide a bit more "order agnostic" wrapper.
@@ -28,29 +27,32 @@ data Step a = Step
 defaultStep :: Step a
 defaultStep = Step Nothing Nothing Nothing Nothing
 
-foldingVisitor :: forall a. Step a -> Visitor (Rewrite (State a))
+foldingVisitor :: forall a. Step a -> Visitor (State a)
 foldingVisitor step = do
   let
     stepCase' :: StepArgs a Case -> a
     stepCase' = fromMaybe accum (stepCase step)
+
     stepContract' :: StepArgs a Contract -> a
     stepContract' = fromMaybe accum (stepContract step)
+
     stepObservation' :: StepArgs a Observation -> a
     stepObservation' = fromMaybe accum (stepObservation step)
+
     stepValue' :: StepArgs a Value -> a
     stepValue' = fromMaybe accum (stepValue step)
 
   Visitor
-    { onCase = Rewrite \c -> do
+    { onCase = \c -> do
         modify (stepCase' . StepArgs c)
         pure c
-    , onContract = Rewrite \c -> do
+    , onContract = \c -> do
         modify (stepContract' . StepArgs c)
         pure c
-    , onObservation = Rewrite \c -> do
+    , onObservation = \c -> do
         modify (stepObservation' . StepArgs c)
         pure c
-    , onValue = Rewrite \c -> do
+    , onValue = \c -> do
         modify (stepValue' . StepArgs c)
         pure c
     }
@@ -92,4 +94,8 @@ foldMapContract MapStep{..} = do
       , stepValue = Just $ appendAccum mapValue
       }
   foldlContract step mempty
+
+-- | Flipped version which allows folding using `for` like or infix syntax.
+foldMapContractFlipped :: Monoid a => Contract -> MapStep a -> a
+foldMapContractFlipped = flip foldMapContract
 
