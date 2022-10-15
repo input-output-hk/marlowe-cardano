@@ -6,7 +6,7 @@ cardano-cli --version
 
 git rev-parse HEAD
 
-TREASURY=/extra/iohk/networks/treasury
+TREASURY=treasury
 
 FAUCET_SKEY=$TREASURY/payment.skey
 FAUCET_ADDR=$(cat $TREASURY/payment.testnet.address)
@@ -20,7 +20,6 @@ echo "${MAGIC[@]}"
 SECOND=1000
 MINUTE=$((60 * SECOND))
 HOUR=$((60 * MINUTE))
-#DAY=$((24 * HOUR))
 
 NOW="$(($(date -u +%s) * SECOND))"
 echo "$NOW"
@@ -66,7 +65,6 @@ MINIMUM_ADA=3000000
 FIXED_POINT=1000000
 PRINCIPAL=100
 INTEREST_RATE=0.02
-INTEREST=$(jq -n $PRINCIPAL*$INTEREST_RATE)
 
 STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
 INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
@@ -107,28 +105,22 @@ marlowe-cli template actus \
   --counter-party "$COUNTERPARTY_ADDR" \
   --actus-terms-file  history.actus \
   --out-contract-file create-1.contract \
-  --out-state-file    create-1.state
+  --out-state-file /dev/null
 
 json2yaml create-1.contract
 
-json2yaml create-1.state
-
-marlowe-cli run initialize \
-  --contract-file create-1.contract \
-  --state-file    create-1.state    \
-  --out-file      create-1.marlowe  \
-  --print-stats
-
-marlowe create --help
-
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
 
+CONTRACT_ID=$(
 marlowe create \
   --core-file create-1.contract \
   --min-utxo "$MINIMUM_ADA" \
   --change-address "$PARTY_ADDR" \
   --address "$PARTY_ADDR" \
-  --manual-sign create-1.txbody
+  --manual-sign create-1.txbody \
+| sed -e 's/^.*"\([^\\]*\)\\.*$/\1/' \
+)
+echo "CONTRACT_ID = $CONTRACT_ID"
 
 cardano-cli transaction sign \
   --tx-body-file create-1.txbody \
@@ -137,40 +129,49 @@ cardano-cli transaction sign \
 
 marlowe submit create-1.tx
 
-CONTRACT_ID="$TX_1#1"
-echo "$CONTRACT_ID"
+marlowe add "$CONTRACT_ID"
 
-marlowe-cli run prepare \
-  --marlowe-file create-1.marlowe \
-  --out-file     create-2.marlowe \
-  --deposit-account "$PARTY_ADDR" \
-  --deposit-party "$PARTY_ADDR" \
-  --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
-  --invalid-before "$((NOW - 5 * MINUTE))" \
-  --invalid-hereafter "$((NOW + 1 * HOUR))" \
-  --print-stats
+marlowe log --show-contract "$CONTRACT_ID"
 
-marlowe-cli run prepare \
-  --marlowe-file create-2.marlowe \
-  --out-file     create-3.marlowe \
-  --deposit-account "$COUNTERPARTY_ADDR" \
-  --deposit-party "$COUNTERPARTY_ADDR" \
-  --deposit-amount "$((INTEREST*FIXED_POINT))" \
-  --invalid-before "$((NOW-5*MINUTE))" \
-  --invalid-hereafter "$((NOW+1*HOUR))" \
-  --print-stats
+CONTRACT_ADDRESS=$(marlowe-cli contract address)
+echo "$CONTRACT_ADDRESS"
 
-marlowe-cli run prepare \
-  --marlowe-file create-3.marlowe \
-  --out-file     create-4.marlowe \
-  --deposit-account "$COUNTERPARTY_ADDR" \
-  --deposit-party "$COUNTERPARTY_ADDR" \
-  --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
-  --invalid-before "$((NOW-5*MINUTE))" \
-  --invalid-hereafter "$((NOW+4*HOUR))" \
-  --print-stats
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
 
-jq '.tx.contract' create-4.marlowe | json2yaml
+marlowe deposit \
+  --contract "$CONTRACT_ID" \
+  --from-party "$PARTY_ADDR" \
+  --to-party "$PARTY_ADDR" \
+  --lovelace "$((PRINCIPAL*FIXED_POINT))" \
+  --validity-lower-bound "$((NOW - 5 * MINUTE))" \
+  --validity-upper-bound "$((NOW + 1 * HOUR))" \
+  --change-address "$PARTY_ADDR" \
+  --address "$PARTY_ADDR" \
+  --manual-sign create-2.txbody
+
+#marlowe-cli run prepare \
+#  --marlowe-file create-2.marlowe \
+#  --out-file     create-3.marlowe \
+#  --deposit-account "$COUNTERPARTY_ADDR" \
+#  --deposit-party "$COUNTERPARTY_ADDR" \
+#  --deposit-amount "$((INTEREST*FIXED_POINT))" \
+#  --invalid-before "$((NOW-5*MINUTE))" \
+#  --invalid-hereafter "$((NOW+1*HOUR))" \
+#  --print-stats
+
+#marlowe-cli run prepare \
+#  --marlowe-file create-3.marlowe \
+#  --out-file     create-4.marlowe \
+#  --deposit-account "$COUNTERPARTY_ADDR" \
+#  --deposit-party "$COUNTERPARTY_ADDR" \
+#  --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
+#  --invalid-before "$((NOW-5*MINUTE))" \
+#  --invalid-hereafter "$((NOW+4*HOUR))" \
+#  --print-stats
+
+marlowe rm "$CONTRACT_ID"
+
+marlowe ls
 
 marlowe-cli util clean \
   --change-address "$PARTY_ADDR" \
@@ -192,3 +193,5 @@ marlowe-cli transaction simple \
   --change-address "$FAUCET_ADDR" \
   --out-file /dev/null \
   --submit 600
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR" --address "$COUNTERPARTY_ADDR"
