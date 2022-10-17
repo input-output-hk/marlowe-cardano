@@ -22,7 +22,7 @@ module Main
 
 
 import Test.Tasty (TestTree, defaultMain, testGroup)
-import Test.Tasty.QuickCheck (testProperty)
+import Test.Tasty.QuickCheck
 
 import qualified Spec.Marlowe.Marlowe (prop_noFalsePositives, tests)
 import qualified Spec.Marlowe.Plutus (tests)

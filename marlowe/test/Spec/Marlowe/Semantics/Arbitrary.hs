@@ -37,6 +37,7 @@ module Spec.Marlowe.Semantics.Arbitrary
   , choiceInBoundsIfNonempty
   , choiceNotInBounds
   , goldenContract
+  , interestingInput
     -- * Weighting factors for arbitrary contracts
   , assertContractWeights
   , closeContractWeights
@@ -51,7 +52,8 @@ module Spec.Marlowe.Semantics.Arbitrary
 import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
-import Language.Marlowe.Core.V1.Semantics (TransactionInput(..), TransactionOutput(..), computeTransaction, evalValue)
+import Language.Marlowe.Core.V1.Semantics
+  (TransactionInput(..), TransactionOutput(..), computeTransaction, evalObservation, evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types
   ( Accounts
   , Action(..)
@@ -85,7 +87,7 @@ import Plutus.V2.Ledger.Api
   , adaSymbol
   , adaToken
   )
-import PlutusTx.Builtins (BuiltinByteString, lengthOfByteString)
+import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck
   (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat, vectorOf)
@@ -486,6 +488,72 @@ choiceNotInBounds bounds =
   in
     suchThat arbitrary $ \chosenNum -> not $ any (inBound chosenNum) bounds
 
+
+-- | Generate relevant Input content for a given input action
+interestingInput :: Environment -> State -> Bool -> Action -> [InputContent]
+interestingInput env state validity (Notify value) =
+  let
+    validNotification = evalObservation env state value :: Bool
+  in
+    [INotify | validity == validNotification]
+interestingInput env state validity (Deposit account party token value) =
+  let
+    expectedDepositAmount = evalValue env state value :: Integer
+  in
+    if validity
+    then [IDeposit account party token expectedDepositAmount]
+    else [
+      IDeposit account party token (expectedDepositAmount - 1)
+    , IDeposit account party token (expectedDepositAmount + 1)
+    ] <>
+    [ IDeposit account party' token expectedDepositAmount | party' <- interestingParties party validity ]
+    <>
+    [ IDeposit account' party token expectedDepositAmount | account' <- interestingParties account validity ]
+interestingInput _ _ validity (Choice choiceId bounds) =  IChoice <$> interestingChoiceId choiceId validity <*> interestingChoiceNums validity bounds
+
+-- ChoiceId is a choice name and a party making the choice. Then we want to generate a list of choiceIds that are either invalid or valid
+interestingChoiceId :: ChoiceId -> Bool -> [ChoiceId]
+interestingChoiceId (ChoiceId byteString party) validity = fmap (\party' -> ChoiceId byteString party') $ interestingParties party validity
+
+interestingChoiceNums :: Bool -> [Bound] -> [ChosenNum]
+interestingChoiceNums True bounds  = concatMap (interestingChoiceNum True) bounds
+interestingChoiceNums False bounds =
+  let
+    candidates = concatMap (interestingChoiceNum False ) bounds
+  in
+    [
+    candidate
+    | candidate <- candidates
+    , let
+        outside (Bound lower upper) = candidate < lower && candidate > upper
+    , all outside bounds
+    ]
+
+interestingChoiceNum :: Bool -> Bound -> [ChosenNum]
+interestingChoiceNum True (Bound lower upper)  = validValues lower upper
+interestingChoiceNum False (Bound lower upper) = invalidValues lower upper
+
+-- TODO: `interestingParties` is missing a case for PK which is currently being replaced with Address.
+-- We will need to update the PK case with and address case when it's ready.
+interestingParties :: Party -> Bool -> [Party]
+interestingParties validRole True = [validRole]
+interestingParties (Role roleName) False = [
+    Role (removeFirstLetter roleName)
+  , Role (TokenName $ unTokenName roleName `appendByteString` "s")
+  ]
+interestingParties _ _ = []
+
+removeFirstLetter :: TokenName -> TokenName
+removeFirstLetter (TokenName tokenName) = TokenName $ sliceByteString 1 (lengthOfByteString tokenName) tokenName
+
+validValues :: Integer -> Integer -> [Integer]
+validValues lower upper = [x | x <- availableValues, x >= lower  && x <= upper]
+
+invalidValues :: Integer -> Integer -> [Integer]
+invalidValues lower upper = [x | x <- availableValues, x < lower  || x > upper]
+
+availableValues :: [Integer]
+availableValues = tail $ [0..] >>= \x -> [x, -x]
 
 -- | Geneate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
