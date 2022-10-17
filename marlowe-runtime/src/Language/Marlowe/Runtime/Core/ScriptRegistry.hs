@@ -39,6 +39,12 @@ data MarloweScripts = MarloweScripts
   , payoutScriptUTxOs :: Map NetworkId ReferenceScriptUtxo
   } deriving (Show, Eq, Ord)
 
+mainnetNetworkId :: NetworkId
+mainnetNetworkId = Mainnet
+
+preprodNetworkId :: NetworkId
+preprodNetworkId = Testnet $ NetworkMagic 1
+
 previewNetworkId :: NetworkId
 previewNetworkId = Testnet $ NetworkMagic 2
 
@@ -49,16 +55,44 @@ previewNetworkId = Testnet $ NetworkMagic 2
 -- so, please copy the current value into 'v1Scripts' before updating
 -- it to the new one (unless you are certain that the address here has never
 -- been published).
+--
+-- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
+-- APPROVED CHANGES TO MARLOWE'S SCRIPT REGISTRY. THIS VALUE HAS
+-- IMPLICATIONS FOR VERSIONING, SECURITY, AND CONTRACT DISCOVERY.
 currentV1Scripts :: MarloweScripts
 currentV1Scripts = MarloweScripts
   { marloweScript = "6a9391d6aa51af28dd876ebb5565b69d1e83e5ac7861506bd29b56b0"
   , payoutScript = "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
   , marloweScriptUTxOs = Map.fromList
-      [ ( previewNetworkId
+      [ ( mainnetNetworkId
+        , ReferenceScriptUtxo
+            { txOutRef = "c4aff1631174a4463981fad948f17edf8550bf6a9347822abed74917e074271a#1"
+            , txOut = Chain.TransactionOutput
+                { address = fromJust $ fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                , assets = Assets 54922330 mempty
+                , datum = Just $ Constr 0 []
+                , datumHash = Nothing
+                }
+            , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1MarloweScriptCBOR
+            }
+        )
+      , ( preprodNetworkId
+        , ReferenceScriptUtxo
+            { txOutRef = "f721d4f60d88140325eb02cf911d9fc42d62933a8b328fb72ed1e4646d80e8b3#1"
+            , txOut = Chain.TransactionOutput
+                { address = fromJust $ fromBech32 "addr_test1vrw0tuh8l95thdqr65dmpcfqnmcw0en7v7vhgegck7gzqgswa07sw"
+                , assets = Assets 54801650 mempty
+                , datum = Just $ Constr 0 []
+                , datumHash = Nothing
+                }
+            , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1MarloweScriptCBOR
+            }
+        )
+      , ( previewNetworkId
         , ReferenceScriptUtxo
             { txOutRef = "087f21f109a997193421a81886ea8c6397d336d19e696457b9c5c7aefdc31873#1"
             , txOut = Chain.TransactionOutput
-                { address = fromJust $ fromBech32 "addr_test1wp4f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvqu3c6jv"
+                { address = fromJust $ fromBech32 "addr_test1vrw0tuh8l95thdqr65dmpcfqnmcw0en7v7vhgegck7gzqgswa07sw"
                 , assets = Assets 54801650 mempty
                 , datum = Just $ Constr 0 []
                 , datumHash = Nothing
@@ -68,11 +102,35 @@ currentV1Scripts = MarloweScripts
         )
       ]
   , payoutScriptUTxOs = Map.fromList
-      [ ( previewNetworkId
+      [ ( mainnetNetworkId
+        , ReferenceScriptUtxo
+            { txOutRef = "c4aff1631174a4463981fad948f17edf8550bf6a9347822abed74917e074271a#2"
+            , txOut = Chain.TransactionOutput
+                { address = fromJust $ fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                , assets = Assets 12555030 mempty
+                , datum = Just $ Constr 0 []
+                , datumHash = Nothing
+                }
+            , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1PayoutScriptCBOR
+            }
+        )
+      , ( preprodNetworkId
+        , ReferenceScriptUtxo
+            { txOutRef = "f721d4f60d88140325eb02cf911d9fc42d62933a8b328fb72ed1e4646d80e8b3#2"
+            , txOut = Chain.TransactionOutput
+                { address = fromJust $ fromBech32 "addr_test1vpa36uuyf95kxpcleldsncedlhjru6vdmh2vnpkdrsz4u6cll9zas"
+                , assets = Assets 12434350 mempty
+                , datum = Just $ Constr 0 []
+                , datumHash = Nothing
+                }
+            , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1PayoutScriptCBOR
+            }
+        )
+      , ( previewNetworkId
         , ReferenceScriptUtxo
             { txOutRef = "087f21f109a997193421a81886ea8c6397d336d19e696457b9c5c7aefdc31873#2"
             , txOut = Chain.TransactionOutput
-                { address = fromJust $ fromBech32 "addr_test1wpyswm4tyqjrmj2xy5glhx9fe7m3n7rwj6fz3qfekly3muckehcu9"
+                { address = fromJust $ fromBech32 "addr_test1vpa36uuyf95kxpcleldsncedlhjru6vdmh2vnpkdrsz4u6cll9zas"
                 , assets = Assets 12434350 mempty
                 , datum = Just $ Constr 0 []
                 , datumHash = Nothing

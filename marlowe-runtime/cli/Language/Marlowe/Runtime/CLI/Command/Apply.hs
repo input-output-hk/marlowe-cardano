@@ -1,21 +1,31 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Marlowe.Runtime.CLI.Command.Apply
   where
 
+import qualified Cardano.Api as C
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
+import Data.Aeson (toJSON)
+import qualified Data.Aeson as A
+import Data.Bifunctor (Bifunctor(first))
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
+import Data.Time (UTCTime, secondsToNominalDiffTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Language.Marlowe (POSIXTime(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
-import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand, txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI)
+import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (unPolicyId)
-import Language.Marlowe.Runtime.Core.Api (ContractId(..), IsMarloweVersion(..), MarloweVersionTag(..))
-import qualified Language.Marlowe.Scripts as V1
+import Language.Marlowe.Runtime.Core.Api
+  (ContractId(..), IsMarloweVersion(..), MarloweVersion(MarloweV1), MarloweVersionTag(..))
+import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, MarloweTxCommand(ApplyInputs))
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
 import qualified Plutus.V1.Ledger.Api as P
@@ -27,10 +37,19 @@ data ApplyCommand = V1ApplyCommand
   , validityUpperBound :: Maybe POSIXTime
   }
 
+data ApplyCommandError v
+  = ApplyFailed (ApplyInputsError v)
+  | PlainInputsSupportedOnly (ContractInputs v)
+  | TransactionFileWriteFailed (C.FileError ())
+
+deriving instance Show (ApplyCommandError 'V1)
+
 data ContractInputs v
   = ContractInputsByFile FilePath
   | ContractInputsByValue (Redeemer v)
   | ContractInputsByValueWithContinuations (Redeemer v) [FilePath]
+
+deriving instance Show (ContractInputs 'V1)
 
 applyCommandParser :: ParserInfo (TxCommand ApplyCommand)
 applyCommandParser = info (txCommandParser parser) $ progDesc "Apply inputs to a contract"
@@ -128,7 +147,7 @@ singleInputParser verb contentParser = info (txCommandParser parser)
       <*> validityLowerBoundParser
       <*> validityUpperBoundParser
     inputParser = do
-      content <- V1.Input <$> contentParser
+      content <- V1.NormalInput <$> contentParser
       mContinuation <- optional continuationParser
       pure case mContinuation of
         Nothing -> ContractInputsByValue [content]
@@ -189,4 +208,26 @@ readRole :: ReadM V1.Party
 readRole = V1.Role . P.TokenName <$> str
 
 runApplyCommand :: TxCommand ApplyCommand -> CLI ()
-runApplyCommand = error "not implemented"
+runApplyCommand TxCommand { walletAddresses, signingMethod, subCommand=V1ApplyCommand{..}} = runCLIExceptT do
+  inputs' <- case inputs of
+    ContractInputsByValue redeemer -> pure redeemer
+    _ -> throwE (PlainInputsSupportedOnly inputs)
+  let
+    validityLowerBound'= posixTimeToUTCTime <$> validityLowerBound
+    validityUpperBound'= posixTimeToUTCTime <$> validityUpperBound
+
+    cmd = ApplyInputs MarloweV1 walletAddresses contractId validityLowerBound' validityUpperBound' inputs'
+  txBody <- ExceptT $ first ApplyFailed <$> runTxCommand cmd
+  case signingMethod of
+    Manual outputFile -> do
+      ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
+      let
+        txId = C.getTxId txBody
+        res = A.object
+          [ ("txId", toJSON txId) ]
+      liftIO . print $ A.encode res
+  where
+    posixTimeToUTCTime :: POSIXTime -> UTCTime
+    posixTimeToUTCTime (POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
+
+

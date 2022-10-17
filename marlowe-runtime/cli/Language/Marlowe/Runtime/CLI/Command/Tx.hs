@@ -15,6 +15,7 @@ data TxCommand cmd = TxCommand
 
 newtype SigningMethod
   = Manual FilePath
+  deriving (Show)
 
 txCommandParser :: Parser cmd -> Parser (TxCommand cmd)
 txCommandParser subCommandParser = TxCommand
@@ -56,3 +57,4 @@ txCommandParser subCommandParser = TxCommand
       , help "A UTXO which may be used as a collateral input"
       , metavar "UTXO"
       ]
+

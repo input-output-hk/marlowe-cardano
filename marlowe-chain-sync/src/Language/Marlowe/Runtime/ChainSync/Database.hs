@@ -4,6 +4,7 @@ module Language.Marlowe.Runtime.ChainSync.Database
   where
 
 import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint(..), TxInMode)
+import Language.Marlowe.Runtime.ChainSync.Api (GetUTxOsQuery)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock(..))
 import Ouroboros.Network.Point (WithOrigin)
@@ -46,6 +47,9 @@ newtype GetIntersectionPoints m = GetIntersectionPoints
 newtype GetGenesisBlock m = GetGenesisBlock
   { runGetGenesisBlock :: m (Maybe GenesisBlock) }
 
+newtype GetUTxOs m = GetUTxOs
+  { runGetUTxOs :: GetUTxOsQuery -> m Api.UTxOs }
+
 data MoveResult err result
   = RollForward result Api.BlockHeader Api.ChainPoint
   | RollBack Api.ChainPoint Api.ChainPoint
@@ -64,9 +68,13 @@ hoistGetIntersectionPoints transformation = GetIntersectionPoints . transformati
 hoistGetGenesisBlock :: (forall a. m a -> n a) -> GetGenesisBlock m -> GetGenesisBlock n
 hoistGetGenesisBlock transformation = GetGenesisBlock . transformation . runGetGenesisBlock
 
+hoistGetUTxOs :: (forall a. m a -> n a) -> GetUTxOs m -> GetUTxOs n
+hoistGetUTxOs transformation = GetUTxOs . fmap transformation . runGetUTxOs
+
 hoistMoveClient :: (forall a. m a -> n a) -> MoveClient m -> MoveClient n
 hoistMoveClient transformation (MoveClient runMoveClient) =
   MoveClient $ fmap transformation . runMoveClient
+
 
 -- Bundles
 
@@ -77,6 +85,7 @@ data DatabaseQueries m = DatabaseQueries
   , getHeaderAtPoint      :: !(GetHeaderAtPoint m)
   , getIntersectionPoints :: !(GetIntersectionPoints m)
   , getGenesisBlock       :: !(GetGenesisBlock m)
+  , getUTxOs              :: !(GetUTxOs m)
   , moveClient            :: !(MoveClient m)
   }
 
@@ -88,5 +97,6 @@ hoistDatabaseQueries transformation DatabaseQueries{..} = DatabaseQueries
   , getHeaderAtPoint = hoistGetHeaderAtPoint transformation getHeaderAtPoint
   , getIntersectionPoints = hoistGetIntersectionPoints transformation getIntersectionPoints
   , getGenesisBlock = hoistGetGenesisBlock transformation getGenesisBlock
+  , getUTxOs = hoistGetUTxOs transformation getUTxOs
   , moveClient = hoistMoveClient transformation moveClient
   }

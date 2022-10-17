@@ -75,6 +75,8 @@ let
           # The haskell.nix IFD roots for the Haskell project. We include these so they won't be GCd and will be in the
           # cache for users
           inherit (marlowe.haskell.project) roots;
+        } // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          inherit (packages) compose-spec;
         } // pkgs.lib.optionalAttrs (!rootsOnly) (filterCross {
           # build relevant top level attributes from flake.nix
           inherit (packages) tests;

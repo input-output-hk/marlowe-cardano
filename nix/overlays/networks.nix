@@ -26,6 +26,10 @@ in
       name = "preview";
       magic = 2;
     };
+    preprod = mkNetwork self.cardano.environments.preprod // {
+      name = "preprod";
+      magic = 1;
+    };
     # TODO add testnet-public, mainnet in the future
   };
 }

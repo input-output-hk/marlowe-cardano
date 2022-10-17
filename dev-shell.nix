@@ -2,7 +2,7 @@
 , packages
 }:
 let
-  inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
+  inherit (packages) pkgs marlowe docs marlowe-cli chainseekd marlowe-history marlowe-discovery marlowe-tx marlowe-rt dev-scripts network;
   inherit (dev-scripts) nix-flakes-alias start-cardano-node run-chainseekd;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
   inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address cardano-cli cardano-node;
@@ -110,6 +110,10 @@ let
   # affinity APIs!
   + lib.optionalString stdenv.isLinux ''
     ${utillinux}/bin/taskset -pc 0-1000 $$
+
+    # Set up the compose file.
+    # Can't run on darwin without Linux builds set up or if it's in hydra...
+    nix run .#refresh-compose
   '';
 
   defaultShell = haskell.project.shellFor {
@@ -119,6 +123,11 @@ let
       cardano-cli
       cardano-node
       marlowe-cli
+      chainseekd
+      marlowe-history
+      marlowe-discovery
+      marlowe-tx
+      marlowe-rt
       run-chainseekd
       start-cardano-node
       sphinxTools

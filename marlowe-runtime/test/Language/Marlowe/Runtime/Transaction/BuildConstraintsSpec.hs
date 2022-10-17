@@ -42,6 +42,7 @@ spec = Hspec.describe "buildWithdrawConstraints" do
           , payToAddresses = Map.empty
           , payToRoles = Map.empty
           , marloweOutputConstraints = TxConstraints.MarloweOutputConstraintsNone
+          , merkleizedContinuationsConstraints = mempty
           , signatureConstraints = Set.empty
           , metadataConstraints = Map.empty
           }

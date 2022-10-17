@@ -29,6 +29,7 @@ import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE,
 import Data.Bifunctor (bimap, first)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..))
+import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
@@ -44,6 +45,7 @@ data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
       -> IO (Either AcquireFailure result)
+  , getUTxOs :: !(Database.GetUTxOs IO)
   }
 
 newtype ChainSyncQueryServer = ChainSyncQueryServer
@@ -70,6 +72,7 @@ data WorkerDependencies = WorkerDependencies
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
       -> IO (Either AcquireFailure result)
+  , getUTxOs :: !(Database.GetUTxOs IO)
   }
 
 newtype Worker = Worker
@@ -94,6 +97,9 @@ mkWorker WorkerDependencies{..} =
         toServerStNext . bimap (const ()) unsafeCoerce <$> queryLocalNodeState Nothing QuerySystemStart
       GetEraHistory ->
         toServerStNext . first (const ()) <$> queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
+      GetUTxOs utxosQuery -> do
+        utxos <- Database.runGetUTxOs getUTxOs utxosQuery
+        pure $ toServerStNext $ Right utxos
 
     toServerStNext :: Either () a -> ServerStNext ChainSyncQuery 'CanReject Void () a IO ()
     toServerStNext = \case

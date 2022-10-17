@@ -90,6 +90,10 @@ library
     Language.Marlowe.Runtime.History.Store.Memory
     Language.Marlowe.Runtime.History.Store.Model
     Language.Marlowe.Runtime.History.SyncServer
+    Language.Marlowe.Runtime.Plutus.V2.Contexts
+    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
+    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
+    Language.Marlowe.Runtime.Plutus.V2.Scripts
     Language.Marlowe.Runtime.Transaction.Api
     Language.Marlowe.Runtime.Transaction.BuildConstraints
     Language.Marlowe.Runtime.Transaction.Constraints
@@ -103,14 +107,21 @@ library
     , base16
     , binary
     , cardano-api
+    , cardano-ledger-core
+    , co-log
+    , co-log-core
     , bytestring
-    , cardano-api
     , containers
+    , errors
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
+    , newtype-generics
+    , one-line-aeson-text
     , ouroboros-network
     , plutus-ledger-api
+    , plutus-tx
+    , plutus-tx-plugin
     , semialign
     , some
     , stm
@@ -121,6 +132,17 @@ library
     , typed-protocols
     , witherable
 
+library logging
+  import: lang
+  hs-source-dirs: logging
+  exposed-modules:
+    Language.Marlowe.Runtime.Logging
+  build-depends:
+      base >= 4.9 && < 5
+    , co-log
+    , co-log-core
+    , text
+
 library config
   import: lang
   hs-source-dirs: config
@@ -129,10 +151,14 @@ library config
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , co-log
     , marlowe-chain-sync
     , marlowe-runtime
     , network
+    , marlowe-runtime:logging
     , optparse-applicative
+    , prelude-safeenum
+    , text
     , split
 
 executable marlowe
@@ -156,17 +182,21 @@ executable marlowe
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-      base >= 4.9 && < 5
+      aeson
+    , base >= 4.9 && < 5
     , ansi-terminal
     , async
     , base16
     , bytestring
+    , cardano-api
     , containers
+    , errors
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
+    , marlowe-runtime:logging
     , monad-control
     , network
     , plutus-ledger-api
@@ -177,7 +207,9 @@ executable marlowe
     , stm
     , stm-delay
     , text
+    , time
     , wl-pprint
+    , yaml
   if !os(windows)
     build-depends: unix
 
@@ -255,21 +287,27 @@ executable marlowe-tx
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-      base >= 4.9 && < 5
-    , ansi-terminal
+      ansi-terminal
     , async
+    , base >= 4.9 && < 5
     , base16
+    , bytestring
     , cardano-api
     , containers
+    , co-log
+    , co-log-core
     , marlowe
     , marlowe-protocols
     , marlowe-runtime
+    , marlowe-runtime:config
+    , marlowe-runtime:logging
     , marlowe-chain-sync
     , network
-    , typed-protocols
     , optparse-applicative
+    , one-line-aeson-text
     , stm
     , text
+    , typed-protocols
     , wl-pprint
   ghc-options: -threaded
 

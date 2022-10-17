@@ -2,10 +2,15 @@
 module Language.Marlowe.Runtime.CLI.Option
   where
 
+import qualified Colog
 import Control.Arrow ((>>>))
+import Data.Char (toUpper)
 import Data.Foldable (asum)
+import Data.List (intercalate)
 import Data.List.Split (splitOn)
+import Data.Maybe (fromMaybe)
 import Data.String (fromString)
+import qualified Data.Text as T
 import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32, parseTxOutRef)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..))
@@ -39,11 +44,12 @@ discoveryHost = host "discovery" "DISCOVERY" "127.0.0.1" "The hostname of the Ma
 
 discoveryQueryPort :: CliOption OptionFields PortNumber
 discoveryQueryPort = port "discovery-query" "DISCOVERY_QUERY" 3721 "The port number of the discovery server's query API."
+
 txHost :: CliOption OptionFields HostName
 txHost = host "tx" "TX" "127.0.0.1" "The hostname of the Marlowe Runtime transaction server."
 
 txCommandPort :: CliOption OptionFields PortNumber
-txCommandPort = port "tx-command" "TX_COMMAND" 3720 "The port number of the transaction server's job API."
+txCommandPort = port "tx-command" "TX_COMMAND" 3723 "The port number of the transaction server's job API."
 
 port :: String -> String -> PortNumber -> String -> CliOption OptionFields PortNumber
 port optPrefix envPrefix defaultValue description = CliOption
@@ -62,7 +68,7 @@ port optPrefix envPrefix defaultValue description = CliOption
 
 host :: String -> String -> HostName  -> String -> CliOption OptionFields HostName
 host optPrefix envPrefix defaultValue description = CliOption
-  { env = "MARLOWE_RT_" <> envPrefix <> "_HOST"
+  { env = env
   , parseEnv = Just
   , parser = strOption . (<>) (mconcat
       [ long $ optPrefix <> "-host"
@@ -88,7 +94,7 @@ keyValueOption readKey readValue = option $ eitherReader \val -> case splitOn "=
   _ -> Left "Expected format: <key>=<value>"
 
 txOutRefParser :: ReadM TxOutRef
-txOutRefParser = eitherReader $ parseTxOutRef >>> \case
+txOutRefParser = eitherReader $ T.pack >>> parseTxOutRef >>> \case
   Nothing  -> Left "Invalid UTXO - expected format: <hex-tx-id>#<tx-out-ix>"
   Just cid -> Right cid
 
@@ -113,3 +119,40 @@ optParserWithEnvDefault :: HasValue f => CliOption f a -> IO (Parser a)
 optParserWithEnvDefault CliOption{..} = do
   envMod <- foldMap value . (parseEnv =<<) <$> lookupEnv env
   pure $ parser envMod
+
+data Verbosity = LogLevel Colog.Severity | Silent
+
+verbosityParser :: Verbosity -> Parser Verbosity
+verbosityParser defaultVerbosity = fromMaybe defaultVerbosity <$> (fmap LogLevel <$> optional logLevel <|> optional silent)
+  where
+    silent :: Parser Verbosity
+    silent = flag' Silent $ mconcat
+      [ long "silent"
+      , help "Suppress all logs."
+      ]
+
+    -- Parses log severity expressed using: Debug, Info, Normal, Warning, General, Error
+    logLevel :: Parser Colog.Severity
+    logLevel = do
+      let
+        capitalize :: String -> String
+        capitalize = map toUpper
+        severities =
+          [ ("DEBUG", Colog.Debug)
+          , ("INFO", Colog.Info)
+          , ("WARNING", Colog.Warning)
+          , ("ERROR", Colog.Error)
+          ]
+        spec = "[" <> (intercalate "|" . map (capitalize. fst) $ severities) <> "]"
+
+        severityParser :: ReadM Colog.Severity
+        severityParser = eitherReader $ capitalize >>> flip lookup severities >>> \case
+          Just sev -> Right sev
+          Nothing -> Left $ "Invalid log level. Expecting value:  " <> spec <> "."
+
+      option severityParser $ mconcat
+        [ long "log-level"
+        , metavar "LOG_LEVEL"
+        , help $ "Log everything up including the given level: " <> spec
+        ]
+
