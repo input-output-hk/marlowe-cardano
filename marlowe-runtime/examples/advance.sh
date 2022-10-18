@@ -19,8 +19,6 @@ echo "${MAGIC[@]}"
 
 SECOND=1000
 MINUTE=$((60 * SECOND))
-#HOUR=$((60 * MINUTE))
-#DAY=$((24 * HOUR))
 
 NOW="$(($(date -u +%s) * SECOND))"
 echo "$NOW"
@@ -63,16 +61,15 @@ marlowe-cli util fund-address \
 
 MINIMUM_ADA=3000000
 
-FIXED_POINT=1000000
+#FIXED_POINT=1000000
 PRINCIPAL=100
 INTEREST_RATE=0.02
-INTEREST=$(jq -n $PRINCIPAL*$INTEREST_RATE)
 
 STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
 INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
 MATURITY_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 2 year" +"%Y-01-01T00:00:00")
 
-yaml2json << EOI > submit.actus
+yaml2json << EOI > advance.actus
 scheduleConfig:
   businessDayConvention: "NULL"
   endOfMonthConvention: "EOM"
@@ -96,140 +93,73 @@ prepaymentEffect: "N"
 nominalInterestRate: $INTEREST_RATE
 interestCalculationBase: "NT"
 EOI
-cat submit.actus
+cat history.actus
 
 marlowe-cli template actus \
   --minimum-ada "$MINIMUM_ADA" \
   --party "$PARTY_ADDR" \
   --counter-party "$COUNTERPARTY_ADDR" \
-  --actus-terms-file  submit.actus \
-  --out-contract-file submit-1.contract \
-  --out-state-file    submit-1.state
+  --actus-terms-file  advance.actus \
+  --out-contract-file advance-1.contract \
+  --out-state-file /dev/null
 
-sed -i -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 10 * MINUTE))/" submit-1.contract
+sed -i -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 10 * MINUTE))/" advance-1.contract
 
-json2yaml submit-1.contract
+json2yaml advance-1.contract
 
-json2yaml submit-1.state
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
 
-marlowe-cli run initialize \
-  --contract-file submit-1.contract \
-  --state-file    submit-1.state    \
-  --out-file      submit-1.marlowe  \
-  --print-stats
-
-TX_1=$(
-marlowe-cli run auto-execute \
-  --marlowe-out-file submit-1.marlowe \
-  --required-signer "$PARTY_SKEY" \
+CONTRACT_ID=$(
+marlowe create \
+  --core-file advance-1.contract \
+  --min-utxo "$MINIMUM_ADA" \
   --change-address "$PARTY_ADDR" \
-  --out-file submit-1.txbody \
-  --print-stats \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
+  --address "$PARTY_ADDR" \
+  --manual-sign advance-1.txbody \
+| sed -e 's/^.*"\([^\\]*\)\\.*$/\1/' \
 )
-echo "TX_1 = $TX_1"
+echo "CONTRACT_ID = $CONTRACT_ID"
 
 cardano-cli transaction sign \
-  --tx-body-file submit-1.txbody \
-  --out-file     submit-1.tx \
+  --tx-body-file advance-1.txbody \
+  --out-file     advance-1.tx \
   --signing-key-file "$PARTY_SKEY"
 
-marlowe submit submit-1.tx
+marlowe submit advance-1.tx
 
-CONTRACT_ID="$TX_1#1"
-echo "$CONTRACT_ID"
+marlowe add "$CONTRACT_ID"
 
-marlowe-cli run prepare \
-  --marlowe-file submit-1.marlowe \
-  --out-file     submit-2.marlowe \
-  --deposit-account "$PARTY_ADDR" \
-  --deposit-party "$PARTY_ADDR" \
-  --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
-  --invalid-before "$((NOW-5*MINUTE))" \
-  --invalid-hereafter "$((NOW+9*MINUTE))" \
-  --print-stats
+marlowe log --show-contract "$CONTRACT_ID"
 
-TX_2=$(
-marlowe-cli run auto-execute \
-  --tx-in-marlowe "$TX_1#1" \
-  --marlowe-in-file  submit-1.marlowe \
-  --marlowe-out-file submit-2.marlowe \
-  --required-signer "$PARTY_SKEY" \
+CONTRACT_ADDRESS=$(marlowe-cli contract address)
+echo "$CONTRACT_ADDRESS"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
+
+sleep 11m
+
+marlowe advance \
+  --contract "$CONTRACT_ID" \
+  --validity-lower-bound "$((NOW-11*MINUTE))" \
+  --validity-upper-bound "$((NOW+20*MINUTE))" \
   --change-address "$PARTY_ADDR" \
-  --out-file submit-2.txbody \
-  --print-stats \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
-)
-echo "TX_2 = $TX_2"
+  --address "$PARTY_ADDR" \
+  --manual-sign advance-2.txbody
 
 cardano-cli transaction sign \
-  --tx-body-file submit-2.txbody \
-  --out-file     submit-2.tx \
+  --tx-body-file advance-2.txbody \
+  --out-file     advance-2.tx \
   --signing-key-file "$PARTY_SKEY"
 
-marlowe submit submit-2.tx
+marlowe submit advance-2.tx
 
-marlowe-cli run prepare \
-  --marlowe-file submit-2.marlowe \
-  --out-file     submit-3.marlowe \
-  --deposit-account "$COUNTERPARTY_ADDR" \
-  --deposit-party "$COUNTERPARTY_ADDR" \
-  --deposit-amount "$((INTEREST*FIXED_POINT))" \
-  --invalid-before "$((NOW-5*MINUTE))" \
-  --invalid-hereafter "$((NOW+9*MINUTE))" \
-  --print-stats
+marlowe log --show-contract "$CONTRACT_ID"
 
-TX_3=$(
-marlowe-cli run auto-execute \
-  --tx-in-marlowe "$TX_2#1" \
-  --marlowe-in-file  submit-2.marlowe \
-  --marlowe-out-file submit-3.marlowe \
-  --required-signer "$COUNTERPARTY_SKEY" \
-  --change-address "$COUNTERPARTY_ADDR" \
-  --out-file submit-3.txbody \
-  --print-stats \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
-)
-echo "TX_3 = $TX_3"
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
 
-cardano-cli transaction sign \
-  --tx-body-file submit-3.txbody \
-  --out-file     submit-3.tx \
-  --signing-key-file "$COUNTERPARTY_SKEY"
+marlowe rm "$CONTRACT_ID"
 
-marlowe submit submit-3.tx
-
-marlowe-cli run prepare \
-  --marlowe-file submit-3.marlowe \
-  --out-file     submit-4.marlowe \
-  --deposit-account "$COUNTERPARTY_ADDR" \
-  --deposit-party "$COUNTERPARTY_ADDR" \
-  --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
-  --invalid-before "$((NOW-5*MINUTE))" \
-  --invalid-hereafter "$((NOW+9*MINUTE))" \
-  --print-stats
-
-TX_4=$(
-marlowe-cli run auto-execute \
-  --tx-in-marlowe "$TX_3#1" \
-  --marlowe-in-file  submit-3.marlowe \
-  --marlowe-out-file submit-4.marlowe \
-  --required-signer "$COUNTERPARTY_SKEY" \
-  --change-address "$COUNTERPARTY_ADDR" \
-  --out-file submit-4.txbody \
-  --print-stats \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
-)
-echo "TX_4 = $TX_4"
-
-cardano-cli transaction sign \
-  --tx-body-file submit-4.txbody \
-  --out-file     submit-4.tx \
-  --signing-key-file "$COUNTERPARTY_SKEY"
-
-marlowe submit submit-4.tx
-
-jq '.tx.contract' submit-4.marlowe | json2yaml
+marlowe ls
 
 marlowe-cli util clean \
   --change-address "$PARTY_ADDR" \

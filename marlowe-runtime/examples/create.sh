@@ -19,7 +19,6 @@ echo "${MAGIC[@]}"
 
 SECOND=1000
 MINUTE=$((60 * SECOND))
-HOUR=$((60 * MINUTE))
 
 NOW="$(($(date -u +%s) * SECOND))"
 echo "$NOW"
@@ -62,7 +61,7 @@ marlowe-cli util fund-address \
 
 MINIMUM_ADA=3000000
 
-FIXED_POINT=1000000
+#FIXED_POINT=1000000
 PRINCIPAL=100
 INTEREST_RATE=0.02
 
@@ -70,10 +69,7 @@ STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
 INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
 MATURITY_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 2 year" +"%Y-01-01T00:00:00")
 
-#LENDING_DEADLINE=$((NOW+12*HOUR))
-#REPAYMENT_DEADLINE=$((NOW+24*HOUR))
-
-yaml2json << EOI > history.actus
+yaml2json << EOI > create.actus
 scheduleConfig:
   businessDayConvention: "NULL"
   endOfMonthConvention: "EOM"
@@ -97,15 +93,17 @@ prepaymentEffect: "N"
 nominalInterestRate: $INTEREST_RATE
 interestCalculationBase: "NT"
 EOI
-cat history.actus
+cat create.actus
 
 marlowe-cli template actus \
   --minimum-ada "$MINIMUM_ADA" \
   --party "$PARTY_ADDR" \
   --counter-party "$COUNTERPARTY_ADDR" \
-  --actus-terms-file  history.actus \
+  --actus-terms-file  create.actus \
   --out-contract-file create-1.contract \
   --out-state-file /dev/null
+
+sed -i -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 10 * MINUTE))/" create-1.contract
 
 json2yaml create-1.contract
 
@@ -137,37 +135,6 @@ CONTRACT_ADDRESS=$(marlowe-cli contract address)
 echo "$CONTRACT_ADDRESS"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
-
-marlowe deposit \
-  --contract "$CONTRACT_ID" \
-  --from-party "$PARTY_ADDR" \
-  --to-party "$PARTY_ADDR" \
-  --lovelace "$((PRINCIPAL*FIXED_POINT))" \
-  --validity-lower-bound "$((NOW - 5 * MINUTE))" \
-  --validity-upper-bound "$((NOW + 1 * HOUR))" \
-  --change-address "$PARTY_ADDR" \
-  --address "$PARTY_ADDR" \
-  --manual-sign create-2.txbody
-
-#marlowe-cli run prepare \
-#  --marlowe-file create-2.marlowe \
-#  --out-file     create-3.marlowe \
-#  --deposit-account "$COUNTERPARTY_ADDR" \
-#  --deposit-party "$COUNTERPARTY_ADDR" \
-#  --deposit-amount "$((INTEREST*FIXED_POINT))" \
-#  --invalid-before "$((NOW-5*MINUTE))" \
-#  --invalid-hereafter "$((NOW+1*HOUR))" \
-#  --print-stats
-
-#marlowe-cli run prepare \
-#  --marlowe-file create-3.marlowe \
-#  --out-file     create-4.marlowe \
-#  --deposit-account "$COUNTERPARTY_ADDR" \
-#  --deposit-party "$COUNTERPARTY_ADDR" \
-#  --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
-#  --invalid-before "$((NOW-5*MINUTE))" \
-#  --invalid-hereafter "$((NOW+4*HOUR))" \
-#  --print-stats
 
 marlowe rm "$CONTRACT_ID"
 

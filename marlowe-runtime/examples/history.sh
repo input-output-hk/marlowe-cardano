@@ -6,7 +6,7 @@ cardano-cli --version
 
 git rev-parse HEAD
 
-TREASURY=/extra/iohk/networks/treasury
+TREASURY=treasury
 
 FAUCET_SKEY=$TREASURY/payment.skey
 FAUCET_ADDR=$(cat $TREASURY/payment.testnet.address)
@@ -19,8 +19,6 @@ echo "${MAGIC[@]}"
 
 SECOND=1000
 MINUTE=$((60 * SECOND))
-HOUR=$((60 * MINUTE))
-#DAY=$((24 * HOUR))
 
 NOW="$(($(date -u +%s) * SECOND))"
 echo "$NOW"
@@ -72,9 +70,6 @@ STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
 INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
 MATURITY_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 2 year" +"%Y-01-01T00:00:00")
 
-#LENDING_DEADLINE=$((NOW+12*HOUR))
-#REPAYMENT_DEADLINE=$((NOW+24*HOUR))
-
 yaml2json << EOI > history.actus
 scheduleConfig:
   businessDayConvention: "NULL"
@@ -109,6 +104,8 @@ marlowe-cli template actus \
   --out-contract-file history-1.contract \
   --out-state-file    history-1.state
 
+sed -i -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 10 * MINUTE))/" history-1.contract
+
 json2yaml history-1.contract
 
 json2yaml history-1.state
@@ -140,8 +137,8 @@ marlowe-cli run prepare \
   --deposit-account "$PARTY_ADDR" \
   --deposit-party "$PARTY_ADDR" \
   --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
-  --invalid-before "$((NOW - 5 * MINUTE))" \
-  --invalid-hereafter "$((NOW + 1 * HOUR))" \
+  --invalid-before "$((NOW-5*MINUTE))" \
+  --invalid-hereafter "$((NOW+9*MINUTE))" \
   --print-stats
 
 TX_2=$(
@@ -191,7 +188,7 @@ marlowe-cli run prepare \
   --deposit-party "$COUNTERPARTY_ADDR" \
   --deposit-amount "$((INTEREST*FIXED_POINT))" \
   --invalid-before "$((NOW-5*MINUTE))" \
-  --invalid-hereafter "$((NOW+1*HOUR))" \
+  --invalid-hereafter "$((NOW+9*MINUTE))" \
   --print-stats
 
 TX_3=$(
@@ -215,7 +212,7 @@ marlowe-cli run prepare \
   --deposit-party "$COUNTERPARTY_ADDR" \
   --deposit-amount "$((PRINCIPAL*FIXED_POINT))" \
   --invalid-before "$((NOW-5*MINUTE))" \
-  --invalid-hereafter "$((NOW+4*HOUR))" \
+  --invalid-hereafter "$((NOW+9*MINUTE))" \
   --print-stats
 
 TX_4=$(
@@ -263,3 +260,5 @@ marlowe-cli transaction simple \
   --change-address "$FAUCET_ADDR" \
   --out-file /dev/null \
   --submit 600
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR" --address "$COUNTERPARTY_ADDR"
