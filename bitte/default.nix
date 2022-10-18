@@ -44,7 +44,7 @@ let
     (name: {
       inherit name;
       value = run-entrypoints pkgs.networks.${name};
-    }) [ "testnet-dev" "testnet-pioneers" ]);
+    }) [ "testnet-dev" "testnet-pioneers" "preprod" ]);
 in
 {
   node-socat = pkgs.callPackage ./node-socat.nix {
