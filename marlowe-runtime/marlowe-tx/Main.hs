@@ -114,7 +114,7 @@ run Options{..} = withSocketsDo do
 
         runHistorySyncClient :: MarloweSyncClient IO a -> IO a
         runHistorySyncClient client = do
-          historySyncAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
+          historySyncAddr <- head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
           bracket (openClient historySyncAddr) close \historySyncSocket -> do
             let driver = mkDriver throwIO codecMarloweSync $ socketAsChannel historySyncSocket
             let peer = marloweSyncClientPeer client
