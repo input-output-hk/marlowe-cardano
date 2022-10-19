@@ -61,9 +61,10 @@ marlowe-cli util fund-address \
 
 MINIMUM_ADA=3000000
 
-#FIXED_POINT=1000000
+FIXED_POINT=1000000
 PRINCIPAL=100
 INTEREST_RATE=0.02
+INTEREST=$(jq -n $PRINCIPAL*$INTEREST_RATE)
 
 STATUS_DATE=$(date -d "$(date -u -R -d @$((NOW/1000)))" +"%Y-%m-%dT00:00:00")
 INITIAL_EXCHANGE_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 1 year" +"%Y-01-01T00:00:00")
@@ -107,9 +108,7 @@ sed -i -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 10 * MINU
 
 json2yaml deposit-1.contract
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
-
-CONTRACT_ID=$(
+TX_1=$(
 marlowe create \
   --core-file deposit-1.contract \
   --min-utxo "$MINIMUM_ADA" \
@@ -118,7 +117,8 @@ marlowe create \
   --manual-sign deposit-1.txbody \
 | sed -e 's/^.*"\([^\\]*\)\\.*$/\1/' \
 )
-echo "CONTRACT_ID = $CONTRACT_ID"
+CONTRACT_ID="$TX_1"
+echo "CONTRACT_ID = TX_1 = $CONTRACT_ID"
 
 cardano-cli transaction sign \
   --tx-body-file deposit-1.txbody \
@@ -127,15 +127,20 @@ cardano-cli transaction sign \
 
 marlowe submit deposit-1.tx
 
+CONTRACT_ADDR=$(marlowe-cli contract address)
+echo "$CONTRACT_ADDR"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_1//#*/}/p"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDR"
+
 marlowe add "$CONTRACT_ID"
 
 marlowe log --show-contract "$CONTRACT_ID"
 
-CONTRACT_ADDRESS=$(marlowe-cli contract address)
-echo "$CONTRACT_ADDRESS"
-
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
-
+TX_2=$(
 marlowe deposit \
   --contract "$CONTRACT_ID" \
   --from-party "$PARTY_ADDR" \
@@ -145,7 +150,10 @@ marlowe deposit \
   --validity-upper-bound "$((NOW+9*MINUTE))" \
   --change-address "$PARTY_ADDR" \
   --address "$PARTY_ADDR" \
-  --manual-sign deposit-2.txbody
+  --manual-sign deposit-2.txbody \
+| sed -e 's/^.*"\([^\\]*\)\\.*$/\1/' \
+)
+echo "TX_2 = $TX_2"
 
 cardano-cli transaction sign \
   --tx-body-file deposit-2.txbody \
@@ -154,10 +162,15 @@ cardano-cli transaction sign \
 
 marlowe submit deposit-2.tx
 
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_2//#*/}/p"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDR"
+
 marlowe log --show-contract "$CONTRACT_ID"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
-
+TX_3=$(
 marlowe deposit \
   --contract "$CONTRACT_ID" \
   --from-party "$COUNTERPARTY_ADDR" \
@@ -167,7 +180,10 @@ marlowe deposit \
   --validity-upper-bound "$((NOW+9*MINUTE))" \
   --change-address "$COUNTERPARTY_ADDR" \
   --address "$COUNTERPARTY_ADDR" \
-  --manual-sign deposit-3.txbody
+  --manual-sign deposit-3.txbody \
+| sed -e 's/^.*"\([^\\]*\)\\.*$/\1/' \
+)
+echo "TX_3 = $TX_3"
 
 cardano-cli transaction sign \
   --tx-body-file deposit-3.txbody \
@@ -176,10 +192,15 @@ cardano-cli transaction sign \
 
 marlowe submit deposit-3.tx
 
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_3//#*/}/p"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDR"
+
 marlowe log --show-contract "$CONTRACT_ID"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
-
+TX_4=$(
 marlowe deposit \
   --contract "$CONTRACT_ID" \
   --from-party "$COUNTERPARTY_ADDR" \
@@ -189,7 +210,10 @@ marlowe deposit \
   --validity-upper-bound "$((NOW+9*MINUTE))" \
   --change-address "$COUNTERPARTY_ADDR" \
   --address "$COUNTERPARTY_ADDR" \
-  --manual-sign deposit-4.txbody
+  --manual-sign deposit-4.txbody \
+| sed -e 's/^.*"\([^\\]*\)\\.*$/\1/' \
+)
+echo "TX_4 = $TX_4"
 
 cardano-cli transaction sign \
   --tx-body-file deposit-4.txbody \
@@ -198,9 +222,13 @@ cardano-cli transaction sign \
 
 marlowe submit deposit-4.tx
 
-marlowe log --show-contract "$CONTRACT_ID"
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_4//#*/}/p"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDR"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDR"
+
+marlowe log --show-contract "$CONTRACT_ID"
 
 marlowe rm "$CONTRACT_ID"
 

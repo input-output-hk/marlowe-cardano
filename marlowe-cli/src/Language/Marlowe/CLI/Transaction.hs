@@ -1359,7 +1359,7 @@ buildBodyWithContent connection payFromScript payToScript extraInputs inputs out
       balancingLoop :: Integer -> C.Value -> m (C.TxBodyContent C.BuildTx era, BalancedTxBody era)
       balancingLoop counter changeValue = do -- changeTxOut@(TxOut addr (txOutValueToValue -> changeValue) datum ref) = do
         when (counter == 0) $ throwError . CliError $ do
-          "Uncucessful balancing of the transaction: " <> show (TxBodyContent {..})
+          "Unsuccessful balancing of the transaction: " <> show (TxBodyContent {..})
         let
           -- Recompute execution units with full set of UTxOs, including change.
           buildTxBodyContent = TxBodyContent{..} { txOuts = mkChangeTxOut changeValue : txOuts }

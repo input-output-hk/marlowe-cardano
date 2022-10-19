@@ -300,12 +300,19 @@ toCardanoTxOut era TransactionOutput{..} = C.TxOut
   <*> toCardanoTxOutDatum (cardanoEraOfFeature era) datumHash datum
   <*> pure C.ReferenceScriptNone
 
-toCardanoTxOut' :: C.MultiAssetSupportedInEra era -> TransactionOutput -> Maybe (C.TxOut ctx era)
-toCardanoTxOut' era TransactionOutput{..} = C.TxOut
-  <$> toCardanoAddressInEra (cardanoEraOfFeature era) address
-  <*> toCardanoTxOutValue era assets
-  <*> toCardanoTxOutDatum' (cardanoEraOfFeature era) datumHash
-  <*> pure C.ReferenceScriptNone
+toCardanoTxOut' :: C.IsCardanoEra era
+                => C.MultiAssetSupportedInEra era
+                -> TransactionOutput
+                -> Maybe C.ScriptInAnyLang
+                -> Maybe (C.TxOut ctx era)
+toCardanoTxOut' era TransactionOutput{..} script =
+  do
+    refs <- C.refInsScriptsAndInlineDatsSupportedInEra C.cardanoEra
+    C.TxOut
+      <$> toCardanoAddressInEra (cardanoEraOfFeature era) address
+      <*> toCardanoTxOutValue era assets
+      <*> toCardanoTxOutDatum' (cardanoEraOfFeature era) datumHash
+      <*> pure (maybe C.ReferenceScriptNone (C.ReferenceScript refs) script)
 
 fromCardanoTxOut
   :: C.CardanoEra era
