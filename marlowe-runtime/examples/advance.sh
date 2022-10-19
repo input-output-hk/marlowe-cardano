@@ -17,12 +17,6 @@ export CARDANO_TESTNET_MAGIC=2
 MAGIC=(--testnet-magic 2)
 echo "${MAGIC[@]}"
 
-SECOND=1000
-MINUTE=$((60 * SECOND))
-
-NOW="$(($(date -u +%s) * SECOND))"
-echo "$NOW"
-
 marlowe-cli transaction find-published
 
 PARTY_SKEY="$TREASURY/john-fletcher.skey"
@@ -59,6 +53,12 @@ marlowe-cli util fund-address \
   --source-wallet-credentials "$FAUCET_ADDR:$FAUCET_SKEY" \
   "$COUNTERPARTY_ADDR"
 
+SECOND=1000
+MINUTE=$((60 * SECOND))
+
+NOW="$(($(date -u +%s) * SECOND))"
+echo "$NOW"
+
 MINIMUM_ADA=3000000
 
 #FIXED_POINT=1000000
@@ -93,7 +93,7 @@ prepaymentEffect: "N"
 nominalInterestRate: $INTEREST_RATE
 interestCalculationBase: "NT"
 EOI
-cat history.actus
+cat advance.actus
 
 marlowe-cli template actus \
   --minimum-ada "$MINIMUM_ADA" \
@@ -103,7 +103,10 @@ marlowe-cli template actus \
   --out-contract-file advance-1.contract \
   --out-state-file /dev/null
 
-sed -i -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 10 * MINUTE))/" advance-1.contract
+sed -i \
+  -e "s/$(jq '.timeout' advance-1.contract)/$((NOW + 10 * MINUTE))/" \
+  -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 15 * MINUTE))/" \
+  advance-1.contract
 
 json2yaml advance-1.contract
 
@@ -140,8 +143,8 @@ sleep 11m
 
 marlowe advance \
   --contract "$CONTRACT_ID" \
-  --validity-lower-bound "$((NOW-11*MINUTE))" \
-  --validity-upper-bound "$((NOW+20*MINUTE))" \
+  --validity-lower-bound "$(($(jq '.timeout' advance-1.contract) + 1 * SECOND))" \
+  --validity-upper-bound "$(($(jq '.timeout' advance-1.contract) + 4 * MINUTE))" \
   --change-address "$PARTY_ADDR" \
   --address "$PARTY_ADDR" \
   --manual-sign advance-2.txbody
@@ -153,9 +156,9 @@ cardano-cli transaction sign \
 
 marlowe submit advance-2.tx
 
-marlowe log --show-contract "$CONTRACT_ID"
-
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1,2p;/${CONTRACT_ID//#*/}/p"
+
+marlowe log --show-contract "$CONTRACT_ID"
 
 marlowe rm "$CONTRACT_ID"
 
