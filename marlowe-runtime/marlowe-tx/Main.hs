@@ -3,11 +3,9 @@
 module Main
   where
 
-import Cardano.Api (NetworkId(Mainnet))
 import qualified Colog
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
-import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString.Lazy as LB
 import Data.Either (fromRight)
@@ -79,7 +77,6 @@ import Options.Applicative
   , strOption
   , value
   )
-import System.Exit (die)
 
 main :: IO ()
 main = run =<< getOptions
@@ -142,8 +139,6 @@ run Options{..} = withSocketsDo do
       protocolParameters <- queryChainSync GetProtocolParameters
       slotConfig <- queryChainSync GetSlotConfig
       networkId <- queryChainSync GetNetworkId
-      when (networkId == Mainnet) do
-        die "Mainnet support is currently disabled."
       let
         solveConstraints :: SolveConstraints
         solveConstraints = Constraints.solveConstraints
