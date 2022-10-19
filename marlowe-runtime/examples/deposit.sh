@@ -17,12 +17,6 @@ export CARDANO_TESTNET_MAGIC=2
 MAGIC=(--testnet-magic 2)
 echo "${MAGIC[@]}"
 
-SECOND=1000
-MINUTE=$((60 * SECOND))
-
-NOW="$(($(date -u +%s) * SECOND))"
-echo "$NOW"
-
 marlowe-cli transaction find-published
 
 PARTY_SKEY="$TREASURY/john-fletcher.skey"
@@ -58,6 +52,12 @@ marlowe-cli util fund-address \
   --lovelace 250000000 \
   --source-wallet-credentials "$FAUCET_ADDR:$FAUCET_SKEY" \
   "$COUNTERPARTY_ADDR"
+
+SECOND=1000
+MINUTE=$((60 * SECOND))
+
+NOW="$(($(date -u +%s) * SECOND))"
+echo "$NOW"
 
 MINIMUM_ADA=3000000
 
@@ -104,7 +104,10 @@ marlowe-cli template actus \
   --out-contract-file deposit-1.contract \
   --out-state-file /dev/null
 
-sed -i -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 10 * MINUTE))/" deposit-1.contract
+sed -i \
+  -e "s/$(jq '.timeout' deposit-1.contract)/$((NOW + 10 * MINUTE))/" \
+  -e "s/$(($(date -d "$MATURITY_DATE" -u +%s) * SECOND))/$((NOW + 15 * MINUTE))/" \
+  deposit-1.contract
 
 json2yaml deposit-1.contract
 
