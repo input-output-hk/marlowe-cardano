@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Network.Protocol.ChainSeek.TH
+module Network.Protocol.SchemaVersion.TH
   ( mkSchemaVersion
   ) where
 

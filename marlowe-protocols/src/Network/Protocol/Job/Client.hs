@@ -11,30 +11,46 @@ module Network.Protocol.Job.Client
 
 import Data.Void (Void, absurd)
 import Network.Protocol.Job.Types
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol
 
 -- | A generic client for the job protocol.
 newtype JobClient cmd m a = JobClient { runJobClient :: m (ClientStInit cmd m a) }
 
+-- | In the 'StInit' protocol state, the client has agency. It must send a
+-- handshake request message.
+data ClientStInit cmd m a
+  = SendMsgRequestHandshake SchemaVersion (ClientStHandshake cmd m a)
+
+-- | In the 'StHandshake' protocol state, the client does not have agency.
+-- Instead, it must be prepared to handle either:
+--
+-- * a handshake rejection message
+-- * a handshake confirmation message
+data ClientStHandshake cmd m a = ClientStHandshake
+  { recvMsgHandshakeRejected  :: SchemaVersion -> m a
+  , recvMsgHandshakeConfirmed :: m (ClientStIdle cmd m a)
+  }
+
 -- | In the 'StInit' state, the client has agency. It can send:
 --
 -- * An exec message
 -- * An attach message
-data ClientStInit cmd m a where
+data ClientStIdle cmd m a where
 
   -- | Tell the server to execute a command in a new job.
   SendMsgExec
     :: cmd status err result
     -> ClientStCmd cmd status err result m a
-    -> ClientStInit cmd m a
+    -> ClientStIdle cmd m a
 
   -- | Ask to attach to an existing job.
   SendMsgAttach
     :: JobId cmd status err result
     -> ClientStAttach cmd status err result m a
-    -> ClientStInit cmd m a
+    -> ClientStIdle cmd m a
 
-deriving instance Functor m => Functor (ClientStInit cmd m)
+deriving instance Functor m => Functor (ClientStIdle cmd m)
 
 -- | In the 'StCmd' state, the server has agency. The client must be prepared
 -- to handle either:
@@ -85,7 +101,16 @@ hoistJobClient
   -> JobClient cmd n a
 hoistJobClient phi = JobClient . phi . fmap hoistInit . runJobClient
   where
-  hoistInit = \case
+  hoistInit :: ClientStInit cmd m a -> ClientStInit cmd n a
+  hoistInit (SendMsgRequestHandshake v idle) = SendMsgRequestHandshake v $ hoistHandshake idle
+
+  hoistHandshake :: ClientStHandshake cmd m a -> ClientStHandshake cmd n a
+  hoistHandshake ClientStHandshake{..} = ClientStHandshake
+    { recvMsgHandshakeRejected = phi <$> recvMsgHandshakeRejected
+    , recvMsgHandshakeConfirmed = phi $ hoistIdle <$> recvMsgHandshakeConfirmed
+    }
+
+  hoistIdle = \case
     SendMsgExec cmd stCmd        -> SendMsgExec cmd $ hoistCmd stCmd
     SendMsgAttach jobId stAttach -> SendMsgAttach jobId $ hoistAttach stAttach
 
@@ -122,10 +147,31 @@ jobClientPeer
 jobClientPeer JobClient{..} =
   Effect $ peerInit <$> runJobClient
   where
-  peerInit :: ClientStInit cmd m a -> Peer (Job cmd) 'AsClient 'StInit m a
-  peerInit = \case
-    SendMsgExec cmd stCmd     -> Yield (ClientAgency TokInit) (MsgExec cmd) $ peerCmd (tagFromCommand cmd) stCmd
-    SendMsgAttach jobId stAttach -> Yield (ClientAgency TokInit) (MsgAttach jobId) $ peerAttach (tagFromJobId jobId) stAttach
+  peerInit
+    :: ClientStInit cmd m a
+    -> Peer (Job cmd) 'AsClient 'StInit m a
+  peerInit (SendMsgRequestHandshake schemaVersion handshake) =
+    Yield (ClientAgency TokInit) (MsgRequestHandshake schemaVersion) $ peerHandshake handshake
+
+  peerHandshake
+    :: ClientStHandshake cmd m a
+    -> Peer (Job cmd) 'AsClient 'StHandshake m a
+  peerHandshake ClientStHandshake{..} =
+    Await (ServerAgency TokHandshake) \case
+      MsgRejectHandshake version -> Effect $ Done TokFault <$> recvMsgHandshakeRejected version
+      MsgConfirmHandshake         -> peerIdle  recvMsgHandshakeConfirmed
+
+  peerIdle
+    :: m (ClientStIdle cmd m a)
+    -> Peer (Job cmd) 'AsClient 'StIdle m a
+  peerIdle = Effect . fmap peerIdle_
+
+  peerIdle_
+    :: ClientStIdle cmd m a
+    -> Peer (Job cmd) 'AsClient 'StIdle m a
+  peerIdle_ = \case
+    SendMsgExec cmd stCmd     -> Yield (ClientAgency TokIdle) (MsgExec cmd) $ peerCmd (tagFromCommand cmd) stCmd
+    SendMsgAttach jobId stAttach -> Yield (ClientAgency TokIdle) (MsgAttach jobId) $ peerAttach (tagFromJobId jobId) stAttach
 
   peerCmd
     :: Tag cmd status err result
@@ -156,11 +202,16 @@ jobClientPeer JobClient{..} =
 
 -- | Create a client that runs a command that cannot await to completion and
 -- returns the result.
-liftCommand :: Monad m => cmd Void err result -> JobClient cmd m (Either err result)
-liftCommand = JobClient . pure . ($ stCmd) . SendMsgExec
+liftCommand :: Monad m => SchemaVersion -> (SchemaVersion -> err) -> cmd Void err result -> JobClient cmd m (Either err result)
+liftCommand version handshakeRejected cmd = JobClient . pure . SendMsgRequestHandshake version $ ClientStHandshake
+  { recvMsgHandshakeRejected = \version' -> pure . Left . handshakeRejected $ version'
+  , recvMsgHandshakeConfirmed = pure stInit
+  }
   where
+    stInit = SendMsgExec cmd stCmd
     stCmd = ClientStCmd
       { recvMsgAwait = absurd
       , recvMsgFail = pure . Left
       , recvMsgSucceed = pure . Right
       }
+

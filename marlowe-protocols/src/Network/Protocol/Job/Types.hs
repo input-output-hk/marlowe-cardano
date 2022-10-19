@@ -19,6 +19,7 @@ module Network.Protocol.Job.Types
 import Data.Binary (Put)
 import Data.Binary.Get (Get)
 import Data.Type.Equality (type (:~:))
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol
 
 data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
@@ -62,6 +63,15 @@ data Job (cmd :: * -> * -> * -> *) where
   -- | The initial state of the protocol.
   StInit :: Job cmd
 
+  -- | The client is waiting for the server to accept the handshake.
+  StHandshake :: Job cmd
+
+  -- | The client and server are idle. The client can send a request.
+  StIdle :: Job cmd
+
+  -- | The failed state of the protocol.
+  StFault :: Job cmd
+
   -- | In the 'StCmd' state, the server has agency. It is running a command
   -- sent by the client and starting the job.
   StCmd :: status -> err -> result -> Job cmd
@@ -83,14 +93,29 @@ instance Protocol (Job cmd) where
   -- the state machine diagram of the protocol.
   data Message (Job cmd) from to where
 
+    -- | Initiate a handshake for the given schema version.
+    MsgRequestHandshake :: SchemaVersion -> Message (Job cmd)
+      'StInit
+      'StHandshake
+
+    -- | Accept the handshake.
+    MsgConfirmHandshake :: Message (Job cmd)
+      'StHandshake
+      'StIdle
+
+    -- | Reject the handshake.
+    MsgRejectHandshake :: SchemaVersion -> Message (Job cmd)
+      'StHandshake
+      'StFault
+
     -- | Tell the server to execute a command in a new job.
     MsgExec :: cmd status err result -> Message (Job cmd)
-      'StInit
+      'StIdle
       ('StCmd status err result)
 
     -- | Attach to the job of previously executed command.
     MsgAttach :: JobId cmd status err result -> Message (Job cmd)
-      'StInit
+      'StIdle
       ('StAttach status err result)
 
     -- | Attaching to the job succeeded.
@@ -128,20 +153,27 @@ instance Protocol (Job cmd) where
       ('StAwait status err result)
       'StDone
 
+
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
+    TokIdle :: ClientHasAgency 'StIdle
     TokAwait :: Tag cmd status err result -> ClientHasAgency ('StAwait status err result)
 
   data ServerHasAgency st where
+    TokHandshake :: ServerHasAgency 'StHandshake
     TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result)
     TokAttach :: Tag cmd status err result -> ServerHasAgency ('StAttach status err result)
 
   data NobodyHasAgency st where
+    TokFault :: NobodyHasAgency 'StFault
     TokDone :: NobodyHasAgency 'StDone
 
   exclusionLemma_ClientAndServerHaveAgency TokInit      = \case
+  exclusionLemma_ClientAndServerHaveAgency TokIdle      = \case
   exclusionLemma_ClientAndServerHaveAgency (TokAwait _) = \case
 
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
+  exclusionLemma_NobodyAndClientHaveAgency TokFault = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+  exclusionLemma_NobodyAndServerHaveAgency TokFault = \case

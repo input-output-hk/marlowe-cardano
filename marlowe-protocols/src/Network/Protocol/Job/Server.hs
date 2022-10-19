@@ -10,17 +10,43 @@ module Network.Protocol.Job.Server
   where
 
 import Network.Protocol.Job.Types
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol
 
 -- | A generic server for the job protocol.
 newtype JobServer cmd m a = JobServer { runJobServer :: m (ServerStInit cmd m a) }
+
+-- | In the 'StInit' protocol state, the server does not have agency. Instead,
+-- it is waiting to handle a handshake request from the client, which it must
+-- handle.
+newtype ServerStInit cmd m a = ServerStInit
+  { recvMsgRequestHandshake :: SchemaVersion -> m (ServerStHandshake cmd m a)
+  }
+
+-- | In the 'StHandshake' protocol state, the server has agency. It must send
+-- either:
+--
+-- * a handshake rejection message
+-- * a handshake confirmation message
+data ServerStHandshake cmd m a where
+
+  -- | Reject the handshake request
+  SendMsgHandshakeRejected
+    :: SchemaVersion   -- ^ A supported schema version.
+    -> a               -- ^ The result of running the protocol.
+    -> ServerStHandshake cmd m a
+
+  -- | Accept the handshake request
+  SendMsgHandshakeConfirmed
+    :: m (ServerStIdle cmd m a) -- ^ An action that computes the idle handlers.
+    -> ServerStHandshake cmd m a
 
 -- | In the 'StInit' state, the client has agency. The server must be prepared
 -- to handle either:
 --
 -- * An exec message
 -- * An attach message
-data ServerStInit cmd m a = ServerStInit
+data ServerStIdle cmd m a = ServerStIdle
   { recvMsgExec
     :: forall status err result
      . cmd status err result
@@ -31,7 +57,7 @@ data ServerStInit cmd m a = ServerStInit
     -> m (ServerStAttach cmd status err result m a)
   }
 
-deriving instance Functor m => Functor (ServerStInit cmd m)
+deriving instance Functor m => Functor (ServerStIdle cmd m)
 
 -- | In the 'StCmd' state, the server has agency. It is running a command
 -- sent by the client and starting the job. It may send either:
@@ -100,7 +126,24 @@ hoistInit
   => (forall x. m x -> n x)
   -> ServerStInit cmd m a
   -> ServerStInit cmd n a
-hoistInit phi ServerStInit{..} = ServerStInit
+hoistInit phi = ServerStInit . fmap (phi . fmap (hoistHandshake phi)) . recvMsgRequestHandshake
+
+hoistHandshake
+  :: forall cmd m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStHandshake cmd m a
+  -> ServerStHandshake cmd n a
+hoistHandshake _ (SendMsgHandshakeRejected vs a)  = SendMsgHandshakeRejected vs a
+hoistHandshake phi (SendMsgHandshakeConfirmed idle) = SendMsgHandshakeConfirmed $ phi $ hoistIdle phi <$> idle
+
+hoistIdle
+  :: forall cmd m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ServerStIdle cmd m a
+  -> ServerStIdle cmd n a
+hoistIdle phi ServerStIdle{..} = ServerStIdle
   { recvMsgExec = phi . fmap (hoistCmd phi) . recvMsgExec
   , recvMsgAttach = phi . fmap (hoistAttach phi) . recvMsgAttach
   }
@@ -146,9 +189,33 @@ jobServerPeer
 jobServerPeer JobServer{..} =
   Effect $ peerInit <$> runJobServer
   where
-  peerInit :: ServerStInit cmd m a -> Peer (Job cmd) 'AsServer 'StInit m a
-  peerInit ServerStInit{..} =
-    Await (ClientAgency TokInit) $ Effect . \case
+  peerInit
+    :: ServerStInit cmd m a
+    -> Peer (Job cmd) 'AsServer 'StInit m a
+  peerInit ServerStInit{..} = Await (ClientAgency TokInit) \case
+    MsgRequestHandshake version -> Effect $ peerHandshake <$> recvMsgRequestHandshake version
+
+  peerHandshake
+    :: ServerStHandshake cmd m a
+    -> Peer (Job cmd) 'AsServer 'StHandshake m a
+  peerHandshake = \case
+    SendMsgHandshakeRejected version ma ->
+      Yield (ServerAgency TokHandshake) (MsgRejectHandshake version) $
+      Done TokFault ma
+    SendMsgHandshakeConfirmed serverIdle ->
+      Yield (ServerAgency TokHandshake) MsgConfirmHandshake $
+      peerIdle serverIdle
+
+  peerIdle
+    :: m (ServerStIdle cmd m a)
+    -> Peer (Job cmd) 'AsServer 'StIdle m a
+  peerIdle = Effect . fmap peerIdle_
+
+  peerIdle_
+    :: ServerStIdle cmd m a
+    -> Peer (Job cmd) 'AsServer 'StIdle m a
+  peerIdle_ ServerStIdle{..} =
+    Await (ClientAgency TokIdle) $ Effect . \case
       MsgExec cmd     -> peerCmd (tagFromCommand cmd) <$> recvMsgExec cmd
       MsgAttach cmdId -> peerAttach (tagFromJobId cmdId) <$> recvMsgAttach cmdId
 
@@ -181,17 +248,24 @@ jobServerPeer JobServer{..} =
 -- | Lift a function that executes a command directly into a command server.
 liftCommandHandler
   :: Monad m
-  => (forall status err result. Either (cmd status err result) (JobId cmd status err result) -> m (a, Either err result))
-  -> JobServer cmd m a
-liftCommandHandler handle = JobServer $ pure $ ServerStInit
-  { recvMsgExec = \cmd -> do
-      (a, e) <- handle $ Left cmd
-      pure case e of
-        Left err     -> SendMsgFail err a
-        Right result -> SendMsgSucceed result a
-  , recvMsgAttach = \cmdId -> do
-      (a, e) <- handle $ Right cmdId
-      pure $ SendMsgAttached case e of
-        Left err     -> SendMsgFail err a
-        Right result -> SendMsgSucceed result a
-  }
+  => SchemaVersion
+  -> (forall status err result. Either (cmd status err result) (JobId cmd status err result) -> m (Either err result))
+  -> JobServer cmd m ()
+liftCommandHandler serverSchemaVersion handle = JobServer $ do
+  pure $ ServerStInit \clientSchemaVersion -> pure if serverSchemaVersion == clientSchemaVersion
+      then SendMsgHandshakeConfirmed $ pure stIdle
+      else SendMsgHandshakeRejected serverSchemaVersion ()
+  where
+    stIdle = ServerStIdle
+      { recvMsgExec = \cmd -> do
+          e <- handle $ Left cmd
+          pure case e of
+            Left err     -> SendMsgFail err ()
+            Right result -> SendMsgSucceed result ()
+      , recvMsgAttach = \cmdId -> do
+          e <- handle $ Right cmdId
+          pure $ SendMsgAttached case e of
+            Left err     -> SendMsgFail err ()
+            Right result -> SendMsgSucceed result ()
+      }
+

@@ -53,7 +53,6 @@ library
     Network.Protocol.ChainSeek.Codec
     Network.Protocol.ChainSeek.Server
     Network.Protocol.ChainSeek.Types
-    Network.Protocol.ChainSeek.TH
     Network.Protocol.Job.Client
     Network.Protocol.Job.Codec
     Network.Protocol.Job.Server
@@ -63,6 +62,8 @@ library
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
     Network.Protocol.Codec
+    Network.Protocol.SchemaVersion
+    Network.Protocol.SchemaVersion.TH
   build-depends:
       base >= 4.9 && < 5
     , async
