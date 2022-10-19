@@ -99,7 +99,16 @@ import Language.Marlowe.CLI.IO
 import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction
-  (buildBody, buildPayFromScript, buildPayToScript, ensureMinUtxo, hashSigningKey, makeTxOut', selectCoins, submitBody)
+  ( buildBody
+  , buildPayFromScript
+  , buildPayToScript
+  , ensureMinUtxo
+  , findMarloweScriptsRefs
+  , hashSigningKey
+  , makeTxOut'
+  , selectCoins
+  , submitBody
+  )
 import Language.Marlowe.CLI.Types
   ( AnUTxO(AnUTxO, unAnUTxO)
   , CliEnv
@@ -109,6 +118,7 @@ import Language.Marlowe.CLI.Types
   , MarloweScriptsRefs(MarloweScriptsRefs, mrMarloweValidator, mrRolePayoutValidator)
   , MarloweTransaction(..)
   , PrintStats(PrintStats)
+  , PublishingStrategy
   , RedeemerInfo(..)
   , SigningKeyFile(..)
   , SomeMarloweTransaction(..)
@@ -201,7 +211,8 @@ makeNotification outputFile =
 initializeTransaction :: MonadError CliError m
                       => MonadIO m
                       => MonadReader (CliEnv era) m
-                      => MarloweParams          -- ^ The Marlowe contract parameters.
+                      => LocalNodeConnectInfo CardanoMode
+                      -> MarloweParams          -- ^ The Marlowe contract parameters.
                       -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
                       -> ProtocolVersion
                       -> CostModelParams        -- ^ The cost model parameters.
@@ -209,12 +220,18 @@ initializeTransaction :: MonadError CliError m
                       -> StakeAddressReference  -- ^ The stake address.
                       -> FilePath               -- ^ The JSON file containing the contract.
                       -> FilePath               -- ^ The JSON file containing the contract's state.
+                      -> Maybe (PublishingStrategy era)
                       -> Maybe FilePath         -- ^ The output JSON file for the validator information.
                       -> Bool                   -- ^ Whether to deeply merkleize the contract.
                       -> Bool                   -- ^ Whether to print statistics about the validator.
                       -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransaction marloweParams slotConfig protocolVersion costModelParams network stake contractFile stateFile outputFile merkleize printStats =
+initializeTransaction connection marloweParams slotConfig protocolVersion costModelParams network stake contractFile stateFile publishingStrategy outputFile merkleize printStats =
   do
+    era <- askEra
+    refs <- case publishingStrategy of
+              Nothing                  -> pure Nothing
+              Just publishingStrategy' -> withShelleyBasedEra era
+                                            $ findMarloweScriptsRefs connection publishingStrategy' (PrintStats printStats)
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
     marloweTransaction <- initializeTransactionImpl
@@ -226,9 +243,9 @@ initializeTransaction marloweParams slotConfig protocolVersion costModelParams n
       stake
       contract
       state
+      refs
       merkleize
       printStats
-    era <- askEra
     maybeWriteJson outputFile $
       SomeMarloweTransaction
       (plutusScriptVersion :: PlutusScriptVersion MarlowePlutusVersion)
@@ -249,16 +266,27 @@ initializeTransactionImpl :: forall m era
                           -> StakeAddressReference              -- ^ The stake address.
                           -> Contract                           -- ^ The initial Marlowe contract.
                           -> State                              -- ^ The initial Marlowe state.
+                          -> Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
                           -> Bool                               -- ^ Whether to deeply merkleize the contract.
                           -> Bool                               -- ^ Whether to print statistics about the validator.
                           -> m (MarloweTransaction MarlowePlutusVersion era)    -- ^ Action to return a MarloweTransaction
-initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelParams network stake mtContract mtState merkleize printStats =
+initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelParams network stake mtContract mtState refs merkleize printStats =
   do
     era <- askEra
     let
       mtRolesCurrency = rolesCurrency marloweParams
-    mtValidator <- liftCli $ marloweValidatorInfo era protocolVersion costModelParams network stake
-    mtRoleValidator <- liftCli $ roleValidatorInfo era protocolVersion costModelParams network stake
+    (mtValidator, mtRoleValidator) <-
+      case refs of
+        Nothing                     -> do
+                                         mv <- liftCli $ marloweValidatorInfo era protocolVersion costModelParams network stake
+                                         rv <- liftCli $ roleValidatorInfo era protocolVersion costModelParams network stake
+                                         pure (mv, rv)
+        Just MarloweScriptsRefs{..} -> pure
+                                         (
+                                           snd mrMarloweValidator
+                                         , snd mrRolePayoutValidator
+                                         )
+
     let
       ValidatorInfo{..} = mtValidator
       mtContinuations = mempty

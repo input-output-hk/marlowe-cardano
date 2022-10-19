@@ -49,13 +49,15 @@ import Language.Marlowe.CLI.Command.Parse
   , parseTokenName
   , parseTxIn
   , parseTxOut
+  , publishingStrategyOpt
   , requiredSignersOpt
   , txBodyFileOpt
   )
 import Language.Marlowe.CLI.Run
   (autoRunTransaction, autoWithdrawFunds, initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
 import Language.Marlowe.CLI.Transaction (querySlotConfig)
-import Language.Marlowe.CLI.Types (CliEnv, CliError, PrintStats(PrintStats), SigningKeyFile, TxBodyFile)
+import Language.Marlowe.CLI.Types
+  (CliEnv, CliError, PrintStats(PrintStats), PublishingStrategy, SigningKeyFile, TxBodyFile)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Input)
 import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
@@ -78,6 +80,7 @@ data RunCommand era =
     , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
     , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
+    , strategy      :: Maybe (PublishingStrategy era)
     , outputFile    :: Maybe FilePath               -- ^ The output JSON file for the validator information.
     , merkleize     :: Bool                         -- ^ Whether to deeply merkleize the contract.
     , printStats    :: Bool                         -- ^ Whether to print statistics about the contract.
@@ -204,6 +207,7 @@ runRunCommand command =
                           slotConfig <- querySlotConfig connection
                           protocolVersion <- getProtocolVersion connection
                           initializeTransaction
+                            connection
                             marloweParams'
                             slotConfig
                             protocolVersion
@@ -212,6 +216,7 @@ runRunCommand command =
                             stake'
                             contractFile
                             stateFile
+                            strategy
                             outputFile
                             merkleize
                             printStats
@@ -308,7 +313,8 @@ parseRunCommand network socket =
 
 
 -- | Parser for the "initialize" command.
-initializeCommand :: O.Mod O.OptionFields NetworkId
+initializeCommand :: IsShelleyBasedEra era
+                  => O.Mod O.OptionFields NetworkId
                   -> O.Mod O.OptionFields FilePath
                   -> O.Mod O.CommandFields (RunCommand era)
 initializeCommand network socket =
@@ -318,7 +324,8 @@ initializeCommand network socket =
 
 
 -- | Parser for the "initialize" options.
-initializeOptions :: O.Mod O.OptionFields NetworkId
+initializeOptions :: IsShelleyBasedEra era
+                  => O.Mod O.OptionFields NetworkId
                   -> O.Mod O.OptionFields FilePath
                   -> O.Parser (RunCommand era)
 initializeOptions network socket =
@@ -329,6 +336,7 @@ initializeOptions network socket =
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"            <> O.help "The currency symbol for roles, if any."                                                                          )
     <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"              <> O.help "JSON input file for the contract."                                                                               )
     <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"                 <> O.help "JSON input file for the contract state."                                                                         )
+    <*> O.optional publishingStrategyOpt
     <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                <> O.help "JSON output file for initialize."                                                                                )
     <*> O.switch                                           (O.long "merkleize"                                                <> O.help "Whether to deeply merkleize the contract."                                                                       )
     <*> O.switch                                           (O.long "print-stats"                                              <> O.help "Print statistics."                                                                                               )
@@ -379,7 +387,6 @@ runOptions network socket =
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE"            <> O.help "Transaction output in ADDRESS+VALUE format."                                                                     )
     <*> O.option parseAddress                  (O.long "change-address"  <> O.metavar "ADDRESS"                  <> O.help "Address to receive ADA in excess of fee."                                                                        )
     <*> requiredSignersOpt
-
     <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE"           <> O.help "JSON file containing metadata."                                                                                  )
     <*> txBodyFileOpt
 
