@@ -3,7 +3,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Marlowe.Runtime.API.Command.Apply
+module Language.Marlowe.Runtime.CLI.Command.Apply
   where
 
 import qualified Cardano.Api as C
@@ -19,8 +19,8 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Language.Marlowe (POSIXTime(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
-import Language.Marlowe.Runtime.API.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
-import Language.Marlowe.Runtime.API.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (unPolicyId)
 import Language.Marlowe.Runtime.Core.Api

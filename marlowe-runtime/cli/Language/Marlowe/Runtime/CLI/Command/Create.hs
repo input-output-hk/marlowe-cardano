@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.API.Command.Create
+module Language.Marlowe.Runtime.CLI.Command.Create
   where
 
 import qualified Cardano.Api as C
@@ -19,8 +19,8 @@ import Data.String (fromString)
 import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
 import Language.Marlowe (POSIXTime(POSIXTime))
-import Language.Marlowe.Runtime.API.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
-import Language.Marlowe.Runtime.API.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address

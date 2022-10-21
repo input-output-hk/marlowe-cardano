@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.API.Command.Ls
+module Language.Marlowe.Runtime.CLI.Command.Ls
   where
 
 import Control.Monad.IO.Class (liftIO)
@@ -7,7 +7,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Text.IO as T
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.API.Monad (CLI, runDiscoveryQueryClient, runHistoryQueryClient)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runDiscoveryQueryClient, runHistoryQueryClient)
 import Language.Marlowe.Runtime.Core.Api (renderContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..), DiscoveryQuery(..))
 import Language.Marlowe.Runtime.History.Api (FollowerStatus(..), HistoryQuery(..))

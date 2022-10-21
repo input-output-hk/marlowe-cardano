@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.API.Command.Add
+module Language.Marlowe.Runtime.CLI.Command.Add
   where
 
 import Control.Monad (when)
@@ -6,7 +6,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(..))
 import Data.Foldable (for_)
 import qualified Data.Text.IO as T
-import Language.Marlowe.Runtime.API.Monad (CLI, runCLIExceptT, runHistoryCommand)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runHistoryCommand)
 import Language.Marlowe.Runtime.CLI.Option (contractIdArgument)
 import Language.Marlowe.Runtime.Core.Api (ContractId, renderContractId)
 import Language.Marlowe.Runtime.History.Api (HistoryCommand(..))
