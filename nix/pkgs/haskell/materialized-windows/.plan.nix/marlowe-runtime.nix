@@ -135,7 +135,25 @@
           modules = [ "Language/Marlowe/Runtime/CLI/Option" ];
           hsSourceDirs = [ "config" ];
           };
-        "marlowe-api" = {
+        };
+      exes = {
+        "marlowe-server" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
+            (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
+            (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
+            (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
+            ];
+          buildable = true;
+          modules = [ "Paths_marlowe_runtime" ];
+          hsSourceDirs = [ "web-server" ];
+          mainPath = [
+            "Main.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
+          };
+        "marlowe" = {
           depends = [
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -168,53 +186,24 @@
             ] ++ (pkgs.lib).optional (!system.isWindows) (hsPkgs."unix" or (errorHandler.buildDepError "unix"));
           buildable = true;
           modules = [
-            "Language/Marlowe/Runtime/API/Command/Add"
-            "Language/Marlowe/Runtime/API/Command/Apply"
-            "Language/Marlowe/Runtime/API/Command/Create"
-            "Language/Marlowe/Runtime/API/Command/Log"
-            "Language/Marlowe/Runtime/API/Command/Ls"
-            "Language/Marlowe/Runtime/API/Command/Rm"
-            "Language/Marlowe/Runtime/API/Command/Submit"
-            "Language/Marlowe/Runtime/API/Command/Tx"
-            "Language/Marlowe/Runtime/API/Command/Withdraw"
-            "Language/Marlowe/Runtime/API/Env"
-            "Language/Marlowe/Runtime/API/Monad"
-            "Language/Marlowe/Runtime/API/Command"
+            "Language/Marlowe/Runtime/CLI/Command"
+            "Language/Marlowe/Runtime/CLI/Command/Add"
+            "Language/Marlowe/Runtime/CLI/Command/Apply"
+            "Language/Marlowe/Runtime/CLI/Command/Create"
+            "Language/Marlowe/Runtime/CLI/Command/Log"
+            "Language/Marlowe/Runtime/CLI/Command/Ls"
+            "Language/Marlowe/Runtime/CLI/Command/Rm"
+            "Language/Marlowe/Runtime/CLI/Command/Submit"
+            "Language/Marlowe/Runtime/CLI/Command/Tx"
+            "Language/Marlowe/Runtime/CLI/Command/Withdraw"
+            "Language/Marlowe/Runtime/CLI/Env"
+            "Language/Marlowe/Runtime/CLI/Monad"
+            "Paths_marlowe_runtime"
             ];
-          hsSourceDirs = [ "marlowe-api" ];
-          };
-        };
-      exes = {
-        "marlowe" = {
-          depends = [
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."marlowe-runtime".components.sublibs.marlowe-api or (errorHandler.buildDepError "marlowe-runtime:marlowe-api"))
-            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
-            ] ++ (pkgs.lib).optional (!system.isWindows) (hsPkgs."unix" or (errorHandler.buildDepError "unix"));
-          buildable = true;
-          modules = [ "Paths_marlowe_runtime" ];
           hsSourceDirs = [ "cli" ];
           mainPath = ([
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "") ++ (pkgs.lib).optional (!system.isWindows) "";
-          };
-        "marlowe-server" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."marlowe-runtime".components.sublibs.marlowe-api or (errorHandler.buildDepError "marlowe-runtime:marlowe-api"))
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
-            (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
-            (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
-            (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
-            ];
-          buildable = true;
-          modules = [ "Paths_marlowe_runtime" ];
-          hsSourceDirs = [ "web-server" ];
-          mainPath = [
-            "Main.hs"
-            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
           };
         "marlowed" = {
           depends = [
