@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.CLI.Command.Tx
+module Language.Marlowe.Runtime.API.Command.Tx
   where
 
 import qualified Data.Set as Set

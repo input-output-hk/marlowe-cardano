@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module Language.Marlowe.Runtime.CLI.Monad
+module Language.Marlowe.Runtime.API.Monad
   where
 
 import Control.Monad (MonadPlus, (>=>))
@@ -12,7 +12,7 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, local)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
-import Language.Marlowe.Runtime.CLI.Env (Env(..))
+import Language.Marlowe.Runtime.API.Env (Env(..))
 import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
 import Language.Marlowe.Runtime.History.Api (HistoryCommand, HistoryQuery)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)

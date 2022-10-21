@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.CLI.Command.Submit
+module Language.Marlowe.Runtime.API.Command.Submit
   where
 
 import qualified Cardano.Api as C
@@ -10,8 +10,8 @@ import Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor(first))
 import Data.ByteString.Base16 (encodeBase16)
-import Language.Marlowe.Runtime.CLI.Env (Env(..))
-import Language.Marlowe.Runtime.CLI.Monad (CLI, asksEnv, runCLIExceptT, runTxJobClient)
+import Language.Marlowe.Runtime.API.Env (Env(..))
+import Language.Marlowe.Runtime.API.Monad (CLI, asksEnv, runCLIExceptT, runTxJobClient)
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader(BlockHeader), BlockHeaderHash(unBlockHeaderHash), BlockNo(unBlockNo), SlotNo(unSlotNo))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(Submit), SubmitError)

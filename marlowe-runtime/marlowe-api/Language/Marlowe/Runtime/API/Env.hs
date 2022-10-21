@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.CLI.Env
+module Language.Marlowe.Runtime.API.Env
   where
 
 import Control.Concurrent.STM (STM)

@@ -8,7 +8,7 @@ import Control.Concurrent.STM (retry)
 import Control.Concurrent.STM (atomically, newEmptyTMVarIO, putTMVar, takeTMVar)
 #endif
 import GHC.IO.Handle (hSetBuffering)
-import Language.Marlowe.Runtime.CLI.Command
+import Language.Marlowe.Runtime.API.Command
 import System.IO (BufferMode(LineBuffering), stderr, stdout)
 import System.Posix (Handler(Catch), installHandler, sigINT)
 
