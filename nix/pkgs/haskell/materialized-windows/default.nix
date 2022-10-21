@@ -1158,6 +1158,7 @@
           "fmt".components.library.planned = lib.mkOverride 900 true;
           "ekg-forward".components.library.planned = lib.mkOverride 900 true;
           "system-filepath".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."marlowe-api".planned = lib.mkOverride 900 true;
           "network-mux".components.exes."mux-demo".planned = lib.mkOverride 900 true;
           "hw-aeson".components.library.planned = lib.mkOverride 900 true;
           "distributive".components.library.planned = lib.mkOverride 900 true;
@@ -1657,6 +1658,7 @@
           "ouroboros-consensus-protocol".components.sublibs."ouroboros-consensus-protocol-test".planned = lib.mkOverride 900 true;
           "integer-gmp".components.library.planned = lib.mkOverride 900 true;
           "marlowe-actus".components.tests."actus-core-test".planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe-server".planned = lib.mkOverride 900 true;
           "tasty".components.library.planned = lib.mkOverride 900 true;
           "lobemo-scribe-systemd".components.library.planned = lib.mkOverride 900 true;
           "transformers-compat".components.library.planned = lib.mkOverride 900 true;
