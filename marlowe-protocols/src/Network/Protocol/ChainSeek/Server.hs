@@ -11,7 +11,9 @@
 module Network.Protocol.ChainSeek.Server
   where
 
+import Data.Coerce (coerce)
 import Network.Protocol.ChainSeek.Types
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol (Peer(..), PeerHasAgency(..))
 import Network.TypedProtocol.Core (PeerRole(..))
 
@@ -24,7 +26,7 @@ newtype ChainSeekServer query point tip m a = ChainSeekServer
 -- it is waiting to handle a handshake request from the client, which it must
 -- handle.
 newtype ServerStInit query point tip m a = ServerStInit
-  { recvMsgRequestHandshake :: SchemaVersion -> m (ServerStHandshake query point tip m a)
+  { recvMsgRequestHandshake :: SchemaVersion query -> m (ServerStHandshake query point tip m a)
   }
 
 -- | In the 'StHandshake' protocol state, the server has agency. It must send
@@ -36,7 +38,7 @@ data ServerStHandshake query point tip m a where
 
   -- | Reject the handshake request
   SendMsgHandshakeRejected
-    :: [SchemaVersion] -- ^ A list of supported schema versions.
+    :: SchemaVersion query -- ^ A list of supported schema versions.
     -> a               -- ^ The result of running the protocol.
     -> ServerStHandshake query point tip m a
 
@@ -115,10 +117,11 @@ mapChainSeekServer cmapQuery mapPoint mapTip =
   ChainSeekServer . fmap mapInit . runChainSeekServer
 
   where
-    mapInit = ServerStInit . (fmap . fmap) mapHandshake . recvMsgRequestHandshake
+    mapInit :: ServerStInit query point tip m a -> ServerStInit query' point' tip' m a
+    mapInit (ServerStInit serverStInit) = ServerStInit (fmap mapHandshake . serverStInit . coerce)
 
     mapHandshake :: ServerStHandshake query point tip m a -> ServerStHandshake query' point' tip' m a
-    mapHandshake (SendMsgHandshakeRejected vs m)  = SendMsgHandshakeRejected vs m
+    mapHandshake (SendMsgHandshakeRejected vs m)  = SendMsgHandshakeRejected (coerce vs) m
     mapHandshake (SendMsgHandshakeConfirmed idle) = SendMsgHandshakeConfirmed $ mapIdle <$> idle
 
     mapIdle :: ServerStIdle query point tip m a -> ServerStIdle query' point' tip' m a
@@ -191,8 +194,8 @@ chainSeekServerPeer initialPoint (ChainSeekServer mclient) =
     :: ServerStHandshake query point tip m a
     -> Peer (ChainSeek query point tip) 'AsServer 'StHandshake m a
   peerHandshake = \case
-    SendMsgHandshakeRejected versions ma ->
-      Yield (ServerAgency TokHandshake) (MsgRejectHandshake versions) $
+    SendMsgHandshakeRejected version ma ->
+      Yield (ServerAgency TokHandshake) (MsgRejectHandshake version) $
       Done TokFault ma
     SendMsgHandshakeConfirmed midle ->
       Yield (ServerAgency TokHandshake) MsgConfirmHandshake $

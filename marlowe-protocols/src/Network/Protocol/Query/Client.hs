@@ -12,22 +12,37 @@ module Network.Protocol.Query.Client
 
 import Data.Void (Void)
 import Network.Protocol.Query.Types
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol
 
 -- | A generic client for the query protocol.
 newtype QueryClient query m a = QueryClient { runQueryClient :: m (ClientStInit query m a) }
 
--- | In the 'StInit' state, the client has agency. It can send:
+-- | In the 'StInit' protocol state, the client has agency. It must send a
+-- handshake request message.
+data ClientStInit query m a
+  = SendMsgRequestHandshake (SchemaVersion query) (ClientStHandshake query m a)
+
+-- | In the 'StHandshake' protocol state, the client does not have agency.
+-- Instead, it must be prepared to handle either:
+--
+-- * a handshake rejection message
+-- * a handshake confirmation message
+data ClientStHandshake cmd m a = ClientStHandshake
+  { recvMsgHandshakeRejected  :: SchemaVersion cmd -> m a
+  , recvMsgHandshakeConfirmed :: m (ClientStIdle cmd m a)
+  }
+
+-- | In the 'StIdle' state, the client has agency. It can send:
 --
 -- * A request message
-data ClientStInit query m a where
+data ClientStIdle query m a where
+  SendMsgDone :: a -> ClientStIdle query m a
   -- | Request the results of a query.
   SendMsgRequest
     :: query delimiter err results
     -> ClientStNextCanReject delimiter err results m a
-    -> ClientStInit query m a
-
-deriving instance Functor m => Functor (ClientStInit query m)
+    -> ClientStIdle query m a
 
 -- | In the 'StNext CanReject' state, the server has agency. The client must be prepared
 -- to handle either:
@@ -50,7 +65,7 @@ data ClientStPage delimiter err results m a where
   SendMsgRequestNext :: delimiter -> ClientStNext delimiter err results m a -> ClientStPage delimiter err results m a
 
   -- | Exit the reading loop.
-  SendMsgDone :: a -> ClientStPage delimiter err results m a
+  SendMsgRequestDone :: a -> ClientStPage delimiter err results m a
 
 deriving instance Functor m => Functor (ClientStPage delimiter err results m)
 
@@ -74,8 +89,18 @@ hoistQueryClient
   -> QueryClient query n a
 hoistQueryClient phi = QueryClient . phi . fmap hoistInit . runQueryClient
   where
-  hoistInit = \case
+  hoistInit :: ClientStInit query m a -> ClientStInit query n a
+  hoistInit (SendMsgRequestHandshake v idle) = SendMsgRequestHandshake v $ hoistHandshake idle
+
+  hoistHandshake :: ClientStHandshake query m a -> ClientStHandshake query n a
+  hoistHandshake ClientStHandshake{..} = ClientStHandshake
+    { recvMsgHandshakeRejected = phi <$> recvMsgHandshakeRejected
+    , recvMsgHandshakeConfirmed = phi $ hoistIdle <$> recvMsgHandshakeConfirmed
+    }
+
+  hoistIdle = \case
     SendMsgRequest query next   -> SendMsgRequest query $ hoistNextCanReject next
+    SendMsgDone a -> SendMsgDone a
 
   hoistNextCanReject
     :: ClientStNextCanReject delimiter err results m a
@@ -90,7 +115,7 @@ hoistQueryClient phi = QueryClient . phi . fmap hoistInit . runQueryClient
     -> ClientStPage delimiter err results n a
   hoistPage = \case
     SendMsgRequestNext delimiter next -> SendMsgRequestNext delimiter $ hoistNext next
-    SendMsgDone a                     -> SendMsgDone a
+    SendMsgRequestDone a -> SendMsgRequestDone a
 
   hoistNext
     :: ClientStNext delimiter err results m a
@@ -108,9 +133,32 @@ queryClientPeer
 queryClientPeer QueryClient{..} =
   Effect $ peerInit <$> runQueryClient
   where
-  peerInit :: ClientStInit query m a -> Peer (Query query) 'AsClient 'StInit m a
-  peerInit (SendMsgRequest query next) =
-    Yield (ClientAgency TokInit) (MsgRequest query) $ peerNextCanReject (tagFromQuery query) next
+  peerInit
+    :: ClientStInit query m a
+    -> Peer (Query query) 'AsClient 'StInit m a
+  peerInit (SendMsgRequestHandshake schemaVersion handshake) =
+    Yield (ClientAgency TokInit) (MsgRequestHandshake schemaVersion) $ peerHandshake handshake
+
+  peerHandshake
+    :: ClientStHandshake query m a
+    -> Peer (Query query) 'AsClient 'StHandshake m a
+  peerHandshake ClientStHandshake{..} =
+    Await (ServerAgency TokHandshake) \case
+      MsgRejectHandshake version -> Effect $ Done TokFault <$> recvMsgHandshakeRejected version
+      MsgConfirmHandshake         -> peerIdle  recvMsgHandshakeConfirmed
+
+  peerIdle
+    :: m (ClientStIdle query m a)
+    -> Peer (Query query) 'AsClient 'StIdle m a
+  peerIdle = Effect . fmap peerIdle_
+
+  peerIdle_
+    :: ClientStIdle query m a
+    -> Peer (Query query) 'AsClient 'StIdle m a
+  peerIdle_ (SendMsgRequest query next) =
+    Yield (ClientAgency TokIdle) (MsgRequest query) $ peerNextCanReject (tagFromQuery query) next
+  peerIdle_ (SendMsgDone a) =
+    Yield (ClientAgency TokIdle) MsgDone $ Done TokDone a
 
   peerNextCanReject
     :: Tag query delimiter err results
@@ -128,7 +176,7 @@ queryClientPeer QueryClient{..} =
   peerPage tag = \case
     SendMsgRequestNext delimiter next ->
       Yield (ClientAgency (TokPage tag)) (MsgRequestNext delimiter) $ peerNext tag next
-    SendMsgDone a  -> Yield (ClientAgency (TokPage tag)) MsgDone $ Done TokDone a
+    SendMsgRequestDone a  -> Yield (ClientAgency (TokPage tag)) MsgRequestDone $ Done TokDone a
 
   peerNext
     :: Tag query delimiter err results
@@ -138,11 +186,37 @@ queryClientPeer QueryClient{..} =
     Await (ServerAgency (TokNext TokMustReply query)) $ Effect . \case
       MsgNextPage results delimiter -> peerPage query <$> recvMsgNextPage results delimiter
 
+queryClient
+  :: Monad m
+  => SchemaVersion query
+  -> m (ClientStHandshake query m a)
+  -> QueryClient query m a
+queryClient version clientStHandshake =
+  QueryClient do
+    SendMsgRequestHandshake version <$> clientStHandshake
+
 -- | Create a client that runs a query that cannot have multiple pages.
-liftQuery :: Monad m => query Void err results -> QueryClient query m (Either err results)
-liftQuery = QueryClient . pure . ($ next) . SendMsgRequest
+liftQuery
+  :: Monad m
+  => SchemaVersion query
+  -> query Void err results
+  -> QueryClient query m (Either (Either (SchemaVersion query) err) results)
+liftQuery version query = queryClient version . pure $ ClientStHandshake
+  { recvMsgHandshakeRejected = \version' -> pure . Left . Left $ version'
+  , recvMsgHandshakeConfirmed = pure stReq
+  }
   where
+    stReq = SendMsgRequest query next
     next = ClientStNextCanReject
-      { recvMsgNextPage = const . pure . SendMsgDone . Right
-      , recvMsgReject = pure . Left
+      { recvMsgNextPage = const . pure . SendMsgRequestDone . Right
+      , recvMsgReject = pure . Left . Right
       }
+
+doHandshake
+  ::  Monad m
+  => SchemaVersion query
+  -> QueryClient query m (Either (SchemaVersion query) ())
+doHandshake version = queryClient version . pure $ ClientStHandshake
+  { recvMsgHandshakeRejected  = \version' -> pure $ Left version'
+  , recvMsgHandshakeConfirmed = pure $ SendMsgDone (Right ())
+  }

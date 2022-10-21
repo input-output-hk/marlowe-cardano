@@ -94,7 +94,7 @@ instance Protocol (Job cmd) where
   data Message (Job cmd) from to where
 
     -- | Initiate a handshake for the given schema version.
-    MsgRequestHandshake :: SchemaVersion -> Message (Job cmd)
+    MsgRequestHandshake :: SchemaVersion cmd -> Message (Job cmd)
       'StInit
       'StHandshake
 
@@ -104,9 +104,14 @@ instance Protocol (Job cmd) where
       'StIdle
 
     -- | Reject the handshake.
-    MsgRejectHandshake :: SchemaVersion -> Message (Job cmd)
+    MsgRejectHandshake :: SchemaVersion cmd -> Message (Job cmd)
       'StHandshake
       'StFault
+
+    -- | Disconnect peers.
+    MsgDone :: Message (Job cmd)
+      'StIdle
+      'StDone
 
     -- | Tell the server to execute a command in a new job.
     MsgExec :: cmd status err result -> Message (Job cmd)
@@ -177,3 +182,5 @@ instance Protocol (Job cmd) where
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
   exclusionLemma_NobodyAndServerHaveAgency TokFault = \case
+
+

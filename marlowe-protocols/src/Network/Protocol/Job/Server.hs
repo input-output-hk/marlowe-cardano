@@ -20,7 +20,7 @@ newtype JobServer cmd m a = JobServer { runJobServer :: m (ServerStInit cmd m a)
 -- it is waiting to handle a handshake request from the client, which it must
 -- handle.
 newtype ServerStInit cmd m a = ServerStInit
-  { recvMsgRequestHandshake :: SchemaVersion -> m (ServerStHandshake cmd m a)
+  { recvMsgRequestHandshake :: SchemaVersion cmd -> m (ServerStHandshake cmd m a)
   }
 
 -- | In the 'StHandshake' protocol state, the server has agency. It must send
@@ -32,8 +32,8 @@ data ServerStHandshake cmd m a where
 
   -- | Reject the handshake request
   SendMsgHandshakeRejected
-    :: SchemaVersion   -- ^ A supported schema version.
-    -> a               -- ^ The result of running the protocol.
+    :: SchemaVersion cmd -- ^ A supported schema version.
+    -> a                -- ^ The result of running the protocol.
     -> ServerStHandshake cmd m a
 
   -- | Accept the handshake request
@@ -55,6 +55,7 @@ data ServerStIdle cmd m a = ServerStIdle
     :: forall status err result
      . JobId cmd status err result
     -> m (ServerStAttach cmd status err result m a)
+  , recvMsgDone :: m a
   }
 
 deriving instance Functor m => Functor (ServerStIdle cmd m)
@@ -146,6 +147,7 @@ hoistIdle
 hoistIdle phi ServerStIdle{..} = ServerStIdle
   { recvMsgExec = phi . fmap (hoistCmd phi) . recvMsgExec
   , recvMsgAttach = phi . fmap (hoistAttach phi) . recvMsgAttach
+  , recvMsgDone = phi recvMsgDone
   }
 
 hoistAttach
@@ -218,6 +220,7 @@ jobServerPeer JobServer{..} =
     Await (ClientAgency TokIdle) $ Effect . \case
       MsgExec cmd     -> peerCmd (tagFromCommand cmd) <$> recvMsgExec cmd
       MsgAttach cmdId -> peerAttach (tagFromJobId cmdId) <$> recvMsgAttach cmdId
+      MsgDone -> Done TokDone <$> recvMsgDone
 
   peerAttach
     :: Tag cmd status err result
@@ -245,18 +248,21 @@ jobServerPeer JobServer{..} =
       MsgPoll   -> peerCmd tokCmd <$> recvMsgPoll
       MsgDetach -> Done TokDone <$> recvMsgDetach
 
+jobServer :: Applicative m => SchemaVersion cmd -> m (ServerStIdle cmd m ()) -> JobServer cmd m ()
+jobServer serverSchemaVersion stIdle = JobServer $ do
+  pure $ ServerStInit \clientSchemaVersion -> pure if serverSchemaVersion == clientSchemaVersion
+      then SendMsgHandshakeConfirmed stIdle
+      else SendMsgHandshakeRejected serverSchemaVersion ()
+
 -- | Lift a function that executes a command directly into a command server.
 liftCommandHandler
   :: Monad m
-  => SchemaVersion
+  => SchemaVersion cmd
   -> (forall status err result. Either (cmd status err result) (JobId cmd status err result) -> m (Either err result))
   -> JobServer cmd m ()
-liftCommandHandler serverSchemaVersion handle = JobServer $ do
-  pure $ ServerStInit \clientSchemaVersion -> pure if serverSchemaVersion == clientSchemaVersion
-      then SendMsgHandshakeConfirmed $ pure stIdle
-      else SendMsgHandshakeRejected serverSchemaVersion ()
+liftCommandHandler serverSchemaVersion handle = jobServer serverSchemaVersion stIdle
   where
-    stIdle = ServerStIdle
+    stIdle = pure $ ServerStIdle
       { recvMsgExec = \cmd -> do
           e <- handle $ Left cmd
           pure case e of
@@ -267,5 +273,6 @@ liftCommandHandler serverSchemaVersion handle = JobServer $ do
           pure $ SendMsgAttached case e of
             Left err     -> SendMsgFail err ()
             Right result -> SendMsgSucceed result ()
+      , recvMsgDone = pure ()
       }
 

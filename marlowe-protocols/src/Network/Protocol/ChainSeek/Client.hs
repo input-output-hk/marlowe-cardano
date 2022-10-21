@@ -10,7 +10,9 @@
 module Network.Protocol.ChainSeek.Client
   where
 
+import Data.Coerce (coerce)
 import Network.Protocol.ChainSeek.Types
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol (Peer(..), PeerHasAgency(..))
 import Network.TypedProtocol.Core (PeerRole(..))
 
@@ -22,7 +24,7 @@ newtype ChainSeekClient query point tip m a = ChainSeekClient
 -- | In the 'StInit' protocol state, the client has agency. It must send a
 -- handshake request message.
 data ClientStInit query point tip m a
-  = SendMsgRequestHandshake SchemaVersion (ClientStHandshake query point tip m a)
+  = SendMsgRequestHandshake (SchemaVersion query) (ClientStHandshake query point tip m a)
 
 -- | In the 'StHandshake' protocol state, the client does not have agency.
 -- Instead, it must be prepared to handle either:
@@ -30,7 +32,7 @@ data ClientStInit query point tip m a
 -- * a handshake rejection message
 -- * a handshake confirmation message
 data ClientStHandshake query point tip m a = ClientStHandshake
-  { recvMsgHandshakeRejected  :: [SchemaVersion] -> m a
+  { recvMsgHandshakeRejected  :: SchemaVersion query -> m a
   , recvMsgHandshakeConfirmed :: m (ClientStIdle query point tip m a)
   }
 
@@ -89,10 +91,10 @@ mapChainSeekClient mapQuery cmapPoint cmapTip ChainSeekClient{..} =
   ChainSeekClient $ mapInit <$> runChainSeekClient
 
   where
-    mapInit (SendMsgRequestHandshake v handshake) = SendMsgRequestHandshake v $ mapHandshake handshake
+    mapInit (SendMsgRequestHandshake v handshake) = SendMsgRequestHandshake (coerce v) $ mapHandshake handshake
 
     mapHandshake ClientStHandshake{..} = ClientStHandshake
-      { recvMsgHandshakeRejected
+      { recvMsgHandshakeRejected = recvMsgHandshakeRejected . coerce
       , recvMsgHandshakeConfirmed = mapIdle <$> recvMsgHandshakeConfirmed
       }
 
@@ -185,7 +187,6 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
         MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
         MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
         MsgWait                        -> peerWait pos query waitNext
-
     SendMsgDone a -> Yield (ClientAgency TokIdle) MsgDone (Done TokDone a)
 
   peerWait
@@ -201,3 +202,22 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
       MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
       MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
       MsgPing                        -> Yield (ClientAgency TokPing) MsgPong $ peerWait pos query $ pure next
+
+queryClient
+  :: Monad m
+  => SchemaVersion query
+  -> m (ClientStHandshake query point tip m a)
+  -> ChainSeekClient query point tip m a
+queryClient version clientStHandshake =
+  ChainSeekClient do
+    SendMsgRequestHandshake version <$> clientStHandshake
+
+doHandshake
+  ::  Monad m
+  => SchemaVersion query
+  -> ChainSeekClient query point tip m (Either (SchemaVersion query) ())
+doHandshake version = queryClient version . pure $ ClientStHandshake
+  { recvMsgHandshakeRejected  = \version' -> pure $ Left version'
+  , recvMsgHandshakeConfirmed = pure $ SendMsgDone (Right ())
+  }
+

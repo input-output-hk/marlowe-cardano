@@ -45,9 +45,9 @@ codecChainSeek = binaryCodec putMsg getMsg
 
     putMsg (ServerAgency TokHandshake) msg = case msg of
       MsgConfirmHandshake                  -> putWord8 0x02
-      MsgRejectHandshake supportedVersions -> do
+      MsgRejectHandshake supportedVersion -> do
        putWord8 0x03
-       put supportedVersions
+       put supportedVersion
 
     putMsg (ServerAgency (TokNext tag _)) (MsgRejectQuery err tip) = do
         putWord8 0x05

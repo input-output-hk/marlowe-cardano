@@ -28,42 +28,44 @@ codecJob = binaryCodec putMsg getMsg
         MsgRequestHandshake schemaVersion -> do
           putWord8 0x01
           put schemaVersion
+      ServerAgency TokHandshake -> \case
+        MsgConfirmHandshake -> putWord8 0x02
+        MsgRejectHandshake supportedVersion -> do
+         putWord8 0x03
+         put supportedVersion
       ClientAgency TokIdle -> \case
         MsgExec cmd -> do
-          putWord8 0x02
+          putWord8 0x04
           let tag = tagFromCommand cmd
           putTag tag
           putCommand cmd
         MsgAttach jobId -> do
-          putWord8 0x03
+          putWord8 0x05
           let tag = tagFromJobId jobId
           putTag tag
           putJobId jobId
-      ClientAgency (TokAwait _) -> \case
-        MsgPoll   -> putWord8 0x04
-        MsgDetach -> putWord8 0x05
-      ServerAgency TokHandshake -> \case
-        MsgConfirmHandshake -> putWord8 0x06
-        MsgRejectHandshake supportedVersion -> do
-         putWord8 0x07
-         put supportedVersion
+        MsgDone -> do
+          putWord8 0x06
       ServerAgency (TokCmd tag) -> \case
         MsgFail err -> do
-          putWord8 0x08
+          putWord8 0x07
           putTag (coerceTag tag)
           putErr (coerceTag tag) err
         MsgSucceed result -> do
-          putWord8 0x09
+          putWord8 0x08
           putTag (coerceTag tag)
           putResult (coerceTag tag) result
         MsgAwait status jobId -> do
-          putWord8 0x0a
+          putWord8 0x09
           putTag (coerceTag tag)
           putStatus (coerceTag tag) status
           putJobId jobId
       ServerAgency (TokAttach _) -> \case
-        MsgAttached     -> putWord8 0x0b
-        MsgAttachFailed -> putWord8 0x0c
+        MsgAttached     -> putWord8 0x0a
+        MsgAttachFailed -> putWord8 0x0b
+      ClientAgency (TokAwait _) -> \case
+        MsgPoll   -> putWord8 0x0c
+        MsgDetach -> putWord8 0x0d
 
     getMsg :: GetMessage (Job cmd)
     getMsg tok = do
@@ -74,54 +76,59 @@ codecJob = binaryCodec putMsg getMsg
             SomeMessage . MsgRequestHandshake <$> get
           _ -> fail "Invalid protocol state for MsgRequestHandshake"
         0x02 -> case tok of
+          ServerAgency TokHandshake -> pure $ SomeMessage MsgConfirmHandshake
+          _                         -> fail "Invalid protocol state for MsgConfirmHandshake"
+        0x03 -> case tok of
+          ServerAgency TokHandshake -> SomeMessage . MsgRejectHandshake <$> get
+          _                         -> fail "Invalid protocol state for MsgRejectHandshake"
+        0x04 -> case tok of
           ClientAgency TokIdle -> do
             SomeTag ctag <- getTag
             SomeMessage . MsgExec <$> getCommand ctag
           _ -> fail "Invalid protocol state for MsgExec"
-        0x03 -> case tok of
+        0x05 -> case tok of
           ClientAgency TokIdle -> do
             SomeTag ctag <- getTag
             SomeMessage . MsgAttach <$> getJobId ctag
           _ -> fail "Invalid protocol state for MsgAttach"
-        0x04 -> case tok of
-          ClientAgency (TokAwait _) -> pure $ SomeMessage MsgPoll
-          _                         -> fail "Invalid protocol state for MsgPoll"
-        0x05 -> case tok of
-          ClientAgency (TokAwait _) -> pure $ SomeMessage MsgDetach
-          _                         -> fail "Invalid protocol state for MsgDetach"
         0x06 -> case tok of
-          ServerAgency TokHandshake -> pure $ SomeMessage MsgConfirmHandshake
-          _                         -> fail "Invalid protocol state for MsgConfirmHandshake"
+          ClientAgency TokIdle -> pure . SomeMessage $ MsgDone
+          _                         -> fail "Invalid protocol state for MsgDone"
         0x07 -> case tok of
-          ServerAgency TokHandshake -> SomeMessage . MsgRejectHandshake <$> get
-          _                         -> fail "Invalid protocol state for MsgRejectHandshake"
-        0x08 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
             case tagEq (coerceTag ctag) ctag' of
               Nothing                 -> fail "decoded command tag does not match expected command tag"
               Just (Refl, Refl, Refl) -> SomeMessage . MsgFail <$> getErr ctag'
           _ -> fail "Invalid protocol state for MsgFail"
-        0x09 -> case tok of
+        0x08 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
             case tagEq (coerceTag ctag) ctag' of
               Nothing                 -> fail "decoded command tag does not match expected command tag"
               Just (Refl, Refl, Refl) -> SomeMessage . MsgSucceed <$> getResult ctag'
           _ -> fail "Invalid protocol state for MsgSucceed"
-        0x0a -> case tok of
+        0x09 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
             case tagEq (coerceTag ctag) ctag' of
               Nothing                 -> fail "decoded command tag does not match expected command tag"
               Just (Refl, Refl, Refl) -> SomeMessage <$> (MsgAwait <$> getStatus ctag' <*> getJobId ctag')
           _ -> fail "Invalid protocol state for MsgAwait"
-        0x0b -> case tok of
+        0x0a -> case tok of
           ServerAgency (TokAttach _) -> pure $ SomeMessage MsgAttached
           _                          -> fail "Invalid protocol state for MsgAttached"
-        0x0c -> case tok of
+        0x0b -> case tok of
           ServerAgency (TokAttach _) -> pure $ SomeMessage MsgAttachFailed
           _                          -> fail "Invalid protocol state for MsgAttachFailed"
+
+        0x0c -> case tok of
+          ClientAgency (TokAwait _) -> pure $ SomeMessage MsgPoll
+          _                         -> fail "Invalid protocol state for MsgPoll"
+        0x0d -> case tok of
+          ClientAgency (TokAwait _) -> pure $ SomeMessage MsgDetach
+          _                         -> fail "Invalid protocol state for MsgDetach"
+
         _ -> fail $ "Invalid msg tag " <> show tag
 
     -- Unfortunately, the poly-kinded cmd parameter doesn't play nicely with

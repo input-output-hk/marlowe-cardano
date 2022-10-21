@@ -15,13 +15,14 @@ import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as T
 
-
--- | Schema version used for
-newtype SchemaVersion = SchemaVersion Text
+-- | Used during handshakes and represents query or command schema
+-- versions used by both sides. It is indexed by type which version
+-- it represents.
+newtype SchemaVersion t = SchemaVersion Text
   deriving stock (Show, Eq, Ord)
   deriving newtype (IsString)
 
-instance Binary SchemaVersion where
+instance Binary (SchemaVersion t) where
   put (SchemaVersion v) = put $ T.encodeUtf8 v
   get = do
     bytes <- get

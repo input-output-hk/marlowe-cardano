@@ -10,12 +10,10 @@
 module Network.Protocol.ChainSeek.Types
   where
 
-import Data.Binary (Binary(..), Get, Put)
+import Data.Binary (Get, Put)
 import Data.Kind (Type)
-import Data.String (IsString)
-import Data.Text (Text)
-import qualified Data.Text.Encoding as T
 import Data.Type.Equality (type (:~:))
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol (Protocol(..))
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
@@ -65,19 +63,6 @@ data StNextKind
   = StCanAwait  -- ^ The server can send a 'Wait' message or a response
   | StMustReply -- ^ The server must send a reply, having sent a 'Wait'.
 
--- | Schema version used for
-newtype SchemaVersion = SchemaVersion Text
-  deriving stock (Show, Eq, Ord)
-  deriving newtype (IsString)
-
-instance Binary SchemaVersion where
-  put (SchemaVersion v) = put $ T.encodeUtf8 v
-  get = do
-    bytes <- get
-    case T.decodeUtf8' bytes of
-      Left err      -> fail $ show err
-      Right version -> pure $ SchemaVersion version
-
 instance Protocol (ChainSeek query point tip) where
 
   -- | The type of messages in the protocol. Corresponds to the state
@@ -85,7 +70,7 @@ instance Protocol (ChainSeek query point tip) where
   data Message (ChainSeek query point tip) from to where
 
     -- | Initiate a handshake for the given schema version.
-    MsgRequestHandshake :: SchemaVersion -> Message (ChainSeek query point tip)
+    MsgRequestHandshake :: SchemaVersion query -> Message (ChainSeek query point tip)
       'StInit
       'StHandshake
 
@@ -95,7 +80,7 @@ instance Protocol (ChainSeek query point tip) where
       'StIdle
 
     -- | Reject the handshake.
-    MsgRejectHandshake :: [SchemaVersion] -> Message (ChainSeek query point tip)
+    MsgRejectHandshake :: SchemaVersion query -> Message (ChainSeek query point tip)
       'StHandshake
       'StFault
 
@@ -166,3 +151,4 @@ instance Protocol (ChainSeek query point tip) where
 data TokNextKind (k :: StNextKind) where
   TokCanAwait :: TokNextKind 'StCanAwait
   TokMustReply :: TokNextKind 'StMustReply
+
