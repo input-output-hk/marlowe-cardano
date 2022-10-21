@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.API.Command.Log
+module Language.Marlowe.Runtime.CLI.Command.Log
   where
 
 import Control.Concurrent.STM (atomically)
@@ -15,8 +15,8 @@ import qualified Data.Text as T
 import Language.Marlowe (pretty)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Protocol.Sync.Client
-import Language.Marlowe.Runtime.API.Env (Env(..))
-import Language.Marlowe.Runtime.API.Monad (CLI, askEnv, runCLIExceptT, runHistorySyncClient)
+import Language.Marlowe.Runtime.CLI.Env (Env(..))
+import Language.Marlowe.Runtime.CLI.Monad (CLI, askEnv, runCLIExceptT, runHistorySyncClient)
 import Language.Marlowe.Runtime.CLI.Option (contractIdArgument)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( AssetId(AssetId)

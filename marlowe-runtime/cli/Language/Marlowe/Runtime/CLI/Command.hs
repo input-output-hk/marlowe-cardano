@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
-module Language.Marlowe.Runtime.API.Command
+module Language.Marlowe.Runtime.CLI.Command
   where
 
 import Control.Concurrent.STM (STM)
@@ -10,8 +10,8 @@ import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
-import Language.Marlowe.Runtime.API.Command.Add (AddCommand, addCommandParser, runAddCommand)
-import Language.Marlowe.Runtime.API.Command.Apply
+import Language.Marlowe.Runtime.CLI.Command.Add (AddCommand, addCommandParser, runAddCommand)
+import Language.Marlowe.Runtime.CLI.Command.Apply
   ( ApplyCommand
   , advanceCommandParser
   , applyCommandParser
@@ -20,15 +20,15 @@ import Language.Marlowe.Runtime.API.Command.Apply
   , notifyCommandParser
   , runApplyCommand
   )
-import Language.Marlowe.Runtime.API.Command.Create (CreateCommand, createCommandParser, runCreateCommand)
-import Language.Marlowe.Runtime.API.Command.Log (LogCommand, logCommandParser, runLogCommand)
-import Language.Marlowe.Runtime.API.Command.Ls (LsCommand, lsCommandParser, runLsCommand)
-import Language.Marlowe.Runtime.API.Command.Rm (RmCommand, rmCommandParser, runRmCommand)
-import Language.Marlowe.Runtime.API.Command.Submit (SubmitCommand, runSubmitCommand, submitCommandParser)
-import Language.Marlowe.Runtime.API.Command.Tx (TxCommand)
-import Language.Marlowe.Runtime.API.Command.Withdraw (WithdrawCommand, runWithdrawCommand, withdrawCommandParser)
-import Language.Marlowe.Runtime.API.Env (Env(..), RunClient, runClientPeerOverSocket)
-import Language.Marlowe.Runtime.API.Monad (CLI, runCLI)
+import Language.Marlowe.Runtime.CLI.Command.Create (CreateCommand, createCommandParser, runCreateCommand)
+import Language.Marlowe.Runtime.CLI.Command.Log (LogCommand, logCommandParser, runLogCommand)
+import Language.Marlowe.Runtime.CLI.Command.Ls (LsCommand, lsCommandParser, runLsCommand)
+import Language.Marlowe.Runtime.CLI.Command.Rm (RmCommand, rmCommandParser, runRmCommand)
+import Language.Marlowe.Runtime.CLI.Command.Submit (SubmitCommand, runSubmitCommand, submitCommandParser)
+import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand)
+import Language.Marlowe.Runtime.CLI.Command.Withdraw (WithdrawCommand, runWithdrawCommand, withdrawCommandParser)
+import Language.Marlowe.Runtime.CLI.Env (Env(..), RunClient, runClientPeerOverSocket)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Network.Protocol.Job.Client (jobClientPeer)
