@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.CLI.Command.Withdraw
+module Language.Marlowe.Runtime.API.Command.Withdraw
   where
 
 import qualified Cardano.Api as C
@@ -10,8 +10,8 @@ import Control.Monad.Trans.Except (ExceptT(ExceptT))
 import Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (first)
-import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.API.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.API.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (marloweVersionParser, txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (TokenName(TokenName))
 import Language.Marlowe.Runtime.Core.Api

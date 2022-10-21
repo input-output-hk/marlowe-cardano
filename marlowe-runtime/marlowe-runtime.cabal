@@ -166,21 +166,34 @@ executable marlowe
   hs-source-dirs: cli
   main-is: Main.hs
   other-modules:
-    Language.Marlowe.Runtime.CLI.Command
-    Language.Marlowe.Runtime.CLI.Command.Add
-    Language.Marlowe.Runtime.CLI.Command.Apply
-    Language.Marlowe.Runtime.CLI.Command.Create
-    Language.Marlowe.Runtime.CLI.Command.Log
-    Language.Marlowe.Runtime.CLI.Command.Ls
-    Language.Marlowe.Runtime.CLI.Command.Rm
-    Language.Marlowe.Runtime.CLI.Command.Submit
-    Language.Marlowe.Runtime.CLI.Command.Tx
-    Language.Marlowe.Runtime.CLI.Command.Withdraw
-    Language.Marlowe.Runtime.CLI.Env
-    Language.Marlowe.Runtime.CLI.Monad
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
+  build-depends:
+      aeson
+    , base >= 4.9 && < 5
+    , marlowe-api
+    , stm
+  if !os(windows)
+    build-depends: unix
+
+library marlowe-api
+  import: lang
+  hs-source-dirs: marlowe-api
+  exposed-modules:
+    Language.Marlowe.Runtime.API.Command
+  other-modules:
+    Language.Marlowe.Runtime.API.Command.Add
+    Language.Marlowe.Runtime.API.Command.Apply
+    Language.Marlowe.Runtime.API.Command.Create
+    Language.Marlowe.Runtime.API.Command.Log
+    Language.Marlowe.Runtime.API.Command.Ls
+    Language.Marlowe.Runtime.API.Command.Rm
+    Language.Marlowe.Runtime.API.Command.Submit
+    Language.Marlowe.Runtime.API.Command.Tx
+    Language.Marlowe.Runtime.API.Command.Withdraw
+    Language.Marlowe.Runtime.API.Env
+    Language.Marlowe.Runtime.API.Monad
   build-depends:
       aeson
     , base >= 4.9 && < 5
