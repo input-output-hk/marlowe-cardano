@@ -123,11 +123,11 @@ instance Protocol (Query query) where
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
     TokIdle :: ClientHasAgency 'StIdle
-    TokPage :: Tag query delimiter err results -> ClientHasAgency ('StPage delimiter err results)
+    TokPage :: Tag query delimiter err results -> ClientHasAgency ('StPage delimiter err results :: Query query)
 
   data ServerHasAgency st where
     TokHandshake :: ServerHasAgency 'StHandshake
-    TokNext :: TokNextKind k -> Tag query delimiter err results -> ServerHasAgency ('StNext k delimiter err results)
+    TokNext :: TokNextKind k -> Tag query delimiter err results -> ServerHasAgency ('StNext k delimiter err results :: Query query)
 
   data NobodyHasAgency st where
     TokFault :: NobodyHasAgency 'StFault

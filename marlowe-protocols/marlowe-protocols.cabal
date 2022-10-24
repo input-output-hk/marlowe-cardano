@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name: marlowe-protocols
 version: 0.0.0.0
 synopsis:
@@ -18,9 +18,8 @@ source-repository head
   location: https://github.com/input-output-hk/marlowe-cardano
   subdir: marlowe-protocols
 
-library
+common lang
   default-language: Haskell2010
-  hs-source-dirs:   src
   default-extensions:
     BlockArguments
     DeriveAnyClass
@@ -46,6 +45,10 @@ library
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
+
+library
+  import: lang
+  hs-source-dirs:   src
   exposed-modules:
     Network.Channel
     Network.Protocol.Driver
@@ -74,3 +77,37 @@ library
     , template-haskell
     , text
     , typed-protocols
+
+test-suite marlowe-protocols-test
+  import: lang
+  hs-source-dirs:
+    test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Network.Protocol.Job.CodecSpec
+    Paths_marlowe_protocols
+  build-depends:
+      base >= 4.9 && < 5
+    , async
+    , binary
+    , bytestring
+    , cardano-api
+    , containers
+    , hspec
+    , marlowe
+    , marlowe-protocols
+    , plutus-tx
+    , plutus-ledger-api
+    , QuickCheck
+    , some
+    , stm
+    , tasty
+    , tasty-hunit
+    , tasty-quickcheck
+    , text
+    , time
+    , transformers
+    , typed-protocols
+  build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded

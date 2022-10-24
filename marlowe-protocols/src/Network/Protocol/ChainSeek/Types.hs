@@ -132,7 +132,7 @@ instance Protocol (ChainSeek query point tip) where
 
   data ServerHasAgency st where
     TokHandshake :: ServerHasAgency 'StHandshake
-    TokNext :: Tag query err result -> TokNextKind k -> ServerHasAgency ('StNext err result k)
+    TokNext :: Tag query err result -> TokNextKind k -> ServerHasAgency ('StNext err result k :: ChainSeek query point tip)
 
   data NobodyHasAgency st where
     TokFault :: NobodyHasAgency 'StFault

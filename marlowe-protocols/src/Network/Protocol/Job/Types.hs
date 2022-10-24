@@ -3,6 +3,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -63,10 +65,10 @@ data Job (cmd :: * -> * -> * -> *) where
   -- | The initial state of the protocol.
   StInit :: Job cmd
 
-  -- | The client is waiting for the server to accept the handshake.
+  -- | Server has agency. The client is waiting for the server to accept the handshake.
   StHandshake :: Job cmd
 
-  -- | The client and server are idle. The client can send a request.
+  -- | Client has agency. The client and server are idle. The client can send a cmd request.
   StIdle :: Job cmd
 
   -- | The failed state of the protocol.
@@ -158,16 +160,15 @@ instance Protocol (Job cmd) where
       ('StAwait status err result)
       'StDone
 
-
   data ClientHasAgency st where
-    TokInit :: ClientHasAgency 'StInit
-    TokIdle :: ClientHasAgency 'StIdle
-    TokAwait :: Tag cmd status err result -> ClientHasAgency ('StAwait status err result)
+    TokInit :: ClientHasAgency ('StInit :: Job cmd)
+    TokIdle :: ClientHasAgency ('StIdle :: Job cmd)
+    TokAwait :: Tag cmd status err result -> ClientHasAgency ('StAwait status err result :: Job cmd)
 
   data ServerHasAgency st where
-    TokHandshake :: ServerHasAgency 'StHandshake
-    TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result)
-    TokAttach :: Tag cmd status err result -> ServerHasAgency ('StAttach status err result)
+    TokHandshake :: ServerHasAgency ('StHandshake :: Job cmd)
+    TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result :: Job cmd)
+    TokAttach :: Tag cmd status err result -> ServerHasAgency ('StAttach status err result :: Job cmd)
 
   data NobodyHasAgency st where
     TokFault :: NobodyHasAgency 'StFault

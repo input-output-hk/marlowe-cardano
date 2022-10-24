@@ -14,7 +14,6 @@ import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Query.Types
 import Network.TypedProtocol.Codec
-import Unsafe.Coerce (unsafeCoerce)
 
 codecQuery
   :: forall query m
@@ -42,20 +41,20 @@ codecQuery = binaryCodec putMsg getMsg
       ServerAgency (TokNext _ tag) -> \case
         MsgReject err -> do
           putWord8 0x06
-          putTag (coerceTag tag)
-          putErr (coerceTag tag) err
+          putTag tag
+          putErr tag err
         MsgNextPage results delimiter -> do
           putWord8 0x07
-          putTag (coerceTag tag)
-          putResult (coerceTag tag) results
+          putTag tag
+          putResult tag results
           case delimiter of
             Nothing -> putWord8 0x01
-            Just d  -> putDelimiter (coerceTag tag) d
+            Just d  -> putDelimiter tag d
       ClientAgency (TokPage tag) -> \case
         MsgRequestNext delimiter -> do
           putWord8 0x08
-          putTag (coerceTag tag)
-          putDelimiter (coerceTag tag) delimiter
+          putTag tag
+          putDelimiter tag delimiter
         MsgRequestDone -> putWord8 0x09
 
     getMsg :: GetMessage (Query query)
@@ -86,14 +85,14 @@ codecQuery = binaryCodec putMsg getMsg
         0x06 -> case tok of
           ServerAgency (TokNext TokCanReject qtag) -> do
             SomeTag qtag' :: SomeTag query <- getTag
-            case tagEq (coerceTag qtag) qtag' of
+            case tagEq qtag qtag' of
               Nothing                 -> fail "decoded query tag does not match expected query tag"
               Just (Refl, Refl, Refl) -> SomeMessage . MsgReject <$> getErr qtag'
           _ -> fail "Invalid protocol state for MsgReject"
         0x07 -> case tok of
           ServerAgency (TokNext _ qtag) -> do
             SomeTag qtag' :: SomeTag query <- getTag
-            case tagEq (coerceTag qtag) qtag' of
+            case tagEq qtag qtag' of
               Nothing   -> fail "decoded query tag does not match expected query tag"
               Just (Refl, Refl, Refl) -> do
                 result <- getResult qtag'
@@ -107,7 +106,7 @@ codecQuery = binaryCodec putMsg getMsg
         0x08 -> case tok of
           ClientAgency (TokPage qtag) -> do
             SomeTag qtag' :: SomeTag query <- getTag
-            case tagEq (coerceTag qtag) qtag' of
+            case tagEq qtag qtag' of
               Nothing                 -> fail "decoded query tag does not match expected query tag"
               Just (Refl, Refl, Refl) -> SomeMessage . MsgRequestNext <$> getDelimiter qtag'
           _                            -> fail "Invalid protocol state for MsgRequestNext"
@@ -116,9 +115,3 @@ codecQuery = binaryCodec putMsg getMsg
           _                        -> fail "Invalid protocol state for MsgDone"
         _ -> fail $ "Invalid msg tag " <> show tag
 
-    -- Unfortunately, the poly-kinded query parameter doesn't play nicely with
-    -- the `PeerHasAgency` type and it gets confused, thinking that 'query1'
-    -- and 'query' are unrelated types. So we have to coerce them (they will
-    -- absolutely be the same type constructor though).
-    coerceTag :: forall query1 delimiter err results. Tag query1 delimiter err results -> Tag query delimiter err results
-    coerceTag = unsafeCoerce
