@@ -83,7 +83,7 @@ mkWorker WorkerDependencies{..} = do
 
     stInit = ServerStInit \version -> pure if version == moveSchema
       then SendMsgHandshakeConfirmed $ stIdle Genesis
-      else SendMsgHandshakeRejected [ moveSchema ] ()
+      else SendMsgHandshakeRejected moveSchema ()
 
     stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainPoint IO ())
     stIdle pos = pure ServerStIdle

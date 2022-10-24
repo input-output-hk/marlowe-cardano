@@ -13,7 +13,7 @@ import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..), commandSchema)
 import Network.Protocol.Job.Server
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
 import System.IO (hPutStrLn, stderr)
@@ -67,8 +67,8 @@ mkWorker WorkerDependencies{..} =
     pure Worker { runWorker = run server }
   where
     server :: JobServer ChainSyncCommand IO ()
-    server = liftCommandHandler $ flip either (\case) \case
-      SubmitTx era tx -> ((),) <$> do
+    server = liftCommandHandler commandSchema $ flip either (\case) \case
+      SubmitTx era tx -> do
         result <- submitTxToNodeLocal
           case era of
             ScriptDataInAlonzoEra -> AlonzoEra

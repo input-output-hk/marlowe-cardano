@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name: marlowe-chain-sync
 version: 0.0.0.0
 synopsis:
@@ -126,9 +126,13 @@ executable chainseekd
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
+    , co-log
+    , co-log-core
     , hasql
     , hasql-pool
     , marlowe-chain-sync
+    , marlowe-chain-sync:config
+    , marlowe-chain-sync:logging
     , marlowe-protocols
     , network
     , optparse-applicative
@@ -160,3 +164,33 @@ executable example-client
     , text
     , these
     , typed-protocols
+
+library logging
+  import: lang
+  hs-source-dirs: logging
+  exposed-modules:
+    Language.Marlowe.Runtime.Logging.Colog
+  build-depends:
+      base >= 4.9 && < 5
+    , co-log
+    , co-log-core
+    , text
+    , transformers
+  visibility: public
+
+library config
+  import: lang
+  hs-source-dirs: config
+  exposed-modules:
+    Language.Marlowe.Runtime.CLI.Option.Colog
+  build-depends:
+      base >= 4.9 && < 5
+    , co-log
+    , co-log-core
+    , optparse-applicative
+    , marlowe-chain-sync:logging
+    , split
+    , text
+    , transformers
+  visibility: public
+

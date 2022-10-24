@@ -16,6 +16,7 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
+import qualified Colog
 import Control.Concurrent.STM (atomically, modifyTVar, newTVarIO, readTVar)
 import Control.Exception (bracket, bracketOnError, finally, throwIO)
 import Control.Monad ((<=<))
@@ -23,11 +24,14 @@ import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
-import qualified Data.Text.Lazy.IO as TL
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Time (secondsToNominalDiffTime)
+import GHC.Stack (HasCallStack)
 import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
+import Language.Marlowe.Runtime.CLI.Option.Colog (mkLogger)
 import Language.Marlowe.Runtime.ChainSync (ChainSync(..), ChainSyncDependencies(..), mkChainSync)
 import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
@@ -36,6 +40,7 @@ import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
 import Language.Marlowe.Runtime.ChainSync.JobServer (RunJobServer(..))
 import Language.Marlowe.Runtime.ChainSync.QueryServer (RunQueryServer(..))
 import Language.Marlowe.Runtime.ChainSync.Server (RunChainSeekServer(..))
+import Language.Marlowe.Runtime.Logging.Colog (logDebugM)
 import Network.Channel (effectChannel, socketAsChannel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (mkDriver)
@@ -47,6 +52,7 @@ import Network.Socket
   ( AddrInfo(..)
   , AddrInfoFlag(..)
   , SockAddr
+  , Socket
   , SocketOption(ReuseAddr)
   , SocketType(..)
   , bind
@@ -63,7 +69,6 @@ import Network.Socket
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options (Options(..), getOptions)
-import System.IO (hPrint, hPutStr, stderr)
 
 main :: IO ()
 main = run =<< getOptions "0.0.0.0"
@@ -73,9 +78,9 @@ run Options{..} = withSocketsDo do
   chainSeekAddr <- resolve port
   queryAddr <- resolve queryPort
   commandAddr <- resolve commandPort
-  bracket (open chainSeekAddr) close \chainSeekSocket -> do
-    bracket (open queryAddr) close \querySocket -> do
-      bracket (open commandAddr) close \commandSocket -> do
+  bracket (open "ChainSeek" chainSeekAddr) close \chainSeekSocket -> do
+    bracket (open "Query" queryAddr) close \querySocket -> do
+      bracket (open "Job" commandAddr) close \commandSocket -> do
         socketIdVar <- newTVarIO @Int 0
         pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
         genesisConfigResult <- runExceptT do
@@ -129,10 +134,14 @@ run Options{..} = withSocketsDo do
           }
         runChainSync chainSync
   where
-    logSend i bytes =
-      hPutStr stderr ("send[" <> show i <> "]: ") *> TL.hPutStrLn stderr (encodeBase16 bytes)
+    logAction :: Colog.LogAction IO Colog.Message
+    logAction = mkLogger verbosity
+
+    logSend i bytes = do
+      logDebugM logAction $ "send[" <> T.pack (show i) <> "]: " <> TL.toStrict (encodeBase16 bytes)
     logRecv i mbytes =
-      hPutStr stderr ("recv[" <> show i <> "]: ") *> hPrint stderr (encodeBase16 <$> mbytes)
+      logDebugM logAction $ "recv[" <> T.pack (show i) <> "]: " <> (T.pack . show $ encodeBase16 <$> mbytes)
+
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
 
@@ -150,7 +159,9 @@ run Options{..} = withSocketsDo do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
-    open addr = bracketOnError (openSocket addr) close \socket -> do
+    open :: HasCallStack => String -> AddrInfo -> IO Socket
+    open name addr = bracketOnError (openSocket addr) close \socket -> do
+      logDebugM logAction . T.pack $ "Starting " <> show name <> " server at: " <> show (addrAddress addr)
       setSocketOption socket ReuseAddr 1
       withFdSocket socket setCloseOnExecIfNeeded
       bind socket $ addrAddress addr

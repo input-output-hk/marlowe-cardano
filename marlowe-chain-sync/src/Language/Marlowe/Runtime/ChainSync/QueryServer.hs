@@ -27,11 +27,11 @@ import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (bimap, first)
-import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..))
+import Data.Void (Void)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..), querySchema)
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
-import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
-import Network.Protocol.Query.Types (StNextKind(..))
+import Network.Protocol.Query.Server (QueryServer(..))
+import qualified Network.Protocol.Query.Server as QueryServer
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import System.IO (hPutStrLn, stderr)
 import Unsafe.Coerce (unsafeCoerce)
@@ -88,29 +88,21 @@ mkWorker WorkerDependencies{..} =
 
   where
     server :: QueryServer ChainSyncQuery IO ()
-    server = QueryServer $ pure $ ServerStInit \case
-      GetSlotConfig        -> queryGenesisParameters extractSlotConfig
-      GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
-      GetNetworkId -> queryGenesisParameters protocolParamNetworkId
-      GetProtocolParameters -> toServerStNext <$> queryShelley (const QueryProtocolParameters)
-      GetSystemStart ->
-        toServerStNext . bimap (const ()) unsafeCoerce <$> queryLocalNodeState Nothing QuerySystemStart
-      GetEraHistory ->
-        toServerStNext . first (const ()) <$> queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
-      GetUTxOs utxosQuery -> do
-        utxos <- Database.runGetUTxOs getUTxOs utxosQuery
-        pure $ toServerStNext $ Right utxos
+    server = QueryServer.liftHandler querySchema $ \case
+        GetSlotConfig        -> queryGenesisParameters extractSlotConfig
+        GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
+        GetNetworkId -> queryGenesisParameters protocolParamNetworkId
+        GetProtocolParameters -> queryShelley (const QueryProtocolParameters)
+        GetSystemStart ->
+          bimap (const ()) unsafeCoerce <$> queryLocalNodeState Nothing QuerySystemStart
+        GetEraHistory ->
+          first (const ()) <$> queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
+        GetUTxOs utxosQuery -> do
+          utxos <- Database.runGetUTxOs getUTxOs utxosQuery
+          pure $ Right utxos
 
-    toServerStNext :: Either () a -> ServerStNext ChainSyncQuery 'CanReject Void () a IO ()
-    toServerStNext = \case
-      Left _ -> SendMsgReject () ()
-      Right a -> SendMsgNextPage a Nothing $ ServerStPage
-        { recvMsgDone = pure ()
-        , recvMsgRequestNext = absurd
-        }
-
-    queryGenesisParameters :: (GenesisParameters -> a) -> IO (ServerStNext ChainSyncQuery 'CanReject Void () a IO ())
-    queryGenesisParameters f = toServerStNext . fmap f <$> queryShelley (const QueryGenesisParameters)
+    -- queryGenesisParameters :: (GenesisParameters -> a) -> IO (ServerStNext ChainSyncQuery 'CanReject Void () a IO ())
+    queryGenesisParameters f = fmap f <$> queryShelley (const QueryGenesisParameters)
 
     queryShelley
       :: (forall era. ShelleyBasedEra era -> QueryInShelleyBasedEra era result)

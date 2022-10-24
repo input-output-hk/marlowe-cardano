@@ -4,8 +4,10 @@ module Options
   ) where
 
 import Cardano.Api (NetworkId(..), NetworkMagic(..))
+import qualified Colog
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import Language.Marlowe.Runtime.CLI.Option.Colog (Verbosity(LogLevel), verbosityParser)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel(..))
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
@@ -24,6 +26,7 @@ data Options = Options
   , commandPort       :: !PortNumber
   , costModel         :: !CostModel
   , maxCost           :: !Int
+  , verbosity         :: !Verbosity
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -105,6 +108,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> jobPortOption
               <*> costModelParser
               <*> maxCostParser
+              <*> verbosityParser (LogLevel Colog.Error)
           )
       where
         versionOption :: O.Parser (a -> a)

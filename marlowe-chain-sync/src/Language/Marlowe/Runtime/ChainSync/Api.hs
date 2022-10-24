@@ -2,6 +2,7 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -61,6 +62,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , UTxOs(..)
   , ValidityRange(..)
   , WithGenesis(..)
+  , commandSchema
   , fromBech32
   , fromCardanoStakeAddressPointer
   , fromDatum
@@ -76,6 +78,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , paymentCredential
   , policyIdToScriptHash
   , putUTCTime
+  , querySchema
   , renderTxOutRef
   , runtimeChainSeekCodec
   , slotToUTCTime
@@ -152,10 +155,10 @@ import Language.Marlowe.Runtime.SystemStart (SystemStart(..))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
-import Network.Protocol.ChainSeek.TH (mkSchemaVersion)
 import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
+import Network.Protocol.SchemaVersion.TH (mkSchemaVersion)
 import Network.TypedProtocol.Codec (Codec)
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
@@ -516,7 +519,7 @@ fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
   deriving anyclass (Binary)
 
 policyIdToScriptHash :: PolicyId -> ScriptHash
@@ -612,8 +615,6 @@ data Move err result where
   -- | Advance to the block containing transactions that send outputs to any
   -- addresses with the requested credentials.
   FindTxsTo :: Set Credential -> Move FindTxsToError (Set Transaction)
-
-mkSchemaVersion "moveSchema" ''Move
 
 deriving instance Show (Move err result)
 deriving instance Eq (Move err result)
@@ -867,6 +868,8 @@ data ChainSyncQuery delimiter err result where
   GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery Void () UTxOs
 
+mkSchemaVersion "querySchema" ''ChainSyncQuery
+
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
@@ -1069,3 +1072,7 @@ eraEq ScriptDataInAlonzoEra ScriptDataInAlonzoEra   = Just Refl
 eraEq ScriptDataInAlonzoEra _                       = Nothing
 eraEq ScriptDataInBabbageEra ScriptDataInBabbageEra = Just Refl
 eraEq ScriptDataInBabbageEra _                      = Nothing
+
+mkSchemaVersion "moveSchema" ''Move
+mkSchemaVersion "commandSchema" ''ChainSyncCommand
+
