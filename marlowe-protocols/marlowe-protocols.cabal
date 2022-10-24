@@ -85,7 +85,10 @@ test-suite marlowe-protocols-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    Network.Protocol.Arbitrary
+    Network.Protocol.ChainSeek.CodecSpec
     Network.Protocol.Job.CodecSpec
+    Network.Protocol.Query.CodecSpec
     Paths_marlowe_protocols
   build-depends:
       base >= 4.9 && < 5

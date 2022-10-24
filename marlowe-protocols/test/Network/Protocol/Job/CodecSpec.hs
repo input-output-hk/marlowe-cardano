@@ -8,25 +8,13 @@ module Network.Protocol.Job.CodecSpec
   ( spec
   ) where
 
-import qualified Cardano.Api as C
-import Data.Void (Void)
-import Test.Hspec (Spec, describe, it, shouldBe)
-import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Arbitrary(arbitrary), Gen)
--- import Network.Protocol.Job.Types (putCommand, getCommand, Command (tagFromCommand), getResult, putResult)
 import Data.Binary (Binary(get), getWord8, put, putWord8)
-import Data.Binary.Get (runGet)
-import Data.Binary.Put (runPut)
 import Data.Data (type (:~:)(Refl))
 import Data.Functor.Identity (runIdentity)
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Network.Protocol.Arbitrary (genSchemaVersion)
 import Network.Protocol.Job.Codec (codecJob)
-import Network.Protocol.Job.Types
-  (Command(..), Job(StHandshake, StInit), Message(..), getCommand, getResult, putCommand, putResult)
 import Network.Protocol.Job.Types as Job
-import Network.Protocol.SchemaVersion (SchemaVersion(SchemaVersion))
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol.Codec
   ( AnyMessage(AnyMessage)
   , AnyMessageAndAgency(AnyMessageAndAgency)
@@ -34,31 +22,12 @@ import Network.TypedProtocol.Codec
   , prop_codec
   , prop_codecM
   )
-
+import Test.Hspec (Spec, it, shouldBe)
+import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (Arbitrary(arbitrary), Gen)
 
 data TestCommand status err result where
   TestCommand :: TestCommand () () ()
-
-instance Eq (TestCommand () () ()) where
-  _ == _ = True
-
-instance Eq (AnyMessage (Job.Job TestCommand)) where
-  (AnyMessage (MsgRequestHandshake sv1)) == (AnyMessage (MsgRequestHandshake sv2))  = sv1 == sv2
-  (AnyMessage MsgConfirmHandshake) == (AnyMessage MsgConfirmHandshake)  = True
-  (AnyMessage (MsgRejectHandshake sv1)) == (AnyMessage (MsgRejectHandshake sv2))  = sv1 == sv2
-  (AnyMessage (MsgExec TestCommand)) == (AnyMessage (MsgExec TestCommand))  = True
-  (AnyMessage (MsgAttach jId1)) == (AnyMessage (MsgAttach jId2)) = case (jId1, jId2) of
-    (TestJobId i1, TestJobId i2) -> i1 == i2
-  (AnyMessage MsgAttached) == (AnyMessage MsgAttached) = True
-  (AnyMessage MsgAttachFailed) == (AnyMessage MsgAttachFailed) = True
-  (AnyMessage (MsgFail _)) == (AnyMessage (MsgFail _)) = True
-  (AnyMessage (MsgSucceed _)) == (AnyMessage (MsgSucceed _)) = True
-  (AnyMessage MsgDone) == (AnyMessage MsgDone) = True
-  (AnyMessage (MsgAwait _ _)) == (AnyMessage (MsgAwait _ _)) = True
-  (AnyMessage MsgPoll) == (AnyMessage MsgPoll) = True
-  (AnyMessage MsgDetach) == (AnyMessage MsgDetach) = True
-  _ == _ = False
-
 
 instance Command TestCommand where
 
@@ -80,7 +49,7 @@ instance Command TestCommand where
     case tag of
       0x01 -> pure $ Job.SomeTag TestTag
       _    -> fail $ "Invalid command tag: " <> show tag
-  putJobId (TestJobId id) = put id
+  putJobId (TestJobId jid) = put jid
   getJobId TestTag = TestJobId <$> get
 
   putCommand TestCommand = putWord8 0x01
@@ -108,12 +77,22 @@ instance Command TestCommand where
   getResult = \case
     TestTag -> get
 
-
-genText :: Gen Text
-genText = T.pack <$> arbitrary
-
-genSchemaVersion :: Gen (SchemaVersion cmd)
-genSchemaVersion = SchemaVersion <$> genText
+instance Eq (AnyMessage (Job.Job TestCommand)) where
+  (AnyMessage (MsgRequestHandshake sv1)) == (AnyMessage (MsgRequestHandshake sv2))  = sv1 == sv2
+  (AnyMessage MsgConfirmHandshake) == (AnyMessage MsgConfirmHandshake)  = True
+  (AnyMessage (MsgRejectHandshake sv1)) == (AnyMessage (MsgRejectHandshake sv2))  = sv1 == sv2
+  (AnyMessage (MsgExec TestCommand)) == (AnyMessage (MsgExec TestCommand))  = True
+  (AnyMessage (MsgAttach jId1)) == (AnyMessage (MsgAttach jId2)) = case (jId1, jId2) of
+    (TestJobId i1, TestJobId i2) -> i1 == i2
+  (AnyMessage MsgAttached) == (AnyMessage MsgAttached) = True
+  (AnyMessage MsgAttachFailed) == (AnyMessage MsgAttachFailed) = True
+  (AnyMessage (MsgFail _)) == (AnyMessage (MsgFail _)) = True
+  (AnyMessage (MsgSucceed _)) == (AnyMessage (MsgSucceed _)) = True
+  (AnyMessage MsgDone) == (AnyMessage MsgDone) = True
+  (AnyMessage (MsgAwait _ _)) == (AnyMessage (MsgAwait _ _)) = True
+  (AnyMessage MsgPoll) == (AnyMessage MsgPoll) = True
+  (AnyMessage MsgDetach) == (AnyMessage MsgDetach) = True
+  _ == _ = False
 
 genMsgRequestHandshake :: Gen (Message (Job TestCommand) 'StInit 'StHandshake)
 genMsgRequestHandshake =
@@ -147,10 +126,10 @@ spec = do
       msg = MsgExec TestCommand
     prop_codec runIdentity codecJob (AnyMessageAndAgency (ClientAgency TokIdle) msg) `shouldBe` True
   prop "MsgAttach serialization roundtrip" $ do
-    id <- arbitrary
+    jid <- arbitrary
     let
       msg :: Message (Job TestCommand) 'StIdle ('StAttach () () ())
-      msg = MsgAttach (TestJobId id)
+      msg = MsgAttach (TestJobId jid)
     prop_codecM codecJob (AnyMessageAndAgency (ClientAgency TokIdle) msg)
   it "MsgAttached serialization roundtrip" $ do
     let
