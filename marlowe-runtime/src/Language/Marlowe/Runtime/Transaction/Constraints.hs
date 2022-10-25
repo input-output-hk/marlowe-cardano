@@ -20,7 +20,7 @@ import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import Data.Map (Map)
 import qualified Data.Map as Map (fromSet, keysSet, lookup, mapWithKey, member, null, singleton, toList, unionWith)
-import qualified Data.Map.Strict as SMap (elems, fromList, toList)
+import qualified Data.Map.Strict as SMap (fromList, toList)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
@@ -508,6 +508,10 @@ makeTxOut address datum value referenceScript = do
     datum
     referenceScript
 
+-- Test whether a value only contains lovelace.
+onlyLovelace :: C.Value -> Bool
+onlyLovelace value = C.lovelaceToValue (C.selectLovelace value) == value
+
 -- Selects enough additional inputs to cover the excess balance of the
 -- transaction (total outputs - total inputs).
 selectCoins
@@ -537,10 +541,6 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 
     fee :: C.Value
     fee = C.lovelaceToValue $ 2 * maximumFee protocol
-
-    -- Test whether value only contains lovelace.
-    onlyLovelace :: C.Value -> Bool
-    onlyLovelace value = C.lovelaceToValue (C.selectLovelace value) == value
 
   collateral <-
     case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) utxos of
@@ -635,16 +635,19 @@ selectCoins protocol WalletContext{..} txBodyContent = do
       let
         -- Choose the best UTxO from the candidates.
         next :: (C.TxIn, C.TxOut C.CtxTx C.BabbageEra)
-        next = minimumBy (compare `on` priority required) candidates
+        -- next = minimumBy (compare `on` priority required) candidates
+        next = minimumBy (compare `on` priority (log ("select required: " <> show required) required)) candidates
         -- Determine the remaining candidates.
         candidates' :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
-        candidates' = delete next candidates
+        -- candidates' = delete next candidates
+        candidates' = delete next (log ("select candidates: " <> show candidates) candidates)
         -- Ignore negative quantities.
         filterPositive :: C.Value -> C.Value
         filterPositive = C.valueFromList . filter ((> 0) . snd) . C.valueToList
         -- Compute the remaining requirement.
         required' :: C.Value
-        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd next)
+        -- required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd next)
+        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd (log ("select next: " <> show next) next))
       in
         -- Decide whether to continue.
         if required' == mempty
@@ -797,7 +800,14 @@ balanceTx era systemStart eraHistory protocol marloweVersion MarloweContext{..} 
         <> mapMaybe mkPayoutUtxo (Map.toList payoutOutputs)
 
     -- Compute net of inputs and outputs, accounting for minting.
-    totalIn = foldMap txOutToValue . (SMap.elems . C.unUTxO) $ utxos
+    totalIn =
+      foldMap (txOutToValue . snd)
+            -- 5. turn the right-side TxOutS that remain into ValueS
+        . filter (flip elem (fst <$> txIns) . fst)
+            -- 4. filter for membership of the TxIn in the ones from txIns
+        . SMap.toList   -- 3. turn that Map into a [(TxIn, (TxOut CtxUTxO era))]
+        . C.unUTxO      -- 2. extract the Map inside C.UTxO
+        $ utxos         -- 1. :: C.UTxO C.BabbageEra
     totalOut = foldMap txOutToValue txOuts
     totalMint = case txMintValue of
       C.TxMintValue _ value _ -> value
@@ -805,6 +815,9 @@ balanceTx era systemStart eraHistory protocol marloweVersion MarloweContext{..} 
 
     -- Initial setup is `fee = 0` - we output all the difference as a change and expect balancing error ;-)
     initialChange = totalIn <> totalMint <> C.negateValue totalOut
+
+  unless (onlyLovelace initialChange)
+    $ Left (BalancingError "balanceTx: Change must be pure lovelace")
 
   -- Return the transaction body.
   (_, C.BalancedTxBody txBody _ _) <- balancingLoop 10 initialChange
