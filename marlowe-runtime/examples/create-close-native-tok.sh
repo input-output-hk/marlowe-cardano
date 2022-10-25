@@ -108,7 +108,7 @@ marlowe rm "$CONTRACT_ID"
 marlowe ls
 
 marlowe-cli util burn \
-  ${MAGIC[@]} \
+  "${MAGIC[@]}" \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --issuer "$PARTY_ADDR:$PARTY_SKEY" \
   --expires $MINT_EXPIRES \
