@@ -51,6 +51,8 @@ instance Eq RoleTokens where
 -- Unfortunatelly `PlutusTx.Prelude` doesn't provide `group` so we perform
 -- this fold manually here.
 {-# INLINEABLE step #-}
+step :: (Eq a, AdditiveSemigroup b)
+  => (a, b) -> Maybe ((a, b), [(a, b)]) -> Maybe ((a, b), [(a, b)])
 step last Nothing = Just (last, [])
 step curr@(tn', i') (Just (tokAcc@(tn, i), acc)) =
   Just $ if tn == tn'
