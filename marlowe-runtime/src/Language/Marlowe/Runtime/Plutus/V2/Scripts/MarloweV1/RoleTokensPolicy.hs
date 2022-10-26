@@ -67,6 +67,7 @@ validateMinting roleTokens seedInput context =
             tokensMap = fromMaybe AssocMap.empty . AssocMap.lookup ownCurrency . PV2.getValue . PV2.txInfoMint $ txInfo
           mkRoleTokensHash . mkRoleTokens . AssocMap.toList $ tokensMap
 
+{-# INLINEABLE validateBurning #-}
 validateBurning :: PV2.ScriptContext -> Bool
 validateBurning context = do
  traceIfFalse "Burn failed" allBurned
