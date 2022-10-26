@@ -14,9 +14,7 @@ MAGIC=(--testnet-magic 2)
 echo "${MAGIC[@]}"
 
 VALID_CONTRACT_ID=06b5a9fe7e9868648671333ee1a5ece61af9019b12251b68f1e9fc01cd7a12b2#1
-INVALID_CONTRACT_ID=06b5a9fe7e9868648671333ee1a5ece61af9019b12251b68f1e9fc01cd7a12b2
-MISSING_CONTRACT_ID=
-EMPTY_STRING_CONTRACT_ID=""
+
 echo "Test Scnario set up done"
 
 # marlowe rm --all not implemented yet

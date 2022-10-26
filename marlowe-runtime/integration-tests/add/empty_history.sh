@@ -41,7 +41,7 @@ echo "Expect to see an error: Invalid UTXO - expected format: <hex-tx-id>#<tx-ou
 marlowe add $INVALID_CONTRACT_ID
 
 echo "Expect to see an error: Invalid UTXO - expected format: <hex-tx-id>#<tx-out-ix>"
-marlowe add $MISSING_CONTRACT_ID
+marlowe add "$MISSING_CONTRACT_ID"
 
 echo "Expect to see an error: Invalid UTXO - expected format: <hex-tx-id>#<tx-out-ix>"
-marlowe add $EMPTY_STRING_CONTRACT_ID
+marlowe add "$EMPTY_STRING_CONTRACT_ID"
