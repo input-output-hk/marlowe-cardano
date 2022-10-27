@@ -386,7 +386,7 @@ solveConstraints start history protocol version marloweCtx walletCtx constraints
     >>= balanceTx C.BabbageEraInCardanoMode start history protocol version marloweCtx walletCtx
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's
---   calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will
+--   calculateMinimumUTxO. It's called by adjustOutputForMinUTxO below. We will
 --   eventually be able to remove it.
 ensureAtLeastHalfAnAda :: C.Value -> C.Value
 ensureAtLeastHalfAnAda origValue =
@@ -404,15 +404,20 @@ adjustOutputForMinUtxo
    .  C.ProtocolParameters
   -> C.TxOut C.CtxTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxOut C.CtxTx C.BabbageEra)
-adjustOutputForMinUtxo protocol txOut@(C.TxOut address origValue datum script) = do
-  minValue <- case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage txOut protocol of
+adjustOutputForMinUtxo protocol (C.TxOut address txOrigValue datum script) = do
+  let
+    origValue = C.txOutValueToValue txOrigValue
+    adjustedForCalculateMin = ensureAtLeastHalfAnAda origValue
+    txOut' = C.TxOut address (C.TxOutValue C.MultiAssetInBabbageEra adjustedForCalculateMin) datum script
+  minValue <- case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage txOut' protocol of
     Right minValue' -> pure minValue'
     Left e -> Left (CalculateMinUtxoFailed $ show e)
   let
-    value = ensureAtLeastHalfAnAda $ C.txOutValueToValue origValue
     minLovelace = C.selectLovelace minValue
-    deficit = minLovelace <> negate (minimum[C.selectLovelace value, minLovelace])
-    newValue = value <> C.lovelaceToValue deficit
+    deficit = if minLovelace > C.selectLovelace origValue
+      then minLovelace <> (negate $ C.selectLovelace origValue)
+      else mempty
+    newValue = origValue <> C.lovelaceToValue deficit
   pure $ C.TxOut address (C.TxOutValue C.MultiAssetInBabbageEra newValue) datum script
 
 -- Adjusts all the TxOuts as necessary to comply with Minimum UTXO
@@ -561,10 +566,14 @@ selectCoins protocol WalletContext{..} txBodyContent = do
     inputTxIns = map fst $ C.txIns txBodyContent
     inputsFromBody = foldMap (txOutToValue . snd) $ filter (flip elem inputTxIns . fst) utxos
 
+    mintValue = case C.txMintValue txBodyContent of
+      C.TxMintValue _ value _ -> value
+      _ -> mempty
+
     -- Find the net additional input that is needed
     targetSelectionValue :: C.Value
-    -- targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody
-    targetSelectionValue = log ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> log ("selectCoins fee: " <> show fee) fee <> log ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> log ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) C.negateValue inputsFromBody
+    targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
+    -- targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
 
     -- Remove the lovelace from a value.
     deleteLovelace :: C.Value -> C.Value
