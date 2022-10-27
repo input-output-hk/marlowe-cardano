@@ -50,6 +50,7 @@
           depends = [
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."sort" or (errorHandler.buildDepError "sort"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))

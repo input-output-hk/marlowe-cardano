@@ -44,6 +44,7 @@ library actus-core
   build-depends:
     aeson -any,
     base -any,
+    errors -any,
     mtl -any,
     sort -any,
     lens -any,

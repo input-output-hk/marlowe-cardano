@@ -10,6 +10,7 @@ module Actus.Domain.ContractTerms
   where
 
 import Control.Applicative ((<|>))
+import Control.Error.Util (hush)
 import Control.Monad (guard, mzero)
 import Data.Aeson.TH (deriveJSON)
 import Data.Aeson.Types
@@ -305,9 +306,6 @@ instance FromJSON Cycle where
       unconsConstant c t = do (ht, tt) <- uncons t
                               guard (ht == c)
                               return tt
-
-      hush :: Either a b -> Maybe b
-      hush = either (const Nothing) Just
 
   parseJSON _ = mzero
 
