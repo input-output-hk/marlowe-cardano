@@ -1,0 +1,60 @@
+digraph ApplyInputs {
+
+rankdir=LR
+
+node [shape=record]
+
+
+Tx0_Role [label="A Contract Role|2 ₳ + 1 role token"]
+
+Tx0_ADA [label="A Contract Role|X ₳"]
+
+
+Tx0_Script [label="Marlowe Application|Y ₳|{Prior\nBalance|Prior\nHistory|Prior\nVariables}"]
+
+
+Tx1 [shape=oval label="Input-Application Tx"]
+
+Tx0_Role -> Tx1
+
+Tx0_ADA -> Tx1
+
+Tx0_Script -> Tx1 [label="inputs to contract"]
+
+
+Tx1_0 [label="Same Contract Role|X + Y - Z - P₁ - ... - Pₙ - 1.3 ₳"]
+
+Tx1 -> Tx1_0 [label="#0"]
+
+
+Tx1_1 [label="Same Contract Role|2 ₳ + 1 role token"]
+
+Tx1 -> Tx1_1 [label="#1"]
+
+
+Tx1_2 [label="Marlowe Application|Z ₳|{New\nBalance|New\nHistory|New\nVariables}"]
+
+Tx1 -> Tx1_2 [label="#2"]
+
+
+Tx1_3 [label="Marlowe Payout|P₁ ₳|Role to be paid"]
+
+Tx1 -> Tx1_3 [label="#3"]
+
+
+Tx1_4 [shape=none label=". . ."]
+
+Tx1 -> Tx1_4
+
+
+Tx1_N [label="Marlowe Payout|Pₙ ₳|Role to be paid"]
+
+Tx1 -> Tx1_N [label="# n+2"]
+
+
+Tx1_Fee [label="Fee\n1.3 ₳"]
+
+Tx1 -> Tx1_Fee
+
+
+}
