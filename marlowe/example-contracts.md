@@ -113,7 +113,7 @@ The [marlowe-contracts](../marlowe-contracts/src/Marlowe/Contracts) Haskell pack
 ## Marlowe Runtime
 
 Marlowe Runtime is the new backend for running Marlowe contracts. Here are examples of running contracts with Marlowe Runtime:
-- [ACTUS PAM (principal at maturity)contract](../marlowe-runtime/examples/deposit.ipynb)
+- [ACTUS PAM (principal at maturity) contract](../marlowe-runtime/examples/deposit.ipynb)
 - [Token Bidding](../marlowe-runtime/examples/token-bid.ipynb)
 
 
