@@ -362,7 +362,7 @@ data CreateError v
   deriving (Generic)
 
 data CreateBuildupError
-  = CollateralSelectionFailed
+  = MintingUtxoSelectionFailed
   | AddressDecodingFailed Address
   | MintingScriptDecodingFailed PlutusScript
   deriving (Eq, Show, Generic)

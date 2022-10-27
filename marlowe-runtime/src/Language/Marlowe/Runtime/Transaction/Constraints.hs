@@ -52,16 +52,15 @@ import Witherable (wither)
 
 -- For debug logging
 -- import Debug.Trace (trace)
-import Prelude hiding (log)
 
 -- | Quick-and-dirty logging for the pure code in this module
 --   examples, before: foo bar baz
---             after:  foo (log ("bar: " <> show bar) bar) baz
---             or:     foo (log "some message" bar) baz
+--             after:  foo (logD ("bar: " <> show bar) bar) baz
+--             or:     foo (logD "some message" bar) baz
 --   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
-log :: String -> a -> a
--- log = trace  -- Logging "active"
-log = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+logD :: String -> a -> a
+-- logD = trace  -- Logging "active"
+logD = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -386,7 +385,7 @@ solveConstraints start history protocol version marloweCtx walletCtx constraints
     >>= balanceTx C.BabbageEraInCardanoMode start history protocol version marloweCtx walletCtx
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's
---   calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will
+--   calculateMinimumUTxO. It's called by adjustOutputForMinUTxO below. We will
 --   eventually be able to remove it.
 ensureAtLeastHalfAnAda :: C.Value -> C.Value
 ensureAtLeastHalfAnAda origValue =
@@ -404,15 +403,20 @@ adjustOutputForMinUtxo
    .  C.ProtocolParameters
   -> C.TxOut C.CtxTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxOut C.CtxTx C.BabbageEra)
-adjustOutputForMinUtxo protocol txOut@(C.TxOut address origValue datum script) = do
-  minValue <- case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage txOut protocol of
+adjustOutputForMinUtxo protocol (C.TxOut address txOrigValue datum script) = do
+  let
+    origValue = C.txOutValueToValue txOrigValue
+    adjustedForCalculateMin = ensureAtLeastHalfAnAda origValue
+    txOut' = C.TxOut address (C.TxOutValue C.MultiAssetInBabbageEra adjustedForCalculateMin) datum script
+  minValue <- case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage txOut' protocol of
     Right minValue' -> pure minValue'
     Left e -> Left (CalculateMinUtxoFailed $ show e)
   let
-    value = ensureAtLeastHalfAnAda $ C.txOutValueToValue origValue
     minLovelace = C.selectLovelace minValue
-    deficit = minLovelace <> negate (minimum[C.selectLovelace value, minLovelace])
-    newValue = value <> C.lovelaceToValue deficit
+    deficit = if minLovelace > C.selectLovelace origValue
+      then minLovelace <> (negate $ C.selectLovelace origValue)
+      else mempty
+    newValue = origValue <> C.lovelaceToValue deficit
   pure $ C.TxOut address (C.TxOutValue C.MultiAssetInBabbageEra newValue) datum script
 
 -- Adjusts all the TxOuts as necessary to comply with Minimum UTXO
@@ -561,10 +565,14 @@ selectCoins protocol WalletContext{..} txBodyContent = do
     inputTxIns = map fst $ C.txIns txBodyContent
     inputsFromBody = foldMap (txOutToValue . snd) $ filter (flip elem inputTxIns . fst) utxos
 
+    mintValue = case C.txMintValue txBodyContent of
+      C.TxMintValue _ value _ -> value
+      _ -> mempty
+
     -- Find the net additional input that is needed
     targetSelectionValue :: C.Value
-    -- targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody
-    targetSelectionValue = log ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> log ("selectCoins fee: " <> show fee) fee <> log ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> log ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) C.negateValue inputsFromBody
+    targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
+    -- targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
 
     -- Remove the lovelace from a value.
     deleteLovelace :: C.Value -> C.Value
@@ -596,7 +604,7 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 
   -- Ensure that coin selection for lovelace is possible.
   -- unless (C.selectLovelace targetSelectionValue <= C.selectLovelace universe)
-  unless (C.selectLovelace (log ("selectCoins targetSelectionValue: " <> show targetSelectionValue) targetSelectionValue) <= C.selectLovelace (log ("selectCoins universe: " <> show universe) universe))
+  unless (C.selectLovelace (logD ("selectCoins targetSelectionValue: " <> show targetSelectionValue) targetSelectionValue) <= C.selectLovelace (logD ("selectCoins universe: " <> show universe) universe))
     . Left
     . CoinSelectionFailed
     $ "Insufficient lovelace available for coin selection: "
@@ -636,18 +644,18 @@ selectCoins protocol WalletContext{..} txBodyContent = do
         -- Choose the best UTxO from the candidates.
         next :: (C.TxIn, C.TxOut C.CtxTx C.BabbageEra)
         -- next = minimumBy (compare `on` priority required) candidates
-        next = minimumBy (compare `on` priority (log ("select required: " <> show required) required)) candidates
+        next = minimumBy (compare `on` priority (logD ("select required: " <> show required) required)) candidates
         -- Determine the remaining candidates.
         candidates' :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
         -- candidates' = delete next candidates
-        candidates' = delete next (log ("select candidates: " <> show candidates) candidates)
+        candidates' = delete next (logD ("select candidates: " <> show candidates) candidates)
         -- Ignore negative quantities.
         filterPositive :: C.Value -> C.Value
         filterPositive = C.valueFromList . filter ((> 0) . snd) . C.valueToList
         -- Compute the remaining requirement.
         required' :: C.Value
         -- required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd next)
-        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd (log ("select next: " <> show next) next))
+        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd (logD ("select next: " <> show next) next))
       in
         -- Decide whether to continue.
         if required' == mempty
@@ -858,22 +866,23 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
   --   , txScriptValidity = C.TxScriptValidityNone
   --   }
   pure C.TxBodyContent
-    { txIns = log ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
+    { txIns = logD ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
     , txInsCollateral = C.TxInsCollateralNone
-    , txInsReference = log ("solveInitialTxBodyContent txInsReference: " <> show txInsReference) txInsReference
+    , txInsReference = logD ("solveInitialTxBodyContent txInsReference: " <> show txInsReference) txInsReference
     , txOuts
     , txTotalCollateral = C.TxTotalCollateralNone
     , txReturnCollateral = C.TxReturnCollateralNone
     , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-    , txValidityRange = log ("solveInitialTxBodyContent txValidityRange: " <> show txValidityRange) txValidityRange
-    , txMetadata = log ("solveInitialTxBodyContent txMetadata: " <> show txMetadata) txMetadata
+    , txValidityRange = logD ("solveInitialTxBodyContent txValidityRange: " <> show txValidityRange) txValidityRange
+    , txMetadata = logD ("solveInitialTxBodyContent txMetadata: " <> show txMetadata) txMetadata
     , txAuxScripts = C.TxAuxScriptsNone
-    , txExtraKeyWits = log ("solveInitialTxBodyContent txExtraKeyWits: " <> show txExtraKeyWits) txExtraKeyWits
+    , txExtraKeyWits = logD ("solveInitialTxBodyContent txExtraKeyWits: " <> show txExtraKeyWits) txExtraKeyWits
     , txProtocolParams = C.BuildTxWith $ Just protocol
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    , txMintValue = log ("END values for the new tx body\nsolveInitialTxBodyContent txMintValue: " <> show txMintValue) txMintValue
+    -- , txMintValue
+    , txMintValue = logD ("END values for the new tx body") txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
   where

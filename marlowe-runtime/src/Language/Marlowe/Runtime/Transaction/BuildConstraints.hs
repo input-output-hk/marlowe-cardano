@@ -23,7 +23,7 @@ import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (find, sortBy)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, maybeToList)
+import Data.Maybe (catMaybes, listToMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
@@ -48,7 +48,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TransactionMetadata(TransactionMetadata, unTransactionMetadata)
   , TransactionOutput(TransactionOutput)
   , UTxO(UTxO)
-  , toUTxOTuple
   , toUTxOsList
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
@@ -75,7 +74,7 @@ import qualified Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokens
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
   , ApplyInputsError(..)
-  , CreateBuildupError(AddressDecodingFailed, CollateralSelectionFailed, MintingScriptDecodingFailed)
+  , CreateBuildupError(AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed)
   , CreateError(..)
   , Mint(unMint)
   , NFTMetadata(unNFTMetadata)
@@ -206,16 +205,16 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
       Just (Left policyId) -> pure policyId
       Just (Right (unMint -> minting)) -> do
         let
-          WalletContext { collateralUtxos, availableUtxos } = walletCtx
+          WalletContext { availableUtxos } = walletCtx
           txLovelaceRequirementEstimate = adaAsset $
             minAda
             + maxFees
             + Lovelace (fromInteger . toInteger . length $ minting) * minAdaPerTokenOutput
           utxoAssets UTxO {transactionOutput = TransactionOutput { assets }} = assets
-          collateralUtxos' = filter (flip Set.member collateralUtxos . fst . toUTxOTuple) . toUTxOsList $ availableUtxos
-          possibleInput = find ((<) txLovelaceRequirementEstimate . utxoAssets) . sortBy (compare `on` utxoAssets) $ collateralUtxos'
+          possibleInput = (find ((<) txLovelaceRequirementEstimate . utxoAssets) . sortBy (compare `on` utxoAssets) . toUTxOsList $ availableUtxos)
+            <|> listToMaybe (toUTxOsList availableUtxos)
 
-        UTxO txOutRef _ <- liftMaybe CollateralSelectionFailed possibleInput
+        UTxO txOutRef _ <- liftMaybe MintingUtxoSelectionFailed possibleInput
         let
           txOutRef' = toPlutusTxOutRef txOutRef
 
