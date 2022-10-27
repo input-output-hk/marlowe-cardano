@@ -48,17 +48,6 @@ instance Eq RoleTokens where
   {-# INLINABLE (==) #-}
   (RoleTokens r1) == (RoleTokens r2) = r1 == r2
 
--- Unfortunatelly `PlutusTx.Prelude` doesn't provide `group` so we perform
--- this fold manually here.
-{-# INLINEABLE step #-}
-step :: (Eq a, AdditiveSemigroup b)
-  => (a, b) -> Maybe ((a, b), [(a, b)]) -> Maybe ((a, b), [(a, b)])
-step last Nothing = Just (last, [])
-step curr@(tn', i') (Just (tokAcc@(tn, i), acc)) =
-  Just $ if tn == tn'
-    then ((tn, i + i'), acc)
-    else (curr, tokAcc : acc)
-
 {-# INLINEABLE mkRoleTokens #-}
 mkRoleTokens :: [(PV2.TokenName, Integer)] -> RoleTokens
 mkRoleTokens = RoleTokens . squash . sort
@@ -67,6 +56,14 @@ mkRoleTokens = RoleTokens . squash . sort
 
   finalize Nothing = []
   finalize (Just (tokAcc, acc)) = tokAcc : acc
+
+  -- Unfortunatelly `PlutusTx.Prelude` doesn't provide `group` so we perform
+  -- this fold manually here.
+  step last Nothing = Just (last, [])
+  step curr@(tn', i') (Just (tokAcc@(tn, i), acc)) =
+    Just $ if tn == tn'
+      then ((tn, i + i'), acc)
+      else (curr, tokAcc : acc)
 
 newtype RoleTokensHash = RoleTokensHash { getRoleTokensHash :: PV2.BuiltinByteString }
   deriving (Haskell.Show) via PV2.LedgerBytes
