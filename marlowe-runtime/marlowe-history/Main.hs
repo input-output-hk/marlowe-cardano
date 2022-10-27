@@ -3,14 +3,17 @@
 module Main
   where
 
+import qualified Colog
 import Control.Concurrent.STM (atomically)
-import Control.Exception (bracket, bracketOnError, throwIO)
-import Data.Either (fromRight)
+import Control.Exception (SomeException, bracket, bracketOnError, catch, throw, throwIO)
+import qualified Data.Text as T
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
+import Language.Marlowe.Runtime.CLI.Option.Colog (Verbosity(LogLevel), logActionParser)
 import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
 import Language.Marlowe.Runtime.History (History(..), HistoryDependencies(..), mkHistory)
 import Language.Marlowe.Runtime.History.Api (historyJobCodec, historyQueryCodec)
 import Language.Marlowe.Runtime.History.JobServer (RunJobServer(RunJobServer))
@@ -18,11 +21,12 @@ import Language.Marlowe.Runtime.History.QueryServer (RunQueryServer(RunQueryServ
 import Language.Marlowe.Runtime.History.Store (hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
 import Language.Marlowe.Runtime.History.SyncServer (RunSyncServer(..))
+import Language.Marlowe.Runtime.Logging.Colog (logErrorM)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Job.Server (jobServerPeer)
-import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
+import Network.Protocol.Query.Client (liftQuery', queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket
@@ -31,6 +35,7 @@ import Network.Socket
   , HostName
   , PortNumber
   , SockAddr
+  , Socket
   , SocketOption(..)
   , SocketType(..)
   , accept
@@ -72,51 +77,62 @@ clientHints :: AddrInfo
 clientHints = defaultHints { addrSocketType = Stream }
 
 run :: Options -> IO ()
-run Options{..} = withSocketsDo do
+run Options{logAction=mainLogAction,..} = withSocketsDo do
   jobAddr <- resolve commandPort
   queryAddr <- resolve queryPort
   syncAddr <- resolve syncPort
-  bracket (openServer jobAddr) close \jobSocket ->
-    bracket (openServer queryAddr) close \querySocket -> do
-      bracket (openServer syncAddr) close \syncSocket -> do
-        slotConfig <- queryChainSync GetSlotConfig
-        securityParameter <- queryChainSync GetSecurityParameter
-        let
+  Colog.withBackgroundLogger Colog.defCapacity mainLogAction \logAction -> do
+    let
+      withNetworkClient :: forall a. String -> AddrInfo -> (Socket -> IO a) -> IO a
+      withNetworkClient name serverAddr action = do
+        let open = openClient serverAddr
+        bracket open close action `catch` \(err :: SomeException) -> do
+          let
+            serverInfo = show (addrAddress serverAddr)
+          logErrorM logAction . T.pack $
+            show name <> " client (server at: " <> serverInfo <> ") failure: " <> show err <> " ."
+          throw err
 
-          connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-          connectToChainSeek client = do
-            chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-            bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
-              let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
-              let peer = chainSeekClientPeer Genesis client
-              fst <$> runPeerWithDriver driver peer (startDState driver)
+    bracket (openServer jobAddr) close \jobSocket ->
+      bracket (openServer queryAddr) close \querySocket -> do
+        bracket (openServer syncAddr) close \syncSocket -> do
+          slotConfig <- queryChainSync GetSlotConfig
+          securityParameter <- queryChainSync GetSecurityParameter
+          let
+            connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+            connectToChainSeek client = do
+              chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+              withNetworkClient "Chain Seek" chainSeekAddr \chainSeekSocket -> do
+                let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
+                let peer = chainSeekClientPeer Genesis client
+                fst <$> runPeerWithDriver driver peer (startDState driver)
 
-          acceptRunJobServer = do
-            (conn, _ :: SockAddr) <- accept jobSocket
-            let driver = mkDriver throwIO historyJobCodec $ socketAsChannel conn
-            pure $ RunJobServer \server -> do
-              let peer = jobServerPeer server
-              fst <$> runPeerWithDriver driver peer (startDState driver)
+            acceptRunJobServer = do
+              (conn, _ :: SockAddr) <- accept jobSocket
+              let driver = mkDriver throwIO historyJobCodec $ socketAsChannel conn
+              pure $ RunJobServer \server -> do
+                let peer = jobServerPeer server
+                fst <$> runPeerWithDriver driver peer (startDState driver)
 
-          acceptRunQueryServer = do
-            (conn, _ :: SockAddr) <- accept querySocket
-            let driver = mkDriver throwIO historyQueryCodec $ socketAsChannel conn
-            pure $ RunQueryServer \server -> do
-              let peer = queryServerPeer server
-              fst <$> runPeerWithDriver driver peer (startDState driver)
+            acceptRunQueryServer = do
+              (conn, _ :: SockAddr) <- accept querySocket
+              let driver = mkDriver throwIO historyQueryCodec $ socketAsChannel conn
+              pure $ RunQueryServer \server -> do
+                let peer = queryServerPeer server
+                fst <$> runPeerWithDriver driver peer (startDState driver)
 
-          acceptRunSyncServer = do
-            (conn, _ :: SockAddr) <- accept syncSocket
-            let driver = mkDriver throwIO codecMarloweSync $ socketAsChannel conn
-            pure $ RunSyncServer \server -> do
-              let peer = marloweSyncServerPeer server
-              fst <$> runPeerWithDriver driver peer (startDState driver)
+            acceptRunSyncServer = do
+              (conn, _ :: SockAddr) <- accept syncSocket
+              let driver = mkDriver throwIO codecMarloweSync $ socketAsChannel conn
+              pure $ RunSyncServer \server -> do
+                let peer = marloweSyncServerPeer server
+                fst <$> runPeerWithDriver driver peer (startDState driver)
 
-        let followerPageSize = 1024 -- TODO move to config with a default
-        History{..} <- atomically do
-          historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
-          mkHistory HistoryDependencies{..}
-        runHistory
+          let followerPageSize = 1024 -- TODO move to config with a default
+          History{..} <- atomically do
+            historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
+            mkHistory HistoryDependencies{..}
+          runHistory
   where
     openClient addr = bracketOnError (openSocket addr) close \sock -> do
       connect sock $ addrAddress addr
@@ -138,19 +154,23 @@ run Options{..} = withSocketsDo do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
       bracket (openClient addr) close \socket -> do
         let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
-        let client = liftQuery query
+        let onHandshakeFailure _ = error "Chain seek handshake failed"
+        let client = liftQuery' ChainSync.querySchema onHandshakeFailure . pure $ query
         let peer = queryClientPeer client
         result <- fst <$> runPeerWithDriver driver peer (startDState driver)
-        pure $ fromRight (error "failed to query chain seek server") result
+
+        let onFailure _ = error "failed to query chain seek server"
+        pure $ either onFailure id result
 
 data Options = Options
-  { chainSeekPort      :: PortNumber
-  , chainSeekQueryPort :: PortNumber
-  , commandPort        :: PortNumber
-  , queryPort          :: PortNumber
-  , syncPort           :: PortNumber
-  , chainSeekHost      :: HostName
-  , host               :: HostName
+  { chainSeekPort       :: PortNumber
+  , chainSeekQueryPort  :: PortNumber
+  , commandPort         :: PortNumber
+  , queryPort           :: PortNumber
+  , syncPort            :: PortNumber
+  , chainSeekHost       :: HostName
+  , host                :: HostName
+  , logAction           :: Colog.LogAction IO Colog.Message
   }
 
 getOptions :: IO Options
@@ -164,6 +184,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> syncPortParser
       <*> chainSeekHostParser
       <*> hostParser
+      <*> logActionParser (LogLevel Colog.Error)
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-seek-port-number"

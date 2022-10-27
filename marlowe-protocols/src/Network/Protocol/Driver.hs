@@ -45,3 +45,6 @@ mkDriver throwImpl Codec{..} Channel{..} = Driver{..}
 
     startDState :: Maybe bytes
     startDState = Nothing
+
+hoistDriver :: (forall x. m x -> m' x) -> Driver ps (Maybe bytes) m -> Driver ps (Maybe bytes) m'
+hoistDriver phi (Driver send recv dstate) = Driver (fmap phi <$> send) (fmap phi <$> recv) dstate

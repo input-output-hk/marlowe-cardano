@@ -5,18 +5,25 @@ import qualified Cardano.Api as C
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT(ExceptT))
 import Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor(first))
 import Data.ByteString.Base16 (encodeBase16)
+import qualified Data.Text as T
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
-import Language.Marlowe.Runtime.CLI.Monad (CLI, asksEnv, runCLIExceptT, runTxJobClient)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, asksEnv, logDebug, runCLIExceptT, runTxJobClient)
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader(BlockHeader), BlockHeaderHash(unBlockHeaderHash), BlockNo(unBlockNo), SlotNo(unSlotNo))
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(Submit), SubmitError)
+import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(Submit), SubmitError, marloweTxCommandSchema)
 import Network.Protocol.Job.Client
-  (ClientStAwait(SendMsgDetach, SendMsgPoll), ClientStCmd(..), ClientStInit(SendMsgExec), JobClient(JobClient))
+  ( ClientStAwait(SendMsgDetach, SendMsgPoll)
+  , ClientStCmd(..)
+  , ClientStHandshake(..)
+  , ClientStIdle(SendMsgExec)
+  , jobClient
+  )
 import Options.Applicative
 
 newtype SubmitCommand = SubmitCommand
@@ -34,13 +41,15 @@ submitCommandParser = info parser $ progDesc "Submit a signed transaction to the
       ]
 
 data CilentSubmitError
-  = SubmitFailed SubmitError
+  = SchemaMistmatch
+  | SubmitFailed SubmitError
   | SubmitInterrupted
   | TransactionDecodingFailed
   deriving (Show)
 
 runSubmitCommand :: SubmitCommand -> CLI ()
 runSubmitCommand SubmitCommand{txFile} = runCLIExceptT do
+  lift $ logDebug $ "Trying to decode tx file:" <> T.pack txFile
   tx <- ExceptT $ liftIO $ first (const TransactionDecodingFailed) <$> C.readFileTextEnvelope (C.AsTx C.AsBabbageEra) txFile
   let
     cmd = Submit tx
@@ -59,8 +68,11 @@ runSubmitCommand SubmitCommand{txFile} = runCLIExceptT do
           pure . Left . SubmitFailed $ err
       , recvMsgSucceed = pure . Right
       }
-    jobClient = JobClient . pure . SendMsgExec cmd $ next
-  BlockHeader slotNo hash blockNo <- ExceptT $ runTxJobClient jobClient
+    jobClient' = jobClient marloweTxCommandSchema . pure $ ClientStHandshake
+      { recvMsgHandshakeRejected = const $ pure $ Left SchemaMistmatch
+      , recvMsgHandshakeConfirmed = pure $ SendMsgExec cmd next
+      }
+  BlockHeader slotNo hash blockNo <- ExceptT $ runTxJobClient jobClient'
   let
     res = A.object
       [ ("slotNo", toJSON $ unSlotNo slotNo)

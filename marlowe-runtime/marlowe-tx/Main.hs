@@ -1,20 +1,23 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
 module Main
   where
 
 import Cardano.Api (NetworkId(Mainnet))
+import Colog (logDebug, logError)
 import qualified Colog
 import Control.Concurrent.STM (atomically)
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception.Base
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString.Lazy as LB
-import Data.Either (fromRight)
+import qualified Data.Text as T
 import Data.Void (Void)
+import GHC.Stack (HasCallStack)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
-import Language.Marlowe.Runtime.CLI.Option (Verbosity(LogLevel, Silent), verbosityParser)
+import Language.Marlowe.Runtime.CLI.Option.Colog (Verbosity(LogLevel), logActionParser)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( ChainSyncCommand
   , ChainSyncQuery(..)
@@ -25,16 +28,19 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , chainSeekClientPeer
   , runtimeChainSeekCodec
   )
-import Language.Marlowe.Runtime.Logging (mkLogger)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (LogIO, dieLogIO, runLogIO)
+import Language.Marlowe.Runtime.Logging.Colog.LogIO.Network
+  (ProtocolName(ProtocolName), withClientSocket, withServerSocket)
 import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server
-  (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), WorkerM, mkTransactionServer)
+  (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Network.Channel (Channel, hoistChannel, socketAsChannel)
-import Network.Protocol.Driver (mkDriver)
+import Network.Protocol.Driver (hoistDriver, mkDriver)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -46,19 +52,10 @@ import Network.Socket
   , HostName
   , PortNumber
   , SockAddr
-  , SocketOption(..)
   , SocketType(..)
   , accept
-  , bind
-  , close
-  , connect
   , defaultHints
   , getAddrInfo
-  , listen
-  , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
   , withSocketsDo
   )
 import Network.TypedProtocol (runPeerWithDriver, startDState)
@@ -79,7 +76,6 @@ import Options.Applicative
   , strOption
   , value
   )
-import System.Exit (die)
 
 main :: IO ()
 main = run =<< getOptions
@@ -88,62 +84,60 @@ clientHints :: AddrInfo
 clientHints = defaultHints { addrSocketType = Stream }
 
 run :: Options -> IO ()
-run Options{..} = withSocketsDo do
+run Options{logAction=mainLogAction, ..} = withSocketsDo do
   addr <- resolve port
-
-  let
-    mainLogAction :: Colog.LogAction IO Colog.Message
-    mainLogAction = mkLogger $ case verbosity of
-      Silent -> Nothing
-      LogLevel severity -> Just severity
-
-  bracket (openServer addr) close \socket -> do
-    Colog.withBackgroundLogger Colog.defCapacity mainLogAction \logAction -> do
+  Colog.withBackgroundLogger Colog.defCapacity mainLogAction \logAction -> do
+    runLogIO logAction $ withServerSocket (ProtocolName "Marlowe Tx") addr \socket -> do
       {- Setup Dependencies -}
       let
         acceptRunTransactionServer = do
-          (conn, _ :: SockAddr) <- accept socket
+          (conn, _ :: SockAddr) <- liftIO $ accept socket
 
           let
-            chann :: Channel WorkerM LB.ByteString
+            chann :: Channel LogIO LB.ByteString
             chann = hoistChannel liftIO $ socketAsChannel conn
             driver = mkDriver (liftIO . throwIO) codecJob chann
           pure $ RunTransactionServer \server -> do
             let peer = jobServerPeer server
             fst <$> runPeerWithDriver driver peer (startDState driver)
 
-        runHistorySyncClient :: MarloweSyncClient IO a -> IO a
+        runHistorySyncClient :: MarloweSyncClient LogIO a -> LogIO a
         runHistorySyncClient client = do
-          historySyncAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-          bracket (openClient historySyncAddr) close \historySyncSocket -> do
-            let driver = mkDriver throwIO codecMarloweSync $ socketAsChannel historySyncSocket
+          historySyncAddr <- liftIO $ head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
+          withClientSocket (ProtocolName "HistorySync") historySyncAddr \historySyncSocket -> do
+            let driver = hoistDriver liftIO $ mkDriver throwIO codecMarloweSync $ socketAsChannel historySyncSocket
             let peer = marloweSyncClientPeer client
             fst <$> runPeerWithDriver driver peer (startDState driver)
 
-        connectToChainSeek :: RuntimeChainSeekClient IO a -> IO a
+        connectToChainSeek :: RuntimeChainSeekClient LogIO a -> LogIO a
         connectToChainSeek client = do
-          chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-          bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
-            let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
+          chainSeekAddr <- liftIO $ head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+          withClientSocket (ProtocolName "ChainSeek") chainSeekAddr \chainSeekSocket -> do
+            let driver = hoistDriver liftIO (mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket)
             let peer = chainSeekClientPeer Genesis client
             fst <$> runPeerWithDriver driver peer (startDState driver)
 
-        runChainSyncJobClient :: JobClient ChainSyncCommand IO a -> IO a
+        runChainSyncJobClient :: JobClient ChainSyncCommand LogIO a -> LogIO a
         runChainSyncJobClient client = do
-          chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
-          bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
-            let driver = mkDriver throwIO codecJob $ socketAsChannel chainSeekSocket
+          chainSeekAddr <- liftIO $ head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
+          withClientSocket (ProtocolName "ChainSyncJob") chainSeekAddr \chainSeekSocket -> do
+            let driver = hoistDriver liftIO $ mkDriver throwIO codecJob $ socketAsChannel chainSeekSocket
             let peer = jobClientPeer client
             fst <$> runPeerWithDriver driver peer (startDState driver)
 
-      let mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
-      systemStart <- queryChainSync GetSystemStart
-      eraHistory <- queryChainSync GetEraHistory
-      protocolParameters <- queryChainSync GetProtocolParameters
-      slotConfig <- queryChainSync GetSlotConfig
-      networkId <- queryChainSync GetNetworkId
+      let
+        mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
+        queryChainSync' q = queryChainSync q >>= \case
+          Just res -> pure res
+          Nothing -> error "Initialization failed on chain sync query"
+
+      systemStart <- queryChainSync' GetSystemStart
+      eraHistory <- queryChainSync' GetEraHistory
+      protocolParameters <- queryChainSync' GetProtocolParameters
+      slotConfig <- queryChainSync' GetSlotConfig
+      networkId <- queryChainSync' GetNetworkId
       when (networkId == Mainnet) do
-        die "Mainnet support is currently disabled."
+        dieLogIO "Mainnet support is currently disabled."
       let
         solveConstraints :: SolveConstraints
         solveConstraints = Constraints.solveConstraints
@@ -158,39 +152,37 @@ run Options{..} = withSocketsDo do
         loadWalletContext :: LoadWalletContext
         loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
 
-      TransactionServer{..} <- atomically do
+      TransactionServer{..} <- liftIO $ atomically do
         mkTransactionServer TransactionServerDependencies{..}
 
       {- Run the server -}
       runTransactionServer
   where
-    openServer addr = bracketOnError (openSocket addr) close \socket -> do
-      setSocketOption socket ReuseAddr 1
-      withFdSocket socket setCloseOnExecIfNeeded
-      bind socket $ addrAddress addr
-      listen socket 2048
-      return socket
-
     resolve p = do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
-    queryChainSync :: ChainSyncQuery Void e a -> IO a
+    queryChainSync :: Show e => ChainSyncQuery Void e a -> LogIO (Maybe a)
     queryChainSync query = do
-      addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      bracket (openClient addr) close \socket -> do
-        let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
-        let client = liftQuery query
+      addr <- liftIO $ head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
+      withClientSocket (ProtocolName "Chain Sync") addr \socket -> do
+        let driver = hoistDriver liftIO $ mkDriver throwIO codecQuery $ socketAsChannel socket
+        let client = liftQuery ChainSync.querySchema (pure query)
         let peer = queryClientPeer client
         result <- fst <$> runPeerWithDriver driver peer (startDState driver)
-        pure $ fromRight (error "failed to query chain seek server") result
+        case result of
+          Right r -> pure $ Just r
+          Left (Left _) -> do
+            logError "Chain Sync handshake erorr"
+            pure Nothing
+          Left (Right err) -> do
+            logError . T.pack . mappend "Chain Sync query error..." $ show err
+            pure Nothing
 
-    runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
-    runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
-
-    openClient addr = bracketOnError (openSocket addr) close \sock -> do
-      connect sock $ addrAddress addr
-      pure sock
+    runGetUTxOsQuery :: HasCallStack => GetUTxOsQuery -> LogIO (Maybe UTxOs)
+    runGetUTxOsQuery getUTxOsQuery = do
+      logDebug . T.pack $ show getUTxOsQuery
+      queryChainSync (GetUTxOs getUTxOsQuery)
 
 data Options = Options
   { chainSeekPort      :: PortNumber
@@ -201,7 +193,7 @@ data Options = Options
   , host               :: HostName
   , historySyncPort :: PortNumber
   , historyHost :: HostName
-  , verbosity  :: Verbosity
+  , logAction :: Colog.LogAction IO Colog.Message
   }
 
 getOptions :: IO Options
@@ -216,7 +208,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> hostParser
       <*> historySyncPortParser
       <*> historyHostParser
-      <*> verbosityParser (LogLevel Colog.Error)
+      <*> logActionParser (LogLevel Colog.Error)
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-seek-port-number"

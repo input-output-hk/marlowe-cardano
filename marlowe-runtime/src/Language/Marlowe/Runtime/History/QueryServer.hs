@@ -68,7 +68,7 @@ mkWorker WorkerDependencies{..} =
 
   where
     server :: RuntimeHistoryQueryServer IO ()
-    server = QueryServer $ pure $ ServerStInit \case
+    server = queryServer' querySchema \case
       GetFollowedContracts  -> getFollowedContractsServer followerPageSize followerStatuses
       GetStatuses contractIds -> getStatusesServer contractIds followerStatuses
 
@@ -92,7 +92,7 @@ getFollowedContractsServer followerPageSize followerStatuses = do
       nextPageDelimiter = fst <$> listToMaybe remaining
     in
       SendMsgNextPage results nextPageDelimiter ServerStPage
-        { recvMsgDone = pure ()
+        { recvMsgRequestDone = pure ()
         , recvMsgRequestNext = \delimiter -> pure
             $ next
             $ Map.fromDistinctAscList
@@ -106,6 +106,6 @@ getStatusesServer
 getStatusesServer contractIds followerStatuses = do
   followers <- atomically followerStatuses
   pure $ SendMsgNextPage (Map.restrictKeys followers contractIds) Nothing ServerStPage
-    { recvMsgDone = pure ()
+    { recvMsgRequestDone = pure ()
     , recvMsgRequestNext = absurd
     }

@@ -4,6 +4,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | A generc server for the query protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
@@ -12,6 +13,8 @@
 module Network.Protocol.Query.Server
   where
 
+import Control.Category ((>>>))
+import Control.Monad ((>=>))
 import Network.Protocol.Query.Types
 import Network.Protocol.SchemaVersion (SchemaVersion)
 import Network.TypedProtocol
@@ -200,15 +203,25 @@ queryServer version stIdle = QueryServer $ do
       then SendMsgHandshakeConfirmed stIdle
       else SendMsgHandshakeRejected version ()
 
+queryServer'
+  :: Applicative m
+  => SchemaVersion query
+  -> (forall delimiter err results. query delimiter err results -> m (ServerStNext query 'CanReject delimiter err results m ()))
+  -> QueryServer query m ()
+queryServer' version handle = queryServer version $ pure $ ServerStIdle
+  { recvMsgRequest = handle
+  , recvMsgDone = pure ()
+  }
+
 -- | Create a server that does not return results in multiple pages. Requesting
 -- next will always return the same results as the first page.
-liftHandler
+liftNonPaginated
   :: forall query m
    . Monad m
   => SchemaVersion query
   -> (forall delimiter err results. query delimiter err results -> m (Either err results))
   -> QueryServer query m ()
-liftHandler version handle = queryServer version $ pure $ ServerStIdle
+liftNonPaginated version handle = queryServer version $ pure $ ServerStIdle
   { recvMsgRequest = \query -> do
       result <- handle query
       pure case result of
@@ -221,5 +234,27 @@ liftHandler version handle = queryServer version $ pure $ ServerStIdle
     sendResults results = SendMsgNextPage results Nothing ServerStPage
       { recvMsgRequestDone = pure ()
       , recvMsgRequestNext = \_ -> pure $ sendResults results
+      }
+
+-- | Create a server that does not return results in multiple pages. Requesting
+-- next will always return the same results as the first page.
+liftPaginated
+  :: forall query m seed
+   . Monad m
+  => SchemaVersion query
+  -> (forall delimiter err results. Either (query delimiter err results) seed -> m (results, seed, Maybe delimiter))
+  -> QueryServer query m ()
+liftPaginated version handle = queryServer version $ pure $ ServerStIdle
+  { recvMsgRequest = Left >>> go
+  , recvMsgDone = pure ()
+  }
+  where
+    go :: Either (query delimiter err results) seed -> m (ServerStNext query k delimiter err results m ())
+    go = handle >=> \(results, seed, delimiter) -> pure (sendResults results seed delimiter)
+
+    sendResults :: forall delimiter err k results. results -> seed -> Maybe delimiter -> ServerStNext query k delimiter err results m ()
+    sendResults results seed delimiter = SendMsgNextPage results delimiter ServerStPage
+      { recvMsgRequestDone = pure ()
+      , recvMsgRequestNext = \_ -> go (Right seed)
       }
 

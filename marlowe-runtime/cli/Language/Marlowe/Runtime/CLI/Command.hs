@@ -3,11 +3,14 @@
 module Language.Marlowe.Runtime.CLI.Command
   where
 
+import qualified Colog
 import Control.Concurrent.STM (STM)
 import Control.Exception (Exception, SomeException, catch, throw)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
+import qualified Data.Text as T
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.CLI.Command.Add (AddCommand, addCommandParser, runAddCommand)
@@ -28,18 +31,27 @@ import Language.Marlowe.Runtime.CLI.Command.Submit (SubmitCommand, runSubmitComm
 import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand)
 import Language.Marlowe.Runtime.CLI.Command.Withdraw (WithdrawCommand, runWithdrawCommand, withdrawCommandParser)
 import Language.Marlowe.Runtime.CLI.Env (Env(..), RunClient, runClientPeerOverSocket)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
+import Language.Marlowe.Runtime.CLI.Monad
+  (CLI, logDebug, logError, runCLI, runDiscoveryQueryClient, runHistoryJobClient, runHistoryQueryClient, runTxJobClient)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
+import Language.Marlowe.Runtime.CLI.Option.Colog (Verbosity(LogLevel), logActionParser)
+import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
+import qualified Language.Marlowe.Runtime.History.Api as History
+import Language.Marlowe.Runtime.Logging.Colog (logErrorM)
+import Language.Marlowe.Runtime.Transaction.Api (marloweTxCommandSchema)
 import Network.Protocol.Job.Client (jobClientPeer)
+import qualified Network.Protocol.Job.Client as Job
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Query.Client (queryClientPeer)
+import qualified Network.Protocol.Query.Client as Query
 import Network.Protocol.Query.Codec (codecQuery)
-import Network.Socket (AddrInfo, HostName, PortNumber, SocketType(..), addrSocketType, defaultHints, getAddrInfo)
+import Network.Socket
+  (AddrInfo(addrAddress), HostName, PortNumber, SocketType(..), addrSocketType, defaultHints, getAddrInfo)
 import Network.TypedProtocol (Peer, PeerRole(AsClient))
 import Network.TypedProtocol.Codec (Codec)
 import Options.Applicative
-import System.IO (hPutStrLn, stderr)
+import System.Exit (exitFailure)
 
 -- | Top-level options for running a command in the Marlowe Runtime CLI.
 data Options = Options
@@ -52,6 +64,7 @@ data Options = Options
   , txHost :: !HostName
   , txCommandPort :: !PortNumber
   , cmd :: !Command
+  , logAction :: !(Colog.LogAction IO Colog.Message)
   }
 
 -- | A command for the Marlowe Runtime CLI.
@@ -110,6 +123,7 @@ getOptions = do
       <*> txHostParser
       <*> txCommandPortParser
       <*> commandParser
+      <*> logActionParser (LogLevel Colog.Error)
     infoMod = mconcat
       [ fullDesc
       , progDesc "Command line interface for managing Marlowe smart contracts on Cardano."
@@ -136,28 +150,48 @@ runCLIWithOptions sigInt Options{..} cli = do
   historySyncAddr <- resolve historyHost historySyncPort
   discoveryQueryAddr <- resolve discoveryHost discoveryQueryPort
   txJobAddr <- resolve txHost txCommandPort
-  runReaderT (runCLI cli) Env
-    { envRunHistoryJobClient = runClientPeerOverSocket' "History job client failure" historyJobAddr codecJob jobClientPeer
-    , envRunHistoryQueryClient = runClientPeerOverSocket' "History query client failure" historyQueryAddr codecQuery queryClientPeer
-    , envRunHistorySyncClient = runClientPeerOverSocket' "History sync client failure" historySyncAddr codecMarloweSync marloweSyncClientPeer
-    , envRunTxJobClient = runClientPeerOverSocket' "Tx client client failure" txJobAddr codecJob jobClientPeer
-    , envRunDiscoveryQueryClient = runClientPeerOverSocket' "Marlowe discovery query client failure" discoveryQueryAddr codecQuery queryClientPeer
+
+  let
+    onHandshake name (Left _) = do
+      logError . T.pack $ name <> " server handshake failure"
+      liftIO exitFailure
+    onHandshake name _ = do
+      logDebug . T.pack $ name <> " server handshake succeeded"
+      pure ()
+
+    cli' = do
+      runHistoryJobClient (Job.doHandshake History.commandSchema) >>= onHandshake "History Job"
+      runHistoryQueryClient (Query.doHandshake History.querySchema) >>= onHandshake "History Query"
+      -- FIXME: add handshake to marlowe protocol
+      -- runHistorySyncClient (ChainSync.doHandshake ChainSync.marloweChainSync) >>= onHandshake "History sycn"
+      runTxJobClient (Job.doHandshake marloweTxCommandSchema) >>= onHandshake "Marlowe Tx Job"
+      runDiscoveryQueryClient (Query.doHandshake Discovery.querySchema) >>= onHandshake "Marlowe Discovery"
+      cli
+
+  runReaderT (runCLI cli') Env
+    { envRunHistoryJobClient = runClientPeerOverSocket' "History Job" historyJobAddr codecJob jobClientPeer
+    , envRunHistoryQueryClient = runClientPeerOverSocket' "History Query" historyQueryAddr codecQuery queryClientPeer
+    , envRunHistorySyncClient = runClientPeerOverSocket' "History Sync" historySyncAddr codecMarloweSync marloweSyncClientPeer
+    , envRunTxJobClient = runClientPeerOverSocket' "Marlowe Tx Job" txJobAddr codecJob jobClientPeer
+    , envRunDiscoveryQueryClient = runClientPeerOverSocket' "Marlowe Discovery" discoveryQueryAddr codecQuery queryClientPeer
+    , logAction = logAction
     , sigInt
     }
   where
     resolve host port =
       head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
 
-runClientPeerOverSocket'
-  :: Exception ex
-  => String -- ^ Client failure stderr extra message
-  -> AddrInfo -- ^ Socket address to connect to
-  -> Codec protocol ex IO LB.ByteString -- ^ A codec for the protocol
-  -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
-  -> RunClient IO client
-runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
-  let
-    run = runClientPeerOverSocket addr codec clientToPeer client
-  run `catch` \(err :: SomeException)-> do
-    hPutStrLn stderr errMsg
-    throw err
+    runClientPeerOverSocket'
+      :: Exception ex
+      => String -- ^ Client failure stderr extra message
+      -> AddrInfo -- ^ Socket address to connect to
+      -> Codec protocol ex IO LB.ByteString -- ^ A codec for the protocol
+      -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
+      -> RunClient IO client
+    runClientPeerOverSocket' name addr codec clientToPeer client = do
+      let
+        run = runClientPeerOverSocket addr codec clientToPeer client
+      run `catch` \(err :: SomeException)-> do
+        logErrorM logAction . T.pack $ (name <> " client (server at: " <> show (addrAddress addr) <> ") failure: " <> show err)
+        -- hPutStrLn stderr (name <> " client (server at: " <> show (addrAddress addr) <> ") failure: " <> show err)
+        throw err

@@ -86,6 +86,9 @@ library
     , cardano-ledger-alonzo
     , cardano-ledger-core
     , cardano-ledger-shelley
+    , co-log
+    , co-log-core
+    , marlowe-chain-sync:logging
     , containers
     , foldl
     , hasql
@@ -170,10 +173,14 @@ library logging
   hs-source-dirs: logging
   exposed-modules:
     Language.Marlowe.Runtime.Logging.Colog
+    Language.Marlowe.Runtime.Logging.Colog.LogIO
+    Language.Marlowe.Runtime.Logging.Colog.LogIO.Network
   build-depends:
-      base >= 4.9 && < 5
+      async
+    , base >= 4.9 && < 5
     , co-log
     , co-log-core
+    , network
     , text
     , transformers
   visibility: public

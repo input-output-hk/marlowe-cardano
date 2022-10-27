@@ -65,11 +65,14 @@ mkWorker WorkerDependencies{..} =
 
   where
     server :: QueryServer DiscoveryQuery IO ()
-    server = QueryServer $ pure $ ServerStInit \case
-      GetContractHeaders ->
-        getContractHeadersServer pageSize getHeaders
-      GetContractHeadersByRoleTokenCurrency policyId ->
-        getContractHeadersByRoleTokenCurrencyServer policyId getHeadersByRoleTokenCurrency
+    server = queryServer querySchema $ pure $ ServerStIdle
+      { recvMsgRequest = \case
+          GetContractHeaders ->
+            getContractHeadersServer pageSize getHeaders
+          GetContractHeadersByRoleTokenCurrency policyId ->
+            getContractHeadersByRoleTokenCurrencyServer policyId getHeadersByRoleTokenCurrency
+      , recvMsgDone = pure ()
+      }
 
 getContractHeadersServer
   :: Natural
@@ -83,14 +86,14 @@ getContractHeadersServer pageSize getHeaders = next <$> getHeaders
   next headers = case splitAt (fromIntegral pageSize) headers of
     (page, []) -> lastPage page
     (page, headers') -> SendMsgNextPage page (Just ()) ServerStPage
-      { recvMsgDone = pure ()
+      { recvMsgRequestDone = pure ()
       , recvMsgRequestNext = const $ pure $ next headers'
       }
   lastPage
     :: [ContractHeader]
     -> ServerStNext DiscoveryQuery k () Void [ContractHeader] IO ()
   lastPage page = SendMsgNextPage page Nothing ServerStPage
-    { recvMsgDone = pure ()
+    { recvMsgRequestDone = pure ()
     , recvMsgRequestNext = const $ pure $ lastPage []
     }
 
@@ -101,6 +104,6 @@ getContractHeadersByRoleTokenCurrencyServer
 getContractHeadersByRoleTokenCurrencyServer policyId getHeadersByRoleTokenCurrency = do
   headers <- getHeadersByRoleTokenCurrency policyId
   pure $ SendMsgNextPage headers Nothing ServerStPage
-    { recvMsgDone = pure ()
+    { recvMsgRequestDone = pure ()
     , recvMsgRequestNext = absurd
     }

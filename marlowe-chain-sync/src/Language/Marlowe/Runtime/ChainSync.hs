@@ -11,7 +11,6 @@ module Language.Marlowe.Runtime.ChainSync
 
 import Cardano.Api (CardanoEra, CardanoMode, LocalNodeClientProtocolsInMode, Tx, TxValidationErrorInMode)
 import qualified Cardano.Api as Cardano
-import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.STM (STM)
 import Control.Monad (unless)
 import Data.Time (NominalDiffTime)
@@ -26,34 +25,35 @@ import Language.Marlowe.Runtime.ChainSync.QueryServer
 import Language.Marlowe.Runtime.ChainSync.Server
   (ChainSyncServer(..), ChainSyncServerDependencies(..), RunChainSeekServer(..), mkChainSyncServer)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore(..), ChainStoreDependencies(..), mkChainStore)
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (LogIO, concurrentlyLogIO_, dieLogIO)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult)
 
-data ChainSyncDependencies = ChainSyncDependencies
-  { connectToLocalNode       :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
+data ChainSyncDependencies m = ChainSyncDependencies
+  { connectToLocalNode       :: !(LocalNodeClientProtocolsInMode CardanoMode -> LogIO ())
   , maxCost                  :: !Int
   , costModel                :: !CostModel
-  , databaseQueries          :: !(DatabaseQueries IO)
+  , databaseQueries          :: !(DatabaseQueries m)
   , persistRateLimit         :: !NominalDiffTime
   , genesisBlock             :: !GenesisBlock
-  , acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
-  , acceptRunQueryServer     :: IO (RunQueryServer IO)
-  , acceptRunJobServer     :: IO (RunJobServer IO)
+  , acceptRunChainSeekServer :: m (RunChainSeekServer m)
+  , acceptRunQueryServer     :: m (RunQueryServer m)
+  , acceptRunJobServer     :: m (RunJobServer m)
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
       -> Cardano.QueryInMode CardanoMode result
-      -> IO (Either AcquireFailure result)
+      -> m (Either AcquireFailure result)
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
       -> Tx era
-      -> IO (SubmitResult (TxValidationErrorInMode CardanoMode))
+      -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-newtype ChainSync = ChainSync { runChainSync :: IO () }
+newtype ChainSync = ChainSync { runChainSync :: LogIO () }
 
-mkChainSync :: ChainSyncDependencies -> STM ChainSync
+mkChainSync :: ChainSyncDependencies LogIO -> STM ChainSync
 mkChainSync ChainSyncDependencies{..} = do
   let DatabaseQueries{..} = databaseQueries
   NodeClient{..} <- mkNodeClient NodeClientDependencies{..}
@@ -63,14 +63,15 @@ mkChainSync ChainSyncDependencies{..} = do
   ChainSyncQueryServer{..} <- mkChainSyncQueryServer ChainSyncQueryServerDependencies{..}
   ChainSyncJobServer{..} <- mkChainSyncJobServer ChainSyncJobServerDependencies{..}
   pure $ ChainSync do
-    mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
-    case mDbGenesisBlock of
-      Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
-        fail "Existing genesis block does not match computed genesis block"
-      Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
+    do
+      mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
+      case mDbGenesisBlock of
+        Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
+          dieLogIO "Existing genesis block does not match computed genesis block"
+        Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
 
     runNodeClient
-      `concurrently_` runChainStore
-      `concurrently_` runChainSyncServer
-      `concurrently_` runChainSyncQueryServer
-      `concurrently_` runChainSyncJobServer
+      `concurrentlyLogIO_` runChainStore
+      `concurrentlyLogIO_` runChainSyncServer
+      `concurrentlyLogIO_` runChainSyncQueryServer
+      `concurrentlyLogIO_` runChainSyncJobServer

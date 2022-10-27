@@ -3,6 +3,7 @@
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -18,8 +19,10 @@ module Language.Marlowe.Runtime.Transaction.Api
   , NFTMetadata(unNFTMetadata)
   , SubmitError(..)
   , SubmitStatus(..)
+  , Tag(..)
   , WalletAddresses(..)
   , WithdrawError(..)
+  , marloweTxCommandSchema
   , mkMint
   , mkNFTMetadata
   ) where
@@ -66,10 +69,11 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError)
 import Network.Protocol.Job.Types (Command(..), SomeTag(..))
+import Network.Protocol.SchemaVersion.TH (mkSchemaVersion)
 
 -- CIP-25 metadata
 newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
-  deriving stock (Eq, Ord, Generic)
+  deriving stock (Eq, Ord, Generic, Show)
   deriving newtype (Binary)
 
 -- FIXME: Validate the metadata format
@@ -78,11 +82,25 @@ mkNFTMetadata = Just . NFTMetadata
 
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
-  deriving stock (Eq, Ord, Generic)
+  deriving stock (Eq, Ord, Generic, Show)
   deriving newtype (Binary, Semigroup, Monoid)
 
 mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
+
+-- data MyType x
+--   = MyConstructor1 Int String
+
+data MyType x where
+  MyConstructor1 :: Int -> String -> MyType Int
+  MyConstructor2 :: Int -> String -> MyType String
+
+deriving instance Eq (MyType Int)
+deriving instance Eq (MyType String)
+deriving instance Show (MyType Int)
+
+-- deriving instance Generic (MyType Int)
+
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -159,6 +177,24 @@ data MarloweTxCommand status err result where
         SubmitStatus -- This job reports the status of the tx submission, which can take some time.
         SubmitError
         BlockHeader  -- The block header of the block this transaction was added to.
+
+instance Eq (MarloweTxCommand status err result) where
+  (Create stake1 MarloweV1 wallet1 mint1 meta1 min1 cntr1) == (Create stake2 MarloweV1 wallet2 mint2 meta2 min2 cntr2) =
+    (stake1, wallet1, mint1, meta1, min1, cntr1) == (stake2, wallet2, mint2, meta2, min2, cntr2)
+  (ApplyInputs MarloweV1 wallet1 cntr1 before1 after1 redeemer1) == (ApplyInputs MarloweV1 wallet2 cntr2 before2 after2 redeemer2)
+    = (wallet1, cntr1, before1, after1, redeemer1) == (wallet2, cntr2, before2, after2, redeemer2)
+  (Withdraw MarloweV1 wallet1 cntr1 token1) == (Withdraw MarloweV1 wallet2 cntr2 token2)
+    = (wallet1, cntr1, token1) == (wallet2, cntr2, token2)
+  (Submit tx1) == (Submit tx2) = tx1 == tx2
+
+instance Show (MarloweTxCommand status err result) where
+  show (Create stake MarloweV1 wallet mint meta minUTxO contract) = unwords
+    [ "(Create", show stake, show MarloweV1, show wallet, show mint, show meta, show minUTxO, show contract, ")"]
+  show (ApplyInputs MarloweV1 wallet contract lowerBound upperBound redeemer) = unwords
+    ["(ApplyInputs", show MarloweV1, show wallet, show contract, show lowerBound, show upperBound, show redeemer, ")" ]
+  show (Withdraw MarloweV1 wallet contract token) = unwords
+    ["(Withdraw", show MarloweV1, show wallet, show contract, show token, ")" ]
+  show (Submit tx) = unwords ["(Submit", show tx, ")"]
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
@@ -359,6 +395,7 @@ data CreateError v
   = CreateConstraintError (ConstraintError v)
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
+  | CreateExecutionError String
   deriving (Generic)
 
 data CreateBuildupError
@@ -377,6 +414,7 @@ data ApplyInputsError v
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
+  | ApplyExecutionError String
 
 deriving instance Eq (ApplyInputsError 'V1)
 deriving instance Show (ApplyInputsError 'V1)
@@ -393,6 +431,7 @@ data WithdrawError v
   = WithdrawConstraintError (ConstraintError v)
   | WithdrawLoadMarloweContextFailed LoadMarloweContextError
   | UnableToFindPayoutForAGivenRole TokenName
+  | WithdrawExecutionError String
   deriving (Generic)
 
 deriving instance Eq (WithdrawError 'V1)
@@ -411,7 +450,9 @@ data LoadMarloweContextError
   deriving anyclass Binary
 
 data SubmitError
-  = SubmitException
+  = HandshakeFailed
+  | SubmitRejected
+  | SubmitException String
   | SubmitFailed String -- should be from show TxValidationErrorInMode
   | TxDiscarded
   deriving (Eq, Show, Generic, Binary)
@@ -420,3 +461,6 @@ data SubmitStatus
   = Submitting
   | Accepted
   deriving (Eq, Show, Generic, Binary)
+
+mkSchemaVersion "marloweTxCommandSchema" ''MarloweTxCommand
+

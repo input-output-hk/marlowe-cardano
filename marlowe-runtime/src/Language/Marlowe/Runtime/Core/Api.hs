@@ -143,8 +143,10 @@ data Payout v = Payout
   , datum :: PayoutDatum v
   }
 
+deriving instance Generic (Payout 'V1)
 deriving instance Show (Payout 'V1)
 deriving instance Eq (Payout 'V1)
+deriving instance ToJSON (Payout 'V1)
 
 instance Binary (Payout 'V1) where
   put Payout{..} = do
@@ -160,8 +162,10 @@ data TransactionScriptOutput v = TransactionScriptOutput
   , datum :: Datum v
   }
 
+deriving instance Generic (TransactionScriptOutput 'V1)
 deriving instance Show (TransactionScriptOutput 'V1)
 deriving instance Eq (TransactionScriptOutput 'V1)
+deriving instance ToJSON (TransactionScriptOutput 'V1)
 
 instance Binary (TransactionScriptOutput 'V1) where
   put TransactionScriptOutput{..} = do

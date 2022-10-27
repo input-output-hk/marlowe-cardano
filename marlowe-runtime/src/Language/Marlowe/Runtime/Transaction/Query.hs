@@ -1,4 +1,5 @@
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -6,8 +7,14 @@
 module Language.Marlowe.Runtime.Transaction.Query
   where
 
-import Cardano.Api (NetworkId)
+import Cardano.Api (NetworkId, ToJSON)
 import qualified Cardano.Api as C
+import Colog (logDebug)
+import Control.Error (MaybeT(MaybeT, runMaybeT))
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (except, runExceptT, throwE)
+import qualified Data.Aeson.OneLine as O
+import Data.Aeson.Types (toJSON)
 import Data.Foldable (find)
 import Data.List (scanl')
 import Data.List.NonEmpty (NonEmpty(..))
@@ -15,6 +22,7 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
+import GHC.Stack (HasCallStack)
 import Language.Marlowe.Protocol.Sync.Client
 import Language.Marlowe.Runtime.Cardano.Api
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -22,32 +30,38 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo(txOutRef), getScripts)
 import Language.Marlowe.Runtime.History.Api
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (LogIO)
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 
-type LoadWalletContext = WalletAddresses -> IO WalletContext
+type LoadWalletContext = WalletAddresses -> LogIO (Maybe WalletContext)
 
 type LoadMarloweContext = forall v
-   . MarloweVersion v
+   . ToJSON (MarloweContext v)
+  => MarloweVersion v
   -> ContractId
-  -> IO (Either LoadMarloweContextError (MarloweContext v))
+  -> LogIO (Either LoadMarloweContextError (MarloweContext v))
 
-loadWalletContext :: (GetUTxOsQuery -> IO UTxOs) -> LoadWalletContext
-loadWalletContext runQuery WalletAddresses{..} = do
-  availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses (Set.insert changeAddress extraAddresses)
+loadWalletContext :: (GetUTxOsQuery -> LogIO (Maybe UTxOs)) -> LoadWalletContext
+loadWalletContext runQuery WalletAddresses{..} = runMaybeT do
+  availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- MaybeT $ runQuery $ GetUTxOsAtAddresses (Set.insert changeAddress extraAddresses)
   let
     collateralUtxos' = Set.filter (flip elem txOutRefs) collateralUtxos
-  pure $ WalletContext
-    { availableUtxos=availableUtxos
-    , collateralUtxos=collateralUtxos'
-    , changeAddress=changeAddress
-    }
+    walletContext = WalletContext
+      { availableUtxos=availableUtxos
+      , collateralUtxos=collateralUtxos'
+      , changeAddress=changeAddress
+      }
+  lift $ logDebug . mappend "WalletContext: " . O.renderValue . toJSON $ walletContext
+  pure walletContext
+
 
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
-  :: C.NetworkId
-  -> (forall a. MarloweSyncClient IO a -> IO a)
+  :: HasCallStack
+  => C.NetworkId
+  -> (forall a. MarloweSyncClient LogIO a -> LogIO a)
   -> LoadMarloweContext
 loadMarloweContext networkId runClient desiredVersion contractId = runClient client
   where
@@ -59,9 +73,9 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
       -- If the contract isn't found, return an error
       { recvMsgContractNotFound = pure $ Left LoadMarloweContextErrorNotFound
       -- Otherwise,
-      , recvMsgContractFound = \blockHeader actualVersion CreateStep{..} ->
+      , recvMsgContractFound = \blockHeader actualVersion CreateStep{..} -> do
           -- Otherwise, check the desired version matches the actual one
-          either (pure . SendMsgDone . Left) pure case testEquality desiredVersion actualVersion of
+          either (pure . SendMsgDone . Left) pure =<< runExceptT case testEquality desiredVersion actualVersion of
             Nothing -> pure
               $ SendMsgDone
               $ Left
@@ -82,32 +96,35 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
                         (C.PaymentCredentialByScript payoutScriptHash)
                         C.NoStakeAddress
                 let scripts = getScripts actualVersion
-                marloweScriptHash <- maybe (Left $ InvalidScriptAddress scriptAddress) Right do
+                marloweScriptHash <- except $ maybe (Left $ InvalidScriptAddress scriptAddress) Right do
                   credential <- paymentCredential scriptAddress
                   case credential of
                     PaymentKeyCredential _ -> Nothing
                     ScriptCredential hash -> Just hash
                 let matchesScriptHash MarloweScripts{..} = marloweScript == marloweScriptHash
                 marloweScripts <- case find matchesScriptHash scripts of
-                  Nothing -> Left $ UnknownMarloweScript marloweScriptHash
-                  Just marloweScripts -> Right marloweScripts
-                marloweScriptUTxO <- lookupMarloweScriptUtxo networkId marloweScripts
-                payoutScriptUTxO <- lookupPayoutScriptUtxo networkId marloweScripts
-                pure $ clientIdle $ pure
-                  ( blockHeader
-                  , MarloweContext
-                      { marloweAddress = scriptAddress
-                      , payoutScriptHash = payoutValidatorHash
-                      , marloweScriptHash
-                      , payoutAddress
-                      -- Get the script output of the create event.
-                      , scriptOutput = Just createOutput
-                      -- No payouts to start with
-                      , payoutOutputs = mempty
-                      , marloweScriptUTxO
-                      , payoutScriptUTxO
-                      }
-                  )
+                  Nothing -> throwE $ UnknownMarloweScript marloweScriptHash
+                  Just marloweScripts -> pure marloweScripts
+                marloweScriptUTxO <- except $ lookupMarloweScriptUtxo networkId marloweScripts
+                payoutScriptUTxO <- except $ lookupPayoutScriptUtxo networkId marloweScripts
+                contexts <- do
+                  let
+                    marloweContext = MarloweContext
+                        { marloweAddress = scriptAddress
+                        , payoutScriptHash = payoutValidatorHash
+                        , marloweScriptHash
+                        , payoutAddress
+                        -- Get the script output of the create event.
+                        , scriptOutput = Just createOutput
+                        -- No payouts to start with
+                        , payoutOutputs = mempty
+                        , marloweScriptUTxO
+                        , payoutScriptUTxO
+                        }
+                    contexts = ( blockHeader, marloweContext)
+                  lift $ logDebug . O.renderValue . toJSON $ marloweContext
+                  pure $ contexts :| []
+                pure $ clientIdle contexts
         }
 
     -- Request the next steps in the contract
@@ -115,7 +132,7 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
     clientNext contexts = ClientStNext
       -- If the creation event was rolled back, return an error
       { recvMsgRollBackCreation =
-          (pure :: forall a. a -> IO a) $ Left LoadMarloweContextErrorNotFound
+          (pure :: forall a. a -> LogIO a) $ Left LoadMarloweContextErrorNotFound
       -- Handle rollbacks
       , recvMsgRollBackward =
           pure . handleRollback contexts

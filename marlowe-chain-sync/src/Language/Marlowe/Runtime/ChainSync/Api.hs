@@ -837,6 +837,7 @@ instance Binary SlotConfig where
 data GetUTxOsQuery
   = GetUTxOsAtAddresses (Set Address)
   | GetUTxOsForTxOutRefs (Set TxOutRef)
+  deriving (Show, Eq)
 
 -- Semigroup and Monoid seem to be safe - we cover here a subset of a partial function.
 newtype UTxOs = UTxOs { unUTxOs :: Map TxOutRef TransactionOutput }

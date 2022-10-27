@@ -8,14 +8,15 @@ module Language.Marlowe.Runtime.ChainSync.Server
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
-import Control.Concurrent.Async (wait, waitEitherCatch, withAsync)
+import Colog (logDebug, logError)
+import Control.Concurrent.Async (wait, waitEitherCatch)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (throwIO)
 import Control.Monad (guard)
+import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Short (toShort)
 import Data.Functor (void)
 import qualified Data.Text as T
-import Data.Text.IO (hPutStrLn)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( BlockHeader(BlockHeader)
@@ -27,20 +28,20 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , moveSchema
   )
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient(..), MoveResult(..))
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (LogIO, withAsyncLogIO)
 import Network.Protocol.ChainSeek.Server
   (ChainSeekServer(..), ServerStHandshake(..), ServerStIdle(..), ServerStInit(..), ServerStNext(..))
-import System.IO (stderr)
 
-newtype RunChainSeekServer m = RunChainSeekServer (forall a. RuntimeChainSeekServer m a -> IO a)
+newtype RunChainSeekServer m = RunChainSeekServer (forall a. RuntimeChainSeekServer m a -> LogIO a)
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
-  { acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
-  , moveClient               :: !(MoveClient IO)
+  { acceptRunChainSeekServer :: LogIO (RunChainSeekServer LogIO)
+  , moveClient               :: !(MoveClient LogIO)
   , localTip                 :: !(STM Cardano.ChainTip)
   }
 
 newtype ChainSyncServer = ChainSyncServer
-  { runChainSyncServer :: IO Void
+  { runChainSyncServer :: LogIO Void
   }
 
 mkChainSyncServer :: ChainSyncServerDependencies -> STM ChainSyncServer
@@ -48,29 +49,29 @@ mkChainSyncServer ChainSyncServerDependencies{..} = do
   let
     runChainSyncServer = do
       runChainSeekServer <- acceptRunChainSeekServer
-      hPutStrLn stderr "New client connected"
-      worker <- atomically $ mkWorker WorkerDependencies {..}
-      withAsync (runWorker worker) \aworker ->
-        withAsync runChainSyncServer \aserver -> do
-          result <- waitEitherCatch aworker aserver
+      logDebug "New client connected"
+      worker <- liftIO $ atomically $ mkWorker WorkerDependencies {..}
+      withAsyncLogIO (runWorker worker) \aworker ->
+        withAsyncLogIO runChainSyncServer \aserver -> do
+          result <- liftIO $ waitEitherCatch aworker aserver
           case result of
-            Right (Left ex) -> throwIO ex
+            Right (Left ex) -> liftIO $ throwIO ex
             Right (Right x) -> absurd x
             Left (Left ex)  -> do
-              hPutStrLn stderr $ "Lost client with exception " <> T.pack (show ex)
+              logError . T.pack . mappend "Lost client with exception " . show $ ex
             Left _  -> do
-              hPutStrLn stderr "Client terminated normally"
-          wait aserver
+              logDebug "Client terminated normally"
+          liftIO $ wait aserver
   pure $ ChainSyncServer { runChainSyncServer }
 
 data WorkerDependencies = WorkerDependencies
-  { runChainSeekServer :: !(RunChainSeekServer IO)
-  , moveClient         :: !(MoveClient IO)
+  { runChainSeekServer :: !(RunChainSeekServer LogIO)
+  , moveClient         :: !(MoveClient LogIO)
   , localTip           :: !(STM Cardano.ChainTip)
   }
 
 newtype Worker = Worker
-  { runWorker :: IO ()
+  { runWorker :: LogIO ()
   }
 
 mkWorker :: WorkerDependencies -> STM Worker
@@ -85,12 +86,12 @@ mkWorker WorkerDependencies{..} = do
       then SendMsgHandshakeConfirmed $ stIdle Genesis
       else SendMsgHandshakeRejected moveSchema ()
 
-    stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainPoint IO ())
+    stIdle :: ChainPoint -> LogIO (ServerStIdle Move ChainPoint ChainPoint LogIO ())
     stIdle pos = pure ServerStIdle
       { recvMsgQueryNext = \query -> do
           let
             goWait lastTip = do
-              atomically $ awaitTipChange case lastTip of
+              liftIO $ atomically $ awaitTipChange case lastTip of
                 Genesis -> Cardano.ChainTipAtGenesis
                 At (BlockHeader slotNo hash blockNo) -> Cardano.ChainTip
                   (Cardano.SlotNo $ fromIntegral slotNo)

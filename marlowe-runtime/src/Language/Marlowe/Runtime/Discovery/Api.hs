@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.Discovery.Api
@@ -13,6 +15,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Metadata, PolicyId, ScriptHash)
 import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
 import Network.Protocol.Query.Types (IsQuery(..), SomeTag(..))
+import Network.Protocol.SchemaVersion.TH (mkSchemaVersion)
 
 -- | A Marlowe contract header is a compact structure that contains all the
 -- significant metadata related to a Marlowe Contract on chain.
@@ -43,6 +46,8 @@ data DiscoveryQuery delimiter err result where
   -- | Query all contract headers that use the given minting policy ID for role
   -- tokens.
   GetContractHeadersByRoleTokenCurrency :: PolicyId -> DiscoveryQuery Void Void [ContractHeader]
+
+mkSchemaVersion "querySchema" ''DiscoveryQuery
 
 instance IsQuery DiscoveryQuery where
   data Tag DiscoveryQuery delimiter err result where

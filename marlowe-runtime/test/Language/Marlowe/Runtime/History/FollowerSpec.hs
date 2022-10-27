@@ -54,6 +54,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), currentV1Scripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
+import Network.Protocol.SchemaVersion (SchemaVersion(SchemaVersion))
 import qualified Plutus.V1.Ledger.Value as Plutus
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)
@@ -346,7 +347,7 @@ point4 = Chain.At block4
 
 checkHandshakeRejected :: Expectation
 checkHandshakeRejected = do
-  FollowerTestResult{..} <- runFollowerTest $ RejectHandshake [] ()
+  FollowerTestResult{..} <- runFollowerTest $ RejectHandshake (SchemaVersion "differentversion") ()
   followerError `shouldBe` Just HansdshakeFailed
   followerChanges `shouldBe` Nothing
 

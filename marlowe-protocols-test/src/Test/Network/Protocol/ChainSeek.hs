@@ -11,10 +11,11 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Types
+import Network.Protocol.SchemaVersion (SchemaVersion)
 import Test.Hspec (Expectation, expectationFailure)
 
 data ChainSeekServerScript q point tip (m :: * -> *) a
-  = RejectHandshake [SchemaVersion] a
+  = RejectHandshake (SchemaVersion q) a
   | ConfirmHandshake (ServerStIdleScript q point tip m a)
 
 data ServerStIdleScript q point tip (m :: * -> *) a where

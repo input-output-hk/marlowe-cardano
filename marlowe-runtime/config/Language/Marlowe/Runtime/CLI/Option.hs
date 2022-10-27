@@ -2,13 +2,9 @@
 module Language.Marlowe.Runtime.CLI.Option
   where
 
-import qualified Colog
 import Control.Arrow ((>>>))
-import Data.Char (toUpper)
 import Data.Foldable (asum)
-import Data.List (intercalate)
 import Data.List.Split (splitOn)
-import Data.Maybe (fromMaybe)
 import Data.String (fromString)
 import qualified Data.Text as T
 import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32, parseTxOutRef)
@@ -119,40 +115,4 @@ optParserWithEnvDefault :: HasValue f => CliOption f a -> IO (Parser a)
 optParserWithEnvDefault CliOption{..} = do
   envMod <- foldMap value . (parseEnv =<<) <$> lookupEnv env
   pure $ parser envMod
-
-data Verbosity = LogLevel Colog.Severity | Silent
-
-verbosityParser :: Verbosity -> Parser Verbosity
-verbosityParser defaultVerbosity = fromMaybe defaultVerbosity <$> (fmap LogLevel <$> optional logLevel <|> optional silent)
-  where
-    silent :: Parser Verbosity
-    silent = flag' Silent $ mconcat
-      [ long "silent"
-      , help "Suppress all logs."
-      ]
-
-    -- Parses log severity expressed using: Debug, Info, Normal, Warning, General, Error
-    logLevel :: Parser Colog.Severity
-    logLevel = do
-      let
-        capitalize :: String -> String
-        capitalize = map toUpper
-        severities =
-          [ ("DEBUG", Colog.Debug)
-          , ("INFO", Colog.Info)
-          , ("WARNING", Colog.Warning)
-          , ("ERROR", Colog.Error)
-          ]
-        spec = "[" <> (intercalate "|" . map (capitalize. fst) $ severities) <> "]"
-
-        severityParser :: ReadM Colog.Severity
-        severityParser = eitherReader $ capitalize >>> flip lookup severities >>> \case
-          Just sev -> Right sev
-          Nothing -> Left $ "Invalid log level. Expecting value:  " <> spec <> "."
-
-      option severityParser $ mconcat
-        [ long "log-level"
-        , metavar "LOG_LEVEL"
-        , help $ "Log everything up including the given level: " <> spec
-        ]
 

@@ -9,54 +9,58 @@ module Language.Marlowe.Runtime.ChainSync.JobServer
   where
 
 import Cardano.Api (CardanoEra(..), CardanoMode, ScriptDataSupportedInEra(..), Tx, TxValidationErrorInMode)
-import Control.Concurrent.Async (Concurrently(..))
+import Colog (logError)
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException, catch)
+import Control.Exception (SomeException)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
 import Data.Void (Void)
+import GHC.Stack (HasCallStack)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..), commandSchema)
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (ConcurrentlyLogIO(..), LogIO, catchLogIO)
 import Network.Protocol.Job.Server
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
-import System.IO (hPutStrLn, stderr)
 
-newtype RunJobServer m = RunJobServer (forall a. JobServer ChainSyncCommand m a -> IO a)
+newtype RunJobServer m = RunJobServer (forall a. JobServer ChainSyncCommand m a -> LogIO a)
 
 data ChainSyncJobServerDependencies = ChainSyncJobServerDependencies
-  { acceptRunJobServer :: IO (RunJobServer IO)
+  { acceptRunJobServer :: LogIO (RunJobServer LogIO)
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
       -> Tx era
-      -> IO (SubmitResult (TxValidationErrorInMode CardanoMode))
+      -> LogIO (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
 newtype ChainSyncJobServer = ChainSyncJobServer
-  { runChainSyncJobServer :: IO Void
+  { runChainSyncJobServer :: LogIO Void
   }
 
 mkChainSyncJobServer :: ChainSyncJobServerDependencies -> STM ChainSyncJobServer
 mkChainSyncJobServer ChainSyncJobServerDependencies{..} = do
   let
+    runChainSyncJobServer :: HasCallStack => LogIO Void
     runChainSyncJobServer = do
       runJobServer <- acceptRunJobServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runChainSyncJobServer
+      Worker{..} <- liftIO $ atomically $ mkWorker WorkerDependencies {..}
+      runConcurrentlyLogIO $
+        ConcurrentlyLogIO (runWorker `catchLogIO` catchWorker) *> ConcurrentlyLogIO runChainSyncJobServer
   pure $ ChainSyncJobServer { runChainSyncJobServer }
 
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show
+catchWorker :: SomeException -> LogIO ()
+catchWorker = logError . T.pack . mappend "Job worker crashed with exception: " . show
 
 data WorkerDependencies = WorkerDependencies
-  { runJobServer      :: RunJobServer IO
+  { runJobServer      :: RunJobServer LogIO
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
       -> Tx era
-      -> IO (SubmitResult (TxValidationErrorInMode CardanoMode))
+      -> LogIO (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
 newtype Worker = Worker
-  { runWorker :: IO ()
+  { runWorker :: LogIO ()
   }
 
 mkWorker :: WorkerDependencies -> STM Worker
@@ -66,7 +70,7 @@ mkWorker WorkerDependencies{..} =
   in
     pure Worker { runWorker = run server }
   where
-    server :: JobServer ChainSyncCommand IO ()
+    server :: JobServer ChainSyncCommand LogIO ()
     server = liftCommandHandler commandSchema $ flip either (\case) \case
       SubmitTx era tx -> do
         result <- submitTxToNodeLocal

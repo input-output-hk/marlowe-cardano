@@ -7,40 +7,42 @@ module Language.Marlowe.Runtime.ChainSync.Store
 
 import Cardano.Api (ChainPoint(..), ChainTip(..), SlotNo(..))
 import Cardano.Api.Shelley (Hash(..))
+import Colog (logDebug, logError, logInfo)
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, when)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort)
 import Data.Foldable (for_, traverse_)
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Void (Void)
+import GHC.Stack (HasCallStack)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks(..), CommitRollback(..))
 import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes(..), isEmptyChanges)
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (LogIO)
 import Prelude hiding (filter)
-import System.IO (stderr)
 import Witherable (Witherable(..))
 
 -- | Set of dependencies required by the ChainStore
 data ChainStoreDependencies = ChainStoreDependencies
-  { commitRollback :: !(CommitRollback IO) -- ^ How to persist rollbacks in the database backend
-  , commitBlocks   :: !(CommitBlocks IO)   -- ^ How to commit blocks in bulk in the database backend
+  { commitRollback :: !(CommitRollback LogIO) -- ^ How to persist rollbacks in the database backend
+  , commitBlocks   :: !(CommitBlocks LogIO)   -- ^ How to commit blocks in bulk in the database backend
   , rateLimit      :: !NominalDiffTime     -- ^ The minimum time between database writes
   , getChanges     :: !(STM Changes)       -- ^ A source of changes to commit
   }
 
 -- | Public API of the ChainStore component
 data ChainStore = ChainStore
-  { runChainStore :: !(IO Void)        -- ^ Run the chain store in IO
+  { runChainStore :: !(LogIO Void)        -- ^ Run the chain store in IO
   , localTip      :: !(STM ChainTip) -- ^ Action to read the current (local) chain tip
   }
 
 -- | Create a ChainStore component.
-mkChainStore :: ChainStoreDependencies -> STM ChainStore
+mkChainStore :: HasCallStack => ChainStoreDependencies -> STM ChainStore
 mkChainStore ChainStoreDependencies{..} = do
   localTipVar <- newTVar ChainTipAtGenesis
   let
@@ -53,16 +55,16 @@ mkChainStore ChainStoreDependencies{..} = do
       guard $ not $ isEmptyChanges changes
       pure changes
 
-    runChainStore :: IO Void
+    runChainStore :: LogIO Void
     runChainStore = go Nothing
       where
         go lastWrite = do
-          delay <- wither computeDelay lastWrite
-          Changes{..} <- atomically $ awaitChanges delay
+          delay <- liftIO $ wither computeDelay lastWrite
+          Changes{..} <- liftIO $ atomically $ awaitChanges delay
           for_ changesRollback \point -> do
             case point of
-              ChainPointAtGenesis -> T.hPutStrLn stderr "Rolling back to Genesis"
-              ChainPoint (SlotNo slot) (HeaderHash hash) -> T.hPutStrLn stderr $ T.intercalate " "
+              ChainPointAtGenesis -> logError "Rolling back to Genesis"
+              ChainPoint (SlotNo slot) (HeaderHash hash) -> logInfo $ T.intercalate " "
                 [ "Rolling back to block"
                 , encodeBase16 $ fromShort hash
                 , "at slot"
@@ -70,7 +72,7 @@ mkChainStore ChainStoreDependencies{..} = do
                 ]
             runCommitRollback commitRollback point
           when (changesBlockCount > 0) do
-            T.hPutStrLn stderr $ mconcat
+            logDebug $ mconcat
               [ "Saving "
               , T.pack $ show changesBlockCount
               , " blocks, "
@@ -91,8 +93,8 @@ mkChainStore ChainStoreDependencies{..} = do
               , ")"
               ]
             runCommitBlocks commitBlocks changesBlocks
-            atomically $ writeTVar localTipVar changesLocalTip
-          go . Just =<< getCurrentTime
+            liftIO $ atomically $ writeTVar localTipVar changesLocalTip
+          go . Just =<< liftIO getCurrentTime
 
     computeDelay :: UTCTime -> IO (Maybe Delay)
     computeDelay lastWrite = runMaybeT do

@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.History.Api
@@ -26,6 +27,7 @@ import Network.Protocol.Query.Client (QueryClient)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (QueryServer)
 import qualified Network.Protocol.Query.Types as Query
+import Network.Protocol.SchemaVersion.TH (mkSchemaVersion)
 import Network.TypedProtocol.Codec
 
 data ContractHistoryError
@@ -124,6 +126,8 @@ data HistoryCommand status err result where
   FollowContract :: ContractId -> HistoryCommand Void ContractHistoryError Bool
   StopFollowingContract :: ContractId -> HistoryCommand Void Void Bool
 
+mkSchemaVersion "commandSchema" ''HistoryCommand
+
 instance Command HistoryCommand where
   data JobId HistoryCommand status err result where
 
@@ -215,6 +219,8 @@ data SomeHistory = forall v. SomeHistory (MarloweVersion v) (History v)
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
   GetStatuses :: Set ContractId -> HistoryQuery Void Void (Map ContractId FollowerStatus)
+
+mkSchemaVersion "querySchema" ''HistoryQuery
 
 instance Query.IsQuery HistoryQuery where
   data Tag HistoryQuery delimiter err result where

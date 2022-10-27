@@ -59,7 +59,7 @@ import Prelude hiding (log)
 --   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
 log :: String -> a -> a
 -- log = trace  -- Logging "active"
-log = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+log _ x = x  -- Logging "inactive", uncomment this to disable logging without removing log code
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -361,6 +361,10 @@ data MarloweContext v = MarloweContext
   , marloweScriptHash :: Chain.ScriptHash
   , payoutScriptHash :: Chain.ScriptHash
   }
+  deriving (Generic)
+
+deriving instance Show (MarloweContext 'V1)
+deriving instance ToJSON (MarloweContext 'V1)
 
 type SolveConstraints
    = forall v

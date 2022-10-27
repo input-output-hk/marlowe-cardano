@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 module Main
   where
@@ -16,10 +17,13 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
+import Colog (logDebug)
 import qualified Colog
+import Control.Category ((<<<))
 import Control.Concurrent.STM (atomically, modifyTVar, newTVarIO, readTVar)
-import Control.Exception (bracket, bracketOnError, finally, throwIO)
+import Control.Exception (throwIO)
 import Control.Monad ((<=<))
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.String (IsString(fromString))
@@ -27,7 +31,6 @@ import Data.Text (unpack)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Time (secondsToNominalDiffTime)
-import GHC.Stack (HasCallStack)
 import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
@@ -40,32 +43,17 @@ import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
 import Language.Marlowe.Runtime.ChainSync.JobServer (RunJobServer(..))
 import Language.Marlowe.Runtime.ChainSync.QueryServer (RunQueryServer(..))
 import Language.Marlowe.Runtime.ChainSync.Server (RunChainSeekServer(..))
-import Language.Marlowe.Runtime.Logging.Colog (logDebugM)
-import Network.Channel (effectChannel, socketAsChannel)
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (finallyLogIO, runLogIO, throwLogIO)
+import Language.Marlowe.Runtime.Logging.Colog.LogIO.Network (ProtocolName(ProtocolName), withServerSocket)
+import Network.Channel (effectChannel, hoistChannel, socketAsChannel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Driver (mkDriver)
+import Network.Protocol.Driver (hoistDriver, mkDriver)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket
-  ( AddrInfo(..)
-  , AddrInfoFlag(..)
-  , SockAddr
-  , Socket
-  , SocketOption(ReuseAddr)
-  , SocketType(..)
-  , bind
-  , close
-  , defaultHints
-  , getAddrInfo
-  , listen
-  , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
-  , withSocketsDo
-  )
+  (AddrInfo(..), AddrInfoFlag(..), SockAddr, SocketType(..), close, defaultHints, getAddrInfo, withSocketsDo)
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options (Options(..), getOptions)
@@ -78,69 +66,74 @@ run Options{..} = withSocketsDo do
   chainSeekAddr <- resolve port
   queryAddr <- resolve queryPort
   commandAddr <- resolve commandPort
-  bracket (open "ChainSeek" chainSeekAddr) close \chainSeekSocket -> do
-    bracket (open "Query" queryAddr) close \querySocket -> do
-      bracket (open "Job" commandAddr) close \commandSocket -> do
-        socketIdVar <- newTVarIO @Int 0
-        pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
-        genesisConfigResult <- runExceptT do
-          hash <- ExceptT $ pure $ decodeAbstractHash genesisConfigHash
-          (hash,) <$> withExceptT
-            (const "failed to read byron genesis file")
-            (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
-        (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
-        let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
-        chainSync <- atomically $ mkChainSync ChainSyncDependencies
-          { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
-          , databaseQueries = hoistDatabaseQueries
-              (either throwUsageError pure <=< Pool.use pool)
-              (PostgreSQL.databaseQueries genesisBlock)
-          , persistRateLimit
-          , genesisBlock
-            , acceptRunChainSeekServer = do
-                socketId <- atomically do
-                  modifyTVar socketIdVar (+1)
-                  readTVar socketIdVar
-                (conn, _ :: SockAddr) <- accept chainSeekSocket
-                let
-                  driver = mkDriver throwIO runtimeChainSeekCodec
-                    $ effectChannel (logSend socketId) (logRecv socketId)
-                    $ socketAsChannel conn
-                pure $ RunChainSeekServer \server -> do
-                  let peer = chainSeekServerPeer Genesis server
-                  fst <$> (runPeerWithDriver driver peer (startDState driver) `finally` close conn)
-          , acceptRunQueryServer = do
-              (conn, _ :: SockAddr) <- accept querySocket
-              let driver = mkDriver throwIO codecQuery $ socketAsChannel conn
-              pure $ RunQueryServer \server -> do
-                let peer = queryServerPeer server
-                fst <$> runPeerWithDriver driver peer (startDState driver)
-          , acceptRunJobServer = do
-              (conn, _ :: SockAddr) <- accept commandSocket
-              let driver = mkDriver throwIO codecJob $ socketAsChannel conn
-              pure $ RunJobServer \server -> do
-                let peer = jobServerPeer server
-                fst <$> runPeerWithDriver driver peer (startDState driver)
-          , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
-          , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
-              ByronEra -> ByronEraInCardanoMode
-              ShelleyEra -> ShelleyEraInCardanoMode
-              AllegraEra -> AllegraEraInCardanoMode
-              MaryEra -> MaryEraInCardanoMode
-              AlonzoEra -> AlonzoEraInCardanoMode
-              BabbageEra -> BabbageEraInCardanoMode
-          , maxCost
-          , costModel
-          }
-        runChainSync chainSync
+  Colog.withBackgroundLogger Colog.defCapacity rootLogAction \logAction -> do
+    runLogIO logAction $ withServerSocket (ProtocolName "ChainSeek") chainSeekAddr \chainSeekSocket -> do
+      withServerSocket (ProtocolName "Query") queryAddr \querySocket -> do
+        withServerSocket (ProtocolName "Job") commandAddr \commandSocket -> do
+          chainSync <- liftIO do
+            socketIdVar <- newTVarIO @Int 0
+            pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
+            genesisConfigResult <- runExceptT do
+              hash <- ExceptT $ pure $ decodeAbstractHash genesisConfigHash
+              (hash,) <$> withExceptT
+                (const "failed to read byron genesis file")
+                (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
+            (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
+            let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
+            atomically $ mkChainSync ChainSyncDependencies
+              { connectToLocalNode = liftIO <$> Cardano.connectToLocalNode localNodeConnectInfo
+              , databaseQueries = hoistDatabaseQueries
+                  (liftIO <<< either throwUsageError pure <=< Pool.use pool)
+                  (PostgreSQL.databaseQueries genesisBlock)
+              , persistRateLimit
+              , genesisBlock
+                , acceptRunChainSeekServer = do
+                    (conn, driver) <- liftIO $ do
+                      socketId <- atomically do
+                        modifyTVar socketIdVar (+1)
+                        readTVar socketIdVar
+                      (conn, _ :: SockAddr) <- accept chainSeekSocket
+                      pure . (conn,) $ mkDriver (throwLogIO "ChainSeek protocol execution error") runtimeChainSeekCodec
+                          $ effectChannel (logSend socketId) (logRecv socketId)
+                          $ hoistChannel liftIO (socketAsChannel conn)
+                    pure $ RunChainSeekServer \server -> do
+                      let peer = chainSeekServerPeer Genesis server
+                      fst <$> (runPeerWithDriver driver peer (startDState driver) `finallyLogIO` (liftIO $ close conn))
+              , acceptRunQueryServer = do
+                  (conn, _ :: SockAddr) <- liftIO $ accept querySocket
+                  let
+                    driver = mkDriver
+                      (throwLogIO "Query protocol execution error")
+                      codecQuery
+                      $ hoistChannel liftIO (socketAsChannel conn)
+                  pure $ RunQueryServer \server -> do
+                    let peer = queryServerPeer server
+                    fst <$> runPeerWithDriver driver peer (startDState driver)
+              , acceptRunJobServer = do
+                  (conn, _ :: SockAddr) <- liftIO $ accept commandSocket
+                  let driver = hoistDriver liftIO $ mkDriver throwIO codecJob $ socketAsChannel conn
+                  pure $ RunJobServer \server -> do
+                    let peer = jobServerPeer server
+                    fst <$> runPeerWithDriver driver peer (startDState driver)
+              , queryLocalNodeState = \point query -> liftIO (queryNodeLocalState localNodeConnectInfo point query)
+              , submitTxToNodeLocal = \era tx -> liftIO $ Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
+                  ByronEra -> ByronEraInCardanoMode
+                  ShelleyEra -> ShelleyEraInCardanoMode
+                  AllegraEra -> AllegraEraInCardanoMode
+                  MaryEra -> MaryEraInCardanoMode
+                  AlonzoEra -> AlonzoEraInCardanoMode
+                  BabbageEra -> BabbageEraInCardanoMode
+              , maxCost
+              , costModel
+              }
+          runChainSync chainSync
   where
-    logAction :: Colog.LogAction IO Colog.Message
-    logAction = mkLogger verbosity
+    rootLogAction = mkLogger verbosity
 
-    logSend i bytes = do
-      logDebugM logAction $ "send[" <> T.pack (show i) <> "]: " <> TL.toStrict (encodeBase16 bytes)
+    logSend i bytes =
+      logDebug $ "send[" <> T.pack (show i) <> "]: " <> TL.toStrict (encodeBase16 bytes)
     logRecv i mbytes =
-      logDebugM logAction $ "recv[" <> T.pack (show i) <> "]: " <> (T.pack . show $ encodeBase16 <$> mbytes)
+      logDebug $ "recv[" <> T.pack (show i) <> "]: " <> (T.pack . show $ encodeBase16 <$> mbytes)
 
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
@@ -159,11 +152,3 @@ run Options{..} = withSocketsDo do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
-    open :: HasCallStack => String -> AddrInfo -> IO Socket
-    open name addr = bracketOnError (openSocket addr) close \socket -> do
-      logDebugM logAction . T.pack $ "Starting " <> show name <> " server at: " <> show (addrAddress addr)
-      setSocketOption socket ReuseAddr 1
-      withFdSocket socket setCloseOnExecIfNeeded
-      bind socket $ addrAddress addr
-      listen socket 2048
-      return socket

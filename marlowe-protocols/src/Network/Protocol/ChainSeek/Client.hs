@@ -212,6 +212,19 @@ queryClient version clientStHandshake =
   ChainSeekClient do
     SendMsgRequestHandshake version <$> clientStHandshake
 
+queryClient'
+  :: Monad m
+  => SchemaVersion query
+  -> (SchemaVersion query -> m a)
+  -> m (ClientStIdle query point tip m a)
+  -> ChainSeekClient query point tip m a
+queryClient' version handleHandshakeRejected clientStIdle =
+  ChainSeekClient do
+    pure $ SendMsgRequestHandshake version ClientStHandshake
+      { recvMsgHandshakeRejected = handleHandshakeRejected
+      , recvMsgHandshakeConfirmed = clientStIdle
+      }
+
 doHandshake
   ::  Monad m
   => SchemaVersion query

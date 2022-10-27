@@ -1,9 +1,13 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Marlowe.Runtime.CLI.Env
   where
 
+import qualified Colog
 import Control.Concurrent.STM (STM)
 import Control.Exception (Exception, bracket, bracketOnError, throwIO)
 import Data.ByteString.Lazy (ByteString)
@@ -29,8 +33,13 @@ data Env m = Env
   , envRunHistorySyncClient :: !(RunClient m MarloweSyncClient)
   , envRunDiscoveryQueryClient :: !(RunClient m (QueryClient DiscoveryQuery))
   , envRunTxJobClient :: !(RunClient m (JobClient MarloweTxCommand))
+  , logAction :: Colog.LogAction m Colog.Message
   , sigInt :: STM ()
   }
+
+instance Colog.HasLog (Env m) Colog.Message m where
+  getLogAction = logAction
+  setLogAction logAction env = env { logAction = logAction }
 
 -- | Run a client as a typed protocols peer over a socket.
 runClientPeerOverSocket

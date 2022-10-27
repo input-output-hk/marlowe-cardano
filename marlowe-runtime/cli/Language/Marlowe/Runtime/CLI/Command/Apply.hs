@@ -8,10 +8,13 @@ module Language.Marlowe.Runtime.CLI.Command.Apply
 
 import qualified Cardano.Api as C
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
 import Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor(first))
+import Data.Binary.Get (runGet)
+import Data.Binary.Put (runPut)
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
 import Data.Time (UTCTime, secondsToNominalDiffTime)
@@ -20,13 +23,14 @@ import Language.Marlowe (POSIXTime(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, logDebug, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (unPolicyId)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), IsMarloweVersion(..), MarloweVersion(MarloweV1), MarloweVersionTag(..))
 import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, MarloweTxCommand(ApplyInputs))
 import qualified Language.Marlowe.Util as V1
+import Network.Protocol.Job.Types (Command(getCommand, tagFromCommand), putCommand)
 import Options.Applicative
 import qualified Plutus.V1.Ledger.Api as P
 
@@ -217,6 +221,13 @@ runApplyCommand TxCommand { walletAddresses, signingMethod, subCommand=V1ApplyCo
     validityUpperBound'= posixTimeToUTCTime <$> validityUpperBound
 
     cmd = ApplyInputs MarloweV1 walletAddresses contractId validityLowerBound' validityUpperBound' inputs'
+  lift $ logDebug $ "Requesting apply: " <> T.pack (show cmd)
+  lift $ logDebug $ "Performing serialization round trip:" <> do
+    let
+      encoded = runPut (putCommand cmd)
+      getCmd = getCommand (tagFromCommand cmd)
+      decoded = runGet getCmd encoded
+    T.pack . show $ decoded
   txBody <- ExceptT $ first ApplyFailed <$> runTxCommand cmd
   case signingMethod of
     Manual outputFile -> do

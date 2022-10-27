@@ -7,10 +7,12 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Text.IO as T
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runDiscoveryQueryClient, runHistoryQueryClient)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, logAndDie, runDiscoveryQueryClient, runHistoryQueryClient)
 import Language.Marlowe.Runtime.Core.Api (renderContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..), DiscoveryQuery(..))
+import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import Language.Marlowe.Runtime.History.Api (FollowerStatus(..), HistoryQuery(..))
+import qualified Language.Marlowe.Runtime.History.Api as History
 import Network.Protocol.Query.Client
 import Options.Applicative
 
@@ -53,32 +55,35 @@ lsCommandParser = info parser $ progDesc "List managed contracts"
 runLsCommand :: LsCommand -> CLI ()
 runLsCommand LsCommand{..}
   | allFlag = runDiscoveryQueryClient
-    $ QueryClient
-    $ pure
-    $ SendMsgRequest GetContractHeaders ClientStNextCanReject
-        { recvMsgReject = absurd
-        , recvMsgNextPage = handleNextPageAll
-        }
+    $ queryClient' Discovery.querySchema discoveryVersionMismatch
+      $ pure $ SendMsgRequest GetContractHeaders ClientStNextCanReject
+          { recvMsgReject = absurd
+          , recvMsgNextPage = handleNextPageAll
+          }
   | otherwise = runHistoryQueryClient
-    $ QueryClient
-    $ pure
-    $ SendMsgRequest GetFollowedContracts ClientStNextCanReject
+    $ queryClient' History.querySchema
+      historyVersionMismatch
+      (pure $ SendMsgRequest GetFollowedContracts ClientStNextCanReject
         { recvMsgReject = absurd
         , recvMsgNextPage = handleNextPage
         }
+      )
   where
+    discoveryVersionMismatch = const $ logAndDie "Discovery server version mismatch"
+    historyVersionMismatch = const $ logAndDie "History server version mismatch"
+
     handleNextPageAll headers nextPage = do
       let ids = Set.fromList $ contractId <$> headers
-      statuses <- fmap (either absurd id) $ runHistoryQueryClient $ liftQuery $ GetStatuses ids
+      statuses <- fmap (either absurd id) $ runHistoryQueryClient $ liftQuery' History.querySchema historyVersionMismatch $ pure $ GetStatuses ids
       void $ Map.traverseWithKey printResult $ Map.union (Just <$> statuses) $ Map.fromSet (const Nothing) ids
       pure $ maybe
-        (SendMsgDone ())
+        (SendMsgRequestDone ())
         (flip SendMsgRequestNext $ ClientStNext handleNextPageAll)
         nextPage
     handleNextPage results nextPage = do
       void $ Map.traverseWithKey printResult $ Just <$> Map.filter filterResult results
       pure $ maybe
-        (SendMsgDone ())
+        (SendMsgRequestDone ())
         (flip SendMsgRequestNext $ ClientStNext handleNextPage)
         nextPage
     filterResult = case failedFlag of

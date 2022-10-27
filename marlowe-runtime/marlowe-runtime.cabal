@@ -115,6 +115,7 @@ library
     , errors
     , marlowe
     , marlowe-chain-sync
+    , marlowe-chain-sync:logging
     , marlowe-protocols
     , newtype-generics
     , one-line-aeson-text
@@ -132,17 +133,6 @@ library
     , typed-protocols
     , witherable
 
-library logging
-  import: lang
-  hs-source-dirs: logging
-  exposed-modules:
-    Language.Marlowe.Runtime.Logging
-  build-depends:
-      base >= 4.9 && < 5
-    , co-log
-    , co-log-core
-    , text
-
 library config
   import: lang
   hs-source-dirs: config
@@ -155,11 +145,11 @@ library config
     , marlowe-chain-sync
     , marlowe-runtime
     , network
-    , marlowe-runtime:logging
+    , marlowe-chain-sync:logging
     , optparse-applicative
     , prelude-safeenum
-    , text
     , split
+    , text
 
 executable marlowe
   import: lang
@@ -187,17 +177,22 @@ executable marlowe
     , ansi-terminal
     , async
     , base16
+    , binary
     , bytestring
     , cardano-api
     , containers
+    , co-log
+    , co-log-core
     , errors
     , marlowe
     , marlowe-chain-sync
+    , marlowe-chain-sync:config
+    , marlowe-chain-sync:logging
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
-    , marlowe-runtime:logging
     , monad-control
+    , mtl
     , network
     , plutus-ledger-api
     , transformers
@@ -240,10 +235,14 @@ executable marlowe-history
     , async
     , base16
     , containers
+    , co-log
+    , co-log-core
     , marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-chain-sync
+    , marlowe-chain-sync:config
+    , marlowe-chain-sync:logging
     , network
     , typed-protocols
     , optparse-applicative
@@ -265,11 +264,15 @@ executable marlowe-discovery
     , ansi-terminal
     , async
     , base16
+    , co-log
+    , co-log-core
     , containers
     , marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-chain-sync
+    , marlowe-chain-sync:config
+    , marlowe-chain-sync:logging
     , network
     , typed-protocols
     , optparse-applicative
@@ -297,11 +300,12 @@ executable marlowe-tx
     , co-log
     , co-log-core
     , marlowe
+    , marlowe-chain-sync
+    , marlowe-chain-sync:config
+    , marlowe-chain-sync:logging
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
-    , marlowe-runtime:logging
-    , marlowe-chain-sync
     , network
     , optparse-applicative
     , one-line-aeson-text
@@ -325,6 +329,8 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.History.StoreSpec
     Language.Marlowe.Runtime.History.Store.ModelSpec
     Language.Marlowe.Runtime.HistorySpec
+    Language.Marlowe.Runtime.Transaction.ApiSpec
+    Language.Marlowe.Runtime.Transaction.Arbitrary
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.Golden
@@ -337,6 +343,7 @@ test-suite marlowe-runtime-test
   build-depends:
       base >= 4.9 && < 5
     , async
+    , binary
     , bytestring
     , cardano-api
     , containers

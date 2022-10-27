@@ -4,29 +4,24 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
   ( spec
   ) where
 
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
+import Language.Marlowe.Runtime.Transaction.Arbitrary (genByteString)
 import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildConstraints
 import Language.Marlowe.Runtime.Transaction.Constraints (TxConstraints(..))
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import Test.Hspec (Spec, shouldBe)
 import qualified Test.Hspec as Hspec
 import qualified Test.Hspec.QuickCheck as Hspec.QuickCheck
-import qualified Test.QuickCheck as QuickCheck
-
-byteStringGen :: QuickCheck.Gen ByteString
-byteStringGen = BS.pack <$> QuickCheck.arbitrary
 
 spec :: Spec
 spec = Hspec.describe "buildWithdrawConstraints" do
   Hspec.QuickCheck.prop "implements Marlowe V1" do
-    tokenName <- Chain.TokenName <$> byteStringGen
-    policyId <- Chain.PolicyId <$> byteStringGen
+    tokenName <- Chain.TokenName <$> genByteString
+    policyId <- Chain.PolicyId <$> genByteString
 
     let assetId :: Chain.AssetId
         assetId = Chain.AssetId policyId tokenName

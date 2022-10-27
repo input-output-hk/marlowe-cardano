@@ -64,7 +64,7 @@ mkWorker WorkerDependencies{..} =
 
   where
     server :: RuntimeHistoryJobServer IO ()
-    server = liftCommandHandler $ fmap ((),) . \case
+    server = liftCommandHandler commandSchema $ \case
       Left (FollowContract contractId) -> do
         followed <- atomically $ followContract contractId
         if followed

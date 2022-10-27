@@ -195,21 +195,49 @@ queryClient version clientStHandshake =
   QueryClient do
     SendMsgRequestHandshake version <$> clientStHandshake
 
+queryClient'
+  :: Monad m
+  => SchemaVersion query
+  -> (SchemaVersion query -> m a)
+  -> m (ClientStIdle query m a)
+  -> QueryClient query m a
+queryClient' version handleHandshakeRejected clientStIdle =
+  QueryClient do
+    pure $ SendMsgRequestHandshake version ClientStHandshake
+      { recvMsgHandshakeRejected = handleHandshakeRejected
+      , recvMsgHandshakeConfirmed = clientStIdle
+      }
+
 -- | Create a client that runs a query that cannot have multiple pages.
 liftQuery
   :: Monad m
   => SchemaVersion query
-  -> query Void err results
+  -> m (query Void err results)
   -> QueryClient query m (Either (Either (SchemaVersion query) err) results)
 liftQuery version query = queryClient version . pure $ ClientStHandshake
   { recvMsgHandshakeRejected = \version' -> pure . Left . Left $ version'
-  , recvMsgHandshakeConfirmed = pure stReq
+  , recvMsgHandshakeConfirmed = stReq <$> query
   }
   where
-    stReq = SendMsgRequest query next
+    stReq q = SendMsgRequest q next
     next = ClientStNextCanReject
       { recvMsgNextPage = const . pure . SendMsgRequestDone . Right
       , recvMsgReject = pure . Left . Right
+      }
+
+liftQuery'
+  :: Monad m
+  => SchemaVersion query
+  -> (SchemaVersion query -> m err)
+  -> m (query Void err results)
+  -> QueryClient query m (Either err results)
+liftQuery' version handleHandshakeRejected query = queryClient' version handleHandshakeRejected' $ stReq <$> query
+  where
+    handleHandshakeRejected' version' = Left <$> handleHandshakeRejected version'
+    stReq q = SendMsgRequest q next
+    next = ClientStNextCanReject
+      { recvMsgNextPage = const . pure . SendMsgRequestDone . Right
+      , recvMsgReject = pure . Left
       }
 
 doHandshake
@@ -220,3 +248,13 @@ doHandshake version = queryClient version . pure $ ClientStHandshake
   { recvMsgHandshakeRejected  = \version' -> pure $ Left version'
   , recvMsgHandshakeConfirmed = pure $ SendMsgDone (Right ())
   }
+
+doHandshake'
+  ::  Monad m
+  => SchemaVersion query
+  -> (SchemaVersion query -> m ())
+  -> QueryClient query m ()
+doHandshake' version handleHandshakeRejected =
+  queryClient' version handleHandshakeRejected . pure $ SendMsgDone ()
+
+

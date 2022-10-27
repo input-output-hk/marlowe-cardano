@@ -3,23 +3,30 @@
 module Language.Marlowe.Runtime.CLI.Monad
   where
 
+import qualified Colog
+import Control.Category ((>>>))
 import Control.Monad (MonadPlus, (>=>))
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Control (MonadBaseControl, liftBaseWith)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, local)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Void (Void)
+import GHC.Stack (HasCallStack, callStack, withFrozenCallStack)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
 import Language.Marlowe.Runtime.History.Api (HistoryCommand, HistoryQuery)
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
+import qualified Language.Marlowe.Runtime.History.Api as History
+import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand, marloweTxCommandSchema)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand)
 import Network.Protocol.Query.Client (QueryClient, hoistQueryClient, liftQuery)
 import Options.Applicative (Alternative)
-import System.Exit (die)
+import System.Exit (exitFailure)
 
 -- | A monad type for Marlowe Runtime CLI programs.
 newtype CLI a = CLI { runCLI :: ReaderT (Env IO) IO a }
@@ -85,17 +92,52 @@ runDiscoveryQueryClient client = do
 
 -- | Run a simple History command.
 runHistoryCommand :: HistoryCommand Void err result -> CLI (Either err result)
-runHistoryCommand = runHistoryJobClient . liftCommand
+runHistoryCommand = runHistoryJobClient . liftCommand History.commandSchema >=> \case
+  Left (Left _) -> logAndDie "History Job server handshake failure"
+  Left (Right err) -> pure $ Left err
+  Right result -> pure $ Right result
 
 -- | Run a simple History query.
 queryHistory :: HistoryQuery Void err results -> CLI (Either err results)
-queryHistory = runHistoryQueryClient . liftQuery
+queryHistory = (pure >>> runHistoryQueryClient . liftQuery History.querySchema) >=> \case
+  Left (Left _) -> logAndDie "History Query handshake failure"
+  Left (Right err) -> pure $ Left err
+  Right result -> pure $ Right result
 
 -- | Run a simple Tx command.
 runTxCommand :: MarloweTxCommand Void err result -> CLI (Either err result)
-runTxCommand = runTxJobClient . liftCommand
+runTxCommand = runTxJobClient . liftCommand marloweTxCommandSchema >=> \case
+  Left (Left _) -> logAndDie "Marlowe Tx handshake failure"
+  Left (Right err) -> pure $ Left err
+  Right result -> pure $ Right result
 
-runCLIExceptT :: Show e => ExceptT e CLI a -> CLI a
+runCLIExceptT :: HasCallStack => Show e => ExceptT e CLI a -> CLI a
 runCLIExceptT = runExceptT >=> \case
-  Left ex -> liftIO $ die $ show ex
+  Left ex -> logAndDie . T.pack $ show ex
   Right a -> pure a
+
+-- * `mtl` is missing from our dependencices (so we don't have `MonadReader` to implement `WithLog`)
+-- * We are not able to use `LoggerT` because it doesn't implement `MonadFail`, `MonadFix` etc.
+-- * It seems that we are forced to reimplement this set of helpers.
+logMessage :: Colog.Severity -> Text -> CLI ()
+logMessage msgSeverity msgText = do
+  Colog.LogAction doLog <- asksEnv logAction
+  CLI $ lift $ withFrozenCallStack (doLog Colog.Msg{ msgStack = callStack, .. })
+
+logDebug :: HasCallStack => Text -> CLI ()
+logDebug msg = withFrozenCallStack (logMessage Colog.Debug msg)
+
+logInfo :: HasCallStack => Text -> CLI ()
+logInfo msg = withFrozenCallStack (logMessage Colog.Info msg)
+
+logWarning :: HasCallStack => Text -> CLI ()
+logWarning msg = withFrozenCallStack (logMessage Colog.Warning msg)
+
+logError :: HasCallStack => Text -> CLI ()
+logError msg = withFrozenCallStack (logMessage Colog.Error msg)
+
+logAndDie :: HasCallStack => forall a. Text -> CLI a
+logAndDie msg = do
+  logError msg
+  liftIO exitFailure
+

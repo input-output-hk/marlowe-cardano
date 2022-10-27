@@ -22,34 +22,36 @@ import Cardano.Api
   , toEraInMode
   )
 import qualified Cardano.Api as Cardano
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
+import Colog (logError)
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException, catch)
+import Control.Exception (SomeException)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (bimap, first)
+import qualified Data.Text as T
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..), querySchema)
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (ConcurrentlyLogIO(..), LogIO, catchLogIO)
 import Network.Protocol.Query.Server (QueryServer(..))
 import qualified Network.Protocol.Query.Server as QueryServer
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
-import System.IO (hPutStrLn, stderr)
 import Unsafe.Coerce (unsafeCoerce)
 
-newtype RunQueryServer m = RunQueryServer (forall a. QueryServer ChainSyncQuery m a -> IO a)
+newtype RunQueryServer m = RunQueryServer (forall a. QueryServer ChainSyncQuery m a -> LogIO a)
 
 data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
-  { acceptRunQueryServer :: IO (RunQueryServer IO)
+  { acceptRunQueryServer :: LogIO (RunQueryServer LogIO)
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
-      -> IO (Either AcquireFailure result)
-  , getUTxOs :: !(Database.GetUTxOs IO)
+      -> LogIO (Either AcquireFailure result)
+  , getUTxOs :: !(Database.GetUTxOs LogIO)
   }
 
 newtype ChainSyncQueryServer = ChainSyncQueryServer
-  { runChainSyncQueryServer :: IO Void
+  { runChainSyncQueryServer :: LogIO Void
   }
 
 mkChainSyncQueryServer :: ChainSyncQueryServerDependencies -> STM ChainSyncQueryServer
@@ -57,26 +59,26 @@ mkChainSyncQueryServer ChainSyncQueryServerDependencies{..} = do
   let
     runChainSyncQueryServer = do
       runQueryServer <- acceptRunQueryServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runChainSyncQueryServer
+      Worker{..} <- liftIO $ atomically $ mkWorker WorkerDependencies {..}
+      runConcurrentlyLogIO $
+        ConcurrentlyLogIO (runWorker `catchLogIO` catchWorker) *> ConcurrentlyLogIO runChainSyncQueryServer
   pure $ ChainSyncQueryServer { runChainSyncQueryServer }
 
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show
+catchWorker :: SomeException -> LogIO ()
+catchWorker = logError . T.pack . mappend "Query worker crashed with exception: " . show
 
 data WorkerDependencies = WorkerDependencies
-  { runQueryServer      :: RunQueryServer IO
+  { runQueryServer :: RunQueryServer LogIO
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
-      -> IO (Either AcquireFailure result)
-  , getUTxOs :: !(Database.GetUTxOs IO)
+      -> LogIO (Either AcquireFailure result)
+  , getUTxOs :: !(Database.GetUTxOs LogIO)
   }
 
 newtype Worker = Worker
-  { runWorker :: IO ()
+  { runWorker :: LogIO ()
   }
 
 mkWorker :: WorkerDependencies -> STM Worker
@@ -87,8 +89,8 @@ mkWorker WorkerDependencies{..} =
     pure Worker { runWorker = run server }
 
   where
-    server :: QueryServer ChainSyncQuery IO ()
-    server = QueryServer.liftHandler querySchema $ \case
+    server :: QueryServer ChainSyncQuery LogIO ()
+    server = QueryServer.liftNonPaginated querySchema $ \case
         GetSlotConfig        -> queryGenesisParameters extractSlotConfig
         GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
         GetNetworkId -> queryGenesisParameters protocolParamNetworkId
@@ -101,12 +103,11 @@ mkWorker WorkerDependencies{..} =
           utxos <- Database.runGetUTxOs getUTxOs utxosQuery
           pure $ Right utxos
 
-    -- queryGenesisParameters :: (GenesisParameters -> a) -> IO (ServerStNext ChainSyncQuery 'CanReject Void () a IO ())
     queryGenesisParameters f = fmap f <$> queryShelley (const QueryGenesisParameters)
 
     queryShelley
       :: (forall era. ShelleyBasedEra era -> QueryInShelleyBasedEra era result)
-      -> IO (Either () result)
+      -> LogIO (Either () result)
     queryShelley query = runExceptT do
       AnyCardanoEra era <- withExceptT (const ())
         $ ExceptT

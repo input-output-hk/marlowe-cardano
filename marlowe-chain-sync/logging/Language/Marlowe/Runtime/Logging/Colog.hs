@@ -19,6 +19,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Stack (HasCallStack, callStack, withFrozenCallStack)
 
+type LoggerT' = LoggerT Message
 
 -- | Given the severity we log everything from that level.
 -- `Nothing` value indicates silent mode.
