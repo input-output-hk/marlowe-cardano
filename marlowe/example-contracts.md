@@ -6,6 +6,7 @@
 - [Generating Marlowe from Haskell](#generating-marlowe-from-haskell)
 - [Marlowe Runtime](#marlowe-runtime)
 - [Cookbook of Miscellaneous Contracts](#cookbook-of-miscellaneous-contracts)
+- [Solutions to Hackathon Challenges](#solutions-to-hackathon-challenges)
 
 
 ## Simple Examples
@@ -211,3 +212,59 @@ This example demonstrates the use of `marlowe-cli` with Plutus V2 reference sc
 We present a novel synergy between the Cardano Beam Dapp and the Marlowe Dapp, where Cardano Beam is used to geolocate the role tokens needed for authorization of Marlowe transactions. This enables use cases such as geocaching, scavenger hunts, or token drops that are linked to Marlowe contracts: this melds the geolocation capabilities of Cardano Beam with the contract-logic capabilities of Marlowe.
 
 A video that shows this example being run is available [here](https://youtu.be/DmkYen0eaV0).
+
+
+## Solutions to Hackathon Challenges
+
+
+### English auctions (difficult)
+
+In live terms, English auctions are where bids are announced by the bidders and winners pay what they bid to receive the object. The common operational method of the format is that it is an ascending bid auction in which bids are open for all to see. The winner is the highest bidder and the price is the highest bid.
+
+Solution: [Haskell](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/app/EnglishAuction.hs), [Marlowe](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/marlowe/EnglishAuction.marlowe), [core JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/core-json/EnglishAuction.json) [extended JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/extended-json/EnglishAuction.json), [TypeScript](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/typescript/EnglishAuction.ts).
+
+
+### Dutch auctions (difficult)
+
+Dutch auctions are the reverse of English auctions whereby the price begins high and is systematically lowered until a buyer accepts the price.
+
+Solution: [Haskell](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/app/DutchAuction.hs), [Marlowe](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/marlowe/DutchAuction.marlowe), [core JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/core-json/DutchAuction.json), [extended JSON](solutions/extended-json/DutchAuction.json), [TypeScript](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/typescript/DutchAuction.ts).
+
+
+### First-price open-bid (easy)
+
+First-price open-bid auctions are when a single bid is made by all bidding parties and the single highest bidder wins, and pays what they bid. This contract is not realistic because it can easily be gamed by waiting to bid last.
+
+Solution: [Haskell](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/app/FirstPriceBid.hs), [Marlowe](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/marlowe/FirstPriceBid.marlowe), [core JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/core-json/FirstPriceBid.json), [extended JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/extended-json/FirstPriceBid.json), [TypeScript](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/typescript/FirstPrice.ts).
+
+A very difficult variant of this in Marlowe is the first-price *sealed-bid* auction, where participants commit their bids before any of them reveal their bids.
+
+
+### Second-price open-bid (intermediate)
+
+Second-price open-bid auctions are when a single bid is made by all bidding parties and the single highest bidder wins, and pays what the second-highest bidder bid. This contract is not realistic because it can easily be gamed through collusion.
+
+Solution: [Haskell](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/app/SecondPriceBid.hs), [Marlowe](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/marlowe/SecondPriceBid.marlowe), [core JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/core-json/SecondPriceBid.json), [extended JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/extended-json/SecondPriceBid.json), [TypeScript](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/typescript/SecondPrice.ts).
+
+A very difficult variant of this in Marlowe is the Vickrey second-price *sealed-bid* auction, where participants commit their bids before any of them reveal their bids.
+
+
+### Reverse auction (intermediate)
+
+Reverse auctions are where the roles of buyer and seller are reversed. Multiple sellers compete to obtain the buyer's business and prices typically decrease over time as new offers are made.
+
+Solution: [Haskell](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/app/ReverseAuction.hs), [Marlowe](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/marlowe/ReverseAuction.marlowe), [core JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/core-json/ReverseAuction.json), [extended JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/extended-json/ReverseAuction.json), [TypeScript](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/typescript/ReverseAuction.ts).
+
+
+### Bidding fee auction (difficult)
+
+A bidding fee auction (also known as a penny auction) requires customers to pay the auction owner for bids, which they can increment an auction price one unit of currency at a time.  On English auctions for example, the price goes up in 1 pence (0.01 GBP) increments.
+
+Solution: [Haskell](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/app/BiddingFee.hs), [Marlowe](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/marlowe/BiddingFee.marlowe), [core JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/core-json/BiddingFee.json), [extended JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/extended-json/BiddingFee.json), [TypeScript](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/typescript/BiddingFee.ts).
+
+
+### Stable coin (easy)
+
+The Marlowe analog of a stable coin is a contract that pays the party the value in a base currency (say, USD) of the ADA that they initially deposit in a contract. A counterparty deposits collateral, according to a specified *reserve ratio* (i.e., the ratio of the total ADA in the contract to the ADA deposited by the party), to cover price changes in ADA. When the party withdraws their funds, they receive the ADA corresponding to the base-currency value initially deposited, and the counterparty receives the remaining ADA.
+
+Solution: [Haskell](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/app/StableCoin.hs), [Marlowe](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/marlowe/StableCoin.marlowe), [core JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/core-json/StableCoin.json), [extended JSON](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/extended-json/StableCoin.json), [TypeScript](https://github.com/input-output-hk/marlowe-hackathons/tree/main/austin-2022/solutions/typescript/StableCoin.ts).
