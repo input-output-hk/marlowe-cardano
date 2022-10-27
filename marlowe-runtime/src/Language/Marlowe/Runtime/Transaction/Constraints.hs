@@ -52,16 +52,15 @@ import Witherable (wither)
 
 -- For debug logging
 -- import Debug.Trace (trace)
-import Prelude hiding (log)
 
 -- | Quick-and-dirty logging for the pure code in this module
 --   examples, before: foo bar baz
---             after:  foo (log ("bar: " <> show bar) bar) baz
---             or:     foo (log "some message" bar) baz
+--             after:  foo (logD ("bar: " <> show bar) bar) baz
+--             or:     foo (logD "some message" bar) baz
 --   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
-log :: String -> a -> a
--- log = trace  -- Logging "active"
-log = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+logD :: String -> a -> a
+-- logD = trace  -- Logging "active"
+logD = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -605,7 +604,7 @@ selectCoins protocol WalletContext{..} txBodyContent = do
 
   -- Ensure that coin selection for lovelace is possible.
   -- unless (C.selectLovelace targetSelectionValue <= C.selectLovelace universe)
-  unless (C.selectLovelace (log ("selectCoins targetSelectionValue: " <> show targetSelectionValue) targetSelectionValue) <= C.selectLovelace (log ("selectCoins universe: " <> show universe) universe))
+  unless (C.selectLovelace (logD ("selectCoins targetSelectionValue: " <> show targetSelectionValue) targetSelectionValue) <= C.selectLovelace (logD ("selectCoins universe: " <> show universe) universe))
     . Left
     . CoinSelectionFailed
     $ "Insufficient lovelace available for coin selection: "
@@ -645,18 +644,18 @@ selectCoins protocol WalletContext{..} txBodyContent = do
         -- Choose the best UTxO from the candidates.
         next :: (C.TxIn, C.TxOut C.CtxTx C.BabbageEra)
         -- next = minimumBy (compare `on` priority required) candidates
-        next = minimumBy (compare `on` priority (log ("select required: " <> show required) required)) candidates
+        next = minimumBy (compare `on` priority (logD ("select required: " <> show required) required)) candidates
         -- Determine the remaining candidates.
         candidates' :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
         -- candidates' = delete next candidates
-        candidates' = delete next (log ("select candidates: " <> show candidates) candidates)
+        candidates' = delete next (logD ("select candidates: " <> show candidates) candidates)
         -- Ignore negative quantities.
         filterPositive :: C.Value -> C.Value
         filterPositive = C.valueFromList . filter ((> 0) . snd) . C.valueToList
         -- Compute the remaining requirement.
         required' :: C.Value
         -- required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd next)
-        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd (log ("select next: " <> show next) next))
+        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd (logD ("select next: " <> show next) next))
       in
         -- Decide whether to continue.
         if required' == mempty
@@ -867,22 +866,23 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
   --   , txScriptValidity = C.TxScriptValidityNone
   --   }
   pure C.TxBodyContent
-    { txIns = log ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
+    { txIns = logD ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
     , txInsCollateral = C.TxInsCollateralNone
-    , txInsReference = log ("solveInitialTxBodyContent txInsReference: " <> show txInsReference) txInsReference
+    , txInsReference = logD ("solveInitialTxBodyContent txInsReference: " <> show txInsReference) txInsReference
     , txOuts
     , txTotalCollateral = C.TxTotalCollateralNone
     , txReturnCollateral = C.TxReturnCollateralNone
     , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-    , txValidityRange = log ("solveInitialTxBodyContent txValidityRange: " <> show txValidityRange) txValidityRange
-    , txMetadata = log ("solveInitialTxBodyContent txMetadata: " <> show txMetadata) txMetadata
+    , txValidityRange = logD ("solveInitialTxBodyContent txValidityRange: " <> show txValidityRange) txValidityRange
+    , txMetadata = logD ("solveInitialTxBodyContent txMetadata: " <> show txMetadata) txMetadata
     , txAuxScripts = C.TxAuxScriptsNone
-    , txExtraKeyWits = log ("solveInitialTxBodyContent txExtraKeyWits: " <> show txExtraKeyWits) txExtraKeyWits
+    , txExtraKeyWits = logD ("solveInitialTxBodyContent txExtraKeyWits: " <> show txExtraKeyWits) txExtraKeyWits
     , txProtocolParams = C.BuildTxWith $ Just protocol
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    , txMintValue = log ("END values for the new tx body\nsolveInitialTxBodyContent txMintValue: " <> show txMintValue) txMintValue
+    -- , txMintValue
+    , txMintValue = logD ("END values for the new tx body") txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
