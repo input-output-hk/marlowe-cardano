@@ -532,7 +532,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
 
     utxos :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
-    utxos = allUtxos marloweVersion marloweCtx walletCtx
+    utxos = allUtxos marloweVersion marloweCtx walletCtx False
 
     -- Compute the value of all available UTxOs
     universe :: C.Value
@@ -758,7 +758,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion marloweCtx walletCt
     -- The available UTxOs.
     -- FIXME: This only needs to be the subset of available UTxOs that are actually `TxIns`, but including extras should be harmless.
     utxos :: C.UTxO C.BabbageEra
-    utxos = C.UTxO . SMap.fromList $ allUtxos marloweVersion marloweCtx walletCtx
+    utxos = C.UTxO . SMap.fromList $ allUtxos marloweVersion marloweCtx walletCtx True
 
     -- Compute net of inputs and outputs, accounting for minting.
     totalIn =
@@ -790,8 +790,9 @@ allUtxos :: forall v ctx
          .  Core.MarloweVersion v
          -> MarloweContext v
          -> WalletContext
+         -> Bool
          -> [(C.TxIn, C.TxOut ctx C.BabbageEra)]
-allUtxos marloweVersion MarloweContext{..} WalletContext{..} =
+allUtxos marloweVersion MarloweContext{..} WalletContext{..} includeReferences =
   let
 
     -- Convert chain UTxOs to Cardano API ones.
@@ -834,9 +835,9 @@ allUtxos marloweVersion MarloweContext{..} WalletContext{..} =
   in
 
     mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs $ availableUtxos)
-      <> mapMaybe mkReferenceUtxo [marloweScriptUTxO, payoutScriptUTxO]
       <> maybe mempty pure (mkMarloweUtxo =<< scriptOutput)
       <> mapMaybe mkPayoutUtxo (Map.toList payoutOutputs)
+      <> mapMaybe mkReferenceUtxo (filter (const includeReferences) [marloweScriptUTxO, payoutScriptUTxO])
 
 
 solveInitialTxBodyContent
