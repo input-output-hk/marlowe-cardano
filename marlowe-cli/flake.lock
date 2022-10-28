@@ -3119,7 +3119,6 @@
         "sphinxcontrib-haddock": "sphinxcontrib-haddock"
       },
       "locked": {
-        "narHash": "sha256-ghmG7HmGaQbwJgayJCcwEVGuoDoX247ke8CTac2NEAM=",
         "path": "/nix/store/qrpnaaqakw01g817hxjrgk7fhni6zx51-source",
         "type": "path"
       },

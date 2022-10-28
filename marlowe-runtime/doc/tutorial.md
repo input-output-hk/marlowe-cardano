@@ -63,7 +63,7 @@ Make sure that the Marlowe Runtime backend services are running and using the de
 The environment variable `CARDANO_NODE_SOCKET_PATH` must point to the socket file of the Cardano node and the enviornment variable `CARDANO_TESTNET_MAGIC` must equal the numeric value for the network magic. In this example, we use the `preview` network.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 export CARDANO_NODE_SOCKET_PATH=node.socket
 export CARDANO_TESTNET_MAGIC=2
 ```
@@ -81,7 +81,7 @@ We create payment keys, signing keys, and addresses for the two participants.
 First we specify the filenames of the payment and signing keys for the party.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 PARTY_SKEY=john-fletcher.skey
 PARTY_VKEY=john-fletcher.vkey
 ```
@@ -89,7 +89,7 @@ PARTY_VKEY=john-fletcher.vkey
 Create the first party's keys, if necessary.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 if [[ ! -e "$PARTY_SKEY" ]]
 then
   cardano-cli address key-gen --signing-key-file "$PARTY_SKEY" --verification-key-file "$PARTY_VKEY"
@@ -106,7 +106,7 @@ Now use Daedalus or some other method to fund the address with at least 150 test
 We check that the party's address has been funded.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PARTY_ADDR"
 ```
 
@@ -120,7 +120,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PART
 Next we specify the filenames of the payment and signing keys for the counterparty.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 COUNTERPARTY_SKEY=thomas-kyd.skey
 COUNTERPARTY_VKEY=thomas-kyd.vkey
 ```
@@ -128,7 +128,7 @@ COUNTERPARTY_VKEY=thomas-kyd.vkey
 Create the second party's keys, if necessary.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 if [[ ! -e "$COUNTERPARTY_SKEY" ]]
 then
   cardano-cli address key-gen --signing-key-file "$COUNTERPARTY_SKEY" --verification-key-file "$COUNTERPARTY_VKEY"
@@ -145,7 +145,7 @@ Now use Daedalus or some other method to fund the address with at least 150 test
 We check that the party's address has been funded.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUNTERPARTY_ADDR"
 ```
 
@@ -157,13 +157,13 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUN
 ### Time computations
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 SECOND=1000
 MINUTE=$((60 * SECOND))
 ```
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 NOW="$(($(date -u +%s) * SECOND))"
 echo "$NOW"
 ```
@@ -176,7 +176,7 @@ echo "$NOW"
 We set the parameters for the ACTUS PAM contract, first in environment variables and then in the JSON file that contains the full set of ACTUS parameters. See [marlowe-actus](../../marlowe-actus/README.md) for more information on using ACTUS in Marlowe.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 SECOND=1000
 MINUTE=$((60 * SECOND))
 NOW="$(($(date -u +%s) * SECOND))"
@@ -194,7 +194,7 @@ MATURITY_DATE=$(date -d "$(date -u -R -d @$((NOW/1000))) + 2 year" +"%Y-01-01T00
 ```
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 yaml2json << EOI > tutorial.actus
 scheduleConfig:
   businessDayConvention: "NULL"
@@ -228,7 +228,7 @@ cat tutorial.actus
 Now use the `marlowe-cli template actus` command to convert the ACTUS parameters into a Marlowe contract. See the documentation for [marlowe-cli template](../../marlowe-cli/doc/template.md) for more information.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe-cli template actus \
   --minimum-ada "$MINIMUM_ADA" \
   --party "$PARTY_ADDR" \
@@ -241,7 +241,7 @@ marlowe-cli template actus \
 View the contract, which closely corresponds to the Blocky diagram shown above for the contract.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 json2yaml tutorial-1.contract
 ```
 
@@ -338,7 +338,7 @@ We use the `marlowe create` command to build the transaction that creates the co
 The command will create the unsigned transaction the identifier for the transaction, which is also the identifier for the Marlowe contract instance. See the [help page](marlowe/create.md) for more information about this command.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 TX_1=$(
 marlowe create \
   --core-file tutorial-1.contract \
@@ -358,7 +358,7 @@ echo "CONTRACT_ID = TX_1 = $CONTRACT_ID"
 For security reasons, Marlowe Runtime will not sign transactions or handle signing keys. To sign the transaction here, we use the `cardano-cli transaction sign` tool, but any wallet or signing tool could be used.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli transaction sign \
   --tx-body-file tutorial-1.txbody \
   --out-file     tutorial-1.tx \
@@ -368,7 +368,7 @@ cardano-cli transaction sign \
 We now submit the transaction using Marlowe Runtime and wait for the confirmation.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe submit tutorial-1.tx
 ```
 
@@ -380,7 +380,7 @@ marlowe submit tutorial-1.tx
 We can now view the UTxO that holds the newly created contract. First we need to compute the address of the Marlowe contract.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 CONTRACT_ADDR=$(marlowe-cli contract address)
 echo "$CONTRACT_ADDR"
 ```
@@ -391,7 +391,7 @@ echo "$CONTRACT_ADDR"
 We now query the blockchain at this address, just printing this one UTxO. We see that the contract has the 3 Ada that was used to create the contract and it has a datum hash that records the contract and its state.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_1//#*/}/p"
 ```
 
@@ -403,7 +403,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONT
 The balance of funds at the party's address reduced by the 3 Ada and the transaction fee.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PARTY_ADDR"
 ```
 
@@ -417,7 +417,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PART
 Now that we know the contract identifier, we can ask Marlowe Runtime to watch the progress of the contract on the blockchain. See the [help page](marlowe/add.md) for more information about the `marlowe add` command.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe add "$CONTRACT_ID"
 ```
 
@@ -427,7 +427,7 @@ marlowe add "$CONTRACT_ID"
 See that the contract is being watched by Marlowe Runtime. See the [help page](marlowe/ls.md) for more information on the `marlowe ls` command.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe ls
 ```
 
@@ -437,12 +437,12 @@ marlowe ls
 We can also view the contract's history, which is just the single creation transaction. See the [help page](marlowe/log.md) for more information about the `marlowe log` command.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe log --show-contract "$CONTRACT_ID"
 ```
 
-    [93mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
-    [0mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
+    mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:          6922384
     BlockNo:         320096
     BlockId:         3c69e702facde686d13646acffc7f983dee236d2bfec470ada6e3ad8b8ead7f9
@@ -497,7 +497,7 @@ We use the `marlowe deposit` command to build the transaction that makes the fir
 The command will create the unsigned transaction the identifier for the transaction, which is also the identifier for the Marlowe contract instance. See the [help page](marlowe/create.md) for more information about this command.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 RIGHT_NOW=$(($(date -u +%s)*SECOND))
 
 TX_2=$(
@@ -523,7 +523,7 @@ echo "TX_2 = $TX_2"
 Sign the transaction, as we ddid previously.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli transaction sign \
   --tx-body-file tutorial-2.txbody \
   --out-file     tutorial-2.tx \
@@ -533,7 +533,7 @@ cardano-cli transaction sign \
 Submit the transaction using Marlowe Runtime.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe submit tutorial-2.tx
 ```
 
@@ -545,7 +545,7 @@ marlowe submit tutorial-2.tx
 Because the deposit passed through the contract, the amount of Ada in the contract hasn't changed. The new datum hash reflects the change in the state of the contract.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_2//#*/}/p"
 ```
 
@@ -557,7 +557,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONT
 However, the party has 100 Ada fewer at their address.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PARTY_ADDR"
 ```
 
@@ -569,7 +569,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PART
 Conversely, the counterparty has 100 Ada more at their address.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUNTERPARTY_ADDR"
 ```
 
@@ -584,12 +584,12 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUN
 There are now two transactions in the contract instance's history.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe log --show-contract "$CONTRACT_ID"
 ```
 
-    [93mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
-    [0mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
+    mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:          6922384
     BlockNo:         320096
     BlockId:         3c69e702facde686d13646acffc7f983dee236d2bfec470ada6e3ad8b8ead7f9
@@ -626,8 +626,8 @@ marlowe log --show-contract "$CONTRACT_ID"
                                   (Token "" "")
                                   (Constant 100000000) Close))] 1704067200000 Close)))] 1704067200000 Close)))] 1672531200000 Close
     
-    [93mtransaction a244dbed33d04efd7cc20d85bde1633e04e2e981802036d10033ad480a09e9fe
-    [0mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction a244dbed33d04efd7cc20d85bde1633e04e2e981802036d10033ad480a09e9fe
+    mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:     6922389
     BlockNo:    320097
     BlockId:    9b6cb2f4942c55fe33cb8fba7e5d13d8e672cb55f32252ffced3dcb5b0dc9f4f
@@ -663,7 +663,7 @@ We see that the contract has become smaller after the party made their deposit o
 The counterparty now repays the interest.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 RIGHT_NOW=$(($(date -u +%s)*SECOND))
 
 TX_3=$(
@@ -689,7 +689,7 @@ echo "TX_3 = $TX_3"
 Sign the transaction.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli transaction sign \
   --tx-body-file tutorial-3.txbody \
   --out-file     tutorial-3.tx \
@@ -699,7 +699,7 @@ cardano-cli transaction sign \
 Submit the transaction using Marlowe Runtime.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe submit tutorial-3.tx
 ```
 
@@ -711,7 +711,7 @@ marlowe submit tutorial-3.tx
 The payment of interest passed through the contract, so the net Ada in the contract hasn't changed, even though the state of the contract did change.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_3//#*/}/p"
 ```
 
@@ -723,7 +723,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONT
 The party received the interest payment of 2 Ada.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PARTY_ADDR"
 ```
 
@@ -736,7 +736,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PART
 The counterparty has 2 Ada and the transaction fee less than previously.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUNTERPARTY_ADDR"
 ```
 
@@ -751,12 +751,12 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUN
 Now we see that there are three transactions in the contract's history.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe log --show-contract "$CONTRACT_ID"
 ```
 
-    [93mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
-    [0mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
+    mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:          6922384
     BlockNo:         320096
     BlockId:         3c69e702facde686d13646acffc7f983dee236d2bfec470ada6e3ad8b8ead7f9
@@ -793,8 +793,8 @@ marlowe log --show-contract "$CONTRACT_ID"
                                   (Token "" "")
                                   (Constant 100000000) Close))] 1704067200000 Close)))] 1704067200000 Close)))] 1672531200000 Close
     
-    [93mtransaction a244dbed33d04efd7cc20d85bde1633e04e2e981802036d10033ad480a09e9fe
-    [0mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction a244dbed33d04efd7cc20d85bde1633e04e2e981802036d10033ad480a09e9fe
+    mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:     6922389
     BlockNo:    320097
     BlockId:    9b6cb2f4942c55fe33cb8fba7e5d13d8e672cb55f32252ffced3dcb5b0dc9f4f
@@ -819,8 +819,8 @@ marlowe log --show-contract "$CONTRACT_ID"
                          (Token "" "")
                          (Constant 100000000) Close))] 1704067200000 Close)))] 1704067200000 Close
     
-    [93mtransaction c95e11ec5370a2c0e0d77356e54e9dfdea10bbc18a0097f5f3c40a27ce2f9c30
-    [0mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction c95e11ec5370a2c0e0d77356e54e9dfdea10bbc18a0097f5f3c40a27ce2f9c30
+    mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:     6922414
     BlockNo:    320098
     BlockId:    7d1966e36ec7da2b2926ae489b606061a2f59e2ea38cf6b9ffcd5aadcf9f954a
@@ -847,7 +847,7 @@ We see that the contract has become even smaller after the counterparty made the
 The counterparty repays the principal.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 RIGHT_NOW=$(($(date -u +%s)*SECOND))
 
 TX_4=$(
@@ -873,7 +873,7 @@ echo "TX_4 = $TX_4"
 Sign the transaction.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli transaction sign \
   --tx-body-file tutorial-4.txbody \
   --out-file     tutorial-4.tx \
@@ -883,7 +883,7 @@ cardano-cli transaction sign \
 Submit the transaction using Marlowe Runtime.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe submit tutorial-4.tx
 ```
 
@@ -895,7 +895,7 @@ marlowe submit tutorial-4.tx
 The contract closed, so there is no UTxO at the contract address.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONTRACT_ADDR" | sed -n -e "1,2p;/${TX_4//#*/}/p"
 ```
 
@@ -906,7 +906,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$CONT
 The party received their 100 Ada of principal and their initial 3 Ada used to create the contract.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PARTY_ADDR"
 ```
 
@@ -920,7 +920,7 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$PART
 The counterparty's balance has dropped by the principal amount, and the transaction fee.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUNTERPARTY_ADDR"
 ```
 
@@ -935,12 +935,12 @@ cardano-cli query utxo --testnet-magic "$CARDANO_TESTNET_MAGIC" --address "$COUN
 We now see the final transaction in the contract's history.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe log --show-contract "$CONTRACT_ID"
 ```
 
-    [93mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
-    [0mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219 (creation)
+    mContractId:      54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:          6922384
     BlockNo:         320096
     BlockId:         3c69e702facde686d13646acffc7f983dee236d2bfec470ada6e3ad8b8ead7f9
@@ -977,8 +977,8 @@ marlowe log --show-contract "$CONTRACT_ID"
                                   (Token "" "")
                                   (Constant 100000000) Close))] 1704067200000 Close)))] 1704067200000 Close)))] 1672531200000 Close
     
-    [93mtransaction a244dbed33d04efd7cc20d85bde1633e04e2e981802036d10033ad480a09e9fe
-    [0mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction a244dbed33d04efd7cc20d85bde1633e04e2e981802036d10033ad480a09e9fe
+    mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:     6922389
     BlockNo:    320097
     BlockId:    9b6cb2f4942c55fe33cb8fba7e5d13d8e672cb55f32252ffced3dcb5b0dc9f4f
@@ -1003,8 +1003,8 @@ marlowe log --show-contract "$CONTRACT_ID"
                          (Token "" "")
                          (Constant 100000000) Close))] 1704067200000 Close)))] 1704067200000 Close
     
-    [93mtransaction c95e11ec5370a2c0e0d77356e54e9dfdea10bbc18a0097f5f3c40a27ce2f9c30
-    [0mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction c95e11ec5370a2c0e0d77356e54e9dfdea10bbc18a0097f5f3c40a27ce2f9c30
+    mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:     6922414
     BlockNo:    320098
     BlockId:    7d1966e36ec7da2b2926ae489b606061a2f59e2ea38cf6b9ffcd5aadcf9f954a
@@ -1020,8 +1020,8 @@ marlowe log --show-contract "$CONTRACT_ID"
                 (Token "" "")
                 (Constant 100000000) Close))] 1704067200000 Close
     
-    [93mtransaction 5f399752c56bb5f335ec7a590d9018d50d23bcdbe173911e364da58e30ca16a3 (close)
-    [0mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
+    mtransaction 5f399752c56bb5f335ec7a590d9018d50d23bcdbe173911e364da58e30ca16a3 (close)
+    mContractId: 54f75925a350a9cf80ff8d917b94826ab5747a126d670fa1fb4bdf4298bdd219#1
     SlotNo:     6922431
     BlockNo:    320099
     BlockId:    a484733eaf37997c3c7bc5a1572cae001b50842cbd037852cd73bb269f63c08b
@@ -1035,7 +1035,7 @@ marlowe log --show-contract "$CONTRACT_ID"
 Remove the contract from history tracking. See the [help page](marlowe/rm.md) for more information on the `marlowe rm` command.
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe rm "$CONTRACT_ID"
 ```
 
@@ -1043,6 +1043,6 @@ marlowe rm "$CONTRACT_ID"
 
 
 
-```/nix/store/l0wlqpbsvh1pgvhcdhw7qkka3d31si7k-bash-5.1-p8/bin/bash
+```bash
 marlowe ls
 ```
