@@ -1,0 +1,73 @@
+stTestName: Actus PAM contract test with role token
+
+stScriptOperations:
+  - tag: Publish
+    soPublishPermanently: true
+
+  - tag: CreateWallet
+    soWalletNickname: lender
+
+  - tag: FundWallets
+    soValues:
+      - 150_000_000
+    soWalletNicknames: [lender]
+
+  - tag: CreateWallet
+    soWalletNickname: borrower
+
+  - tag: FundWallets
+    soValues:
+      - 250_000_000
+    soWalletNicknames: [borrower]
+
+  - tag: Mint
+    soCurrencyNickname: Actus
+    soTokenDistribution:
+      - [ lender, lenderRole, 1 ]
+      - [ borrower, borrowerRole, 1 ]
+
+  - tag: Initialize
+    soContractNickname: PAM
+    soMinAda: 3000000
+    soRoleCurrency: PAM
+    soContractSource:
+      template:
+        tag: UseActus
+        utParty:
+          role_token: lender
+        utCounterParty:
+          role_token: borrower
+        utPaymentDeadline:
+          relative: 1000000
+        utComplaintDeadline:
+          relative: 2000000
+        utDisputeDeadline:
+          relative: 3000000
+        utMediationDeadline:
+          relative: 4000000
+
+  - tag: AutoRun
+    soSubmitter: seller
+    soContractNickname: Escrow
+
+  - tag: Prepare
+    soContractNickname: Escrow
+    soInputs:
+      - input_from_party:
+          role_token: buyer
+        that_deposits: 256
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: seller
+    soMinimumTime:
+      relative: -1000
+    soMaximumTime:
+      relative: 8000
+
+  - tag: AutoRun
+    soSubmitter: buyer
+    soContractNickname: Escrow
+
+

@@ -494,89 +494,92 @@ interpret so@AutoRun {..} = do
       ssContracts `modifying`  Map.insert soContractNickname marloweContract'
 
 interpret so@Withdraw {..} = do
-  marloweContract@MarloweContract {..} <- findMarloweContract soContractNickname
+  timeoutForOnChainMode >>= \case
+    Nothing -> logSoMsg' so "Execution Mode set to 'Simulation' - Withdrawals are not submitted to chain in simulation mode"
+    (Just _) -> do
+      marloweContract@MarloweContract {..} <- findMarloweContract soContractNickname
 
-  marloweThread <- case mcThread of
-    Just marloweThread -> pure marloweThread
-    Nothing -> throwSoError so "Contract is not on the chain yet so there are not payouts as well."
-  Wallet{waAddress, waSigningKey, waMintedTokens} <- findWallet soWalletNickname
-  Currency { ccCurrencySymbol } <- maybe (snd <$> getCurrency) findCurrency mcCurrency
-  let
-    roles = P.flattenValue waMintedTokens `foldMapFlipped` \(cs, tn, _) ->
-      if cs == ccCurrencySymbol
-        then [tn]
-        else mempty
-  when (roles == mempty) $ do
-    throwSoError so $ fold
-      [ "Provided wallet "
-      , show soWalletNickname
-      , "has no roles associated with the given contract "
-      , show soContractNickname
-      ]
+      marloweThread <- case mcThread of
+        Just marloweThread -> pure marloweThread
+        Nothing -> throwSoError so "Contract is not on the chain yet so there are not payouts as well."
+      Wallet{waAddress, waSigningKey, waMintedTokens} <- findWallet soWalletNickname
+      Currency { ccCurrencySymbol } <- maybe (snd <$> getCurrency) findCurrency mcCurrency
+      let
+        roles = P.flattenValue waMintedTokens `foldMapFlipped` \(cs, tn, _) ->
+          if cs == ccCurrencySymbol
+            then [tn]
+            else mempty
+      when (roles == mempty) $ do
+        throwSoError so $ fold
+          [ "Provided wallet "
+          , show soWalletNickname
+          , "has no roles associated with the given contract "
+          , show soContractNickname
+          ]
 
-  timeout <- timeoutForOnChainMode
-  connection <- view seConnection
-  txBodies <- foldMapMFlipped roles \role -> do
-    let
-      lastWithdrawalCheckPoint = Map.lookup role mcWithdrawalsCheckPoints
-      threadTransactions :: [(MarloweTransaction MarlowePlutusVersion era, C.TxId)]
-      threadTransactions = do
-        let step item acc = (getMarloweThreadTransaction item, C.getTxId . getMarloweThreadTxBody $ item) : acc
-        overAnyMarloweThread (foldrMarloweThread step []) marloweThread
-
-      possibleWithdrawals = takeWhile ((/=) lastWithdrawalCheckPoint . Just . snd) threadTransactions
-
-      paymentRole (M.Payment _ (M.Party (M.Role r)) _ _) = Just r
-      paymentRole _ = Nothing
-
-      -- Sometimes we reuse the same currency across multiple tests (when Faucet is an issuer) so we
-      -- need to filter out payouts which are really associated with this particular test
-      -- case. We can identify them by matching them against a set of submitted transaction ids.
-      filterPayoutsUTxOs utxos = do
+      timeout <- timeoutForOnChainMode
+      connection <- view seConnection
+      txBodies <- foldMapMFlipped roles \role -> do
         let
-          txIds = map snd possibleWithdrawals
-          txInId (C.TxIn txId _) = txId
-        filter (flip elem txIds . txInId . fst . unAnUTxO) utxos
+          lastWithdrawalCheckPoint = Map.lookup role mcWithdrawalsCheckPoints
+          threadTransactions :: [(MarloweTransaction MarlowePlutusVersion era, C.TxId)]
+          threadTransactions = do
+            let step item acc = (getMarloweThreadTransaction item, C.getTxId . getMarloweThreadTxBody $ item) : acc
+            overAnyMarloweThread (foldrMarloweThread step []) marloweThread
 
-    let
-      anyWithdrawalsExist = possibleWithdrawals `anyFlipped` \(T.MarloweTransaction{..}, _) -> do
-        elem role . mapMaybe paymentRole $ mtPayments
+          possibleWithdrawals = takeWhile ((/=) lastWithdrawalCheckPoint . Just . snd) threadTransactions
 
-    if anyWithdrawalsExist
-      then do
+          paymentRole (M.Payment _ (M.Party (M.Role r)) _ _) = Just r
+          paymentRole _ = Nothing
+
+          -- Sometimes we reuse the same currency across multiple tests (when Faucet is an issuer) so we
+          -- need to filter out payouts which are really associated with this particular test
+          -- case. We can identify them by matching them against a set of submitted transaction ids.
+          filterPayoutsUTxOs utxos = do
+            let
+              txIds = map snd possibleWithdrawals
+              txInId (C.TxIn txId _) = txId
+            filter (flip elem txIds . txInId . fst . unAnUTxO) utxos
+
         let
-          roleToken = M.Token ccCurrencySymbol role
-          T.MarloweTransaction { mtRoleValidator } :| _ = mcPlan
+          anyWithdrawalsExist = possibleWithdrawals `anyFlipped` \(T.MarloweTransaction{..}, _) -> do
+            elem role . mapMaybe paymentRole $ mtPayments
 
-        logSoMsg' so $ "Withdrawing funds for role " <> show role <> " after application of inputs: " <> do
-          let
-            inputs = foldMapFlipped possibleWithdrawals \(T.MarloweTransaction { mtInputs }, _) -> mtInputs
-          show inputs
+        if anyWithdrawalsExist
+          then do
+            let
+              roleToken = M.Token ccCurrencySymbol role
+              T.MarloweTransaction { mtRoleValidator } :| _ = mcPlan
 
-        txBody <- runSoCli so $ autoWithdrawFundsImpl
-          connection
-          roleToken
-          mtRoleValidator
-          Nothing
-          waAddress
-          [waSigningKey]
-          (Just filterPayoutsUTxOs)
-          C.TxMetadataNone
-          timeout
-          (PrintStats True)
-          False
-        pure [txBody]
-      else
-        pure []
+            logSoMsg' so $ "Withdrawing funds for role " <> show role <> " after application of inputs: " <> do
+              let
+                inputs = foldMapFlipped possibleWithdrawals \(T.MarloweTransaction { mtInputs }, _) -> mtInputs
+              show inputs
 
-  updateWallet soWalletNickname \wallet@Wallet {waSubmittedTransactions} ->
-    wallet { waSubmittedTransactions = txBodies <> waSubmittedTransactions }
+            txBody <- runSoCli so $ autoWithdrawFundsImpl
+              connection
+              roleToken
+              mtRoleValidator
+              Nothing
+              waAddress
+              [waSigningKey]
+              (Just filterPayoutsUTxOs)
+              C.TxMetadataNone
+              timeout
+              (PrintStats True)
+              False
+            pure [txBody]
+          else
+            pure []
 
-  let
-    newWithdrawals = foldMapFlipped roles \role ->
-      Map.singleton role (C.getTxId . overAnyMarloweThread getMarloweThreadTxBody $ marloweThread)
-    marloweContract' = marloweContract{ mcWithdrawalsCheckPoints = newWithdrawals <> mcWithdrawalsCheckPoints }
-  modifying ssContracts $ Map.insert soContractNickname marloweContract'
+      updateWallet soWalletNickname \wallet@Wallet {waSubmittedTransactions} ->
+        wallet { waSubmittedTransactions = txBodies <> waSubmittedTransactions }
+
+      let
+        newWithdrawals = foldMapFlipped roles \role ->
+          Map.singleton role (C.getTxId . overAnyMarloweThread getMarloweThreadTxBody $ marloweThread)
+        marloweContract' = marloweContract{ mcWithdrawalsCheckPoints = newWithdrawals <> mcWithdrawalsCheckPoints }
+      modifying ssContracts $ Map.insert soContractNickname marloweContract'
 
 interpret so@Publish {..} = do
   whenM (isJust <$> use ssReferenceScripts) do
@@ -718,7 +721,7 @@ useTemplate currency = do
     UseTrivial{..} -> do
       timeout' <- toMarloweTimeout utTimeout
       let
-        partyRef = fromMaybe (WalletRef faucetNickname) utParty
+        partyRef = fromMaybe (WalletRef "party") utParty
       party <- buildParty currency partyRef
       makeContract $ trivial
         party
@@ -731,8 +734,8 @@ useTemplate currency = do
       Currency { ccCurrencySymbol=aCurrencySymbol } <- findCurrency utACurrencyNickname
       Currency { ccCurrencySymbol=bCurrencySymbol } <- findCurrency utBCurrencyNickname
       let
-        aPartyRef = fromMaybe (WalletRef faucetNickname) utAParty
-        bPartyRef = fromMaybe (WalletRef faucetNickname) utBParty
+        aPartyRef = fromMaybe (WalletRef "aParty") utAParty
+        bPartyRef = fromMaybe (WalletRef "bParty") utBParty
       aParty <- buildParty currency aPartyRef
       bParty <- buildParty currency bPartyRef
       makeContract $ swap
@@ -751,9 +754,9 @@ useTemplate currency = do
       disputeDeadline' <- toMarloweTimeout utDisputeDeadline
       mediationDeadline' <- toMarloweTimeout utMediationDeadline
       let
-        sellerRef = fromMaybe (WalletRef faucetNickname) utSeller
-        buyerRef = fromMaybe (WalletRef faucetNickname) utBuyer
-        mediatorRef = fromMaybe (WalletRef faucetNickname) utMediator
+        sellerRef = fromMaybe (WalletRef "seller") utSeller
+        buyerRef = fromMaybe (WalletRef "buyer") utBuyer
+        mediatorRef = fromMaybe (WalletRef "mediator") utMediator
       seller <- buildParty currency sellerRef
       buyer <- buildParty currency buyerRef
       mediator <- buildParty currency mediatorRef

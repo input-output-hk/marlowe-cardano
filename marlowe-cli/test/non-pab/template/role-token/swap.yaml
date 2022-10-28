@@ -32,14 +32,14 @@ stScriptOperations:
     soCurrencyNickname: aPartyCurrency
     soIssuer: aParty
     soTokenDistribution:
-      - [ aParty, aPartyTokenName, 100]
+      - [ aParty, Globe, 300]
 
   # Minting tokens bParty will use in the swap
   - tag: Mint
     soCurrencyNickname: bPartyCurrency
     soIssuer: bParty
     soTokenDistribution:
-      - [ bParty, bPartyTokenName, 100]
+      - [ bParty, Swan, 500]
 
   - tag: Initialize
     soContractNickname: Swap
@@ -52,8 +52,8 @@ stScriptOperations:
           role_token: aParty
         utACurrencyNickname: aPartyCurrency
         utATokenName:
-          unTokenName: aPartyTokenName
-        utAAmount: 50
+          unTokenName: Globe
+        utAAmount: 300
         # Threre are three timeouts in the contract calculated from this value:
         # `timeout`, `timeout-1000`, `timeout-2000`
         utATimeout:
@@ -62,26 +62,22 @@ stScriptOperations:
           role_token: bParty
         utBCurrencyNickname: bPartyCurrency
         utBTokenName:
-          unTokenName: bPartyTokenName
-        utBAmount: 40
+          unTokenName: Swan
+        utBAmount: 500
         # Threre are three timeouts in the contract calculated from this value:
         # `timeout`, `timeout-1000`, `timeout-2000`
         utBTimeout:
           relative: 1000000
-
-  - tag: AutoRun
-    soSubmitter: aParty
-    soContractNickname: Swap
 
   - tag: Prepare
     soContractNickname: Swap
     soInputs:
       - input_from_party:
           role_token: aParty
-        that_deposits: 50
+        that_deposits: 300
         of_token:
           currency_symbol: aPartyCurrency
-          token_name: aPartyTokenName
+          token_name: Globe
         into_account:
           role_token: aParty
     soMinimumTime:
@@ -89,19 +85,15 @@ stScriptOperations:
     soMaximumTime:
       relative: 8000
 
-  - tag: AutoRun
-    soSubmitter: aParty
-    soContractNickname: Swap
-
   - tag: Prepare
     soContractNickname: Swap
     soInputs:
       - input_from_party:
           role_token: bParty
-        that_deposits: 40
+        that_deposits: 500
         of_token:
           currency_symbol: bPartyCurrency
-          token_name: bPartyTokenName
+          token_name: Swan
         into_account:
           role_token: bParty
     soMinimumTime:
@@ -115,13 +107,18 @@ stScriptOperations:
   - tag: CheckBalance
     soWalletNickname: aParty
     soBalance:
-      - [aPartyCurrency, aParty, 50]
+      - [Swap, aParty, 1]
+      # - [aPartyCurrency, Globe, 300]
+      - [bPartyCurrency, Swan, 500]
+      - [Ada, 100]
 
   - tag: CheckBalance
     soWalletNickname: bParty
     soBalance:
-      - [ADA, 85]
-      - [Trivial, aPartyTokenName, 1]
+      - [Swap, bParty, 1]
+      # - [aPartyCurrency, Globe, 300]
+      - [bPartyCurrency, Swan, 500]
+      - [Ada, 100]
 
   - tag: BurnAll
     soCurrencyNickname: aPartyCurrency
