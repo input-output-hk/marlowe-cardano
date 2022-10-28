@@ -110,7 +110,7 @@ See `marlowe-tx`'s [help page](marlowe-tx.md) for more information.
 
 The `marlowe` executable provides a command-line interface to interacting with Marlowe Runtime services. All communication is via TCP sockets with a Haskell-centric serialization format. It can be used to discover, query, create, apply inputs, withdraw, or submit Marlowe transactions. Note that it does not support private-key management and it defers signing to external tools such as [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md).
 
-See `marlowe-tx`'s various [help pages](marlowe-tx.md) for more information, or the [tutorial for Marlowe Runtime]:
+See `marlowe-tx`'s various [help pages](marlowe-tx.md) for more information, or the tutorial for Marlowe runtime [as a Jupyter notebook](tutorial.ipynb) or in [markdown format](tutorial.md).
 - Building transactions
 	- [Create a contract](marlowe/create.md)
 	- [Advance a contract through a timeout](marlowe/advance.md)
