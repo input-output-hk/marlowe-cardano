@@ -80,6 +80,22 @@
         "type": "github"
       }
     },
+    "actus-dictionary": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1599515636,
+        "narHash": "sha256-CjHh5nQ5kmEbQWr3mb2zM89QZkvW51KxD1NBv7UAJVE=",
+        "owner": "actusfrf",
+        "repo": "actus-dictionary",
+        "rev": "3076d91c4112221458f2137442c644f35ca7a77c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "actusfrf",
+        "repo": "actus-dictionary",
+        "type": "github"
+      }
+    },
     "actus-tests": {
       "flake": false,
       "locked": {
@@ -6447,6 +6463,7 @@
     },
     "root": {
       "inputs": {
+        "actus-dictionary": "actus-dictionary",
         "actus-tests": "actus-tests",
         "cardano-world": "cardano-world",
         "flake-utils": "flake-utils_28",

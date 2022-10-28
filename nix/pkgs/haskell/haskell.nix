@@ -15,6 +15,7 @@
   # it. If set to true, we will also build the haddocks for those packages.
 , deferPluginErrors
 , actus-tests
+, actus-dictionary
 , source-repo-override
 , evalSystem
 }:
@@ -156,11 +157,11 @@ let
               platforms = lib.platforms.linux;
             };
 
-            marlowe-actus.components.exes.marlowe-shiny = {
-              build-tools = r-packages;
-              # Seems to be broken on darwin for some reason
-              platforms = lib.platforms.linux;
-            };
+            # actus-core depends on external data which is
+            # provided from Nix (as niv dependency)
+            marlowe-actus.components.exes.actus-gen.preCheck = ''
+              export ACTUS_DICTIONARY_DIR=${actus-dictionary}
+            '';
 
             # The marlowe-actus tests depend on external data which is
             # provided from Nix (as niv dependency)

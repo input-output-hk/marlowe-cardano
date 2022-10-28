@@ -12,6 +12,7 @@
 , z3
 , enableHaskellProfiling
 , actus-tests
+, actus-dictionary
 , source-repo-override
 , evalSystem
 }:
@@ -42,6 +43,7 @@ let
       inherit enableHaskellProfiling;
       inherit deferPluginErrors;
       inherit actus-tests;
+      inherit actus-dictionary;
       inherit source-repo-override;
     };
   project = baseProject { deferPluginErrors = false; };

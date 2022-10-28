@@ -140,6 +140,7 @@ let
     # costs a fair bit of eval time.
     withHoogle = false;
     shellHook = ''
+      export ACTUS_DICTIONARY_DIR=${packages.actus-dictionary}
       export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
       export PGUSER=postgres
       ${defaultShellHook}
@@ -185,6 +186,7 @@ let
         name = "actus";
         packages = cmps: [ cmps.marlowe-actus ];
         shellHook = ''
+          export ACTUS_DICTIONARY_DIR=${packages.actus-dictionary}
           export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
         '';
       };

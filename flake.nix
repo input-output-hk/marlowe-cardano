@@ -12,6 +12,10 @@
       url = "github:actusfrf/actus-tests";
       flake = false;
     };
+    actus-dictionary = {
+      url = "github:actusfrf/actus-dictionary";
+      flake = false;
+    };
     haskell-language-server = {
       # Pinned to a release
       url = "github:haskell/haskell-language-server?ref=1.3.0";

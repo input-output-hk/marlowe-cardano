@@ -37,7 +37,7 @@ rec {
   docs = import ./nix/docs.nix { inherit pkgs marlowe; };
 
   # Test data needed by marlowe-actus
-  inherit (inputs) actus-tests;
+  inherit (inputs) actus-tests actus-dictionary;
 
   # Packages needed for the bitte deployment
   entrypoints = import ./bitte {

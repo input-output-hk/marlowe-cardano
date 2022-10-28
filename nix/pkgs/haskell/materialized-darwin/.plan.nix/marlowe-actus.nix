@@ -81,6 +81,22 @@
           hsSourceDirs = [ "actus-core/src" ];
           };
         };
+      exes = {
+        "actus-gen" = {
+          depends = [
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."ghc-source-gen" or (errorHandler.buildDepError "ghc-source-gen"))
+            (hsPkgs."ghc-paths" or (errorHandler.buildDepError "ghc-paths"))
+            (hsPkgs."ghc" or (errorHandler.buildDepError "ghc"))
+            ];
+          buildable = true;
+          hsSourceDirs = [ "actus-core/app" ];
+          mainPath = [ "GenActus.hs" ];
+          };
+        };
       tests = {
         "actus-core-test" = {
           depends = [

@@ -199,6 +199,7 @@
         "bytebuild".flags.checked = false;
         "data-bword".revision = (((hackage."data-bword")."0.1.0.1").revisions).default;
         "wide-word".revision = (((hackage."wide-word")."0.1.1.2").revisions).default;
+        "ghc-source-gen".revision = (((hackage."ghc-source-gen")."0.4.3.0").revisions).default;
         "bech32-th".revision = (((hackage."bech32-th")."1.1.1").revisions).default;
         "bech32-th".flags.release = false;
         "basement".revision = (((hackage."basement")."0.0.14").revisions).default;
@@ -1139,6 +1140,7 @@
           "barbies".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-byron".components.exes."db-converter".planned = lib.mkOverride 900 true;
           "resourcet".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-actus".components.exes."actus-gen".planned = lib.mkOverride 900 true;
           "tdigest".components.library.planned = lib.mkOverride 900 true;
           "haskell-src-meta".components.library.planned = lib.mkOverride 900 true;
           "cardano-addresses-cli".components.library.planned = lib.mkOverride 900 true;
@@ -1697,6 +1699,7 @@
           "basement".components.library.planned = lib.mkOverride 900 true;
           "optparse-applicative".components.library.planned = lib.mkOverride 900 true;
           "validity-scientific".components.library.planned = lib.mkOverride 900 true;
+          "ghc-source-gen".components.library.planned = lib.mkOverride 900 true;
           "network-mux".components.exes."cardano-ping".planned = lib.mkOverride 900 true;
           "aeson".components.library.planned = lib.mkOverride 900 true;
           "x509-system".components.library.planned = lib.mkOverride 900 true;
