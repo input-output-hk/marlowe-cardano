@@ -1,4 +1,4 @@
-# Deploying Marlowe Runtime Backend Services
+# Deploying Marlowe Runtime Backend Services Manually
 
 Deploying the Marlowe Runtime requires running six backend services:
 - four [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc) services:
@@ -9,7 +9,7 @@ Deploying the Marlowe Runtime requires running six backend services:
 - [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity
 - [PostgreSQL](https://www.postgresql.org/) for persistent storage
 
-For deployment using Docker, see [here](docker.md).
+This document describes how to deploy manually, on a service-by-service basis. For deployment using Docker, see [here](docker.md).
 
 
 ## Building the Executables
