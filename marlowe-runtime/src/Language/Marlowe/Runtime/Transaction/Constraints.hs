@@ -962,7 +962,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
             C.PlutusScriptV2
             plutusScriptOrRefInput
             (C.ScriptDatumForTxIn $ toCardanoScriptData $ Core.toChainPayoutDatum marloweVersion datum)
-            (C.ScriptDataConstructor 1 [])
+            (C.ScriptDataConstructor 0 [])
             (C.ExecutionUnits 0 0)
         pure $ Just (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
       | otherwise = pure Nothing
