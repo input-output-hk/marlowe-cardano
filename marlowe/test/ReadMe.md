@@ -24,7 +24,7 @@
 -   [Marlowe-Cardano specification](../specification/marlowe-cardano-specification.md)
 -   [Marlowe-Cardano github repository](https://github.com/input-output-hk/marlowe-cardano/)
 -   [Test report](./test-report.md)
--   [Testing framework](./)
+-   [Testing framework](../marlowe-test/)
 
 
 ## Testing tools:

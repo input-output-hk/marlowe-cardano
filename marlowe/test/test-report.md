@@ -3,7 +3,7 @@
 
 ## Executive Summary
 
-This document summarizes the testing status of Marlowe's Cardano implementation prior to the audit of Version 1 of the Marlowe validators, which are coded in Plutus V2. Marlowe uses a *Semantics Validator* to validate transitions (application of inputs, timeouts, payments, etc.) in Marlowe contracts and a *Payout Validator* to validate receipt of funds from roles in Marlowe contracts. The [On-Chain Transaction Specification for Marlowe](../specification/marlowe-cardano-specification.md) defines the behavior of these validators. The [Isabelle Specification for Marlowe](https://github.com/input-output-hk/marlowe/tree/master/isabelle) defines the behavior of the Marlowe DSL (domain-specific language) itself.
+This document summarizes the testing status of Marlowe's Cardano implementation prior to the audit of Version 1 of the Marlowe validators, which are coded in Plutus V2. Marlowe uses a *Semantics Validator* to validate transitions (application of inputs, timeouts, payments, etc.) in Marlowe contracts and a *Payout Validator* to validate receipt of funds from roles in Marlowe contracts. The [On-Chain Transaction Specification for Marlowe](../marlowe/specificiation/marlowe-cardano-specification.md) defines the behavior of these validators. The [Isabelle Specification for Marlowe](https://github.com/input-output-hk/marlowe/tree/master/isabelle) defines the behavior of the Marlowe DSL (domain-specific language) itself.
 
 This test report covers the tests of the Haskell implementation of Marlowe semantics and of the Plutus validators that connect those semantics to the Cardano blockchain. Testing involves approximately two hundred property-based tests and dozens of on-chain tests. This document summarizes [two risk areas](#summary-of-testing-history-and-results) that were discovered and demonstrated during testing:
 1. Marlowe contracts that are created with an initially invalid state are either unexecutable or their execution behavior may vary from Marlowe's abstract semantics. 
@@ -35,20 +35,20 @@ This test report covers the tests of the Haskell implementation of Marlowe seman
 ## Introduction
 
 Two specifications define the behavior of Marlowe on the Cardano blockchain:
-- The [Isabelle Specification for Marlowe](../specification/marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf) defines the Marlowe DSL and its operational/executable semantics. The language and the semantics are independent of the particular blockchain where Marlowe contracts are run.
-- The [On-Chain Transaction Specification for Marlowe](../specification/marlowe-cardano-specification.md) defines the realization of Marlowe on the Cardano blockchain. In particular, this specification relates abstract Marlowe types and constructs to the concrete types present in Cardano's Plutus language in such a way the Marlowe transactions conform to Cardano's [Ledger Specifications](https://github.com/input-output-hk/cardano-ledger#cardano-ledger) and the [Formal Specification of the Plutus Core Language](https://github.com/input-output-hk/plutus/blob/master/plutus-core-spec/draft-new-specification/plutus-core-specification.pdf).
+- The [Isabelle Specification for Marlowe](../marlowe/specificiation/marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf) defines the Marlowe DSL and its operational/executable semantics. The language and the semantics are independent of the particular blockchain where Marlowe contracts are run.
+- The [On-Chain Transaction Specification for Marlowe](../marlowe/specificiation/marlowe-cardano-specification.md) defines the realization of Marlowe on the Cardano blockchain. In particular, this specification relates abstract Marlowe types and constructs to the concrete types present in Cardano's Plutus language in such a way the Marlowe transactions conform to Cardano's [Ledger Specifications](https://github.com/input-output-hk/cardano-ledger#cardano-ledger) and the [Formal Specification of the Plutus Core Language](https://github.com/input-output-hk/plutus/blob/master/plutus-core-spec/draft-new-specification/plutus-core-specification.pdf).
 
-The bridge between abstract semantics and concrete Plutus is the [`Language.Marlowe.Core.V1.Semantics`](../src/Language/Marlowe/Core/V1/Semantics.hs) function `computeTransaction`:
+The bridge between abstract semantics and concrete Plutus is the [`Language.Marlowe.Core.V1.Semantics`](../marlowe/src/Language/Marlowe/Core/V1/Semantics.hs) function `computeTransaction`:
 ```haskell
 computeTransaction :: TransactionInput -> State -> Contract -> TransactionOutput
 ```
 where the blockchain-agnostic types  `TransactionInput` , `State`, `Contract`, and `TransactionOutput` are the input to the contract, its pre-transaction state, its pre-transaction contract, and the result of applying the input to the contract. Note that applying input to a Marlowe contract results in a new, smaller contract that is the sub-contract of the original pre-transaction contract: essentially, a Marlowe contract consists of a directed acyclic graph (DAG) of contract continuations, where branching is determined by applying inputs or experiencing timeouts. This DAG-continuation has advantages not only for proving guarantees on Marlowe semantics, but also for minimizing the on-chain storage needed for a contract.
 
-Marlowe transactions utilize one of two Plutus V2 validators, residing in the [`Language.Marlowe.Scripts`](../src/Language/Marlowe/Scripts.hs) module:
+Marlowe transactions utilize one of two Plutus V2 validators, residing in the [`Language.Marlowe.Scripts`](../marlowe/src/Language/Marlowe/Scripts.hs) module:
 - The *Semantics Validator* is Plutus code that verifies that a transaction obeys the Marlowe DSL semantics along with the Cardano ledger rules. This validator resides in the `smallUntypedValidator` function that marshals Plutus types to call `computeTransaction` and checks constraints on input and output.
 - The *Payout Validator* is Plutus code that verifies that a transaction is properly authorized by a Marlowe role to withdraw funds paid by the Semantics Validator. This validator resides in the  `rolePayoutValidator`  function that simply verifies authorization.
 
-Marlowe's property-based and golden tests reside in the `marlowe-test` executable of the [marlowe](../) package of the [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/) repository, while Marlowe's on-chain tests reside in the [`run-nonpab-test.sh`](../../marlowe-cli/run-nonpab-tests.sh) script of the [marlowe-cli](../../marlowe-cli/) package of the repository. Informal tests are scattered throughout the Marlowe repositories.
+Marlowe's property-based and golden tests reside in the `marlowe-test` executable of the [marlowe-test](.) package of the [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/) repository, while Marlowe's on-chain tests reside in the [`run-nonpab-test.sh`](../marlowe-cli/run-nonpab-tests.sh) script of the [marlowe-cli](../marlowe-cli/) package of the repository. Informal tests are scattered throughout the Marlowe repositories.
 
 
 ## Formal Guarantees for Marlowe
@@ -70,18 +70,18 @@ How to run the proofs is described [here](https://github.com/input-output-hk/mar
 
 ## Property-Based Tests of Marlowe's Haskell Implementation
 
-The property-based tests (generally using [Tasty](https://hackage.haskell.org/package/tasty) and [QuickCheck](https://hackage.haskell.org/package/QuickCheck)) for the Haskell implementation of Marlowe run in the `marlowe-test` executable of the [marlowe](../) package and are implemented in the [`Spec.Marlowe`](Spec/Marlowe/) modules. The property-based tests are automatically run in the Github CI for the Marlowe-Cardano repository.
+The property-based tests (generally using [Tasty](https://hackage.haskell.org/package/tasty) and [QuickCheck](https://hackage.haskell.org/package/QuickCheck)) for the Haskell implementation of Marlowe run in the `marlowe-test` executable of the [marlowe](../marlowe/) package and are implemented in the [`Spec.Marlowe`](src/Spec/Marlowe/) modules. The property-based tests are automatically run in the Github CI for the Marlowe-Cardano repository.
 
 
 ### Tests of Marlowe Semantics Implementation
 
-The property-based tests for the Haskell implementation of Marlowe semantics are implemented in the [`Spec.Marlowe.Semantics`](Spec/Marlowe/Semantics/) modules. The table below lists categories of these tests and the name of each test.
+The property-based tests for the Haskell implementation of Marlowe semantics are implemented in the [`Spec.Marlowe.Semantics`](src/Spec/Marlowe/Semantics/) modules. The table below lists categories of these tests and the name of each test.
 - The *golden tests* compare the output of the Haskell `computeTransaction` to a constraint-solver analysis of all possible valid paths through a reference set of Marlowe contracts; that analysis is independent of the Haskell implementation. Manually created sets of invalid inputs to the contract are also tested. Additional contracts could easily be added to this category of tests, but it is labor intensive to manually develop the invalid inputs.
 - The *holistic tests* verify the response of `computeTransaction` to specific types of invalid inputs and to specific side effects of applying inputs. The testing framework implements a monad that checks preconditions, invariants, and postconditions in the transaction computation that is being tested. This makes the test cases succinct and readable: only minimal effort would be required to include additional tests.
 - The tests of *support functions* used by `computeTransaction` exhaustively cover each behavior of nearly every function. Other semantic functions like `applyInputs`, `reduceUntilQuiescent`, etc. are tested indirectly by exhaustively testing `computeTransaction`.
-- Finally, tests of the *suitability of data generation* (via [`Arbitrary`](https://hackage.haskell.org/package/QuickCheck-2.14.2/docs/Test-QuickCheck-Arbitrary.html) and [`Gen`](https://hackage.haskell.org/package/QuickCheck-2.14.2/docs/Test-QuickCheck-Gen.html#t:Gen)) ensure that the test inputs are neither too repetitious nor too unrealistic. [We compute the entropy of the diversity of values generated by `arbitrary`](Spec/Marlowe/Semantics/Entropy.hs) to ensure that central, realistic, edge, simple, and complex cases are generated. Semantically interesting test cases should have meaningful and stressful correlation between `Environment`, `State`, `Contract`, and `Input`. To achieve this, we have implemented a `SemiArbitrary` typeclass that uses a carefully generated arbitrary  `Context` from which state, contract, input, and other values are drawn, but with some probability those values might be perturbed or completely random. Further work in generating correlated test values is warranted, since this would yield more demonstrably stressful test values.
+- Finally, tests of the *suitability of data generation* (via [`Arbitrary`](https://hackage.haskell.org/package/QuickCheck-2.14.2/docs/Test-QuickCheck-Arbitrary.html) and [`Gen`](https://hackage.haskell.org/package/QuickCheck-2.14.2/docs/Test-QuickCheck-Gen.html#t:Gen)) ensure that the test inputs are neither too repetitious nor too unrealistic. [We compute the entropy of the diversity of values generated by `arbitrary`](src/Spec/Marlowe/Semantics/Entropy.hs) to ensure that central, realistic, edge, simple, and complex cases are generated. Semantically interesting test cases should have meaningful and stressful correlation between `Environment`, `State`, `Contract`, and `Input`. To achieve this, we have implemented a `SemiArbitrary` typeclass that uses a carefully generated arbitrary  `Context` from which state, contract, input, and other values are drawn, but with some probability those values might be perturbed or completely random. Further work in generating correlated test values is warranted, since this would yield more demonstrably stressful test values.
 
-We have used Haskell code-coverage profiling ([HPC](https://wiki.haskell.org/Haskell_program_coverage)) to confirm that 100% of the logic paths in the [`Language.Marlowe.Core.V1.Semantics`](../src/Language/Marlowe/Core/V1/Semantics/) module are explored by the tests. There are, however, a couple of minor code fragments, such as the text of particular warning messages, that aren't evaluated.
+We have used Haskell code-coverage profiling ([HPC](https://wiki.haskell.org/Haskell_program_coverage)) to confirm that 100% of the logic paths in the [`Language.Marlowe.Core.V1.Semantics`](../marlowe/src/Language/Marlowe/Core/V1/Semantics/) module are explored by the tests. There are, however, a couple of minor code fragments, such as the text of particular warning messages, that aren't evaluated.
 
 The table below summarizes the property-based tests for the semantics implementation.
 
@@ -180,7 +180,7 @@ The table below summarizes the property-based tests for the semantics implementa
 
 ### ACTUS Contract Tests
 
-The [marlowe-actus](../../marlowe-actus/) package runs Marlowe contracts derived from the [ACTUS](https://github.com/actusfrf/actus-tests) test suite: namely, the examples
+The [marlowe-actus](../marlowe-actus/) package runs Marlowe contracts derived from the [ACTUS](https://github.com/actusfrf/actus-tests) test suite: namely, the examples
 - Principal at maturity (PAM),
 - Linear Amortizer (LAM),
 - Negative Amortizer (NAM),
@@ -234,7 +234,7 @@ Marlowe's Haskell implementation relies on the Plutus Haskell functions behaving
 
 ### Tests of Marlowe's Plutus Validators
 
-Requirements for bridging `computeTransaction` to Plutus validation are defined as seventeen constraining properties in the [On-Chain Transaction Specification for Marlowe](../specification/marlowe-cardano-specification.md). These property based tests run arbitrary transactions using Marlowe's serialized Plutus validators via `Plutus.ApiCommon.evaluateScriptCounting`: this provides a mock execution environment that performs the same Phase 2 validation that would occur at a node on the live blockchain. To this end, the [`Spec.Marlowe.Plutus.Script`](Spec/Marlowe/Plutus/Script.hs) package provides a pair of functions for simulating Marlowe transactions:
+Requirements for bridging `computeTransaction` to Plutus validation are defined as seventeen constraining properties in the [On-Chain Transaction Specification for Marlowe](../marlowe/specificiation/marlowe-cardano-specification.md). These property based tests run arbitrary transactions using Marlowe's serialized Plutus validators via `Plutus.ApiCommon.evaluateScriptCounting`: this provides a mock execution environment that performs the same Phase 2 validation that would occur at a node on the live blockchain. To this end, the [`Spec.Marlowe.Plutus.Script`](src/Spec/Marlowe/Plutus/Script.hs) package provides a pair of functions for simulating Marlowe transactions:
 ```haskell
 -- | Run the Plutus evaluator on the Marlowe semantics validator's UPLC serialization.
 evaluateSemantics :: MarloweParams           -- ^ The parameters.
@@ -252,7 +252,7 @@ evaluatePayout :: MarloweParams           -- ^ The parameters.
 ```
 This allows one to feed arbitrary datum, redeemer, and script context to either of the Marlowe validators, where those validators have previously been serialized to `ShortByteString`. This executes Marlowe directly as Untyped Plutus Core (UPLC).
 
-The [`Spec.Marlowe.Plutus.Types`](Spec/Marlowe/Plutus/Types.hs) module includes data structures for representing Plutus transactions in general and Marlowe transactions specifically:
+The [`Spec.Marlowe.Plutus.Types`](src/Spec/Marlowe/Plutus/Types.hs) module includes data structures for representing Plutus transactions in general and Marlowe transactions specifically:
 ```haskell
 -- | A Plutus transaction.
 data PlutusTransaction a =
@@ -284,7 +284,7 @@ data PayoutTransaction =
   , _amount  :: Value          -- ^ The value paid.
   }
 ```
-In [`Spec.Marlowe.Plutus.Transaction`](Spec/MarlowePlutus/Transaction.hs), functions are provided to generate arbitrary Marlowe transactions which are initially valid, but which may be modified before the construction process or afterwards.
+In [`Spec.Marlowe.Plutus.Transaction`](src/Spec/MarlowePlutus/Transaction.hs), functions are provided to generate arbitrary Marlowe transactions which are initially valid, but which may be modified before the construction process or afterwards.
 ```haskell
 -- | An arbitrary Plutus transaction.
 type ArbitraryTransaction p a = StateT (PlutusTransaction p) Gen a
@@ -314,7 +314,7 @@ Each test case modifies the arbitrary valid transaction using actions within `Ar
 
 #### Semantics Validator
 
-We use the aforementioned simulation technique to test properties constraining the semantics validator, `marloweValidator` in [`Language.Marlowe.Scripts`](../src/Language/Marlowe/Scripts.hs). The first tests run arbitrary valid transactions; the later tests run transactions that must fail for particular reasons. In three cases manual code inspection was used instead of a property-based tests: implementing those tests would have involved instrumenting the Plutus validator itself.
+We use the aforementioned simulation technique to test properties constraining the semantics validator, `marloweValidator` in [`Language.Marlowe.Scripts`](../marlowe/src/Language/Marlowe/Scripts.hs). The first tests run arbitrary valid transactions; the later tests run transactions that must fail for particular reasons. In three cases manual code inspection was used instead of a property-based tests: implementing those tests would have involved instrumenting the Plutus validator itself.
 
 | Property | Test |
 |----------|------|
@@ -344,7 +344,7 @@ We use the aforementioned simulation technique to test properties constraining t
 
 #### Payout Validator
 
-We use the aforementioned simulation technique to test properties constraining the payout validator, `rolePayoutValidator` in [`Lanugage.Marlowe.Scripts`](../src/Language/Marlowe/Scripts.hs). The first tests run arbitrary valid transactions; the later tests run transactions that must fail for particular reasons.
+We use the aforementioned simulation technique to test properties constraining the payout validator, `rolePayoutValidator` in [`Lanugage.Marlowe.Scripts`](../marlowe/src/Language/Marlowe/Scripts.hs). The first tests run arbitrary valid transactions; the later tests run transactions that must fail for particular reasons.
 
 | Property | Test |
 |----------|------|
@@ -362,7 +362,7 @@ We use the aforementioned simulation technique to test properties constraining t
 
 ### Miscellaneous Property-Based Tests
 
-Several other property-based tests, in the [`Spec.Marlowe.Marlowe`](Spec/Marlowe/Marlowe.hs) module, exercise parts of the Marlowe Haskell implementation:
+Several other property-based tests, in the [`Spec.Marlowe.Marlowe`](src/Spec/Marlowe/Marlowe.hs) module, exercise parts of the Marlowe Haskell implementation:
 
 | Category | Test |
 |-----------|------|
@@ -405,7 +405,7 @@ A test oracle service, based on Marlowe's PureScript export from Isabelle is ava
 
 ## On-Chain Tests of Marlowe
 
-On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verify that invalid transactions fail. Formal tests are codified as scripts for the [`marlowe-cli`](../../marlowe-cli/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
+On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verify that invalid transactions fail. Formal tests are codified as scripts for the [`marlowe-cli`](../marlowe-cli/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
 
 
 ### Formal Tests
@@ -414,61 +414,61 @@ A dozen on-chain tests, embodied as `bash` scripts, are regularly run for qualit
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/test/double-satisfaction.sh](../../marlowe-cli/test/double-satisfaction.sh) | Double-satisfaction, where one Marlowe contract steals funds from another. |
-| [marlowe-cli/examples/actus/run-actus.sh](../../marlowe-cli/examples/actus/run-actus.sh) | An ACTUS contract (Zero-Coupon Bond). |
-| [marlowe-cli/examples/cfd/run-cfd.sh](../../marlowe-cli/examples/cfd/run-cfd.sh) | A contract for differences, using an oracle. |
-| [marlowe-cli/examples/coveredCall/run-coveredCall.sh](../../marlowe-cli/examples/coveredCall/run-coveredCall.sh) | A covered-call contract. |
-| [marlowe-cli/examples/escrow/run-confirm-claim.sh](../../marlowe-cli/examples/escrow/run-confirm-claim.sh) | The "confirm claim" path through the example escrow contract. |
-| [marlowe-cli/examples/escrow/run-confirm-problem.sh](../../marlowe-cli/examples/escrow/run-confirm-problem.sh) | The "confirm problem" path through the example escrow contract. |
-| [marlowe-cli/examples/escrow/run-dismiss-claim.sh](../../marlowe-cli/examples/escrow/run-dismiss-claim.sh) | The "dismiss claim" path through the example escrow contract. |
-| [marlowe-cli/examples/escrow/run-everything-is-alright.sh](../../marlowe-cli/examples/escrow/run-everything-is-alright.sh) | The "everything is alright " path through the example escrow contract. |
-| [marlowe-cli/examples/simple/run-simple.sh](../../marlowe-cli/examples/simple/run-simple.sh) | A simple notify-then-close contract. |
-| [marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh](../../marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh) | A variant of the simple notify-and-close test. |
-| [marlowe-cli/examples/swap/run-swap.sh](../../marlowe-cli/examples/swap/run-swap.sh) | A swap of two tokens. |
-| [marlowe-cli/examples/zcb/run-zcb.sh](../../marlowe-cli/examples/zcb/run-zcb.sh) | A zero-coupon bond. |
+| [marlowe-cli/test/double-satisfaction.sh](../marlowe-cli/test/double-satisfaction.sh) | Double-satisfaction, where one Marlowe contract steals funds from another. |
+| [marlowe-cli/examples/actus/run-actus.sh](../marlowe-cli/examples/actus/run-actus.sh) | An ACTUS contract (Zero-Coupon Bond). |
+| [marlowe-cli/examples/cfd/run-cfd.sh](../marlowe-cli/examples/cfd/run-cfd.sh) | A contract for differences, using an oracle. |
+| [marlowe-cli/examples/coveredCall/run-coveredCall.sh](../marlowe-cli/examples/coveredCall/run-coveredCall.sh) | A covered-call contract. |
+| [marlowe-cli/examples/escrow/run-confirm-claim.sh](../marlowe-cli/examples/escrow/run-confirm-claim.sh) | The "confirm claim" path through the example escrow contract. |
+| [marlowe-cli/examples/escrow/run-confirm-problem.sh](../marlowe-cli/examples/escrow/run-confirm-problem.sh) | The "confirm problem" path through the example escrow contract. |
+| [marlowe-cli/examples/escrow/run-dismiss-claim.sh](../marlowe-cli/examples/escrow/run-dismiss-claim.sh) | The "dismiss claim" path through the example escrow contract. |
+| [marlowe-cli/examples/escrow/run-everything-is-alright.sh](../marlowe-cli/examples/escrow/run-everything-is-alright.sh) | The "everything is alright " path through the example escrow contract. |
+| [marlowe-cli/examples/simple/run-simple.sh](../marlowe-cli/examples/simple/run-simple.sh) | A simple notify-then-close contract. |
+| [marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh](../marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh) | A variant of the simple notify-and-close test. |
+| [marlowe-cli/examples/swap/run-swap.sh](../marlowe-cli/examples/swap/run-swap.sh) | A swap of two tokens. |
+| [marlowe-cli/examples/zcb/run-zcb.sh](../marlowe-cli/examples/zcb/run-zcb.sh) | A zero-coupon bond. |
 
 A new off- and on-chain testing DSL is being readied for release (executable via `marlowe-cli test script`) and will include tests migrated from Marlowe's previous PAB-based testing DSL:
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/test/test-contract-for-differences-with-oracle.yaml](../../marlowe-cli/test/test-contract-for-differences-with-oracle.yaml) | A contract for differences, with an oracle. |
-| [marlowe-cli/test/test-contract-for-differences.yaml](../../marlowe-cli/test/test-contract-for-differences.yaml) | A contract for differences, without an oracle. |
-| [marlowe-cli/test/test-coupon-bond-guaranteed.yaml](../../marlowe-cli/test/test-coupon-bond-guaranteed.yaml) | A guaranteed bond. |
-| [marlowe-cli/test/test-escrow-with-collateral.yaml](../../marlowe-cli/test/test-escrow-with-collateral.yaml) | An escrow contract that includes collateral. |
-| [marlowe-cli/test/test-escrow.yaml](../../marlowe-cli/test/test-escrow.yaml) | An escrow contract that does not include collateral. |
-| [marlowe-cli/test/test-simple.yaml](../../marlowe-cli/test/test-simple.yaml) | A simple notify-then-close contract. |
-| [marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml](../../marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml) | A swap of Ada for USD tokens. |
-| [marlowe-cli/test/test-swap-of-ada-for-ada.yaml](../../marlowe-cli/test/test-swap-of-ada-for-ada.yaml) | A swap of Ada for Ada. |
-| [marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml](../../marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml) | A zero-coupon bond where a timeout occurs late in the contract. |
-| [marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml](../../marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml) | A zero-coupon bond where a timeout occurs early in the contract. |
-| [marlowe-cli/test/test-zero-coupon-bond-too-late.yaml](../../marlowe-cli/test/test-zero-coupon-bond-too-late.yaml) | A zero-coupon bond where input fails due to a timeout. |
-| [marlowe-cli/test/test-zero-coupon-bond.yaml](../../marlowe-cli/test/test-zero-coupon-bond.yaml) | A zero-coupon bond. |
+| [marlowe-cli/test/test-contract-for-differences-with-oracle.yaml](../marlowe-cli/test/test-contract-for-differences-with-oracle.yaml) | A contract for differences, with an oracle. |
+| [marlowe-cli/test/test-contract-for-differences.yaml](../marlowe-cli/test/test-contract-for-differences.yaml) | A contract for differences, without an oracle. |
+| [marlowe-cli/test/test-coupon-bond-guaranteed.yaml](../marlowe-cli/test/test-coupon-bond-guaranteed.yaml) | A guaranteed bond. |
+| [marlowe-cli/test/test-escrow-with-collateral.yaml](../marlowe-cli/test/test-escrow-with-collateral.yaml) | An escrow contract that includes collateral. |
+| [marlowe-cli/test/test-escrow.yaml](../marlowe-cli/test/test-escrow.yaml) | An escrow contract that does not include collateral. |
+| [marlowe-cli/test/test-simple.yaml](../marlowe-cli/test/test-simple.yaml) | A simple notify-then-close contract. |
+| [marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml](../marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml) | A swap of Ada for USD tokens. |
+| [marlowe-cli/test/test-swap-of-ada-for-ada.yaml](../marlowe-cli/test/test-swap-of-ada-for-ada.yaml) | A swap of Ada for Ada. |
+| [marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml](../marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml) | A zero-coupon bond where a timeout occurs late in the contract. |
+| [marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml](../marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml) | A zero-coupon bond where a timeout occurs early in the contract. |
+| [marlowe-cli/test/test-zero-coupon-bond-too-late.yaml](../marlowe-cli/test/test-zero-coupon-bond-too-late.yaml) | A zero-coupon bond where input fails due to a timeout. |
+| [marlowe-cli/test/test-zero-coupon-bond.yaml](../marlowe-cli/test/test-zero-coupon-bond.yaml) | A zero-coupon bond. |
 
 Two test scenarios are provided as Jupyter notebooks:
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/test/min-ada.ipynb](../../marlowe-cli/test/min-ada.ipynb) | Execution failure due to insufficient minimum UTxO value. |
-| [marlowe-cli/test/exceed-protocol-parameters.ipynb](../../marlowe-cli/test/exceed-protocol-parameters.ipynb) | Execution failure due to exceeding protocol limits. |
+| [marlowe-cli/test/min-ada.ipynb](../marlowe-cli/test/min-ada.ipynb) | Execution failure due to insufficient minimum UTxO value. |
+| [marlowe-cli/test/exceed-protocol-parameters.ipynb](../marlowe-cli/test/exceed-protocol-parameters.ipynb) | Execution failure due to exceeding protocol limits. |
 
 
 ### Informal Tests
 
-A set of informal tests are provided in the [Marlowe Contract Cookbook](../../marlowe-cli/cookbook/):
+A set of informal tests are provided in the [Marlowe Contract Cookbook](../marlowe-cli/cookbook/):
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/cookbook/collective-loan-30-70.ipynb](../../marlowe-cli/cookbook/collective-loan-30-70.ipynb) | A collective loan involving over 500 transactions. |
-| [marlowe-cli/cookbook/collective-loan.ipynb](../../marlowe-cli/cookbook/collective-loan.ipynb) | A collective loan with ad-hoc distribution of role tokens. |
-| [marlowe-cli/cookbook/english-auction.ipynb](../../marlowe-cli/cookbook/english-auction.ipynb) | An English Auction involving massive merkleization. |
-| [marlowe-cli/cookbook/guessing-game.ipynb](../../marlowe-cli/cookbook/guessing-game.ipynb) | A guessing game involving complex arithmetic. |
-| [marlowe-cli/cookbook/payment-using-djed.ipynb](../../marlowe-cli/cookbook/payment-using-djed.ipynb) | Payments using the DJED stablecoin. |
-| [marlowe-cli/cookbook/reference-script.ipynb](../../marlowe-cli/cookbook/reference-script.ipynb) | Using CIP-33 reference scripts with Marlowe. |
-| [marlowe-cli/cookbook/revenue-based-loan.ipynb](../../marlowe-cli/cookbook/revenue-based-loan.ipynb) | A revenue-based loan. |
-| [marlowe-cli/cookbook/simple-babbage.ipynb](../../marlowe-cli/cookbook/simple-babbage.ipynb) | A proof of Marlowe in the Babbage Era. |
-| [marlowe-cli/cookbook/stabilized-collective-loan.ipynb](../../marlowe-cli/cookbook/stabilized-collective-loan.ipynb) | A stabilized collective loan that exceeds protocol limits. |
-| [marlowe-cli/cookbook/swap.ipynb](../../marlowe-cli/cookbook/swap.ipynb) | A swap contract with automated coin selection. |
-| [marlowe-cli/cookbook/zcb.ipynb](../../marlowe-cli/cookbook/zcb.ipynb) | A zero-coupon bond contract with automated coin selection. |
+| [marlowe-cli/cookbook/collective-loan-30-70.ipynb](../marlowe-cli/cookbook/collective-loan-30-70.ipynb) | A collective loan involving over 500 transactions. |
+| [marlowe-cli/cookbook/collective-loan.ipynb](../marlowe-cli/cookbook/collective-loan.ipynb) | A collective loan with ad-hoc distribution of role tokens. |
+| [marlowe-cli/cookbook/english-auction.ipynb](../marlowe-cli/cookbook/english-auction.ipynb) | An English Auction involving massive merkleization. |
+| [marlowe-cli/cookbook/guessing-game.ipynb](../marlowe-cli/cookbook/guessing-game.ipynb) | A guessing game involving complex arithmetic. |
+| [marlowe-cli/cookbook/payment-using-djed.ipynb](../marlowe-cli/cookbook/payment-using-djed.ipynb) | Payments using the DJED stablecoin. |
+| [marlowe-cli/cookbook/reference-script.ipynb](../marlowe-cli/cookbook/reference-script.ipynb) | Using CIP-33 reference scripts with Marlowe. |
+| [marlowe-cli/cookbook/revenue-based-loan.ipynb](../marlowe-cli/cookbook/revenue-based-loan.ipynb) | A revenue-based loan. |
+| [marlowe-cli/cookbook/simple-babbage.ipynb](../marlowe-cli/cookbook/simple-babbage.ipynb) | A proof of Marlowe in the Babbage Era. |
+| [marlowe-cli/cookbook/stabilized-collective-loan.ipynb](../marlowe-cli/cookbook/stabilized-collective-loan.ipynb) | A stabilized collective loan that exceeds protocol limits. |
+| [marlowe-cli/cookbook/swap.ipynb](../marlowe-cli/cookbook/swap.ipynb) | A swap contract with automated coin selection. |
+| [marlowe-cli/cookbook/zcb.ipynb](../marlowe-cli/cookbook/zcb.ipynb) | A zero-coupon bond contract with automated coin selection. |
 
 
 ## Testing Tools
@@ -484,7 +484,7 @@ A set of informal tests are provided in the [Marlowe Contract Cookbook](../../ma
 ## Summary of Testing History and Results
 
 The Marlowe validator implementation currently passes all property-based and on-chain tests. The testing code and process outlined above revealed several issues that were further scrutinized:
-1. The test for ["Constraint 4: No output to script on close"](../specification/marlowe-cardano-specification.md#constraint-4-no-output-to-script-on-close) of the Marlowe-Cardano specification originally failed. This failure was eliminated with a minor modification to the semantics validator.
+1. The test for ["Constraint 4: No output to script on close"](../marlowe/specificiation/marlowe-cardano-specification.md#constraint-4-no-output-to-script-on-close) of the Marlowe-Cardano specification originally failed. This failure was eliminated with a minor modification to the semantics validator.
 2. Testing revealed an ambiguity regarding how a payment of no value should be warned as `ReduceNonPositivePay` versus `ReducePartialPay`. In documentation, we clarify that an intentional payment of zero results in the warning `ReduceNonPositivePay`, which means "the contract was meant to pay zero or less but that is impossible so it pays nothing", whereas a payment that happens to be zero because of insufficient funds results in the warning `ReducePartialPay`, which means "the contract is meant to pay more than there is, so it pays what there is".
 3. The `computeTransaction` function does not guard for the preconditions (1) that internal account balances are positive and (2) that duplicate `(Account, Token)` pairs are not present in the association map `accounts :: PlutusTx.Map (Account, Token) Integer`.
     1. Marlowe's semantics validator *guards* against the first case by failing to execute any transaction that begins with a non-positive balance in an internal account. *This causes permanent locking of funds in the contract.*
@@ -499,7 +499,7 @@ Issues 1 and 2 above have been eliminated. Issues 3.1, 3.2, 4, and 7 must be dea
 
 ### Funds Locked or Input Blocked Due to Exceeding Protocol Parameters
 
-Funds in a Marlowe contract on the Cardano blockchain may be forever *locked* (inaccessible) if all possible transactions exceed protocol parameters for script execution. Similarly, certain paths of contract execution will be *blocked* if some (but not all) semantically allowable transactions exceed protocol limits. This behavior is demonstrated on-chain in [marlowe-cli/test/exceed-protocol-parameters.ipynb](../../marlowe-cli/test/exceed-protocol-parameters.ipynb).
+Funds in a Marlowe contract on the Cardano blockchain may be forever *locked* (inaccessible) if all possible transactions exceed protocol parameters for script execution. Similarly, certain paths of contract execution will be *blocked* if some (but not all) semantically allowable transactions exceed protocol limits. This behavior is demonstrated on-chain in [marlowe-cli/test/exceed-protocol-parameters.ipynb](../marlowe-cli/test/exceed-protocol-parameters.ipynb).
 
 The following protocol parameters affect the viability of semantically-valid Marlowe transactions.
 1. Transaction size (`maxTxSize`)
