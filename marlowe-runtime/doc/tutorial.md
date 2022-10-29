@@ -1,6 +1,6 @@
 # Marlowe Runtime Tutorial: The ACTUS Principal at Maturity (PAM) Contract
 
-This tutorial demonstrates how to run an example Marlowe contract, the ACTUS Principal at Maturity (PAM) contract, using the Marlowe Runtime backend and its command-line tool. See [tutorial.ipynb](tutorial.ipynb) to view this tutorial as a Jupyter notebook.
+This tutorial demonstrates how to run an example Marlowe contract, the ACTUS Principal at Maturity (PAM) contract, using the Marlowe Runtime backend and its command-line tool. See [tutorial.ipynb](tutorial.ipynb) to view this tutorial as a Jupyter notebook. There are more examples [here](../examples/).
 
 ## Prerequisites
 
