@@ -109,6 +109,7 @@ library
     , plutus-tx
     , QuickCheck
     , quickcheck-instances
+    , sbv >=8.4
     , serialise
     , tasty
     , tasty-hunit
