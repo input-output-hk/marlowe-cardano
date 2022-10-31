@@ -1,0 +1,6 @@
+.obsidian/
+.ipynb_checkpoints/
+tutorial*
+*.skey
+*.vkey
+*.socket
