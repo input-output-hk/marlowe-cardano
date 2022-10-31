@@ -9,7 +9,6 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
-import Control.Arrow ((***))
 import Control.Monad (forM, unless, when)
 import Data.Aeson (ToJSON)
 import Data.Binary (Binary)
@@ -381,7 +380,7 @@ solveConstraints
 solveConstraints start history protocol version marloweCtx walletCtx constraints =
   solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
     >>= adjustTxForMinUtxo protocol marloweCtx
-    >>= selectCoins protocol walletCtx
+    >>= selectCoins protocol version marloweCtx walletCtx
     >>= balanceTx C.BabbageEraInCardanoMode start history protocol version marloweCtx walletCtx
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's
@@ -519,25 +518,21 @@ onlyLovelace value = C.lovelaceToValue (C.selectLovelace value) == value
 -- Selects enough additional inputs to cover the excess balance of the
 -- transaction (total outputs - total inputs).
 selectCoins
-  :: C.ProtocolParameters
+  :: forall v
+  .  C.ProtocolParameters
+  -> Core.MarloweVersion v
+  -> MarloweContext v
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-selectCoins protocol WalletContext{..} txBodyContent = do
+selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBodyContent = do
   let
     -- Extract the value of a UTxO
     txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
     txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
 
-    -- Only "succeed" if both halves of the pair aren't Nothing
-    maybePair :: (Maybe a,  Maybe b) -> Maybe (a, b)
-    maybePair    (Just  a , Just  b) =  Just  (a, b)
-    maybePair    _                   =  Nothing
-
     utxos :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
-    utxos =
-      mapMaybe (maybePair . (toCardanoTxIn *** toCardanoTxOut C.MultiAssetInBabbageEra) . toUTxOTuple)
-      . toUTxOsList $ availableUtxos
+    utxos = allUtxos marloweVersion marloweCtx walletCtx False
 
     -- Compute the value of all available UTxOs
     universe :: C.Value
@@ -713,7 +708,7 @@ balanceTx
   -> WalletContext
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBody C.BabbageEra)
-balanceTx era systemStart eraHistory protocol marloweVersion MarloweContext{..} WalletContext{..} C.TxBodyContent{..} = do
+balanceTx era systemStart eraHistory protocol marloweVersion marloweCtx walletCtx@WalletContext{..} C.TxBodyContent{..} = do
   changeAddress' <- maybe
     (Left $ BalancingError "Failed to convert change address.")
     Right
@@ -723,37 +718,6 @@ balanceTx era systemStart eraHistory protocol marloweVersion MarloweContext{..} 
     -- Extract the value of a UTxO
     txOutToValue :: C.TxOut ctx C.BabbageEra -> C.Value
     txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
-
-    -- Extra UTxOs for reference scripts.
-    mkReferenceUtxo :: ReferenceScriptUtxo -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
-    mkReferenceUtxo ReferenceScriptUtxo{..} =
-      (,)
-        <$> toCardanoTxIn txOutRef
-        <*> toCardanoTxOut' C.MultiAssetInBabbageEra txOut (Just . C.toScriptInAnyLang $ C.PlutusScript C.PlutusScriptV2 script)
-
-    -- Extra UTxO for the input from the script.
-    mkMarloweUtxo :: Core.TransactionScriptOutput v -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
-    mkMarloweUtxo Core.TransactionScriptOutput{..} =
-      (,)
-        <$> toCardanoTxIn utxo
-        <*> (
-              C.TxOut
-                <$> toCardanoAddressInEra C.cardanoEra address
-                <*> toCardanoTxOutValue C.MultiAssetInBabbageEra assets
-                <*> pure (C.TxOutDatumInline C.ReferenceTxInsScriptsInlineDatumsInBabbageEra . toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
-                <*> pure C.ReferenceScriptNone
-            )
-    mkPayoutUtxo :: (Chain.TxOutRef, Core.Payout v) -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
-    mkPayoutUtxo (utxo, Core.Payout{..}) =
-      (,)
-        <$> toCardanoTxIn utxo
-        <*> (
-              C.TxOut
-                <$> toCardanoAddressInEra C.cardanoEra address
-                <*> toCardanoTxOutValue C.MultiAssetInBabbageEra assets
-                <*> pure (C.TxOutDatumInline C.ReferenceTxInsScriptsInlineDatumsInBabbageEra . toCardanoScriptData $ Core.toChainPayoutDatum marloweVersion datum)
-                <*> pure C.ReferenceScriptNone
-            )
 
     -- Make the change output.
     mkChangeTxOut value = do
@@ -791,21 +755,10 @@ balanceTx era systemStart eraHistory protocol marloweVersion MarloweContext{..} 
         Right balanced@(C.BalancedTxBody (C.TxBody C.TxBodyContent { txFee = fee }) _ _) -> do
           pure (buildTxBodyContent { C.txFee = fee }, balanced)
 
-    -- Convert chain UTxOs to Cardano API ones.
-    convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
-    convertUtxo (txOutRef, transactionOutput) =
-      (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' C.MultiAssetInBabbageEra transactionOutput Nothing
-
     -- The available UTxOs.
     -- FIXME: This only needs to be the subset of available UTxOs that are actually `TxIns`, but including extras should be harmless.
     utxos :: C.UTxO C.BabbageEra
-    utxos =
-      C.UTxO
-        . SMap.fromList
-        $ mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs $ availableUtxos)
-        <> mapMaybe mkReferenceUtxo [marloweScriptUTxO, payoutScriptUTxO]
-        <> maybe mempty pure (mkMarloweUtxo =<< scriptOutput)
-        <> mapMaybe mkPayoutUtxo (Map.toList payoutOutputs)
+    utxos = C.UTxO . SMap.fromList $ allUtxos marloweVersion marloweCtx walletCtx True
 
     -- Compute net of inputs and outputs, accounting for minting.
     totalIn =
@@ -830,6 +783,62 @@ balanceTx era systemStart eraHistory protocol marloweVersion MarloweContext{..} 
   -- Return the transaction body.
   (_, C.BalancedTxBody txBody _ _) <- balancingLoop 10 initialChange
   pure txBody
+
+
+-- The available UTxOs.
+allUtxos :: forall v ctx
+         .  Core.MarloweVersion v
+         -> MarloweContext v
+         -> WalletContext
+         -> Bool
+         -> [(C.TxIn, C.TxOut ctx C.BabbageEra)]
+allUtxos marloweVersion MarloweContext{..} WalletContext{..} includeReferences =
+  let
+
+    -- Convert chain UTxOs to Cardano API ones.
+    convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
+    convertUtxo (txOutRef, transactionOutput) =
+      (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' C.MultiAssetInBabbageEra transactionOutput Nothing
+
+    -- Extra UTxO for the input from the script.
+    mkMarloweUtxo :: Core.TransactionScriptOutput v -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
+    mkMarloweUtxo Core.TransactionScriptOutput{..} =
+      (,)
+        <$> toCardanoTxIn utxo
+        <*> (
+              C.TxOut
+                <$> toCardanoAddressInEra C.cardanoEra address
+                <*> toCardanoTxOutValue C.MultiAssetInBabbageEra assets
+                <*> pure (C.TxOutDatumInline C.ReferenceTxInsScriptsInlineDatumsInBabbageEra . toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
+                <*> pure C.ReferenceScriptNone
+            )
+
+    mkPayoutUtxo :: (Chain.TxOutRef, Core.Payout v) -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
+    mkPayoutUtxo (utxo, Core.Payout{..}) =
+      (,)
+        <$> toCardanoTxIn utxo
+        <*> (
+              C.TxOut
+                <$> toCardanoAddressInEra C.cardanoEra address
+                <*> toCardanoTxOutValue C.MultiAssetInBabbageEra assets
+                <*> pure (C.TxOutDatumInline C.ReferenceTxInsScriptsInlineDatumsInBabbageEra . toCardanoScriptData $ Core.toChainPayoutDatum marloweVersion datum)
+                <*> pure C.ReferenceScriptNone
+            )
+
+    -- Extra UTxOs for reference scripts.
+    mkReferenceUtxo :: ReferenceScriptUtxo -> Maybe (C.TxIn, C.TxOut ctx C.BabbageEra)
+    mkReferenceUtxo ReferenceScriptUtxo{..} =
+      (,)
+        <$> toCardanoTxIn txOutRef
+        <*> toCardanoTxOut' C.MultiAssetInBabbageEra txOut (Just . C.toScriptInAnyLang $ C.PlutusScript C.PlutusScriptV2 script)
+
+  in
+
+    mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs $ availableUtxos)
+      <> maybe mempty pure (mkMarloweUtxo =<< scriptOutput)
+      <> mapMaybe mkPayoutUtxo (Map.toList payoutOutputs)
+      <> mapMaybe mkReferenceUtxo (filter (const includeReferences) [marloweScriptUTxO, payoutScriptUTxO])
+
 
 solveInitialTxBodyContent
   :: forall v
@@ -953,7 +962,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
             C.PlutusScriptV2
             plutusScriptOrRefInput
             (C.ScriptDatumForTxIn $ toCardanoScriptData $ Core.toChainPayoutDatum marloweVersion datum)
-            (C.ScriptDataConstructor 1 [])
+            (C.ScriptDataConstructor 0 [])
             (C.ExecutionUnits 0 0)
         pure $ Just (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
       | otherwise = pure Nothing
