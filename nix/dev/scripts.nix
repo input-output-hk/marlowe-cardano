@@ -98,7 +98,6 @@ in
         ${haskell.extraPackages.updateAllShaFiles} &
       '')
       packagesBySystem)}
-      ${marlowe.haskell.project.projectCross.mingwW64.plan-nix.passthru.generateMaterialized} ./nix/pkgs/haskell/materialized-windows &
 
       wait
   '';

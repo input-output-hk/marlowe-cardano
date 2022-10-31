@@ -6,7 +6,15 @@
 
     nixpkgs.follows = "haskell-nix/nixpkgs-2205";
 
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
+    haskell-nix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.hackage.follows = "hackage";
+    };
+
+    hackage = {
+      url = "github:input-output-hk/hackage.nix";
+      flake = false;
+    };
 
     actus-tests = {
       url = "github:actusfrf/actus-tests";
