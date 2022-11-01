@@ -1,7 +1,7 @@
 { system
 , packagesBySystem
 , inputs
-, networkNixName ? "preview"
+, networkNixName ? "preprod"
 }:
 let
   packages = packagesBySystem.${system};

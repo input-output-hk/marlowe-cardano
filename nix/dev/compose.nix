@@ -98,7 +98,7 @@ let
       # TODO Connect volumes here to top-level volumes
       volumes = [
         "postgres:/var/lib/postgresql/data"
-        "./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:r"
+        "./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql"
         "./:/src"
         "/nix:/nix"
         "${symlinks}:/exec"
