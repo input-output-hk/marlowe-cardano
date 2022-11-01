@@ -374,7 +374,7 @@ solveConstraints
   -> SolveConstraints
 solveConstraints start history protocol version marloweCtx walletCtx constraints =
   solveInitialTxBodyContent protocol version marloweCtx walletCtx constraints
-    >>= adjustTxForMinUtxo protocol marloweCtx
+    >>= adjustTxForMinUtxo protocol (marloweAddress marloweCtx)
     >>= selectCoins protocol version marloweCtx walletCtx
     >>= balanceTx C.BabbageEraInCardanoMode start history protocol version marloweCtx walletCtx
 
@@ -419,10 +419,10 @@ adjustOutputForMinUtxo protocol (C.TxOut address txOrigValue datum script) = do
 adjustTxForMinUtxo
   :: forall v
    . C.ProtocolParameters
-  -> MarloweContext v
+  -> Chain.Address
   -> C.TxBodyContent C.BuildTx C.BabbageEra
   -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx C.BabbageEra)
-adjustTxForMinUtxo protocol MarloweContext{..} txBodyContent = do
+adjustTxForMinUtxo protocol marloweAddress txBodyContent = do
   let
     getMarloweOutputValue :: [C.TxOut C.CtxTx C.BabbageEra] -> Maybe (C.TxOutValue C.BabbageEra)
     getMarloweOutputValue = getFirst . mconcat . map (First
