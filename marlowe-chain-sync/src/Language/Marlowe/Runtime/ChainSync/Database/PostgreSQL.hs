@@ -5,6 +5,25 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
 
+{- IMPORTANT PERFORMANCE WARNING - non-obvious requirement for filtering on addresses
+
+   If you want to write a query that filters on chain.txOut.address, be aware
+   that the database does not index the address column directly (because of some
+   Byron addresses that are prohibitively large). Instead, it indexes an MD5 hash
+   of the address.
+
+   This means that if you want your query to be at all performant, it is not
+   enough to say, for example
+
+    WHERE txOut.address = myAddress
+
+   you have to do something like this:
+
+    WHERE txOut.address = myAddress AND CAST(MD5(txOut.address) as uuid) = CAST(MD5(myAddress) as uuid)
+
+   On mainnet, this can make as much as a 600x difference in performance!
+-}
+
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
   ( databaseQueries
   ) where
@@ -782,6 +801,9 @@ getUTxOs = GetUTxOs $ fmap Api.UTxOs . \case
       addresses' = V.fromList $ fmap Api.unAddress. Set.toList $ addresses
     HT.statement addresses' $
       [foldStatement|
+        WITH addresses (address) AS
+          ( SELECT * FROM UNNEST($1 :: bytea[])
+          )
         SELECT txOut.txId :: bytea
              , txOut.txIx :: smallint
              , txOut.address :: bytea
@@ -792,11 +814,11 @@ getUTxOs = GetUTxOs $ fmap Api.UTxOs . \case
              , asset.name :: bytea?
              , assetOut.quantity :: bigint?
           FROM chain.txOut         AS txOut
+          JOIN addresses           AS addr     ON addr.address = txOut.address AND CAST(MD5(addr.address) AS uuid) = CAST(MD5(txOut.address) AS uuid)
           LEFT JOIN chain.txIn     AS txIn     ON txIn.txoutid = txOut.txId AND txIn.txoutix = txOut.txIx
           LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
           LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
-         WHERE txOut.address = ANY($1 :: bytea[])
-           AND txIn.txinid IS NULL
+         WHERE txIn.txinid IS NULL
          ORDER BY txIx
       |] (Fold foldRow mempty id)
   where
