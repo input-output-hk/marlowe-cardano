@@ -3119,13 +3119,12 @@
         "sphinxcontrib-haddock": "sphinxcontrib-haddock"
       },
       "locked": {
-        "lastModified": 0,
-        "narHash": "sha256-vG8ve4NzWlhaNCItzT6k9JI4gvwG76eqEulraJ5hvng=",
-        "path": "/nix/store/ix53xr3bmadbjgl1pwhyipg17xj8a7ji-source",
+        "narHash": "sha256-efcYL3ORB96gbdtmrJwkrTEvLxlhsumBI2w5m9mZf5w=",
+        "path": "/nix/store/qlkb6sj0s4i0yxk98rs3qh24q930j8cq-source",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/ix53xr3bmadbjgl1pwhyipg17xj8a7ji-source",
+        "path": "/nix/store/qlkb6sj0s4i0yxk98rs3qh24q930j8cq-source",
         "type": "path"
       }
     },
