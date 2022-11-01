@@ -314,6 +314,7 @@
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-protocols-test" or (errorHandler.buildDepError "marlowe-protocols-test"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
@@ -337,16 +338,9 @@
             "Language/Marlowe/Runtime/History/Store/ModelSpec"
             "Language/Marlowe/Runtime/HistorySpec"
             "Language/Marlowe/Runtime/Transaction/BuildConstraintsSpec"
-            "Spec/Marlowe/Semantics/Arbitrary"
-            "Spec/Marlowe/Semantics/Golden"
-            "Spec/Marlowe/Semantics/Golden/Escrow"
-            "Spec/Marlowe/Semantics/Golden/Pangram"
-            "Spec/Marlowe/Semantics/Golden/Swap"
-            "Spec/Marlowe/Semantics/Golden/Trivial"
-            "Spec/Marlowe/Semantics/Golden/ZeroCouponBond"
             "Paths_marlowe_runtime"
             ];
-          hsSourceDirs = [ "test" "../marlowe/test" ];
+          hsSourceDirs = [ "test" ];
           mainPath = [ "Spec.hs" ];
           };
         };

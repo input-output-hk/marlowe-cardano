@@ -12,6 +12,7 @@ packages:
   marlowe-protocols
   marlowe-protocols-test
   marlowe-runtime
+  marlowe-test
 
   libs/aeson-via-serialise
   libs/base16-aeson

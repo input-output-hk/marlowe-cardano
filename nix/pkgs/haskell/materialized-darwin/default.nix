@@ -791,6 +791,7 @@
         ouroboros-consensus-shelley = ./.plan.nix/ouroboros-consensus-shelley.nix;
         byron-spec-chain = ./.plan.nix/byron-spec-chain.nix;
         cardano-crypto-test = ./.plan.nix/cardano-crypto-test.nix;
+        marlowe-test = ./.plan.nix/marlowe-test.nix;
         marlowe-cli = ./.plan.nix/marlowe-cli.nix;
         cardano-config = ./.plan.nix/cardano-config.nix;
         plutus-ledger-ada = ./.plan.nix/plutus-ledger-ada.nix;
@@ -883,10 +884,7 @@
           "hedgehog-extras" = { flags = {}; };
           "cardano-submit-api" = { flags = {}; };
           "marlowe" = {
-            flags = {
-              "limit-static-analysis-time" = lib.mkOverride 900 true;
-              "defer-plugin-errors" = lib.mkOverride 900 false;
-              };
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "cardano-git-rev" = {
             flags = { "systemd" = lib.mkOverride 900 true; };
@@ -962,6 +960,12 @@
             };
           "byron-spec-chain" = { flags = {}; };
           "cardano-crypto-test" = { flags = {}; };
+          "marlowe-test" = {
+            flags = {
+              "limit-static-analysis-time" = lib.mkOverride 900 true;
+              "defer-plugin-errors" = lib.mkOverride 900 false;
+              };
+            };
           "marlowe-cli" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
@@ -1140,7 +1144,6 @@
           "cardano-ledger-shelley-ma-test".components.library.planned = lib.mkOverride 900 true;
           "http2".components.library.planned = lib.mkOverride 900 true;
           "microlens".components.library.planned = lib.mkOverride 900 true;
-          "marlowe".components.tests."marlowe-test".planned = lib.mkOverride 900 true;
           "hedgehog".components.library.planned = lib.mkOverride 900 true;
           "fmlist".components.library.planned = lib.mkOverride 900 true;
           "filepath".components.library.planned = lib.mkOverride 900 true;
@@ -1174,6 +1177,7 @@
           "Unique".components.library.planned = lib.mkOverride 900 true;
           "attoparsec-iso8601".components.library.planned = lib.mkOverride 900 true;
           "vector-sized".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-test".components.tests."marlowe-test".planned = lib.mkOverride 900 true;
           "quickcheck-io".components.library.planned = lib.mkOverride 900 true;
           "dec".components.library.planned = lib.mkOverride 900 true;
           "SHA".components.library.planned = lib.mkOverride 900 true;
@@ -1713,6 +1717,7 @@
           "hedgehog-extras".components.library.planned = lib.mkOverride 900 true;
           "terminfo".components.library.planned = lib.mkOverride 900 true;
           "non-integral".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-test".components.library.planned = lib.mkOverride 900 true;
           "connection".components.library.planned = lib.mkOverride 900 true;
           "void".components.library.planned = lib.mkOverride 900 true;
           "Only".components.library.planned = lib.mkOverride 900 true;
