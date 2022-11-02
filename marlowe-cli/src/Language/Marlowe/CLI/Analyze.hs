@@ -180,7 +180,7 @@ analyzeImpl :: forall m lang era
 analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
   do
     let
-      checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
+      checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost || transactionSize
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations mtValidator mtRoleValidator mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
