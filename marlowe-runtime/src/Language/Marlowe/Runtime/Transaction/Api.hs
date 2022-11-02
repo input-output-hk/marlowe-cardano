@@ -35,6 +35,7 @@ import Cardano.Api
   , serialiseToCBOR
   )
 import Cardano.Api.Shelley (StakeCredential(..))
+import qualified Data.Aeson as Aeson
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
@@ -70,7 +71,7 @@ import Network.Protocol.Job.Types (Command(..), SomeTag(..))
 -- CIP-25 metadata
 newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Aeson.FromJSON)
 
 -- FIXME: Validate the metadata format
 mkNFTMetadata :: Metadata -> Maybe NFTMetadata
@@ -79,7 +80,7 @@ mkNFTMetadata = Just . NFTMetadata
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid)
+  deriving newtype (Binary, Semigroup, Monoid, Aeson.FromJSON)
 
 mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
@@ -353,7 +354,7 @@ data WalletAddresses = WalletAddresses
   , extraAddresses :: Set Address
   , collateralUtxos :: Set TxOutRef
   }
-  deriving (Eq, Show, Generic, Binary)
+  deriving (Eq, Show, Generic, Binary, Aeson.FromJSON)
 
 data CreateError v
   = CreateConstraintError (ConstraintError v)

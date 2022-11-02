@@ -176,6 +176,15 @@ executable marlowe-server
     , servant-server
     , wai
     , warp
+    , text
+    , bytestring
+    , vector
+    , containers
+    , cardano-api
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
 
 executable marlowe
   import: lang

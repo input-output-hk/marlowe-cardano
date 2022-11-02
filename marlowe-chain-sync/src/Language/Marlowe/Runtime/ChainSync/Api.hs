@@ -111,7 +111,7 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Monad (guard, (>=>))
-import Data.Aeson (ToJSON, ToJSONKey, toJSON)
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, toJSON, (.:))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -119,6 +119,7 @@ import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function (on)
 import Data.Functor (($>))
@@ -214,6 +215,16 @@ data Metadata
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+instance FromJSON Metadata where
+  parseJSON = Aeson.withObject "Metadata" \o ->
+    o .: "tag" >>= \case
+      "MetadataMap" -> MetadataMap <$> o .: "content"
+      "MetadataList" -> MetadataList <$> o .: "content"
+      "MetadataNumber" -> MetadataNumber <$> o .: "content"
+      "MetadataBytes" -> MetadataBytes . BS.Char8.pack <$> o .: "content"
+      "MetadataText" -> MetadataText <$> o .: "content"
+      s -> error $ "Unknown tag \"" <> s <> "\""
+
 -- Handle convenient `JSON` based encoding for a subset of `Metadata`
 -- type domain.
 -- It is not an implementation of a possible `fromJSON` method.
@@ -243,6 +254,9 @@ fromJSONEncodedTransactionMetadata = \case
     value' <- fromJSONEncodedMetadata value
     pure (label, value')
   _ -> Nothing
+
+instance FromJSON TransactionMetadata where
+  parseJSON = maybe (error "Unable to parse TransactionMetadata!") pure . fromJSONEncodedTransactionMetadata
 
 -- | An input of a transaction.
 data TransactionInput = TransactionInput
@@ -370,6 +384,11 @@ instance IsString Base16 where
 instance ToJSON Base16 where
   toJSON = toJSON . encodeBase16 . unBase16
 
+instance FromJSON Base16 where
+  parseJSON = Aeson.withText "Base16" $ pure . fromString . T.unpack
+
+instance FromJSONKey Base16
+
 newtype DatumHash = DatumHash { unDatumHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
@@ -378,11 +397,11 @@ newtype DatumHash = DatumHash { unDatumHash :: ByteString }
 newtype TxId = TxId { unTxId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, FromJSON) via Base16
 
 newtype TxIx = TxIx { unTxIx :: Word16 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, FromJSON)
 
 newtype CertIx = CertIx { unCertIx :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
@@ -393,7 +412,7 @@ data TxOutRef = TxOutRef
   , txIx :: !TxIx
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, ToJSONKey)
+  deriving anyclass (Binary, ToJSON, ToJSONKey, FromJSON)
 
 instance IsString TxOutRef where
   fromString = fromJust . parseTxOutRef . T.pack
@@ -435,12 +454,12 @@ data AssetId = AssetId
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, FromJSON) via Base16
 
 newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, FromJSON, FromJSONKey) via Base16
 
 newtype Quantity = Quantity { unQuantity :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
@@ -448,12 +467,12 @@ newtype Quantity = Quantity { unQuantity :: Word64 }
 
 newtype Lovelace = Lovelace { unLovelace :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, FromJSON)
 
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, FromJSON) via Base16
 
 toBech32 :: Address -> Maybe Text
 toBech32 = toCardanoAddress >=> \case
