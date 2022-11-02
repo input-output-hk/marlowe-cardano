@@ -1035,6 +1035,7 @@ findPaths ContractInstance{..} =
     unless (M.null ciContinuations)
       . liftIO $ hPutStrLn stderr "Demerkleizing contract . . ."
     contract <- runReaderT (deepDemerkleize ciContract) ciContinuations
+    liftIO $ hPutStrLn stderr "Note that path-based analysis ignore the initial state of the contract and instead start with an empty state."
     liftIO $ hPutStrLn stderr "Starting search for execution paths . . ."
     paths <- liftCliIO $ getAllInputs contract
     liftIO $ hPutStrLn stderr $ " . . . found " <> (show $ length paths) <> " execution paths."
