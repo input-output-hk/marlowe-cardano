@@ -2,6 +2,7 @@
 
 Marlowe Runtime is the application backend for managing Marlowe contracts. It provides easy-to-use, higher-level APIs (application programming interfaces) and complete backend services that enable developers to build and deploy enterprise and Web(3) (D)app solutions using Marlowe, but without having to assemble “plumbing” that manually orchestrates a backend workflow for a Marlowe-based application.
 
+
 ![Usages of Marlowe Runtime](diagrams/usages.jpg)
 
 Runtime provides developers access to the off-chain logic required to run Marlowe contracts and track their progress. This involves querying information about contracts, discovering contracts, reading the history and state of a contract, and subscribing to live contract updates. It also involves interacting with contracts: creating new contracts, applying contract inputs, and withdrawing funds paid out to a party.
@@ -14,7 +15,7 @@ Knowledge of Haskell or Plutus is not required for developers to communicate wit
 
 ## Architecture
 
-The backend for Marlowe runtime consists of a chain-indexing service (`chainseekd`), a history-tracking service for Marlowe contracts (`marlowe-history`), a discovery service for Marlowe contracts (`marlowe-discovery`), and a transaction-creation service for Marlowe contracts (`marlowe-tx`). These backend services operate in concert and rely upon [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity and upon [PostgreSQL](https://www.postgresql.org/) for persistent storage. Access to the backend services is provided via a command-line client (`marlowe`) or a REST/WebSocket server (`web-server`) that uses JSON payloads. Web applications can integrate with a [CIP-30 light wallet](https://cips.cardano.org/cips/cip30/) for transaction signing, whereas enterprise applications can integrate with [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md) for signing transactions.
+The backend for Marlowe runtime consists of a chain-indexing service (`chainseekd`), a history-tracking service for Marlowe contracts (`marlowe-history`), a discovery service for Marlowe contracts (`marlowe-discovery`), and a transaction-creation service for Marlowe contracts (`marlowe-tx`). These backend services operate in concert and rely upon [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity and upon [PostgreSQL](https://www.postgresql.org/) for persistent storage. Access to the backend services is provided via a command-line client (`marlowe`), an AWS Lambda function (`marlowe-lambda`), or a REST/WebSocket server (`web-server`) that uses JSON payloads. Web applications can integrate with a [CIP-30 light wallet](https://cips.cardano.org/cips/cip30/) for transaction signing, whereas enterprise applications can integrate with [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md) for signing transactions.
 
 ![Marlowe Runtime ecosystem](diagrams/ecosystem.png)
 
@@ -126,6 +127,11 @@ See `marlowe-tx`'s various [help pages](marlowe-tx.md) for more information, or 
 	- [Add a contract to the set of tracked contracts](marlowe/add.md)
 	- [Remove a contract from the set of tracked contracts](marlowe/rm.md)
 	- [Output the History of a contract](marlowe/log.md)
+
+
+## AWS Lambda Interface
+
+The Marlowe Runtime client for AWS Lambda is documented in a separate repository, [`marlowe-lambda`](https://github.com/input-output-hk/marlowe-lambda). In brief, it enables users to create, apply inputs to, and withdraw funds from Marlowe contract instances; it also lets them list all of the Marlowe contracts on the blockchain and to examine their on-chain status and contents.
 
 
 ## Web Services
