@@ -123,11 +123,6 @@ let
       cardano-cli
       cardano-node
       marlowe-cli
-      chainseekd
-      marlowe-history
-      marlowe-discovery
-      marlowe-tx
-      marlowe-rt
       run-chainseekd
       start-cardano-node
       sphinxTools
