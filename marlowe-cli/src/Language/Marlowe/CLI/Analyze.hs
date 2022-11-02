@@ -234,6 +234,8 @@ checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
       [
         "Invalid roles currency"        .= invalidCurrency ciRolesCurrency
       , "Invalid account tokens"        .= filter invalidToken (snd <$> AM.keys accounts)
+      , "Invalid account parties"       .= filter invalidParty (fst <$> AM.keys accounts)
+      , "Invalid choice parties"        .= filter invalidChoiceParty (AM.keys choices)
       , "Non-positive account balances" .= nonPositiveBalances accounts
       , "Duplicate accounts"            .= duplicates accounts
       , "Duplicate choices"             .= duplicates choices
@@ -253,6 +255,18 @@ invalidToken (Token currency@P.CurrencySymbol{..} token@P.TokenName{..}) =
          && token == P.adaToken
       || P.lengthOfByteString unCurrencySymbol == 28
          && P.lengthOfByteString unTokenName <= 32
+
+
+-- | Detect an invalid party in a choice.
+invalidChoiceParty :: ChoiceId -> Bool
+invalidChoiceParty (ChoiceId _ (Role role)) = invalidRole role
+invalidChoiceParty _                        = False
+
+
+-- | Detect an invalid party.
+invalidParty :: Party -> Bool
+invalidParty (Role role) = invalidRole role
+invalidParty _           = False
 
 
 -- | Detect an invalid role name.
