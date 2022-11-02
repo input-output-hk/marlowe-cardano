@@ -561,10 +561,15 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
       txInfoDCert = mempty
       txInfoWdrl = AM.empty
       txInfoValidRange = P.Interval (P.LowerBound (P.Finite $ fst txInterval) True) (P.UpperBound (P.Finite $ snd txInterval) True)
+      findSignatory :: InputContent -> [P.PubKeyHash]
+      findSignatory (IDeposit _ (Address _ (P.Address (P.PubKeyCredential pkh) _)) _ _) = pure pkh
+      findSignatory (IChoice (ChoiceId _ (Address _ (P.Address (P.PubKeyCredential pkh) _))) _) = pure pkh
+      findSignatory _ = mempty
       txInfoSignatories =
-        case creatorAddress of
-          P.Address (P.PubKeyCredential pkh) _ -> pure pkh
-          _                                    -> mempty
+        (foldMap findSignatory $ getInputContent <$> txInputs)
+          <> case creatorAddress of
+               P.Address (P.PubKeyCredential pkh) _ -> pure pkh
+               _                                    -> mempty
       txInfoRedeemers = AM.singleton scriptContextPurpose redeemer
       txInfoData = AM.fromList $ ((,) =<< P.datumHash) <$> inDatum : outDatum <> outPaymentDatums <> merkleDatums
       txInfoId = "2222222222222222222222222222222222222222222222222222222222222222"
