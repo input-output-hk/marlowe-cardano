@@ -9,6 +9,7 @@ import Control.Applicative (empty)
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVarIO, writeTVar)
 import Control.Concurrent.STM.TVar (readTVar)
 import Control.Monad (forever, mfilter)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT, runMaybeT))
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -22,6 +23,7 @@ import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), assert
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
 import Language.Marlowe.Runtime.History.Follower (ContractChanges(..), SomeContractChanges(..))
 import Language.Marlowe.Runtime.History.FollowerSupervisor (UpdateContract(..))
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (LogIO)
 
 -- | Data access methods for managing contract history.
 data HistoryQueries m = HistoryQueries
@@ -44,19 +46,19 @@ hoistHistoryQueries nat HistoryQueries{..} = HistoryQueries
 data HistoryStoreDependencies = HistoryStoreDependencies
   { changes        :: STM (Map ContractId UpdateContract)
   -- ^ A transactional source of contract history updates.
-  , historyQueries :: HistoryQueries IO
+  , historyQueries :: HistoryQueries LogIO
   -- ^ The set of history queries to use.
   }
 
 -- | API of the history store.
 data HistoryStore = HistoryStore
-  { runHistoryStore   :: IO ()
+  { runHistoryStore   :: LogIO ()
   -- ^ Run the history store process.
-  , findContract      :: ContractId -> IO (Maybe (BlockHeader, SomeCreateStep))
+  , findContract      :: ContractId -> LogIO (Maybe (BlockHeader, SomeCreateStep))
   -- ^ Lookup a contract's creation context by its ID.
-  , intersectContract :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> IO (Maybe BlockHeader)
+  , intersectContract :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> LogIO (Maybe BlockHeader)
   -- ^ Find the latest common block header from the provided list in a contract's history
-  , getNextSteps      :: forall v. ContractId -> MarloweVersion v -> ChainPoint -> IO (GetNextStepsResponse v)
+  , getNextSteps      :: forall v. ContractId -> MarloweVersion v -> ChainPoint -> LogIO (GetNextStepsResponse v)
   -- ^ Get the next steps for a contract after the given chain point.
   }
 
@@ -125,11 +127,11 @@ mkHistoryStore HistoryStoreDependencies{..} = do
   -- A transactional cache of the latest block in each contract's history.
   latestBlocksPerContractVar <- newTVar (Map.empty :: Map ContractId (TVar (Maybe BlockHeader)))
   let
-    runHistoryStore :: IO ()
+    runHistoryStore :: LogIO ()
     runHistoryStore = forever do
-      newChanges <- atomically awaitChanges
+      newChanges <- liftIO $ atomically awaitChanges
       commitChanges newChanges
-      atomically $ updateLatestBlocks newChanges
+      liftIO $ atomically $ updateLatestBlocks newChanges
 
     -- | Waits for non-empty changes to come from the source of changes.
     awaitChanges :: STM (Map ContractId UpdateContract)
@@ -174,7 +176,7 @@ mkHistoryStore HistoryStoreDependencies{..} = do
 
     findContract = findCreateStep
 
-    intersectContract :: ContractId -> MarloweVersion v -> [BlockHeader] -> IO (Maybe BlockHeader)
+    intersectContract :: ContractId -> MarloweVersion v -> [BlockHeader] -> LogIO (Maybe BlockHeader)
     intersectContract contractId version headers = runMaybeT do
       -- Lookup the intersection via a database query
       Intersection version' blockHeader <- MaybeT $ findIntersection contractId headers
@@ -186,10 +188,10 @@ mkHistoryStore HistoryStoreDependencies{..} = do
         Just _  -> pure blockHeader
         Nothing -> empty
 
-    getNextSteps :: ContractId -> MarloweVersion v -> ChainPoint -> IO (GetNextStepsResponse v)
+    getNextSteps :: ContractId -> MarloweVersion v -> ChainPoint -> LogIO (GetNextStepsResponse v)
     getNextSteps contractId version point = do
       -- Lookup the latest known block for the contract.
-      latestBlocksPerContract <- readTVarIO latestBlocksPerContractVar
+      latestBlocksPerContract <- liftIO $ readTVarIO latestBlocksPerContractVar
       case Map.lookup contractId latestBlocksPerContract of
         -- If not found, tell the client to roll back to genesis
         Nothing -> pure $ Rollback Genesis

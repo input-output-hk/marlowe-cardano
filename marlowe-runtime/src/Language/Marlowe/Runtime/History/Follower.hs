@@ -21,10 +21,10 @@ module Language.Marlowe.Runtime.History.Follower
   ) where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM
   (STM, TVar, atomically, modifyTVar, newEmptyTMVar, newTVar, readTVar, takeTMVar, tryPutTMVar, tryTakeTMVar, writeTVar)
 import Control.Monad (guard, mfilter, when)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Writer.CPS (WriterT, execWriterT, runWriterT, tell)
@@ -72,6 +72,7 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion)
 import Language.Marlowe.Runtime.History.Api
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (ConcurrentlyLogIO(..), LogIO)
 
 data ContractChanges v = ContractChanges
   { steps      :: Map Chain.BlockHeader [ContractStep v]
@@ -128,13 +129,13 @@ applyRollback (At blockHeader@Chain.BlockHeader{slotNo}) ContractChanges{..} = C
 
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
-  , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+  , connectToChainSeek :: forall a. RuntimeChainSeekClient LogIO a -> LogIO a
   , slotConfig         :: SlotConfig
   , securityParameter  :: Int
   }
 
 data Follower = Follower
-  { runFollower    :: IO (Either ContractHistoryError ())
+  { runFollower    :: LogIO (Either ContractHistoryError ())
   , status         :: STM FollowerStatus
   , changes        :: STM (Maybe SomeContractChanges)
   , cancelFollower :: STM ()
@@ -167,7 +168,7 @@ mkFollower deps@FollowerDependencies{..} = do
             Left err ->
               failWith $ ExtractContractFailed err
             Right (SomeCreateStep version create@CreateStep{..}) -> do
-              changesVar <- atomically do
+              changesVar <- liftIO $ atomically do
                 changesVar <- newTVar $ ContractChanges
                   { steps = Map.empty
                   , create = Just (blockHeader, create)
@@ -188,12 +189,12 @@ mkFollower deps@FollowerDependencies{..} = do
 
   pure Follower
     { runFollower = do
-        _ <- atomically $ tryTakeTMVar cancelled
-        runConcurrently $ asum $ Concurrently <$>
-          [ atomically $ Right <$> takeTMVar cancelled
+        _ <- liftIO $ atomically $ tryTakeTMVar cancelled
+        runConcurrentlyLogIO $ asum $ ConcurrentlyLogIO <$>
+          [ liftIO $ atomically $ Right <$> takeTMVar cancelled
           , do
               result <- connectToChainSeek $ ChainSeekClient $ pure stInit
-              atomically $ writeTVar statusVar case result of
+              liftIO $ atomically $ writeTVar statusVar case result of
                 Left err      -> Failed err
                 Right version -> Finished version
               pure $ () <$ result
@@ -273,18 +274,18 @@ getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
 sendMsgQueryNext
   :: FollowerContext v
   -> query err result
-  -> ClientStNext query err result point tip IO a
-  -> ClientStIdle query point tip IO a
+  -> ClientStNext query err result point tip LogIO a
+  -> ClientStIdle query point tip LogIO a
 sendMsgQueryNext FollowerContext{..} move next =
   SendMsgQueryNext move next do
-    atomically $ writeTVar statusVar $ Waiting $ SomeMarloweVersion version
+    liftIO $ atomically $ writeTVar statusVar $ Waiting $ SomeMarloweVersion version
     pure next
 
 followContract
   :: BlockHeader
   -> FollowerContext v
   -> FollowerState v
-  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion))
+  -> LogIO (ClientStIdle Move ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion))
 followContract blockHeader context state@FollowerState{..} = do
   let move = FindConsumingTxs $ Set.insert scriptUTxO $ Map.keysSet payouts
   pure $ sendMsgQueryNext context move $ followNext blockHeader context state
@@ -296,7 +297,7 @@ followNext
    . BlockHeader
   -> FollowerContext v
   -> FollowerState v
-  -> ClientStNext Move (Map Chain.TxOutRef Chain.UTxOError) (Map Chain.TxOutRef Chain.Transaction) ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion)
+  -> ClientStNext Move (Map Chain.TxOutRef Chain.UTxOError) (Map Chain.TxOutRef Chain.Transaction) ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion)
 followNext previousBlockHeader context@FollowerContext{..} state@FollowerState{..} = ClientStNext
   { recvMsgQueryRejected = \err _ -> failWith case Map.lookup scriptUTxO err of
       Nothing   -> FollowPayoutUTxOsFailed err
@@ -309,12 +310,12 @@ followNext previousBlockHeader context@FollowerContext{..} state@FollowerState{.
           Left err -> failWith err
           Right (mOutput, changes) -> do
             let
-              followContract' :: FollowerState v -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion))
+              followContract' :: FollowerState v -> LogIO (ClientStIdle Move ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion))
               followContract' state'@FollowerState{payouts = payouts'} = followContract blockHeader context state'
                 { payouts = Map.withoutKeys payouts' $ Map.keysSet txs
                 , previousState = Just $ truncateFollowerState securityParameter blockHeader $ Retained previousBlockHeader state
                 }
-            atomically $ modifyTVar changesVar (<> changes)
+            liftIO $ atomically $ modifyTVar changesVar (<> changes)
             case mOutput of
               Nothing -> followContract' state
               Just (TransactionOutput newPayouts mScriptOutput) -> case mScriptOutput of
@@ -327,7 +328,7 @@ followNext previousBlockHeader context@FollowerContext{..} state@FollowerState{.
       next <- case point of
         Genesis        -> failWith CreateTxRolledBack
         At blockHeader -> rollbackPreviousState blockHeader context previousState
-      atomically $ modifyTVar changesVar $ applyRollback point
+      liftIO $ atomically $ modifyTVar changesVar $ applyRollback point
       pure next
   }
   where
@@ -337,7 +338,7 @@ followContractClosed
   :: BlockHeader
   -> FollowerContext v
   -> FollowerStateClosed v
-  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion))
+  -> LogIO (ClientStIdle Move ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion))
 followContractClosed blockHeader context@FollowerContext{..} state@FollowerStateClosed{..}
   | Map.null payouts = pure
     $ sendMsgQueryNext context (AdvanceBlocks $ fromIntegral securityParameter)
@@ -349,7 +350,7 @@ followContractClosed blockHeader context@FollowerContext{..} state@FollowerState
 followNextRetire
   :: FollowerContext v
   -> FollowerStateClosed v
-  -> ClientStNext Move Void () ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion)
+  -> ClientStNext Move Void () ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion)
 followNextRetire context@FollowerContext{..} state = ClientStNext
   { recvMsgQueryRejected = absurd
   , recvMsgRollForward = \_ _ _ -> pure $ SendMsgDone $ Right $ SomeMarloweVersion version
@@ -360,7 +361,7 @@ followNextPayout
   :: BlockHeader
   -> FollowerContext v
   -> FollowerStateClosed v
-  -> ClientStNext Move (Map TxOutRef UTxOError) (Map TxOutRef Chain.Transaction) ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion)
+  -> ClientStNext Move (Map TxOutRef UTxOError) (Map TxOutRef Chain.Transaction) ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion)
 followNextPayout previousBlockHeader context@FollowerContext{..} state@FollowerStateClosed{..} = ClientStNext
   { recvMsgQueryRejected = \err _ -> failWith $ FollowPayoutUTxOsFailed err
   , recvMsgRollForward = \txs point _ -> case point of
@@ -369,7 +370,7 @@ followNextPayout previousBlockHeader context@FollowerContext{..} state@FollowerS
         case execWriterT $ Map.traverseWithKey (processPayout blockHeader payouts) txs of
           Left err -> failWith err
           Right changes -> do
-            atomically $ modifyTVar changesVar (<> changes)
+            liftIO $ atomically $ modifyTVar changesVar (<> changes)
             followContractClosed blockHeader context $ state
               { previousState = truncateFollowerStateClosed securityParameter blockHeader $ Retained previousBlockHeader $ ClosedPreviousClosed state
               , payouts = Map.withoutKeys payouts $ Map.keysSet txs
@@ -381,12 +382,12 @@ followNextHandleRollback
   :: ChainPoint
   -> FollowerContext v
   -> FollowerStateClosed v
-  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion))
+  -> LogIO (ClientStIdle Move ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion))
 followNextHandleRollback point context@FollowerContext{..} FollowerStateClosed{..}= do
   next <- case point of
     Genesis        -> failWith CreateTxRolledBack
     At blockHeader -> rollbackPreviousStateClosed blockHeader context previousState
-  atomically $ modifyTVar changesVar $ applyRollback point
+  liftIO $ atomically $ modifyTVar changesVar $ applyRollback point
   pure next
 
 rollbackPreviousState
@@ -394,7 +395,7 @@ rollbackPreviousState
    . BlockHeader
   -> FollowerContext v
   -> Maybe (PreviousState (FollowerState v))
-  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion))
+  -> LogIO (ClientStIdle Move ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion))
 rollbackPreviousState blockHeader context = \case
   Nothing -> failWith CreateTxRolledBack
   Just Truncated -> error "encountered rollback beyond security parameter"
@@ -408,7 +409,7 @@ rollbackPreviousStateClosed
    . BlockHeader
   -> FollowerContext v
   -> PreviousState (ClosedPreviousState v)
-  -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion))
+  -> LogIO (ClientStIdle Move ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion))
 rollbackPreviousStateClosed blockHeader context = \case
   Truncated -> error "encountered rollback beyond security parameter"
   Retained blockHeader' (ClosedPreviousOpen state) -> rollbackPreviousState blockHeader context $ Just $ Retained blockHeader' state
@@ -538,7 +539,7 @@ consumesUTxO :: TxOutRef -> Chain.TransactionInput -> Bool
 consumesUTxO TxOutRef{..} Chain.TransactionInput { txId = txInId, txIx = txInIx } =
   txId == txInId && txIx == txInIx
 
-failWith :: ContractHistoryError -> IO (ClientStIdle Move ChainPoint ChainPoint IO (Either ContractHistoryError SomeMarloweVersion))
+failWith :: ContractHistoryError -> LogIO (ClientStIdle Move ChainPoint ChainPoint LogIO (Either ContractHistoryError SomeMarloweVersion))
 failWith = pure . SendMsgDone . Left
 
 note :: a -> Maybe b -> Either a b

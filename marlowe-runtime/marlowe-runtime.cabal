@@ -54,7 +54,7 @@ common lang
     TypeApplications
     TupleSections
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances
+    -- -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
   if flag(defer-plugin-errors)

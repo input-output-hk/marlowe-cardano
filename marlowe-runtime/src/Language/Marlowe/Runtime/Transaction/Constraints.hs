@@ -40,7 +40,7 @@ import Language.Marlowe.Runtime.Cardano.Api
   , toCardanoTxOut'
   , tokensToCardanoValue
   )
-import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toUTxOTuple, toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toBech32, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -50,6 +50,8 @@ import Witherable (wither)
 
 -- For debug logging
 -- import Debug.Trace (trace)
+import qualified Data.Aeson as A
+import Data.Aeson.Types (toJSON)
 import Prelude hiding (log)
 
 -- | Quick-and-dirty logging for the pure code in this module
@@ -345,8 +347,17 @@ data WalletContext = WalletContext
   , changeAddress :: Chain.Address
   -- ^ The change address of the wallet.
   }
-  deriving (Show, Generic, ToJSON)
+  deriving (Show, Generic)
 
+-- | TODO: `ToJSON` instances are only provided to facilitate logging.
+-- We should probably drop all of them when we move to more semantic representation
+-- of logs so we can move these JSON converters down to "log interpreters/printers".
+instance ToJSON WalletContext where
+  toJSON (WalletContext availableUtxos collateralUtxos changeAddress) = A.object
+    [ ("availableUtxos", toJSON availableUtxos)
+    , ("collateralUtxos", toJSON collateralUtxos)
+    , ("changeAddress", maybe (toJSON changeAddress) toJSON (toBech32 changeAddress))
+    ]
 
 -- | Data from Marlowe Scripts needed to solve the constraints.
 data MarloweContext v = MarloweContext

@@ -29,9 +29,10 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , runtimeChainSeekCodec
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
+import Language.Marlowe.Runtime.Logging.Colog (prefixLogger)
 import Language.Marlowe.Runtime.Logging.Colog.LogIO (LogIO, dieLogIO, runLogIO)
 import Language.Marlowe.Runtime.Logging.Colog.LogIO.Network
-  (ProtocolName(ProtocolName), withClientSocket, withServerSocket)
+  (ProtocolName(ProtocolName), clientPrefix, withClientSocket, withServerSocket)
 import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
@@ -42,6 +43,7 @@ import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Network.Channel (Channel, hoistChannel, socketAsChannel)
 import Network.Protocol.Driver (hoistDriver, mkDriver)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
+import qualified Network.Protocol.Job.Client as Job.Client
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
@@ -127,15 +129,15 @@ run Options{logAction=mainLogAction, ..} = withSocketsDo do
 
       let
         mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
-        queryChainSync' q = queryChainSync q >>= \case
+        queryChainSync' s q = queryChainSync s q >>= \case
           Just res -> pure res
           Nothing -> error "Initialization failed on chain sync query"
 
-      systemStart <- queryChainSync' GetSystemStart
-      eraHistory <- queryChainSync' GetEraHistory
-      protocolParameters <- queryChainSync' GetProtocolParameters
-      slotConfig <- queryChainSync' GetSlotConfig
-      networkId <- queryChainSync' GetNetworkId
+      systemStart <- queryChainSync' show GetSystemStart
+      eraHistory <- queryChainSync' (const "EraHistory") GetEraHistory
+      protocolParameters <- queryChainSync' show GetProtocolParameters
+      slotConfig <- queryChainSync' show GetSlotConfig
+      networkId <- queryChainSync' show GetNetworkId
       when (networkId == Mainnet) do
         dieLogIO "Mainnet support is currently disabled."
       let
@@ -155,6 +157,7 @@ run Options{logAction=mainLogAction, ..} = withSocketsDo do
       TransactionServer{..} <- liftIO $ atomically do
         mkTransactionServer TransactionServerDependencies{..}
 
+      runChainSyncJobClient (Job.Client.doHandshake ChainSync.commandSchema)
       {- Run the server -}
       runTransactionServer
   where
@@ -162,27 +165,30 @@ run Options{logAction=mainLogAction, ..} = withSocketsDo do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
-    queryChainSync :: Show e => ChainSyncQuery Void e a -> LogIO (Maybe a)
-    queryChainSync query = do
+    queryChainSync :: Show e => (a -> String) -> ChainSyncQuery Void e a -> LogIO (Maybe a)
+    queryChainSync showResult query = do
       addr <- liftIO $ head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      withClientSocket (ProtocolName "Chain Sync") addr \socket -> do
+      let pn = ProtocolName "Chain Sync Query"
+      withClientSocket pn addr \socket -> prefixLogger (T.pack $ clientPrefix pn addr) do
         let driver = hoistDriver liftIO $ mkDriver throwIO codecQuery $ socketAsChannel socket
         let client = liftQuery ChainSync.querySchema (pure query)
         let peer = queryClientPeer client
         result <- fst <$> runPeerWithDriver driver peer (startDState driver)
         case result of
-          Right r -> pure $ Just r
+          Right r -> do
+            logDebug . T.pack $ "Query result:" <> showResult r
+            pure $ Just r
           Left (Left _) -> do
-            logError "Chain Sync handshake erorr"
+            logError "Chain Sync Query handshake error.."
             pure Nothing
           Left (Right err) -> do
-            logError . T.pack . mappend "Chain Sync query error..." $ show err
+            logError . T.pack . mappend "Chain Sync Query error..." $ show err
             pure Nothing
 
     runGetUTxOsQuery :: HasCallStack => GetUTxOsQuery -> LogIO (Maybe UTxOs)
     runGetUTxOsQuery getUTxOsQuery = do
       logDebug . T.pack $ show getUTxOsQuery
-      queryChainSync (GetUTxOs getUTxOsQuery)
+      queryChainSync show (GetUTxOs getUTxOsQuery)
 
 data Options = Options
   { chainSeekPort      :: PortNumber

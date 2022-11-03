@@ -13,6 +13,7 @@ import Unsafe.Coerce (unsafeCoerce)
 -- rectified in recent versions, but still affects the current version. Remove
 -- this module when we upgrade to a version of cardano-api that fixes this.
 newtype SystemStart = SystemStart { unSystemStart :: UTCTime }
+  deriving (Show)
 
 makeTransactionBodyAutoBalance
   :: forall era mode

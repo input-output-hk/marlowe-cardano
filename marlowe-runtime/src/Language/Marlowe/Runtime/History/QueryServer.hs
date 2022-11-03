@@ -8,32 +8,35 @@
 module Language.Marlowe.Runtime.History.QueryServer
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
+import Colog (logError)
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException, catch)
+import Control.Exception (SomeException)
+import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (bimap)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (listToMaybe)
 import Data.Set (Set)
+import qualified Data.Text as T
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
+import Language.Marlowe.Runtime.Logging.Colog.LogIO
+  (ConcurrentlyLogIO(ConcurrentlyLogIO), LogIO, catchLogIO, runConcurrentlyLogIO)
 import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
 import Numeric.Natural (Natural)
-import System.IO (hPutStrLn, stderr)
 
 newtype RunQueryServer m = RunQueryServer (forall a. RuntimeHistoryQueryServer m a -> m a)
 
 data HistoryQueryServerDependencies = HistoryQueryServerDependencies
-  { acceptRunQueryServer :: IO (RunQueryServer IO)
+  { acceptRunQueryServer :: LogIO (RunQueryServer LogIO)
   , followerStatuses     :: STM (Map ContractId FollowerStatus)
   , followerPageSize     :: Natural
   }
 
 newtype HistoryQueryServer = HistoryQueryServer
-  { runHistoryQueryServer :: IO ()
+  { runHistoryQueryServer :: LogIO ()
   }
 
 mkHistoryQueryServer :: HistoryQueryServerDependencies -> STM HistoryQueryServer
@@ -41,22 +44,22 @@ mkHistoryQueryServer HistoryQueryServerDependencies{..} = do
   let
     runHistoryQueryServer = do
       runQueryServer <- acceptRunQueryServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runHistoryQueryServer
+      Worker{..} <- liftIO $ atomically $ mkWorker WorkerDependencies {..}
+      runConcurrentlyLogIO $
+        ConcurrentlyLogIO (runWorker `catchLogIO` catchWorker) *> ConcurrentlyLogIO runHistoryQueryServer
   pure $ HistoryQueryServer { runHistoryQueryServer }
 
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show
+catchWorker :: SomeException -> LogIO ()
+catchWorker = logError . T.pack . mappend "Query worker crashed with exception: " . show
 
 data WorkerDependencies = WorkerDependencies
-  { runQueryServer   :: RunQueryServer IO
+  { runQueryServer   :: RunQueryServer LogIO
   , followerStatuses :: STM (Map ContractId FollowerStatus)
   , followerPageSize :: Natural
   }
 
 newtype Worker = Worker
-  { runWorker :: IO ()
+  { runWorker :: LogIO ()
   }
 
 mkWorker :: WorkerDependencies -> STM Worker
@@ -67,7 +70,7 @@ mkWorker WorkerDependencies{..} =
     pure Worker { runWorker = run server }
 
   where
-    server :: RuntimeHistoryQueryServer IO ()
+    server :: RuntimeHistoryQueryServer LogIO ()
     server = queryServer' querySchema \case
       GetFollowedContracts  -> getFollowedContractsServer followerPageSize followerStatuses
       GetStatuses contractIds -> getStatusesServer contractIds followerStatuses
@@ -75,14 +78,14 @@ mkWorker WorkerDependencies{..} =
 getFollowedContractsServer
   :: Natural
   -> STM (Map ContractId FollowerStatus)
-  -> IO (ServerStNext HistoryQuery 'CanReject ContractId Void (Map ContractId FollowerStatus) IO ())
+  -> LogIO (ServerStNext HistoryQuery 'CanReject ContractId Void (Map ContractId FollowerStatus) LogIO ())
 getFollowedContractsServer followerPageSize followerStatuses = do
-  followers <- atomically followerStatuses
+  followers <- liftIO $ atomically followerStatuses
   pure $ next followers
   where
   next
     :: Map ContractId FollowerStatus
-    -> ServerStNext HistoryQuery k ContractId Void (Map ContractId FollowerStatus) IO ()
+    -> ServerStNext HistoryQuery k ContractId Void (Map ContractId FollowerStatus) LogIO ()
   next followers =
     let
       (results, remaining) = bimap (Map.fromDistinctAscList . fmap snd) (fmap snd)
@@ -102,9 +105,9 @@ getFollowedContractsServer followerPageSize followerStatuses = do
 getStatusesServer
   :: Set ContractId
   -> STM (Map ContractId FollowerStatus)
-  -> IO (ServerStNext HistoryQuery 'CanReject Void Void (Map ContractId FollowerStatus) IO ())
+  -> LogIO (ServerStNext HistoryQuery 'CanReject Void Void (Map ContractId FollowerStatus) LogIO ())
 getStatusesServer contractIds followerStatuses = do
-  followers <- atomically followerStatuses
+  followers <- liftIO $ atomically followerStatuses
   pure $ SendMsgNextPage (Map.restrictKeys followers contractIds) Nothing ServerStPage
     { recvMsgRequestDone = pure ()
     , recvMsgRequestNext = absurd

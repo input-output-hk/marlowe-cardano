@@ -3,19 +3,22 @@
 module Language.Marlowe.Runtime.History.FollowerSupervisor
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
+import Colog (logDebug)
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard, mfilter, when, (<=<))
+import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (sequenceA_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.Text as T
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, SlotConfig)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.History.Api (FollowerStatus(..))
 import Language.Marlowe.Runtime.History.Follower
   (Follower(..), FollowerDependencies(..), SomeContractChanges, mkFollower)
 import qualified Language.Marlowe.Runtime.History.Follower as Follower
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (ConcurrentlyLogIO(ConcurrentlyLogIO), LogIO, runConcurrentlyLogIO)
 import Witherable (Witherable(wither))
 
 data FollowerActivation
@@ -23,7 +26,7 @@ data FollowerActivation
   | Activate
 
 data FollowerSupervisorDependencies = FollowerSupervisorDependencies
-  { connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+  { connectToChainSeek :: forall a. RuntimeChainSeekClient LogIO a -> LogIO a
   , slotConfig         :: SlotConfig
   , securityParameter  :: Int
   }
@@ -38,7 +41,7 @@ data FollowerSupervisor = FollowerSupervisor
   , stopFollowingContract :: ContractId -> STM Bool
   , followerStatuses      :: STM (Map ContractId FollowerStatus)
   , changes               :: STM (Map ContractId UpdateContract)
-  , runFollowerSupervisor :: IO ()
+  , runFollowerSupervisor :: LogIO ()
   }
 
 mkFollowerSupervisor :: FollowerSupervisorDependencies -> STM FollowerSupervisor
@@ -122,11 +125,11 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
     runFollowerWithCleanup contractId follower = do
       result <- runFollower follower
       case result of
-        Left _ -> atomically $ modifyTVar removalsVar $ Set.insert contractId
+        Left _ -> liftIO $ atomically $ modifyTVar removalsVar $ Set.insert contractId
         _ -> pure ()
 
     runFollowerSupervisor = do
-      newFollowers <- atomically do
+      newFollowers <- liftIO $ atomically do
         activations <- awaitActivations
         flip wither activations \(contractId, activation) -> do
           followers <- readTVar followersVar
@@ -149,8 +152,9 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
               when (Set.member contractId seen) do
                 modifyTVar removalsVar $ Set.insert contractId
               pure Nothing
-      runConcurrently
+      logDebug . T.pack $ "Starting new " <>  show (length newFollowers) <> " follower(s) "
+      runConcurrentlyLogIO
         $ sequenceA_
-        $ Concurrently <$> (runFollowerSupervisor : (uncurry runFollowerWithCleanup <$> newFollowers))
+        $ ConcurrentlyLogIO <$> (runFollowerSupervisor : (uncurry runFollowerWithCleanup <$> newFollowers))
 
   pure FollowerSupervisor {..}

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Language.Marlowe.Runtime.Logging.Colog
   where
 
@@ -11,15 +12,22 @@ import Colog
   , fmtMessage
   , formatWith
   , logTextStderr
+  , withLog
   )
 import Control.Exception (Exception(displayException))
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT(runReaderT), runReaderT)
+import Data.Functor.Contravariant (contramap)
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Stack (HasCallStack, callStack, withFrozenCallStack)
 
-type LoggerT' = LoggerT Message
+prefixLogger :: Monad m => Text -> LoggerT Message m a -> LoggerT Message m a
+prefixLogger str action = do
+  let
+    prefixMsg :: Message -> Message
+    prefixMsg (Msg sev stack msg) = Msg sev stack $ str <> msg
+  withLog (contramap prefixMsg) action
 
 -- | Given the severity we log everything from that level.
 -- `Nothing` value indicates silent mode.

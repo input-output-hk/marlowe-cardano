@@ -6,7 +6,6 @@
 module Language.Marlowe.Runtime.History
   where
 
-import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM)
 import Data.Foldable (asum)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, SlotConfig)
@@ -17,24 +16,26 @@ import Language.Marlowe.Runtime.History.Store
   (HistoryQueries, HistoryStore(..), HistoryStoreDependencies(..), mkHistoryStore)
 import Language.Marlowe.Runtime.History.SyncServer
   (HistorySyncServer(..), HistorySyncServerDependencies(..), RunSyncServer, mkHistorySyncServer)
+import Language.Marlowe.Runtime.Logging.Colog (prefixLogger)
+import Language.Marlowe.Runtime.Logging.Colog.LogIO (ConcurrentlyLogIO(ConcurrentlyLogIO), LogIO, runConcurrentlyLogIO)
 import Numeric.Natural (Natural)
 
-data HistoryDependencies = HistoryDependencies
-  { acceptRunJobServer   :: IO (RunJobServer IO)
-  , acceptRunQueryServer :: IO (RunQueryServer IO)
-  , connectToChainSeek   :: forall a. RuntimeChainSeekClient IO a -> IO a
+data HistoryDependencies m = HistoryDependencies
+  { acceptRunJobServer   :: m (RunJobServer m)
+  , acceptRunQueryServer :: m (RunQueryServer m)
+  , connectToChainSeek   :: forall a. RuntimeChainSeekClient m a -> m a
   , followerPageSize     :: Natural
   , slotConfig           :: SlotConfig
   , securityParameter    :: Int
-  , acceptRunSyncServer  :: IO (RunSyncServer IO)
-  , historyQueries       :: HistoryQueries IO
+  , acceptRunSyncServer  :: m (RunSyncServer m)
+  , historyQueries       :: HistoryQueries m
   }
 
-newtype History = History
-  { runHistory :: IO ()
+newtype History m = History
+  { runHistory :: m ()
   }
 
-mkHistory :: HistoryDependencies -> STM History
+mkHistory :: HistoryDependencies LogIO -> STM (History LogIO)
 mkHistory HistoryDependencies{..} = do
   FollowerSupervisor{..} <- mkFollowerSupervisor FollowerSupervisorDependencies{..}
   HistoryJobServer{..} <- mkHistoryJobServer HistoryJobServerDependencies{..}
@@ -42,11 +43,11 @@ mkHistory HistoryDependencies{..} = do
   HistoryStore{..} <- mkHistoryStore HistoryStoreDependencies{..}
   HistorySyncServer{..} <- mkHistorySyncServer HistorySyncServerDependencies{..}
   pure History
-    { runHistory = runConcurrently $ asum $ Concurrently <$>
-        [ runFollowerSupervisor
-        , runHistoryJobServer
-        , runHistoryQueryServer
-        , runHistoryStore
-        , runHistorySyncServer
+    { runHistory = runConcurrentlyLogIO $ asum $ ConcurrentlyLogIO <$>
+        [ prefixLogger "[Follower Supervisor] " runFollowerSupervisor
+        , prefixLogger "[Job Server] " runHistoryJobServer
+        , prefixLogger "[Query Server] " runHistoryQueryServer
+        , prefixLogger "[Store] " runHistoryStore
+        , prefixLogger "[Sync] " runHistorySyncServer
         ]
     }

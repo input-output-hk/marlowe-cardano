@@ -11,14 +11,22 @@ import qualified Control.Concurrent.Async as A
 import Control.Exception (Exception, bracket, bracketOnError, catch, finally, throwIO)
 import Control.Exception.Base (SomeException)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ask)
 import Data.Text (Text)
 import GHC.Base (Alternative((<|>)))
 import Language.Marlowe.Runtime.Logging.Colog (unliftLogAction)
 import System.Exit (exitFailure)
 
--- | Bunch of wrappers around IO and Async for `LoggerT Message IO`.
--- TODO: We should be able to generalize this to an API over newtyped ReaderT.
+-- TODO I:
+-- We want to abstract away `Message` so we can define proper types for (application specific) logs and pass them as values. At the end we want to
+-- interpret on the log consumer side (turn them into `String` etc.).
+-- Some details like `CallStack` and probably suggested `Severity` can be a part of default context (so we probably gonna end up with a tuple like):
+-- `data Msg trace = Msg CallStack Severity trace`.
+-- In other words we want to replace `String` with values.
+--
+-- TODO II:
+-- We want to abstract away `LoggerT` here to any `ReaderT ctx` + `HasLog ctx` combination.
 type LogIO = LoggerT Message IO
 type LogIOAction = LogAction LogIO Message
 
@@ -28,6 +36,12 @@ runLogIO logAction = usingLoggerT (unliftLogAction logAction)
 askLogIOAction :: LogIO LogIOAction
 askLogIOAction = LoggerT ask
 
+-- TODO:
+-- When we migrate to more semantic representation of loger like `LogIO msg ()`
+-- this and other functions should allow us to enhance the logging context like:
+-- ```
+-- forkLogIO :: Log msg' IO -> (msg' -> msg) -> LogIO msg ThreadId
+-- ```
 forkLogIO :: LogIO () -> LogIO ThreadId
 forkLogIO action = do
   logAction <- askLogIOAction
@@ -53,7 +67,7 @@ newtype ConcurrentlyLogIO a = ConcurrentlyLogIO { runConcurrentlyLogIO :: LogIO 
   deriving newtype (Functor, Applicative)
 
 instance Alternative ConcurrentlyLogIO where
-  empty = ConcurrentlyLogIO (LoggerT empty)
+  empty = ConcurrentlyLogIO $ lift (runConcurrently empty)
   ConcurrentlyLogIO as <|> ConcurrentlyLogIO bs =
     ConcurrentlyLogIO $ do
       logAction <- askLogIOAction
@@ -64,7 +78,7 @@ catchLogIO action handler = do
   logAction <- askLogIOAction
   liftIO $ runLogIO logAction action `catch` (runLogIO logAction <$> handler)
 
-dieLogIO :: Text -> LogIO ()
+dieLogIO :: forall a. Text -> LogIO a
 dieLogIO msg = do
   logError msg
   liftIO exitFailure

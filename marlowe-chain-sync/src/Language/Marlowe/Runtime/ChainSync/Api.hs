@@ -151,12 +151,14 @@ import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
+import Language.Haskell.TH (appT, conT)
 import Language.Marlowe.Runtime.SystemStart (SystemStart(..))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.Job.Types as Job
+import Network.Protocol.ProtocolVersion.TH (mkProtocolVersion)
 import qualified Network.Protocol.Query.Types as Query
 import Network.Protocol.SchemaVersion.TH (mkSchemaVersion)
 import Network.TypedProtocol.Codec (Codec)
@@ -871,6 +873,8 @@ data ChainSyncQuery delimiter err result where
 
 mkSchemaVersion "querySchema" ''ChainSyncQuery
 
+-- mkProtocolVersion "queryProtocolSchema" (appT (conT ''Query.Query) (conT ''ChainSyncQuery))
+
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
@@ -1014,6 +1018,9 @@ instance Query.IsQuery ChainSyncQuery where
 
 data ChainSyncCommand status err result where
   SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
+
+-- mkProtocolVersion "queryProtocolSchema" (appT (conT ''Job.Job) (conT ''ChainSyncCommand))
+mkProtocolVersion "queryProtocolSchema" ''ChainSyncCommand
 
 instance Job.Command ChainSyncCommand where
   data Tag ChainSyncCommand status err result where

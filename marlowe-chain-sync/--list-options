@@ -1,0 +1,7 @@
+Build profile: -w ghc-8.10.7 -O1
+In order, the following will be built (use -v for more details):
+ - marlowe-chain-sync-0.0.0.0 (lib) (file src/Language/Marlowe/Runtime/ChainSync/Api.hs changed)
+ - marlowe-chain-sync-0.0.0.0 (exe:chainseekd) (configuration changed)
+Preprocessing library for marlowe-chain-sync-0.0.0.0..
+Building library for marlowe-chain-sync-0.0.0.0..
+[ 4 of 14] Compiling Language.Marlowe.Runtime.ChainSync.Api ( src/Language/Marlowe/Runtime/ChainSync/Api.hs, /home/paluh/programming/marlowe/marlowe-cardano.git/SCP-4529/dist-newstyle/build/x86_64-linux/ghc-8.10.7/marlowe-chain-sync-0.0.0.0/build/Language/Marlowe/Runtime/ChainSync/Api.o, /home/paluh/programming/marlowe/marlowe-cardano.git/SCP-4529/dist-newstyle/build/x86_64-linux/ghc-8.10.7/marlowe-chain-sync-0.0.0.0/build/Language/Marlowe/Runtime/ChainSync/Api.dyn_o )
