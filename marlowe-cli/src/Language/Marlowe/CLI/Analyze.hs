@@ -180,7 +180,7 @@ analyzeImpl :: forall m lang era
 analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
   do
     let
-      checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost
+      checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost || transactionSize
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations mtValidator mtRoleValidator mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
@@ -234,6 +234,8 @@ checkPreconditions ContractInstance{ciRolesCurrency, ciState=State{..}} =
       [
         "Invalid roles currency"        .= invalidCurrency ciRolesCurrency
       , "Invalid account tokens"        .= filter invalidToken (snd <$> AM.keys accounts)
+      , "Invalid account parties"       .= filter invalidParty (fst <$> AM.keys accounts)
+      , "Invalid choice parties"        .= filter invalidChoiceParty (AM.keys choices)
       , "Non-positive account balances" .= nonPositiveBalances accounts
       , "Duplicate accounts"            .= duplicates accounts
       , "Duplicate choices"             .= duplicates choices
@@ -253,6 +255,18 @@ invalidToken (Token currency@P.CurrencySymbol{..} token@P.TokenName{..}) =
          && token == P.adaToken
       || P.lengthOfByteString unCurrencySymbol == 28
          && P.lengthOfByteString unTokenName <= 32
+
+
+-- | Detect an invalid party in a choice.
+invalidChoiceParty :: ChoiceId -> Bool
+invalidChoiceParty (ChoiceId _ (Role role)) = invalidRole role
+invalidChoiceParty _                        = False
+
+
+-- | Detect an invalid party.
+invalidParty :: Party -> Bool
+invalidParty (Role role) = invalidRole role
+invalidParty _           = False
 
 
 -- | Detect an invalid role name.
@@ -547,10 +561,15 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
       txInfoDCert = mempty
       txInfoWdrl = AM.empty
       txInfoValidRange = P.Interval (P.LowerBound (P.Finite $ fst txInterval) True) (P.UpperBound (P.Finite $ snd txInterval) True)
+      findSignatory :: InputContent -> [P.PubKeyHash]
+      findSignatory (IDeposit _ (Address _ (P.Address (P.PubKeyCredential pkh) _)) _ _) = pure pkh
+      findSignatory (IChoice (ChoiceId _ (Address _ (P.Address (P.PubKeyCredential pkh) _))) _) = pure pkh
+      findSignatory _ = mempty
       txInfoSignatories =
-        case creatorAddress of
-          P.Address (P.PubKeyCredential pkh) _ -> pure pkh
-          _                                    -> mempty
+        (foldMap findSignatory $ getInputContent <$> txInputs)
+          <> case creatorAddress of
+               P.Address (P.PubKeyCredential pkh) _ -> pure pkh
+               _                                    -> mempty
       txInfoRedeemers = AM.singleton scriptContextPurpose redeemer
       txInfoData = AM.fromList $ ((,) =<< P.datumHash) <$> inDatum : outDatum <> outPaymentDatums <> merkleDatums
       txInfoId = "2222222222222222222222222222222222222222222222222222222222222222"
@@ -1016,6 +1035,7 @@ findPaths ContractInstance{..} =
     unless (M.null ciContinuations)
       . liftIO $ hPutStrLn stderr "Demerkleizing contract . . ."
     contract <- runReaderT (deepDemerkleize ciContract) ciContinuations
+    liftIO $ hPutStrLn stderr "Note that path-based analysis ignore the initial state of the contract and instead start with an empty state."
     liftIO $ hPutStrLn stderr "Starting search for execution paths . . ."
     paths <- liftCliIO $ getAllInputs contract
     liftIO $ hPutStrLn stderr $ " . . . found " <> (show $ length paths) <> " execution paths."
