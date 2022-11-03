@@ -20,10 +20,9 @@ import System.Exit (exitFailure)
 
 -- TODO I:
 -- We want to abstract away `Message` so we can define proper types for (application specific) logs and pass them as values. At the end we want to
--- interpret on the log consumer side (turn them into `String` etc.).
--- Some details like `CallStack` and probably suggested `Severity` can be a part of default context (so we probably gonna end up with a tuple like):
+-- interpret them on the log consumer side - turn them into `String`, `JSON` etc.).
+-- Some details like `CallStack` and even `Severity` can be a part of default context beside the semantic log value part (I call it a `trace` below):
 -- `data Msg trace = Msg CallStack Severity trace`.
--- In other words we want to replace `String` with values.
 --
 -- TODO II:
 -- We want to abstract away `LoggerT` here to any `ReaderT ctx` + `HasLog ctx` combination.
