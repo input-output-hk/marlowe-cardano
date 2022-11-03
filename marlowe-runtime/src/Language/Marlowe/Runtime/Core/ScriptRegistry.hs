@@ -90,7 +90,7 @@ currentV1Scripts = MarloweScripts
         )
       , ( previewNetworkId
         , ReferenceScriptUtxo
-            { txOutRef = "087f21f109a997193421a81886ea8c6397d336d19e696457b9c5c7aefdc31873#1"
+            { txOutRef = "929b418dd69c1b9531fdd55039e8f12aa9d6f11a27b600a8e0d56c7e9f2851a0#1"
             , txOut = Chain.TransactionOutput
                 { address = fromJust $ fromBech32 "addr_test1vrw0tuh8l95thdqr65dmpcfqnmcw0en7v7vhgegck7gzqgswa07sw"
                 , assets = Assets 54801650 mempty
@@ -128,7 +128,7 @@ currentV1Scripts = MarloweScripts
         )
       , ( previewNetworkId
         , ReferenceScriptUtxo
-            { txOutRef = "087f21f109a997193421a81886ea8c6397d336d19e696457b9c5c7aefdc31873#2"
+            { txOutRef = "929b418dd69c1b9531fdd55039e8f12aa9d6f11a27b600a8e0d56c7e9f2851a0#2"
             , txOut = Chain.TransactionOutput
                 { address = fromJust $ fromBech32 "addr_test1vpa36uuyf95kxpcleldsncedlhjru6vdmh2vnpkdrsz4u6cll9zas"
                 , assets = Assets 12434350 mempty
