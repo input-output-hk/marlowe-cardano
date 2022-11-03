@@ -17,7 +17,7 @@ import Cardano.Api
   , AddressTypeInEra(..)
   , BabbageEra
   , CardanoEra(BabbageEra)
-  , NetworkId
+  , NetworkId(..)
   , PaymentCredential(..)
   , ShelleyBasedEra(..)
   , StakeAddressReference(..)
@@ -37,6 +37,7 @@ import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Exception (SomeException, catch)
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
@@ -51,7 +52,7 @@ import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, Credential(..), PolicyId, SlotConfig, TokenName, TransactionMetadata, TxId(..))
+  (BlockHeader, ChainSyncQuery(..), Credential(..), PolicyId, SlotConfig, TokenName, TransactionMetadata, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (Contract, ContractId(..), MarloweVersion(MarloweV1), Payout(Payout, datum), Redeemer, withMarloweVersion)
@@ -71,11 +72,13 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints
   (buildApplyInputsConstraints, buildCreateConstraints, buildWithdrawConstraints)
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(..), SolveConstraints)
+import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query
   (LoadMarloweContext, LoadWalletContext, lookupMarloweScriptUtxo, lookupPayoutScriptUtxo)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
+import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
 
 newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
@@ -83,12 +86,10 @@ newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer Marlo
 data TransactionServerDependencies = TransactionServerDependencies
   { acceptRunTransactionServer :: IO (RunTransactionServer WorkerM)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
-  , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
   , logAction :: AppLogAction
-  , slotConfig :: SlotConfig
-  , networkId :: NetworkId
+  , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   }
 
 newtype TransactionServer = TransactionServer
@@ -116,12 +117,10 @@ data WorkerDependencies = WorkerDependencies
   , getSubmitJob :: TxId -> STM (Maybe SubmitJob)
   , trackSubmitJob :: TxId -> SubmitJob -> STM ()
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
-  , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
   , logAction :: AppLogAction
-  , slotConfig :: SlotConfig
-  , networkId :: NetworkId
+  , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   }
 
 type AppLogAction = Colog.LogAction IO Colog.Message
@@ -145,42 +144,57 @@ mkWorker WorkerDependencies{..} =
 
     serverInit :: ServerStInit MarloweTxCommand WorkerM ()
     serverInit = ServerStInit
-      { recvMsgExec = \case
-          Create mStakeCredential version addresses roles metadata minAda contract ->
-            execCreate
-              solveConstraints
-              loadWalletContext
-              networkId
-              mStakeCredential
-              version
-              addresses
-              roles
-              metadata
-              minAda
-              contract
-          ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
-            withMarloweVersion version $ execApplyInputs
-              slotConfig
-              solveConstraints
-              loadWalletContext
-              loadMarloweContext
-              version
-              addresses
-              contractId
-              invalidBefore
-              invalidHereafter
-              redeemer
-          Withdraw version addresses contractId roleToken ->
-            execWithdraw
-              solveConstraints
-              loadWalletContext
-              loadMarloweContext
-              version
-              addresses
-              contractId
-              roleToken
-          Submit tx ->
-            execSubmit mkSubmitJob trackSubmitJob tx
+      { recvMsgExec = \command -> do
+          systemStart <- liftIO $ queryChainSync GetSystemStart
+          eraHistory <- liftIO $ queryChainSync GetEraHistory
+          protocolParameters <- liftIO $ queryChainSync GetProtocolParameters
+          slotConfig <- liftIO $ queryChainSync GetSlotConfig
+          networkId <- liftIO $ queryChainSync GetNetworkId
+          liftIO $ when (networkId == Mainnet) do
+            die "Mainnet support is currently disabled."
+          let
+            solveConstraints :: Constraints.SolveConstraints
+            solveConstraints =
+              Constraints.solveConstraints
+                systemStart
+                eraHistory
+                protocolParameters
+          case command of
+            Create mStakeCredential version addresses roles metadata minAda contract ->
+              execCreate
+                solveConstraints
+                loadWalletContext
+                networkId
+                mStakeCredential
+                version
+                addresses
+                roles
+                metadata
+                minAda
+                contract
+            ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
+              withMarloweVersion version $ execApplyInputs
+                slotConfig
+                solveConstraints
+                loadWalletContext
+                loadMarloweContext
+                version
+                addresses
+                contractId
+                invalidBefore
+                invalidHereafter
+                redeemer
+            Withdraw version addresses contractId roleToken ->
+              execWithdraw
+                solveConstraints
+                loadWalletContext
+                loadMarloweContext
+                version
+                addresses
+                contractId
+                roleToken
+            Submit tx ->
+              execSubmit mkSubmitJob trackSubmitJob tx
       , recvMsgAttach = \case
           jobId@(JobIdSubmit txId) ->
             attachSubmit jobId $ getSubmitJob txId
@@ -372,4 +386,3 @@ execExceptT
   => ExceptT e m a
   -> m (ServerStCmd cmd status e a n ())
 execExceptT = fmap (either (flip SendMsgFail ()) (flip SendMsgSucceed ())) . runExceptT
-

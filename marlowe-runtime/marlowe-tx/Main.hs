@@ -3,11 +3,9 @@
 module Main
   where
 
-import Cardano.Api (NetworkId(Mainnet))
 import qualified Colog
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
-import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString.Lazy as LB
 import Data.Either (fromRight)
@@ -26,8 +24,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , runtimeChainSeekCodec
   )
 import Language.Marlowe.Runtime.Logging (mkLogger)
-import Language.Marlowe.Runtime.Transaction.Constraints (SolveConstraints)
-import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server
@@ -79,7 +75,6 @@ import Options.Applicative
   , strOption
   , value
   )
-import System.Exit (die)
 
 main :: IO ()
 main = run =<< getOptions
@@ -105,9 +100,9 @@ run Options{..} = withSocketsDo do
           (conn, _ :: SockAddr) <- accept socket
 
           let
-            chann :: Channel WorkerM LB.ByteString
-            chann = hoistChannel liftIO $ socketAsChannel conn
-            driver = mkDriver (liftIO . throwIO) codecJob chann
+            chan :: Channel WorkerM LB.ByteString
+            chan = hoistChannel liftIO $ socketAsChannel conn
+            driver = mkDriver (liftIO . throwIO) codecJob chan
           pure $ RunTransactionServer \server -> do
             let peer = jobServerPeer server
             fst <$> runPeerWithDriver driver peer (startDState driver)
@@ -137,23 +132,11 @@ run Options{..} = withSocketsDo do
             fst <$> runPeerWithDriver driver peer (startDState driver)
 
       let mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
-      systemStart <- queryChainSync GetSystemStart
-      eraHistory <- queryChainSync GetEraHistory
-      protocolParameters <- queryChainSync GetProtocolParameters
-      slotConfig <- queryChainSync GetSlotConfig
-      networkId <- queryChainSync GetNetworkId
-      when (networkId == Mainnet) do
-        die "Mainnet support is currently disabled."
-      let
-        solveConstraints :: SolveConstraints
-        solveConstraints = Constraints.solveConstraints
-          systemStart
-          eraHistory
-          protocolParameters
-
       let
         loadMarloweContext :: LoadMarloweContext
-        loadMarloweContext = Query.loadMarloweContext networkId runHistorySyncClient
+        loadMarloweContext version contractId = do
+          networkId <- queryChainSync GetNetworkId
+          Query.loadMarloweContext networkId runHistorySyncClient version contractId
 
         loadWalletContext :: LoadWalletContext
         loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
