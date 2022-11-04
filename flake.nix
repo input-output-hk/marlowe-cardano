@@ -55,9 +55,18 @@
     tullia = {
       url = "github:input-output-hk/tullia";
     };
+    std = {
+      url = "github:divnix/std";
+    };
+    data-merge = {
+      url = "github:divnix/data-merge";
+    };
+    bitte-cells = {
+      url = "github:input-output-hk/bitte-cells";
+    };
   };
 
-  outputs = { self, flake-utils, tullia, ... }@inputs:
+  outputs = { self, flake-utils, std, tullia, ... }@inputs:
     let
       systems = [ "x86_64-linux" "x86_64-darwin" ];
     in
@@ -162,6 +171,36 @@
           packages = packagesProf;
         };
 
+        # 4 Layers of Packaging
+        operables = import ./nix/operables.nix {
+          inputs = std.deSystemize system inputs;
+        };
+        oci-images = import ./nix/oci-images.nix {
+          inputs = std.deSystemize system inputs;
+        };
+        nomadChart = import ./nix/nomadChart.nix {
+          inputs = std.deSystemize system inputs;
+        };
+        nomadEnvs = let
+          envsData = import ./nix/nomadEnvs.nix {
+            inputs = std.deSystemize system inputs;
+          };
+          mkNomadJobs = let
+            pkgs = inputs.nixpkgs.legacyPackages.${system};
+          in
+            builtins.mapAttrs (
+              n: job:
+              pkgs.linkFarm "job.${n}" [
+                {
+                  name = "job";
+                  path = pkgs.writeText "${n}.nomad.json" (builtins.toJSON job);
+                }
+              ]
+            );
+        in {
+          preprod = mkNomadJobs envsData.preprod;
+        };
+
         # Export ciJobs for tullia to parse
         ciJobs = self.hydraJobs {
           supportedSystems = [ system ];
@@ -196,4 +235,17 @@
             systems);
         };
     };
+
+  nixConfig = {
+    extra-substituters = [
+      # TODO: spongix
+      "https://cache.iog.io"
+    ];
+    extra-trusted-public-keys = [
+      "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+    ];
+    # post-build-hook = "./upload-to-cache.sh";
+    allow-import-from-derivation = "true";
+  };
+
 }
