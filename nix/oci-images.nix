@@ -1,0 +1,17 @@
+{ inputs }:
+let
+  inherit (inputs) std self;
+  inherit (self) operables;
+
+  mkImage = name: std.lib.ops.mkStandardOCI {
+    name = "registry.ci.iog.io/dapps-world-${name}";
+    operable = operables.${name};
+    debug = true;
+  };
+
+in {
+  chainseekd = mkImage "chainseekd";
+  marlowe-history = mkImage "marlowe-history";
+  marlowe-discovery = mkImage "marlowe-discovery";
+  marlowe-tx = mkImage "marlowe-tx";
+}
