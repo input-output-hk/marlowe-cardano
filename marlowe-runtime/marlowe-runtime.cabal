@@ -118,6 +118,7 @@ library
     , marlowe-protocols
     , newtype-generics
     , one-line-aeson-text
+    , ouroboros-consensus
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx

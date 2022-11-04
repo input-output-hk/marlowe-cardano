@@ -17,6 +17,8 @@ import Cardano.Api
   , AddressTypeInEra(..)
   , BabbageEra
   , CardanoEra(BabbageEra)
+  , CardanoMode
+  , EraHistory
   , NetworkId(..)
   , PaymentCredential(..)
   , ShelleyBasedEra(..)
@@ -52,7 +54,7 @@ import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, ChainSyncQuery(..), Credential(..), PolicyId, SlotConfig, TokenName, TransactionMetadata, TxId(..))
+  (BlockHeader, ChainSyncQuery(..), Credential(..), PolicyId, TokenName, TransactionMetadata, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (Contract, ContractId(..), MarloweVersion(MarloweV1), Payout(Payout, datum), Redeemer, withMarloweVersion)
@@ -78,8 +80,10 @@ import Language.Marlowe.Runtime.Transaction.Query
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
+import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
+import Unsafe.Coerce (unsafeCoerce)
 
 newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
 
@@ -148,7 +152,6 @@ mkWorker WorkerDependencies{..} =
           systemStart <- liftIO $ queryChainSync GetSystemStart
           eraHistory <- liftIO $ queryChainSync GetEraHistory
           protocolParameters <- liftIO $ queryChainSync GetProtocolParameters
-          slotConfig <- liftIO $ queryChainSync GetSlotConfig
           networkId <- liftIO $ queryChainSync GetNetworkId
           liftIO $ when (networkId == Mainnet) do
             die "Mainnet support is currently disabled."
@@ -174,7 +177,8 @@ mkWorker WorkerDependencies{..} =
                 contract
             ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
               withMarloweVersion version $ execApplyInputs
-                slotConfig
+                (unsafeCoerce systemStart) -- TODO fix this when the imports are not messed up anymore
+                eraHistory
                 solveConstraints
                 loadWalletContext
                 loadMarloweContext
@@ -273,7 +277,8 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
       isToCurrentScriptAddress _ = False
 
 execApplyInputs
-  :: SlotConfig
+  :: SystemStart
+  -> EraHistory CardanoMode
   -> SolveConstraints
   -> LoadWalletContext
   -> LoadMarloweContext
@@ -285,7 +290,8 @@ execApplyInputs
   -> Redeemer v
   -> WorkerM (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra) WorkerM ())
 execApplyInputs
-  slotConfig
+  systemStart
+  eraHistory
   solveConstraints
   loadWalletContext
   loadMarloweContext
@@ -301,7 +307,8 @@ execApplyInputs
     invalidBefore' <- liftIO $ maybe getCurrentTime pure invalidBefore
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     constraints <- except $ buildApplyInputsConstraints
-        slotConfig
+        systemStart
+        eraHistory
         version
         scriptOutput'
         invalidBefore'
