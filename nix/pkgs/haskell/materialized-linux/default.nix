@@ -1045,6 +1045,11 @@
           "strict-containers".components.library.planned = lib.mkOverride 900 true;
           "call-stack".components.library.planned = lib.mkOverride 900 true;
           "unix-bytestring".components.library.planned = lib.mkOverride 900 true;
+<<<<<<< HEAD
+=======
+          "marlowe-protocols".components.tests."marlowe-protocols-test".planned = lib.mkOverride 900 true;
+          "shakespeare".components.library.planned = lib.mkOverride 900 true;
+>>>>>>> 648a5f85a ( SCP-4592 - Add tests for codecs)
           "async-timer".components.library.planned = lib.mkOverride 900 true;
           "optics-core".components.library.planned = lib.mkOverride 900 true;
           "hint".components.library.planned = lib.mkOverride 900 true;

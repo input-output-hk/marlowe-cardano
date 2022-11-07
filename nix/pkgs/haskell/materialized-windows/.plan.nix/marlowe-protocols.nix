@@ -34,20 +34,13 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
-          (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-          (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
+          (hsPkgs."async" or (errorHandler.buildDepError "async"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-          (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
-          (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
           (hsPkgs."hashable" or (errorHandler.buildDepError "hashable"))
-          (hsPkgs."lifted-base" or (errorHandler.buildDepError "lifted-base"))
-          (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
-          (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
-          (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
           (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
           ];
         buildable = true;

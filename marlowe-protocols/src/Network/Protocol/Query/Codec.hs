@@ -39,7 +39,9 @@ codecQuery = binaryCodec putMsg getMsg
           putResult tag results
           case delimiter of
             Nothing -> putWord8 0x01
-            Just d  -> putDelimiter tag d
+            Just d  -> do
+              putWord8 0x02
+              putDelimiter tag d
       ClientAgency (TokPage tag) -> \case
         MsgRequestNext delimiter -> do
           putWord8 0x04
