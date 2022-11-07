@@ -166,16 +166,16 @@ The Marlowe Runtime client for AWS Lambda is documented in a separate repository
 
 ### Marlowe Language and Semantics
 
--   [Executable specification in Isabelle](https://github.com/input-output-hk/marlowe/isabelle/)
--   [Marlowe Specification, Version 3](../marlowe/specification/marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf)
+-   [Executable specification in Isabelle](https://github.com/input-output-hk/marlowe/tree/master/isabelle)
+-   [Marlowe Specification, Version 3](../../marlowe/specification/marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf)
 
 
 ### Marlowe Implementation on Cardano
 
 -   [Marlowe-Cardano specification](../../marlowe/specification/marlowe-cardano-specification.md)
 -   [Marlowe-Cardano github repository](https://github.com/input-output-hk/marlowe-cardano/)
--   [Test report](../marlowe/test/test-report.md)
--   [Testing framework](../marlowe/test/)
+-   [Test report](../../marlowe/test/test-report.md)
+-   [Testing framework](../../marlowe/test/)
 
 
 ### Testing tools:
@@ -183,4 +183,4 @@ The Marlowe Runtime client for AWS Lambda is documented in a separate repository
 -   [Marlowe CLI](../../marlowe-cli/ReadMe.md)
 -   [Scripted on-chain tests](../../marlowe-cli/run-nonpab-tests.sh)
 -   [DSL-based off- and on-chain tests](../../marlowe-cli/test/non-pab)
--   [Debugging cookbook](../debugging-cookbook.md)
+-   [Debugging cookbook](../../marlowe/debugging-cookbook.md)
