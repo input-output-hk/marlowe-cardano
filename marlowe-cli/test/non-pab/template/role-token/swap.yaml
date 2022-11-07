@@ -104,21 +104,29 @@ stScriptOperations:
   - tag: AutoRun
     soContractNickname: Swap
 
+  - tag: Withdraw
+    soContractNickname: Swap
+    soWalletNickname: aParty
+
+  - tag: Withdraw
+    soContractNickname: Swap
+    soWalletNickname: bParty
+
   - tag: CheckBalance
     soWalletNickname: aParty
     soBalance:
       - [Swap, aParty, 1]
-      # - [aPartyCurrency, Globe, 300]
       - [bPartyCurrency, Swan, 500]
       - [Ada, 100]
+      - [Ada, 1.193870]
 
   - tag: CheckBalance
     soWalletNickname: bParty
     soBalance:
       - [Swap, bParty, 1]
-      # - [aPartyCurrency, Globe, 300]
-      - [bPartyCurrency, Swan, 500]
+      - [aPartyCurrency, Globe, 300]
       - [Ada, 100]
+      - [Ada, 1.193870]
 
   - tag: BurnAll
     soCurrencyNickname: aPartyCurrency
