@@ -50,6 +50,7 @@
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
           (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
+          (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
