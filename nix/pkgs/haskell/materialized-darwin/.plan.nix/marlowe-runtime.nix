@@ -137,18 +137,15 @@
           };
         };
       exes = {
-        "marlowe-server" = {
+        "cip30-demo" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
-            (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
-            (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
-            (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
+            (hsPkgs."yesod" or (errorHandler.buildDepError "yesod"))
+            (hsPkgs."shakespeare" or (errorHandler.buildDepError "shakespeare"))
             ];
           buildable = true;
           modules = [ "Paths_marlowe_runtime" ];
-          hsSourceDirs = [ "web-server" ];
+          hsSourceDirs = [ "cip30-demo" ];
           mainPath = [
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
