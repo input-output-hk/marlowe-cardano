@@ -14,7 +14,6 @@ import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.Protocol.Job.Types
 import Network.TypedProtocol.Codec
-import Unsafe.Coerce (unsafeCoerce)
 
 codecJob
   :: forall cmd m
@@ -38,16 +37,16 @@ codecJob = binaryCodec putMsg getMsg
       ServerAgency (TokCmd tag) -> \case
         MsgFail err -> do
           putWord8 0x03
-          putTag (coerceTag tag)
-          putErr (coerceTag tag) err
+          putTag tag
+          putErr tag err
         MsgSucceed result -> do
           putWord8 0x04
-          putTag (coerceTag tag)
-          putResult (coerceTag tag) result
+          putTag tag
+          putResult tag result
         MsgAwait status jobId -> do
           putWord8 0x05
-          putTag (coerceTag tag)
-          putStatus (coerceTag tag) status
+          putTag tag
+          putStatus tag status
           putJobId jobId
       ClientAgency (TokAwait _) -> \case
         MsgPoll   -> putWord8 0x06
@@ -73,21 +72,21 @@ codecJob = binaryCodec putMsg getMsg
         0x03 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
-            case tagEq (coerceTag ctag) ctag' of
+            case tagEq ctag ctag' of
               Nothing                 -> fail "decoded command tag does not match expected command tag"
               Just (Refl, Refl, Refl) -> SomeMessage . MsgFail <$> getErr ctag'
           _ -> fail "Invalid protocol state for MsgFail"
         0x04 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
-            case tagEq (coerceTag ctag) ctag' of
+            case tagEq ctag ctag' of
               Nothing                 -> fail "decoded command tag does not match expected command tag"
               Just (Refl, Refl, Refl) -> SomeMessage . MsgSucceed <$> getResult ctag'
           _ -> fail "Invalid protocol state for MsgSucceed"
         0x05 -> case tok of
           ServerAgency (TokCmd ctag) -> do
             SomeTag ctag' <- getTag
-            case tagEq (coerceTag ctag) ctag' of
+            case tagEq ctag ctag' of
               Nothing                 -> fail "decoded command tag does not match expected command tag"
               Just (Refl, Refl, Refl) -> SomeMessage <$> (MsgAwait <$> getStatus ctag' <*> getJobId ctag')
           _ -> fail "Invalid protocol state for MsgAwait"
@@ -105,9 +104,3 @@ codecJob = binaryCodec putMsg getMsg
           _                          -> fail "Invalid protocol state for MsgAttachFailed"
         _ -> fail $ "Invalid msg tag " <> show tag
 
-    -- Unfortunately, the poly-kinded cmd parameter doesn't play nicely with
-    -- the `PeerHasAgency` type and it gets confused, thinking that cmd1
-    -- and 'cmd' are unrelated types. So we have to coerce them (they will
-    -- absolutely be the same type constructor though).
-    coerceTag :: forall cmd1 status err result. Tag cmd1 status err result -> Tag cmd status err result
-    coerceTag = unsafeCoerce

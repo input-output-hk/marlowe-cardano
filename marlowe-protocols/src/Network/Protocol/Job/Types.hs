@@ -130,10 +130,10 @@ instance Protocol (Job cmd) where
 
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
-    TokAwait :: Tag cmd status err result -> ClientHasAgency ('StAwait status err result)
+    TokAwait :: Tag cmd status err result -> ClientHasAgency ('StAwait status err result :: Job cmd)
 
   data ServerHasAgency st where
-    TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result)
+    TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result :: Job cmd)
     TokAttach :: Tag cmd status err result -> ServerHasAgency ('StAttach status err result)
 
   data NobodyHasAgency st where
