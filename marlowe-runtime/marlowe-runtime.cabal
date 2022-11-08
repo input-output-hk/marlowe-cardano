@@ -162,6 +162,32 @@ library config
     , text
     , split
 
+library web
+  import: lang
+  hs-source-dirs: web
+  exposed-modules:
+    Language.Marlowe.Runtime.Web
+  other-modules:
+    Language.Marlowe.Runtime.Web.API
+    Language.Marlowe.Runtime.Web.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , base16
+    , bytestring
+    , containers
+    , lens
+    , marlowe
+    , marlowe-runtime
+    , openapi3
+    , servant
+    , servant-pagination
+    , servant-server
+    , servant-openapi3
+    , text
+    , wai
+    , warp
+
 executable cip30-demo
   import: lang
   hs-source-dirs: cip30-demo
