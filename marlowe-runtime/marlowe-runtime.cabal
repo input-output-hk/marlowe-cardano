@@ -161,9 +161,9 @@ library config
     , text
     , split
 
-executable marlowe-server
+executable cip30-demo
   import: lang
-  hs-source-dirs: web-server
+  hs-source-dirs: cip30-demo
   main-is: Main.hs
   other-modules:
     Paths_marlowe_runtime
@@ -171,11 +171,8 @@ executable marlowe-server
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
-    , aeson
-    , servant
-    , servant-server
-    , wai
-    , warp
+    , yesod
+    , shakespeare
 
 executable marlowe
   import: lang
