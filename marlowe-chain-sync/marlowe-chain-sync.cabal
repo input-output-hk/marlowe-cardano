@@ -127,7 +127,8 @@ executable chainseekd
     , cardano-crypto-wrapper
     , cardano-ledger-byron
     , hasql
-    , hasql-pool
+    -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
+    , hasql-pool < 0.6
     , marlowe-chain-sync
     , marlowe-protocols
     , network

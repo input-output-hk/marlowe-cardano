@@ -60,7 +60,6 @@ let
           # Map `crossSystem.config` to a name used in `lib.platforms`
           platformString =
             if crossSystem == null then system
-            else if crossSystem.config == "x86_64-w64-mingw32" then "x86_64-windows"
             else crossSystem.config;
           isBuildable = platformFilterGeneric pkgs platformString;
           filterCross = x:
