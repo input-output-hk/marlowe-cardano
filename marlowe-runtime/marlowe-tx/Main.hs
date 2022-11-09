@@ -101,6 +101,7 @@ run Options{..} = withSocketsDo do
     Colog.withBackgroundLogger Colog.defCapacity mainLogAction \logAction -> do
       {- Setup Dependencies -}
       let
+        eventBackend = unitEventBackend
         acceptRunTransactionServer = do
           (conn, _ :: SockAddr) <- accept socket
 

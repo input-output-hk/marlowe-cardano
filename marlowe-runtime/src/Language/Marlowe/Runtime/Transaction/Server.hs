@@ -80,13 +80,14 @@ import System.IO (hPutStrLn, stderr)
 
 newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
 
-data TransactionServerDependencies = TransactionServerDependencies
+data TransactionServerDependencies r = TransactionServerDependencies
   { acceptRunTransactionServer :: IO (RunTransactionServer WorkerM)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , solveConstraints :: SolveConstraints
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
   , logAction :: AppLogAction
+  , eventBackend :: EventBackend IO r TransactionServerSelector
   , slotConfig :: SlotConfig
   , networkId :: NetworkId
   }
@@ -95,17 +96,29 @@ newtype TransactionServer = TransactionServer
   { runTransactionServer :: IO ()
   }
 
-mkTransactionServer :: TransactionServerDependencies -> STM TransactionServer
+data TransactionServerSelector f where
+  NewConnection :: TransactionServerSelector Void
+  HandleConnection :: TransactionServerSelector Void
+
+mkTransactionServer :: TransactionServerDependencies r -> STM TransactionServer
 mkTransactionServer TransactionServerDependencies{..} = do
   submitJobsVar <- newTVar mempty
   let
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
     trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
     runTransactionServer = do
-      runServer <- acceptRunTransactionServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
+      Worker{..} <- withEvent eventBackend NewConnection \ev -> do
+        runServer <- acceptRunTransactionServer
+        atomically $ mkWorker WorkerDependencies {..}
+      let
+        runWorker' = do
+          let
+            go = withEvent eventBackend HandleConnection \ev -> do
+              Colog.usingLoggerT logAction runWorker
+          go `catch` memtpy
+
       runConcurrently $
-        Concurrently (Colog.usingLoggerT logAction runWorker `catch` catchWorker) *> Concurrently runTransactionServer
+        Concurrently runWorker' *> Concurrently runTransactionServer
   pure $ TransactionServer { runTransactionServer }
 
 catchWorker :: SomeException -> IO ()
@@ -120,6 +133,7 @@ data WorkerDependencies = WorkerDependencies
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
   , logAction :: AppLogAction
+  -- , eventBackend :: EventBackend IO () _
   , slotConfig :: SlotConfig
   , networkId :: NetworkId
   }
