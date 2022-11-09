@@ -1,5 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.Web.Types
   where
@@ -23,6 +26,7 @@ import Data.OpenApi
   , declareSchemaRef
   , description
   , enum_
+  , example
   , oneOf
   , pattern
   )
@@ -34,6 +38,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import Servant
+import Servant.Pagination (HasPagination(..))
 
 newtype Base16 = Base16 { unBase16 :: ByteString }
   deriving (Eq, Ord)
@@ -61,8 +66,8 @@ instance ToSchema Base16 where
   declareNamedSchema _ = NamedSchema Nothing <$> declareSchema (Proxy @String)
 
 newtype TxId = TxId { unTxId :: ByteString }
-  deriving (Show, Eq, Ord, Generic)
-  deriving (ToHttpApiData, ToJSON) via Base16
+  deriving (Eq, Ord, Generic)
+  deriving (Show, ToHttpApiData, ToJSON) via Base16
 
 instance FromHttpApiData TxId where
   parseUrlPiece = fmap TxId . (hasLength 32 . unBase16 <=< parseUrlPiece)
@@ -83,8 +88,8 @@ instance ToSchema TxId where
     & pattern ?~ "[a-fA-F0-9]{64}"
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
-  deriving (Show, Eq, Ord, Generic)
-  deriving (ToHttpApiData, FromHttpApiData, ToJSON, FromJSON) via Base16
+  deriving (Eq, Ord, Generic)
+  deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON) via Base16
 
 instance ToSchema PolicyId where
   declareNamedSchema _ = pure $ NamedSchema (Just "PolicyId") $ mempty
@@ -114,6 +119,7 @@ instance ToSchema TxOutRef where
     & type_ ?~ OpenApiString
     & description ?~ "A reference to a transaction output with a transaction ID and index."
     & pattern ?~ "[a-fA-F0-9]{64}:[0-9]+"
+    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7:1"
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
@@ -155,6 +161,10 @@ data ContractHeader = ContractHeader
 instance ToJSON ContractHeader
 instance ToSchema ContractHeader
 
+instance HasPagination ContractHeader "contractId" where
+  type RangeType ContractHeader "contractId" = TxOutRef
+  getFieldValue _ ContractHeader{..} = contractId
+
 newtype Metadata = Metadata { unMetadata :: Value }
   deriving (Show, Eq, Ord)
   deriving newtype (ToJSON, FromJSON)
@@ -186,8 +196,8 @@ instance ToSchema TxStatusHeader where
       & description ?~ "A header of the status of a transaction on the local node."
 
 data BlockHeader = BlockHeader
-  { slotNo :: Int
-  , blockNo :: Int
+  { slotNo :: Word64
+  , blockNo :: Word64
   , blockHeaderHash :: Base16
   } deriving (Show, Eq, Ord, Generic)
 
