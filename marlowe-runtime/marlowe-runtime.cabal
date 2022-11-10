@@ -363,6 +363,7 @@ executable marlowe-web-server
     Monad
     OpenAPI
     Paths_marlowe_runtime
+    Process.ContractHeaderIndexer
     Server
     Web
   autogen-modules:
@@ -370,20 +371,28 @@ executable marlowe-web-server
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , async
     , bytestring
     , containers
     , exceptions
     , lens
     , marlowe-runtime:web
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
     , monad-control
     , mtl
+    , network
     , openapi3
     , servant
     , servant-server
     , servant-openapi3
     , servant-pagination
     , stm
+    , stm-delay
+    , transformers
     , transformers-base
+    , typed-protocols
     , wai
     , warp
   ghc-options: -threaded
