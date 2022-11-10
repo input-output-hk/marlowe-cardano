@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraints
   , buildWithdrawConstraints
   ) where
 
+import Cardano.Api (CardanoMode, EraHistory(..))
 import qualified Cardano.Api.Byron as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as CL (Network(..))
@@ -17,7 +18,7 @@ import Control.Error (note)
 import Control.Monad ((<=<), (>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT, execWriterT, tell)
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (bimap, first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.Functor ((<&>))
@@ -25,7 +26,7 @@ import Data.List (find, sortBy)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, listToMaybe, maybeToList)
 import qualified Data.Set as Set
-import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
+import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import GHC.Base (Alternative((<|>)))
@@ -43,7 +44,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PaymentKeyHash(PaymentKeyHash)
   , PolicyId(PolicyId)
   , ScriptHash(unScriptHash)
-  , SlotConfig(slotLength, slotZeroTime)
   , TokenName(unTokenName)
   , TransactionMetadata(TransactionMetadata, unTransactionMetadata)
   , TransactionOutput(TransactionOutput)
@@ -94,6 +94,9 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   , requiresSignature
   )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
+import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime, toRelativeTime)
+import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock, wallclockToSlot)
+import qualified Ouroboros.Network.Block as O
 import qualified Plutus.V2.Ledger.Api as P
 import qualified Plutus.V2.Ledger.Api as PV2
 import qualified PlutusTx.AssocMap as AM
@@ -246,12 +249,13 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
         let
           -- We use ADA currency symbol as a placeholder which
           -- carries really no semantics in this context.
-          uslessRolePolicyId  = PolicyId . PV2.fromBuiltin . PV2.unCurrencySymbol $ PV2.adaSymbol
-        pure uslessRolePolicyId
+          uselessRolePolicyId  = PolicyId . PV2.fromBuiltin . PV2.unCurrencySymbol $ PV2.adaSymbol
+        pure uselessRolePolicyId
 
 -- applies an input to a contract.
 buildApplyInputsConstraints
-  :: SlotConfig -- ^ The slot config used to convert the validity interval to slots.
+  :: SystemStart
+  -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> TransactionScriptOutput v -- ^ The previous script output for the contract
   -> UTCTime -- ^ The minimum bound of the validity interval (inclusive).
@@ -260,20 +264,21 @@ buildApplyInputsConstraints
                    -- in the contract.
   -> Redeemer v -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError v) (TxConstraints v)
-buildApplyInputsConstraints slotConfig version marloweOutput invalidBefore invalidHereafter redeemer =
+buildApplyInputsConstraints systemStart eraHistory version marloweOutput invalidBefore invalidHereafter redeemer =
   case version of
-    MarloweV1 -> buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHereafter redeemer
+    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- applies an input to a contract.
 buildApplyInputsConstraintsV1
-  :: SlotConfig -- ^ The slot config used to convert the validity interval to slots.
+  :: SystemStart
+  -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> TransactionScriptOutput 'V1 -- ^ The previous script output for the contract with raw TxOut.
   -> UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
   -> Redeemer 'V1 -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError 'V1) (TxConstraints 'V1)
-buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHereafter redeemer = execWriterT do
+buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer = execWriterT do
   let
     TransactionScriptOutput _ _ _ datum = marloweOutput
     V1.MarloweData params state contract = datum
@@ -282,11 +287,11 @@ buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHere
     requiredParties = Set.fromList $ for redeemer $ marloweInputParty >>> maybeToList
     roleAssetId = toAssetId currencySymbol
 
-    invalidBefore' = utcTimeToSlotNo invalidBefore
+  invalidBefore' <- lift $ utcTimeToSlotNo invalidBefore
 
-  invalidHereafter' <- lift $ note (ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout) do
-    ib <- invalidHereafter <|> nextMarloweTimeout contract
-    pure $ utcTimeToSlotNo ib
+  invalidHereafter' <- lift $ do
+    ib <- note (ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout) $ invalidHereafter <|> nextMarloweTimeout contract
+    utcTimeToSlotNo ib
 
   -- Construct inputs constraints.
   -- Consume UTXOs containing Marlowe script.
@@ -297,7 +302,7 @@ buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHere
     V1.Role role -> tell $ mustSpendRoleToken $ roleAssetId role
     _ -> pure ()
 
-  -- Require signature of an every party which is autorhized through an address.
+  -- Require signature of an every party which is authorized through an address.
   for_ requiredParties $ traverse_ $ \case
     V1.Address _ address -> case address of
       P.Address (P.PubKeyCredential (P.PubKeyHash pkh)) _ ->
@@ -306,12 +311,9 @@ buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHere
     _ -> pure ()
 
   -- Apply inputs.
-  let
-    txInterval = do
-      let
-        slotNoToPOSIXTime = utcToPOSIXTime . slotStart
-      (slotNoToPOSIXTime invalidBefore', slotNoToPOSIXTime invalidHereafter')
-    transactionInput = V1.TransactionInput { txInterval, txInputs = redeemer }
+  let slotNoToPOSIXTime = fmap utcToPOSIXTime . slotStart
+  txInterval <- lift $ (,) <$> slotNoToPOSIXTime invalidBefore' <*> slotNoToPOSIXTime invalidHereafter'
+  let transactionInput = V1.TransactionInput { txInterval, txInputs = redeemer }
   (possibleContinuation, payments) <- case V1.computeTransaction transactionInput state contract of
      V1.Error err -> lift $ Left $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
      V1.TransactionOutput _ payments _ V1.Close ->
@@ -389,17 +391,24 @@ buildApplyInputsConstraintsV1 slotConfig marloweOutput invalidBefore invalidHere
 
     assocLeft (a, (b, c)) = ((a, b), c)
 
-    -- Calculate slot number which contains a given timestamp
-    utcTimeToSlotNo :: UTCTime -> C.SlotNo
-    utcTimeToSlotNo time = C.SlotNo $ floor $ diffUTCTime time (slotZeroTime slotConfig) / slotLength slotConfig
+    EraHistory _ interpreter = eraHistory
 
-    slotStart :: C.SlotNo -> UTCTime
-    slotStart (C.SlotNo slotNo) = addUTCTime (slotLength slotConfig * slotNo') (slotZeroTime slotConfig)
-      where
-      -- In order to scale `NominalDiffTime` we have to cast the factor into `NominalDiffTime` as well
-      -- which doesn't make sens but that's how it works: https://stackoverflow.com/a/73056198
-      slotNo' :: NominalDiffTime
-      slotNo' = fromInteger . toInteger $ slotNo
+    -- Calculate slot number which contains a given timestamp
+    utcTimeToSlotNo :: UTCTime -> Either (ApplyInputsError 'V1) C.SlotNo
+    utcTimeToSlotNo time = do
+      let relativeTime = toRelativeTime systemStart time
+      (slotNo, _, _) <- first (SlotConversionFailed . show)
+        $ interpretQuery interpreter
+        $ wallclockToSlot relativeTime
+      pure $ C.SlotNo $ O.unSlotNo slotNo
+
+    slotStart :: C.SlotNo -> Either (ApplyInputsError 'V1) UTCTime
+    slotStart (C.SlotNo slotNo) = do
+      (relativeTime, _) <- first (SlotConversionFailed . show)
+        $ interpretQuery interpreter
+        $ slotToWallclock
+        $ O.SlotNo slotNo
+      pure $ fromRelativeTime systemStart relativeTime
 
     utcToPOSIXTime :: UTCTime -> PV2.POSIXTime
     utcToPOSIXTime = PV2.POSIXTime . floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
@@ -424,4 +433,3 @@ buildWithdrawConstraints = \case
     buildWithdrawConstraintsV1 :: AssetId -> TxConstraints 'V1
     buildWithdrawConstraintsV1 =
       TxConstraints.mustConsumePayouts <> TxConstraints.mustSpendRoleToken
-

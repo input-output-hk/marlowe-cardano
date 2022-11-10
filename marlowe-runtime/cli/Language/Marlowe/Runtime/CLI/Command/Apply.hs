@@ -229,5 +229,3 @@ runApplyCommand TxCommand { walletAddresses, signingMethod, subCommand=V1ApplyCo
   where
     posixTimeToUTCTime :: POSIXTime -> UTCTime
     posixTimeToUTCTime (POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
-
-
