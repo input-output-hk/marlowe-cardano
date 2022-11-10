@@ -8,14 +8,22 @@
 module Main
   where
 
+import Control.Monad.Reader (runReaderT)
 import Flags
+import Monad (AppEnv(..), AppM(..))
 import Network.Wai.Handler.Warp (run)
 import Servant
 import qualified Server
 
 main :: IO ()
-main = run 8080 $ app Enabled
+main = do
+  let _loadContractHeaders _ = pure $ Just []
+  run 8080 $ app AppEnv{..} Enabled
 
-app :: Flag openAPIFlag -> Application
-app Enabled = serve (Server.api Enabled) $ Server.server Enabled
-app Disabled = serve (Server.api Disabled) $ Server.server Disabled
+app :: AppEnv -> Flag openAPIFlag -> Application
+app env Enabled = serve api $ hoistServer api (flip runReaderT env . runAppM) $ Server.server Enabled
+  where
+    api = Server.api Enabled
+app env Disabled = serve api $ hoistServer api (flip runReaderT env . runAppM) $ Server.server Disabled
+  where
+    api = Server.api Disabled

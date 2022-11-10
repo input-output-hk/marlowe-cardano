@@ -360,6 +360,7 @@ executable marlowe-web-server
   main-is: Main.hs
   other-modules:
     Flags
+    Monad
     OpenAPI
     Paths_marlowe_runtime
     Server
@@ -370,13 +371,19 @@ executable marlowe-web-server
       base >= 4.9 && < 5
     , aeson
     , bytestring
+    , containers
+    , exceptions
     , lens
     , marlowe-runtime:web
+    , monad-control
+    , mtl
     , openapi3
     , servant
     , servant-server
     , servant-openapi3
     , servant-pagination
+    , stm
+    , transformers-base
     , wai
     , warp
   ghc-options: -threaded

@@ -43,5 +43,5 @@ instance (KnownSymbolList ss, KnownSymbol s) => KnownSymbolList (s ': ss) where
 
 type API = "swagger.json" :> Get '[JSON] OpenApi
 
-server :: Server API
+server :: Applicative m => ServerT API m
 server = pure $ toOpenApi Web.api
