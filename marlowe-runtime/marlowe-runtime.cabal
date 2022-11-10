@@ -359,7 +359,11 @@ executable marlowe-web-server
   hs-source-dirs: web-server
   main-is: Main.hs
   other-modules:
+    Flags
+    OpenAPI
     Paths_marlowe_runtime
+    Server
+    Web
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
