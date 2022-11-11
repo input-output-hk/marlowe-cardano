@@ -11,9 +11,8 @@ import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Language.Marlowe.Runtime.Web
+import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
 import Servant
-import Servant.Pagination (Range)
 
 newtype AppM a = AppM { runAppM :: ReaderT AppEnv Handler a }
   deriving newtype
@@ -32,8 +31,10 @@ newtype AppM a = AppM { runAppM :: ReaderT AppEnv Handler a }
     )
 
 newtype AppEnv = AppEnv
-  { _loadContractHeaders :: Range "contractId" TxOutRef -> IO (Maybe [ContractHeader])
+  { _loadContractHeaders :: LoadContractHeaders IO
   }
 
-loadContractHeaders :: Range "contractId" TxOutRef -> AppM (Maybe [ContractHeader])
-loadContractHeaders range = asks  _loadContractHeaders >>= liftIO . ($ range)
+loadContractHeaders :: LoadContractHeaders AppM
+loadContractHeaders startFrom limit offset order = do
+  load <- asks _loadContractHeaders
+  liftIO $ load startFrom limit offset order

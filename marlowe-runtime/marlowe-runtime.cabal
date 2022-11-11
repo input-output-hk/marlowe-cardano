@@ -192,6 +192,7 @@ library web-server
   exposed-modules:
     Language.Marlowe.Runtime.Web.Server
   other-modules:
+    Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Flags
     Language.Marlowe.Runtime.Web.Server.Monad
     Language.Marlowe.Runtime.Web.Server.OpenAPI
@@ -202,6 +203,7 @@ library web-server
     , aeson
     , async
     , bytestring
+    , cardano-api
     , containers
     , exceptions
     , lens

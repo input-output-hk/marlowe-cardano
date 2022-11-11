@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.Web.Server.REST
 
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.Runtime.Web
+import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad (AppM, loadContractHeaders)
 import Servant
 import Servant.Pagination
@@ -19,9 +20,13 @@ server = getContracts
 getContracts
   :: Maybe (Ranges '["contractId"] ContractHeader)
   -> AppM (PaginatedResponse '["contractId"] ContractHeader)
-getContracts ranges = loadContractHeaders range >>= \case
-  Nothing -> throwError err416
-  Just headers -> addHeader (length headers) <$> returnRange range headers
-  where
+getContracts ranges = do
+  let
     range :: Range "contractId" TxOutRef
-    range = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
+    range@Range{..} = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
+  startFrom <- case traverse fromDTO rangeValue of
+    Nothing -> throwError err404
+    Just startFrom -> pure startFrom
+  loadContractHeaders startFrom rangeLimit rangeOffset rangeOrder >>= \case
+    Nothing -> throwError err416
+    Just headers -> addHeader (length headers) <$> returnRange range (toDTO headers)
