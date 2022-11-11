@@ -1,5 +1,10 @@
 {-# LANGUAGE TypeFamilies #-}
 
+-- | This module defines the data-transfer object (DTO) translation layer for
+-- the web server. DTOs are the types served by the API, which notably include
+-- no cardano-api dependencies and have nice JSON representations. This module
+-- describes how they are mapped to the internal API types of the runtime.
+
 module Language.Marlowe.Runtime.Web.Server.DTO
   where
 
@@ -14,12 +19,16 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(MarloweV1), SomeMarloweVersion(..))
 import qualified Language.Marlowe.Runtime.Web as Web
 
+-- | A class that states a type has a DTO representation.
 class HasDTO a where
+  -- | The type used in the API to represent this type.
   type DTO a :: *
 
+-- | States that a type can be encoded as a DTO.
 class HasDTO a => ToDTO a where
   toDTO :: a -> DTO a
 
+-- | States that a type can be decoded from a DTO.
 class HasDTO a => FromDTO a where
   fromDTO :: DTO a -> Maybe a
 

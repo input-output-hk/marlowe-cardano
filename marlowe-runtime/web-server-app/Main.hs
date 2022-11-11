@@ -36,7 +36,7 @@ main :: IO ()
 main = do
   discoverySyncAddr <- resolve "127.0.0.1" 3722
   Server{..} <- mkServer ServerDependencies
-    { openAPI = Enabled
+    { openAPIEnabled = True
     , runApplication = run 8080
     , runMarloweHeaderSyncClient = runClientPeerOverSocket
         discoverySyncAddr

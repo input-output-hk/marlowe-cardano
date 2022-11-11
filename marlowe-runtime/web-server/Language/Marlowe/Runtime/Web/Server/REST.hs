@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- | This module defines a server for the REST API.
+
 module Language.Marlowe.Runtime.Web.Server.REST
   where
 
@@ -10,9 +12,6 @@ import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad (AppM, loadContractHeaders)
 import Servant
 import Servant.Pagination
-
-api :: Proxy API
-api = Proxy
 
 server :: ServerT API AppM
 server = getContracts

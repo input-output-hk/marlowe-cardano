@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | Defines a custom Monad for the web server's handler functions to run in.
+
 module Language.Marlowe.Runtime.Web.Server.Monad
   where
 
@@ -34,6 +36,7 @@ newtype AppEnv = AppEnv
   { _loadContractHeaders :: LoadContractHeaders IO
   }
 
+-- | Load a list of contract headers.
 loadContractHeaders :: LoadContractHeaders AppM
 loadContractHeaders startFrom limit offset order = do
   load <- asks _loadContractHeaders

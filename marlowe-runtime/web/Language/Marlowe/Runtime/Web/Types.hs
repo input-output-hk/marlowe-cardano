@@ -4,6 +4,9 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 
+-- | This module defines the request and response types in the Marlowe Runtime
+-- | Web API.
+
 module Language.Marlowe.Runtime.Web.Types
   where
 
@@ -40,6 +43,7 @@ import GHC.Generics (Generic)
 import Servant
 import Servant.Pagination (HasPagination(..))
 
+-- | A newtype for Base16 decoding and encoding ByteStrings
 newtype Base16 = Base16 { unBase16 :: ByteString }
   deriving (Eq, Ord)
 

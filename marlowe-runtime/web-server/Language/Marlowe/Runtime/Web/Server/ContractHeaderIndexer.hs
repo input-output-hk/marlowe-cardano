@@ -2,14 +2,15 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- | This module defines a worker process that subscribes to contract header
+-- updates via the MarloweHeaderSync protocol and indexes them for fast
+-- loading.
+
 module Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   where
 
 import Control.Concurrent.STM
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Maybe
-import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor (void)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
@@ -22,93 +23,121 @@ import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api
 import Servant.Pagination
 
+-- | Dependencies for the a ContractHeaderIndexer
 newtype ContractHeaderIndexerDependencies = ContractHeaderIndexerDependencies
   { runMarloweHeaderSyncClient :: forall a. MarloweHeaderSyncClient IO a -> IO a
   }
 
+-- | Signature for a delegate that loads a list of contract headers.
 type LoadContractHeaders m
-   = Maybe ContractId
-  -> Int
-  -> Int
-  -> RangeOrder
-  -> m (Maybe [ContractHeader])
+   = Maybe ContractId -- ^ ID of the contract to start from.
+  -> Int -- ^ Limit: the maximum number of contract headers to load.
+  -> Int -- ^ Offset: how many contract headers after the initial one to skip.
+  -> RangeOrder -- ^ Whether to load an ascending or descending list.
+  -> m (Maybe [ContractHeader]) -- ^ Nothing if the initial ID is not found
 
+-- | Public API of the ContractHeaderIndexer
 data ContractHeaderIndexer = ContractHeaderIndexer
-  { runContractHeaderIndexer :: IO ()
-  , loadContractHeaders :: LoadContractHeaders IO
+  { runContractHeaderIndexer :: IO () -- ^ Run the indexer process
+  , loadContractHeaders :: LoadContractHeaders IO -- ^ Load contract headers from the indexer.
   }
 
+-- | Create a new contract header indexer.
 mkContractHeaderIndexer :: ContractHeaderIndexerDependencies-> IO ContractHeaderIndexer
 mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
-  headersTVar <- newTVarIO mempty
-  indexTVar <- newTVarIO mempty
+  -- State variable that stores contract headers in a nested map. The outer
+  -- IntMap indexes collections of contract headers by slot number, and the
+  -- inner map indexes the contract headers for that slot by contract ID. This
+  -- nesting encodes the two levels of ordering for contract headers - sort
+  -- first by slot, then by contractId as a byte string.
+  contractsTVar <- newTVarIO (mempty :: IntMap (Map ContractId ContractHeader))
+  -- State variable that stores a reverse index that allows the slot number to
+  -- be looked up for a particular contract ID.
+  slotIndexTVar <- newTVarIO (mempty :: Map ContractId IntMap.Key)
+  -- Synchronization variable that is used to wait until the sync client has
+  -- caught up to the tip of the server.
   inSync <- newEmptyTMVarIO
   let
+    -- Client that keeps the local state synchronized with an upstream peer
+    -- (e.g. a running instance of marlowe-discovery).
     client = MarloweHeaderSyncClient
       $ pure clientIdle
+    -- When Idle, always request the next set of headers.
     clientIdle = SendMsgRequestNext clientNext
     clientNext = ClientStNext
-      { recvMsgNewHeaders = \block headers -> do
-          atomically $ addNewContractHeaders headersTVar indexTVar block headers
+      -- Handle new headers by updating the sate variables
+      { recvMsgNewHeaders = \block contracts -> do
+          atomically $ addNewContractHeaders contractsTVar slotIndexTVar block contracts
           pure clientIdle
+      -- Handle rollbacks by removing rolled back contract headers.
       , recvMsgRollBackward = \point -> do
-          atomically $ rollback headersTVar indexTVar point
+          atomically $ rollback contractsTVar slotIndexTVar point
           pure clientIdle
+      -- When told to wait, wait for 0.5 seconds then poll the server again.
       , recvMsgWait = do
           delay <- newDelay 500_000 -- 0.5 seconds
           atomically do
+            -- Waiting means we are caught up to the tip. Unblock queries by
+            -- putting a value the inSync TMVar.
             void $ tryPutTMVar inSync ()
             waitDelay delay
             pure $ SendMsgPoll clientNext
       }
   pure ContractHeaderIndexer
     { runContractHeaderIndexer = runMarloweHeaderSyncClient client
-    , loadContractHeaders = \startFrom limit offset order -> atomically $ runMaybeT do
-        lift $ readTMVar inSync
-        headers <- lift $ readTVar headersTVar
-        index <- lift $ readTVar indexTVar
-        headersFlat <- MaybeT $ pure $ flattenFrom order index headers startFrom
+    , loadContractHeaders = \startFrom limit offset order -> atomically do
+        -- Wait until we are in sync.
+        readTMVar inSync
+        -- Load all contracts
+        contracts <- readTVar contractsTVar
+        -- Load the reverse index
+        index <- readTVar slotIndexTVar
+        -- Flatten the contracts from the starting point, in the requested
+        -- order. Then skip the requested quantity of results and take the
+        -- requested quantity.
         pure
-          $ List.take limit
-          $ List.drop offset headersFlat
+          $ List.take limit . List.drop offset
+          <$> flattenFrom order index contracts startFrom
     }
 
+-- Updates the state variables of the indexer to exclude values after a
+-- particular chain point.
 rollback
   :: TVar (IntMap (Map ContractId ContractHeader))
   -> TVar (Map ContractId IntMap.Key)
   -> Chain.ChainPoint
   -> STM ()
-rollback headersTVar indexTVar = \case
+rollback contractsTVar slotIndexTVar = \case
+  -- Rolling back to Genesis means discarding everything.
   Chain.Genesis -> do
-    writeTVar headersTVar mempty
-    writeTVar indexTVar mempty
+    writeTVar contractsTVar mempty
+    writeTVar slotIndexTVar mempty
+  -- Rolling back to a point means discarding all records with slot numbers
+  -- greater than that point.
   Chain.At Chain.BlockHeader{..} -> do
-    blocks <- readTVar headersTVar
-    let
-      (blocksBefore, blocksAfter) =
-        bimap IntMap.fromDistinctAscList IntMap.fromDistinctAscList
-          $ break ((>= fromIntegral slotNo) . fst)
-          $ IntMap.toAscList blocks
-      contractsAfter = foldMap Map.keysSet blocksAfter
-    writeTVar headersTVar blocksBefore
-    modifyTVar indexTVar $ flip Map.withoutKeys contractsAfter
+    modifyTVar contractsTVar $ IntMap.filterWithKey (\k _ -> k <= fromIntegral slotNo)
+    modifyTVar slotIndexTVar $ Map.filter (\v -> v <= fromIntegral slotNo)
 
+-- Updates the start variables of the indexer to include new headers at a new
+-- block.
 addNewContractHeaders
   :: TVar (IntMap (Map ContractId ContractHeader))
   -> TVar (Map ContractId IntMap.Key)
   -> Chain.BlockHeader
   -> [ContractHeader]
   -> STM ()
-addNewContractHeaders headersTVar indexTVar Chain.BlockHeader{..} headers = do
-  modifyTVar headersTVar
+addNewContractHeaders contractsTVar slotIndexTVar Chain.BlockHeader{..} contracts = do
+  modifyTVar contractsTVar
     $ IntMap.insert (fromIntegral slotNo)
     $ Map.fromList
-    $ tag contractId <$> headers
-  modifyTVar indexTVar
+    $ tag contractId <$> contracts
+  modifyTVar slotIndexTVar
     $ Map.union
     $ Map.fromList
-    $ (,fromIntegral slotNo) . contractId <$> headers
+    $ (,fromIntegral slotNo) . contractId <$> contracts
 
+-- Convert a value to a tuple using a projection function for the first
+-- element.
 tag :: (b -> a) -> b -> (a, b)
 tag f a = (f a, a)
 

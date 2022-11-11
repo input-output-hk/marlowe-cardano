@@ -1,17 +1,22 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | This module defines the top-level aggregate process (HTTP server and
+-- worker processes) for running the web server.
+
 module Language.Marlowe.Runtime.Web.Server
-  ( API
+  ( APIWithOpenAPI
   , module Language.Marlowe.Runtime.Web.Server.Flags
   , Server(..)
   , ServerDependencies(..)
   , app
   , mkServer
-  , server
+  , serverWithOpenAPI
   ) where
 
 import Control.Concurrent.Async (mapConcurrently_)
@@ -26,29 +31,23 @@ import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Servant hiding (Server)
 
-type family API openAPIFlag where
-  API Enabled = OpenAPI.API :<|> Web.API
-  API Disabled = Web.API
+type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
 
-apiWithOpenApi :: Proxy (API Enabled)
+apiWithOpenApi :: Proxy APIWithOpenAPI
 apiWithOpenApi = Proxy
 
-apiWithoutOpenApi :: Proxy (API Disabled)
-apiWithoutOpenApi = Proxy
+serverWithOpenAPI :: ServerT APIWithOpenAPI AppM
+serverWithOpenAPI = OpenAPI.server :<|> REST.server
 
-server :: Flag openAPIFlag -> ServerT (API openAPIFlag) AppM
-server = \case
-  Enabled -> OpenAPI.server :<|> REST.server
-  Disabled -> REST.server
+serveAppM :: HasServer api '[] => Proxy api -> AppEnv -> ServerT api AppM -> Application
+serveAppM api env = serve api . hoistServer api (flip runReaderT env . runAppM)
 
-app :: AppEnv -> Flag openAPIFlag -> Application
-app env Enabled =
-  serve apiWithOpenApi $ hoistServer apiWithOpenApi (flip runReaderT env . runAppM) $ server Enabled
-app env Disabled =
-  serve apiWithoutOpenApi $ hoistServer apiWithoutOpenApi (flip runReaderT env . runAppM) $ server Disabled
+app :: AppEnv -> Bool -> Application
+app env True = serveAppM apiWithOpenApi env serverWithOpenAPI
+app env False = serveAppM Web.api env REST.server
 
-data ServerDependencies = forall openAPI. ServerDependencies
-  { openAPI :: Flag openAPI
+data ServerDependencies = ServerDependencies
+  { openAPIEnabled :: Bool
   , runApplication :: Application -> IO ()
   , runMarloweHeaderSyncClient :: forall a. MarloweHeaderSyncClient IO a -> IO a
   }
@@ -66,7 +65,7 @@ mkServer ServerDependencies{..} = do
       }
   pure Server
     { runServer = mapConcurrently_ id
-      [ runApplication $ app env Enabled
+      [ runApplication $ app env openAPIEnabled
       , runContractHeaderIndexer
       ]
     }
