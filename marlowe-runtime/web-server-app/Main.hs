@@ -31,23 +31,32 @@ import Network.Socket
 import Network.TypedProtocol (Peer, PeerRole(..), runPeerWithDriver, startDState)
 import Network.TypedProtocol.Codec (Codec)
 import Network.Wai.Handler.Warp (run)
+import Options
+import System.IO (BufferMode(..), hSetBuffering, stderr, stdout)
 
 main :: IO ()
-main = do
-  discoverySyncAddr <- resolve "127.0.0.1" 3722
-  Server{..} <- mkServer ServerDependencies
-    { openAPIEnabled = True
-    , runApplication = run 8080
+main = hSetBuffering stdout LineBuffering
+  >> hSetBuffering stderr LineBuffering
+  >> getOptions
+  >>= optionsToServerDependencies
+  >>= mkServer
+  >>= runServer
+
+optionsToServerDependencies :: Options -> IO ServerDependencies
+optionsToServerDependencies Options{..} = do
+  discoverySyncAddr <- resolve discoveryHost discoverySyncPort
+  pure ServerDependencies
+    { openAPIEnabled
+    , runApplication = run $ fromIntegral port
     , runMarloweHeaderSyncClient = runClientPeerOverSocket
         discoverySyncAddr
         codecMarloweHeaderSync
         marloweHeaderSyncClientPeer
     }
-  runServer
-  where
-    resolve :: HostName -> PortNumber -> IO AddrInfo
-    resolve host port =
-      head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
+
+resolve :: HostName -> PortNumber -> IO AddrInfo
+resolve host port =
+  head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
 
 -- | Run a client as a typed protocols peer over a socket.
 runClientPeerOverSocket

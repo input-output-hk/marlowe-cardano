@@ -45,6 +45,9 @@ discoveryHost = host "discovery" "DISCOVERY" "127.0.0.1" "The hostname of the Ma
 discoveryQueryPort :: CliOption OptionFields PortNumber
 discoveryQueryPort = port "discovery-query" "DISCOVERY_QUERY" 3721 "The port number of the discovery server's query API."
 
+discoverySyncPort :: CliOption OptionFields PortNumber
+discoverySyncPort = port "discovery-sync" "DISCOVERY_SYNC" 3722 "The port number of the discovery server's synchronization API."
+
 txHost :: CliOption OptionFields HostName
 txHost = host "tx" "TX" "127.0.0.1" "The hostname of the Marlowe Runtime transaction server."
 
@@ -155,4 +158,3 @@ verbosityParser defaultVerbosity = fromMaybe defaultVerbosity <$> (fmap LogLevel
         , metavar "LOG_LEVEL"
         , help $ "Log everything up including the given level: " <> spec
         ]
-

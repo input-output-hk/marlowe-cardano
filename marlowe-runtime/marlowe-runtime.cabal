@@ -395,6 +395,7 @@ executable marlowe-web-server
   hs-source-dirs: web-server-app
   main-is: Main.hs
   other-modules:
+    Options
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
@@ -403,9 +404,11 @@ executable marlowe-web-server
     , bytestring
     , exceptions
     , marlowe-protocols
+    , marlowe-runtime:config
     , marlowe-runtime:web-server
     , marlowe-runtime
     , network
+    , optparse-applicative
     , typed-protocols
     , warp
   ghc-options: -threaded

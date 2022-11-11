@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
+
 module Language.Marlowe.Runtime.CLI.Command
   where
 

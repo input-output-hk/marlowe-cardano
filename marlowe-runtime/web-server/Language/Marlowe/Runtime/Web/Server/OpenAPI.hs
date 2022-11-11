@@ -44,7 +44,7 @@ instance KnownSymbolList '[] where
 instance (KnownSymbolList ss, KnownSymbol s) => KnownSymbolList (s ': ss) where
   symbolListVal _ = symbolVal (Proxy @s) : symbolListVal (Proxy @ss)
 
-type API = "swagger.json" :> Get '[JSON] OpenApi
+type API = "openapi.json" :> Get '[JSON] OpenApi
 
 server :: Applicative m => ServerT API m
 server = pure $ toOpenApi Web.api
