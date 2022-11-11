@@ -48,7 +48,7 @@ getWalletR walletName = Yesod.defaultLayout do
         <i>Make a choice in a running contract
       <li>
         <h2><a>notify
-        <i>Poke a running contract to continue
+        <i>Prompt a running contract to recheck a condition it is currently awaiting
       <li>
         <h2><a>withdraw
         <i>Withdraw payouts from a running contract
