@@ -42,7 +42,7 @@ getWalletR walletName = Yesod.defaultLayout do
         <i>Create a new contract
       <li>
         <h2><a>deposit
-        <i>Deposit funds into running contract
+        <i>Deposit funds into a running contract
       <li>
         <h2><a>choose
         <i>Make a choice in a running contract
