@@ -7,7 +7,6 @@ module Main
 
 import qualified Text.Blaze as Blaze
 import Text.Julius (juliusFile)
-import qualified Text.Julius as Julius
 import Yesod (Yesod)
 import qualified Yesod
 
@@ -19,7 +18,6 @@ newtype WalletName = WalletName String
     , Read
     , Show
     , Yesod.PathPiece
-    , Julius.ToJavascript
     , Blaze.ToMarkup
     )
 
