@@ -166,6 +166,8 @@ executable cip30-demo
   import: lang
   hs-source-dirs: cip30-demo
   main-is: Main.hs
+  default-extensions:
+    ViewPatterns
   other-modules:
     Paths_marlowe_runtime
   autogen-modules:
