@@ -447,3 +447,23 @@ test-suite marlowe-runtime-test
     , transformers
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
+
+test-suite web-server-test
+  import: lang
+  hs-source-dirs: web-server-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , bytestring
+    , hspec
+    , marlowe-runtime:web
+    , openapi3
+    , QuickCheck
+    , regex-posix
+    , servant-openapi3
+    , text
+  ghc-options: -threaded

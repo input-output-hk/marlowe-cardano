@@ -85,7 +85,7 @@ instance ToSchema TxId where
   declareNamedSchema _ = pure $ NamedSchema (Just "TxId") $ mempty
     & type_ ?~ OpenApiString
     & description ?~ "The hex-encoded identifier of a Cardano transaction"
-    & pattern ?~ "[a-fA-F0-9]{64}"
+    & pattern ?~ "^[a-fA-F0-9]{64}$"
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving (Eq, Ord, Generic)
@@ -95,7 +95,7 @@ instance ToSchema PolicyId where
   declareNamedSchema _ = pure $ NamedSchema (Just "PolicyId") $ mempty
     & type_ ?~ OpenApiString
     & description ?~ "The hex-encoded minting policy ID for a native Cardano token"
-    & pattern ?~ "[a-fA-F0-9]*"
+    & pattern ?~ "^[a-fA-F0-9]*$"
 
 data TxOutRef = TxOutRef
   { txId :: TxId
@@ -118,7 +118,7 @@ instance ToSchema TxOutRef where
   declareNamedSchema _ = pure $ NamedSchema (Just "TxOutRef") $ mempty
     & type_ ?~ OpenApiString
     & description ?~ "A reference to a transaction output with a transaction ID and index."
-    & pattern ?~ "[a-fA-F0-9]{64}:[0-9]+"
+    & pattern ?~ "^[a-fA-F0-9]{64}:[0-9]+$"
     & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7:1"
 
 instance ToJSON TxOutRef where
