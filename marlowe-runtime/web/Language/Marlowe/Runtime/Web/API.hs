@@ -22,14 +22,10 @@ type GetContractsAPI =  PaginatedGet '["contractId"] ContractHeader
 
 type PaginatedGet rangeFields resource
   =  Header "Range" (Ranges rangeFields resource)
-  :> GetPartialContent
-      '[JSON]
-      ( Headers
-          (  Header "Total-Count" Int
-          ': PageHeaders '["contractId"] resource
-          )
-          [resource]
-      )
+  :> GetPartialContent '[JSON] (PaginatedResponse '["contractId"] resource)
+
+type PaginatedResponse fields resource =
+  Headers (Header "Total-Count" Int ': PageHeaders fields resource) [resource]
 
 type family AsumAPI (apis :: [*]) where
   AsumAPI '[] = EmptyAPI

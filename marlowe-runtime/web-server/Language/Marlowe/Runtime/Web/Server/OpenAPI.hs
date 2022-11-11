@@ -3,17 +3,17 @@
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module OpenAPI
+module Language.Marlowe.Runtime.Web.Server.OpenAPI
   where
 
 import Control.Lens
 import Data.OpenApi hiding (Server)
 import Data.String (fromString)
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Servant
 import Servant.OpenApi (toOpenApi)
 import Servant.Pagination
-import qualified Web
 
 instance ToParamSchema (Ranges fields resource) where
   toParamSchema _ = mempty
@@ -44,4 +44,4 @@ instance (KnownSymbolList ss, KnownSymbol s) => KnownSymbolList (s ': ss) where
 type API = "swagger.json" :> Get '[JSON] OpenApi
 
 server :: Applicative m => ServerT API m
-server = pure $ toOpenApi Web.api
+server = pure $ toOpenApi REST.api

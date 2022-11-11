@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
-module Flags
+
+module Language.Marlowe.Runtime.Web.Server.Flags
   where
 
 data Enabled

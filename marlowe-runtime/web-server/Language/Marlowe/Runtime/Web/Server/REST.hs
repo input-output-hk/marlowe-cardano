@@ -1,12 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Web
+module Language.Marlowe.Runtime.Web.Server.REST
   where
 
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.Runtime.Web
-import Monad (AppM, loadContractHeaders)
+import Language.Marlowe.Runtime.Web.Server.Monad (AppM, loadContractHeaders)
 import Servant
 import Servant.Pagination
 
@@ -16,12 +16,9 @@ api = Proxy
 server :: ServerT API AppM
 server = getContracts
 
-type GetContractsHeaders =
-  Header "Total-Count" Int ': PageHeaders '["contractId"] ContractHeader
-
 getContracts
   :: Maybe (Ranges '["contractId"] ContractHeader)
-  -> AppM (Headers GetContractsHeaders [ContractHeader])
+  -> AppM (PaginatedResponse '["contractId"] ContractHeader)
 getContracts ranges = loadContractHeaders range >>= \case
   Nothing -> throwError err416
   Just headers -> addHeader (length headers) <$> returnRange range headers

@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Process.ContractHeaderIndexer
+module Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   where
 
 import Control.Concurrent.STM
@@ -24,16 +24,17 @@ import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import Language.Marlowe.Runtime.Web
 import Servant.Pagination
 
+newtype ContractHeaderIndexerDependencies = ContractHeaderIndexerDependencies
+  { runMarloweHeaderSyncClient :: forall a. MarloweHeaderSyncClient IO a -> IO a
+  }
+
 data ContractHeaderIndexer = ContractHeaderIndexer
   { runContractHeaderIndexer :: IO ()
   , loadContractHeaders :: Range "contractId" TxOutRef -> IO (Maybe [ContractHeader])
   }
 
--- | A function signature for running a client for some protocol in some monad m.
-type RunClient m client = forall a. client m a -> m a
-
-mkContractHeaderIndexer :: RunClient IO MarloweHeaderSyncClient -> IO ContractHeaderIndexer
-mkContractHeaderIndexer runDiscoveryClient = do
+mkContractHeaderIndexer :: ContractHeaderIndexerDependencies-> IO ContractHeaderIndexer
+mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
   headersTVar <- newTVarIO mempty
   indexTVar <- newTVarIO mempty
   inSync <- newEmptyTMVarIO
@@ -76,7 +77,7 @@ mkContractHeaderIndexer runDiscoveryClient = do
             pure $ SendMsgPoll clientNext
       }
   pure ContractHeaderIndexer
-    { runContractHeaderIndexer = runDiscoveryClient client
+    { runContractHeaderIndexer = runMarloweHeaderSyncClient client
     , loadContractHeaders = \range@Range{..} -> atomically $ runMaybeT do
         lift $ readTMVar inSync
         headers <- lift $ readTVar headersTVar
