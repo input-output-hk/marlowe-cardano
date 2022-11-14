@@ -169,6 +169,10 @@
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
+            (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
+            (hsPkgs."eventuo11y-batteries" or (errorHandler.buildDepError "eventuo11y-batteries"))
             (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
@@ -196,6 +200,7 @@
             "Language/Marlowe/Runtime/Web/Server/OpenAPI"
             "Language/Marlowe/Runtime/Web/Server/ContractHeaderIndexer"
             "Language/Marlowe/Runtime/Web/Server/REST"
+            "Language/Marlowe/Runtime/Web/Server/REST/Contracts"
             "Language/Marlowe/Runtime/Web/Server"
             ];
           hsSourceDirs = [ "web-server" ];
@@ -366,6 +371,7 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
             (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))
