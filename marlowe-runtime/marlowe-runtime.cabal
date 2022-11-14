@@ -198,6 +198,7 @@ library web-server
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
     Language.Marlowe.Runtime.Web.Server.REST
+    Language.Marlowe.Runtime.Web.Server.REST.Contracts
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -205,6 +206,10 @@ library web-server
     , bytestring
     , cardano-api
     , containers
+    , eventuo11y
+    , eventuo11y-dsl
+    , eventuo11y-json
+    , eventuo11y-batteries
     , exceptions
     , lens
     , marlowe-runtime:web
@@ -402,6 +407,7 @@ executable marlowe-web-server
   build-depends:
       base >= 4.9 && < 5
     , bytestring
+    , eventuo11y-json
     , exceptions
     , marlowe-protocols
     , marlowe-runtime:config

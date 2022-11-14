@@ -1,10 +1,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module defines the top-level aggregate process (HTTP server and
 -- worker processes) for running the web server.
@@ -19,16 +23,30 @@ module Language.Marlowe.Runtime.Web.Server
   , serverWithOpenAPI
   ) where
 
-import Control.Concurrent.Async (mapConcurrently_)
+import Control.Concurrent.Async (concurrently_)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
+import Data.Void (Void)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
-  (ContractHeaderIndexer(..), ContractHeaderIndexerDependencies(..), mkContractHeaderIndexer)
+  ( ContractHeaderIndexer(..)
+  , ContractHeaderIndexerDependencies(..)
+  , ContractHeaderIndexerSelector
+  , mkContractHeaderIndexer
+  )
 import Language.Marlowe.Runtime.Web.Server.Flags
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
+import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
+import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
+import Observe.Event.BackendModification (EventBackendModifiers, setAncestor)
+import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
+import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(..))
+import Observe.Event.Render.JSON.DSL.Compile (compile)
+import Observe.Event.Syntax ((≔))
+import Observe.Event.Wai (ServeRequest, application, renderServeRequest)
 import Servant hiding (Server)
 
 type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
@@ -36,36 +54,58 @@ type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
 apiWithOpenApi :: Proxy APIWithOpenAPI
 apiWithOpenApi = Proxy
 
-serverWithOpenAPI :: ServerT APIWithOpenAPI AppM
-serverWithOpenAPI = OpenAPI.server :<|> REST.server
+serverWithOpenAPI
+  :: EventBackend AppM r ApiSelector
+  -> EventBackendModifiers r r'
+  -> ServerT APIWithOpenAPI AppM
+serverWithOpenAPI eventBackend mods = OpenAPI.server :<|> REST.server eventBackend mods
 
-serveAppM :: HasServer api '[] => Proxy api -> AppEnv -> ServerT api AppM -> Application
+serveAppM
+  :: HasServer api '[]
+  => Proxy api
+  -> AppEnv
+  -> ServerT api AppM
+  -> Application
 serveAppM api env = serve api . hoistServer api (flip runReaderT env . runAppM)
 
-app :: AppEnv -> Bool -> Application
-app env True = serveAppM apiWithOpenApi env serverWithOpenAPI
-app env False = serveAppM Web.api env REST.server
+app :: Bool -> AppEnv -> EventBackend AppM r ApiSelector -> EventBackendModifiers r r' -> Application
+app True env eventBackend = serveAppM apiWithOpenApi env . serverWithOpenAPI eventBackend
+app False env eventBackend = serveAppM Web.api env . REST.server eventBackend
 
-data ServerDependencies = ServerDependencies
+instance DefaultRenderSelectorJSON ServeRequest where
+  defaultRenderSelectorJSON = renderServeRequest
+
+compile $ SelectorSpec "server"
+  [ ["run", "server"] ≔ ''Void
+  , "http" ≔ Inject ''ServeRequest
+  , "api" ≔ Inject ''ApiSelector
+  , ["contract", "indexer"] ≔ Inject ''ContractHeaderIndexerSelector
+  ]
+
+data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
   , runApplication :: Application -> IO ()
   , runMarloweHeaderSyncClient :: forall a. MarloweHeaderSyncClient IO a -> IO a
+  , eventBackend :: EventBackend IO r ServerSelector
   }
 
 newtype Server = Server
   { runServer :: IO ()
   }
 
-mkServer :: ServerDependencies -> IO Server
+mkServer :: ServerDependencies r -> IO Server
 mkServer ServerDependencies{..} = do
-  ContractHeaderIndexer{..} <- mkContractHeaderIndexer ContractHeaderIndexerDependencies{..}
+  ContractHeaderIndexer{..} <- mkContractHeaderIndexer ContractHeaderIndexerDependencies
+    { runMarloweHeaderSyncClient
+    , eventBackend = narrowEventBackend ContractIndexer eventBackend
+    }
   let
     env = AppEnv
       { _loadContractHeaders = loadContractHeaders
       }
+    httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
+    app' = application (narrowEventBackend Http eventBackend) $ app openAPIEnabled env httpBackend . setAncestor
   pure Server
-    { runServer = mapConcurrently_ id
-      [ runApplication $ app env openAPIEnabled
-      , runContractHeaderIndexer
-      ]
+    { runServer = runApplication app'
+        `concurrently_` runContractHeaderIndexer
     }

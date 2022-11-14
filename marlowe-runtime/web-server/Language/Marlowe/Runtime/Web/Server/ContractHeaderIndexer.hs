@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | This module defines a worker process that subscribes to contract header
 -- updates via the MarloweHeaderSync protocol and indexes them for fast
@@ -17,15 +19,42 @@ import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Void (Void)
+import Data.Word (Word64)
 import Language.Marlowe.Protocol.HeaderSync.Client
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api
+import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Server.DTO (toDTO)
+import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
+import Observe.Event.Render.JSON.DSL.Compile (compile)
+import Observe.Event.Syntax ((≔))
 import Servant.Pagination
 
+type ContractHeaders = [Web.ContractHeader]
+
+compile $ SelectorSpec ["contract", "header", "indexer"]
+  [ ["new", "headers"] ≔ FieldSpec ["new", "headers"]
+      [ "slotNo" ≔ ''Word64
+      , "blockNo" ≔ ''Word64
+      , "blockHeaderHash" ≔ ''String
+      , ["contract", "headers"] ≔ ''ContractHeaders
+      ]
+  , ["rollback", "to", "block"] ≔ FieldSpec "rollback"
+      [ "rollbackSlotNo" ≔ ''Word64
+      , "rollbackBlockNo" ≔ ''Word64
+      , "rollbackBlockHeaderHash" ≔ ''String
+      ]
+  , ["rollback", "to", "genesis"] ≔ ''Void
+  , "wait" ≔ ''Void
+  ]
+
 -- | Dependencies for the a ContractHeaderIndexer
-newtype ContractHeaderIndexerDependencies = ContractHeaderIndexerDependencies
+data ContractHeaderIndexerDependencies r = ContractHeaderIndexerDependencies
   { runMarloweHeaderSyncClient :: forall a. MarloweHeaderSyncClient IO a -> IO a
+  , eventBackend :: EventBackend IO r ContractHeaderIndexerSelector
   }
 
 -- | Signature for a delegate that loads a list of contract headers.
@@ -43,7 +72,7 @@ data ContractHeaderIndexer = ContractHeaderIndexer
   }
 
 -- | Create a new contract header indexer.
-mkContractHeaderIndexer :: ContractHeaderIndexerDependencies-> IO ContractHeaderIndexer
+mkContractHeaderIndexer :: ContractHeaderIndexerDependencies r -> IO ContractHeaderIndexer
 mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
   -- State variable that stores contract headers in a nested map. The outer
   -- IntMap indexes collections of contract headers by slot number, and the
@@ -60,22 +89,32 @@ mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
   let
     -- Client that keeps the local state synchronized with an upstream peer
     -- (e.g. a running instance of marlowe-discovery).
-    client = MarloweHeaderSyncClient
-      $ pure clientIdle
+    client = MarloweHeaderSyncClient $ pure clientIdle
     -- When Idle, always request the next set of headers.
     clientIdle = SendMsgRequestNext clientNext
     clientNext = ClientStNext
       -- Handle new headers by updating the sate variables
-      { recvMsgNewHeaders = \block contracts -> do
+      { recvMsgNewHeaders = \block contracts -> withEvent eventBackend NewHeaders \ev -> do
+          addField ev $ SlotNo $ Chain.unSlotNo $ Chain.slotNo block
+          addField ev $ BlockNo $ Chain.unBlockNo $ Chain.blockNo block
+          addField ev $ BlockHeaderHash $ show $ Chain.headerHash block
+          addField ev $ ContractHeaders $ toDTO contracts
           atomically $ addNewContractHeaders contractsTVar slotIndexTVar block contracts
           pure clientIdle
       -- Handle rollbacks by removing rolled back contract headers.
       , recvMsgRollBackward = \point -> do
-          atomically $ rollback contractsTVar slotIndexTVar point
+          case point of
+            Chain.Genesis -> withEvent eventBackend RollbackToGenesis \_ -> do
+              atomically $ rollback contractsTVar slotIndexTVar point
+            Chain.At block -> withEvent eventBackend RollbackToBlock \ev -> do
+              addField ev $ RollbackSlotNo $ Chain.unSlotNo $ Chain.slotNo block
+              addField ev $ RollbackBlockNo $ Chain.unBlockNo $ Chain.blockNo block
+              addField ev $ RollbackBlockHeaderHash $ show $ Chain.headerHash block
+              atomically $ rollback contractsTVar slotIndexTVar point
           pure clientIdle
-      -- When told to wait, wait for 0.5 seconds then poll the server again.
-      , recvMsgWait = do
-          delay <- newDelay 500_000 -- 0.5 seconds
+      -- When told to wait, wait for 1 second then poll the server again.
+      , recvMsgWait = withEvent eventBackend Wait \_ -> do
+          delay <- newDelay 1_000_000 -- 1 second
           atomically do
             -- Waiting means we are caught up to the tip. Unblock queries by
             -- putting a value the inSync TMVar.

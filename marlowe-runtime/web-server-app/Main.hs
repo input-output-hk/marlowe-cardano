@@ -1,10 +1,10 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Main
   where
@@ -31,6 +31,8 @@ import Network.Socket
 import Network.TypedProtocol (Peer, PeerRole(..), runPeerWithDriver, startDState)
 import Network.TypedProtocol.Codec (Codec)
 import Network.Wai.Handler.Warp (run)
+import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
+import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
 import Options
 import System.IO (BufferMode(..), hSetBuffering, stderr, stdout)
 
@@ -42,9 +44,10 @@ main = hSetBuffering stdout LineBuffering
   >>= mkServer
   >>= runServer
 
-optionsToServerDependencies :: Options -> IO ServerDependencies
+optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
 optionsToServerDependencies Options{..} = do
   discoverySyncAddr <- resolve discoveryHost discoverySyncPort
+  eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
     , runApplication = run $ fromIntegral port
@@ -52,6 +55,7 @@ optionsToServerDependencies Options{..} = do
         discoverySyncAddr
         codecMarloweHeaderSync
         marloweHeaderSyncClientPeer
+    , eventBackend
     }
 
 resolve :: HostName -> PortNumber -> IO AddrInfo
