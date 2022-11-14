@@ -23,7 +23,8 @@ module Language.Marlowe.Runtime.Web.Server
   , serverWithOpenAPI
   ) where
 
-import Control.Concurrent.Async (concurrently_)
+import Control.Concurrent.Async (concurrently_, mapConcurrently_)
+import Control.Concurrent.STM (STM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
@@ -93,7 +94,18 @@ newtype Server = Server
   { runServer :: IO ()
   }
 
-mkServer :: ServerDependencies r -> IO Server
+{- Architecture notes:
+    The web server runs multiple parallel worker processes. If any of them crash,
+    the whole application crashes.
+
+    The web server (built with servant-server) runs in a `ReaderT` monad that has
+    access to some resources from the other worker processes.
+
+    Application logging is done using the eventuo11y library, which each worker
+    process having its own event backend injected via its parameters.
+-}
+
+mkServer :: ServerDependencies r -> STM Server
 mkServer ServerDependencies{..} = do
   ContractHeaderIndexer{..} <- mkContractHeaderIndexer ContractHeaderIndexerDependencies
     { runMarloweHeaderSyncClient
@@ -106,6 +118,8 @@ mkServer ServerDependencies{..} = do
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
     app' = application (narrowEventBackend Http eventBackend) $ app openAPIEnabled env httpBackend . setAncestor
   pure Server
-    { runServer = runApplication app'
-        `concurrently_` runContractHeaderIndexer
+    { runServer = mapConcurrently_ @[] id
+        [ runApplication app'
+        , runContractHeaderIndexer
+        ]
     }

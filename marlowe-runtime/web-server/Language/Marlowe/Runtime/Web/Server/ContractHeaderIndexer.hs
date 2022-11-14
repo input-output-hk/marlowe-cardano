@@ -72,20 +72,20 @@ data ContractHeaderIndexer = ContractHeaderIndexer
   }
 
 -- | Create a new contract header indexer.
-mkContractHeaderIndexer :: ContractHeaderIndexerDependencies r -> IO ContractHeaderIndexer
+mkContractHeaderIndexer :: ContractHeaderIndexerDependencies r -> STM ContractHeaderIndexer
 mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
   -- State variable that stores contract headers in a nested map. The outer
   -- IntMap indexes collections of contract headers by slot number, and the
   -- inner map indexes the contract headers for that slot by contract ID. This
   -- nesting encodes the two levels of ordering for contract headers - sort
   -- first by slot, then by contractId as a byte string.
-  contractsTVar <- newTVarIO (mempty :: IntMap (Map ContractId ContractHeader))
+  contractsTVar <- newTVar (mempty :: IntMap (Map ContractId ContractHeader))
   -- State variable that stores a reverse index that allows the slot number to
   -- be looked up for a particular contract ID.
-  slotIndexTVar <- newTVarIO (mempty :: Map ContractId IntMap.Key)
+  slotIndexTVar <- newTVar (mempty :: Map ContractId IntMap.Key)
   -- Synchronization variable that is used to wait until the sync client has
   -- caught up to the tip of the server.
-  inSync <- newEmptyTMVarIO
+  inSync <- newEmptyTMVar
   let
     -- Client that keeps the local state synchronized with an upstream peer
     -- (e.g. a running instance of marlowe-discovery).

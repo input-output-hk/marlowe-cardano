@@ -415,6 +415,7 @@ executable marlowe-web-server
     , marlowe-runtime
     , network
     , optparse-applicative
+    , stm
     , typed-protocols
     , warp
   ghc-options: -threaded

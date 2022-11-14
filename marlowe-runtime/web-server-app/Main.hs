@@ -9,6 +9,7 @@
 module Main
   where
 
+import Control.Concurrent.STM (atomically)
 import Control.Exception (Exception, bracket, bracketOnError, throwIO)
 import qualified Data.ByteString.Lazy as LB
 import Language.Marlowe.Protocol.HeaderSync.Client (marloweHeaderSyncClientPeer)
@@ -41,7 +42,7 @@ main = hSetBuffering stdout LineBuffering
   >> hSetBuffering stderr LineBuffering
   >> getOptions
   >>= optionsToServerDependencies
-  >>= mkServer
+  >>= atomically . mkServer
   >>= runServer
 
 optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
