@@ -23,21 +23,11 @@ marlowe add $EXISTING_CONTRACT_ID
 marlowe ls
 echo "Test Scnario set up done"
 
-echo "Scenario: Adding a new contract id when an existing contract is managed in history"
-marlowe add $NEW_CONTRACT_ID
-
-echo "Expect to see $EXISTING_CONTRACT_ID and $NEW_CONTRACT_ID in history"
+echo "Scenario: One contract is managed in history"
+echo "Expect to see $EXISTING_CONTRACT_ID in history"
 marlowe ls
 
-echo "Scenario: Adding an already managed contract id to history should raise an error"
-
-echo "Expect to see an error: 'Contract already managed in history"
-marlowe add $EXISTING_CONTRACT_ID
-
-echo "Expect to see $EXISTING_CONTRACT_ID and $NEW_CONTRACT_ID in history"
-marlowe ls
-
-echo "Expect to see an error: 'Contract already managed in history"
+echo "Scenario: two contracts managed in history"
 marlowe add $NEW_CONTRACT_ID
 
 echo "Expect to see $EXISTING_CONTRACT_ID and $NEW_CONTRACT_ID in history"
