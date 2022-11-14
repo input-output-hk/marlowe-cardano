@@ -40,6 +40,7 @@ setTimeout(() => {
 
           const exploreWalletOptions = document.createElement("a");
           exploreWalletOptions.innerHTML = wallet;
+          exploreWalletOptions.setAttribute("href", `/${wallet}`);
           walletListItem.appendChild(exploreWalletOptions);
         }
       }

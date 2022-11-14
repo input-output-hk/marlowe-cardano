@@ -141,6 +141,7 @@
         "cip30-demo" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."blaze-markup" or (errorHandler.buildDepError "blaze-markup"))
             (hsPkgs."yesod" or (errorHandler.buildDepError "yesod"))
             (hsPkgs."shakespeare" or (errorHandler.buildDepError "shakespeare"))
             ];
