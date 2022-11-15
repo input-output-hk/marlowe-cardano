@@ -444,13 +444,16 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.History.Store.ModelSpec
     Language.Marlowe.Runtime.HistorySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
+    Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
     , async
     , bytestring
     , cardano-api
+    , cardano-api:gen
     , containers
+    , hedgehog-quickcheck
     , hspec
     , marlowe
     , marlowe-chain-sync

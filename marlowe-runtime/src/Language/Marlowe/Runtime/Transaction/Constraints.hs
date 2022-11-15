@@ -361,6 +361,8 @@ data MarloweContext v = MarloweContext
   , payoutScriptHash :: Chain.ScriptHash
   }
 
+deriving instance Show (MarloweContext 'V1)
+
 type SolveConstraints
    = forall v
    . Core.MarloweVersion v
