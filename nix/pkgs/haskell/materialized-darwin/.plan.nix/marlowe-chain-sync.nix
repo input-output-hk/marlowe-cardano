@@ -35,7 +35,7 @@
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-          (hsPkgs."async" or (errorHandler.buildDepError "async"))
+          (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
           (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
@@ -95,6 +95,7 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
