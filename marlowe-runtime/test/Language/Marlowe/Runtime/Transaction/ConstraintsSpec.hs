@@ -16,6 +16,7 @@ import Data.Maybe (fromJust, mapMaybe)
 import qualified Data.Set as Set
 import Data.Traversable (for)
 import Data.Word (Word32)
+import GHC.Word (Word64)
 import Gen.Cardano.Api.Metadata (genTxMetadataValue)
 import Gen.Cardano.Api.Typed
   ( genAddressByron
@@ -29,7 +30,7 @@ import Gen.Cardano.Api.Typed
   , genValueForTxOut
   , genVerificationKey
   )
-import Language.Marlowe (MarloweData(MarloweData), MarloweParams(..), txInputs)
+import Language.Marlowe (MarloweData(..), MarloweParams(..), txInputs)
 import Language.Marlowe.Runtime.Cardano.Api
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
@@ -44,10 +45,11 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Constraints
+import Spec.Marlowe.Common (shrinkContract)
 import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary(semiArbitrary), arbitraryValidInput)
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.QuickCheck
+import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Property (failed)
 
@@ -200,6 +202,87 @@ instance Arbitrary SolveInitialTxBodyContentArgs where
   arbitrary = oneof
     [ SolveInitialTxBodyContentArgs <$> genV1SolveInitialTxBodyContentArgs
     ]
+  shrink (SolveInitialTxBodyContentArgs args@SolveInitialTxBodyContentArgs'{..}) =
+    case marloweVersion of
+      MarloweV1 -> SolveInitialTxBodyContentArgs <$> shrinkV1SolveInitialTxBodyContentArgs args
+
+shrinkV1SolveInitialTxBodyContentArgs
+  :: SolveInitialTxBodyContentArgs' 'V1
+  -> [SolveInitialTxBodyContentArgs' 'V1]
+shrinkV1SolveInitialTxBodyContentArgs SolveInitialTxBodyContentArgs'{..} = do
+  constraints' <- shrinkConstraints constraints
+  SolveInitialTxBodyContentArgs' protocol MarloweV1
+    <$> shrinkMarloweContext constraints' marloweContext
+    <*> shrinkWalletContext constraints' walletContext
+    <*> pure constraints'
+
+shrinkConstraints :: TxConstraints 'V1 -> [TxConstraints 'V1]
+shrinkConstraints TxConstraints{..} = TxConstraints
+  <$> shrinkMarloweInputConstraints marloweInputConstraints
+  <*> shrinkPayoutInputConstraints payoutInputConstraints
+  <*> shrinkRoleTokenConstraints roleTokenConstraints
+  <*> shrinkPayToAddresses payToAddresses
+  <*> shrinkPayToRoles payToRoles
+  <*> shrinkMarloweOutputConstraints marloweOutputConstraints
+  <*> shrinkMerkleizedContinuationsConstraints merkleizedContinuationsConstraints
+  <*> shrinkSignatureConstraints signatureConstraints
+  <*> shrinkMetadataConstraints metadataConstraints
+
+shrinkMarloweInputConstraints :: MarloweInputConstraints 'V1 -> [MarloweInputConstraints 'V1]
+shrinkMarloweInputConstraints = \case
+  MarloweInputConstraintsNone -> []
+  MarloweInput s1 s2 redeemer -> MarloweInputConstraintsNone : (MarloweInput s1 s2 <$> shrinkList shrinkNothing redeemer)
+
+shrinkSet :: (a -> [a]) -> Set.Set a -> [Set.Set a]
+shrinkSet shrinkItem = fmap Set.fromDistinctAscList . shrinkList shrinkItem . Set.toAscList
+
+shrinkMap :: (v -> [v]) -> Map k v -> [Map k v]
+shrinkMap shrinkItem = fmap Map.fromDistinctAscList . shrinkList (traverse shrinkItem) . Map.toAscList
+
+shrinkPayoutInputConstraints :: Set.Set Chain.AssetId -> [Set.Set Chain.AssetId]
+shrinkPayoutInputConstraints = shrinkSet shrinkNothing
+
+shrinkRoleTokenConstraints :: RoleTokenConstraints -> [RoleTokenConstraints]
+shrinkRoleTokenConstraints = \case
+  RoleTokenConstraintsNone -> []
+  MintRoleTokens ref witness distribution -> RoleTokenConstraintsNone :
+    (MintRoleTokens ref witness <$> shrinkMap shrinkNothing distribution)
+  SpendRoleTokens roleTokens -> RoleTokenConstraintsNone :
+    (SpendRoleTokens <$> shrinkSet shrinkNothing roleTokens)
+
+shrinkPayToAddresses :: Map Chain.Address Chain.Assets -> [Map Chain.Address Chain.Assets]
+shrinkPayToAddresses = shrinkMap shrinkAssets
+
+shrinkPayToRoles :: Map Chain.AssetId Chain.Assets -> [Map Chain.AssetId Chain.Assets]
+shrinkPayToRoles = shrinkMap shrinkAssets
+
+shrinkAssets :: Chain.Assets -> [Chain.Assets]
+shrinkAssets Chain.Assets{..} = Chain.Assets ada <$> shrinkTokens tokens
+
+shrinkTokens :: Chain.Tokens -> [Chain.Tokens]
+shrinkTokens = fmap Chain.Tokens . shrinkMap shrinkNothing . Chain.unTokens
+
+shrinkMarloweOutputConstraints :: MarloweOutputConstraints 'V1 -> [MarloweOutputConstraints 'V1]
+shrinkMarloweOutputConstraints = \case
+  MarloweOutputConstraintsNone -> []
+  MarloweOutput assets datum -> MarloweOutput <$> shrinkAssets assets <*> shrinkDatum datum
+
+shrinkDatum :: MarloweData -> [MarloweData]
+shrinkDatum MarloweData{..} = MarloweData marloweParams marloweState <$> shrinkContract marloweContract
+
+shrinkMerkleizedContinuationsConstraints :: Set.Set (Contract 'V1) -> [Set.Set (Contract 'V1)]
+shrinkMerkleizedContinuationsConstraints = shrinkSet shrinkContract
+
+shrinkSignatureConstraints :: Set.Set Chain.PaymentKeyHash -> [Set.Set Chain.PaymentKeyHash]
+shrinkSignatureConstraints = shrinkSet shrinkNothing
+
+shrinkMetadataConstraints :: Map Word64 Chain.Metadata -> [Map Word64 Chain.Metadata]
+shrinkMetadataConstraints metadata
+  | Map.null metadata = []
+  | otherwise = [mempty]
+
+shrinkWalletContext :: TxConstraints 'V1 -> WalletContext -> [WalletContext]
+shrinkWalletContext _ _ = []
 
 genV1SolveInitialTxBodyContentArgs :: Gen (SolveInitialTxBodyContentArgs' 'V1)
 genV1SolveInitialTxBodyContentArgs = do
@@ -302,6 +385,17 @@ genAddress = fromCardanoAddressAny <$> oneof
   , hedgehog $ AddressShelley <$> genAddressShelley
   ]
 
+shrinkMarloweContext :: TxConstraints 'V1 -> MarloweContext 'V1 -> [MarloweContext 'V1]
+shrinkMarloweContext constraints MarloweContext{..} = MarloweContext
+  <$> shrinkScriptOutput constraints scriptOutput
+  <*> shrinkPayoutOutputs constraints payoutOutputs
+  <*> pure marloweAddress
+  <*> pure payoutAddress
+  <*> shrinkReferenceScriptUtxo marloweScriptUTxO
+  <*> shrinkReferenceScriptUtxo payoutScriptUTxO
+  <*> pure marloweScriptHash
+  <*> pure payoutScriptHash
+
 genMarloweContext :: TxConstraints 'V1 -> Gen (MarloweContext 'V1)
 genMarloweContext constraints = do
   marloweScriptHash <- hedgehog genScriptHash
@@ -322,6 +416,19 @@ genMarloweContext constraints = do
     <*> pure (fromCardanoScriptHash marloweScriptHash)
     <*> pure (fromCardanoScriptHash payoutScriptHash)
 
+shrinkScriptOutput :: TxConstraints 'V1 -> Maybe (TransactionScriptOutput 'V1) -> [Maybe (TransactionScriptOutput 'V1)]
+shrinkScriptOutput TxConstraints{..} = \case
+  Nothing -> []
+  Just TransactionScriptOutput{..} -> case marloweInputConstraints of
+    MarloweInputConstraintsNone -> [Nothing]
+    MarloweInput {} -> Just <$>
+      (TransactionScriptOutput address
+        <$> shrinkAssets assets
+        <*> pure utxo
+        <*> shrinkDatum datum
+      )
+
+
 genScriptOutput :: Chain.Address -> TxConstraints 'V1 -> Gen (Maybe (TransactionScriptOutput 'V1))
 genScriptOutput address TxConstraints{..} = case marloweInputConstraints of
   MarloweInputConstraintsNone -> oneof
@@ -329,6 +436,15 @@ genScriptOutput address TxConstraints{..} = case marloweInputConstraints of
     , Just <$> (TransactionScriptOutput address <$> genOutAssets <*> genTxOutRef <*> genDatum)
     ]
   MarloweInput {} -> Just <$> (TransactionScriptOutput address <$> genOutAssets <*> genTxOutRef <*> genDatum)
+
+shrinkPayoutOutputs :: TxConstraints 'V1 -> Map Chain.TxOutRef (Payout 'V1) -> [Map Chain.TxOutRef (Payout 'V1)]
+shrinkPayoutOutputs TxConstraints{..} = filter containsAllRequired . shrinkMap shrinkPayout
+  where
+    containsAllRequired payouts = all (flip Set.member $ Set.fromList $ fmap getDatum $ snd <$> Map.toList payouts) payoutInputConstraints
+    getDatum Payout{..} = datum
+
+shrinkPayout :: Payout 'V1 -> [Payout 'V1]
+shrinkPayout Payout{..} = Payout address <$> shrinkAssets assets <*> pure datum
 
 genPayoutOutputs :: Chain.Address -> TxConstraints 'V1 -> Gen (Map Chain.TxOutRef (Payout 'V1))
 genPayoutOutputs address TxConstraints{..} = (<>) <$> required <*> extra
@@ -340,6 +456,17 @@ genPayout :: Chain.Address -> Chain.AssetId -> Gen (Chain.TxOutRef, Payout 'V1)
 genPayout address datum = do
   assets <- genOutAssets
   (,Payout{..}) <$> genTxOutRef
+
+shrinkReferenceScriptUtxo :: ReferenceScriptUtxo -> [ReferenceScriptUtxo]
+shrinkReferenceScriptUtxo ReferenceScriptUtxo{..} = ReferenceScriptUtxo txOutRef
+  <$> shrinkTransactionOutput txOut
+  <*> pure script
+
+shrinkTransactionOutput :: Chain.TransactionOutput -> [Chain.TransactionOutput]
+shrinkTransactionOutput Chain.TransactionOutput{..} = Chain.TransactionOutput address
+  <$> shrinkAssets assets
+  <*> pure datumHash
+  <*> pure datum
 
 genReferenceScriptUtxo :: Chain.Address -> Gen ReferenceScriptUtxo
 genReferenceScriptUtxo address = ReferenceScriptUtxo
