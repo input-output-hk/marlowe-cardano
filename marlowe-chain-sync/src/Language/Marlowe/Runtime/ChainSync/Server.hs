@@ -8,15 +8,13 @@ module Language.Marlowe.Runtime.ChainSync.Server
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
-import Control.Concurrent.Async (wait, waitEitherCatch, withAsync)
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (throwIO)
 import Control.Monad (guard)
 import Data.ByteString.Short (toShort)
 import Data.Functor (void)
 import qualified Data.Text as T
 import Data.Text.IO (hPutStrLn)
-import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( BlockHeader(BlockHeader)
   , BlockHeaderHash(unBlockHeaderHash)
@@ -40,29 +38,15 @@ data ChainSyncServerDependencies = ChainSyncServerDependencies
   , localTip                 :: !(STM Cardano.ChainTip)
   }
 
-newtype ChainSyncServer = ChainSyncServer
-  { runChainSyncServer :: IO Void
-  }
-
-mkChainSyncServer :: ChainSyncServerDependencies -> STM ChainSyncServer
-mkChainSyncServer ChainSyncServerDependencies{..} = do
-  let
-    runChainSyncServer = do
+chainSyncServer :: Component IO ChainSyncServerDependencies ()
+chainSyncServer = serverComponent
+  worker
+  (\ex -> hPutStrLn stderr $ "Lost client with exception " <> T.pack (show ex))
+  (hPutStrLn stderr "Client terminated normally")
+  \ChainSyncServerDependencies{..} -> do
       runChainSeekServer <- acceptRunChainSeekServer
       hPutStrLn stderr "New client connected"
-      worker <- atomically $ mkWorker WorkerDependencies {..}
-      withAsync (runWorker worker) \aworker ->
-        withAsync runChainSyncServer \aserver -> do
-          result <- waitEitherCatch aworker aserver
-          case result of
-            Right (Left ex) -> throwIO ex
-            Right (Right x) -> absurd x
-            Left (Left ex)  -> do
-              hPutStrLn stderr $ "Lost client with exception " <> T.pack (show ex)
-            Left _  -> do
-              hPutStrLn stderr "Client terminated normally"
-          wait aserver
-  pure $ ChainSyncServer { runChainSyncServer }
+      pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
   { runChainSeekServer :: !(RunChainSeekServer IO)
@@ -70,12 +54,8 @@ data WorkerDependencies = WorkerDependencies
   , localTip           :: !(STM Cardano.ChainTip)
   }
 
-newtype Worker = Worker
-  { runWorker :: IO ()
-  }
-
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} = do
+worker :: Component IO WorkerDependencies ()
+worker = component \WorkerDependencies{..} -> do
   let
     RunServer runServer = runChainSeekServer
     runWorker = void $ runServer server
@@ -115,4 +95,4 @@ mkWorker WorkerDependencies{..} = do
       , recvMsgDone = pure ()
       }
 
-  pure $ Worker { runWorker }
+  pure (runWorker, ())

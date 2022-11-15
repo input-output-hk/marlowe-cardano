@@ -16,8 +16,9 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
-import Control.Concurrent.STM (atomically)
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Concurrent.Component
+import Control.Concurrent.STM (atomically, modifyTVar, newTVarIO, readTVar)
+import Control.Exception (bracket, bracketOnError, finally, throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.String (IsString(fromString))
@@ -26,7 +27,7 @@ import Data.Time (secondsToNominalDiffTime)
 import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Language.Marlowe.Runtime.ChainSync (ChainSync(..), ChainSyncDependencies(..), mkChainSync)
+import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), codecChainSeek)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
@@ -74,7 +75,7 @@ run Options{..} = withSocketsDo do
             (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
         (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
         let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
-        chainSync <- atomically $ mkChainSync ChainSyncDependencies
+        runComponent_ chainSync ChainSyncDependencies
           { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
           , databaseQueries = hoistDatabaseQueries
               (either throwUsageError pure <=< Pool.use pool)
@@ -95,7 +96,6 @@ run Options{..} = withSocketsDo do
           , maxCost
           , costModel
           }
-        runChainSync chainSync
   where
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err

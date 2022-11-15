@@ -2,11 +2,12 @@ module Language.Marlowe.Runtime.ChainSync.Store
   ( ChainStore(..)
   , ChainStoreDependencies(..)
   , Changes(..)
-  , mkChainStore
+  , chainStore
   ) where
 
 import Cardano.Api (ChainPoint(..), ChainTip(..), SlotNo(..))
 import Cardano.Api.Shelley (Hash(..))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, when)
@@ -18,7 +19,6 @@ import Data.Foldable (for_, traverse_)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
-import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks(..), CommitRollback(..))
 import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes(..), isEmptyChanges)
 import Prelude hiding (filter)
@@ -34,14 +34,13 @@ data ChainStoreDependencies = ChainStoreDependencies
   }
 
 -- | Public API of the ChainStore component
-data ChainStore = ChainStore
-  { runChainStore :: !(IO Void)        -- ^ Run the chain store in IO
-  , localTip      :: !(STM ChainTip) -- ^ Action to read the current (local) chain tip
+newtype ChainStore = ChainStore
+  { localTip      :: STM ChainTip -- ^ Action to read the current (local) chain tip
   }
 
 -- | Create a ChainStore component.
-mkChainStore :: ChainStoreDependencies -> STM ChainStore
-mkChainStore ChainStoreDependencies{..} = do
+chainStore :: Component IO ChainStoreDependencies ChainStore
+chainStore = component \ChainStoreDependencies{..} -> do
   localTipVar <- newTVar ChainTipAtGenesis
   let
     awaitChanges :: Maybe Delay -> STM Changes
@@ -53,7 +52,7 @@ mkChainStore ChainStoreDependencies{..} = do
       guard $ not $ isEmptyChanges changes
       pure changes
 
-    runChainStore :: IO Void
+    runChainStore :: IO ()
     runChainStore = go Nothing
       where
         go lastWrite = do
@@ -105,4 +104,4 @@ mkChainStore ChainStoreDependencies{..} = do
 
     localTip = readTVar localTipVar
 
-  pure $ ChainStore { runChainStore, localTip }
+  pure (runChainStore, ChainStore { localTip })

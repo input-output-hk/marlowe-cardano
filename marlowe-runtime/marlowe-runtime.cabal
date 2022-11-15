@@ -104,6 +104,7 @@ library
       base >= 4.9 && < 5
     , aeson
     , async
+    , async-components
     , base16
     , binary
     , cardano-api

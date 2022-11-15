@@ -7,12 +7,14 @@ module Control.Concurrent.Component
 import Control.Applicative (liftA2)
 import Control.Arrow
 import Control.Category
-import Control.Concurrent.Async.Lifted (Async, Concurrently(..), waitCatchSTM, withAsync)
+import Control.Concurrent.Async.Lifted (Async, Concurrently(..), wait, waitCatchSTM, waitEitherCatch, withAsync)
 import Control.Concurrent.STM
+import Control.Exception (SomeException, throwIO)
 import Control.Monad (join)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Control (MonadBaseControl(StM))
+import qualified Data.Bifunctor as B
 import Prelude hiding ((.))
 
 newtype Component m a b = Component { unComponent :: a -> STM (Concurrently m (), b) }
@@ -101,12 +103,41 @@ runComponent c a = do
   (run, b) <- unComponent c a
   pure (runConcurrently run, b)
 
+runComponent_ :: MonadBaseControl IO m => Component m a () -> a -> m ()
+runComponent_ c a = fst =<< liftBase (atomically $ runComponent c a)
+
 withComponent :: MonadBaseControl IO m => Component m a b -> a -> (b -> Async (StM m ()) -> m c) -> m c
 withComponent c a f = do
   (Concurrently run, b) <- liftBase $ atomically $ unComponent c a
   withAsync run $ f b
 
-component :: (a -> STM b) -> (a -> b -> m ()) -> Component m a b
-component initialize run = Component \a -> do
-  b <- initialize a
-  pure (Concurrently $ run a b, b)
+withComponent_ :: MonadBaseControl IO m => Component m a () -> a -> (Async (StM m ()) -> m c) -> m c
+withComponent_ c a = withComponent c a . const
+
+component :: (a -> STM (m (), b)) -> Component m a b
+component run = Component $ (fmap . B.first) Concurrently . run
+
+serverComponent
+  :: forall m a b
+   . MonadBaseControl IO m
+  => Component m b ()
+  -> (SomeException -> m ())
+  -> m ()
+  -> (a -> m b)
+  -> Component m a ()
+serverComponent worker onWorkerError onWorkerTerminated accept = component \a ->
+  let
+    run :: m ()
+    run = do
+      b <- accept a
+      withComponent_ worker b \aworker ->
+        withAsync run \aserver -> do
+          result <- waitEitherCatch aworker aserver
+          case result of
+            Right (Left ex) -> liftBase $ throwIO ex
+            Right (Right x) -> pure x
+            Left (Left ex)  -> onWorkerError ex
+            Left (Right ())  -> onWorkerTerminated
+          wait aserver
+ in
+    pure (run, ())
