@@ -3,6 +3,7 @@
 module Main
   where
 
+import Control.Concurrent.Component
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Either (fromRight)
@@ -11,7 +12,7 @@ import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
-import Language.Marlowe.Runtime.History (History(..), HistoryDependencies(..), mkHistory)
+import Language.Marlowe.Runtime.History (HistoryDependencies(..), history)
 import Language.Marlowe.Runtime.History.Api (historyJobCodec, historyQueryCodec)
 import Language.Marlowe.Runtime.History.Store (hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
@@ -84,10 +85,8 @@ run Options{..} = withSocketsDo do
           acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket historyQueryCodec queryServerPeer
           acceptRunSyncServer = acceptRunServerPeerOverSocket throwIO syncSocket codecMarloweSync marloweSyncServerPeer
         let followerPageSize = 1024 -- TODO move to config with a default
-        History{..} <- atomically do
-          historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
-          mkHistory HistoryDependencies{..}
-        runHistory
+        historyQueries <- atomically $ hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
+        runComponent_ history HistoryDependencies{..}
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1

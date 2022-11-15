@@ -46,7 +46,7 @@ data WorkerDependencies = WorkerDependencies
   }
 
 worker :: Component IO WorkerDependencies ()
-worker = component \WorkerDependencies{..} ->
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runJobServer
 
@@ -61,5 +61,4 @@ worker = component \WorkerDependencies{..} ->
         pure case result of
           SubmitFail err -> Left $ show err
           SubmitSuccess -> Right ()
-  in
-    pure (run server, ())
+  run server

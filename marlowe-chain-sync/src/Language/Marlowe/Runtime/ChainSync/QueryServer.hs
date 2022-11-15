@@ -67,7 +67,7 @@ data WorkerDependencies = WorkerDependencies
   }
 
 worker :: Component IO WorkerDependencies ()
-worker = component \WorkerDependencies{..} ->
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runQueryServer
 
@@ -122,5 +122,4 @@ worker = component \WorkerDependencies{..} ->
       withExceptT (const ()) $ except result
 
     extractSlotConfig GenesisParameters{..} = SlotConfig protocolParamSystemStart protocolParamSlotLength
-  in
-    pure (run server, ())
+  run server

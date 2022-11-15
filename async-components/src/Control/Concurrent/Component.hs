@@ -117,6 +117,9 @@ withComponent_ c a = withComponent c a . const
 component :: (a -> STM (m (), b)) -> Component m a b
 component run = Component $ (fmap . B.first) Concurrently . run
 
+component_ :: (a -> m ()) -> Component m a ()
+component_ = component . fmap (pure . (,()))
+
 serverComponent
   :: forall m a b
    . MonadBaseControl IO m
@@ -125,7 +128,7 @@ serverComponent
   -> m ()
   -> (a -> m b)
   -> Component m a ()
-serverComponent worker onWorkerError onWorkerTerminated accept = component \a ->
+serverComponent worker onWorkerError onWorkerTerminated accept = component_ \a ->
   let
     run :: m ()
     run = do
@@ -140,4 +143,4 @@ serverComponent worker onWorkerError onWorkerTerminated accept = component \a ->
             Left (Right ())  -> onWorkerTerminated
           wait aserver
  in
-    pure (run, ())
+    run

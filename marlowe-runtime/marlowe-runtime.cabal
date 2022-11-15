@@ -281,7 +281,6 @@ executable marlowe
       aeson
     , base >= 4.9 && < 5
     , ansi-terminal
-    , async
     , base16
     , bytestring
     , cardano-api
@@ -333,7 +332,7 @@ executable marlowe-history
   build-depends:
       base >= 4.9 && < 5
     , ansi-terminal
-    , async
+    , async-components
     , base16
     , containers
     , marlowe
@@ -359,7 +358,7 @@ executable marlowe-discovery
   build-depends:
       base >= 4.9 && < 5
     , ansi-terminal
-    , async
+    , async-components
     , base16
     , containers
     , marlowe
@@ -384,7 +383,6 @@ executable marlowe-tx
     Paths_marlowe_runtime
   build-depends:
       ansi-terminal
-    , async
     , base >= 4.9 && < 5
     , base16
     , bytestring

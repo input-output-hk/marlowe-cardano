@@ -8,9 +8,8 @@
 module Language.Marlowe.Runtime.History.JobServer
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, retry)
-import Control.Exception (SomeException, catch)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Language.Marlowe.Runtime.Core.Api
@@ -28,22 +27,14 @@ data HistoryJobServerDependencies = HistoryJobServerDependencies
   , followerStatuses      :: STM (Map ContractId FollowerStatus)
   }
 
-newtype HistoryJobServer = HistoryJobServer
-  { runHistoryJobServer :: IO ()
-  }
-
-mkHistoryJobServer :: HistoryJobServerDependencies -> STM HistoryJobServer
-mkHistoryJobServer HistoryJobServerDependencies{..} = do
-  let
-    runHistoryJobServer = do
+historyJobServer :: Component IO HistoryJobServerDependencies ()
+historyJobServer = serverComponent
+  worker
+  (hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show)
+  (hPutStrLn stderr "Job client terminated normally")
+  \HistoryJobServerDependencies{..} -> do
       runJobServer <- acceptRunJobServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runHistoryJobServer
-  pure $ HistoryJobServer { runHistoryJobServer }
-
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show
+      pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runJobServer          :: RunJobServer IO
@@ -52,18 +43,11 @@ data WorkerDependencies = WorkerDependencies
   , followerStatuses      :: STM (Map ContractId FollowerStatus)
   }
 
-newtype Worker = Worker
-  { runWorker :: IO ()
-  }
-
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} =
+worker :: Component IO WorkerDependencies ()
+worker = component_ \WorkerDependencies{..} ->
   let
     RunServer run = runJobServer
-  in
-    pure Worker { runWorker = run server }
 
-  where
     server :: RuntimeHistoryJobServer IO ()
     server = liftCommandHandler $ fmap ((),) . \case
       Left (FollowContract contractId) -> do
@@ -79,3 +63,5 @@ mkWorker WorkerDependencies{..} =
           else pure $ Right False
       Left (StopFollowingContract contractId) -> atomically $ Right <$> stopFollowingContract contractId
       Right jobId -> case jobId of
+  in
+    run server

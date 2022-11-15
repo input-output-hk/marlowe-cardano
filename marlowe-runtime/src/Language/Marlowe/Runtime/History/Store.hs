@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.History.Store
   where
 
 import Control.Applicative (empty)
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVarIO, writeTVar)
 import Control.Concurrent.STM.TVar (readTVar)
 import Control.Monad (forever, mfilter)
@@ -50,9 +51,7 @@ data HistoryStoreDependencies = HistoryStoreDependencies
 
 -- | API of the history store.
 data HistoryStore = HistoryStore
-  { runHistoryStore   :: IO ()
-  -- ^ Run the history store process.
-  , findContract      :: ContractId -> IO (Maybe (BlockHeader, SomeCreateStep))
+  { findContract      :: ContractId -> IO (Maybe (BlockHeader, SomeCreateStep))
   -- ^ Lookup a contract's creation context by its ID.
   , intersectContract :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> IO (Maybe BlockHeader)
   -- ^ Find the latest common block header from the provided list in a contract's history
@@ -120,11 +119,13 @@ instance Show SomeContractSteps where
     )
 
 -- | Create a new history store from a set of dependencies.
-mkHistoryStore :: HistoryStoreDependencies -> STM HistoryStore
-mkHistoryStore HistoryStoreDependencies{..} = do
+historyStore :: Component IO HistoryStoreDependencies HistoryStore
+historyStore = component \HistoryStoreDependencies{..} -> do
   -- A transactional cache of the latest block in each contract's history.
   latestBlocksPerContractVar <- newTVar (Map.empty :: Map ContractId (TVar (Maybe BlockHeader)))
   let
+    HistoryQueries{..} = historyQueries
+
     runHistoryStore :: IO ()
     runHistoryStore = forever do
       newChanges <- atomically awaitChanges
@@ -209,6 +210,4 @@ mkHistoryStore HistoryStoreDependencies{..} = do
             FindNext blockHeader (SomeContractSteps version' steps) -> case assertVersionsEqual version' version of
               Refl -> pure $ Next blockHeader steps
 
-  pure HistoryStore{..}
-  where
-    HistoryQueries{..} = historyQueries
+  pure (runHistoryStore, HistoryStore{..})

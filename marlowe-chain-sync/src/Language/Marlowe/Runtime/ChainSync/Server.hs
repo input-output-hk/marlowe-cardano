@@ -55,7 +55,7 @@ data WorkerDependencies = WorkerDependencies
   }
 
 worker :: Component IO WorkerDependencies ()
-worker = component \WorkerDependencies{..} -> do
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer runServer = runChainSeekServer
     runWorker = void $ runServer server
@@ -95,4 +95,4 @@ worker = component \WorkerDependencies{..} -> do
       , recvMsgDone = pure ()
       }
 
-  pure (runWorker, ())
+  runWorker
