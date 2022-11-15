@@ -7,6 +7,7 @@ module Language.Marlowe.Runtime.History.StoreSpec
   ) where
 
 import Control.Concurrent (forkFinally, killThread, threadDelay)
+import Control.Concurrent.Component
 import Control.Concurrent.STM
   (STM, TVar, atomically, modifyTVar, newEmptyTMVarIO, newTVar, putTMVar, readTVar, tryTakeTMVar, writeTVar)
 import Control.Exception.Base (throwIO)
@@ -75,9 +76,9 @@ runStoreProp
   -> HistoryScript
   -> Property
 runStoreProp storeProp script = monadicIO do
-  (store@HistoryStore{..}, seedStore) <- run $ atomically setupStore
+  (runStore, store, seedStore) <- run $ atomically setupStore
   exVar <- run newEmptyTMVarIO
-  threadId <- run $ forkFinally runHistoryStore \case
+  threadId <- run $ forkFinally runStore \case
     Left ex -> atomically $ putTMVar exVar ex
     _       -> pure ()
   run $ seedStore script
@@ -98,7 +99,7 @@ runStoreProp storeProp script = monadicIO do
         Nothing -> pure $ actual' === expected'
         Just ex -> run $ throwIO ex
 
-setupStore :: STM (HistoryStore, HistoryScript -> IO ())
+setupStore :: STM (IO (), HistoryStore, HistoryScript -> IO ())
 setupStore = do
   changesVar <- newTVar mempty
   stateVar <- newTVar []
@@ -113,12 +114,12 @@ setupStore = do
     notEmptyUpdate = \case
       RemoveContract    -> False
       UpdateContract ch -> not $ isEmptyChanges ch
-  store <- mkHistoryStore HistoryStoreDependencies{..}
+  (runStore, store) <- runComponent historyStore HistoryStoreDependencies{..}
   let
     seedStore (HistoryScript script) = do
       atomically $ traverse_ (\event -> withSome event $ runScriptEvent stateVar changesVar) script
       atomically $ void $ mfilter (all isEmptyUpdate) $ readTVar changesVar
-  pure (store, seedStore)
+  pure (runStore, store, seedStore)
 
 isEmptyUpdate :: UpdateContract -> Bool
 isEmptyUpdate = \case

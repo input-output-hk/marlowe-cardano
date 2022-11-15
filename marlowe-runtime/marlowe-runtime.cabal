@@ -384,6 +384,7 @@ executable marlowe-tx
   build-depends:
       ansi-terminal
     , base >= 4.9 && < 5
+    , async-components
     , base16
     , bytestring
     , cardano-api
@@ -448,6 +449,7 @@ test-suite marlowe-runtime-test
   build-depends:
       base >= 4.9 && < 5
     , async
+    , async-components
     , bytestring
     , cardano-api
     , cardano-api:gen

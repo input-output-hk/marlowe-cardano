@@ -5,6 +5,7 @@ module Language.Marlowe.Runtime.Discovery.Chain
   where
 
 import Control.Applicative ((<|>))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
 import Data.Crosswalk (crosswalk)
@@ -13,7 +14,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
@@ -57,13 +57,8 @@ newtype DiscoveryChainClientDependencies = DiscoveryChainClientDependencies
   { connectToChainSeek :: RunClient IO Chain.RuntimeChainSeekClient
   }
 
-data DiscoveryChainClient = DiscoveryChainClient
-  { runDiscoveryChainClient :: IO Void
-  , changes :: STM Changes
-  }
-
-mkDiscoveryChainClient :: DiscoveryChainClientDependencies -> STM DiscoveryChainClient
-mkDiscoveryChainClient DiscoveryChainClientDependencies{..} = do
+discoveryChainClient :: Component IO DiscoveryChainClientDependencies (STM Changes)
+discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
   changesVar <- newTVar mempty
   let
     clientInit = Chain.SendMsgRequestHandshake Chain.moveSchema clientHandshake
@@ -95,13 +90,13 @@ mkDiscoveryChainClient DiscoveryChainClientDependencies{..} = do
           pure clientIdle
       }
 
-  pure DiscoveryChainClient
-    { runDiscoveryChainClient = connectToChainSeek $ Chain.ChainSeekClient $ pure clientInit
-    , changes = do
+  pure
+    ( connectToChainSeek $ Chain.ChainSeekClient $ pure clientInit
+    , do
         changes <- readTVar changesVar
         writeTVar changesVar mempty
         pure changes
-    }
+    )
 
 extractHeaders :: Chain.BlockHeader -> Chain.Transaction -> Maybe (Set ContractHeader)
 extractHeaders blockHeader Chain.Transaction{..} =

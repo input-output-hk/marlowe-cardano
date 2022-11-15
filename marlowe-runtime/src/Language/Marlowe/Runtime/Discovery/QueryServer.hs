@@ -8,9 +8,7 @@
 module Language.Marlowe.Runtime.Discovery.QueryServer
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
-import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException, catch)
+import Control.Concurrent.Component
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (PolicyId)
 import Language.Marlowe.Runtime.Discovery.Api
@@ -29,22 +27,14 @@ data DiscoveryQueryServerDependencies = DiscoveryQueryServerDependencies
   , pageSize :: Natural
   }
 
-newtype DiscoveryQueryServer = DiscoveryQueryServer
-  { runDiscoveryQueryServer :: IO Void
-  }
-
-mkDiscoveryQueryServer :: DiscoveryQueryServerDependencies -> STM DiscoveryQueryServer
-mkDiscoveryQueryServer DiscoveryQueryServerDependencies{..} = do
-  let
-    runDiscoveryQueryServer = do
+discoveryQueryServer :: Component IO DiscoveryQueryServerDependencies ()
+discoveryQueryServer = serverComponent
+  worker
+  (hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show)
+  (hPutStrLn stderr "Query client terminated normally")
+  \DiscoveryQueryServerDependencies{..} -> do
       runQueryServer <- acceptRunQueryServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runDiscoveryQueryServer
-  pure $ DiscoveryQueryServer { runDiscoveryQueryServer }
-
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show
+      pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runQueryServer   :: RunQueryServer IO
@@ -53,24 +43,18 @@ data WorkerDependencies = WorkerDependencies
   , pageSize :: Natural
   }
 
-newtype Worker = Worker
-  { runWorker :: IO ()
-  }
-
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} =
+worker :: Component IO WorkerDependencies ()
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runQueryServer
-  in
-    pure Worker { runWorker = run server }
 
-  where
     server :: QueryServer DiscoveryQuery IO ()
     server = QueryServer $ pure $ ServerStInit \case
       GetContractHeaders ->
         getContractHeadersServer pageSize getHeaders
       GetContractHeadersByRoleTokenCurrency policyId ->
         getContractHeadersByRoleTokenCurrencyServer policyId getHeadersByRoleTokenCurrency
+  run server
 
 getContractHeadersServer
   :: Natural

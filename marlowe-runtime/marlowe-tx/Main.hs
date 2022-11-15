@@ -4,7 +4,7 @@ module Main
   where
 
 import qualified Colog
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Data.Either (fromRight)
@@ -25,8 +25,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Logging (mkLogger)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
-import Language.Marlowe.Runtime.Transaction.Server
-  (TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
+import Language.Marlowe.Runtime.Transaction.Server (TransactionServerDependencies(..), transactionServer)
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
@@ -117,11 +116,7 @@ run Options{..} = withSocketsDo do
         loadWalletContext :: LoadWalletContext
         loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
 
-      TransactionServer{..} <- atomically do
-        mkTransactionServer TransactionServerDependencies{..}
-
-      {- Run the server -}
-      runTransactionServer
+      runComponent_ transactionServer TransactionServerDependencies{..}
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1

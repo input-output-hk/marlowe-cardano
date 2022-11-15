@@ -8,9 +8,7 @@
 module Language.Marlowe.Runtime.Discovery.SyncServer
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
-import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException, catch)
+import Control.Concurrent.Component
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Discovery.Api
@@ -25,22 +23,14 @@ data DiscoverySyncServerDependencies = DiscoverySyncServerDependencies
   , getIntersect :: [BlockHeader] -> IO (Maybe BlockHeader)
   }
 
-newtype DiscoverySyncServer = DiscoverySyncServer
-  { runDiscoverySyncServer :: IO ()
-  }
-
-mkDiscoverySyncServer :: DiscoverySyncServerDependencies -> STM DiscoverySyncServer
-mkDiscoverySyncServer DiscoverySyncServerDependencies{..} = do
-  let
-    runDiscoverySyncServer = do
+discoverySyncServer :: Component IO DiscoverySyncServerDependencies ()
+discoverySyncServer = serverComponent
+  worker
+  (hPutStrLn stderr . ("Sync worker crashed with exception: " <>) . show)
+  (hPutStrLn stderr "Sync client terminated normally")
+  \DiscoverySyncServerDependencies{..} -> do
       runSyncServer <- acceptRunSyncServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runDiscoverySyncServer
-  pure $ DiscoverySyncServer { runDiscoverySyncServer }
-
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Sync worker crashed with exception: " <>) . show
+      pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runSyncServer     :: RunSyncServer IO
@@ -52,14 +42,11 @@ newtype Worker = Worker
   { runWorker :: IO ()
   }
 
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} =
+worker :: Component IO WorkerDependencies ()
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runSyncServer
-  in
-    pure Worker { runWorker = run server }
 
-  where
     server :: MarloweHeaderSyncServer IO ()
     server = MarloweHeaderSyncServer $ pure $ idleServer Genesis
 
@@ -90,3 +77,4 @@ mkWorker WorkerDependencies{..} =
       { recvMsgPoll = nextServer point
       , recvMsgCancel = pure $ idleServer point
       }
+  run server
