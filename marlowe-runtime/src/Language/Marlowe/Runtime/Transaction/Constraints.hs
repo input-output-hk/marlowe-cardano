@@ -59,7 +59,7 @@ import Witherable (wither)
 --   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
 logD :: String -> a -> a
 -- logD = trace  -- Logging "active"
-logD = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+logD = const id -- Logging "inactive", uncomment this to disable logging without removing log code
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -171,7 +171,7 @@ mustSendMarloweOutput assets datum =
 
 -- | Require the transaction to send an output which contains datum with
 -- the merkleized continuation. `MarloweTxInput` redeemer only references the continuation
--- through hash but the actual continuation is embeded in the datum of other dedicated for that
+-- through hash but the actual continuation is embedded in the datum of other dedicated for that
 -- purpose output.
 --
 -- Requires that:
@@ -854,25 +854,6 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
   txValidityRange <- solveTxValidityRange
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
-  -- pure C.TxBodyContent
-  --   { txIns
-  --   , txInsCollateral = C.TxInsCollateralNone
-  --   , txInsReference
-  --   , txOuts
-  --   , txTotalCollateral = C.TxTotalCollateralNone
-  --   , txReturnCollateral = C.TxReturnCollateralNone
-  --   , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-  --   , txValidityRange
-  --   , txMetadata
-  --   , txAuxScripts = C.TxAuxScriptsNone
-  --   , txExtraKeyWits
-  --   , txProtocolParams = C.BuildTxWith $ Just protocol
-  --   , txWithdrawals = C.TxWithdrawalsNone
-  --   , txCertificates = C.TxCertificatesNone
-  --   , txUpdateProposal = C.TxUpdateProposalNone
-  --   , txMintValue
-  --   , txScriptValidity = C.TxScriptValidityNone
-  --   }
   pure C.TxBodyContent
     { txIns = logD ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
     , txInsCollateral = C.TxInsCollateralNone
@@ -889,7 +870,6 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    -- , txMintValue
     , txMintValue = logD "END values for the new tx body" txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
