@@ -3,6 +3,7 @@ index-state: 2022-10-29T00:00:00Z
 -- with-compiler: ghc-8.10.7
 
 packages:
+  async-components
   marlowe
   marlowe-actus
   marlowe-chain-sync
