@@ -1,15 +1,18 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec
   where
 
 import Cardano.Api
 import Cardano.Api.Shelley (PlutusScriptOrReferenceInput(PScript), ProtocolParameters)
-import Data.Bifunctor (Bifunctor(bimap))
+import Control.Applicative (Alternative)
+import Control.Monad (guard)
 import Data.Foldable (fold)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromJust, mapMaybe)
 import qualified Data.Set as Set
 import Data.Traversable (for)
 import Data.Word (Word32)
@@ -28,14 +31,6 @@ import Gen.Cardano.Api.Typed
   )
 import Language.Marlowe (MarloweData(MarloweData), MarloweParams(..), txInputs)
 import Language.Marlowe.Runtime.Cardano.Api
-  ( assetsFromCardanoValue
-  , fromCardanoAddressAny
-  , fromCardanoAssetName
-  , fromCardanoPaymentKeyHash
-  , fromCardanoPolicyId
-  , fromCardanoScriptHash
-  , fromCardanoTxId
-  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( Contract
@@ -58,7 +53,7 @@ import Test.QuickCheck.Property (failed)
 
 spec :: Spec
 spec = do
-  describe "solveInitialTxBodyContent" do
+  focus $ describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SolveInitialTxBodyContentArgs SolveInitialTxBodyContentArgs'{..}) ->
       case solveInitialTxBodyContent protocol marloweVersion marloweContext walletContext constraints of
         Left err -> case marloweVersion of
@@ -71,57 +66,118 @@ satisfiesConstraints marloweVersion constraints txBodyContent =
 
 violations :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
 violations marloweVersion constraints txBodyContent = fold
-  [ mustMintRoleTokenViolations marloweVersion constraints txBodyContent
-  , mustSpendRoleTokenViolations marloweVersion constraints txBodyContent
-  , mustPayToAddressViolations marloweVersion constraints txBodyContent
-  , mustSendMarloweOutputViolations marloweVersion constraints txBodyContent
-  , mustSendMerkleizedContinuationOutputViolations marloweVersion constraints txBodyContent
-  , mustPayToRoleViolations marloweVersion constraints txBodyContent
-  , mustConsumeMarloweOutputViolations marloweVersion constraints txBodyContent
-  , mustConsumePayoutsViolations marloweVersion constraints txBodyContent
-  , requiresSignatureViolations marloweVersion constraints txBodyContent
-  , requiresMetadataViolations marloweVersion constraints txBodyContent
+  [ ("mustMintRoleToken: " <>) <$> mustMintRoleTokenViolations marloweVersion constraints txBodyContent
+  , ("mustSpendRoleToken: " <>) <$> mustSpendRoleTokenViolations marloweVersion constraints txBodyContent
+  , ("mustPayToAddress: " <>) <$> mustPayToAddressViolations marloweVersion constraints txBodyContent
+  , ("mustSendMarloweOutput: " <>) <$> mustSendMarloweOutputViolations marloweVersion constraints txBodyContent
+  , ("mustSendMerkleizedContinuationOutput: " <>) <$> mustSendMerkleizedContinuationOutputViolations marloweVersion constraints txBodyContent
+  , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion constraints txBodyContent
+  , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion constraints txBodyContent
+  , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion constraints txBodyContent
+  , ("requiresSignature: " <>) <$> requiresSignatureViolations marloweVersion constraints txBodyContent
+  , ("requiresMetadata: " <>) <$> requiresMetadataViolations marloweVersion constraints txBodyContent
   ]
+
+check :: Alternative m => Bool -> a -> m a
+check condition msg = msg <$ guard (not condition)
 
 mustMintRoleTokenViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustMintRoleTokenViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustMintRoleTokenViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = fold
+  [ mintsOneToken
+  , sendsOneTokenAndOnlyToken
+  , consumesUtxo
+  ]
+  where
+    consumesUtxo = case roleTokenConstraints of
+      MintRoleTokens txOutRef _ _ -> do
+        check
+          (any ((== txOutRef) . fromCardanoTxIn . fst) txIns)
+          ("UTxO not consumed: " <> show (Chain.renderTxOutRef txOutRef))
+      _ -> []
+
+    sendsOneTokenAndOnlyToken = case roleTokenConstraints of
+      MintRoleTokens _ _ distribution -> do
+        (assetId, address) <- Map.toList distribution
+        (("roleToken: " <> show assetId) <>) <$> do
+          let
+            cardanoAssetId = toCardanoAssetId assetId
+            matches (TxOut outAddress (TxOutValue MultiAssetInBabbageEra value) _ _)
+              | selectAsset value cardanoAssetId > 0 = Just (outAddress, value)
+              | otherwise = Nothing
+            matches (TxOut _ (TxOutAdaOnly era _) _ _) = case era of
+          let matchingOuts = mapMaybe matches txOuts
+          case matchingOuts of
+            [(outAddress, value)] -> do
+              fold
+                [ check
+                    (fmap fst (valueToList value) == [cardanoAssetId])
+                    ("Output contains extra tokens: " <> show (fmap fst (valueToList value)))
+                , check
+                    (selectAsset value cardanoAssetId == 1)
+                    ("Output quantity for token expected to equal 1, was: " <> show (selectAsset value cardanoAssetId))
+                , check
+                    (fromCardanoAddressInEra BabbageEra outAddress == address)
+                    ("Output sent to wrong address: " <> show outAddress)
+                ]
+            [] -> pure "No outputs contain role token"
+            _ -> pure "Multiple outputs contain role token"
+      _ -> []
+
+    mintsOneToken = case roleTokenConstraints of
+      MintRoleTokens _ _ distribution -> case txMintValue of
+        TxMintNone
+          | Map.null distribution -> []
+          | otherwise -> ["No tokens minted"]
+        TxMintValue MultiAssetInBabbageEra value _ -> do
+          assetId <- Map.keys distribution
+          (("roleToken: " <> show assetId) <>) <$> do
+            let cardanoAssetId = toCardanoAssetId assetId
+            let quantityMinted = selectAsset value cardanoAssetId
+            check (quantityMinted == 1) ("Expected to mint 1 token, found " <> show quantityMinted)
+      _ -> []
+
+toCardanoAssetId :: Chain.AssetId -> AssetId
+toCardanoAssetId (Chain.AssetId policy name) = AssetId
+  (fromJust $ toCardanoPolicyId policy)
+  (toCardanoAssetName name)
+
 
 mustSpendRoleTokenViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustSpendRoleTokenViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustSpendRoleTokenViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 mustPayToAddressViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustPayToAddressViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustPayToAddressViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 mustSendMarloweOutputViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustSendMarloweOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustSendMarloweOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 mustSendMerkleizedContinuationOutputViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustSendMerkleizedContinuationOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustSendMerkleizedContinuationOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 mustPayToRoleViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustPayToRoleViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustPayToRoleViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 mustConsumeMarloweOutputViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustConsumeMarloweOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustConsumeMarloweOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 mustConsumePayoutsViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustConsumePayoutsViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+mustConsumePayoutsViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 requiresSignatureViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-requiresSignatureViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+requiresSignatureViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 requiresMetadataViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-requiresMetadataViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = error "not implemented"
+requiresMetadataViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
 
 data SolveInitialTxBodyContentArgs =
   forall v. SolveInitialTxBodyContentArgs (SolveInitialTxBodyContentArgs' v)
@@ -147,7 +203,7 @@ instance Arbitrary SolveInitialTxBodyContentArgs where
 
 genV1SolveInitialTxBodyContentArgs :: Gen (SolveInitialTxBodyContentArgs' 'V1)
 genV1SolveInitialTxBodyContentArgs = do
-  constraints <- genConstraints
+  constraints <- fixConstraints <$> genConstraints
   SolveInitialTxBodyContentArgs'
     <$> hedgehog genProtocolParameters
     <*> pure MarloweV1
@@ -155,9 +211,27 @@ genV1SolveInitialTxBodyContentArgs = do
     <*> genWalletContext constraints
     <*> pure constraints
 
+fixConstraints :: TxConstraints 'V1 -> TxConstraints 'V1
+fixConstraints constraints@TxConstraints{..} = constraints
+  { payToAddresses = case roleTokenConstraints of
+      MintRoleTokens _ _ distribution -> removeTokens distribution <$> payToAddresses
+      _ -> payToAddresses
+  , payToRoles = case roleTokenConstraints of
+      MintRoleTokens _ _ distribution -> removeTokens distribution <$> payToRoles
+      _ -> payToRoles
+  , marloweOutputConstraints = case (roleTokenConstraints, marloweOutputConstraints) of
+      (MintRoleTokens _ _ distribution, MarloweOutput assets datum) ->
+        MarloweOutput (removeTokens distribution assets) datum
+      _ -> marloweOutputConstraints
+  }
+
+removeTokens :: Map Chain.AssetId Chain.Address -> Chain.Assets -> Chain.Assets
+removeTokens distribution (Chain.Assets lovelace (Chain.Tokens tokens)) =
+  Chain.Assets lovelace $ Chain.Tokens $ Map.difference tokens distribution
+
 genConstraints :: Gen (TxConstraints 'V1)
 genConstraints = sized \n -> frequency
-    [ (n, resize (n - 1) $ (<>) <$> genConstraints <*> genConstraints)
+    [ (n, resize (n `div` 2) $ (<>) <$> genConstraints <*> genConstraints)
     , (1, pure mempty)
     , (1, mustMintRoleToken <$> genTxOutRef <*> genMintScriptWitness <*> genAssetId <*> genAddress)
     , (1, mustSpendRoleToken <$> genAssetId)
@@ -185,14 +259,6 @@ genRedeemer = do
 
 genMetadata :: Gen Chain.Metadata
 genMetadata = hedgehog $ fromCardanoMetadata <$> genTxMetadataValue
-
-fromCardanoMetadata :: TxMetadataValue -> Chain.Metadata
-fromCardanoMetadata = \case
-  TxMetaMap ms -> Chain.MetadataMap $ bimap fromCardanoMetadata fromCardanoMetadata <$> ms
-  TxMetaList ms -> Chain.MetadataList $ fromCardanoMetadata <$> ms
-  TxMetaNumber i -> Chain.MetadataNumber i
-  TxMetaBytes bs -> Chain.MetadataBytes bs
-  TxMetaText t -> Chain.MetadataText t
 
 genPaymentKeyHash :: Gen Chain.PaymentKeyHash
 genPaymentKeyHash = hedgehog $ fromCardanoPaymentKeyHash . verificationKeyHash <$> genVerificationKey AsPaymentKey
@@ -267,11 +333,8 @@ genScriptOutput address TxConstraints{..} = case marloweInputConstraints of
 genPayoutOutputs :: Chain.Address -> TxConstraints 'V1 -> Gen (Map Chain.TxOutRef (Payout 'V1))
 genPayoutOutputs address TxConstraints{..} = (<>) <$> required <*> extra
   where
-    required = Map.fromList . concat <$> traverse (genPayouts address) (Set.toList payoutInputConstraints)
-    extra = Map.fromList . concat <$> listOf (genPayouts address =<< genAssetId)
-
-genPayouts :: Chain.Address -> Chain.AssetId -> Gen [(Chain.TxOutRef, Payout 'V1)]
-genPayouts address datum = listOf1 $ genPayout address datum
+    required = Map.fromList <$> traverse (genPayout address) (Set.toList payoutInputConstraints)
+    extra = Map.fromList <$> listOf (genPayout address =<< genAssetId)
 
 genPayout :: Chain.Address -> Chain.AssetId -> Gen (Chain.TxOutRef, Payout 'V1)
 genPayout address datum = do
