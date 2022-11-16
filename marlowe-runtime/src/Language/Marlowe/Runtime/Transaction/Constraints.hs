@@ -199,9 +199,6 @@ mustSendMerkleizedContinuationOutput contract =
 --   1. fromCardano (total role txBody `subValue` total role txBody') == assets
 --   2. The transaction sends an output to a script address.
 --   3. The datum of the output in rule 2 is equal to the role.
---   4. The transaction consumes an output from a marlowe script address.
---   5. The script address in rule 1 is the payout script address associated
---      with the marlowe script address in rule 2.
 mustPayToRole :: Core.IsMarloweVersion v => Chain.Assets -> Core.PayoutDatum v -> TxConstraints v
 mustPayToRole assets datum =
   mempty { payToRoles = Map.singleton datum assets }

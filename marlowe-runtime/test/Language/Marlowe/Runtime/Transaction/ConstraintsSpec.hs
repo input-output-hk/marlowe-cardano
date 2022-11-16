@@ -43,6 +43,7 @@ import Language.Marlowe.Runtime.Core.Api
   , Redeemer
   , TransactionScriptOutput(..)
   , toChainDatum
+  , toChainPayoutDatum
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -82,7 +83,7 @@ violations marloweVersion marloweContext utxos constraints txBodyContent = fold
   , ("mustPayToAddress: " <>) <$> mustPayToAddressViolations marloweVersion constraints txBodyContent
   , ("mustSendMarloweOutput: " <>) <$> mustSendMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustSendMerkleizedContinuationOutput: " <>) <$> mustSendMerkleizedContinuationOutputViolations marloweVersion constraints txBodyContent
-  , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion constraints txBodyContent
+  , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion constraints txBodyContent
   , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion constraints txBodyContent
   , ("requiresSignature: " <>) <$> requiresSignatureViolations marloweVersion constraints txBodyContent
@@ -218,8 +219,27 @@ mustSendMerkleizedContinuationOutputViolations MarloweV1 TxConstraints{..} TxBod
     _ -> []
 
 mustPayToRoleViolations
-  :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustPayToRoleViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
+  :: MarloweVersion v
+  -> MarloweContext v
+  -> TxConstraints v
+  -> TxBodyContent BuildTx BabbageEra
+  -> [String]
+mustPayToRoleViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyContent{..} = do
+  (roleToken, assets) <- Map.toList payToRoles
+  (("roleToken" <> show roleToken <> ": ") <>) <$> do
+    let
+      isMatch txOut = extractAddress txOut == payoutAddress
+                   && extractDatum txOut == Just (toChainPayoutDatum MarloweV1 roleToken)
+      matchingOutput = find isMatch txOuts
+    case matchingOutput of
+      Nothing -> ["No matching output found to payout validator"]
+      Just txOut ->
+        let
+          totalToRole = extractValue txOut
+        in
+          check
+            (totalToRole == assets)
+            ("Role paid the wrong amount. Expected " <> show assets <> " got " <> show totalToRole)
 
 mustConsumeMarloweOutputViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
