@@ -15,7 +15,6 @@
 
 module Language.Marlowe.Runtime.Web.Server
   ( APIWithOpenAPI
-  , module Language.Marlowe.Runtime.Web.Server.Flags
   , Server(..)
   , ServerDependencies(..)
   , app
@@ -23,7 +22,7 @@ module Language.Marlowe.Runtime.Web.Server
   , serverWithOpenAPI
   ) where
 
-import Control.Concurrent.Async (concurrently_, mapConcurrently_)
+import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (STM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
@@ -36,7 +35,6 @@ import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   , ContractHeaderIndexerSelector
   , mkContractHeaderIndexer
   )
-import Language.Marlowe.Runtime.Web.Server.Flags
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)

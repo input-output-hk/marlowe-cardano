@@ -195,7 +195,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/Web/Server/DTO"
-            "Language/Marlowe/Runtime/Web/Server/Flags"
             "Language/Marlowe/Runtime/Web/Server/Monad"
             "Language/Marlowe/Runtime/Web/Server/OpenAPI"
             "Language/Marlowe/Runtime/Web/Server/ContractHeaderIndexer"
