@@ -88,7 +88,7 @@ violations marloweVersion marloweContext utxos constraints txBodyContent = fold
   , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion marloweContext constraints txBodyContent
-  , ("requiresSignature: " <>) <$> requiresSignatureViolations marloweVersion constraints txBodyContent
+  , ("requiresSignature: " <>) <$> requiresSignatureViolations marloweVersion utxos constraints txBodyContent
   , ("requiresMetadata: " <>) <$> requiresMetadataViolations marloweVersion constraints txBodyContent
   ]
 
@@ -300,10 +300,28 @@ mustConsumePayoutsViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBo
       , check (all isPayoutUtxo matchingInputs) "Not all matching inputs come from the payout address"
       ]
 
-
 requiresSignatureViolations
-  :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-requiresSignatureViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
+  :: MarloweVersion v
+  -> Chain.UTxOs
+  -> TxConstraints v
+  -> TxBodyContent BuildTx BabbageEra
+  -> [String]
+requiresSignatureViolations MarloweV1 utxos TxConstraints{..} TxBodyContent{..} = do
+  pkh <- Set.toList signatureConstraints
+  let
+    inInput ref = case Chain.lookupUTxO ref utxos of
+      Nothing -> False
+      Just Chain.TransactionOutput{..} -> case Chain.paymentCredential address of
+        Just (Chain.PaymentKeyCredential pkh') -> pkh' == pkh
+        _ -> False
+    inExtraKeyWits = case txExtraKeyWits of
+      TxExtraKeyWitnessesNone -> False
+      TxExtraKeyWitnesses _ hashes -> any ((== pkh) . fromCardanoPaymentKeyHash) hashes
+    inInputs = any (inInput . fromCardanoTxIn . fst) txIns
+  (("pkh" <> show pkh <> ": ") <>) <$> check
+    (inExtraKeyWits || inInputs)
+    "Witness missing from either extra key wits or inputs"
+
 
 requiresMetadataViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
