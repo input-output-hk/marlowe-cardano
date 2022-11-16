@@ -42,6 +42,7 @@ import Language.Marlowe.Runtime.Core.Api
   , PayoutDatum
   , Redeemer
   , TransactionScriptOutput(..)
+  , toChainDatum
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -51,7 +52,6 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
-import Test.QuickCheck.Property (failed)
 
 spec :: Spec
 spec = do
@@ -60,31 +60,27 @@ spec = do
       protocol <- hedgehog genProtocolParameters
       marloweContext <- genMarloweContext marloweVersion constraints
       walletContext <- genWalletContext marloweVersion constraints
-      let (marloweContextStr, walletContextStr) = case marloweVersion of MarloweV1 -> (show marloweContext, show walletContext)
-      pure $ counterexample marloweContextStr $ counterexample walletContextStr $ case solveInitialTxBodyContent protocol marloweVersion marloweContext walletContext constraints of
-        Left err -> case marloweVersion of
-          MarloweV1 -> counterexample (show err) failed
-        Right txBodyContent ->
-          satisfiesConstraints
-            marloweVersion
-            ( Chain.UTxOs
-            $ Map.fromList
-            $ fmap (bimap fromCardanoTxIn $ fromCardanoTxOut BabbageEra)
-            $ allUtxos marloweVersion marloweContext walletContext True
-            )
-            constraints
-            txBodyContent
+      let
+        (marloweContextStr, walletContextStr) = case marloweVersion of MarloweV1 -> (show marloweContext, show walletContext)
+        utxos = Chain.UTxOs
+          $ Map.fromList
+          $ fmap (bimap fromCardanoTxIn $ fromCardanoTxOut BabbageEra)
+          $ allUtxos marloweVersion marloweContext walletContext True
+        result = violations marloweVersion marloweContext utxos constraints
+          <$> solveInitialTxBodyContent protocol marloweVersion marloweContext walletContext constraints
+        theProperty :: Property
+        theProperty = case marloweVersion of
+          MarloweV1 -> Right [] === result
+      pure
+        $ counterexample marloweContextStr
+        $ counterexample walletContextStr theProperty
 
-satisfiesConstraints :: MarloweVersion v -> Chain.UTxOs -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> Property
-satisfiesConstraints marloweVersion utxos constraints txBodyContent =
-  violations marloweVersion utxos constraints txBodyContent === []
-
-violations :: MarloweVersion v -> Chain.UTxOs -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-violations marloweVersion utxos constraints txBodyContent = fold
+violations :: MarloweVersion v -> MarloweContext v -> Chain.UTxOs -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
+violations marloweVersion marloweContext utxos constraints txBodyContent = fold
   [ ("mustMintRoleToken: " <>) <$> mustMintRoleTokenViolations marloweVersion constraints txBodyContent
   , ("mustSpendRoleToken: " <>) <$> mustSpendRoleTokenViolations marloweVersion utxos constraints txBodyContent
   , ("mustPayToAddress: " <>) <$> mustPayToAddressViolations marloweVersion constraints txBodyContent
-  , ("mustSendMarloweOutput: " <>) <$> mustSendMarloweOutputViolations marloweVersion constraints txBodyContent
+  , ("mustSendMarloweOutput: " <>) <$> mustSendMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustSendMerkleizedContinuationOutput: " <>) <$> mustSendMerkleizedContinuationOutputViolations marloweVersion constraints txBodyContent
   , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion constraints txBodyContent
   , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion constraints txBodyContent
@@ -188,18 +184,37 @@ mustPayToAddressViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
   (address, assets) <- Map.toList payToAddresses
   (("address: " <> show address <> ": ") <>) <$> do
     let
-      extractValue (TxOut _ txOutValue _ _) = fromCardanoTxOutValue txOutValue
-      extractAddress (TxOut addr _ _ _) = fromCardanoAddressInEra BabbageEra addr
       totalToAddress = foldMap extractValue
         $ filter ((== address) . extractAddress) txOuts
     check
       (totalToAddress == assets)
       ("Address paid the wrong amount. Expected " <> show assets <> " got " <> show totalToAddress)
 
+extractValue :: TxOut ctx era -> Chain.Assets
+extractValue (TxOut _ txOutValue _ _) = fromCardanoTxOutValue txOutValue
+
+extractAddress :: TxOut ctx BabbageEra -> Chain.Address
+extractAddress (TxOut addr _ _ _) = fromCardanoAddressInEra BabbageEra addr
 
 mustSendMarloweOutputViolations
-  :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustSendMarloweOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
+  :: MarloweVersion v
+  -> MarloweContext v
+  -> TxConstraints v
+  -> TxBodyContent BuildTx BabbageEra
+  -> [String]
+mustSendMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyContent{..} =
+  case marloweOutputConstraints of
+    MarloweOutputConstraintsNone -> []
+    MarloweOutput assets datum ->
+      case find ((== marloweAddress) . extractAddress) txOuts of
+        Nothing -> ["No output found to Marlowe address"]
+        Just txOut -> fold
+          [ check (extractValue txOut == assets) "Wrong assets sent to Marlowe Address."
+          , check (extractDatum txOut == Just (toChainDatum MarloweV1 datum)) "Wrong assets sent to Marlowe Address."
+          ]
+
+extractDatum :: TxOut CtxTx BabbageEra -> Maybe Chain.Datum
+extractDatum (TxOut _ _ txOutDatum _) = snd $ fromCardanoTxOutDatum txOutDatum
 
 mustSendMerkleizedContinuationOutputViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
