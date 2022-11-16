@@ -325,7 +325,17 @@ requiresSignatureViolations MarloweV1 utxos TxConstraints{..} TxBodyContent{..} 
 
 requiresMetadataViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-requiresMetadataViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
+requiresMetadataViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
+  (idx, value) <- Map.toList metadataConstraints
+  let
+    metadata = case txMetadata of
+      TxMetadataNone -> Nothing
+      TxMetadataInEra _ (TxMetadata md) -> Map.lookup idx md
+  (("idx" <> show idx <> ": ") <>) <$> fold
+    [ check
+      (metadata == Just (toCardanoMetadata value))
+      ("Expected " <> show value <> " got " <> show metadata)
+    ]
 
 data SomeTxConstraints = forall v. SomeTxConstraints (MarloweVersion v) (TxConstraints v)
 
