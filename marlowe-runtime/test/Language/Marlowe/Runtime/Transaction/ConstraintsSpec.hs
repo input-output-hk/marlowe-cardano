@@ -58,7 +58,7 @@ import Test.QuickCheck.Hedgehog (hedgehog)
 
 spec :: Spec
 spec = do
-  focus $ describe "solveInitialTxBodyContent" do
+  describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
       protocol <- hedgehog genProtocolParameters
       marloweContext <- genMarloweContext marloweVersion constraints
