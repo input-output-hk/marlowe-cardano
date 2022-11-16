@@ -8,8 +8,8 @@ module Language.Marlowe.Runtime.Transaction.ConstraintsSpec
 import Cardano.Api
 import Cardano.Api.Shelley (PlutusScriptOrReferenceInput(PScript))
 import Control.Applicative (Alternative)
+import Control.Error (note)
 import Control.Monad (guard)
-import Data.Bifunctor (bimap)
 import Data.Either (fromLeft)
 import Data.Foldable (fold)
 import Data.List (find)
@@ -65,18 +65,27 @@ spec = do
       walletContext <- genWalletContext marloweVersion constraints
       let
         (marloweContextStr, walletContextStr) = case marloweVersion of MarloweV1 -> (show marloweContext, show walletContext)
-        utxos = Chain.UTxOs
-          $ Map.fromList
-          $ fmap (bimap fromCardanoTxIn $ fromCardanoTxOut BabbageEra)
-          $ allUtxos marloweVersion marloweContext walletContext True
-        result = violations marloweVersion marloweContext utxos constraints
-          <$> solveInitialTxBodyContent protocol marloweVersion marloweContext walletContext constraints
+        marloweUtxo = case scriptOutput marloweContext of
+          Nothing -> mempty
+          Just TransactionScriptOutput{..} -> Chain.UTxOs
+            $ Map.singleton utxo
+            $ Chain.TransactionOutput address assets Nothing (Just $ toChainDatum marloweVersion datum)
+        payoutToTransactionOutput Payout{..} = Chain.TransactionOutput address assets Nothing (Just $ toChainPayoutDatum marloweVersion datum)
+        payoutUtxos = Chain.UTxOs $ payoutToTransactionOutput <$> payoutOutputs marloweContext
+        referenceScriptUtxoToUtxo ReferenceScriptUtxo{..} = (txOutRef, txOut)
+        referenceUtxos = Chain.UTxOs $ Map.fromList $ referenceScriptUtxoToUtxo <$> [marloweScriptUTxO marloweContext, payoutScriptUTxO marloweContext]
+        utxosFromMarloweContext = marloweUtxo <> payoutUtxos <> referenceUtxos
+        utxos = utxosFromMarloweContext <> availableUtxos walletContext
+        result = solveInitialTxBodyContent protocol marloweVersion marloweContext walletContext constraints
+        mViolations = violations marloweVersion marloweContext utxos constraints <$> result
         theProperty :: Property
         theProperty = case marloweVersion of
-          MarloweV1 -> Right [] === result
+          MarloweV1 -> Right [] === mViolations
       pure
         $ counterexample marloweContextStr
-        $ counterexample walletContextStr theProperty
+        $ counterexample walletContextStr
+        $ counterexample (show utxos)
+        $ either (const theProperty) (flip counterexample theProperty . show) result
 
 violations :: MarloweVersion v -> MarloweContext v -> Chain.UTxOs -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
 violations marloweVersion marloweContext utxos constraints txBodyContent = fold

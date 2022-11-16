@@ -453,6 +453,7 @@ test-suite marlowe-runtime-test
     , cardano-api
     , cardano-api:gen
     , containers
+    , errors
     , hedgehog-quickcheck
     , hspec
     , marlowe

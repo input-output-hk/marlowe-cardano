@@ -5,10 +5,34 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.Transaction.Constraints
-  where
+  ( ConstraintError(..)
+  , MarloweContext(..)
+  , MarloweInputConstraints(..)
+  , MarloweOutputConstraints(..)
+  , RoleTokenConstraints(..)
+  , SolveConstraints
+  , TxConstraints(..)
+  , WalletContext(..)
+  , adjustTxForMinUtxo
+  , balanceTx
+  , mustConsumeMarloweOutput
+  , mustConsumePayouts
+  , mustMintRoleToken
+  , mustPayToAddress
+  , mustPayToRole
+  , mustSendMarloweOutput
+  , mustSendMerkleizedContinuationOutput
+  , mustSpendRoleToken
+  , requiresMetadata
+  , requiresSignature
+  , selectCoins
+  , solveConstraints
+  , solveInitialTxBodyContent
+  ) where
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
+import Control.Error (note)
 import Control.Monad (forM, unless, when)
 import Data.Aeson (ToJSON)
 import Data.Binary (Binary)
@@ -1047,6 +1071,3 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
           $ C.BuildTxWith
           $ Map.fromSet (const witness) policyIds
       _ -> pure C.TxMintNone
-
-note :: a -> Maybe b -> Either a b
-note e = maybe (Left e) Right
