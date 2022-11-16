@@ -190,12 +190,6 @@ mustPayToAddressViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
       (totalToAddress == assets)
       ("Address paid the wrong amount. Expected " <> show assets <> " got " <> show totalToAddress)
 
-extractValue :: TxOut ctx era -> Chain.Assets
-extractValue (TxOut _ txOutValue _ _) = fromCardanoTxOutValue txOutValue
-
-extractAddress :: TxOut ctx BabbageEra -> Chain.Address
-extractAddress (TxOut addr _ _ _) = fromCardanoAddressInEra BabbageEra addr
-
 mustSendMarloweOutputViolations
   :: MarloweVersion v
   -> MarloweContext v
@@ -213,12 +207,15 @@ mustSendMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} T
           , check (extractDatum txOut == Just (toChainDatum MarloweV1 datum)) "Wrong assets sent to Marlowe Address."
           ]
 
-extractDatum :: TxOut CtxTx BabbageEra -> Maybe Chain.Datum
-extractDatum (TxOut _ _ txOutDatum _) = snd $ fromCardanoTxOutDatum txOutDatum
-
 mustSendMerkleizedContinuationOutputViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustSendMerkleizedContinuationOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
+mustSendMerkleizedContinuationOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
+  continuationContract <- Set.toList merkleizedContinuationsConstraints
+  let isMatch = (== Just (Chain.toDatum continuationContract))
+  let matchingOutput = find (isMatch . extractDatum) txOuts
+  case matchingOutput of
+    Nothing -> ["No matching output found"]
+    _ -> []
 
 mustPayToRoleViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
@@ -625,3 +622,12 @@ toCardanoAssetId :: Chain.AssetId -> AssetId
 toCardanoAssetId (Chain.AssetId policy name) = AssetId
   (fromJust $ toCardanoPolicyId policy)
   (toCardanoAssetName name)
+
+extractValue :: TxOut ctx era -> Chain.Assets
+extractValue (TxOut _ txOutValue _ _) = fromCardanoTxOutValue txOutValue
+
+extractAddress :: TxOut ctx BabbageEra -> Chain.Address
+extractAddress (TxOut addr _ _ _) = fromCardanoAddressInEra BabbageEra addr
+
+extractDatum :: TxOut CtxTx BabbageEra -> Maybe Chain.Datum
+extractDatum (TxOut _ _ txOutDatum _) = snd $ fromCardanoTxOutDatum txOutDatum
