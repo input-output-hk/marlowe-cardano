@@ -409,7 +409,10 @@
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."cardano-api".components.sublibs.gen or (errorHandler.buildDepError "cardano-api:gen"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
+            (hsPkgs."hedgehog-quickcheck" or (errorHandler.buildDepError "hedgehog-quickcheck"))
             (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
@@ -440,6 +443,7 @@
             "Language/Marlowe/Runtime/History/Store/ModelSpec"
             "Language/Marlowe/Runtime/HistorySpec"
             "Language/Marlowe/Runtime/Transaction/BuildConstraintsSpec"
+            "Language/Marlowe/Runtime/Transaction/ConstraintsSpec"
             "Paths_marlowe_runtime"
             ];
           hsSourceDirs = [ "test" ];
