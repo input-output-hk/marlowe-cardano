@@ -18,9 +18,9 @@ import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import Data.Map (Map)
-import qualified Data.Map as Map (fromSet, keysSet, lookup, mapWithKey, member, null, singleton, toList, unionWith)
+import qualified Data.Map as Map (fromSet, keysSet, mapWithKey, member, null, singleton, toList, unionWith)
 import qualified Data.Map.Strict as SMap (fromList, toList)
-import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
+import Data.Maybe (mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
@@ -203,20 +203,6 @@ mustPayToRole :: Core.IsMarloweVersion v => Chain.Assets -> Core.PayoutDatum v -
 mustPayToRole assets datum =
   mempty { payToRoles = Map.singleton datum assets }
 
--- | Get the total amount required to be paid to the given address.
-getTotalForAddress :: Chain.Address -> TxConstraints v -> Chain.Assets
-getTotalForAddress address = fromMaybe mempty . Map.lookup address . payToAddresses
-
--- | Get the total amount required to be paid to the given role.
-getTotalForRole
-  :: forall v
-   . Core.IsMarloweVersion v
-  => Core.PayoutDatum v
-  -> TxConstraints v
-  -> Chain.Assets
-getTotalForRole role = case Core.marloweVersion @v of
-  Core.MarloweV1 -> fromMaybe mempty . Map.lookup role . payToRoles
-
 data MarloweInputConstraints v
   = MarloweInputConstraintsNone
   | MarloweInput C.SlotNo C.SlotNo (Core.Redeemer v)
@@ -239,14 +225,8 @@ instance Monoid (MarloweInputConstraints v) where
 --   1. The input at the Marlowe Script Address for the contract is consumed.
 --   2. The input in rule 1 includes the given redeemer.
 --   3. The validity range of the transaction matches the given min and max
---      validity bounds (converted to slots).
---   4. The input in rule 1 comes from one of the marlowe script addresses
---      associated with marlowe version v.
---   5. All other inputs do not come from a script address.
---   6. If 'computeTransaction' returns 'Close' for the previous datum and the redeemer,
---      there are no outputs to any Marlowe script address.
---   7. Otherwise, there is an output to the same address as the input with the
---      correct datum and assets.
+--      validity bounds.
+--   4. All other inputs do not come from a script address.
 mustConsumeMarloweOutput :: Core.IsMarloweVersion v => C.SlotNo -> C.SlotNo -> Core.Redeemer v -> TxConstraints v
 mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
   mempty { marloweInputConstraints = MarloweInput invalidBefore invalidHereafter inputs }
@@ -257,13 +237,6 @@ mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
 -- Requires that:
 --   1. At least one UTXO is consumed that bears the correct payout datum.
 --   2. All such inputs that satisfy rule 1 come from the same address.
---   3. The address from rule 2 exists in the set of payout validator
---      addresses associated with marlowe version v.
---   4. For all inputs i that do not satisfy rule 1, the address of i does
---      not exist in the set of payout script addresses associated with
---      Marlowe version v.
---   5. For all inputs i, the address of i does not exist in the set of
---      Marlowe script addresses associated with Marlowe version v.
 mustConsumePayouts :: Core.IsMarloweVersion v => Core.PayoutDatum v -> TxConstraints v
 mustConsumePayouts payoutDatum = mempty { payoutInputConstraints = Set.singleton payoutDatum }
 

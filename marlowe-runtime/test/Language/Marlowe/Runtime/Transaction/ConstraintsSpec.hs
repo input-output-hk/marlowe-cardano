@@ -10,6 +10,7 @@ import Cardano.Api.Shelley (PlutusScriptOrReferenceInput(PScript))
 import Control.Applicative (Alternative)
 import Control.Monad (guard)
 import Data.Bifunctor (bimap)
+import Data.Either (fromLeft)
 import Data.Foldable (fold)
 import Data.List (find)
 import Data.Map (Map)
@@ -44,6 +45,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   , toChainDatum
   , toChainPayoutDatum
+  , toChainRedeemer
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -84,8 +86,8 @@ violations marloweVersion marloweContext utxos constraints txBodyContent = fold
   , ("mustSendMarloweOutput: " <>) <$> mustSendMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustSendMerkleizedContinuationOutput: " <>) <$> mustSendMerkleizedContinuationOutputViolations marloweVersion constraints txBodyContent
   , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion marloweContext constraints txBodyContent
-  , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion constraints txBodyContent
-  , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion constraints txBodyContent
+  , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
+  , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion marloweContext constraints txBodyContent
   , ("requiresSignature: " <>) <$> requiresSignatureViolations marloweVersion constraints txBodyContent
   , ("requiresMetadata: " <>) <$> requiresMetadataViolations marloweVersion constraints txBodyContent
   ]
@@ -242,12 +244,62 @@ mustPayToRoleViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyCon
             ("Role paid the wrong amount. Expected " <> show assets <> " got " <> show totalToRole)
 
 mustConsumeMarloweOutputViolations
-  :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustConsumeMarloweOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
+  :: MarloweVersion v
+  -> MarloweContext v
+  -> TxConstraints v
+  -> TxBodyContent BuildTx BabbageEra
+  -> [String]
+mustConsumeMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyContent{..} =
+  case marloweInputConstraints of
+    MarloweInputConstraintsNone -> []
+    MarloweInput invalidBefore invalidHereafter redeemer -> fold
+      [ fromLeft [] do
+          TransactionScriptOutput{..} <- note ["TEST ERROR: MarloweContext doesn't contain script output"] scriptOutput
+          (_, witness) <- note
+            ["Marlowe script UTxO not consumed"]
+            (find ((== utxo) . fromCardanoTxIn . fst) txIns)
+          (witDatum, witRedeemer) <- case witness of
+            BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ _ (ScriptDatumForTxIn d) r _)) ->
+              pure (d, r)
+            _ -> Left ["TxInput not build with a plutus script witness"]
+          Left $ fold
+            [ check
+                (witDatum == toCardanoScriptData (toChainDatum MarloweV1 datum))
+                "Input datum does not match"
+            , check
+                (witRedeemer == toCardanoScriptData (Chain.unRedeemer $ toChainRedeemer MarloweV1 redeemer))
+                "Input redeemer does not match"
+            ]
+      , check
+          ( txValidityRange ==
+              ( TxValidityLowerBound ValidityLowerBoundInBabbageEra invalidBefore
+              , TxValidityUpperBound ValidityUpperBoundInBabbageEra invalidHereafter
+              )
+          )
+          "Tx validity range does not match constraints"
+      ]
 
 mustConsumePayoutsViolations
-  :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustConsumePayoutsViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = []
+  :: MarloweVersion v
+  -> MarloweContext v
+  -> TxConstraints v
+  -> TxBodyContent BuildTx BabbageEra
+  -> [String]
+mustConsumePayoutsViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyContent{..} = do
+  roleToken <- Set.toList payoutInputConstraints
+  (("roleToken" <> show roleToken <> ": ") <>) <$> do
+    let
+      isMatch (_, witness) = case witness of
+        BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ _ (ScriptDatumForTxIn d) _ _)) ->
+          d == toCardanoScriptData (toChainPayoutDatum MarloweV1 roleToken)
+        _ -> False
+      matchingInputs = fromCardanoTxIn . fst <$> filter isMatch txIns
+      isPayoutUtxo utxo = Map.member utxo payoutOutputs
+    fold
+      [ check (not $ null matchingInputs) "No matching inputs found"
+      , check (all isPayoutUtxo matchingInputs) "Not all matching inputs come from the payout address"
+      ]
+
 
 requiresSignatureViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
