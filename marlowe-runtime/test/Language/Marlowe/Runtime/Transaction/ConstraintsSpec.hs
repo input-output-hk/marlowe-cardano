@@ -177,7 +177,7 @@ mustSpendRoleTokenViolations MarloweV1 utxos TxConstraints{..} TxBodyContent{..}
                       ("Expected to consume UTxO " <> show txOutRef)
                   , check
                       (any ((== transactionOutput) . fromCardanoTxOut BabbageEra) txOuts)
-                      "Matching output not found"
+                      ("Matching output not found for input " <> show transactionOutput)
                   ]
       _ -> []
 
@@ -591,7 +591,7 @@ genRoleToken = Chain.AssetId
 -- NOTE just a random list of names that won't conflict with anything generated
 -- by Gen.Cardano.Api.Typed
 genRole :: Gen Chain.TokenName
-genRole = Chain.TokenName <$> elements
+genRole = elements
   [ "buyer"
   , "seller"
   , "renter"
