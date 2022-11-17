@@ -172,6 +172,7 @@ library web
   other-modules:
     Language.Marlowe.Runtime.Web.API
     Language.Marlowe.Runtime.Web.Types
+    Language.Marlowe.Runtime.Web.Orphans
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -474,7 +475,10 @@ test-suite web-server-test
     , aeson
     , bytestring
     , hspec
+    , marlowe
     , marlowe-runtime:web
+    , marlowe-runtime:web-server
+    , marlowe-test
     , openapi3
     , QuickCheck
     , regex-posix

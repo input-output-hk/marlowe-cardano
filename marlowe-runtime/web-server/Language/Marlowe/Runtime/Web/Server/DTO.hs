@@ -53,7 +53,8 @@ instance ToDTO ContractHeader where
     , roleTokenMintingPolicyId = toDTO rolesCurrency
     , version = toDTO marloweVersion
     , metadata = toDTO metadata
-    , status = Web.Confirmed $ toDTO blockHeader
+    , status = Web.Confirmed
+    , block = Just $ toDTO blockHeader
     }
 
 instance HasDTO Chain.BlockHeader where

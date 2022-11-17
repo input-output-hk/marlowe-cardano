@@ -38,7 +38,7 @@ server
   :: EventBackend AppM r ContractsSelector
   -> EventBackendModifiers r r'
   -> ServerT ContractsAPI AppM
-server = get
+server ev mods = get ev mods :<|> undefined
 
 get
   :: EventBackend AppM r ContractsSelector

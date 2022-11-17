@@ -6,14 +6,15 @@ module Main
 import Control.Monad (replicateM)
 import Data.Aeson (Value(Null))
 import qualified Data.ByteString as BS
-import Data.OpenApi
+import Data.OpenApi hiding (version)
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Runtime.Web as Web
 import Servant.OpenApi
+import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec)
-import Test.QuickCheck (Arbitrary(..), listOf, oneof)
+import Test.QuickCheck (Arbitrary(..), listOf, oneof, resize)
 import Text.Regex.Posix ((=~))
 
 main :: IO ()
@@ -33,6 +34,26 @@ instance Arbitrary Web.ContractHeader where
     <*> pure Web.V1
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
+
+instance Arbitrary Web.ContractState where
+  -- size of 6 will result in a 1-layer deep contract being generated (this is
+  -- all we care about for the purposes of schema checking).
+  arbitrary = resize 6 $ Web.ContractState
+    <$> arbitrary
+    <*> arbitrary
+    <*> pure Web.V1
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+  shrink cs = [ cs { Web.initialContract = x } | x <- shrink $ Web.initialContract cs ]
+           <> [ cs { Web.currentContract = x } | x <- shrink $ Web.currentContract cs ]
+           <> [ cs { Web.state = x } | x <- shrink $ Web.state cs ]
+
 
 instance Arbitrary Web.TxOutRef where
   arbitrary = Web.TxOutRef <$> arbitrary <*> arbitrary
@@ -46,11 +67,11 @@ instance Arbitrary Web.PolicyId where
 instance Arbitrary Web.Metadata where
   arbitrary = pure $ Web.Metadata Null
 
-instance Arbitrary Web.TxStatusHeader where
+instance Arbitrary Web.TxStatus where
   arbitrary = oneof
     [ pure Web.Unsigned
     , pure Web.Submitted
-    , Web.Confirmed <$> arbitrary
+    , pure Web.Confirmed
     ]
 
 instance Arbitrary Web.BlockHeader where

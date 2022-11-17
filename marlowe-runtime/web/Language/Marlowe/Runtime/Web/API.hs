@@ -8,7 +8,7 @@
 module Language.Marlowe.Runtime.Web.API
   where
 
-import Language.Marlowe.Runtime.Web.Types (ContractHeader)
+import Language.Marlowe.Runtime.Web.Types
 import Servant
 import Servant.Pagination
 
@@ -23,10 +23,19 @@ type API = AsumAPI
 -- | /contracts sub-API
 type ContractsAPI = AsumAPI
   '[ GetContractsAPI
+   , Capture "contractId" TxOutRef :> ContractAPI
+   ]
+
+-- | /contracts/:contractId sup-API
+type ContractAPI = AsumAPI
+  '[ GetContractAPI
    ]
 
 -- | GET /contracts sub-API
 type GetContractsAPI =  PaginatedGet '["contractId"] ContractHeader
+
+-- | GET /contracts/:contractId sub-API
+type GetContractAPI = Get '[JSON] ContractState
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource
