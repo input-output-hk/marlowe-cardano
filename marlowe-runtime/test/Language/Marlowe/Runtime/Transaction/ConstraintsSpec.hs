@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec
   where
 
@@ -361,16 +361,17 @@ instance Arbitrary SomeTxConstraints where
       MarloweV1 -> SomeTxConstraints MarloweV1 <$> shrinkV1Constraints constraints
 
 shrinkV1Constraints :: TxConstraints 'V1 -> [TxConstraints 'V1]
-shrinkV1Constraints constraints@TxConstraints{..} = emptyIfEqual constraints $ TxConstraints
-  <$> returnIfEmpty shrinkMarloweInputConstraints marloweInputConstraints
-  <*> returnIfEmpty shrinkPayoutInputConstraints payoutInputConstraints
-  <*> returnIfEmpty shrinkRoleTokenConstraints roleTokenConstraints
-  <*> returnIfEmpty shrinkPayToAddresses payToAddresses
-  <*> returnIfEmpty shrinkPayToRoles payToRoles
-  <*> returnIfEmpty shrinkMarloweOutputConstraints marloweOutputConstraints
-  <*> returnIfEmpty shrinkMerkleizedContinuationsConstraints merkleizedContinuationsConstraints
-  <*> returnIfEmpty shrinkSignatureConstraints signatureConstraints
-  <*> returnIfEmpty shrinkMetadataConstraints metadataConstraints
+shrinkV1Constraints constraints@TxConstraints{..} = fold
+  [ [ constraints {  marloweInputConstraints = x } | x <- shrinkMarloweInputConstraints marloweInputConstraints ]
+  , [ constraints {  payoutInputConstraints = x } | x <- shrinkPayoutInputConstraints payoutInputConstraints ]
+  , [ constraints {  roleTokenConstraints = x } | x <- shrinkRoleTokenConstraints roleTokenConstraints ]
+  , [ constraints {  payToAddresses = x } | x <- shrinkPayToAddresses payToAddresses ]
+  , [ constraints {  payToRoles = x } | x <- shrinkPayToRoles payToRoles ]
+  , [ constraints {  marloweOutputConstraints = x } | x <- shrinkMarloweOutputConstraints marloweOutputConstraints ]
+  , [ constraints {  merkleizedContinuationsConstraints = x } | x <- shrinkMerkleizedContinuationsConstraints merkleizedContinuationsConstraints ]
+  , [ constraints {  signatureConstraints = x } | x <- shrinkSignatureConstraints signatureConstraints ]
+  , [ constraints {  metadataConstraints = x } | x <- shrinkMetadataConstraints metadataConstraints ]
+  ]
 
 shrinkMarloweInputConstraints :: MarloweInputConstraints 'V1 -> [MarloweInputConstraints 'V1]
 shrinkMarloweInputConstraints = \case
@@ -409,12 +410,14 @@ shrinkTokens = fmap Chain.Tokens . shrinkMap shrinkNothing . Chain.unTokens
 shrinkMarloweOutputConstraints :: MarloweOutputConstraints 'V1 -> [MarloweOutputConstraints 'V1]
 shrinkMarloweOutputConstraints = \case
   MarloweOutputConstraintsNone -> []
-  constraints@(MarloweOutput assets datum) -> emptyIfEqual constraints $ MarloweOutput
-    <$> returnIfEmpty shrinkAssets assets
-    <*> returnIfEmpty shrinkDatum datum
+  MarloweOutput assets datum -> fold
+    [ [ MarloweOutput assets' datum | assets' <- shrinkAssets assets ]
+    , [ MarloweOutput assets datum' | datum' <- shrinkDatum datum ]
+    ]
 
 shrinkDatum :: MarloweData -> [MarloweData]
-shrinkDatum MarloweData{..} = MarloweData marloweParams marloweState <$> shrinkContract marloweContract
+shrinkDatum md@MarloweData{..} =
+  [ md { marloweContract = c, marloweState = s } | (c, s) <- shrink (marloweContract, marloweState) ]
 
 shrinkMerkleizedContinuationsConstraints :: Set.Set (Contract 'V1) -> [Set.Set (Contract 'V1)]
 shrinkMerkleizedContinuationsConstraints = shrinkSet shrinkContract
@@ -660,17 +663,6 @@ genScriptOutput address TxConstraints{..} = case marloweInputConstraints of
     , Just <$> (TransactionScriptOutput address <$> genOutAssets <*> genTxOutRef <*> genDatum)
     ]
   MarloweInput {} -> Just <$> (TransactionScriptOutput address <$> genOutAssets <*> genTxOutRef <*> genDatum)
-
-returnIfEmpty :: (a -> [a]) -> a -> [a]
-returnIfEmpty shrinker a = case shrinker a of
-  [] -> [a]
-  as -> as
-
-emptyIfEqual :: Eq a => a -> [a] -> [a]
-emptyIfEqual a as = case as of
-  [a']
-    | a == a' -> []
-  _ -> as
 
 shrinkPayout :: Payout 'V1 -> [Payout 'V1]
 shrinkPayout Payout{..} = Payout address <$> shrinkAssets assets <*> pure datum
