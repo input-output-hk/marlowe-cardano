@@ -1,8 +1,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module defines the request and response types in the Marlowe Runtime
 -- | Web API.
@@ -10,7 +17,7 @@
 module Language.Marlowe.Runtime.Web.Types
   where
 
-import Control.Lens
+import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
 import Data.Aeson.Types (parseFail)
@@ -20,29 +27,125 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.OpenApi
-  ( HasType(type_)
+  ( Definitions
+  , HasType(..)
   , NamedSchema(..)
-  , OpenApiType(OpenApiString)
+  , OpenApiType(..)
+  , Referenced(Inline)
+  , Schema
   , ToParamSchema
   , ToSchema
   , declareSchema
+  , declareSchemaRef
   , description
   , enum_
   , example
   , pattern
+  , properties
+  , required
   , toParamSchema
   )
+import Data.OpenApi.Declare (Declare)
 import Data.OpenApi.Schema (ToSchema(..))
 import Data.String (IsString(..))
 import Data.Text (intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import Data.Typeable (Typeable)
 import Data.Word (Word16, Word64)
+import GHC.Base (Symbol)
+import GHC.Exts (IsList(fromList))
 import GHC.Generics (Generic)
+import GHC.TypeLits (KnownSymbol, symbolVal)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Servant
 import Servant.Pagination (HasPagination(..))
+
+data AddLink (name :: Symbol) endpoint a where
+  AddLink
+    :: IsElem endpoint api
+    => Proxy api
+    -> (MkLink endpoint Link -> Link)
+    -> a
+    -> AddLink name endpoint a
+  SkipLink :: a -> AddLink name endpoint a
+
+deriving instance Typeable (AddLink name endpoint a)
+
+instance Show a => Show (AddLink name endpoint a) where
+  showsPrec p (AddLink _ _ a) = showsPrec p a
+  showsPrec p (SkipLink a) = showsPrec p a
+
+class ToJSONWithLinks a where
+  toJSONWithLinks :: a -> ([(String, Link)], Value)
+
+instance {-# OVERLAPPING #-}
+  ( ToJSONWithLinks a
+  , KnownSymbol name
+  , HasLink endpoint
+  ) => ToJSONWithLinks (AddLink name endpoint a) where
+  toJSONWithLinks (AddLink api runMkLink a) = (link : links, value)
+    where
+      (links, value) = toJSONWithLinks a
+      link = (symbolVal (Proxy @name), runMkLink $ safeLink api (Proxy @endpoint))
+  toJSONWithLinks (SkipLink a) = toJSONWithLinks a
+
+instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
+  toJSONWithLinks a = ([], toJSON a)
+
+instance
+  ( ToJSONWithLinks a
+  , KnownSymbol name
+  , HasLink endpoint
+  ) => ToJSON (AddLink name endpoint a) where
+  toJSON = toJSON' . toJSONWithLinks
+    where
+      toJSON' (links, value) = object
+        [ "data" .= value
+        , "links" .= object (bimap fromString (toJSON . show . linkURI) <$> links)
+        ]
+
+instance HasPagination resource field => HasPagination (AddLink name endpoint resource) field where
+  type RangeType (AddLink name endpoint resource) field = RangeType resource field
+  getFieldValue p (AddLink _ _ resource) = getFieldValue p resource
+  getFieldValue p (SkipLink resource) = getFieldValue p resource
+
+class ToSchemaWithLinks a where
+  declareNamedSchemaWithLinks :: a -> Declare (Definitions Schema) ([String], NamedSchema)
+
+instance
+  ( ToSchemaWithLinks (Proxy a)
+  , KnownSymbol name
+  ) => ToSchemaWithLinks (Proxy (AddLink name endpoint a)) where
+  declareNamedSchemaWithLinks _  = do
+    (links, namedSchema) <- declareNamedSchemaWithLinks (Proxy @a)
+    pure (symbolVal (Proxy @name) : links, namedSchema)
+
+instance ToSchema a => ToSchemaWithLinks (Proxy a) where
+  declareNamedSchemaWithLinks p = ([],) <$> declareNamedSchema p
+
+instance
+  ( Typeable endpoint
+  , Typeable a
+  , ToSchemaWithLinks (Proxy a)
+  , KnownSymbol name
+  ) => ToSchema (AddLink name endpoint a) where
+  declareNamedSchema _  = do
+    (links, NamedSchema name schema) <- declareNamedSchemaWithLinks (Proxy @a)
+    stringSchema <- declareSchemaRef (Proxy @String)
+    pure $ NamedSchema name $ mempty
+      & description .~ (schema ^. description)
+      & type_ ?~ OpenApiObject
+      & required .~ ["data", "links"]
+      & properties .~
+          [ ("data", Inline schema)
+          , ( "links", Inline $ mempty
+                & type_ ?~ OpenApiObject
+                & properties .~ fromList ((,stringSchema) . fromString <$> links)
+            )
+          ]
+
 
 -- | A newtype for Base16 decoding and encoding ByteStrings
 newtype Base16 = Base16 { unBase16 :: ByteString }
@@ -108,12 +211,12 @@ data TxOutRef = TxOutRef
   } deriving (Show, Eq, Ord, Generic)
 
 instance FromHttpApiData TxOutRef where
-  parseUrlPiece t = case splitOn ":" t of
+  parseUrlPiece t = case splitOn "#" t of
     [idText, ixText] -> TxOutRef <$> parseUrlPiece idText <*> parseUrlPiece ixText
-    _ -> Left "Expected [a-fA-F0-9]{64}:[0-9]+"
+    _ -> Left "Expected [a-fA-F0-9]{64}#[0-9]+"
 
 instance ToHttpApiData TxOutRef where
-  toUrlPiece TxOutRef{..} = toUrlPiece txId <> ":" <> toUrlPiece txIx
+  toUrlPiece TxOutRef{..} = toUrlPiece txId <> "#" <> toUrlPiece txIx
 
 instance FromJSON TxOutRef where
   parseJSON =
@@ -126,8 +229,8 @@ instance ToParamSchema TxOutRef where
   toParamSchema _ = mempty
     & type_ ?~ OpenApiString
     & description ?~ "A reference to a transaction output with a transaction ID and index."
-    & pattern ?~ "^[a-fA-F0-9]{64}:[0-9]+$"
-    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7:1"
+    & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
+    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
@@ -147,7 +250,7 @@ instance ToHttpApiData MarloweVersion where
 
 instance FromHttpApiData MarloweVersion where
   parseUrlPiece "v1" = Right V1
-  parseUrlPiece _ = Left $ fold
+  parseUrlPiece _ = Left $ fold @[]
     [ "expected one of "
     , intercalate "; " ["v1"]
     ]

@@ -51,8 +51,8 @@ contractServer = getOne
 
 get
   :: EventBackend (AppM r) r ContractsSelector
-  -> Maybe (Ranges '["contractId"] ContractHeader)
-  -> AppM r (PaginatedResponse '["contractId"] ContractHeader)
+  -> Maybe (Ranges '["contractId"] GetContractsResponse)
+  -> AppM r (PaginatedResponse '["contractId"] GetContractsResponse)
 get eb ranges = withEvent eb Get \ev -> do
   let
     range :: Range "contractId" TxOutRef
@@ -67,7 +67,9 @@ get eb ranges = withEvent eb Get \ev -> do
     Just headers -> do
       let headers' = toDTO headers
       addField ev $ ContractHeaders headers'
-      addHeader (length headers) <$> returnRange range headers'
+      let addLink header@ContractHeader{..} = AddLink api ($ contractId) header
+      let response = addLink <$> headers'
+      addHeader (length headers) <$> returnRange range response
 
 getOne
   :: EventBackend (AppM r) r ContractsSelector

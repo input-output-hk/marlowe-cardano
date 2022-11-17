@@ -79,3 +79,6 @@ instance Arbitrary Web.BlockHeader where
 
 instance Arbitrary Web.Base16 where
   arbitrary = Web.Base16 . BS.pack <$> listOf arbitrary
+
+instance Arbitrary a => Arbitrary (Web.AddLink name endpoint a) where
+  arbitrary = Web.SkipLink <$> arbitrary

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -32,7 +33,11 @@ type ContractAPI = AsumAPI
    ]
 
 -- | GET /contracts sub-API
-type GetContractsAPI =  PaginatedGet '["contractId"] ContractHeader
+type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
+
+type GetContractsResponse =
+  AddLink "contract" ("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI)
+    ContractHeader
 
 -- | GET /contracts/:contractId sub-API
 type GetContractAPI = Get '[JSON] ContractState
