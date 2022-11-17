@@ -13,6 +13,8 @@ import Control.Concurrent.STM (atomically)
 import Control.Exception (throwIO)
 import Language.Marlowe.Protocol.HeaderSync.Client (marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
+import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
+import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.Web.Server
 import Network.Protocol.Driver (runClientPeerOverSocket)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo)
@@ -33,6 +35,7 @@ main = hSetBuffering stdout LineBuffering
 optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
 optionsToServerDependencies Options{..} = do
   discoverySyncAddr <- resolve discoveryHost discoverySyncPort
+  historySyncAddr <- resolve historyHost historySyncPort
   eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
@@ -42,6 +45,10 @@ optionsToServerDependencies Options{..} = do
         discoverySyncAddr
         codecMarloweHeaderSync
         marloweHeaderSyncClientPeer
+    , runMarloweSyncClient = runClientPeerOverSocket
+        historySyncAddr
+        codecMarloweSync
+        marloweSyncClientPeer
     , eventBackend
     }
 

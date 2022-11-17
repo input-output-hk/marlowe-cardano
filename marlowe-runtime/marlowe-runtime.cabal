@@ -199,6 +199,7 @@ library web-server
     Language.Marlowe.Runtime.Web.Server.Monad
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
+    Language.Marlowe.Runtime.Web.Server.HistoryClient
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
   build-depends:
@@ -214,6 +215,7 @@ library web-server
     , eventuo11y-batteries
     , exceptions
     , lens
+    , marlowe
     , marlowe-protocols
     , marlowe-runtime:web
     , marlowe-runtime
@@ -227,6 +229,7 @@ library web-server
     , servant-pagination
     , stm
     , stm-delay
+    , text
     , transformers
     , transformers-base
     , typed-protocols

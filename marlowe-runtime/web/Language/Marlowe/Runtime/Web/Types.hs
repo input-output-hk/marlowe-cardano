@@ -167,7 +167,7 @@ data ContractState = ContractState
   , block :: Maybe BlockHeader
   , initialContract :: Semantics.Contract
   , currentContract :: Semantics.Contract
-  , state :: Semantics.State
+  , state :: Maybe Semantics.State
   , utxo :: Maybe TxOutRef
   } deriving (Show, Eq, Generic)
 

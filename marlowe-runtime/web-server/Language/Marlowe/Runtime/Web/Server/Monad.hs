@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -17,15 +18,16 @@ import Control.Monad.Reader (MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Coerce (coerce)
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
+import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract)
 import Servant
 
-newtype AppM a = AppM { runAppM :: ReaderT AppEnv Handler a }
+newtype AppM r a = AppM { runAppM :: ReaderT (AppEnv r) Handler a }
   deriving newtype
     ( Functor
     , Applicative
     , Monad
     , MonadIO
-    , MonadReader AppEnv
+    , MonadReader (AppEnv r)
     , MonadFail
     , MonadCatch
     , MonadMask
@@ -35,21 +37,28 @@ newtype AppM a = AppM { runAppM :: ReaderT AppEnv Handler a }
     , MonadBase IO
     )
 
-instance MonadCleanup AppM where
+instance MonadCleanup (AppM r) where
   generalCleanup acquire release action = coerce $ generalCleanup
     (toTransformers acquire)
     (\a b -> toTransformers $ release a b)
     (\a -> toTransformers $ action a)
     where
-      toTransformers :: AppM a -> ReaderT AppEnv (ExceptT ServerError IO) a
+      toTransformers :: AppM r a -> ReaderT (AppEnv r) (ExceptT ServerError IO) a
       toTransformers = coerce
 
-newtype AppEnv = AppEnv
+data AppEnv r = AppEnv
   { _loadContractHeaders :: LoadContractHeaders IO
+  , _loadContract :: LoadContract r IO
   }
 
 -- | Load a list of contract headers.
-loadContractHeaders :: LoadContractHeaders AppM
+loadContractHeaders :: LoadContractHeaders (AppM r)
 loadContractHeaders startFrom limit offset order = do
   load <- asks _loadContractHeaders
   liftIO $ load startFrom limit offset order
+
+-- | Load a list of contract headers.
+loadContract :: LoadContract r (AppM r)
+loadContract mods contractId = do
+  load <- asks _loadContract
+  liftIO $ load mods contractId
