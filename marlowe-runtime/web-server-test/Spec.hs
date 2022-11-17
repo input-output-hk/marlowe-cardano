@@ -39,6 +39,14 @@ instance Arbitrary Web.ContractHeader where
     <*> arbitrary
     <*> arbitrary
 
+instance Arbitrary Web.TxHeader where
+  arbitrary = Web.TxHeader
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+
 instance Arbitrary Web.ContractState where
   -- size of 6 will result in a 1-layer deep contract being generated (this is
   -- all we care about for the purposes of schema checking).
@@ -88,3 +96,5 @@ instance (HasNamedLink a Web.API name, Arbitrary a) => Arbitrary (Web.WithLink n
     [ Web.OmitLink <$> arbitrary
     , Web.IncludeLink Web.api (Proxy @name) <$> arbitrary
     ]
+  shrink (Web.OmitLink a) = Web.OmitLink <$> shrink a
+  shrink (Web.IncludeLink api n a) = [Web.OmitLink a] <> (Web.IncludeLink api n <$> shrink a)

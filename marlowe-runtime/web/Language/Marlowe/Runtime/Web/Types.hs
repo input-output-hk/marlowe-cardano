@@ -312,6 +312,21 @@ instance ToSchema Metadata where
   declareNamedSchema _ = pure $ NamedSchema (Just "Metadata") $ mempty
     & description ?~ "An arbitrary JSON value for storage in a metadata key"
 
+data TxHeader = TxHeader
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  , utxo :: Maybe TxOutRef
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON TxHeader
+instance ToSchema TxHeader
+
+instance HasPagination TxHeader "transactionId" where
+  type RangeType TxHeader "transactionId" = TxId
+  getFieldValue _ TxHeader{..} = transactionId
+
 data TxStatus
   = Unsigned
   | Submitted

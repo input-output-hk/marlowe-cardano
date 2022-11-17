@@ -40,9 +40,24 @@ instance HasNamedLink ContractHeader API "contract" where
 
 -- | /contracts/:contractId sup-API
 type ContractAPI = GetContractAPI
+              :<|> "transactions" :> TransactionsAPI
 
 -- | GET /contracts/:contractId sub-API
-type GetContractAPI = Get '[JSON] ContractState
+type GetContractAPI = Get '[JSON] GetContractResponse
+
+type GetContractResponse = WithLink "transactions" ContractState
+
+instance HasNamedLink ContractState API "transactions" where
+  namedLink _ _ ContractState{..} = safeLink
+    api
+    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
+    contractId
+
+-- | /contracts/:contractId/transactions sup-API
+type TransactionsAPI = GetTransactionsAPI
+
+-- | GET /contracts/:contractId/transactions sup-API
+type GetTransactionsAPI = PaginatedGet '["transactionId"] TxHeader
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource

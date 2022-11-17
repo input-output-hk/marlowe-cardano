@@ -47,7 +47,7 @@ contractServer
   :: EventBackend (AppM r) r ContractsSelector
   -> TxOutRef
   -> ServerT ContractAPI (AppM r)
-contractServer = getOne
+contractServer eb contractId = getOne eb contractId :<|> undefined
 
 get
   :: EventBackend (AppM r) r ContractsSelector
@@ -73,7 +73,7 @@ get eb ranges = withEvent eb Get \ev -> do
 getOne
   :: EventBackend (AppM r) r ContractsSelector
   -> TxOutRef
-  -> AppM r ContractState
+  -> AppM r GetContractResponse
 getOne eb contractId = withEvent eb GetOne \ev -> do
   addField ev $ GetId contractId
   contractId' <- fromDTOThrow err400 contractId
@@ -82,4 +82,4 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
     Just contractRecord -> do
       let contractState = toDTO contractRecord
       addField ev $ GetResult contractState
-      pure contractState
+      pure $ IncludeLink api (Proxy @"transactions") contractState
