@@ -100,9 +100,6 @@ mkDiscoveryStore DiscoveryStoreDependencies{..} = do
         <$> readTVarIO blocksVar
     }
 
-for_ :: Maybe ChainPoint -> (WithGenesis a0 -> t0) -> STM a1
-for_ = error "not implemented"
-
 extractHeaders :: BlockData -> [ContractHeader]
 extractHeaders = \case
   Block hs -> hs
