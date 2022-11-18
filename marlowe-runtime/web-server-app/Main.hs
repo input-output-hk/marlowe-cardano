@@ -46,6 +46,7 @@ optionsToServerDependencies Options{..} = do
         codecMarloweHeaderSync
         marloweHeaderSyncClientPeer
     , runMarloweSyncClient = runClientPeerOverSocket
+        throwIO
         historySyncAddr
         codecMarloweSync
         marloweSyncClientPeer
