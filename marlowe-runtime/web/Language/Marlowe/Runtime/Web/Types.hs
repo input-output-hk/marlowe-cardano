@@ -115,7 +115,7 @@ instance
   toJSON = toJSON' . toJSONWithLinks
     where
       toJSON' (links, value) = object
-        [ "data" .= value
+        [ "resource" .= value
         , "links" .= object (bimap fromString (toJSON . show . linkURI) <$> links)
         ]
 
@@ -148,9 +148,9 @@ instance
     stringSchema <- declareSchemaRef (Proxy @String)
     pure $ NamedSchema Nothing $ mempty
       & type_ ?~ OpenApiObject
-      & required .~ ["data", "links"]
+      & required .~ ["resource", "links"]
       & properties .~
-          [ ("data", schema)
+          [ ("resource", schema)
           , ( "links", Inline $ mempty
                 & type_ ?~ OpenApiObject
                 & properties .~ fromList ((,stringSchema) . fromString <$> links)
