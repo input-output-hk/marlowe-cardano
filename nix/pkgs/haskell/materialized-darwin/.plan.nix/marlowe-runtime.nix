@@ -48,6 +48,7 @@
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+          (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
           (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
           (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
@@ -62,6 +63,7 @@
           (hsPkgs."these" or (errorHandler.buildDepError "these"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+          (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
           (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
           (hsPkgs."witherable" or (errorHandler.buildDepError "witherable"))
           ];
@@ -175,6 +177,7 @@
             (hsPkgs."eventuo11y-batteries" or (errorHandler.buildDepError "eventuo11y-batteries"))
             (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
