@@ -17,7 +17,7 @@ import Control.Monad.Reader (MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Coerce (coerce)
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
-import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract)
+import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransactions)
 import Servant
 
 newtype AppM r a = AppM { runAppM :: ReaderT (AppEnv r) Handler a }
@@ -48,6 +48,7 @@ instance MonadCleanup (AppM r) where
 data AppEnv r = AppEnv
   { _loadContractHeaders :: LoadContractHeaders IO
   , _loadContract :: LoadContract r IO
+  , _loadTransactions :: LoadTransactions r IO
   }
 
 -- | Load a list of contract headers.
@@ -61,3 +62,9 @@ loadContract :: LoadContract r (AppM r)
 loadContract mods contractId = do
   load <- asks _loadContract
   liftIO $ load mods contractId
+
+-- | Load a list of transactions for a contract.
+loadTransactions :: LoadTransactions r (AppM r)
+loadTransactions mods contractId startFrom limit offset order = do
+  load <- asks _loadTransactions
+  liftIO $ load mods contractId startFrom limit offset order

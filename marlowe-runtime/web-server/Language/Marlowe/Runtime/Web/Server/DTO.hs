@@ -21,7 +21,13 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
 import Language.Marlowe.Runtime.Cardano.Api (toCardanoMetadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(MarloweV1), SomeMarloweVersion(..), TransactionScriptOutput(..))
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , SomeMarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  )
 import Language.Marlowe.Runtime.History.Api (CreateStep(..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -176,6 +182,10 @@ data ContractRecord = forall v. ContractRecord
   (CreateStep v)
   (Maybe (TransactionScriptOutput v))
 
+data SomeTransaction = forall v. SomeTransaction
+  (MarloweVersion v)
+  (Transaction v)
+
 instance HasDTO ContractRecord where
   type DTO ContractRecord = Web.ContractState
 
@@ -196,4 +206,17 @@ instance ToDTO ContractRecord where
       , currentContract = maybe Sem.Close (Sem.marloweContract . datum) output
       , state = Sem.marloweState . datum <$> output
       , utxo = toDTO . utxo <$> output
+      }
+
+instance HasDTO SomeTransaction where
+  type DTO SomeTransaction = Web.TxHeader
+
+instance ToDTO SomeTransaction where
+  toDTO (SomeTransaction MarloweV1 Transaction{..}) =
+    Web.TxHeader
+      { contractId = toDTO contractId
+      , transactionId = toDTO transactionId
+      , status = Web.Confirmed
+      , block = Just $ toDTO blockHeader
+      , utxo = toDTO . utxo <$> scriptOutput output
       }

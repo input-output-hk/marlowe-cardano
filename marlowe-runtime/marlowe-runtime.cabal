@@ -194,6 +194,7 @@ library web-server
   hs-source-dirs: web-server
   exposed-modules:
     Language.Marlowe.Runtime.Web.Server
+    Language.Marlowe.Runtime.Web.Server.Util
   other-modules:
     Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Monad
@@ -202,6 +203,7 @@ library web-server
     Language.Marlowe.Runtime.Web.Server.HistoryClient
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
+    Language.Marlowe.Runtime.Web.Server.REST.Transactions
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -209,6 +211,7 @@ library web-server
     , bytestring
     , cardano-api
     , containers
+    , errors
     , eventuo11y
     , eventuo11y-dsl
     , eventuo11y-json

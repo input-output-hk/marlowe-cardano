@@ -122,6 +122,7 @@ mkServer ServerDependencies{..} = do
     env = AppEnv
       { _loadContractHeaders = loadContractHeaders
       , _loadContract = loadContract
+      , _loadTransactions = loadTransactions
       }
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
     app' = application (narrowEventBackend Http eventBackend) $
