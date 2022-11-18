@@ -12,7 +12,7 @@ import Language.Marlowe.Runtime.Discovery.QueryServer (RunQueryServer(..))
 import Language.Marlowe.Runtime.Discovery.SyncServer (RunSyncServer(..))
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (mkDriver)
+import Network.Protocol.Driver (mkDriver, runClientPeerOverSocket)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket
@@ -26,7 +26,6 @@ import Network.Socket
   , accept
   , bind
   , close
-  , connect
   , defaultHints
   , getAddrInfo
   , listen
@@ -70,11 +69,8 @@ run Options{..} = withSocketsDo do
       let
         connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
         connectToChainSeek client = do
-          chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-          bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
-            let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
-            let peer = chainSeekClientPeer Genesis client
-            fst <$> runPeerWithDriver driver peer (startDState driver)
+          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+          runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
 
         acceptRunQueryServer = do
           (conn, _ :: SockAddr) <- accept querySocket
@@ -94,10 +90,6 @@ run Options{..} = withSocketsDo do
       Discovery{..} <- atomically $ mkDiscovery DiscoveryDependencies{..}
       vacuous runDiscovery
   where
-    openClient addr = bracketOnError (openSocket addr) close \sock -> do
-      connect sock $ addrAddress addr
-      pure sock
-
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1
       withFdSocket socket setCloseOnExecIfNeeded

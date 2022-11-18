@@ -211,6 +211,7 @@ library web-server
     , eventuo11y-batteries
     , exceptions
     , lens
+    , marlowe-protocols
     , marlowe-runtime:web
     , marlowe-runtime
     , marlowe-chain-sync

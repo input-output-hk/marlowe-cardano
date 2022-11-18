@@ -20,7 +20,7 @@ import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
 import Language.Marlowe.Runtime.History.SyncServer (RunSyncServer(..))
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (mkDriver)
+import Network.Protocol.Driver (mkDriver, runClientPeerOverSocket)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -36,7 +36,6 @@ import Network.Socket
   , accept
   , bind
   , close
-  , connect
   , defaultHints
   , getAddrInfo
   , listen
@@ -85,11 +84,8 @@ run Options{..} = withSocketsDo do
 
           connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
           connectToChainSeek client = do
-            chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-            bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
-              let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
-              let peer = chainSeekClientPeer Genesis client
-              fst <$> runPeerWithDriver driver peer (startDState driver)
+            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+            runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
 
           acceptRunJobServer = do
             (conn, _ :: SockAddr) <- accept jobSocket
@@ -118,10 +114,6 @@ run Options{..} = withSocketsDo do
           mkHistory HistoryDependencies{..}
         runHistory
   where
-    openClient addr = bracketOnError (openSocket addr) close \sock -> do
-      connect sock $ addrAddress addr
-      pure sock
-
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1
       withFdSocket socket setCloseOnExecIfNeeded
@@ -136,12 +128,8 @@ run Options{..} = withSocketsDo do
     queryChainSync :: ChainSyncQuery Void e a -> IO a
     queryChainSync query = do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      bracket (openClient addr) close \socket -> do
-        let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
-        let client = liftQuery query
-        let peer = queryClientPeer client
-        result <- fst <$> runPeerWithDriver driver peer (startDState driver)
-        pure $ fromRight (error "failed to query chain seek server") result
+      result <- runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
+      pure $ fromRight (error "failed to query chain seek server") result
 
 data Options = Options
   { chainSeekPort      :: PortNumber

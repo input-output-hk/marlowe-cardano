@@ -27,6 +27,7 @@ import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.DTO (toDTO)
+import Network.Protocol.Driver (RunAsPeer)
 import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
@@ -53,7 +54,7 @@ compile $ SelectorSpec ["contract", "header", "indexer"]
 
 -- | Dependencies for the a ContractHeaderIndexer
 data ContractHeaderIndexerDependencies r = ContractHeaderIndexerDependencies
-  { runMarloweHeaderSyncClient :: forall a. MarloweHeaderSyncClient IO a -> IO a
+  { runMarloweHeaderSyncClient :: RunAsPeer IO MarloweHeaderSyncClient
   , eventBackend :: EventBackend IO r ContractHeaderIndexerSelector
   }
 
