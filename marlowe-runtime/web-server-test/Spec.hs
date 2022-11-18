@@ -1,4 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Main
   where
@@ -10,11 +12,12 @@ import Data.OpenApi hiding (version)
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
+import Language.Marlowe.Runtime.Web (HasNamedLink)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec)
-import Test.QuickCheck (Arbitrary(..), elements, listOf, resize)
+import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof, resize)
 import Text.Regex.Posix ((=~))
 
 main :: IO ()
@@ -80,5 +83,5 @@ instance Arbitrary Web.BlockHeader where
 instance Arbitrary Web.Base16 where
   arbitrary = Web.Base16 . BS.pack <$> listOf arbitrary
 
-instance Arbitrary a => Arbitrary (Web.AddLink name endpoint a) where
-  arbitrary = Web.SkipLink <$> arbitrary
+instance (HasNamedLink a Web.API name, Arbitrary a) => Arbitrary (Web.WithLink name a) where
+  arbitrary = oneof [Web.Omit <$> arbitrary, Web.Include Web.api (Proxy @name) <$> arbitrary]

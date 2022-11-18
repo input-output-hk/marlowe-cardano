@@ -56,26 +56,41 @@ import Data.Word (Word16, Word64)
 import GHC.Base (Symbol)
 import GHC.Exts (IsList(fromList))
 import GHC.Generics (Generic)
+import GHC.Show (showSpace)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Servant
 import Servant.Pagination (HasPagination(..))
 
-data AddLink (name :: Symbol) endpoint a where
-  AddLink
-    :: IsElem endpoint api
+class HasNamedLink a api (name :: Symbol) where
+  namedLink :: Proxy api -> Proxy name -> a -> Link
+
+data WithLink (name :: Symbol) a where
+  Include
+    :: HasNamedLink a api name
     => Proxy api
-    -> (MkLink endpoint Link -> Link)
+    -> Proxy name
     -> a
-    -> AddLink name endpoint a
-  SkipLink :: a -> AddLink name endpoint a
+    -> WithLink name a
+  Omit :: a -> WithLink name a
 
-deriving instance Typeable (AddLink name endpoint a)
+deriving instance Typeable (WithLink name a)
 
-instance Show a => Show (AddLink name endpoint a) where
-  showsPrec p (AddLink _ _ a) = showsPrec p a
-  showsPrec p (SkipLink a) = showsPrec p a
+instance (Show a, KnownSymbol name) => Show (WithLink name a) where
+  showsPrec p (Include _ name a) = showParen (p >= 11)
+    ( showString "Include _ (Proxy @"
+    . showSpace
+    . showsPrec 11 (symbolVal name)
+    . showString ")"
+    . showSpace
+    . showsPrec 11 a
+    )
+  showsPrec p (Omit a) = showParen (p >= 11)
+    ( showString "Omit"
+    . showSpace
+    . showsPrec 11 a
+    )
 
 class ToJSONWithLinks a where
   toJSONWithLinks :: a -> ([(String, Link)], Value)
@@ -83,13 +98,12 @@ class ToJSONWithLinks a where
 instance {-# OVERLAPPING #-}
   ( ToJSONWithLinks a
   , KnownSymbol name
-  , HasLink endpoint
-  ) => ToJSONWithLinks (AddLink name endpoint a) where
-  toJSONWithLinks (AddLink api runMkLink a) = (link : links, value)
+  ) => ToJSONWithLinks (WithLink name a) where
+  toJSONWithLinks (Include api name a) = (link : links, value)
     where
       (links, value) = toJSONWithLinks a
-      link = (symbolVal (Proxy @name), runMkLink $ safeLink api (Proxy @endpoint))
-  toJSONWithLinks (SkipLink a) = toJSONWithLinks a
+      link = (symbolVal name, namedLink api name a)
+  toJSONWithLinks (Omit a) = toJSONWithLinks a
 
 instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
   toJSONWithLinks a = ([], toJSON a)
@@ -97,8 +111,7 @@ instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
 instance
   ( ToJSONWithLinks a
   , KnownSymbol name
-  , HasLink endpoint
-  ) => ToJSON (AddLink name endpoint a) where
+  ) => ToJSON (WithLink name a) where
   toJSON = toJSON' . toJSONWithLinks
     where
       toJSON' (links, value) = object
@@ -106,40 +119,38 @@ instance
         , "links" .= object (bimap fromString (toJSON . show . linkURI) <$> links)
         ]
 
-instance HasPagination resource field => HasPagination (AddLink name endpoint resource) field where
-  type RangeType (AddLink name endpoint resource) field = RangeType resource field
-  getFieldValue p (AddLink _ _ resource) = getFieldValue p resource
-  getFieldValue p (SkipLink resource) = getFieldValue p resource
+instance HasPagination resource field => HasPagination (WithLink name resource) field where
+  type RangeType (WithLink name resource) field = RangeType resource field
+  getFieldValue p (Include _ _ resource) = getFieldValue p resource
+  getFieldValue p (Omit resource) = getFieldValue p resource
 
 class ToSchemaWithLinks a where
-  declareNamedSchemaWithLinks :: a -> Declare (Definitions Schema) ([String], NamedSchema)
+  declareNamedSchemaWithLinks :: Proxy a -> Declare (Definitions Schema) ([String], Referenced Schema)
 
-instance
-  ( ToSchemaWithLinks (Proxy a)
+instance {-# OVERLAPPING #-}
+  ( ToSchemaWithLinks a
   , KnownSymbol name
-  ) => ToSchemaWithLinks (Proxy (AddLink name endpoint a)) where
+  ) => ToSchemaWithLinks (WithLink name a) where
   declareNamedSchemaWithLinks _  = do
     (links, namedSchema) <- declareNamedSchemaWithLinks (Proxy @a)
     pure (symbolVal (Proxy @name) : links, namedSchema)
 
-instance ToSchema a => ToSchemaWithLinks (Proxy a) where
-  declareNamedSchemaWithLinks p = ([],) <$> declareNamedSchema p
+instance {-# OVERLAPPING #-} ToSchema a => ToSchemaWithLinks a where
+  declareNamedSchemaWithLinks p = ([],) <$> declareSchemaRef p
 
 instance
-  ( Typeable endpoint
-  , Typeable a
-  , ToSchemaWithLinks (Proxy a)
+  ( Typeable a
+  , ToSchemaWithLinks a
   , KnownSymbol name
-  ) => ToSchema (AddLink name endpoint a) where
+  ) => ToSchema (WithLink name a) where
   declareNamedSchema _  = do
-    (links, NamedSchema name schema) <- declareNamedSchemaWithLinks (Proxy @a)
+    (links, schema) <- declareNamedSchemaWithLinks (Proxy @(WithLink name a))
     stringSchema <- declareSchemaRef (Proxy @String)
-    pure $ NamedSchema name $ mempty
-      & description .~ (schema ^. description)
+    pure $ NamedSchema Nothing $ mempty
       & type_ ?~ OpenApiObject
       & required .~ ["data", "links"]
       & properties .~
-          [ ("data", Inline schema)
+          [ ("data", schema)
           , ( "links", Inline $ mempty
                 & type_ ?~ OpenApiObject
                 & properties .~ fromList ((,stringSchema) . fromString <$> links)

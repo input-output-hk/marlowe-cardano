@@ -1,8 +1,12 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module specifies the Marlowe Runtime Web API as a Servant API type.
 
@@ -17,27 +21,25 @@ api :: Proxy API
 api = Proxy
 
 -- | The REST API of the Marlowe Runtime
-type API = AsumAPI
-  '[ "contracts" :> ContractsAPI
-   ]
+type API = "contracts" :> ContractsAPI
 
 -- | /contracts sub-API
-type ContractsAPI = AsumAPI
-  '[ GetContractsAPI
-   , Capture "contractId" TxOutRef :> ContractAPI
-   ]
-
--- | /contracts/:contractId sup-API
-type ContractAPI = AsumAPI
-  '[ GetContractAPI
-   ]
+type ContractsAPI = GetContractsAPI
+               :<|> Capture "contractId" TxOutRef :> ContractAPI
 
 -- | GET /contracts sub-API
 type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
 
-type GetContractsResponse =
-  AddLink "contract" ("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI)
-    ContractHeader
+type GetContractsResponse = WithLink "contract" ContractHeader
+
+instance HasNamedLink ContractHeader API "contract" where
+  namedLink _ _ ContractHeader{..} = safeLink
+    api
+    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
+    contractId
+
+-- | /contracts/:contractId sup-API
+type ContractAPI = GetContractAPI
 
 -- | GET /contracts/:contractId sub-API
 type GetContractAPI = Get '[JSON] ContractState
@@ -45,14 +47,8 @@ type GetContractAPI = Get '[JSON] ContractState
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource
   =  Header "Range" (Ranges rangeFields resource)
-  :> GetPartialContent '[JSON] (PaginatedResponse '["contractId"] resource)
+  :> GetPartialContent '[JSON] (PaginatedResponse rangeFields resource)
 
 -- | Helper type for describing the response type of generic paginated APIs
 type PaginatedResponse fields resource =
   Headers (Header "Total-Count" Int ': PageHeaders fields resource) [resource]
-
--- | Type family for folding the :<|> combinator over a list of APIs.
-type family AsumAPI (apis :: [*]) where
-  AsumAPI '[] = EmptyAPI
-  AsumAPI '[api] = api
-  AsumAPI (api ': apis) = api :<|> AsumAPI apis
