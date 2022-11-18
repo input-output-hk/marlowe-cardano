@@ -14,7 +14,7 @@ import qualified Language.Marlowe.Runtime.Web as Web
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec)
-import Test.QuickCheck (Arbitrary(..), listOf, oneof, resize)
+import Test.QuickCheck (Arbitrary(..), elements, listOf, resize)
 import Text.Regex.Posix ((=~))
 
 main :: IO ()
@@ -68,10 +68,10 @@ instance Arbitrary Web.Metadata where
   arbitrary = pure $ Web.Metadata Null
 
 instance Arbitrary Web.TxStatus where
-  arbitrary = oneof
-    [ pure Web.Unsigned
-    , pure Web.Submitted
-    , pure Web.Confirmed
+  arbitrary = elements
+    [ Web.Unsigned
+    , Web.Submitted
+    , Web.Confirmed
     ]
 
 instance Arbitrary Web.BlockHeader where
