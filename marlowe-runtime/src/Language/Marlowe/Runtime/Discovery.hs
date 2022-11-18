@@ -10,12 +10,13 @@ import Language.Marlowe.Runtime.Discovery.Chain
 import Language.Marlowe.Runtime.Discovery.QueryServer
 import Language.Marlowe.Runtime.Discovery.Store
 import Language.Marlowe.Runtime.Discovery.SyncServer
+import Network.Protocol.Driver (RunClient)
 import Numeric.Natural (Natural)
 
 data DiscoveryDependencies = DiscoveryDependencies
   { acceptRunSyncServer :: IO (RunSyncServer IO)
   , acceptRunQueryServer :: IO (RunQueryServer IO)
-  , connectToChainSeek :: forall a. Chain.RuntimeChainSeekClient IO a -> IO a
+  , connectToChainSeek :: RunClient IO Chain.RuntimeChainSeekClient
   , pageSize :: Natural
   }
 

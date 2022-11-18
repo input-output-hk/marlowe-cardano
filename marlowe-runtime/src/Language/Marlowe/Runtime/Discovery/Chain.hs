@@ -20,6 +20,7 @@ import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), SomeMarloweVersion(..), fromChainDatum, withSomeMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion, getScripts)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
+import Network.Protocol.Driver (RunClient)
 import qualified Plutus.V1.Ledger.Api as P
 
 data Changes = Changes
@@ -53,7 +54,7 @@ applyRollback (Chain.At blockHeader@Chain.BlockHeader{slotNo}) Changes{..} = Cha
     isNotRolledBack = not . Chain.isAfter slotNo
 
 newtype DiscoveryChainClientDependencies = DiscoveryChainClientDependencies
-  { connectToChainSeek :: forall a. Chain.RuntimeChainSeekClient IO a -> IO a
+  { connectToChainSeek :: RunClient IO Chain.RuntimeChainSeekClient
   }
 
 data DiscoveryChainClient = DiscoveryChainClient

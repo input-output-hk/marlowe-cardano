@@ -33,7 +33,7 @@ import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
-import Network.Protocol.Driver (RunAsPeer, runClientPeerOverSocket)
+import Network.Protocol.Driver (RunClient, runClientPeerOverSocket)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Query.Client (queryClientPeer)
@@ -157,7 +157,7 @@ runClientPeerOverSocket'
   -> AddrInfo -- ^ Socket address to connect to
   -> Codec protocol ex IO LB.ByteString -- ^ A codec for the protocol
   -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
-  -> RunAsPeer IO client
+  -> RunClient IO client
 runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
   let
     run = runClientPeerOverSocket throwIO addr codec clientToPeer client

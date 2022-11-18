@@ -18,9 +18,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGene
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Store (GetNextStepsResponse(..))
+import Network.Protocol.Driver (RunServer(..))
 import System.IO (hPutStrLn, stderr)
 
-newtype RunSyncServer m = RunSyncServer (forall a. MarloweSyncServer m a -> IO a)
+type RunSyncServer m = RunServer m MarloweSyncServer
 
 data HistorySyncServerDependencies = HistorySyncServerDependencies
   { acceptRunSyncServer :: IO (RunSyncServer IO)
@@ -64,7 +65,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunSyncServer run = runSyncServer
+    RunServer run = runSyncServer
   in
     pure Worker { runWorker = run server }
 

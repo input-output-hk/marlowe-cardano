@@ -30,13 +30,14 @@ import Data.Bifunctor (bimap, first)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
+import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import System.IO (hPutStrLn, stderr)
 import Unsafe.Coerce (unsafeCoerce)
 
-newtype RunQueryServer m = RunQueryServer (forall a. QueryServer ChainSyncQuery m a -> IO a)
+type RunQueryServer m = RunServer m (QueryServer ChainSyncQuery)
 
 data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
   { acceptRunQueryServer :: IO (RunQueryServer IO)
@@ -82,7 +83,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunQueryServer run = runQueryServer
+    RunServer run = runQueryServer
   in
     pure Worker { runWorker = run server }
 

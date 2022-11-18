@@ -39,7 +39,7 @@ import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
-import Network.Protocol.Driver (RunAsPeer)
+import Network.Protocol.Driver (RunClient)
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
 import Observe.Event.BackendModification (EventBackendModifiers, setAncestor)
 import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
@@ -85,7 +85,7 @@ compile $ SelectorSpec "server"
 data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
   , runApplication :: Application -> IO ()
-  , runMarloweHeaderSyncClient :: RunAsPeer IO MarloweHeaderSyncClient
+  , runMarloweHeaderSyncClient :: RunClient IO MarloweHeaderSyncClient
   , eventBackend :: EventBackend IO r ServerSelector
   }
 

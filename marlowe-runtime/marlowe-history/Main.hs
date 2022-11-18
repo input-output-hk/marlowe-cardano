@@ -13,14 +13,10 @@ import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.History (History(..), HistoryDependencies(..), mkHistory)
 import Language.Marlowe.Runtime.History.Api (historyJobCodec, historyQueryCodec)
-import Language.Marlowe.Runtime.History.JobServer (RunJobServer(RunJobServer))
-import Language.Marlowe.Runtime.History.QueryServer (RunQueryServer(RunQueryServer))
 import Language.Marlowe.Runtime.History.Store (hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
-import Language.Marlowe.Runtime.History.SyncServer (RunSyncServer(..))
-import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (mkDriver, runClientPeerOverSocket)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -30,10 +26,8 @@ import Network.Socket
   , AddrInfoFlag(..)
   , HostName
   , PortNumber
-  , SockAddr
   , SocketOption(..)
   , SocketType(..)
-  , accept
   , bind
   , close
   , defaultHints
@@ -45,7 +39,6 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
-import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options.Applicative
   ( auto
   , execParser
@@ -87,27 +80,9 @@ run Options{..} = withSocketsDo do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
             runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
 
-          acceptRunJobServer = do
-            (conn, _ :: SockAddr) <- accept jobSocket
-            let driver = mkDriver throwIO historyJobCodec $ socketAsChannel conn
-            pure $ RunJobServer \server -> do
-              let peer = jobServerPeer server
-              fst <$> runPeerWithDriver driver peer (startDState driver)
-
-          acceptRunQueryServer = do
-            (conn, _ :: SockAddr) <- accept querySocket
-            let driver = mkDriver throwIO historyQueryCodec $ socketAsChannel conn
-            pure $ RunQueryServer \server -> do
-              let peer = queryServerPeer server
-              fst <$> runPeerWithDriver driver peer (startDState driver)
-
-          acceptRunSyncServer = do
-            (conn, _ :: SockAddr) <- accept syncSocket
-            let driver = mkDriver throwIO codecMarloweSync $ socketAsChannel conn
-            pure $ RunSyncServer \server -> do
-              let peer = marloweSyncServerPeer server
-              fst <$> runPeerWithDriver driver peer (startDState driver)
-
+          acceptRunJobServer = acceptRunServerPeerOverSocket throwIO jobSocket historyJobCodec jobServerPeer
+          acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket historyQueryCodec queryServerPeer
+          acceptRunSyncServer = acceptRunServerPeerOverSocket throwIO syncSocket codecMarloweSync marloweSyncServerPeer
         let followerPageSize = 1024 -- TODO move to config with a default
         History{..} <- atomically do
           historyQueries <- hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory

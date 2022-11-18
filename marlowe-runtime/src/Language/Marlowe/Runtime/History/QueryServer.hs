@@ -19,12 +19,13 @@ import Data.Set (Set)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
+import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
 import Numeric.Natural (Natural)
 import System.IO (hPutStrLn, stderr)
 
-newtype RunQueryServer m = RunQueryServer (forall a. RuntimeHistoryQueryServer m a -> m a)
+type RunQueryServer m = RunServer m RuntimeHistoryQueryServer
 
 data HistoryQueryServerDependencies = HistoryQueryServerDependencies
   { acceptRunQueryServer :: IO (RunQueryServer IO)
@@ -62,7 +63,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunQueryServer run = runQueryServer
+    RunServer run = runQueryServer
   in
     pure Worker { runWorker = run server }
 

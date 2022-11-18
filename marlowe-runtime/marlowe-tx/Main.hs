@@ -7,7 +7,6 @@ import qualified Colog
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad.IO.Class (liftIO)
-import qualified Data.ByteString.Lazy as LB
 import Data.Either (fromRight)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
@@ -27,10 +26,9 @@ import Language.Marlowe.Runtime.Logging (mkLogger)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server
-  (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), WorkerM, mkTransactionServer)
+  (TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
-import Network.Channel (Channel, hoistChannel, socketAsChannel)
-import Network.Protocol.Driver (mkDriver, runClientPeerOverSocket)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -41,10 +39,8 @@ import Network.Socket
   , AddrInfoFlag(..)
   , HostName
   , PortNumber
-  , SockAddr
   , SocketOption(..)
   , SocketType(..)
-  , accept
   , bind
   , close
   , defaultHints
@@ -56,7 +52,6 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
-import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options.Applicative
   ( auto
   , execParser
@@ -95,16 +90,7 @@ run Options{..} = withSocketsDo do
     Colog.withBackgroundLogger Colog.defCapacity mainLogAction \logAction -> do
       {- Setup Dependencies -}
       let
-        acceptRunTransactionServer = do
-          (conn, _ :: SockAddr) <- accept socket
-
-          let
-            chan :: Channel WorkerM LB.ByteString
-            chan = hoistChannel liftIO $ socketAsChannel conn
-            driver = mkDriver (liftIO . throwIO) codecJob chan
-          pure $ RunTransactionServer \server -> do
-            let peer = jobServerPeer server
-            fst <$> runPeerWithDriver driver peer (startDState driver)
+        acceptRunTransactionServer = acceptRunServerPeerOverSocket (liftIO . throwIO) socket codecJob jobServerPeer
 
         runHistorySyncClient :: MarloweSyncClient IO a -> IO a
         runHistorySyncClient client = do

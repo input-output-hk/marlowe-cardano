@@ -14,9 +14,10 @@ import Control.Exception (SomeException, catch)
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Discovery.Api
+import Network.Protocol.Driver (RunServer(..))
 import System.IO (hPutStrLn, stderr)
 
-newtype RunSyncServer m = RunSyncServer (forall a. MarloweHeaderSyncServer m a -> IO a)
+type RunSyncServer m = RunServer m MarloweHeaderSyncServer
 
 data DiscoverySyncServerDependencies = DiscoverySyncServerDependencies
   { acceptRunSyncServer :: IO (RunSyncServer IO)
@@ -54,7 +55,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunSyncServer run = runSyncServer
+    RunServer run = runSyncServer
   in
     pure Worker { runWorker = run server }
 

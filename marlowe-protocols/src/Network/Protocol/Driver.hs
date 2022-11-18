@@ -12,7 +12,8 @@ import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.ByteString.Lazy (ByteString)
 import Network.Channel (Channel(..), hoistChannel, socketAsChannel)
-import Network.Socket (AddrInfo, Socket, addrAddress, close, connect, openSocket)
+import Network.Socket (AddrInfo, SockAddr, Socket, addrAddress, close, connect, openSocket)
+import Network.Socket.Address (accept)
 import Network.TypedProtocol (Message, Peer, PeerHasAgency, PeerRole, SomeMessage, runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
 import Network.TypedProtocol.Driver (Driver(..))
@@ -52,22 +53,10 @@ mkDriver throwImpl Codec{..} Channel{..} = Driver{..}
     startDState :: Maybe bytes
     startDState = Nothing
 
-type RunAsPeer m machine = forall a. machine m a -> m a
+type RunClient m client = forall a. client m a -> m a
+newtype RunServer m server = RunServer (forall a. server m a -> m a)
 
 type ToPeer machine protocol peer st m = forall a. machine m a -> Peer protocol peer st m a
-
-runPeerOverSocket
-  :: MonadBase IO m
-  => (forall x. ex -> m x)
-  -> Socket
-  -> Codec protocol ex m ByteString
-  -> ToPeer machine protocol peer st m
-  -> RunAsPeer m machine
-runPeerOverSocket throwImpl socket codec toPeer machine = do
-  let channel = hoistChannel liftBase $  socketAsChannel socket
-  let driver = mkDriver throwImpl codec channel
-  let peer = toPeer machine
-  fst <$> runPeerWithDriver driver peer (startDState driver)
 
 runClientPeerOverSocket
   :: MonadBaseControl IO m
@@ -75,11 +64,28 @@ runClientPeerOverSocket
   -> AddrInfo
   -> Codec protocol ex m ByteString
   -> ToPeer client protocol peer st m
-  -> RunAsPeer m client
+  -> RunClient m client
 runClientPeerOverSocket throwImpl addr codec toPeer client =
-  bracket open (liftBase . close) \socket ->
-    runPeerOverSocket throwImpl socket codec toPeer client
+  bracket open (liftBase . close) \socket -> do
+    let channel = hoistChannel liftBase $  socketAsChannel socket
+    let driver = mkDriver throwImpl codec channel
+    let peer = toPeer client
+    fst <$> runPeerWithDriver driver peer (startDState driver)
   where
     open = bracketOnError (liftBase $ openSocket addr) (liftBase . close) \sock -> do
       liftBase $ connect sock $ addrAddress addr
       pure sock
+
+acceptRunServerPeerOverSocket
+  :: MonadBase IO m
+  => (forall x. ex -> m x)
+  -> Socket
+  -> Codec protocol ex m ByteString
+  -> ToPeer server protocol peer st m
+  -> m (RunServer m server)
+acceptRunServerPeerOverSocket throwImpl socket codec toPeer = do
+  (conn, _ :: SockAddr) <- liftBase $ accept socket
+  let driver = mkDriver throwImpl codec $ hoistChannel liftBase $ socketAsChannel conn
+  pure $ RunServer \server -> do
+    let peer = toPeer server
+    fst <$> runPeerWithDriver driver peer (startDState driver)

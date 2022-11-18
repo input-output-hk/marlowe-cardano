@@ -8,11 +8,8 @@ import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.Discovery (Discovery(..), DiscoveryDependencies(..), mkDiscovery)
-import Language.Marlowe.Runtime.Discovery.QueryServer (RunQueryServer(..))
-import Language.Marlowe.Runtime.Discovery.SyncServer (RunSyncServer(..))
-import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (mkDriver, runClientPeerOverSocket)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket
@@ -20,10 +17,8 @@ import Network.Socket
   , AddrInfoFlag(..)
   , HostName
   , PortNumber
-  , SockAddr
   , SocketOption(..)
   , SocketType(..)
-  , accept
   , bind
   , close
   , defaultHints
@@ -35,7 +30,6 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
-import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options.Applicative
   ( auto
   , execParser
@@ -71,21 +65,8 @@ run Options{..} = withSocketsDo do
         connectToChainSeek client = do
           addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
           runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
-
-        acceptRunQueryServer = do
-          (conn, _ :: SockAddr) <- accept querySocket
-          let driver = mkDriver throwIO codecQuery $ socketAsChannel conn
-          pure $ RunQueryServer \server -> do
-            let peer = queryServerPeer server
-            fst <$> runPeerWithDriver driver peer (startDState driver)
-
-        acceptRunSyncServer = do
-          (conn, _ :: SockAddr) <- accept syncSocket
-          let driver = mkDriver throwIO codecMarloweHeaderSync $ socketAsChannel conn
-          pure $ RunSyncServer \server -> do
-            let peer = marloweHeaderSyncServerPeer server
-            fst <$> runPeerWithDriver driver peer (startDState driver)
-
+        acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket codecQuery queryServerPeer
+        acceptRunSyncServer = acceptRunServerPeerOverSocket throwIO syncSocket codecMarloweHeaderSync marloweHeaderSyncServerPeer
       let pageSize = 1024 -- TODO move to config with a default
       Discovery{..} <- atomically $ mkDiscovery DiscoveryDependencies{..}
       vacuous runDiscovery

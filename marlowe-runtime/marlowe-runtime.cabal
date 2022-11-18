@@ -116,6 +116,7 @@ library
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
+    , monad-control
     , newtype-generics
     , one-line-aeson-text
     , ouroboros-consensus
@@ -130,6 +131,7 @@ library
     , these
     , time
     , transformers
+    , transformers-base
     , typed-protocols
     , witherable
 
