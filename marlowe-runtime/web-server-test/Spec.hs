@@ -84,4 +84,7 @@ instance Arbitrary Web.Base16 where
   arbitrary = Web.Base16 . BS.pack <$> listOf arbitrary
 
 instance (HasNamedLink a Web.API name, Arbitrary a) => Arbitrary (Web.WithLink name a) where
-  arbitrary = oneof [Web.Omit <$> arbitrary, Web.Include Web.api (Proxy @name) <$> arbitrary]
+  arbitrary = oneof
+    [ Web.OmitLink <$> arbitrary
+    , Web.IncludeLink Web.api (Proxy @name) <$> arbitrary
+    ]

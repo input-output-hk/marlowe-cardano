@@ -67,27 +67,27 @@ class HasNamedLink a api (name :: Symbol) where
   namedLink :: Proxy api -> Proxy name -> a -> Link
 
 data WithLink (name :: Symbol) a where
-  Include
+  IncludeLink
     :: HasNamedLink a api name
     => Proxy api
     -> Proxy name
     -> a
     -> WithLink name a
-  Omit :: a -> WithLink name a
+  OmitLink :: a -> WithLink name a
 
 deriving instance Typeable (WithLink name a)
 
 instance (Show a, KnownSymbol name) => Show (WithLink name a) where
-  showsPrec p (Include _ name a) = showParen (p >= 11)
-    ( showString "Include _ (Proxy @"
+  showsPrec p (IncludeLink _ name a) = showParen (p >= 11)
+    ( showString "IncludeLink _ (Proxy @"
     . showSpace
     . showsPrec 11 (symbolVal name)
     . showString ")"
     . showSpace
     . showsPrec 11 a
     )
-  showsPrec p (Omit a) = showParen (p >= 11)
-    ( showString "Omit"
+  showsPrec p (OmitLink a) = showParen (p >= 11)
+    ( showString "OmitLink"
     . showSpace
     . showsPrec 11 a
     )
@@ -99,11 +99,11 @@ instance {-# OVERLAPPING #-}
   ( ToJSONWithLinks a
   , KnownSymbol name
   ) => ToJSONWithLinks (WithLink name a) where
-  toJSONWithLinks (Include api name a) = (link : links, value)
+  toJSONWithLinks (IncludeLink api name a) = (link : links, value)
     where
       (links, value) = toJSONWithLinks a
       link = (symbolVal name, namedLink api name a)
-  toJSONWithLinks (Omit a) = toJSONWithLinks a
+  toJSONWithLinks (OmitLink a) = toJSONWithLinks a
 
 instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
   toJSONWithLinks a = ([], toJSON a)
@@ -121,8 +121,8 @@ instance
 
 instance HasPagination resource field => HasPagination (WithLink name resource) field where
   type RangeType (WithLink name resource) field = RangeType resource field
-  getFieldValue p (Include _ _ resource) = getFieldValue p resource
-  getFieldValue p (Omit resource) = getFieldValue p resource
+  getFieldValue p (IncludeLink _ _ resource) = getFieldValue p resource
+  getFieldValue p (OmitLink resource) = getFieldValue p resource
 
 class ToSchemaWithLinks a where
   declareNamedSchemaWithLinks :: Proxy a -> Declare (Definitions Schema) ([String], Referenced Schema)
