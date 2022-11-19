@@ -186,8 +186,8 @@
         nomadChart = import ./nix/nomadChart.nix {
           inputs = std.deSystemize system inputs;
         };
-        nomadEnvs = let
-          envsData = import ./nix/nomadEnvs.nix {
+        nomadEnv = let
+          envData = import ./nix/nomadEnv.nix {
             inputs = std.deSystemize system inputs;
           };
           mkNomadJobs = let
@@ -202,9 +202,7 @@
                 }
               ]
             );
-        in {
-          preprod = mkNomadJobs envsData.preprod;
-        };
+        in mkNomadJobs envData;
 
         # Export ciJobs for tullia to parse
         ciJobs = self.hydraJobs {

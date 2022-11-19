@@ -1,16 +1,18 @@
 { inputs }:
 let
-  inherit (inputs) data-merge cells nixpkgs self cardano-world;
-  inherit (inputs.bitte-cells) vector _utils;
+  inherit (inputs) data-merge cells nixpkgs self cardano-world bitte-cells;
+  inherit (cardano-world) cardano;
+  inherit (bitte-cells) vector _utils;
   inherit (self) oci-images;
   l = nixpkgs.lib // builtins;
   # OCI-Image Namer
   ociNamer = oci: builtins.unsafeDiscardStringContext "${oci.imageName}:${oci.imageTag}";
 in
   {
-    jobname ? "marlowe-runtime",
+    environment,
+    jobname ? "runtime",
     namespace,
-    datacenters ? ["eu-central-1" "eu-west-1" "us-east-1"],
+    datacenters ? ["us-east-1" "eu-central-1" "eu-west-1"],
     domain,
     extraVector ? {},
     nodeClass,
@@ -72,12 +74,9 @@ in
         # ----------
         group.marlowe-runtime = let
           # work-around: we need to get rid of vector first
-          dbsyncFullGroup = (cardano-world.cardano.nomadCharts.cardano-db-sync (args // {jobname = "db-sync";})).job.db-sync.group.db-sync;
-          dbsyncWithoutTask = l.removeAttrs dbsyncFullGroup ["task"];
-          dbsync = dbsyncWithoutTask // {
-            task.cardano-db-sync = dbsyncFullGroup.task.db-sync;
-            task.node = dbsyncFullGroup.task.node;
-          };
+          node' = (cardano.nomadCharts.cardano-node (args // {jobname = "node";})).job.node.group.cardano;
+          group = l.removeAttrs node' ["task"];
+          node = group // {task.node = node'.task.node;};
         in
           merge
           # task.vector ...
@@ -90,7 +89,7 @@ in
             extra = extraVector;
           })
           (
-            merge dbsync
+            merge node
               {
                 count = scaling;
                 # service = append [
@@ -130,8 +129,6 @@ in
                       QUERY_PORT = "8091";
                       JOB_PORT = "8092";
                       CARDANO_NODE_SOCKET_PATH = "/alloc/tmp/node.socket"; # figure out how to pass this from the cardano group
-                      GENESIS_CONFIG = "/persist/config/custom/byron-genesis.json";
-                      GENESIS_HASH = cardano-world.cardano.environments.${namespace}.nodeConfig.ByronGenesisHash;
                       WORKLOAD_CACERT = "/secrets/tls/ca.pem";
                       WORKLOAD_CLIENT_KEY = "/secrets/tls/key.pem";
                       WORKLOAD_CLIENT_CERT = "/secrets/tls/cert.pem";
@@ -143,12 +140,12 @@ in
                       ++ [
                         {
                           change_mode = "restart";
-                          data = "{{- with secret \"kv/data/marlowe-runtime/${namespace}\" }}{{ .Data.data.pgPass }}{{ end -}}";
+                          data = "{{- with secret \"kv/data/marlowe-runtime/${environment}\" }}{{ .Data.data.pgPass }}{{ end -}}";
                           env = "DB_USER";
                         }
                         {
                           change_mode = "restart";
-                          data = "{{- with secret \"kv/data/marlowe-runtime/${namespace}\" }}{{ .Data.data.pgUser }}{{ end -}}";
+                          data = "{{- with secret \"kv/data/marlowe-runtime/${environment}\" }}{{ .Data.data.pgUser }}{{ end -}}";
                           env = "DB_PASS";
                         }
                       ];
