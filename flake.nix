@@ -40,6 +40,9 @@
       url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
       flake = false;
     };
+    dapps-world = {
+      url = "github:input-output-hk/dapps-world";
+    };
     plutus-core = {
       url = "github:input-output-hk/plutus";
       flake = false;
@@ -150,6 +153,8 @@
           inherit system;
           packages = packagesProf;
         };
+
+        devShells.ops = inputs.dapps-world.${system}.automation.devshells.ops;
 
         # 4 Layers of Packaging
         operables = import ./nix/operables.nix {
