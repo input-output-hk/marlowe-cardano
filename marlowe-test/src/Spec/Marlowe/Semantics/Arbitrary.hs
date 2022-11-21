@@ -948,7 +948,7 @@ arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContrac
 
 
 instance SemiArbitrary Contract where
-  semiArbitrary context = sized \size -> arbitraryContractSized (size `div` 6) context -- default size parameter is 30
+  semiArbitrary context = sized \size -> arbitraryContractSized (min size 100 `div` 20) context -- Keep tests from growing too large to execute by capping the maximum contract depth at 5
 
 
 -- | Generate a random association map.
