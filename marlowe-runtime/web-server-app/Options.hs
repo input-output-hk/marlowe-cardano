@@ -10,6 +10,8 @@ import Options.Applicative
 data Options = Options
   { discoveryHost :: HostName
   , discoverySyncPort :: PortNumber
+  , historyHost :: HostName
+  , historySyncPort :: PortNumber
   , port :: PortNumber
   , openAPIEnabled :: Bool
   }
@@ -21,6 +23,8 @@ getOptions :: IO Options
 getOptions = do
   discoveryHostParser <- O.optParserWithEnvDefault O.discoveryHost
   discoverySyncPortParser <- O.optParserWithEnvDefault O.discoverySyncPort
+  historyHostParser <- O.optParserWithEnvDefault O.historyHost
+  historySyncPortParser <- O.optParserWithEnvDefault O.historySyncPort
   portParser <- O.optParserWithEnvDefault portOption
   let
     openAPIParser = flag False True $ mconcat
@@ -32,6 +36,8 @@ getOptions = do
     parser = Options
       <$> discoveryHostParser
       <*> discoverySyncPortParser
+      <*> historyHostParser
+      <*> historySyncPortParser
       <*> portParser
       <*> openAPIParser
     infoMod = mconcat

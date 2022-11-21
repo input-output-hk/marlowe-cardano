@@ -35,14 +35,17 @@ import Language.Marlowe.Runtime.History.Script
   )
 import Language.Marlowe.Runtime.History.Store
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
-import Language.Marlowe.Runtime.History.Store.Model (getRoots)
+import Language.Marlowe.Runtime.History.Store.Model (HistoryRoot(HistoryRoot), getRoots)
 import qualified Language.Marlowe.Runtime.History.Store.Model as Model
 import Language.Marlowe.Runtime.History.Store.ModelSpec
   (genFindCreateStepArgs, genFindIntersectionArgs, genFindNextStepArgs, modelFromScript)
 import Test.Hspec (Spec)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Property, discard, (===))
-import Test.QuickCheck.Monadic (PropertyM, monadicIO, pick, run)
+import Test.QuickCheck.Monadic (PropertyM, monadicIO, pick, pre, run)
+
+hasSteps :: HistoryRoot -> Bool
+hasSteps (HistoryRoot _ _ _ steps _ _) = not $ null steps
 
 spec :: Spec
 spec = do
@@ -51,6 +54,7 @@ spec = do
     actual <- run $ findContract contractId
     pure (actual, Model.findCreateStep contractId model)
   prop "findNextSteps matches model" $ runStoreProp \HistoryStore{..} model -> do
+    pre $ any (hasSteps . snd) (getRoots model)
     (contractId, SomeMarloweVersion version, point) <- pick $ genFindNextStepArgs model
     actual <- run $ toFindNextStepsResponse version <$> getNextSteps contractId version point
     pure (actual, Model.findNextSteps contractId point model)

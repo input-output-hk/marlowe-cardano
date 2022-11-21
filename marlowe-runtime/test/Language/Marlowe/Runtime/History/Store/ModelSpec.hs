@@ -21,6 +21,7 @@ import Language.Marlowe.Runtime.History.Store (FindNextStepsResponse(..), Inters
 import Language.Marlowe.Runtime.History.Store.Model
   ( HistoryRoot(..)
   , HistoryStoreModel(..)
+  , HistoryTree(..)
   , addContract
   , addSteps
   , emptyHistoryStore
@@ -115,7 +116,7 @@ spec = do
 
   -- This property specifies that when next steps are found, the block must be
   -- bigger than the block provided.
-  prop "findNextSteps block increasing" \store -> not (null $ getRoots store) ==> do
+  prop "findNextSteps block increasing" \store -> any (hasSteps . snd) (getRoots store) ==> do
     (contractId, _, point) <- genFindNextStepArgs store
     pure case findNextSteps contractId point store of
       FindNext block _ -> At block > point
@@ -164,8 +165,11 @@ genFindCreateStepArgs store = frequency
 
 genFindNextStepArgs :: HistoryStoreModel -> Gen (ContractId, SomeMarloweVersion, ChainPoint)
 genFindNextStepArgs store = do
-  (contractId, HistoryRoot version _ _ _ _ _) <- pickRoot store
-  point <- elements $ Genesis : (At <$> getAllBlocks store)
+  (contractId, HistoryRoot version block _ _ _ tree) <- pickRootSuchThat hasSteps store
+  let
+    beforeSomeStepsInRoot block' = block' < block || maybe False (beforeSomeStepsInTree block') tree
+    beforeSomeStepsInTree block' (HistoryTree treeBlock _ _ tree') = block' < treeBlock || maybe False (beforeSomeStepsInTree block') tree'
+  point <- elements $ Genesis : (At <$> filter beforeSomeStepsInRoot (getAllBlocks store))
   pure (contractId, SomeMarloweVersion version, point)
 
 genFindIntersectionArgs :: HistoryStoreModel -> Gen (ContractId, SomeMarloweVersion, [BlockHeader])

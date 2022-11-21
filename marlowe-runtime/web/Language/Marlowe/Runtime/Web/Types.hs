@@ -1,8 +1,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module defines the request and response types in the Marlowe Runtime
 -- | Web API.
@@ -10,7 +17,7 @@
 module Language.Marlowe.Runtime.Web.Types
   where
 
-import Control.Lens
+import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
 import Data.Aeson.Types (parseFail)
@@ -20,28 +27,136 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.OpenApi
-  ( HasType(type_)
+  ( Definitions
+  , HasType(..)
   , NamedSchema(..)
-  , OpenApiType(OpenApiString)
+  , OpenApiType(..)
   , Referenced(Inline)
+  , Schema
+  , ToParamSchema
   , ToSchema
   , declareSchema
   , declareSchemaRef
   , description
   , enum_
   , example
-  , oneOf
   , pattern
+  , properties
+  , required
+  , toParamSchema
   )
+import Data.OpenApi.Declare (Declare)
 import Data.OpenApi.Schema (ToSchema(..))
 import Data.String (IsString(..))
 import Data.Text (intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import Data.Typeable (Typeable)
 import Data.Word (Word16, Word64)
+import GHC.Base (Symbol)
+import GHC.Exts (IsList(fromList))
 import GHC.Generics (Generic)
+import GHC.Show (showSpace)
+import GHC.TypeLits (KnownSymbol, symbolVal)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import Language.Marlowe.Runtime.Web.Orphans ()
 import Servant
 import Servant.Pagination (HasPagination(..))
+
+class HasNamedLink a api (name :: Symbol) where
+  namedLink :: Proxy api -> Proxy name -> a -> Link
+
+data WithLink (name :: Symbol) a where
+  IncludeLink
+    :: HasNamedLink a api name
+    => Proxy api
+    -> Proxy name
+    -> a
+    -> WithLink name a
+  OmitLink :: a -> WithLink name a
+
+deriving instance Typeable (WithLink name a)
+
+instance (Show a, KnownSymbol name) => Show (WithLink name a) where
+  showsPrec p (IncludeLink _ name a) = showParen (p >= 11)
+    ( showString "IncludeLink _ (Proxy @"
+    . showSpace
+    . showsPrec 11 (symbolVal name)
+    . showString ")"
+    . showSpace
+    . showsPrec 11 a
+    )
+  showsPrec p (OmitLink a) = showParen (p >= 11)
+    ( showString "OmitLink"
+    . showSpace
+    . showsPrec 11 a
+    )
+
+class ToJSONWithLinks a where
+  toJSONWithLinks :: a -> ([(String, Link)], Value)
+
+instance {-# OVERLAPPING #-}
+  ( ToJSONWithLinks a
+  , KnownSymbol name
+  ) => ToJSONWithLinks (WithLink name a) where
+  toJSONWithLinks (IncludeLink api name a) = (link : links, value)
+    where
+      (links, value) = toJSONWithLinks a
+      link = (symbolVal name, namedLink api name a)
+  toJSONWithLinks (OmitLink a) = toJSONWithLinks a
+
+instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
+  toJSONWithLinks a = ([], toJSON a)
+
+instance
+  ( ToJSONWithLinks a
+  , KnownSymbol name
+  ) => ToJSON (WithLink name a) where
+  toJSON = toJSON' . toJSONWithLinks
+    where
+      toJSON' (links, value) = object
+        [ "resource" .= value
+        , "links" .= object (bimap fromString (toJSON . show . linkURI) <$> links)
+        ]
+
+instance HasPagination resource field => HasPagination (WithLink name resource) field where
+  type RangeType (WithLink name resource) field = RangeType resource field
+  getFieldValue p (IncludeLink _ _ resource) = getFieldValue p resource
+  getFieldValue p (OmitLink resource) = getFieldValue p resource
+
+class ToSchemaWithLinks a where
+  declareNamedSchemaWithLinks :: Proxy a -> Declare (Definitions Schema) ([String], Referenced Schema)
+
+instance {-# OVERLAPPING #-}
+  ( ToSchemaWithLinks a
+  , KnownSymbol name
+  ) => ToSchemaWithLinks (WithLink name a) where
+  declareNamedSchemaWithLinks _  = do
+    (links, namedSchema) <- declareNamedSchemaWithLinks (Proxy @a)
+    pure (symbolVal (Proxy @name) : links, namedSchema)
+
+instance {-# OVERLAPPING #-} ToSchema a => ToSchemaWithLinks a where
+  declareNamedSchemaWithLinks p = ([],) <$> declareSchemaRef p
+
+instance
+  ( Typeable a
+  , ToSchemaWithLinks a
+  , KnownSymbol name
+  ) => ToSchema (WithLink name a) where
+  declareNamedSchema _  = do
+    (links, schema) <- declareNamedSchemaWithLinks (Proxy @(WithLink name a))
+    stringSchema <- declareSchemaRef (Proxy @String)
+    pure $ NamedSchema Nothing $ mempty
+      & type_ ?~ OpenApiObject
+      & required .~ ["resource", "links"]
+      & properties .~
+          [ ("resource", schema)
+          , ( "links", Inline $ mempty
+                & type_ ?~ OpenApiObject
+                & properties .~ fromList ((,stringSchema) . fromString <$> links)
+            )
+          ]
+
 
 -- | A newtype for Base16 decoding and encoding ByteStrings
 newtype Base16 = Base16 { unBase16 :: ByteString }
@@ -107,23 +222,26 @@ data TxOutRef = TxOutRef
   } deriving (Show, Eq, Ord, Generic)
 
 instance FromHttpApiData TxOutRef where
-  parseUrlPiece t = case splitOn ":" t of
+  parseUrlPiece t = case splitOn "#" t of
     [idText, ixText] -> TxOutRef <$> parseUrlPiece idText <*> parseUrlPiece ixText
-    _ -> Left "Expected [a-fA-F0-9]{64}:[0-9]+"
+    _ -> Left "Expected [a-fA-F0-9]{64}#[0-9]+"
 
 instance ToHttpApiData TxOutRef where
-  toUrlPiece TxOutRef{..} = toUrlPiece txId <> ":" <> toUrlPiece txIx
+  toUrlPiece TxOutRef{..} = toUrlPiece txId <> "#" <> toUrlPiece txIx
 
 instance FromJSON TxOutRef where
   parseJSON =
     withText "TxOutRef" $ either (parseFail . T.unpack) pure . parseUrlPiece
 
 instance ToSchema TxOutRef where
-  declareNamedSchema _ = pure $ NamedSchema (Just "TxOutRef") $ mempty
+  declareNamedSchema proxy = pure $ NamedSchema (Just "TxOutRef") $ toParamSchema proxy
+
+instance ToParamSchema TxOutRef where
+  toParamSchema _ = mempty
     & type_ ?~ OpenApiString
     & description ?~ "A reference to a transaction output with a transaction ID and index."
-    & pattern ?~ "^[a-fA-F0-9]{64}:[0-9]+$"
-    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7:1"
+    & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
+    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
@@ -143,7 +261,7 @@ instance ToHttpApiData MarloweVersion where
 
 instance FromHttpApiData MarloweVersion where
   parseUrlPiece "v1" = Right V1
-  parseUrlPiece _ = Left $ fold
+  parseUrlPiece _ = Left $ fold @[]
     [ "expected one of "
     , intercalate "; " ["v1"]
     ]
@@ -154,12 +272,29 @@ instance ToSchema MarloweVersion where
     & description ?~ "A version of the Marlowe language."
     & enum_ ?~ ["v1"]
 
+data ContractState = ContractState
+  { contractId :: TxOutRef
+  , roleTokenMintingPolicyId :: PolicyId
+  , version :: MarloweVersion
+  , metadata :: Map Word64 Metadata
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  , initialContract :: Semantics.Contract
+  , currentContract :: Semantics.Contract
+  , state :: Maybe Semantics.State
+  , utxo :: Maybe TxOutRef
+  } deriving (Show, Eq, Generic)
+
+instance ToJSON ContractState
+instance ToSchema ContractState
+
 data ContractHeader = ContractHeader
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
   , metadata :: Map Word64 Metadata
-  , status :: TxStatusHeader
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
   } deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON ContractHeader
@@ -177,26 +312,23 @@ instance ToSchema Metadata where
   declareNamedSchema _ = pure $ NamedSchema (Just "Metadata") $ mempty
     & description ?~ "An arbitrary JSON value for storage in a metadata key"
 
-data TxStatusHeader
+data TxStatus
   = Unsigned
   | Submitted
-  | Confirmed BlockHeader
+  | Confirmed
   deriving (Show, Eq, Ord)
 
-instance ToJSON TxStatusHeader where
+instance ToJSON TxStatus where
   toJSON Unsigned = String "unsigned"
   toJSON Submitted = String "submitted"
-  toJSON (Confirmed blockHeader) = toJSON blockHeader
+  toJSON Confirmed = String "confirmed"
 
-instance ToSchema TxStatusHeader where
-  declareNamedSchema _ = do
-    let
-      strSchema = mempty
-        & type_ ?~ OpenApiString
-        & enum_ ?~ ["unsigned", "submitted"]
-    blockHeaderSchema <- declareSchemaRef $ Proxy @BlockHeader
-    pure $ NamedSchema (Just "TxStatusHeader") $ mempty
-      & oneOf ?~ [Inline strSchema, blockHeaderSchema]
+instance ToSchema TxStatus where
+  declareNamedSchema _ = pure
+    $ NamedSchema (Just "TxStatusHeader")
+    $ mempty
+      & type_ ?~ OpenApiString
+      & enum_ ?~ ["unsigned", "submitted", "confirmed"]
       & description ?~ "A header of the status of a transaction on the local node."
 
 data BlockHeader = BlockHeader
